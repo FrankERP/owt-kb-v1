@@ -48,7 +48,7 @@ Each row names the alternative it rejects. The ADR (§7) carries the ones the co
 | # | Decision | Rejected alternative | Why |
 |---|---|---|---|
 | E1 | **The server judges every edit; the screen only shows.** The screen holds a list of edits, never a board it trusts. Every check, and the save, sends the base handle plus the whole edit list; the server replays it from the stored proposal through the planner's gate and answers the resulting board | (a) Bundle the planner's gate into the screen and trust its verdict. (b) Let the screen send a finished board | (a) makes a second judge that drifts from the planner's and from the server's; (b) lets any client — or the model, through `revise_proposal` — write an unjudged board into a record `apply_schedule` will turn into services. Replaying edits is stateless (the route has no session, `app/api/mcp/route.ts`), deterministic, and testable without a browser |
-| E2 | **A revision is a NEW proposal record** (`mcpProposal.<new handle>`) that copies the base's frozen confirm entries, solve-time stored ids, rules revision, expiry and principal, carries `parent` and `revision: n+1`, and gets **fresh `creationRequestId`s**. Creating it and marking the base `supersededBy` happen in ONE transaction (T2.2) | Mutate the base's payload in place (the pre-v3 design, which then needed an apply lease, `A14`/`proposal_busy`) | The payload is digest-bound and immutable (`proposalDocument.ts:1-20`, D10); keeping it so means `apply_schedule` needs no lease and no new write path (its only changes are E3's refusal, the waiver confirmation of Q1, and naming the revision it applied). Applied **one after another**, revisions of one solve cannot both land: once one created a service, every other finds that date taken and is refused **before** any record or create (`phase3Refusals`, `applySchedule.ts:248`; `observe.ts:100-133`). Applied **at the same time**, two lineages fall into ADR-0061's accepted interleave (identical frozen entries): the month can end up mixed from both, never duplicated (the create path's weekend lock and special identity coordinator, `roleCreateCommit.ts`). E3's fork refusal makes two live lineages of one solve impossible, so this needs two applies of a base and its successor racing, which E3's supersede refusal also narrows. Fresh request ids matter: a receipt keyed by the base's id would answer «already created» for a body that holds the base's seats, and apply would report Frank's edited service as created when it is not |
+| E2 | **A revision is a NEW proposal record** (`mcpProposal.<new handle>`) that copies the base's frozen confirm entries, solve-time stored ids, rules revision, expiry and principal, carries `parent` and `revision: n+1`, and gets **fresh `creationRequestId`s**. Creating it and marking the base `supersededBy` happen in ONE transaction (T2.2) | Mutate the base's payload in place (the pre-v3 design, which then needed an apply lease, `A14`/`proposal_busy`) | The payload is digest-bound and immutable (`proposalDocument.ts:1-20`, D10); keeping it so means `apply_schedule` needs no lease and no new write path (its only changes are E3's refusal, the waiver confirmation of Q1, and naming the revision it applied). Applied **one after another**, revisions of one solve cannot both land: once one created a service, every other finds that date taken and is refused **before** any record or create (`phase3Refusals`, `applySchedule.ts:248`; `observe.ts:100-133`). Applied **at the same time**, two lineages fall into ADR-0061's accepted interleave (identical frozen entries): the month can end up mixed from both, never duplicated (the create path's weekend lock and special identity coordinator, `roleCreateCommit.ts`). E3's fork refusal makes two live lineages of one solve impossible, so this needs two applies of a base and its successor racing, which E3's supersede refusal also narrows. Fresh request ids matter: `observeProposal` recognises a proposal's own creates by the receipt id of each draft's `creationRequestId` (`observe.ts:60-91`), so a child sharing the base's ids would claim the base's services as its own «ya creado», and a create with a reused id and a different body answers `409 idempotency_mismatch` (`roleCreateCommit.ts:11-13`) |
 | E3 | **No forks, no revising a started apply, no applying a superseded proposal.** A save is refused when its base (a) is already superseded — naming the successor (`stale_revision`, `detail: "superseded"`); (b) has started applying, judged by `observeProposal` over a fresh roles read, receipts first (R-OBS, `observe.ts:3-6`), never by the `state` cache alone; (c) would fail apply's own D7 checks (a), (b) or (c) today, so Frank learns «hay que volver a generar el mes» before editing, not after; (d) fails `admitsProposal` (origin, principal, expiry; `proposalDocument.ts:279`). `apply_schedule` refuses a superseded proposal naming its successor | Allow these and let D7 sort it out | D7 keeps the data safe either way; these refusals keep Frank from losing his edits silently (applying the solver's original after editing, or a stale tab's sibling revision) and from editing a month that is half in `/admin` already. A base whose `state` lags its receipts falls to D7 at apply, and the edits are lost loudly (apply refuses), never silently |
 | E4 | **Per-edit gate = the planner's own gate for each gesture**, against CURRENT members (a fresh pool read) and the proposal's BOUND rules (a changed rule set refuses, `rules_changed`, as apply does): **`place`** (a member from the candidate list into a seat) = the manual pick, `toggleCandidate`/`overrideCandidate` (`PlannerGrid.tsx:921-1010`) — C3 by absence from `rankCandidates` (`candidateRanking.ts:109`), C2 `blockedReason`, C4 `ruleBlockedReason`; **`move`** (a seated member to another seat) = the drag gate `evaluateMove` (`moveGate.ts:231`), which needs a source seat holding the member; **`clear`** = always allowed, as the planner allows removal; **`exchange`** (two seated members trade seats) = ONE judged unit: both are removed, then each placement is judged as a `place` on the board without either, so neither sees the other in its column (no spurious pair-rule C4); either refusal refuses the unit, and each C4 names its own member and rule. C1–C3 refuse; C4 asks (Q1) | Re-implement the checks for the connector; or judge `place` with `evaluateMove` | `evaluateMove` answers `unresolved` for a pick from the pool (`moveGate.ts:252`), so it cannot be the place gate. The pick's verdict AND the assembly of its inputs (`rankFor`, `PlannerGrid.tsx:850-866`) are inline in a client component, so both are **extracted** (T2.3) into a neutral module that `PlannerGrid` calls too — one definition, not a second judge. Sharing only the verdict is not enough: `rankCandidates` enforces no rule when `column` or `config` is missing and no week exclusion without the right `sundayDates` (`candidateRanking.ts:116-135`, `ruleEnforcement.ts:372`), and the solver cannot catch the miss, because exclusions are eligibility, not rule instances (`v3MonthSources.ts:128-146`), and a pinned ineligible person is accepted silently (`gcf_v3/owt_v3/facts.py:38`). So on the server those inputs are required, and a safety net re-checks the whole board after the replay (T2.2's invariant, T2.3) |
 | E5 | **The whole-month check is a small checker of its own, `monthCheck.ts`, that judges the board against the rules AS WRITTEN**: every `<=`/`>=`/`==` count rule per person and month with the rule's own value (never clamped), presence («al menos uno de … cada semana»), pairs, «Mes por medio» cadence, each creatable weekend without a Lead, and each draft's voice seats against the solve's targets. Where the rule could not have been met (a `>=`/`==` above the person's availability), the line says so («pide 2; solo estaba disponible 1»). It reads the same rule objects the solve sent (`collectV3Rules`/`emitV3Rules`, `v3Rules.ts`) and the same eligibility as the solve (the proposal's frozen entries' months, `v3MonthSources.ts`) | (a) Send the board to solver v3 with every draft fixed and read its report (this plan's rounds 1–4). (b) Port the solver's model | (a) was tried on paper and failed four ways, all for one reason: the solver answers «what is the best achievable», not «does this board meet the rules as written». For a fixed service it clamps `>=`/`==` to the pinned availability (`gcf_v3/owt_v3/facts.py:46-57, 84-97`), skips `mandatory_lead` (`instances.py:93`) and `unfilled` (`report.py:92`), and sizes rows to the pins (`facts.py:32`), so removing Ana from one of two Sunday Leads under `Sun.Lead == 2` reports nothing. (b) would copy CP-SAT staging that a check does not need. **Drift guard, on BOTH sides (the `fixtures/fairness/golden.json` pattern, ADR-0050):** committed fixtures `fixtures/month-check/parity.json` — wire request + assignments + expected broken set, in cases where `checker.py`'s semantics and ours coincide (no clamping in play, services not fixed) — are asserted by a `gcf_v3/tests` unittest against `checker.py`'s instance recomputation (through a small public wrapper that returns `(family, rule, scope)` tuples to the test only, so `check()`'s counts-only output, C5-17, is unchanged) AND by vitest against `monthCheck.ts`'s judging core. If the solver's semantics change and `checker.py` follows (the acceptance suite forces it), the Python test goes red until the fixture and the TypeScript core follow too. The two deliberate differences (no clamping; Lead and seats judged on every draft; a seated person counts whatever their eligibility) have their own hand-computed cases, never regenerated from output |
@@ -117,7 +117,8 @@ connector»).
   public wrapper in `checker.py`), plus `fixtures/month-check/cases.json`, hand-computed: a `>=` floor and an `==`
   exact each under-assigned by an edit, one above availability, a `<=` cap broken, a presence rule
   whose only holder was cleared, a pair, a «Mes por medio» break, a weekend whose Lead was cleared,
-  an emptied BGV seat. Each case states the expected Spanish line.
+  an emptied BGV seat, and a fair-share case (seats received against share for a horizon month)
+  computed by hand. Each case states the expected Spanish line.
   Every `cases.json` case whose semantics match `checker.py` (all but the clamping and fixed-service
   differences) is also run through the wrapper. `gcf_v3/tests/test_month_check_parity.py` asserts
   the wrapper reproduces every parity case, and BOTH suites assert that `parity.json` holds at
@@ -167,8 +168,17 @@ connector»).
     - A **finding** is one rule breach on the board, keyed once: (column, `violationKey`, reason)
       for a per-seat rule (an exclusion, a week exclusion); (column, the two members, rule) for a
       pair rule — ONE finding however many of its seats are forced, and unchanged by an exchange
-      inside the column. Findings come from `ruleViolationsForColumn` (`ruleEnforcement.ts:479`),
-      run with no overrides so it lists every live reason of every seat, then keyed as above.
+      inside the column. "rule" is the rule's IDENTITY, never its sentence: the config entry's own
+      `id` (`PersonRestriction.id`, `WeekExclusion.id`, `ConflictRule.id`, `plannerModel.ts`),
+      so two rules with the same wording stay two findings.
+    - **The source is a new exported pure function, `ruleFindings`, in `ruleEnforcement.ts`**, built
+      on the private `blockingReasons` (`ruleEnforcement.ts:346`), which already lists every reason
+      in order: for each seat of a column, judged against the column WITHOUT that seat (as
+      `reasonsFor` does, so a seated member is not self-exempted), it returns EVERY breach as
+      `{ kind: "exclusion" | "week_exclusion" | "pair", ruleId, members, sentence }`. Not
+      `ruleViolationsForColumn`: it keeps one reason per seat (`reasons.find(...)`,
+      `ruleEnforcement.ts:540-551`) and returns strings that carry no rule identity. `evaluate`,
+      `ruleViolationsForColumn` and the grid stay byte-unchanged, and their existing tests pin it.
     - A **waiver** is a finding key Frank confirmed, with its sentence verbatim. Waivers are
       finding-level, not seat-level (`/admin`'s per-seat single reason, `ruleEnforcement.ts:540`,
       is not reused for the record; the grid is not changed): a pair forced from either side is one
@@ -177,13 +187,17 @@ connector»).
       revision is made from a revision-1 record, and copied verbatim to every later revision.
     - **The invariant:** every finding is in `baseline` (a warning: the solver may break a soft
       pair to meet a floor, `gcf_v3/owt_v3/model.py:113-117`, and the TS rules may disagree on a
-      weekend, `ruleEnforcement.ts:440-448`), or a waiver, or confirmed by `force` in this very
-      call; anything else refuses the save. **What `force` confirms is the board diff**: the
+      weekend, `ruleEnforcement.ts:440-448`), or a waiver, or already on the BASE board judged
+      fresh in this call (a breach no edit made — a rename or a deactivation since the solve:
+      a warning, «apareció sin que editaras: …», never a refusal, so a lineage is never stuck), or
+      confirmed by `force` in this very call; anything else refuses the save. **What `force` confirms is the board diff**: the
       findings an edit creates that are in neither `baseline` nor the waivers, computed by the
       finder before and after the edit over the whole board. The C4 prompt (and the check tool's
       answer when the pick gate says clean but the diff is not empty, e.g. an exchange across
       columns) lists exactly those, every one, so Frank confirms everything he creates and nothing
-      else. A waiver whose finding is no longer on the board is dropped, and the answer says which;
+      else. Re-forcing a seat whose breach is in `baseline` has an empty diff: nothing is stored
+      and the breach stays listed as a solver warning before «Cargar» (the answer says so). A
+      waiver whose finding is no longer on the board is dropped, and the answer says which;
       rules are bound (`rulesRev` fixed across a lineage), so a breach that is still there keeps
       its key and its waiver.
     - So the waivers apply must hear repeated are exactly the stored set, every one still live.
@@ -207,9 +221,10 @@ connector»).
      a 2-month horizon included), calls `rankCandidates`, and answers refused (C2/C3) / prompt (C4,
      with the pre-built override) / clean. It moves to a neutral module, and **`PlannerGrid` is
      changed to call it** for both its candidate list and its pick, so the grid and the connector
-     share one definition of inputs and verdict. In this module `column`, `config` and the spine are
-     REQUIRED: the server path refuses (`server_error`, fixed line) rather than judging with one
-     missing. The grid's existing tests stay green unchanged.
+     share one definition of inputs and verdict. `judgePick` keeps the grid's contract (`config`
+     optional, absent = no rules, `PlannerGrid.tsx:296`); a SERVER wrapper requires `column`,
+     `config` and the weekend spine and refuses (`server_error`, fixed line) rather than judging
+     with one missing. The grid's existing tests stay green unchanged.
   3. `draftsToCells`, the inverse of `cellsToDrafts` (`plannerModel.ts:1840`) over
      `buildRows`/`buildColumns`, because the stored payload holds drafts, not cells. Guard:
      `cellsToDrafts(draftsToCells(d))` equals `d` for every draft of the recorded boards, seats in
@@ -226,7 +241,12 @@ connector»).
   eligibility, `collectV3Rules`/`emitV3Rules` under the bound `rulesRev`, seat targets from
   `buildRows()`), with every draft non-fixed and judged against its targets. The fair-share and
   «Mes por medio» lines come from `computeFairnessLedger` (`fairnessLedger.ts:753`) with
-  `balanceStart: FAIRNESS_BALANCE_START` as the GET passes it, fed with the frozen entries turned
+  `balanceStart: FAIRNESS_BALANCE_START` as the GET passes it. **Targets:** the fair-share line
+  uses `target` = the month AFTER the horizon's last month (the ledger drops records at or after
+  `target`, `fairnessLedger.ts:629-633`), over the stored records and roles before the horizon
+  plus, for each horizon month, the frozen entry as its record and the month's stored services
+  plus the board's drafts as its services; the «Mes por medio» lines use `target` = each solved
+  month, as the solve did; fed with the frozen entries turned
   into `LogicalRecord`s by the same builder the fairness PUT path uses for a body, and the board's
   drafts as services (counted specials included as the solve counted them), over a fresh ledger
   read that carries `SANITY_API_READ_TOKEN` (fail closed, ADR-0050)
@@ -236,7 +256,8 @@ connector»).
   re-derived). No network, so no time budget. **Which failures do what (E7):** only the ledger
   read can end in «sin revisar» (the fair-share and cadence lines are then omitted and the
   revision is saved); a failed pool, rules or roles read refuses the check and the save, because
-  without them neither the replay nor the safety net can run. Uncounted specials are not month-checked, and the answer
+  without them neither the replay nor the safety net can run; and so does `collectV3Rules`
+  answering `ok:false` (a rule's person no longer resolves), with its own lines, as Auto refuses. Uncounted specials are not month-checked, and the answer
   says so. A person seated while marked unavailable for that date is listed too (the planner only
   badges it at pick time).
 - T2.5 Tools, one implementation behind three entries:
@@ -298,7 +319,11 @@ connector»).
   every T2.1 case through `monthCheck.ts`, and `monthCheckParity.test.ts`; force in revision 2,
   an unrelated `revise_proposal` edit in revision 3, the waiver is kept and an apply without
   `waivers` is refused; the same with a seat forced past TWO rules and the revision-3 edit in a
-  different column (both waivers kept; apply without both refused); two forced seats with a pair
+  different column (both waivers kept; apply without both refused); Ana and Beto each with
+  `!in *.Lead` plus a `!with` pair on Lead, both forced into Lead (three findings, three waivers,
+  apply needs all three); two rules with identical wording stay two findings; `evaluate`,
+  `ruleViolationsForColumn` and the grid's tests unchanged; a member renamed after the solve
+  produces a «apareció sin que editaras» warning and the save succeeds; two forced seats with a pair
   rule between them, forced in one call and across revisions (one pair finding, one waiver, the
   save succeeds); an exchange of a waived pair inside a column (still covered) and across columns
   (a diff the check tool offers to force); the grid's own behaviour unchanged (it does not use the
@@ -358,7 +383,9 @@ for both.
 
 ## 7. Docs in the same delivery
 
-ADR-0062 (E2, E5, E8–E10, and the rollback note: after reverting this release every record with a
+ADR-0062 (E2, E5, E8–E10, Q1's two guarantees — (1) holds only in hosts that honour app-only
+visibility, the Claude app; a client without MCP Apps support may show `save_proposal_edits` and
+its `force` to the model, and `docs/MCP.md` says so — and the rollback note: after reverting this release every record with a
 v2 payload or a `supersededBy` reads as no record, which fails closed; revisions as new records, a month checker of its own that judges the rules as written (and why not the solver), MCP Apps
 over an Artifact, «Cargar» through the chat, Q1's exact guarantee); the MCP spec amended: the
 `revise_proposal` row and the «Editing a proposal» decision («the connector never forces», spec
