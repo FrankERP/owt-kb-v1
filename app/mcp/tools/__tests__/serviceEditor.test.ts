@@ -168,8 +168,53 @@ describe("save_service_edits", () => {
   });
 
   it("a client-sent group is refused by the schema (groups are the server's)", () => {
-    const parsed = SAVE_SERVICE_EDITS_INPUT.safeParse({ month: MONTH, changes: [{ service: "s", baseRev: "r", target: {}, diff: {}, mac: "", lines: [], group: 1 }] });
+    const parsed = SAVE_SERVICE_EDITS_INPUT.safeParse({ month: MONTH, changes: [{ service: "s", baseRev: "r", target: {}, diff: {}, mac: "", unit: ["s"], lines: [], group: 1 }] });
     expect(parsed.success).toBe(false);
+  });
+
+  it("half of a move is refused before any write: the unit is signed and must come whole", async () => {
+    const w = serviceWorld();
+    const changes = await checked(w, MOVE_ANA);
+    expect(changes.map((c) => c.unit)).toEqual([["sun8", "sun15"], ["sun8", "sun15"]]);
+    const half = await save(w, [changes[0]!]);
+    expect(sc(half)).toMatchObject({ refused: true, detail: "unit_incomplete" });
+    // Shrinking the unit to fit the half breaks its MAC.
+    const forged = await save(w, [{ ...changes[0]!, unit: ["sun8"] }]);
+    expect(sc(forged)).toMatchObject({ detail: "not_the_checked" });
+    expect(w.deps.editRole).not.toHaveBeenCalled();
+  });
+
+  it("every write is kept alive past the answer", async () => {
+    const w = serviceWorld();
+    await save(w, await checked(w, MOVE_ANA));
+    expect(w.deps.keepAlive).toHaveBeenCalledTimes(2);
+  });
+
+  it("a maintenance reload (the commit repaired the document and refused) is «revisa de nuevo», never «sin confirmar»", async () => {
+    const w = serviceWorld();
+    const changes = await checked(w, [{ op: "place", service: "sun15", seat: "BGV", member: "Carla" }]);
+    w.deps.editRole.mockImplementationOnce(async () => {
+      w.store.set("sun15", { ...w.store.get("sun15")!, _rev: "sun15-r2" });
+      return { ok: false, status: 409, body: { error: "bootstrap_completed_reload" } };
+    });
+    const out = await save(w, changes);
+    expect(statuses(out)).toEqual({ sun15: "notSavedRecheck" });
+    expect(sc(out).next).toBe("check_again");
+    expect(textOf(out)).toContain("se acaba de reparar");
+  });
+
+  it("a run with something to re-check never tells the model to repeat the same call", async () => {
+    const w = serviceWorld();
+    const changes = [
+      ...(await checked(w, [{ op: "clear", service: "sun1", seat: "Coro", member: "Dani" }])),
+      ...(await checked(w, [{ op: "place", service: "sun15", seat: "BGV", member: "Carla" }])),
+    ];
+    w.deps.editRole
+      .mockResolvedValueOnce({ ok: false, status: 409, body: { error: "stale_revision" } })
+      .mockResolvedValueOnce({ ok: false, status: 409, body: { error: "ambiguous_target" } });
+    const out = await save(w, changes);
+    expect(statuses(out)).toEqual({ sun1: "notSavedRepeat", sun15: "notSavedRecheck" });
+    expect(sc(out).next).toBe("check_again");
   });
 
   it("a forced rule needs the card's token; from the chat it is refused, with the token it is saved", async () => {
@@ -330,6 +375,13 @@ describe("save_service_edits", () => {
     const saved = await save(w, changesOf(out));
     expect(sc(saved)).toMatchObject({ detail: "group_too_big" });
     expect(w.deps.editRole).not.toHaveBeenCalled();
+    // In parts, by the signed units the check answered (6 + 1), it saves.
+    const units = [...new Set(changesOf(out).map((c) => c.unit.join(",")))];
+    expect(units.map((u) => u.split(",").length)).toEqual([6, 1]);
+    for (const u of units) {
+      const part = await save(w, changesOf(out).filter((c) => c.unit.join(",") === u));
+      expect(Object.values(statuses(part)).every((x) => x === "saved"), textOf(part)).toBe(true);
+    }
   });
 
   it("a weekend setlist saved between check and save does not block it; a special's does («cambió»)", async () => {

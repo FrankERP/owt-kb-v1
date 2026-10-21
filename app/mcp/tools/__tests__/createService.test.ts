@@ -21,7 +21,7 @@ function world() {
     const b = body as Body;
     const receipt = receipts.get(b.creationRequestId);
     if (receipt?.retired) return { ok: false, status: 409, body: { error: "idempotency_key_retired" } };
-    if (receipt) return { ok: true, status: 200, body: { _id: receipt.roleId, replay: true }, effects: { kind: "replay", roleId: receipt.roleId } };
+    if (receipt) return { ok: true, status: 200, body: { ...roles.get(receipt.roleId), _id: receipt.roleId, replay: true }, effects: { kind: "replay", roleId: receipt.roleId } };
     const taken = [...roles.values()].some((r) => r._type === b._type && r.date === b.date && r.service_name === b.service_name);
     if (taken) return { ok: false, status: 409, body: { error: "ambiguous_target" } };
     const roleId = `role-${++n}`;
@@ -29,13 +29,16 @@ function world() {
     receipts.set(b.creationRequestId, { roleId, retired: false });
     return { ok: true, status: 201, body: { _id: roleId }, effects: { kind: "created", roleId, push: {}, notice: null } };
   });
-  const deps = { createRole, nowMs: () => 0, todayIso: () => "2026-10-21" } as unknown as CreateServiceDeps & { createRole: typeof createRole };
+  const keepAlive = vi.fn();
+  const deps = { createRole, keepAlive, nowMs: () => 0, todayIso: () => "2026-10-21" } as unknown as CreateServiceDeps & { createRole: typeof createRole; keepAlive: typeof keepAlive };
   /** `/admin` deletes a role: its receipt is retired for good. */
   const remove = (roleId: string) => {
     roles.delete(roleId);
     for (const r of receipts.values()) if (r.roleId === roleId) r.retired = true;
   };
-  return { deps, roles, remove, bodies: () => createRole.mock.calls.map(([b]) => b as Body) };
+  /** `/admin` renames a special or moves a service: the receipt still points at it. */
+  const edit = (roleId: string, patch: Partial<Body>) => roles.set(roleId, { ...roles.get(roleId)!, ...patch });
+  return { deps, roles, remove, edit, bodies: () => createRole.mock.calls.map(([b]) => b as Body) };
 }
 
 const create = (w: ReturnType<typeof world>, args: CreateServiceArgs) => createServiceResult(args, PRINCIPAL, w.deps);
@@ -114,6 +117,21 @@ describe("create_service", () => {
     expect(ids[2]).not.toBe(ids[0]);
     // And its repeat replays that generation.
     expect(sc(await create(w, { date: "2026-11-29", type: "sunday" }))).toMatchObject({ status: "already", service: "role-2" });
+  });
+
+  it("a service renamed or moved since is not «ya estaba»: the next generation creates the one asked for", async () => {
+    const w = world();
+    await create(w, { date: "2026-11-18", type: "special", name: "Retiro" });
+    w.edit("role-1", { service_name: "Retiro de jóvenes" });
+    const renamed = await create(w, { date: "2026-11-18", type: "special", name: "Retiro" });
+    expect(sc(renamed)).toEqual({ ok: true, status: "created", service: "role-2" });
+    await create(w, { date: "2026-11-29", type: "sunday" });
+    w.edit("role-3", { date: "2026-11-22" });
+    const moved = await create(w, { date: "2026-11-29", type: "sunday" });
+    expect(sc(moved)).toEqual({ ok: true, status: "created", service: "role-4" });
+    // An untouched one still replays, and every create was kept alive past the answer.
+    expect(sc(await create(w, { date: "2026-11-29", type: "sunday" }))).toEqual({ ok: true, status: "already", service: "role-4" });
+    expect(w.deps.keepAlive).toHaveBeenCalledTimes(w.bodies().length);
   });
 
   it("generations are bounded", async () => {

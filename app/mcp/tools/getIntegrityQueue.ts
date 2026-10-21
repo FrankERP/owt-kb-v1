@@ -58,10 +58,14 @@ const defaultDeps: GetIntegrityQueueDeps = {
 };
 
 function presentEntry(e: IntegrityQueueEntry) {
+  // A dangling assignment's ids are the MISSING members' ids: never on the wire (members travel as
+  // tokens, ADR-0062). The record that holds them and how many there are is what an admin acts on.
+  const dangling = e.kind === "dangling_assignment";
   return {
     tipo: INTEGRITY_KIND_LABEL[e.kind],
     motivos: e.reasons.map(describeIntegrityReason),
-    ids: e.ids,
+    ids: dangling ? e.relatedIds : e.ids,
+    ...(dangling ? { referenciasRotas: e.ids.length } : {}),
     bloquea: e.blocking,
     accion: INTEGRITY_ACTION_COPY[e.action],
   };

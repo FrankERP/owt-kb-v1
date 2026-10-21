@@ -304,7 +304,10 @@ several exist precisely to stop a plausible-looking change.
   cache); `calendarFeedRoute.test.ts` asserts zero fetches for every pre-signature refusal.
 - **Notification emails: `before` is captured PRE-COMMIT** and threaded into
   `after()`. Reading live state inside `after()` gives post-write state and the
-  system silently sends nothing. See `docs/NOTIFICATIONS.md`.
+  system silently sends nothing. The MCP saved-service save (`save_service_edits`,
+  `copy_instruments`, ADR-0064) upserts the same notices inline instead
+  (`queueRoleNoticesNow`, awaited, no layer-2 sweep), from the same pre-commit
+  `before`. See `docs/NOTIFICATIONS.md`.
 - **A Server Component may never CALL a value imported from a `"use client"`
   module.** It receives a client reference, not the function, and calling it
   throws at render — that is what took `/` down for 56 minutes on 2026-09-02

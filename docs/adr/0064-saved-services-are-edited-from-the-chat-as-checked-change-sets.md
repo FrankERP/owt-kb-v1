@@ -35,12 +35,18 @@ Plan: `docs/superpowers/plans/2026-10-21-owt-mcp-admin-parity-f1.md` (S2 approve
   (C1–C3 refuse, a C4 is collected), then a whole-board safety net before and after. The save runs
   the same judge again on a fresh read.
 - **Stateless change sets (F3).** A check answers, per changed service, `{service, baseRev, target,
-  diff, mac, lines, waivers?}` — the full target state, never ops, never a `lockRev`. The save reads
+  diff, mac, unit, lines, waivers?}` — the full target state, never ops, never a `lockRev`. The save reads
   the month fresh and sorts first: equal to the target → «ya estaba»; `_rev` ≠ `baseRev` →
   «cambió» (refuses the WHOLE call before any write); else «por guardar». Groups (someone leaves one
   changed service and enters another, transitively) are derived by the server, never sent; a group
   of more than 6 is refused. Writes go one service at a time, a group's back to back, each awaited
   with its notices queued inline. A repeat of the same call finishes what an interruption left.
+- **The save unit is signed (review finding 1).** Each change carries `unit`: the services that must
+  be saved in the same call — its group, or a piece of at most 6 of a larger one, in the server's
+  order (`saveUnits`). The MAC covers it, and the save refuses a call that names a unit without
+  every service in it (`unit_incomplete`). Without it, one side of a move sent alone would land
+  while the other side waits, and the server could not tell: groups are derived from the changes
+  in the call, so a half sent alone looks like a complete single.
 - **The prompt shows what will happen (F4).** `lines` are compared to the server's own rendering
   as an NFC multiset; a mismatch refuses before any write. A copy's lines name EVERY instrument seat
   of the result (`copyLines`), not only who changes.
@@ -65,6 +71,9 @@ Plan: `docs/superpowers/plans/2026-10-21-owt-mcp-admin-parity-f1.md` (S2 approve
   loaders read through the module clients the protected-read audit pins; a second client threaded
   through them would fork that audit. The race bounds the CALL; a request that loses it may still
   land in the background, which is exactly «sin confirmar» and the repeat answers «ya estaba».
+  That late write, and the notices it queues inline, are kept running past the answer with
+  `after()` (`keepWriteAlive`, review finding 2); otherwise the platform could freeze the function
+  between the commit and its notice upsert, and a saved change would reach no one.
 - **A re-forced baseline finding (A4)** carries its line in the prompt but no token, as above.
 - **«Dónde quedó cada quien»** after a group stopped half-written is computed over the whole month
   board with the written targets applied, so a person who also serves elsewhere is named there too.
@@ -72,6 +81,16 @@ Plan: `docs/superpowers/plans/2026-10-21-owt-mcp-admin-parity-f1.md` (S2 approve
   (`ruleEnforcement.ts`: the pattern map lists voice row ids), so a copy of instruments cannot break
   one; if a finding appears anyway the copy is refused (fail closed), never forced. The judge still
   refuses a person without the instrument's Tipo, which `/admin`'s copy does not check.
+- **A repeat cannot finish a half-written move onto a custom instrument or FOH row** whose last
+  holder the written half removed (review finding 7, accepted): rows beyond the defaults come only
+  from labels present in the month (`buildStoredGridRows`), so the fresh board has no such row and
+  the remaining service answers `unknown_row`. It refuses (never writes a wrong row); the admin
+  finishes that one seat in `/admin`. Keeping the rows the check saw would mean trusting the check's
+  board over a fresh read, which the stateless design rejects.
+- **A replayed create is matched against the call (review finding 3).** A receipt keeps pointing
+  at its role after `/admin` renames or moves it; if the role no longer has the date, name, time
+  and format asked for, the call moves to the next generation and creates the one asked for,
+  instead of answering «ya estaba» about a service that is not there.
 - **Header edits (name, time, «Cuenta para equidad») are chat-only** in the card's first version;
   the card edits seats.
 

@@ -52,8 +52,8 @@ export function canonicalJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
-export function changeMac(key: Uint8Array, change: { service: string; baseRev: string; target: unknown; diff: unknown }): string {
-  const body = canonicalJson({ service: change.service, baseRev: change.baseRev, target: change.target, diff: change.diff });
+export function changeMac(key: Uint8Array, change: { service: string; baseRev: string; target: unknown; diff: unknown; unit: readonly string[] }): string {
+  const body = canonicalJson({ service: change.service, baseRev: change.baseRev, target: change.target, diff: change.diff, unit: change.unit });
   return createHmac("sha256", key).update(`${CHANGE_LABEL}${body}`, "utf8").digest().toString("base64url");
 }
 

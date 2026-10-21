@@ -779,8 +779,13 @@ decisions and the rejected alternatives:
   (another admin, or a special's setlist) → «cambió», and NOTHING is written; else saved. So a
   repeat of the same call after «sin confirmar» or «pendiente» finishes the rest.
 - **Moves are saved back to back.** Services joined by someone leaving one and entering another
-  form a group, derived by the server; at most 6 per call. If half a group is written and the other
-  half refused, the save stops and says where each person is now.
+  form a group, derived by the server; at most 6 per call. Each change set carries its signed
+  `unit` (the group, or a piece of at most 6 of a larger one), and a call that leaves out part of a
+  unit is refused before any write. If half a group is written and the other half refused, the save
+  stops and says where each person is now.
+- **A write that outlives the answer keeps running** (`after()`), with its inline notices, so «sin
+  confirmar» never means «saved but nobody told». A repeated `create_service` whose service was
+  renamed or moved since creates the one asked for instead of answering «ya estaba».
 - **Forcing needs the card**, as with proposals: only `check_service_edits_app` mints waiver tokens,
   bound to the service and its revision. A rule the service already broke before the edit is a
   warning; forced again, it is named in the prompt «ya estaba rota antes de este cambio». The
@@ -806,11 +811,15 @@ Confirmed from the code at `963cd736` (P3 plan, § «Notification audiences»):
 | `swap_assignment`, per published role | push «Servicio actualizado» to the members **added** to that role | a `role` notice to the union of before and after assignees, after the window | anything for a draft role |
 | `publish_service` | push «Nuevo servicio asignado» to every current assignee; the consolidated assignment email to the members `sendAssignmentEmailsBatch` itself derives from the service body (`assigneesOf` + `rolesForMember`), reported as that derivation | «Setlist listo» (`debounceMs: 0`) to the participants and the whole worship team (ADR-0054) if there are songs, flushed in the same `after()` | — |
 | `unpublish_service` | — | — | everything; there is no sweep |
+| `save_service_edits`, `copy_instruments`, per published role | push «Servicio actualizado» to the members **added** to that role (in `after()`, as `/admin`) | a `role` notice to the union of before and after assignees, after the window — upserted INLINE and awaited before the next service is written (`queueRoleNoticesNow`), with no layer-2 sweep | anything for a draft role |
+| `create_service` | — | — | everything: it creates an empty draft (`published: false`) |
 
 All of these pass the downstream filters: device tokens and push preferences, `EMAIL_ALLOWLIST`,
-and `wantsNotification`. Any outbox upsert also triggers the derated layer-2 sweep, which can
-deliver **other** notices that were already due to their own recipients, exactly as the same
-`/admin` write does. The tools report all of it as queued (I9).
+and `wantsNotification`. Any outbox upsert through the deferred path also triggers the derated
+layer-2 sweep, which can deliver **other** notices that were already due to their own recipients,
+exactly as the same `/admin` write does; the saved-service save's inline upserts run no sweep and
+are delivered by layers 1 and 3 ([NOTIFICATIONS.md](NOTIFICATIONS.md#the-shape-of-it)). The tools
+report all of it as queued (I9).
 
 ### Admin-surface gates (I15)
 

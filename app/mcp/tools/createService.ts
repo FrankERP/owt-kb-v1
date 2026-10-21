@@ -36,7 +36,7 @@ import { runWriteTool, type WriteFailureCopy } from "../writes/runWriteTool";
 import { principalOf, type McpPrincipal } from "../monthProposals/principal";
 import { canonicalJson } from "../monthProposals/changeSetTokens";
 import { draftLabel } from "../monthProposals/labels";
-import { SAVE_HARD_STOP_MS, beforeStop } from "./serviceEditor";
+import { SAVE_HARD_STOP_MS, beforeStop, keepWriteAlive } from "./serviceEditor";
 
 /** Generations tried past retired receipts before handing the create to `/admin`. */
 export const CREATE_MAX_GENERATIONS = 5;
@@ -71,16 +71,33 @@ const CREATE_COPY: WriteFailureCopy = {
 
 export interface CreateServiceDeps {
   createRole: typeof createRole;
+  /** Keeps a create that outlived the call's hard stop running after the answer (`after()`). */
+  keepAlive: (p: Promise<unknown>) => void;
   nowMs: () => number;
   todayIso: () => string;
 }
 
-export const defaultCreateServiceDeps = (): CreateServiceDeps => ({ createRole, nowMs: () => Date.now(), todayIso: serviceTodayIso });
+export const defaultCreateServiceDeps = (): CreateServiceDeps => ({ createRole, keepAlive: keepWriteAlive, nowMs: () => Date.now(), todayIso: serviceTodayIso });
 
 function answer(isError: boolean, lines: readonly string[], content: Record<string, unknown>): CallToolResult {
   return { ...(isError ? { isError: true } : {}), content: [{ type: "text", text: lines.join("\n") }], structuredContent: content };
 }
 const refusal = (line: string, detail: string) => answer(true, [line], { refused: true, code: "invalid_request", detail });
+
+/**
+ * Whether a replayed receipt's role is still the service this call asks for. A receipt keeps
+ * pointing at its role after `/admin` renames or moves it; «ya estaba» would then name a service
+ * that is no longer there, so a role that drifted counts as gone and the next generation creates.
+ */
+export function replayMatches(role: Record<string, unknown>, intent: { date: string; service_name?: string; time?: string; format?: string }): boolean {
+  const text = (v: unknown) => (typeof v === "string" && v !== "" ? v : null);
+  return (
+    (text(role.date) ?? "").slice(0, 10) === intent.date &&
+    normalizeServiceName(text(role.service_name) ?? "") === (intent.service_name ?? "") &&
+    text(role.time) === (intent.time ?? null) &&
+    text(role.format) === (intent.format ?? null)
+  );
+}
 
 /** `[A-Za-z0-9._:-]`, 8–128 characters (`parseCreateRequest`); the same payload and generation, the same id. */
 export function createRequestId(payload: unknown, generation: number): string {
@@ -141,7 +158,11 @@ export async function createServiceResult(
         );
         let out: Awaited<ReturnType<typeof deps.createRole>> | null = null;
         try {
-          const raced = await callDomain(() => beforeStop(deps.createRole(body), SAVE_HARD_STOP_MS - (deps.nowMs() - startedAt)));
+          const raced = await callDomain(() => {
+            const write = deps.createRole(body);
+            deps.keepAlive(write);
+            return beforeStop(write, SAVE_HARD_STOP_MS - (deps.nowMs() - startedAt));
+          });
           if (!raced.late) out = raced.value;
         } catch {
           console.error("[mcp-create-service] create threw");
@@ -151,6 +172,7 @@ export async function createServiceResult(
         }
         if (out.ok) {
           const replay = out.effects.kind === "replay";
+          if (replay && !replayMatches(out.body as Record<string, unknown>, intent)) continue;
           return answer(false, [replay ? S.create.already(label) : S.create.created(label)], {
             ok: true,
             status: replay ? "already" : "created",

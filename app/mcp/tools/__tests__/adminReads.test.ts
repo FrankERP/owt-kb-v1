@@ -145,6 +145,13 @@ describe("get_integrity_queue", () => {
     expect(JSON.stringify(out)).not.toContain("m-ana");
   });
 
+  it("a dangling assignment names its record and a count, never the missing members' ids", () => {
+    const dangling = entry({ kind: "dangling_assignment", ids: ["m-gone-1", "m-gone-2"], relatedIds: ["role-dec-6"], reasons: ["dangling_assignment"], action: "repair_record_via_operator" });
+    const out = presentIntegrityQueue(queue({ entries: [dangling] }), []);
+    expect(out.cola?.[0]).toMatchObject({ ids: ["role-dec-6"], referenciasRotas: 2 });
+    expect(JSON.stringify(out)).not.toContain("m-gone");
+  });
+
   it("an incomplete inventory says so and is never «sin problemas»", () => {
     const out = presentIntegrityQueue(queue({ entries: [], count: 0, incomplete: true }), []);
     expect(out.resumen).toBe("Inventario incompleto");

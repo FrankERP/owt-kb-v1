@@ -39,6 +39,7 @@
 
 import "server-only";
 
+import { after } from "next/server";
 import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
@@ -93,6 +94,7 @@ import {
   changeLines,
   copyLines,
   deriveGroups,
+  saveUnits,
   judgeTarget,
   movedMembers,
   sameLines,
@@ -197,6 +199,8 @@ const CHANGE = z
     target: WIRE_TARGET,
     diff: WIRE_DIFF,
     mac: z.string().max(64),
+    /** The services this change must be saved with (signed by the check): a move's two halves. */
+    unit: z.array(SERVICE).min(1).max(MAX_GROUP),
     lines: z.array(z.string().max(400)).max(200),
     waivers: z.array(TOKEN).max(200).optional(),
   })
@@ -250,12 +254,12 @@ export const CHECK_SERVICE_EDITS_DESCRIPTION =
 export const COPY_INSTRUMENTS_DESCRIPTION =
   "Copia en producción los instrumentos de un servicio a otro, como «Copiar instrumentos» de /admin: los del destino se " +
   "reemplazan por los que el origen tiene guardados ahora. Antes revisa la copia con check_service_edits (copy {from, " +
-  "to}) y manda aquí month, from, to, lines y, si hay, waivers tal cual los devolvió. Si algo cambió desde la revisión no " +
+  "to}) y manda aquí month, from, to y lines tal cual los devolvió. Si algo cambió desde la revisión no " +
   "copia nada y pide revisar de nuevo. Si dice «sin confirmar», repite exactamente la misma llamada.";
 
 export const SAVE_SERVICE_EDITS_DESCRIPTION =
   "Guarda en producción cambios a servicios guardados que check_service_edits ya revisó. month es YYYY-MM; changes es " +
-  "la lista changes que devolvió la revisión, tal cual (cada uno con su service, baseRev, target, diff, mac, lines y, si " +
+  "la lista changes que devolvió la revisión, tal cual (cada uno con su service, baseRev, target, diff, mac, unit, lines y, si " +
   "hay, waivers). Escribe un servicio a la vez con las mismas reglas y avisos por correo que /admin. Si algo cambió " +
   "desde la revisión no guarda nada y pide revisar de nuevo. Si la respuesta dice «sin confirmar» o «pendiente», repite " +
   "exactamente la misma llamada: lo que ya quedó se reconoce como «ya estaba» y se guarda el resto.";
@@ -275,7 +279,15 @@ export interface ServiceEditorDeps {
   copyInstruments: typeof copyInstruments;
   /** One role as the admin roles read projects it; `null` = gone. Throws on a failed read. */
   rereadRole: (id: string) => Promise<ServiceRole | null>;
+  /**
+   * Keeps the function alive until `p` settles, after the answer: a write that loses the race to the
+   * hard stop may still commit, and its inline notices must land with it (Next's `after`).
+   */
+  keepAlive: (p: Promise<unknown>) => void;
 }
+
+/** `after()` keeps a write that outlived the answer running to the end, notices included. */
+export const keepWriteAlive = (p: Promise<unknown>) => after(() => p.then(() => undefined, () => undefined));
 
 async function rereadRole(id: string): Promise<ServiceRole | null> {
   const q = adminRolesQuery();
@@ -298,6 +310,7 @@ export function defaultServiceEditorDeps(): ServiceEditorDeps {
     editRole,
     copyInstruments,
     rereadRole,
+    keepAlive: keepWriteAlive,
   };
 }
 
@@ -577,6 +590,8 @@ interface CheckedChange {
   baseRev: string;
   target: WireTarget;
   diff: WireDiff;
+  /** The services it must be saved with (`saveUnits`), signed into `mac`. */
+  unit: string[];
   mac: string;
   lines: string[];
   waivers: string[];
@@ -643,12 +658,19 @@ function changeSets(
       baseRev,
       target: wt,
       diff: wd,
-      mac: changeMac(ctx.key, { service: id, baseRev, target: wt, diff: wd }),
+      unit: [],
+      mac: "",
       lines: changeLines({ board: ctx.board, roleId: id, target, judged, nameOf: ctx.namer.nameOf }),
       waivers,
       judged,
       unconfirmed,
     });
+  }
+  // The units are signed with each change, so a save that names half of one is refused (F3).
+  const units = saveUnits(deriveGroups(changes.map((c) => ({ service: c.service, date: c.date, diff: c.diff }))));
+  for (const c of changes) {
+    c.unit = units.find((u) => u.includes(c.service))!;
+    c.mac = changeMac(ctx.key, c);
   }
   return { ok: true, changes };
 }
@@ -849,7 +871,7 @@ async function checkMonth(
       forced: v.forced.length > 0,
     })),
     // What save_service_edits takes, as is (F3).
-    changes: changes.map((c) => ({ service: c.service, baseRev: c.baseRev, target: c.target, diff: c.diff, mac: c.mac, lines: c.lines, ...(c.waivers.length ? { waivers: c.waivers } : {}) })),
+    changes: changes.map((c) => ({ service: c.service, baseRev: c.baseRev, target: c.target, diff: c.diff, mac: c.mac, unit: c.unit, lines: c.lines, ...(c.waivers.length ? { waivers: c.waivers } : {}) })),
     groups,
     ...(tooBig.length ? { maxGroup: MAX_GROUP } : {}),
     ...(unconfirmed.length ? { needsCard: true } : {}),
@@ -1014,16 +1036,16 @@ export async function copyInstrumentsResult(
       let outcome: Awaited<ReturnType<typeof deps.copyInstruments>> | null = null;
       try {
         const raced = await callDomain(() =>
-          beforeStop(
-            deps.copyInstruments({ source: { id: plan.from._id, rev: plan.from._rev }, target: { id: plan.to, rev: baseRev } }, { notices: "inline" }),
-            SAVE_HARD_STOP_MS - (deps.nowMs() - startedAt),
-          ),
-        );
+        {
+          const write = deps.copyInstruments({ source: { id: plan.from._id, rev: plan.from._rev }, target: { id: plan.to, rev: baseRev } }, { notices: "inline" });
+          deps.keepAlive(write);
+          return beforeStop(write, SAVE_HARD_STOP_MS - (deps.nowMs() - startedAt));
+        });
         if (!raced.late) outcome = raced.value;
       } catch {
         console.error("[mcp-service-editor] copy threw");
       }
-      const transport = outcome ? classifyPatchOutcome({ status: outcome.status, body: outcome.body }) : { kind: "unknown" as const };
+      const transport = classifyWrite(outcome);
       if (transport.kind === "knownCommitted" && outcome?.ok) {
         const noticesUnknown = outcome.effects.noticesQueued === false;
         return answer(false, [S.copy.done(plan.fromLabel, plan.label), ...(noticesUnknown ? [S.noticesUnknown] : [])], {
@@ -1064,6 +1086,19 @@ export async function copyInstrumentsResult(
 }
 
 // ── The save ─────────────────────────────────────────────────────────────────
+
+/**
+ * A write's outcome as the planner classifies a PATCH (`classifyPatchOutcome`). A maintenance reload
+ * (the commit bootstrapped a lock and then refused) wrote nothing to the role: a proven refusal.
+ */
+function classifyWrite(outcome: { status: number; body: unknown } | null): { kind: "knownCommitted" } | { kind: "knownFailure"; code: string } | { kind: "unknown" } {
+  if (!outcome) return { kind: "unknown" };
+  const t = classifyPatchOutcome({ status: outcome.status, body: outcome.body });
+  if (t.kind === "maintenanceReload") return { kind: "knownFailure", code: "bootstrap_completed_reload" };
+  if (t.kind === "knownCommitted") return { kind: "knownCommitted" };
+  if (t.kind === "knownFailure") return { kind: "knownFailure", code: t.code };
+  return { kind: "unknown" };
+}
 
 type SaveStatus =
   | { kind: "already" }
@@ -1145,6 +1180,12 @@ export async function saveServiceEditsResult(
         const state = sameRoleSemantics(targetSnapshot(stored), targetSnapshot(target)) ? "already" : column.rev !== change.baseRev ? "changed" : "toSave";
         sorted.push({ change, id: change.service, label, date: column.date, target, state });
       }
+      // A signed unit must be saved whole: never one half of a move without the other (F3).
+      const missingFromUnit = [...new Set(sorted.flatMap((s) => s.change.unit.filter((u) => !seen.has(u))))];
+      if (sorted.some((s) => !s.change.unit.includes(s.id)) || missingFromUnit.length) {
+        const names = missingFromUnit.map((u) => (storedColumn(board, u) ? storedLabel(board, u) : S.judge.unknown_service));
+        return refusal([S.unitIncomplete(names)], { code: "invalid_request", detail: "unit_incomplete" });
+      }
       const changed = sorted.filter((s) => s.state === "changed");
       if (changed.length) return refusal([S.changed(changed.map((s) => s.label))], { code: "stale_revision", detail: "changed", services: changed.map((s) => s.id) });
       if (sorted.every((s) => s.state === "already")) {
@@ -1198,12 +1239,16 @@ export async function saveServiceEditsResult(
           if (!parsed.ok) throw new Error("parse");
           let outcome: Awaited<ReturnType<typeof deps.editRole>> | null = null;
           try {
-            const raced = await callDomain(() => beforeStop(deps.editRole(id, parsed.value, { notices: "inline" }), SAVE_HARD_STOP_MS - elapsed()));
+            const raced = await callDomain(() => {
+              const write = deps.editRole(id, parsed.value, { notices: "inline" });
+              deps.keepAlive(write);
+              return beforeStop(write, SAVE_HARD_STOP_MS - elapsed());
+            });
             if (!raced.late) outcome = raced.value;
           } catch {
             console.error("[mcp-service-editor] write threw");
           }
-          const transport = outcome ? classifyPatchOutcome({ status: outcome.status, body: outcome.body }) : { kind: "unknown" as const };
+          const transport = classifyWrite(outcome);
           if (transport.kind === "knownCommitted" && outcome?.ok) {
             status.set(id, { kind: "saved", noticesQueued: outcome.effects.noticesQueued });
             continue;
@@ -1258,6 +1303,8 @@ export async function saveServiceEditsResult(
 
       // (6) Every service with its status, and the next step.
       const all = [...status.values()];
+      // A service refused because it changed makes a repeat certain to be refused («cambió»): check again.
+      if (all.some((x) => x.kind === "notSavedRecheck")) repeatAdvised = false;
       const anyRecheck = all.some((x) => x.kind === "notSavedRecheck" || x.kind === "notSavedGroup");
       const noticesUnknown = all.some((x) => x.kind === "saved" && x.noticesQueued === false);
       const ordered = groups.flat();

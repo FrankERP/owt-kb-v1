@@ -131,21 +131,23 @@ export function forceStoredLast(edits: readonly StoredEdit[]): StoredEdit[] {
 export const MAX_CHANGES_PER_SAVE = 31;
 
 /**
- * The change sets split into the calls «Guardar» sends. Normally one. Whole groups stay together
- * whenever they fit; a group larger than the server's `maxGroup` cannot, so it is cut into pieces of
- * `maxGroup` services in the server's order — the card says so first, since a piece that fails then
- * leaves the other pieces saved (the server would stop inside one call, not across calls).
+ * The change sets split into the calls «Guardar» sends. Normally one. Each change carries the server's
+ * signed `unit` (a whole group, or a piece of `maxGroup` services of a larger one, ADR-0064), and the
+ * save refuses a call that leaves out any service of a unit it names — so units are never cut here,
+ * only packed. When a group is larger than `maxGroup` the parts stay that small (two pieces of one
+ * group in one call would be that group again), and the card says first that a piece that fails
+ * leaves the other pieces saved.
  */
-export function saveParts(changes: readonly StoredChange[], groups: readonly string[][], maxGroup: number | null): StoredChange[][] {
-  const byId = new Map(changes.map((c) => [c.service, c]));
+export function saveParts(changes: readonly StoredChange[], maxGroup: number | null): StoredChange[][] {
   const limit = maxGroup ?? MAX_CHANGES_PER_SAVE;
-  const pieces: StoredChange[][] = [];
-  for (const g of groups) {
-    const members = g.map((id) => byId.get(id)).filter((c): c is StoredChange => c !== undefined);
-    for (let i = 0; i < members.length; i += limit) pieces.push(members.slice(i, i + limit));
+  const units = new Map<string, StoredChange[]>();
+  for (const c of changes) {
+    const unit = strings(c.unit);
+    const key = (unit.length ? unit : [c.service]).join("\u0000");
+    units.set(key, [...(units.get(key) ?? []), c]);
   }
   const parts: StoredChange[][] = [];
-  for (const piece of pieces) {
+  for (const piece of units.values()) {
     const open = parts[parts.length - 1];
     if (open && open.length + piece.length <= limit) open.push(...piece);
     else parts.push([...piece]);

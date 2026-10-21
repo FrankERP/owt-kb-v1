@@ -278,6 +278,17 @@ export function deriveGroups(changes: ReadonlyArray<{ service: string; date: str
   return [...groups.values()].map((g) => g.sort(order)).sort((a, b) => order(a[0], b[0]));
 }
 
+/**
+ * The units a check signs into each change set: a group, or — for a group larger than `max` — its
+ * pieces of `max` services in the group's order. A save must carry every service of each unit it
+ * names, so a half of a move is never written alone by a call that dropped the other half.
+ */
+export function saveUnits(groups: readonly string[][], max: number = MAX_GROUP): string[][] {
+  const units: string[][] = [];
+  for (const g of groups) for (let i = 0; i < g.length; i += max) units.push(g.slice(i, i + max));
+  return units;
+}
+
 /** Who leaves and who enters a service, for the «quedó en…» line after a half-written group. */
 export function movedMembers(changes: ReadonlyArray<{ diff: ServiceDiff }>): string[] {
   const leaves = new Set(changes.flatMap((c) => c.diff.removed.map((r) => r.member)));

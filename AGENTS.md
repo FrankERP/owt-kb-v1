@@ -194,8 +194,9 @@ looks wrong** — several exist to stop a plausible-looking change.
   (`routeMatcher.test.ts`). So is **`/api/calendar/*`**, the member calendar feed: its handler
   verifies the HMAC with ZERO I/O before any Sanity read, and nothing in it may move a read ahead
   of that check (ADR-0057).
-- **Notification emails: `before` is captured PRE-COMMIT** and threaded into `after()` —
-  reading live state there sends nothing (`docs/NOTIFICATIONS.md`).
+- **Notification emails: `before` is captured PRE-COMMIT** and threaded into `after()` (or
+  awaited inline by the MCP saved-service save, `queueRoleNoticesNow`) — reading live state there
+  sends nothing (`docs/NOTIFICATIONS.md`).
 - **A Server Component may never CALL a value imported from a `"use client"` module**
   (rendering it as JSX or forwarding it as a prop is fine). It took `/` down for 56 minutes
   (ADR-0028); no gate sees it except `clientBoundary.test.ts`.

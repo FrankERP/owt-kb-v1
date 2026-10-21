@@ -705,7 +705,9 @@ export const V3_STORED_EDITOR_LINES = {
   checkHead: (n: number) => `${n === 1 ? "Un servicio cambia" : `${n} servicios cambian`}. Para guardar, llama save_service_edits con estos cambios tal cual (changes):`,
   groupNote: (labels: readonly string[]) => `${joinEs(labels)} se guardan juntos, uno tras otro (alguien sale de uno y entra a otro).`,
   groupTooBig: (n: number, max: number) =>
-    `Estos cambios ligan ${n} servicios (gente que sale de uno y entra a otro); se pueden guardar como máximo ${max} ligados por llamada. Guarda esos cambios en partes.`,
+    `Estos cambios ligan ${n} servicios (gente que sale de uno y entra a otro); se pueden guardar como máximo ${max} ligados por llamada. Guarda esos cambios en partes: en cada llamada, los cambios que comparten el mismo unit.`,
+  unitIncomplete: (missing: readonly string[]) =>
+    `Estos cambios se revisaron junto con ${joinEs(missing)} (alguien sale de uno y entra a otro) y se guardan juntos. ${NO_WRITE_THIS_CALL} Manda también esos cambios, tal cual los devolvió la revisión.`,
   // The save
   noneToSave: "Todo ya estaba guardado así; no se escribió nada.",
   changed: (services: readonly string[]) =>
@@ -733,6 +735,7 @@ export const V3_STORED_EDITOR_LINES = {
     dependency_conflict: "otro documento depende de él",
     invalid_request: "la petición no es válida",
     forbidden: "no está permitido",
+    bootstrap_completed_reload: "su documento se acaba de reparar",
   } as Record<string, string>,
   line: (service: string, status: string) => `${service}: ${status}.`,
   savedHead: "Resultado del guardado:",
@@ -757,7 +760,7 @@ export const V3_STORED_EDITOR_LINES = {
     noSource: "No encuentro el servicio de origen.",
     sameService: "El origen y el destino son el mismo servicio.",
     sourceUnreadable: "El servicio de origen no se puede leer como lo lee el planificador; copia desde /admin.",
-    checkHead: "Para copiarlos, llama copy_instruments con copy tal cual (from, to, lines y, si hay, waivers):",
+    checkHead: "Para copiarlos, llama copy_instruments con copy tal cual (from, to y lines):",
     needsCard: `Esta copia rompería una regla por lugar, y una copia no se fuerza desde el chat: hazla en /admin («Copiar instrumentos») o cambia antes esos lugares. ${NO_WRITE_THIS_CALL}`,
     notTheChecked: (service: string) =>
       `La copia a ${service} no es la que se revisó (o cambiaron los instrumentos, los nombres o las reglas). ${NO_WRITE_THIS_CALL} Revisa de nuevo con check_service_edits.`,

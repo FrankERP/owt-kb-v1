@@ -63,7 +63,7 @@ describe("the saved-month model against the real tools", () => {
     expect(refused.prompt?.[0]?.where).toBe("domingo 1 nov · BGV");
     const forced = await appCheck(w, forceStoredLast(after.edits));
     expect(forced.ok).toBe(true);
-    const [part] = saveParts(forced.changes, forced.groups, forced.maxGroup);
+    const [part] = saveParts(forced.changes, forced.maxGroup);
     const message = saveMessage(MONTH, part!, 0, 1);
     expect(message.split("\n")[0]).toBe("Guarda estos cambios de noviembre de 2026 con save_service_edits:");
     expect(message).toContain("asignado de todos modos");
@@ -89,17 +89,20 @@ describe("the saved-month model against the real tools", () => {
 });
 
 describe("splitting «Guardar»", () => {
-  const ch = (service: string): StoredChange => ({ service, lines: [`${service} · BGV: entra Ana`] });
-  it("one part when every group fits; whole groups packed together", () => {
-    const changes = ["a", "b", "c"].map(ch);
-    expect(saveParts(changes, [["a", "b"], ["c"]], null).map((p) => p.map((c) => c.service))).toEqual([["a", "b", "c"]]);
+  const ch = (service: string, unit: string[] = [service]): StoredChange => ({ service, unit, lines: [`${service} · BGV: entra Ana`] });
+  it("one part when every unit fits; whole units packed together", () => {
+    const changes = [ch("a", ["a", "b"]), ch("b", ["a", "b"]), ch("c")];
+    expect(saveParts(changes, null).map((p) => p.map((c) => c.service))).toEqual([["a", "b", "c"]]);
   });
 
-  it("a group past the server's limit is cut into pieces of that size; small groups fill the gaps", () => {
-    const ids = ["a", "b", "c", "d", "e", "f", "g", "h"];
-    const parts = saveParts(ids.map(ch), [["a", "b", "c", "d", "e", "f", "g"], ["h"]], 6);
+  it("a group past the server's limit goes by its signed units; small units fill the gaps; a unit is never cut", () => {
+    const big = ["a", "b", "c", "d", "e", "f"];
+    const changes = [...big.map((id) => ch(id, big)), ch("g"), ch("h")];
+    const parts = saveParts(changes, 6);
     expect(parts.map((p) => p.map((c) => c.service))).toEqual([["a", "b", "c", "d", "e", "f"], ["g", "h"]]);
     expect(saveMessage(MONTH, parts[1]!, 1, 2).split("\n")[0]).toBe("Guarda la parte 2 de 2 de los cambios de noviembre de 2026 con save_service_edits:");
+    // The unit travels in the message untouched: the save checks it against its MAC.
+    expect(saveMessage(MONTH, parts[0]!, 0, 2)).toContain('"unit":["a","b","c","d","e","f"]');
   });
 });
 

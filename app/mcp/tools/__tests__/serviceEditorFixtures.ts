@@ -205,6 +205,7 @@ export function serviceWorld(opts: { rows?: StoredRow[]; config?: SolverConfig; 
       if (options?.notices === "inline") log.push(`notices:${target._id}`);
       return { ok: true, status: 200, body: { ok: true }, effects: { noticesQueued: options?.notices === "inline" ? true : null } };
     }),
+    keepAlive: vi.fn(),
     rereadRole: vi.fn(async (id: string) => {
       const row = store.get(id);
       return row ? viaJson(row) : null;

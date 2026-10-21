@@ -117,7 +117,7 @@ export function useStoredEditor(app: App | null): StoredEditorState {
 
   const send = (index: number) => {
     if (!app || !month || !check) return;
-    const parts = saveParts(check.changes, check.groups, check.maxGroup);
+    const parts = saveParts(check.changes, check.maxGroup);
     const part = parts[index];
     if (!part) return;
     setBusy(true);
@@ -130,7 +130,7 @@ export function useStoredEditor(app: App | null): StoredEditorState {
 
   let props: EditorProps | null = null;
   if (month && check) {
-    const parts = saveParts(check.changes, check.groups, check.maxGroup);
+    const parts = saveParts(check.changes, check.maxGroup);
     const locked = busy || ask !== null;
     const footer = (
       <>
