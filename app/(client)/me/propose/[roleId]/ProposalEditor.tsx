@@ -66,7 +66,7 @@ interface Props {
   proposal: SharedProposal | null;
   currentUserId: string;
   /**
-   * What admins wrote to this service's leads from its card (ADR-0064) —
+   * What admins wrote to this service's leads from its card (ADR-0065) —
    * typically what the pastor shared. Read-only here; merged into the thread by `at`.
    */
   earlierMessages?: ThreadMessage[] | null;
@@ -581,7 +581,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
           textarea below stands in, and nothing is buffered client-side. */}
       {proposalId && (
         <ProposalThread
-          // The admins' pre-proposal messages first (ADR-0064); the thread orders
+          // The admins' pre-proposal messages first (ADR-0065); the thread orders
           // the whole list by `at`. Kept out of `messages` state on purpose: every
           // post's read-back replaces that state with the PROPOSAL's thread only.
           messages={[...(earlierMessages ?? []), ...messages]}

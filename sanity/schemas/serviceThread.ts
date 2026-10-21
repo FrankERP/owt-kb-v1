@@ -1,7 +1,7 @@
 import { defineType } from "sanity";
 
 /**
- * The conversation about a service before its setlist proposal exists (ADR-0064).
+ * The conversation about a service before its setlist proposal exists (ADR-0065).
  *
  * `_id` is `serviceThread.<roleId>` (dotted: an untokened read never serves it).
  * Admins append here while the service has no `setlistProposal`; once the leads

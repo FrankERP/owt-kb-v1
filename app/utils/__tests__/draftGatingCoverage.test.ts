@@ -104,7 +104,7 @@ const MAY_SEE_DRAFTS: Record<string, string> = {
     "panel's rows (behind `requireActiveManager`; showing an admin their own " +
     "drafts is the draft/publish feature) shared with the MCP month planner, and " +
     "`serviceConversationQuery`, the admin's «Mensajes del servicio» dialog " +
-    "(an admin may write before the month is published; ADR-0064). " +
+    "(an admin may write before the month is published; ADR-0065). " +
     "Do NOT add a member-facing query here.",
 };
 

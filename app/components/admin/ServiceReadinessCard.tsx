@@ -88,7 +88,7 @@ export interface ServiceReadinessCardProps {
   onEdit: () => void;
   onDelete: () => void;
   onSetlist: () => void;
-  /** «Mensajes del servicio»: the conversation with this service's leads (ADR-0064). */
+  /** «Mensajes del servicio»: the conversation with this service's leads (ADR-0065). */
   onMessages?: () => void;
   /** Draft -> publish (guarded / override). Never used to hide a service. */
   onPublish: () => void;

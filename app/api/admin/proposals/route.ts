@@ -20,7 +20,7 @@ export async function GET() {
   // reviewed, and the panel must be able to tell an approved proposal with a
   // verifiable receipt from a legacy one without one.
   // `earlier_messages` is what admins wrote on the service before its proposal
-  // existed (ADR-0064), shown in the same thread; `null` when there was nothing.
+  // existed (ADR-0065), shown in the same thread; `null` when there was nothing.
   const proposals = await operationalClient.fetch(`
     *[_type == "setlistProposal"] | order(service_date asc) {
       _id,

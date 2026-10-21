@@ -1,15 +1,18 @@
-# The gates — the three CLAUDE.md names plus both solver suites — run by a machine
-# instead of asserted by a human. Before this existed, "gates green" was a claim in
+# The gates — the three CLAUDE.md names plus both solver suites (v2 only on a PR
+# that touches it, ADR-0064) — run by a machine instead of asserted by a human. Before this existed, "gates green" was a claim in
 # a chat log: `main` auto-deploys to production, so nothing mechanical stood between
 # a red test suite and the team's app. This is that thing.
 #
 # Three jobs do the work, in parallel: `node` (tsc, vitest, eslint), `solver-v2`
-# (the deployed CP-SAT solver, gcf/) and `solver-v3` (gcf_v3/). A fourth, `gates`,
-# runs no test of its own: it is the ONE check `main`'s branch protection requires,
-# and it is green only when every other job here concluded `success`. It aggregates
-# rather than tests because GitHub counts a SKIPPED required check as passing, so a
-# plain `needs:` would turn every red suite into a green merge. Adding a job means
-# adding it to `gates.needs`; scripts/__tests__/ciLayout.test.ts fails until you do.
+# (the v2 CP-SAT solver, gcf/ — the rollback engine since ADR-0056) and `solver-v3`
+# (gcf_v3/). `scope` decides, on a pull request only, whether `solver-v2` runs at
+# all (ADR-0064). A fifth, `gates`, runs no test of its own: it is the ONE check
+# `main`'s branch protection requires, and it is green only when every other job
+# here concluded `success` — or, for `solver-v2` alone, `skipped` because `scope`
+# said the PR does not touch it. It aggregates rather than tests because GitHub
+# counts a SKIPPED required check as passing, so a plain `needs:` would turn every
+# red suite into a green merge. Adding a job means adding it to `gates.needs`;
+# scripts/__tests__/ciLayout.test.ts fails until you do.
 # See docs/CI.md «Why `gates` is an aggregator».
 #
 # Deliberately NOT here: Playwright e2e (needs live Sanity credentials and the
@@ -73,8 +76,16 @@ jobs:
   # One x86_64 Linux runner, once per run, never a matrix: GOLDEN_SCHEDULE in
   # gcf/test_inertness.py is enforced only on Linux x86_64 and, inside Actions,
   # FAILS instead of skipping anywhere else (docs/CI.md «Solver inertness goldens»).
+  #
+  # Since v2 became the rollback engine, a pull request that touches neither gcf/
+  # nor the CI machinery skips this job (~10 of the run's ~10.5 minutes): `scope`
+  # says "false" and `gates` accepts the skip on that word only. Anything else
+  # (a push, a manual run, an unreadable diff, a `scope` that wrote nothing) runs
+  # it. ADR-0064; docs/CI.md «Scoped skip of solver-v2».
   solver-v2:
     name: solver-v2
+    needs: scope
+    if: ${{ needs.scope.outputs.solver-v2 != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -116,10 +127,30 @@ jobs:
       - name: Solver tests
         run: python -m unittest discover -s gcf_v3 -t gcf_v3 -v
 
+  # Which skippable jobs this run needs (scripts/lib/ci-scope.mjs). Only pull
+  # requests are ever scoped; depth 2 fetches the merge commit's parents, so the
+  # diff is the PR's merge commit against the base tip it merged onto.
+  scope:
+    name: scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      solver-v2: ${{ steps.decide.outputs.solver-v2 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Decide
+        id: decide
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: node scripts/ci/ci-scope.mjs
+
   # THE REQUIRED CHECK. Its name is what branch protection matches; do not rename it.
   gates:
     name: gates
-    needs: [node, solver-v2, solver-v3]
+    needs: [node, solver-v2, solver-v3, scope]
     # NEVER let this job be skipped. Without `always()`, one red job above skips
     # `gates`, and GitHub treats a skipped required check as PASSING — the PR
     # merges red. `!cancelled()` is not enough either: a cancelled run would skip
@@ -130,8 +161,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Exit 0 only if every job in `needs` concluded `success`; it names any that
-      # did not. The job data travels through `env:`, never into the shell source.
+      # Exit 0 only if every job in `needs` concluded `success` (or is a skip that
+      # `scope` vouched for, see above); it names any that did not. The job data
+      # travels through `env:`, never into the shell source.
       # Node builtins only, so the runner's preinstalled Node runs it: no
       # setup-node, no `npm ci`.
       - name: Verdict

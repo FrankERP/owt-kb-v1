@@ -1,5 +1,5 @@
 // Telling a service's leads that an admin wrote about it from the service card
-// (ADR-0064) — typically what the pastor shared, which they want BEFORE choosing
+// (ADR-0065) — typically what the pastor shared, which they want BEFORE choosing
 // songs.
 //
 // Push AND email, unlike an admin message on a proposal (push only). Push alone

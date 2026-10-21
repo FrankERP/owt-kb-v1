@@ -50,7 +50,7 @@ function renderThread(over: Partial<React.ComponentProps<typeof ProposalThread>>
   return { onPost, ...utils };
 }
 
-describe("ProposalThread — read-only (ADR-0064)", () => {
+describe("ProposalThread — read-only (ADR-0065)", () => {
   it("shows the messages and the hint, and no composer, when there is no onPost", () => {
     renderThread({
       onPost: undefined,
@@ -179,7 +179,7 @@ describe("ProposalThread — the composer", () => {
   });
 });
 
-describe("ProposalThread — the pastor's message (ADR-0064)", () => {
+describe("ProposalThread — the pastor's message (ADR-0065)", () => {
   it("offers the box only where asked, and posts with `pastor: true` when ticked", async () => {
     const { unmount } = renderThread();
     expect(screen.queryByLabelText("Es el mensaje del pastor")).toBeNull();

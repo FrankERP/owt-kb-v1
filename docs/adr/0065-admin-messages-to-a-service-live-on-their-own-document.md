@@ -1,4 +1,4 @@
-# ADR-0064: Admin messages to a service live on their own document
+# ADR-0065: Admin messages to a service live on their own document
 
 **Date:** 2026-10-21 · **Status:** Accepted
 

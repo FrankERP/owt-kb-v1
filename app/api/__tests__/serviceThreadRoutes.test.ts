@@ -1,4 +1,4 @@
-// The service conversation (ADR-0064) at the route level: the admin read of one
+// The service conversation (ADR-0065) at the route level: the admin read of one
 // service's conversation, and the writer that appends to `serviceThread.<roleId>`.
 //
 // The transaction is RECORDED IN ORDER, like the proposal message suite: an

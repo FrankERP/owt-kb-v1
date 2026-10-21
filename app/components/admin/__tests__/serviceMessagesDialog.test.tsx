@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 //
-// «Mensajes» from a service card (ADR-0064): the dialog reads one service's whole
+// «Mensajes» from a service card (ADR-0065): the dialog reads one service's whole
 // conversation when it opens (never before), shows the service thread and the
 // proposal's own thread together, and a post replaces ONLY the service thread —
 // the proposal's messages stay as loaded.

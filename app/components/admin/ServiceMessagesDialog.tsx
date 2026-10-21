@@ -1,7 +1,7 @@
 "use client";
 
 // «Mensajes del servicio» — the admin's conversation with one service's leads,
-// opened from the service card (Servicios in /admin, or a DayCard) (ADR-0064).
+// opened from the service card (Servicios in /admin, or a DayCard) (ADR-0065).
 //
 // It shows the WHOLE conversation: what admins wrote on the service itself
 // (`serviceThread.<roleId>`) and, once the leads have created one, the shared
