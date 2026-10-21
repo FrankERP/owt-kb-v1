@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { THREAD_MESSAGES } from "@/app/utils/proposalMessageRead";
+import { serviceThreadMessagesOf } from "@/app/utils/serviceThread";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 
 export async function GET() {
@@ -18,6 +19,8 @@ export async function GET() {
   // contract (A2 §6): an admin transition must submit the revision it actually
   // reviewed, and the panel must be able to tell an approved proposal with a
   // verifiable receipt from a legacy one without one.
+  // `earlier_messages` is what admins wrote on the service before its proposal
+  // existed (ADR-0064), shown in the same thread; `null` when there was nothing.
   const proposals = await operationalClient.fetch(`
     *[_type == "setlistProposal"] | order(service_date asc) {
       _id,
@@ -35,6 +38,7 @@ export async function GET() {
       "service_ref": service_ref._ref,
       "lead_name": coalesce(lead->alias, lead->member_name),
       ${THREAD_MESSAGES},
+      "earlier_messages": ${serviceThreadMessagesOf("^.service_ref._ref")},
       "lead_id": lead->_id,
       "contributors": contributors[]{ "id": person->_id, "name": coalesce(person->alias, person->member_name) },
       songs[] {

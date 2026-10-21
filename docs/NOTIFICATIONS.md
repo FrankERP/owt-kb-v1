@@ -419,6 +419,7 @@ real proposal notified NOBODY, in either direction.
 | Admin, standalone message | thread | **push to the lead** + contributors, "Nuevo mensaje" |
 | Admin, via `request_changes` / `reopen` | transition | unchanged review push, exactly one |
 | Lead, first submission | save | unchanged `notifyProposalSubmitted` |
+| Admin, on a service with **no proposal yet** (ADR-0064) | `serviceThread` | **push to the service's Leads** (never the author), "Nuevo mensaje", `/me/propose/<roleId>`; nothing while the service is unpublished; never email |
 
 **AT MOST ONE SIGNAL PER MESSAGE** — never both, and in one named case neither — an email or a push, never the pair. The
 gate for the lead→admin push is `status === "approved"`, nothing looser: "a
