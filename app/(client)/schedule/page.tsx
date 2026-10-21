@@ -191,6 +191,7 @@ export default async function SchedulePage({
           photos={seatPhotos([...(sundays ?? []), ...(saturdays ?? []), ...(Array.isArray(specials) ? specials : [])])}
           viewerTypes={viewer?.memberType ?? null}
           viewerName={myNameFromSession(session.user)}
+          viewerIsAdmin={["super-admin", "admin"].includes(session.user.role)}
         />
       </div>
     </div>

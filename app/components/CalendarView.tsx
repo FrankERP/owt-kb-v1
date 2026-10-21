@@ -67,6 +67,7 @@ interface Props {
   photos?: Record<string, string>;
   viewerTypes?: string[] | null;
   viewerName?: string;
+  viewerIsAdmin?: boolean;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -86,7 +87,7 @@ function firstDayOffset(year: number, month: number) {
 
 // ─── Root component ───────────────────────────────────────────────────────────
 
-export default function CalendarView({ activeDays, viewMonth, todayStr, photos, viewerTypes, viewerName }: Props) {
+export default function CalendarView({ activeDays, viewMonth, todayStr, photos, viewerTypes, viewerName, viewerIsAdmin }: Props) {
   const [mode, setMode] = useState<"agenda" | "month">("agenda");
   // `false` until the reader actually flips the SegmentedControl: first paint
   // renders at rest (M0b — never `appear` above the fold, ADR-0031), the
@@ -230,6 +231,7 @@ export default function CalendarView({ activeDays, viewMonth, todayStr, photos, 
                 photos={photos}
                 viewerTypes={viewerTypes}
                 viewerName={viewerName}
+                viewerIsAdmin={viewerIsAdmin}
               />
             ))}
           </div>

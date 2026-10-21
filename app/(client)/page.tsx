@@ -238,6 +238,7 @@ export default async function Home() {
     photos: seatPhotos([satRole, sunRole, ...specials]),
     viewerTypes: weekend.viewer?.memberType ?? null,
     viewerName: myName,
+    viewerIsAdmin: ["super-admin", "admin"].includes(session.user.role),
   };
   const greeting = homeGreeting(services.map((s) => s.props), session.user, myName);
 

@@ -322,6 +322,7 @@ export default async function MePage() {
     photos: seatPhotos(allAssignments.map((a) => a.doc)),
     viewerTypes: member?.memberType ?? null,
     viewerName: myNameFromSession(session.user),
+    viewerIsAdmin: ["super-admin", "admin"].includes(session.user.role),
   };
   const cardProps = ({ day, doc, dateKey }: (typeof allAssignments)[number]): DayCardProps => ({
     ...viewer,
