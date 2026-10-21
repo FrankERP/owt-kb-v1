@@ -88,6 +88,8 @@ export interface ServiceReadinessCardProps {
   onEdit: () => void;
   onDelete: () => void;
   onSetlist: () => void;
+  /** «Mensajes del servicio»: the conversation with this service's leads (ADR-0064). */
+  onMessages?: () => void;
   /** Draft -> publish (guarded / override). Never used to hide a service. */
   onPublish: () => void;
   /** Published -> hide, through the separate narrow unpublish flow. */
@@ -238,6 +240,11 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                       </button>
                     }
                   >
+                    {props.onMessages && !card.isPast && (
+                      <MenuItem icon={<ChatIcon />} onSelect={props.onMessages}>
+                        Mensajes a los líderes
+                      </MenuItem>
+                    )}
                     {instrPills.length > 0 && (
                       <MenuItem
                         icon={<CopyIcon />}
@@ -853,6 +860,14 @@ function EyeIcon() {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
       <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function ChatIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
     </svg>
   );
 }

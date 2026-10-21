@@ -5,7 +5,6 @@ import { useToast } from "@/app/components/ui/Toast";
 import SegmentedControl from "@/app/components/ui/SegmentedControl";
 import Skeleton, { SkeletonGroup } from "@/app/components/ui/Skeleton";
 import ProposalThread, { type ThreadMessage } from "@/app/components/ProposalThread";
-import ServiceThreadsSection from "./ServiceThreadsSection";
 
 import {
   HANDOFF_NOTICE,
@@ -48,7 +47,7 @@ interface Proposal {
   team_notes?: string;
   admin_notes?: string;
   messages?: ThreadMessage[] | null;
-  /** What admins wrote on the service before this proposal existed (ADR-0064). */
+  /** What admins wrote to the service's leads from its card (ADR-0064). */
   earlier_messages?: ThreadMessage[] | null;
   submitted_at?: string;
   contributors?: Array<{ id: string; name: string }>;
@@ -661,8 +660,6 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
 
   return (
     <div className="space-y-6">
-      <ServiceThreadsSection viewerId={viewerId} />
-
       <SegmentedControl
         label="Filtrar propuestas"
         tone="filled"

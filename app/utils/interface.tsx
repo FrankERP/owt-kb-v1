@@ -116,6 +116,8 @@ export interface TeamMember {
 }
 
 export interface SundayRole {
+  /** Projected by the reads that need the service's identity (the calendar's «Mensajes»). */
+  _id?: string;
   week: string;
   Lead: Array<TeamMember>;
   instruments: Array<{ instrument: string; person: string }>;
@@ -142,6 +144,8 @@ export interface SpecialRole {
 }
 
 export interface SaturdayRole {
+  /** Projected by the reads that need the service's identity (the calendar's «Mensajes»). */
+  _id?: string;
   week: string;
   Lead: Array<TeamMember>;
   instruments: Array<{ instrument: string; person: string }>;

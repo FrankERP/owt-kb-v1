@@ -1,6 +1,5 @@
-// The pre-proposal conversation (ADR-0064) at the route level: the admin list of
-// services without a proposal, and the writer that appends to
-// `serviceThread.<roleId>`.
+// The service conversation (ADR-0064) at the route level: the admin read of one
+// service's conversation, and the writer that appends to `serviceThread.<roleId>`.
 //
 // The transaction is RECORDED IN ORDER, like the proposal message suite: an
 // `append` on a mocked chain succeeds whether or not the document was created
@@ -111,12 +110,11 @@ vi.mock("@/sanity/lib/serverClient", () => ({
   writeClient: { transaction: () => makeTx() },
 }));
 
-import { POST } from "@/app/api/admin/service-threads/[roleId]/messages/route";
-import { GET } from "@/app/api/admin/service-threads/route";
+import { GET, POST } from "@/app/api/admin/service-threads/[roleId]/messages/route";
 import { PROPOSAL_MESSAGES_MAX } from "@/app/utils/proposalMessageWrite";
 import { serviceTodayIso } from "@/app/components/admin/serviceReadiness";
 import { evaluate, parse } from "groq-js";
-import { documentsReferencingRoleQuery, servicesWithoutProposalQuery } from "@/app/utils/serviceReadQueries";
+import { documentsReferencingRoleQuery, serviceConversationQuery } from "@/app/utils/serviceReadQueries";
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -154,6 +152,10 @@ function admin(role = "admin", sanityId = "admin-1") {
 function post(body: unknown, roleId = ROLE_ID) {
   const req = { json: async () => body } as unknown as NextRequest;
   return POST(req, { params: Promise.resolve({ roleId }) });
+}
+
+function get(roleId = ROLE_ID) {
+  return GET({} as NextRequest, { params: Promise.resolve({ roleId }) });
 }
 
 beforeEach(() => {
@@ -226,6 +228,31 @@ describe("POST /api/admin/service-threads/[roleId]/messages", () => {
     expect(tx.committed).toBe(true);
     const data = await res.json();
     expect(data.messages).toEqual([{ _key: "m1", body: "Tema: gracia" }]);
+  });
+
+  it("marks the pastor's message as `pastor_note`, relayed by the admin", async () => {
+    const res = await post({ body: "Hermanos, este domingo: Efesios 2.", pastor: true });
+    expect(res.status).toBe(200);
+    expect(txs[0].appended[0]).toMatchObject({
+      author: { _ref: "admin-1" },
+      author_role: "admin",
+      kind: "pastor_note",
+      body: "Hermanos, este domingo: Efesios 2.",
+    });
+    await drainAfter();
+    expect(sendPushMock.mock.calls[0][2]).toMatchObject({ title: "Mensaje del pastor" });
+    const [{ subject, html }] = sendEmailMock.mock.calls[0];
+    expect(subject).toMatch(/^Mensaje del pastor para tu servicio — /);
+    expect(html).toContain("Mensaje del pastor");
+  });
+
+  it("refuses a `pastor` flag that is not a boolean, writing nothing", async () => {
+    for (const pastor of ["true", 1, null]) {
+      const res = await post({ body: "hola", pastor });
+      expect(res.status).toBe(400);
+      expect(await res.json()).toMatchObject({ details: { issues: ["pastor"] } });
+    }
+    expect(txs).toHaveLength(0);
   });
 
   it("writes nothing the role-dependency scan sees, so the role stays deletable and movable", async () => {
@@ -357,46 +384,76 @@ describe("POST /api/admin/service-threads/[roleId]/messages", () => {
 
 // ── GET ─────────────────────────────────────────────────────────────────────
 
-describe("servicesWithoutProposalQuery, evaluated", () => {
-  it("lists upcoming services with no proposal, drafts flagged, with their thread", async () => {
-    const today = "2099-03-01";
-    const dataset = [
-      { _id: "past", _type: "sunday_role", week: "2099-02-22" },
-      { _id: "proposed", _type: "sunday_role", week: "2099-03-08" },
-      { _id: "setlistProposal.proposed", _type: "setlistProposal", service_ref: { _type: "reference", _ref: "proposed" } },
-      { _id: "open", _type: "saturday_role", week: "2099-03-07", published: false, Lead: [{ _ref: "lead-1" }] },
-      { _id: "lead-1", _type: "teamMembers", alias: "Ana" },
-      { _id: "special", _type: "special_role", date: "2099-03-10", service_name: "Noche" },
-      { _id: "serviceThread.open", _type: "serviceThread", role_id: "open", messages: [{ _key: "m1", body: "Tema: gracia", author_role: "admin" }] },
-    ];
-    const q = servicesWithoutProposalQuery(today);
-    const rows = (await (await evaluate(parse(q.query), { dataset, params: q.params })).get()) as Array<Record<string, unknown>>;
-    expect(rows.map((r) => r._id)).toEqual(["open", "special"]);
-    expect(rows[0]).toMatchObject({
-      service_date: "2099-03-07",
-      published: false,
-      leads: [{ id: "lead-1", name: "Ana" }],
-      messages: [{ _key: "m1", body: "Tema: gracia" }],
+describe("serviceConversationQuery, evaluated", () => {
+  const dataset = [
+    { _id: "open", _type: "saturday_role", week: "2099-03-07", published: false, Lead: [{ _ref: "lead-1" }, { _ref: "gone" }] },
+    { _id: "lead-1", _type: "teamMembers", alias: "Ana" },
+    { _id: "proposed", _type: "sunday_role", week: "2099-03-08" },
+    {
+      _id: "setlistProposal.proposed",
+      _type: "setlistProposal",
+      status: "draft",
+      service_ref: { _type: "reference", _ref: "proposed" },
+      messages: [{ _key: "p1", body: "Propuesta lista", author_role: "lead", kind: "lead_note" }],
+    },
+    { _id: "serviceThread.open", _type: "serviceThread", role_id: "open", messages: [{ _key: "m1", body: "Tema: gracia", author_role: "admin", kind: "pastor_note" }] },
+    { _id: "special", _type: "special_role", date: "2099-03-10", service_name: "Noche" },
+  ];
+  async function run(roleId: string) {
+    const q = serviceConversationQuery(roleId, `serviceThread.${roleId}`);
+    return (await (await evaluate(parse(q.query), { dataset, params: q.params })).get()) as Record<string, unknown>;
+  }
+
+  it("returns the service, its leads (dangling refs dropped), its thread and no proposal", async () => {
+    expect(await run("open")).toMatchObject({
+      service: {
+        _id: "open",
+        _type: "saturday_role",
+        service_date: "2099-03-07",
+        published: false,
+        leads: [{ id: "lead-1", name: "Ana" }],
+      },
+      messages: [{ _key: "m1", body: "Tema: gracia", kind: "pastor_note" }],
+      proposal: null,
     });
-    expect(rows[1]).toMatchObject({ published: true, messages: null });
+  });
+
+  it("carries the proposal's own thread once the leads created one", async () => {
+    const out = await run("proposed");
+    expect(out).toMatchObject({
+      service: { _id: "proposed", published: true, service_date: "2099-03-08" },
+      messages: null,
+      proposal: { _id: "setlistProposal.proposed", status: "draft", messages: [{ _key: "p1", body: "Propuesta lista" }] },
+    });
+  });
+
+  it("reads a special by its date and answers no service for an unknown id", async () => {
+    expect(await run("special")).toMatchObject({ service: { service_date: "2099-03-10", service_name: "Noche" } });
+    expect((await run("nope")).service).toBeNull();
   });
 });
 
-describe("GET /api/admin/service-threads", () => {
-  it("is admin-only", async () => {
+describe("GET /api/admin/service-threads/[roleId]/messages", () => {
+  it("is admin-only, reading nothing for anyone else", async () => {
+    requireActiveManagerMock.mockResolvedValueOnce(null);
+    expect((await get()).status).toBe(403);
     requireActiveManagerMock.mockResolvedValueOnce(admin("content-editor"));
-    expect((await GET()).status).toBe(403);
+    expect((await get()).status).toBe(403);
     expect(operationalFetch).not.toHaveBeenCalled();
   });
 
-  it("asks for services from today with no proposal, and their thread", async () => {
-    operationalFetch.mockResolvedValueOnce([{ _id: ROLE_ID }]);
-    const res = await GET();
+  it("refuses a draft id and answers 404 for an unknown service", async () => {
+    expect((await get("drafts.role-sun-1")).status).toBe(400);
+    operationalFetch.mockResolvedValueOnce({ service: null, messages: null, proposal: null });
+    expect((await get()).status).toBe(404);
+  });
+
+  it("answers the conversation, asked by role and thread id", async () => {
+    const body = { service: { _id: ROLE_ID }, messages: [{ _key: "m1" }], proposal: null };
+    operationalFetch.mockResolvedValueOnce(body);
+    const res = await get();
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual([{ _id: ROLE_ID }]);
-    const [query, params] = operationalFetch.mock.calls[0];
-    expect(params).toEqual({ today: serviceTodayIso() });
-    expect(query).toContain('count(*[_type == "setlistProposal" && service_ref._ref == ^._id]) == 0');
-    expect(query).toContain('_id == "serviceThread." + ^._id');
+    expect(await res.json()).toEqual(body);
+    expect(operationalFetch.mock.calls[0][1]).toEqual({ roleId: ROLE_ID, threadId: THREAD_ID });
   });
 });
