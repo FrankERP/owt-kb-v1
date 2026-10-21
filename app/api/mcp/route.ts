@@ -4,7 +4,8 @@
 // `mcp-handler`, stateless, tools registered below: `ping`, the seven P1 reads, the three
 // admin-parity reads (fairness ledger, solver rules, integrity queue),
 // the four P3 writes, the two P4 month tools, the proposal editor and the saved-month editor
-// (`check_service_edits`, its card twin, `save_service_edits`), plus one resource (the MCP Apps
+// (`check_service_edits`, its card twin, `save_service_edits`, `copy_instruments`), `create_service`,
+// plus one resource (the MCP Apps
 // card `solve_month` links to, `app/mcp/apps/proposalCard.ts`). Ungated by the session
 // middleware (`api/mcp(?:/|$)` in `app/utils/routeMatcher.ts`, P0 step 5), so
 // it authenticates EVERY request itself, on every method, and nothing reaches
@@ -61,6 +62,7 @@ import { registerSolveMonth } from "@/app/mcp/tools/solveMonth";
 import { registerApplySchedule } from "@/app/mcp/tools/applySchedule";
 import { registerProposalEditor } from "@/app/mcp/tools/proposalEditor";
 import { registerServiceEditor } from "@/app/mcp/tools/serviceEditor";
+import { registerCreateService } from "@/app/mcp/tools/createService";
 import { registerProposalCard } from "@/app/mcp/apps/proposalCard";
 
 export const dynamic = "force-dynamic";
@@ -115,8 +117,10 @@ const mcpHandler = createMcpHandler(
     registerSolveMonth(server);
     registerApplySchedule(server);
     registerProposalEditor(server);
-    // Admin parity phase 1 (ADR-0064): the saved-month editor; its save writes through /admin's PATCH writer.
+    // Admin parity phase 1 (ADR-0064): the saved-month editor (its save and its copy write through
+    // /admin's own writers) and create_service (through the roles POST's).
     registerServiceEditor(server);
+    registerCreateService(server);
     // The one resource: `solve_month`'s card (MCP Apps). Fixed per deployment, like the tools.
     registerProposalCard(server);
   },

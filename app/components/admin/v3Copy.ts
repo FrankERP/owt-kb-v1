@@ -745,6 +745,43 @@ export const V3_STORED_EDITOR_LINES = {
   storedNotice: "Los servicios publicados avisan por correo a su equipo como en /admin.",
   songLeadGone: (service: string, name: string) => `${service}: ${name} dirige una canción del setlist y ya no está en el Lead.`,
   headerOnlySpecial: "Solo un servicio especial tiene nombre y hora.",
+  nothingToCheck: "No hay nada que revisar: manda edits (cambios) o copy (una copia de instrumentos).",
+  // Copy instruments (S3): the check's lines, then the write's
+  copy: {
+    head: (from: string, to: string) => `Copiar los instrumentos de ${from} a ${to} (reemplaza los que tiene ${to}):`,
+    seat: (service: string, seat: string, names: readonly string[]) => `${service} · ${seat}: ${joinEs(names)}`,
+    cleared: (service: string, seat: string) => `${service} · ${seat}: queda vacío`,
+    empty: (service: string) => `${service} queda sin instrumentos.`,
+    nothing: (service: string) => `${service} ya tiene esos mismos instrumentos; no hay nada que copiar.`,
+    alone: "La copia de instrumentos se revisa sola: no la mezcles con otros cambios en la misma revisión.",
+    noSource: "No encuentro el servicio de origen.",
+    sameService: "El origen y el destino son el mismo servicio.",
+    sourceUnreadable: "El servicio de origen no se puede leer como lo lee el planificador; copia desde /admin.",
+    checkHead: "Para copiarlos, llama copy_instruments con copy tal cual (from, to, lines y, si hay, waivers):",
+    needsCard: `Esta copia rompería una regla por lugar, y una copia no se fuerza desde el chat: hazla en /admin («Copiar instrumentos») o cambia antes esos lugares. ${NO_WRITE_THIS_CALL}`,
+    notTheChecked: (service: string) =>
+      `La copia a ${service} no es la que se revisó (o cambiaron los instrumentos, los nombres o las reglas). ${NO_WRITE_THIS_CALL} Revisa de nuevo con check_service_edits.`,
+    done: (from: string, to: string) => `Copié los instrumentos de ${from} a ${to}.`,
+    already: (service: string) => `${service} ya tenía esos instrumentos; no se escribió nada.`,
+    unknown: "No pude confirmar si la copia se guardó. Repite exactamente la misma llamada: si ya quedó, contestará que ya estaba.",
+    repeat: "No se copió: otra edición llegó al mismo tiempo. Repite la misma llamada.",
+    recheck: (why: string) => `No se copió: ${why}. Revisa de nuevo con check_service_edits.`,
+  },
+  // Create a service (S3)
+  create: {
+    created: (service: string) =>
+      `Creé ${service}, sin publicar y sin nadie asignado. Para llenarlo usa check_service_edits; para publicarlo, publish_service.`,
+    already: (service: string) => `${service} ya estaba creado con estos mismos datos (esta misma llamada ya lo había creado); no se escribió nada.`,
+    exists: (service: string) => `Ya existe ${service}. No se escribió nada.`,
+    unknown: "No pude confirmar si el servicio se creó. Repite exactamente la misma llamada: si ya quedó, contestará que ya estaba.",
+    refused: (why: string) => `No se creó el servicio: ${why}. No se escribió nada.`,
+    badDate: "La fecha no es válida (YYYY-MM-DD).",
+    badWeekday: (type: "sunday" | "saturday") => `Esa fecha no es ${type === "sunday" ? "domingo" : "sábado"}.`,
+    needsName: "Un servicio especial necesita nombre.",
+    badTime: "La hora debe ser HH:mm.",
+    onlySpecial: "Solo un servicio especial lleva nombre, hora o formato de Noche de alabanza.",
+    retired: "Este mismo servicio se creó y se borró varias veces desde el chat; créalo en /admin.",
+  },
 } as const;
 
 /** C5's literal `PIN_CAP = 250` (gcf_v3/owt_v3/constants.py), mirrored once (RQ-6, `v3PinCapSync.test.ts`). */

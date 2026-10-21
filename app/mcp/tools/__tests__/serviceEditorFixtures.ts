@@ -114,10 +114,10 @@ export interface ServiceWorld {
   summary: { current: ((rows: StoredRow[]) => RoleDomainSummary) | null };
   /** Runs inside the next write, before it commits: another writer acting meanwhile. */
   beforeWrite: Array<((id: string) => void) | null>;
-  /** The order things happened: `write:<id>`, `notices:<id>`. */
+  /** The order things happened: `write:<id>`, `copy:<id>`, `notices:<id>`. */
   log: string[];
   clock: { now: number };
-  deps: ServiceEditorDeps & { editRole: ReturnType<typeof vi.fn>; rereadRole: ReturnType<typeof vi.fn>; reads: ReturnType<typeof vi.fn> };
+  deps: ServiceEditorDeps & { editRole: ReturnType<typeof vi.fn>; copyInstruments: ReturnType<typeof vi.fn>; rereadRole: ReturnType<typeof vi.fn>; reads: ReturnType<typeof vi.fn> };
   tok(memberId: string): string;
 }
 
@@ -190,6 +190,19 @@ export function serviceWorld(opts: { rows?: StoredRow[]; config?: SolverConfig; 
       store.set(id, applyPatch(row, request));
       log.push(`write:${id}`);
       if (options?.notices === "inline") log.push(`notices:${id}`);
+      return { ok: true, status: 200, body: { ok: true }, effects: { noticesQueued: options?.notices === "inline" ? true : null } };
+    }),
+    // `copyInstrumentsCommit`'s contract: both revisions asserted, the source's instruments onto the target.
+    copyInstruments: vi.fn(async (body: { source: { id: string; rev: string }; target: { id: string; rev: string } }, options?: { notices?: string }) => {
+      const hook = beforeWrite.shift();
+      hook?.(body.target.id);
+      const source = store.get(body.source.id);
+      const target = store.get(body.target.id);
+      if (!source || !target) return { ok: false, status: 404, body: { error: "not_found" } };
+      if (source._rev !== body.source.rev || target._rev !== body.target.rev) return { ok: false, status: 409, body: { error: "stale_revision" } };
+      store.set(target._id, { ...target, _rev: nextRev(target._rev), instruments: source.instruments.map((i) => ({ ...i, _key: `k${++keys}` })) });
+      log.push(`copy:${target._id}`);
+      if (options?.notices === "inline") log.push(`notices:${target._id}`);
       return { ok: true, status: 200, body: { ok: true }, effects: { noticesQueued: options?.notices === "inline" ? true : null } };
     }),
     rereadRole: vi.fn(async (id: string) => {

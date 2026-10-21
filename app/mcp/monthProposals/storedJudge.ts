@@ -31,7 +31,8 @@ import { findingKeyText } from "./proposalDocument";
 import { CELL_LIMIT, NOT_ELIGIBLE_SENTENCE, REPLAY_SENTENCES, type EditorMember, type SeatRef } from "./revise";
 import { whereOf } from "./editorView";
 import { draftLabel } from "./labels";
-import { columnTarget, diffTargets, storedColumn, withTarget, type ServiceDiff, type ServiceTarget } from "./storedMonthBoard";
+import { kindOfType } from "@/app/components/admin/v3Services";
+import { columnTarget, diffTargets, storedColumn, targetSeats, withTarget, type ServiceDiff, type ServiceTarget } from "./storedMonthBoard";
 
 export type JudgeCode =
   | keyof typeof S.judge
@@ -80,7 +81,7 @@ function headerRefusal(board: EditorBoard, roleId: string, stored: ServiceTarget
   const column = storedColumn(board, roleId)!;
   if (target._type !== stored._type) return no("type_changed", S.judge.type_changed);
   if (target.date !== stored.date) return no("date_changed", S.judge.date_changed);
-  if (target._type === "special_role") {
+  if (kindOfType(target._type) === "special") {
     if (!normalizeServiceName(target.service_name)) return no("header_invalid", S.judge.header_invalid);
     if (target.time !== undefined && !isServiceTime(target.time)) return no("header_invalid", S.judge.header_invalid);
   } else if (target.service_name !== undefined || target.time !== undefined) {
@@ -178,7 +179,7 @@ export function changeLines(input: { board: EditorBoard; roleId: string; target:
   const label = storedLabel(board, roleId);
   const { stored, diff } = judged;
   const lines: string[] = [];
-  if (stored._type === "special_role") {
+  if (kindOfType(stored._type) === "special") {
     const from = normalizeServiceName(stored.service_name);
     const to = normalizeServiceName(target.service_name);
     if (from !== to) lines.push(S.rename(label, from, to));
@@ -190,6 +191,31 @@ export function changeLines(input: { board: EditorBoard; roleId: string; target:
     const leaves = diff.removed.filter((r) => r.row === row.id).map((r) => nameOf(r.member));
     if (enters.length || leaves.length) lines.push(S.seatChange(label, row.label, enters, leaves));
   }
+  const where = (f: Finding) => whereOf(judged.board, f.key);
+  lines.push(...judged.added.map((f) => S.forced(f.sentence, where(f))));
+  lines.push(...judged.reforced.map((f) => S.reforced(f.sentence, where(f))));
+  return lines;
+}
+
+/**
+ * What the permission prompt shows for a copy of instruments (S3): EVERY instrument seat of the
+ * result by name («domingo 8 nov · Bass: Tomás»), each instrument row the copy empties, and every
+ * rule forced — so the prompt says who is seated, not only who changes. Check and write both call it.
+ */
+export function copyLines(input: { board: EditorBoard; roleId: string; fromLabel: string; target: ServiceTarget; judged: TargetJudgement; nameOf: (id: string) => string }): string[] {
+  const { board, roleId, fromLabel, target, judged, nameOf } = input;
+  const label = storedLabel(board, roleId);
+  const rowsOf = (t: ServiceTarget) => new Map((targetSeats(board.rows, t) ?? []).map((s) => [s.rowId, s.members]));
+  const after = rowsOf(target);
+  const before = rowsOf(judged.stored);
+  const lines = [S.copy.head(fromLabel, label)];
+  for (const row of board.rows) {
+    if (row.category !== "instrumento") continue;
+    const now = after.get(row.id) ?? [];
+    if (now.length) lines.push(S.copy.seat(label, row.label, now.map(nameOf)));
+    else if ((before.get(row.id) ?? []).length) lines.push(S.copy.cleared(label, row.label));
+  }
+  if (target.instruments.length === 0) lines.push(S.copy.empty(label));
   const where = (f: Finding) => whereOf(judged.board, f.key);
   lines.push(...judged.added.map((f) => S.forced(f.sentence, where(f))));
   lines.push(...judged.reforced.map((f) => S.reforced(f.sentence, where(f))));

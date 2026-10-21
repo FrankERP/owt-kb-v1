@@ -334,11 +334,20 @@ export const MONTH_TOOL_NAMES = ["solve_month", "apply_schedule"];
 export const EDITOR_TOOL_NAMES = ["check_proposal_edits", "save_proposal_edits", "revise_proposal"];
 
 /**
- * Admin parity phase 1 (ADR-0064): the saved-month editor, after the proposal editor. Never called
- * here: the two checks only read but need a month's services, and `save_service_edits` writes
- * production services. `check_service_edits_app` is app-only (the card calls it).
+ * Admin parity phase 1 (ADR-0064): the saved-month editor, after the proposal editor, then
+ * `create_service`. Never called here: the two checks only read but need a month's services, and
+ * the other three write production services. `check_service_edits_app` is app-only (the card calls it).
  */
-export const SERVICE_EDITOR_TOOL_NAMES = ["check_service_edits", "check_service_edits_app", "save_service_edits"];
+export const SERVICE_EDITOR_TOOL_NAMES = [
+  "check_service_edits",
+  "check_service_edits_app",
+  "save_service_edits",
+  "copy_instruments",
+  "create_service",
+];
+
+/** The saved-month editor's writes: destructive, like every write (I14). */
+export const SERVICE_EDITOR_WRITE_NAMES = ["save_service_edits", "copy_instruments", "create_service"];
 
 /**
  * Admin parity phase 1: three reads after the P1 reads (`/admin`'s Equidad, rules and integrity
@@ -386,7 +395,7 @@ export const SOLVE_MONTH_ANNOTATIONS = Object.freeze({
 export function expectedAnnotations(name) {
   // A saved version is a private record like solve_month's; the check only reads.
   if (name === "solve_month" || name === "save_proposal_edits" || name === "revise_proposal") return SOLVE_MONTH_ANNOTATIONS;
-  return WRITE_TOOL_NAMES.includes(name) || name === "apply_schedule" || name === "save_service_edits" ? WRITE_ANNOTATIONS : READ_ONLY_ANNOTATIONS;
+  return WRITE_TOOL_NAMES.includes(name) || name === "apply_schedule" || SERVICE_EDITOR_WRITE_NAMES.includes(name) ? WRITE_ANNOTATIONS : READ_ONLY_ANNOTATIONS;
 }
 
 /**

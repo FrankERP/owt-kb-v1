@@ -654,7 +654,7 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     // read or a destructive write declares.
     for (const tool of tools) {
       const name = String(tool.name);
-      const write = (WRITE_TOOL_NAMES as string[]).includes(name) || name === "apply_schedule" || name === "save_service_edits";
+      const write = (WRITE_TOOL_NAMES as string[]).includes(name) || name === "apply_schedule" || ["save_service_edits", "copy_instruments", "create_service"].includes(name);
       expect(tool.annotations, name).toEqual(
         name === "solve_month" || name === "save_proposal_edits" || name === "revise_proposal"
           ? { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }

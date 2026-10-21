@@ -1,5 +1,5 @@
 // The MCP editor over a SAVED month (admin parity phase 1, S2:
-// docs/superpowers/plans/2026-10-21-owt-mcp-admin-parity-f1.md, T2.4–T2.5; ADR-0064). Three
+// docs/superpowers/plans/2026-10-21-owt-mcp-admin-parity-f1.md, T2.4–T2.5 and S3; ADR-0064). Four
 // entries over one judge:
 //
 //   check_service_edits      model-visible, read-only: edits asked for in the chat (services by id
@@ -10,6 +10,10 @@
 //                            token for every rule finding a forced edit created (F5).
 //   save_service_edits       destructive: writes the checked change set, one service at a time,
 //                            through `/admin`'s own PATCH writer (`roleEditCommit.ts`, F1).
+//   copy_instruments         destructive (S3): one service's instruments onto another, through
+//                            `/admin`'s own copy writer (`copyInstrumentsCommit.ts`). Checked first as
+//                            `copy` in check_service_edits: the destination's target judged as a diff,
+//                            and lines that name EVERY instrument seat of the result (`copyLines`).
 //
 // The judge is the proposal editor's (F2, ADR-0062 E1/E4): the check replays the edits through the
 // planner's gates on the stored month (`storedMonthBoard.ts`, a move in STORED mode), then judges
@@ -45,6 +49,7 @@ import { isServiceTime } from "@/app/utils/serviceTime";
 import { MEMBER_TYPE_LABEL } from "@/app/utils/memberTypes";
 import { parseEditRequest } from "@/app/utils/roleWriteRequest";
 import { editRole } from "@/app/utils/roleEditCommit";
+import { copyInstruments } from "@/app/utils/copyInstrumentsCommit";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import { adminRolesQuery } from "@/app/utils/serviceReadQueries";
 import { serviceTodayIso } from "@/app/components/admin/serviceReadiness";
@@ -86,6 +91,7 @@ import {
   MAX_GROUP,
   baselineLines,
   changeLines,
+  copyLines,
   deriveGroups,
   judgeTarget,
   movedMembers,
@@ -96,6 +102,9 @@ import {
   type TargetJudgement,
 } from "../monthProposals/storedJudge";
 import { PROPOSAL_CARD_TOOL_META } from "../apps/proposalCard";
+import { draftLabel } from "../monthProposals/labels";
+import { kindOfType } from "@/app/components/admin/v3Services";
+import { ROLE_TYPES } from "@/app/utils/serviceReadModel";
 
 
 /** No write or re-read outlives this point of the call (T2.5 item 4). */
@@ -155,11 +164,18 @@ const NAME_EDIT = z.discriminatedUnion("op", [
   z.object(HEADER).strict(),
 ]);
 
-export const CHECK_SERVICE_EDITS_INPUT = z.object({ month: MONTH, edits: z.array(NAME_EDIT).min(1).max(200) }).strict();
+export const CHECK_SERVICE_EDITS_INPUT = z
+  .object({
+    month: MONTH,
+    edits: z.array(NAME_EDIT).max(200),
+    /** A copy of one service's instruments (by id or date) onto another of this month, checked alone. */
+    copy: z.object({ from: SERVICE, to: SERVICE }).strict().optional(),
+  })
+  .strict();
 
 const WIRE_TARGET = z
   .object({
-    _type: z.enum(["sunday_role", "saturday_role", "special_role"]),
+    _type: z.enum(ROLE_TYPES),
     date: z.string().regex(DAY),
     service_name: LABEL.optional(),
     time: z.string().max(5).optional(),
@@ -188,9 +204,24 @@ const CHANGE = z
 
 export const SAVE_SERVICE_EDITS_INPUT = z.object({ month: MONTH, changes: z.array(CHANGE).min(1).max(MAX_CHANGES) }).strict();
 
+/**
+ * A copy exactly as a check answered it (`copy`): role ids and the prompt's lines. No waivers: the
+ * solver's per-seat rules bind voice rows only (`ruleEnforcement.ts`), so a copy of instruments
+ * cannot break one; if one ever appears, the copy is refused (fail closed), never forced.
+ */
+export const COPY_INSTRUMENTS_INPUT = z
+  .object({
+    month: MONTH,
+    from: SERVICE,
+    to: SERVICE,
+    lines: z.array(z.string().max(400)).min(1).max(200),
+  })
+  .strict();
+
 export type CheckServiceEditsArgs = z.infer<typeof CHECK_SERVICE_EDITS_INPUT>;
 export type CheckServiceEditsAppArgs = z.infer<typeof CHECK_SERVICE_EDITS_APP_INPUT>;
 export type SaveServiceEditsArgs = z.infer<typeof SAVE_SERVICE_EDITS_INPUT>;
+export type CopyInstrumentsArgs = z.infer<typeof COPY_INSTRUMENTS_INPUT>;
 type WireTarget = z.infer<typeof WIRE_TARGET>;
 type WireDiff = z.infer<typeof WIRE_DIFF>;
 type Change = z.infer<typeof CHANGE>;
@@ -207,12 +238,20 @@ export const CHECK_SERVICE_EDITS_DESCRIPTION =
   "Revisa cambios a los servicios GUARDADOS de un mes (los que ya existen en /admin) sin guardar nada. month es " +
   "YYYY-MM; edits es la lista de cambios en orden: place (poner a alguien en un lugar), clear (quitarlo), move " +
   "(pasarlo a otro lugar, también de un servicio a otro), exchange (intercambiar a dos personas) y header (el nombre " +
-  "o la hora de un especial, o «Cuenta para equidad»). Cada servicio se nombra por su id (el de get_service o " +
+  "o la hora de un especial, o «Cuenta para equidad»). Para copiar los instrumentos de un servicio a otro manda copy " +
+  "{from, to} en lugar de edits (sola, sin otros cambios). Cada servicio se nombra por su id (el de get_service o " +
   "list_services) o por su fecha (YYYY-MM-DD) cuando ese día tiene uno solo; cada lugar por su nombre en el " +
   "planificador (Lead, BGV, Coro, un instrumento o la consola) y cada persona por su nombre. La fecha de un servicio no " +
   "se cambia desde aquí. Cada cambio pasa por las mismas reglas que /admin: si uno rompe una regla de lugar, se rechaza " +
   "(forzarlo solo se puede desde la tarjeta). La respuesta trae, por servicio, el cambio listo para save_service_edits " +
-  "(changes), sus líneas en palabras, los servicios que se guardan juntos y lo que no cuadra con las reglas del mes.";
+  "(changes) o la copia lista para copy_instruments (copy), sus líneas en palabras, los servicios que se guardan juntos " +
+  "y lo que no cuadra con las reglas del mes.";
+
+export const COPY_INSTRUMENTS_DESCRIPTION =
+  "Copia en producción los instrumentos de un servicio a otro, como «Copiar instrumentos» de /admin: los del destino se " +
+  "reemplazan por los que el origen tiene guardados ahora. Antes revisa la copia con check_service_edits (copy {from, " +
+  "to}) y manda aquí month, from, to, lines y, si hay, waivers tal cual los devolvió. Si algo cambió desde la revisión no " +
+  "copia nada y pide revisar de nuevo. Si dice «sin confirmar», repite exactamente la misma llamada.";
 
 export const SAVE_SERVICE_EDITS_DESCRIPTION =
   "Guarda en producción cambios a servicios guardados que check_service_edits ya revisó. month es YYYY-MM; changes es " +
@@ -233,6 +272,7 @@ export interface ServiceEditorDeps {
   nowMs: () => number;
   todayIso: () => string;
   editRole: typeof editRole;
+  copyInstruments: typeof copyInstruments;
   /** One role as the admin roles read projects it; `null` = gone. Throws on a failed read. */
   rereadRole: (id: string) => Promise<ServiceRole | null>;
 }
@@ -256,6 +296,7 @@ export function defaultServiceEditorDeps(): ServiceEditorDeps {
     nowMs: () => Date.now(),
     todayIso: serviceTodayIso,
     editRole,
+    copyInstruments,
     rereadRole,
   };
 }
@@ -386,7 +427,7 @@ function applyHeader(board: EditorBoard, e: HeaderEdit, todayIso: string): { ok:
   const column = storedColumn(board, e.service);
   if (!column) return { ok: false, sentence: S.judge.unknown_service };
   if (!board.editable.has(e.service)) return { ok: false, sentence: S.judge.not_editable };
-  const special = column.type === "special_role";
+  const special = kindOfType(column.type) === "special";
   if ((e.name !== undefined || e.time !== undefined) && !special) return { ok: false, sentence: S.headerOnlySpecial };
   if (e.name !== undefined && !normalizeServiceName(e.name)) return { ok: false, sentence: S.judge.header_invalid };
   if (e.time !== undefined && e.time !== null && e.time !== "" && !isServiceTime(e.time)) return { ok: false, sentence: S.judge.header_invalid };
@@ -436,20 +477,37 @@ function resolveTokenEdits(edits: readonly TokenEdit[], tokens: MemberTokens): R
   return { ok: true, edits: out };
 }
 
+type ServiceRef = { ok: true; id: string } | { ok: false; line: string };
+
+/** A service named by id, or by a date that has exactly one; `missing` when neither matches. */
+function serviceByIdOrDate(services: ReadonlyArray<{ id: string; date: string; label: string }>, s: string, missing: string): ServiceRef {
+  if (services.some((x) => x.id === s)) return { ok: true, id: s };
+  if (!DAY.test(s)) return { ok: false, line: missing };
+  const onDate = services.filter((x) => x.date === s);
+  if (onDate.length === 1) return { ok: true, id: onDate[0].id };
+  if (onDate.length === 0) return { ok: false, line: missing };
+  return { ok: false, line: `Ese día tiene más de un servicio; usa su id: ${onDate.map((x) => `${x.label} (${x.id})`).join(", ")}.` };
+}
+
+/** A service of this month's board. */
+function boardServiceOf(ctx: MonthContext, s: string): ServiceRef {
+  const { board } = ctx;
+  const services = board.columns.map((c) => ({ id: board.localIdOf.get(c.columnId)!, date: c.date, label: storedLabel(board, board.localIdOf.get(c.columnId)!) }));
+  return serviceByIdOrDate(services, s, S.judge.unknown_service);
+}
+
+/** Any stored service, of any month: a copy's source (as /admin's copy mode allows). */
+function anyServiceOf(ctx: MonthContext, s: string): ServiceRef {
+  const services = ctx.sources.adminRoles.map((r) => ({ id: r._id, date: r.date.slice(0, 10), label: draftLabel({ _type: r._type, date: r.date.slice(0, 10), service_name: r.service_name }) }));
+  return serviceByIdOrDate(services, s, S.copy.noSource);
+}
+
 function resolveNameEdits(edits: readonly NameEdit[], ctx: MonthContext): Resolved {
   const { board } = ctx;
   const seated = new Set(seatedIds(board.cells));
   const audience = ctx.members.filter((m) => isWorship(m) || seated.has(m._id));
   const nameOf = ctx.namer.nameOf;
-  const serviceOf = (s: string): { ok: true; id: string } | { ok: false; line: string } => {
-    if (board.columnIdOf.has(s)) return { ok: true, id: s };
-    if (!DAY.test(s)) return { ok: false, line: S.judge.unknown_service };
-    const onDate = board.columns.filter((c) => c.date === s);
-    if (onDate.length === 1) return { ok: true, id: board.localIdOf.get(onDate[0].columnId)! };
-    if (onDate.length === 0) return { ok: false, line: S.judge.unknown_service };
-    const options = onDate.map((c) => `${storedLabel(board, c.columnId)} (${c.columnId})`);
-    return { ok: false, line: `Ese día tiene más de un servicio; usa su id: ${options.join(", ")}.` };
-  };
+  const serviceOf = (s: string) => boardServiceOf(ctx, s);
   const rowOf = (label: string) => board.rows.find((r) => fold(r.label) === fold(label) || fold(r.id) === fold(label))?.id ?? null;
   const memberOf = (name: string): { ok: true; id: string } | { ok: false; line: string } => {
     const want = fold(name);
@@ -616,7 +674,7 @@ function storedFairShareAdjust(board: EditorBoard): (stored: { records: LogicalR
         countsForFairness: column.countsForFairness,
         Lead: seat("lead"),
         BGVs: seat("bgv"),
-        Chorus: column.type === "saturday_role" ? [] : seat("coro"),
+        Chorus: kindOfType(column.type) === "saturday" ? [] : seat("coro"),
       });
     }
     return { records: stored.records, services };
@@ -654,7 +712,7 @@ function songLeadLines(ctx: MonthContext, board: EditorBoard): string[] {
   const lines: string[] = [];
   for (const column of board.columns) {
     const id = board.localIdOf.get(column.columnId)!;
-    if (!board.editable.has(id) || column.type !== "special_role" || !isWorshipNightFormat(column.format)) continue;
+    if (!board.editable.has(id) || kindOfType(column.type) !== "special" || !isWorshipNightFormat(column.format)) continue;
     const role = ctx.sources.snapshot.roles.find((r) => r._id === id) as { songs?: Array<{ leads?: Array<{ _ref?: string }> }> } | undefined;
     const lead = new Set(board.cells.find((c) => c.columnId === column.columnId && c.rowId === "lead")?.occupants.map((o) => o.memberId) ?? []);
     const leaders = new Set((role?.songs ?? []).flatMap((s) => (s.leads ?? []).map((l) => l._ref).filter((x): x is string => !!x)));
@@ -798,6 +856,15 @@ export async function checkServiceEditsResult(
     async () => {
       const opened = await openMonth(args.month, principal, deps);
       if (!opened.ok) return opened.result;
+      if (args.copy) {
+        if (args.edits.length) return refusal([S.copy.alone], { code: "invalid_request", detail: "copy_alone" });
+        const from = anyServiceOf(opened.ctx, args.copy.from);
+        if (!from.ok) return refusal([from.line], { code: "invalid_request", detail: "copy_from" });
+        const to = boardServiceOf(opened.ctx, args.copy.to);
+        if (!to.ok) return refusal([to.line], { code: "invalid_request", detail: "copy_to" });
+        return checkCopy(opened.ctx, { from: from.id, to: to.id }, deps);
+      }
+      if (!args.edits.length) return refusal([S.nothingToCheck], { code: "invalid_request", detail: "empty" });
       const resolved = resolveNameEdits(args.edits, opened.ctx);
       if (!resolved.ok) return refusal(resolved.lines, { code: "invalid_request", detail: "edit" });
       // From the chat nothing is forced: a rule block refuses its edit in the replay.
@@ -827,6 +894,163 @@ export async function checkServiceEditsAppResult(
   );
 }
 
+// ── Copy instruments (S3) ────────────────────────────────────────────────────
+
+interface CopyPlan {
+  from: ServiceRole;
+  fromLabel: string;
+  to: string;
+  label: string;
+  /** `to` as stored, with its instruments replaced by what `from` stores now: what the commit writes. */
+  target: ServiceTarget;
+  same: boolean;
+}
+
+/** The copy's target state, from THIS read (the commit reads both roles fresh and copies the same). */
+function copyPlan(ctx: MonthContext, fromId: string, toId: string): { ok: true; plan: CopyPlan } | { ok: false; sentence: string } {
+  const { board } = ctx;
+  if (!storedColumn(board, toId)) return { ok: false, sentence: S.judge.unknown_service };
+  if (!board.editable.has(toId)) return { ok: false, sentence: S.judge.not_editable };
+  if (fromId === toId) return { ok: false, sentence: S.copy.sameService };
+  const from = ctx.sources.adminRoles.find((r) => r._id === fromId);
+  if (!from) return { ok: false, sentence: S.copy.noSource };
+  const source = roleTarget(from as ServiceRole, ctx.todayIso);
+  const before = columnTarget(board, toId, ctx.todayIso);
+  if (!source) return { ok: false, sentence: S.copy.sourceUnreadable };
+  if (!before) return { ok: false, sentence: S.judge.not_editable };
+  const target: ServiceTarget = { ...before, instruments: source.target.instruments };
+  return {
+    ok: true,
+    plan: {
+      from: from as ServiceRole,
+      fromLabel: draftLabel({ _type: from._type, date: from.date.slice(0, 10), service_name: from.service_name }),
+      to: toId,
+      label: storedLabel(board, toId),
+      target,
+      same: sameRoleSemantics(targetSnapshot(before), targetSnapshot(target)),
+    },
+  };
+}
+
+async function checkCopy(ctx: MonthContext, copy: { from: string; to: string }, deps: ServiceEditorDeps): Promise<CallToolResult> {
+  const head = { ok: true, month: ctx.month, changes: [], groups: [] };
+  const built = copyPlan(ctx, copy.from, copy.to);
+  if (!built.ok) return refusal([built.sentence], { code: "invalid_request", detail: "copy" });
+  const plan = built.plan;
+  if (plan.same) return answer(false, [S.copy.nothing(plan.label)], { ...head, board: boardView(ctx.board, ctx.namer), copy: null });
+  const verdict = judgeTarget({ board: ctx.board, roleId: plan.to, target: plan.target, members: ctx.members, config: ctx.sources.rules.config, todayIso: ctx.todayIso });
+  if (!verdict.ok) {
+    return answer(false, [S.refusedAll(plan.label, verdict.refusal.sentence)], {
+      ...head,
+      board: boardView(ctx.board, ctx.namer),
+      refusal: { code: verdict.refusal.code, sentence: verdict.refusal.sentence },
+      copy: null,
+    });
+  }
+  const judged = verdict.judged;
+  // Nothing is forced on a copy (see COPY_INSTRUMENTS_INPUT): a new finding refuses it.
+  const unconfirmed = judged.added.map((f) => E.needsConfirm(f.sentence, findingView(judged.board, f, ctx.namer).where));
+  const lines = copyLines({ board: ctx.board, roleId: plan.to, fromLabel: plan.fromLabel, target: plan.target, judged, nameOf: ctx.namer.nameOf });
+  const check = await runStoredMonthCheck(ctx, judged.board, deps);
+  return answer(false, [
+    ...(unconfirmed.length ? [] : [S.copy.checkHead]),
+    ...lines,
+    ...(unconfirmed.length ? [S.copy.needsCard, ...unconfirmed] : []),
+    ...baselineLines(judged),
+    ...monthCheckLines(check),
+  ], {
+    ...head,
+    board: boardView(judged.board, ctx.namer),
+    // What copy_instruments takes, as is. None when the chat would be refused anyway.
+    copy: unconfirmed.length ? null : { month: ctx.month, from: plan.from._id, to: plan.to, lines },
+    ...(unconfirmed.length ? { needsCard: true } : {}),
+    monthCheck: check,
+  });
+}
+
+export async function copyInstrumentsResult(
+  args: CopyInstrumentsArgs,
+  principal: McpPrincipal | null,
+  deps: ServiceEditorDeps = defaultServiceEditorDeps(),
+): Promise<CallToolResult> {
+  return runWriteTool(
+    "copy_instruments",
+    async ({ callDomain }) => {
+      const startedAt = deps.nowMs();
+      const opened = await openMonth(args.month, principal, deps);
+      if (!opened.ok) return opened.result;
+      const ctx = opened.ctx;
+      const built = copyPlan(ctx, args.from, args.to);
+      if (!built.ok) return refusal([built.sentence], { code: "invalid_request", detail: "copy" });
+      const plan = built.plan;
+      // Sorted first, as a save is (F3): already there → nothing to judge, compare or write.
+      if (plan.same) return answer(false, [S.copy.already(plan.label)], { ok: true, month: ctx.month, status: "already" });
+      const verdict = judgeTarget({ board: ctx.board, roleId: plan.to, target: plan.target, members: ctx.members, config: ctx.sources.rules.config, todayIso: ctx.todayIso });
+      if (!verdict.ok) return refusal([S.refusedAll(plan.label, verdict.refusal.sentence)], { code: "invalid_request", detail: verdict.refusal.code });
+      const judged = verdict.judged;
+      const baseRev = storedColumn(ctx.board, plan.to)!.rev;
+      // F4: the prompt's lines are what this read renders, or nothing is written.
+      if (!sameLines(args.lines, copyLines({ board: ctx.board, roleId: plan.to, fromLabel: plan.fromLabel, target: plan.target, judged, nameOf: ctx.namer.nameOf }))) {
+        return refusal([S.copy.notTheChecked(plan.label)], { code: "invalid_request", detail: "not_the_checked" });
+      }
+      if (judged.added.length) {
+        const found = judged.added.map((f) => S.waiverMissing(f.sentence, findingView(judged.board, f, ctx.namer).where));
+        return refusal([S.copy.needsCard, ...found], { code: "invalid_request", detail: "rule" });
+      }
+
+      // The write: `/admin`'s own copy commit, both revisions as THIS call read them.
+      let outcome: Awaited<ReturnType<typeof deps.copyInstruments>> | null = null;
+      try {
+        const raced = await callDomain(() =>
+          beforeStop(
+            deps.copyInstruments({ source: { id: plan.from._id, rev: plan.from._rev }, target: { id: plan.to, rev: baseRev } }, { notices: "inline" }),
+            SAVE_HARD_STOP_MS - (deps.nowMs() - startedAt),
+          ),
+        );
+        if (!raced.late) outcome = raced.value;
+      } catch {
+        console.error("[mcp-service-editor] copy threw");
+      }
+      const transport = outcome ? classifyPatchOutcome({ status: outcome.status, body: outcome.body }) : { kind: "unknown" as const };
+      if (transport.kind === "knownCommitted" && outcome?.ok) {
+        const noticesUnknown = outcome.effects.noticesQueued === false;
+        return answer(false, [S.copy.done(plan.fromLabel, plan.label), ...(noticesUnknown ? [S.noticesUnknown] : [])], {
+          ok: true,
+          month: ctx.month,
+          status: noticesUnknown ? "saved_notices_unknown" : "saved",
+        });
+      }
+      if (transport.kind !== "knownFailure") {
+        return answer(true, [S.copy.unknown], { ok: false, month: ctx.month, status: "unknown", next: "repeat_same_call" });
+      }
+      // A proven pre-write refusal: what does the destination hold now?
+      let now: { rev: string; target: ServiceTarget } | null | "failed" = "failed";
+      try {
+        const reread = await beforeStop(deps.rereadRole(plan.to), SAVE_HARD_STOP_MS - (deps.nowMs() - startedAt));
+        if (!reread.late) now = reread.value ? roleTarget(reread.value, ctx.todayIso) : null;
+      } catch {
+        console.error("[mcp-service-editor] re-read failed");
+      }
+      if (now !== "failed" && now !== null && sameRoleSemantics(targetSnapshot(now.target), targetSnapshot(plan.target))) {
+        return answer(false, [S.copy.already(plan.label)], { ok: true, month: ctx.month, status: "already" });
+      }
+      // A stale SOURCE moves only the source's `_rev`: the destination's unchanged rev still says «repite».
+      const fromNow = await beforeStop(deps.rereadRole(plan.from._id), SAVE_HARD_STOP_MS - (deps.nowMs() - startedAt)).catch(() => ({ late: true as const }));
+      const sourceMoved = fromNow.late || !fromNow.value || fromNow.value._rev !== plan.from._rev;
+      if (transport.code === "stale_revision" && now !== "failed" && now !== null && now.rev === baseRev && !sourceMoved) {
+        return answer(true, [S.copy.repeat], { ok: false, month: ctx.month, status: "not_saved", next: "repeat_same_call" });
+      }
+      return answer(true, [S.copy.recheck(S.reason[transport.code] ?? S.reason.invalid_request)], {
+        ok: false,
+        month: ctx.month,
+        status: "not_saved",
+        next: "check_again",
+      });
+    },
+    SERVICE_EDITOR_COPY,
+  );
+}
+
 // ── The save ─────────────────────────────────────────────────────────────────
 
 type SaveStatus =
@@ -851,7 +1075,7 @@ function statusText(s: SaveStatus): string {
 }
 
 /** `p`, or `{ late: true }` when the call's hard stop comes first. */
-async function beforeStop<T>(p: Promise<T>, ms: number): Promise<{ late: false; value: T } | { late: true }> {
+export async function beforeStop<T>(p: Promise<T>, ms: number): Promise<{ late: false; value: T } | { late: true }> {
   if (ms <= 0) return { late: true };
   let timer: ReturnType<typeof setTimeout> | undefined;
   const late = new Promise<{ late: true }>((resolve) => { timer = setTimeout(() => resolve({ late: true }), ms); });
@@ -1084,5 +1308,15 @@ export function registerServiceEditor(server: McpServer): void {
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     },
     async (args, ctx: ServerContext) => saveServiceEditsResult(args, principalOf(ctx)),
+  );
+  server.registerTool(
+    "copy_instruments",
+    {
+      title: "Copiar instrumentos",
+      description: COPY_INSTRUMENTS_DESCRIPTION,
+      inputSchema: COPY_INSTRUMENTS_INPUT,
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    async (args, ctx: ServerContext) => copyInstrumentsResult(args, principalOf(ctx)),
   );
 }

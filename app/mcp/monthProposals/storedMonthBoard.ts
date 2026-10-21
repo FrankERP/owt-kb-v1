@@ -20,6 +20,7 @@ import { compareServiceTime } from "@/app/utils/serviceTime";
 import type { RoleDomainSummary } from "@/app/utils/serviceReadSummary";
 import type { ServiceRole } from "@/app/components/admin/serviceCardModel";
 import { rowAppliesTo, type GridCell, type GridRow } from "@/app/components/admin/plannerModel";
+import { kindOfType } from "@/app/components/admin/v3Services";
 import {
   buildStoredGridRows,
   joinStoredRoleInventory,
@@ -163,9 +164,9 @@ export function withTarget(board: EditorBoard, roleId: string, target: ServiceTa
   const header: StoredGridColumn = {
     ...column,
     countsForFairness: target.countsForFairness,
-    ...(column.type === "special_role" ? { serviceName: normalizeServiceName(target.service_name) } : {}),
+    ...(kindOfType(column.type) === "special" ? { serviceName: normalizeServiceName(target.service_name) } : {}),
   };
-  if (column.type === "special_role") {
+  if (kindOfType(column.type) === "special") {
     if (target.time) header.time = target.time;
     else delete header.time;
   }
