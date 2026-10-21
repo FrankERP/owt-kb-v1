@@ -1857,3 +1857,72 @@ describe("«Borrar» menus", () => {
     for (const b of screen.getAllByRole("button", { name: /^Borrar/ })) expect((b as HTMLButtonElement).disabled).toBe(true);
   });
 });
+
+describe("PlannerGrid — «Editar servicio» draws one column, judges the month", () => {
+  const AUGUST = buildColumns({ sundayDates: ["2026-08-02", "2026-08-09"], activeSatDates: [] });
+  const SPINE = ["2026-08-02", "2026-08-09", "2026-08-16", "2026-08-23", "2026-08-30"];
+  const [first, second] = AUGUST;
+
+  it("renders only `onlyColumnId`'s cells and header, and drops «Pantalla completa»", () => {
+    const { container } = render(
+      <PlannerGrid {...baseProps({ mode: "stored", columns: AUGUST, onlyColumnId: second.columnId })} />,
+    );
+    expect(container.querySelector(`[data-row-id="lead"][data-date="${second.date}"]`)).toBeTruthy();
+    expect(container.querySelector(`[data-row-id="lead"][data-date="${first.date}"]`)).toBeNull();
+    expect(screen.queryByRole("button", { name: /Pantalla completa/ })).toBeNull();
+  });
+
+  it("an id that names no column draws the whole month", () => {
+    const { container } = render(
+      <PlannerGrid {...baseProps({ mode: "stored", columns: AUGUST, onlyColumnId: "gone" })} />,
+    );
+    expect(container.querySelector(`[data-row-id="lead"][data-date="${first.date}"]`)).toBeTruthy();
+    expect(container.querySelector(`[data-row-id="lead"][data-date="${second.date}"]`)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Pantalla completa/ })).toBeTruthy();
+  });
+
+  it("offers no «Copiar a todo el mes»: it would rewrite services that are not on screen", () => {
+    const cells: InputGridCell[] = [{ date: second.date, rowId: "instrumento:Drums", memberIds: ["d1"], origin: "manual" }];
+    const single = render(
+      <PlannerGrid {...baseProps({ mode: "stored", columns: AUGUST, cells, onlyColumnId: second.columnId })} />,
+    );
+    expect(single.queryByText("Copiar a todo el mes")).toBeNull();
+    single.unmount();
+    const month = render(<PlannerGrid {...baseProps({ mode: "stored", columns: AUGUST, cells })} />);
+    expect(month.queryByText("Copiar a todo el mes")).toBeTruthy();
+  });
+
+  it("a row held only on a hidden date is refused with THAT date, not «vacía la fila»", () => {
+    const cells: InputGridCell[] = [{ date: first.date, rowId: "instrumento:Drums", memberIds: ["d1"], origin: "manual" }];
+    const onRowsChange = vi.fn();
+    render(
+      <PlannerGrid {...baseProps({ mode: "stored", columns: AUGUST, cells, onRowsChange, onlyColumnId: second.columnId })} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Eliminar fila Drums" }));
+    expect(onRowsChange).not.toHaveBeenCalled();
+    expect(screen.getByText(/Ocupada en otro servicio \(2 ago\)/)).toBeTruthy();
+    expect(screen.queryByText(/Vacía la fila/)).toBeNull();
+  });
+
+  it("a seat in the HIDDEN column still weighs on the picker's order", () => {
+    // Same alphabetical trap as the D12 ranking tests: Ana leads the 2nd and sorts first by
+    // name, Zoe has served nothing. If the hidden column stopped feeding the in-grid load,
+    // both would read 0 and Ana would wrongly come first on the 9th.
+    const localMembers: RankMember[] = [
+      { _id: "ana", member_name: "Ana", memberType: ["voz"] },
+      { _id: "zoe", member_name: "Zoe", memberType: ["voz"] },
+    ];
+    const cells: InputGridCell[] = [{ date: first.date, rowId: "lead", memberIds: ["ana"], origin: "manual" }];
+    const { container } = render(
+      <PlannerGrid {...baseProps({
+        mode: "stored", columns: AUGUST, cells, members: localMembers, sundayDates: SPINE, onlyColumnId: second.columnId,
+      })} />,
+    );
+    fireEvent.click(cellFor(container, "lead", second.date));
+    const names = screen.getAllByRole("button").filter((el) => el.tagName === "LI").map((el) => el.textContent ?? "");
+    const anaIdx = names.findIndex((n) => n.includes("Ana"));
+    const zoeIdx = names.findIndex((n) => n.includes("Zoe"));
+    expect(zoeIdx).toBeGreaterThanOrEqual(0);
+    expect(anaIdx).toBeGreaterThan(zoeIdx);
+  });
+});
