@@ -48,6 +48,9 @@ const EXPECTED_CALLERS: Record<string, string[]> = {
   // MCP P4: the create writer — the roles POST and `apply_schedule` (D4).
   roleCreateCommit: ["app/api/admin/roles/route.ts", "app/mcp/tools/applySchedule.ts"],
   roleSwapCommit: ["app/api/admin/roles/swap/route.ts", "app/mcp/tools/swapAssignment.ts"],
+  // Admin parity phase 1 (T2.1): the PATCH and copy routes; the MCP tools join in T2.5 and S3.
+  roleEditCommit: ["app/api/admin/roles/[id]/route.ts"],
+  copyInstrumentsCommit: ["app/api/admin/roles/copy-instruments/route.ts"],
   roleUnpublishCommit: ["app/api/admin/roles/unpublish/route.ts", "app/mcp/tools/unpublishService.ts"],
   setlistSaveCommit: ["app/api/admin/setlists/route.ts", "app/mcp/tools/editSetlist.ts"],
   // Solver v3 C2 WR-16 / IF2-23: the ONE mutation path of `fairnessMonth`. Its importer

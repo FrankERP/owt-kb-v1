@@ -1,51 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export const maxDuration = 60;
-import { randomUUID } from "node:crypto";
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
-import {
-  isNoticeNeutralEdit,
-  notifyRoleAssignments,
-  queueRoleNotices,
-  revalidateRoleMutation,
-  roleUpdateNotice,
-} from "@/app/utils/serviceMutationSideEffects";
+import { queueRoleNotices, revalidateRoleMutation } from "@/app/utils/serviceMutationSideEffects";
+import { editRole } from "@/app/utils/roleEditCommit";
 import { serviceDependencyError, serviceError } from "@/app/utils/serviceMutation";
-import { normalizeServiceName } from "@/app/utils/normalizeLabel";
-import { validateRole } from "@/app/utils/serviceReadModel";
 import { retireReceiptPatch } from "@/app/utils/roleCreationReceipt";
+import { vacateLockPatch } from "@/app/utils/roleTargetLock";
 import {
-  loadSpecialIdentityCoordinator,
-  planSpecialIdentityCoordinatorClaim,
-} from "@/app/utils/specialIdentityCoordinator";
-import {
-  buildClaimedLock,
-  claimLockPatch,
-  roleTargetLockId,
-  vacateLockPatch,
-} from "@/app/utils/roleTargetLock";
-import {
-  buildRoleEditPatch,
   normalizeStoredSeats,
   parseDeleteRequest,
   parseEditRequest,
   planOwnedLock,
-  planTargetClaim,
   roleDateField,
   sanityConflictKind,
-  seatAssignees,
 } from "@/app/utils/roleWriteRequest";
 import {
   bootstrapLegacyLock,
-  loadCanonicalMemberIds,
-  loadCanonicalRole,
   loadDependencies,
   loadLock,
   loadReceiptsForRole,
   loadRoleForWrite,
-  loadTargetOccupancy,
-  nextKey,
   nowIso,
   type RoleWriteTarget,
   type StoredLock,
@@ -98,12 +74,10 @@ async function loadRoleForMutation(id: string, rev: string): Promise<LoadOutcome
 /**
  * Edit one service role (A2 §2).
  *
- * Old type/target come from the STORED role — a request `_type` never converts a
- * document. The client-observed role revision is required, the owned weekend lock
- * is asserted in the same transaction, and a permitted date move atomically
- * vacates the old lock and claims/reclaims the new one. Wrong owner, duplicate
- * target, raw draft, dependency, stale role/lock, or destination conflict returns
- * `409` with no business mutation.
+ * This handler authorizes, parses JSON and the edit request only. Everything after
+ * that is `editRole` (`app/utils/roleEditCommit.ts`), the one edit writer the MCP
+ * stored-service save calls too (admin parity phase 1, T2.1); its outcome's `body`
+ * and `status` are sent as-is.
  */
 // A3 §3: outbound-delivery evidence emitted anywhere under this handler — including
 // its post-commit `after()` fan-out — carries the in-flight verification run's markers.
@@ -123,365 +97,8 @@ async function patchHandler(
   if (!parsed.ok) {
     return reject(serviceError("invalid_request", { details: { issues: parsed.issues } }));
   }
-  const request = parsed.value;
-
-  // Validate the complete submitted roster before any occupancy, coordination,
-  // legacy bootstrap, or business transaction can run. This is referential
-  // validation only; memberType remains UI guidance, not server policy.
-  const wanted = seatAssignees(request.seats);
-  const resolvedMembers = await loadCanonicalMemberIds(wanted);
-  const danglingRefs = wanted.filter((memberId) => !resolvedMembers.has(memberId)).sort();
-  if (danglingRefs.length) {
-    return reject(serviceError("integrity_conflict", { details: { danglingRefs } }));
-  }
-
-  const loaded = await loadRoleForMutation(id, request.rev);
-  if (!loaded.ok) return loaded.response;
-  const role = loaded.target.role;
-  const { targetKey, lockId } = loaded.target;
-  const oldDate = loaded.target.date;
-
-  // Whitelist the stored types this route may mutate, and treat the STORED type
-  // as authoritative: a request naming a different type is a stale or wrong view,
-  // never a conversion (`_type` is immutable per document id).
-  const MUTABLE_TYPES = ["sunday_role", "saturday_role", "special_role"] as const;
-  const roleType = role._type;
-  if (!(MUTABLE_TYPES as readonly string[]).includes(roleType)) {
-    return reject(serviceError("invalid_request", { details: { issues: ["_type"] } }));
-  }
-  if (request.requestedType && request.requestedType !== roleType) {
-    return reject(
-      serviceError("integrity_conflict", {
-        details: { id, storedType: roleType, requestedType: request.requestedType },
-      }),
-    );
-  }
-  if (roleType === "special_role" && !request.serviceName) {
-    return reject(
-      serviceError("integrity_conflict", {
-        details: { id, storedType: roleType, issues: ["service_name"] },
-      }),
-    );
-  }
-  // The parser validates the SHAPE of `time`; only the stored type decides
-  // whether one is allowed at all, and a weekend role refuses it outright
-  // rather than dropping it silently.
-  if (roleType !== "special_role" && request.time) {
-    return reject(
-      serviceError("invalid_request", {
-        details: { id, storedType: roleType, issues: ["time"] },
-      }),
-    );
-  }
-  const newDate = request.date;
-  const isMove = newDate !== oldDate;
-  const isSpecial = roleType === "special_role";
-  const specialIdentityChanged =
-    isSpecial &&
-    (isMove || normalizeServiceName(role.service_name) !== normalizeServiceName(request.serviceName));
-
-  // ── Dependency refusal (a move only; a same-date edit touches no history) ──
-  if (isMove) {
-    const dependencies = await loadDependencies({ operation: "move", role, newDate });
-    if (!dependencies.usable) {
-      return reject(
-        serviceError("integrity_conflict", { details: { dependencyIssues: dependencies.issues } }),
-      );
-    }
-    if (dependencies.hasDependencies) {
-      return reject(serviceDependencyError(dependencies.code, dependencies.dependencies));
-    }
-  }
-
-  // Every special PATCH checks its complete normalized identity, even when the
-  // request changes only roster fields. Weekend occupancy remains move-only.
-  if (isSpecial || isMove) {
-    const occupancy = await loadTargetOccupancy({
-      roleType,
-      date: newDate,
-      serviceName: request.serviceName,
-      excludeRoleId: role._id,
-    });
-    if (occupancy.rawDraftIds.length) {
-      return reject(
-        serviceError("integrity_conflict", {
-          details: { destinationDate: newDate, rawDrafts: occupancy.rawDraftIds },
-        }),
-      );
-    }
-    if (occupancy.canonicalRoleIds.length) {
-      return reject(
-        serviceError("ambiguous_target", {
-          message: "Ya existe un servicio en la fecha destino.",
-          details: { destinationDate: newDate, roleIds: occupancy.canonicalRoleIds },
-        }),
-      );
-    }
-  }
-
-  // ── Coordination: assert the owned lock, bootstrapping a legacy one first ──
-  let ownedLock: StoredLock | null = null;
-  if (lockId) {
-    ownedLock = await loadLock(lockId);
-    if (request.lockRev && ownedLock && ownedLock._rev !== request.lockRev) {
-      return reject(
-        serviceError("stale_revision", {
-          details: { lockId, storedRev: ownedLock._rev, observedRev: request.lockRev },
-        }),
-      );
-    }
-    const plan = planOwnedLock({ lock: ownedLock, targetKey, roleId: role._id });
-    if (plan.kind === "integrity") {
-      return reject(
-        serviceError("integrity_conflict", { details: { lockId, detail: plan.detail } }),
-      );
-    }
-    if (plan.kind === "bootstrap") {
-      const boot = await bootstrapLegacyLock({
-        roleId: role._id,
-        roleRev: role._rev,
-        targetKey,
-        dateField: roleDateField(roleType),
-        date: oldDate,
-      });
-      const code =
-        boot.outcome === "committed_reload"
-          ? "bootstrap_completed_reload"
-          : boot.outcome === "unknown"
-            ? "bootstrap_outcome_unknown"
-            : "stale_revision";
-      return reject(serviceError(code, { details: { ...boot.details, id } }));
-    }
-  }
-
-  let specialClaim: ReturnType<typeof planSpecialIdentityCoordinatorClaim> | null = null;
-  if (specialIdentityChanged) {
-    const loadedCoordinator = await loadSpecialIdentityCoordinator();
-    if (!loadedCoordinator.ok) {
-      return reject(
-        serviceError("integrity_conflict", {
-          details: { detail: "special_identity_coordinator", issues: loadedCoordinator.issues },
-        }),
-      );
-    }
-    specialClaim = planSpecialIdentityCoordinatorClaim(loadedCoordinator.coordinator);
-    if (!specialClaim.ok) {
-      return reject(
-        serviceError("integrity_conflict", {
-          details: { detail: "special_identity_coordinator", issues: specialClaim.issues },
-        }),
-      );
-    }
-  }
-
-  const now = nowIso();
-  // The outbox `before` snapshot, captured PRE-COMMIT from the role this handler
-  // has already loaded (§2). Reading it back inside the post-commit `after()`
-  // block would return the POST-write state, so every notice would compare a
-  // state against itself and say nothing.
-  const beforeSeats = normalizeStoredSeats(role);
-  const editPatch = buildRoleEditPatch({
-    roleType,
-    date: newDate,
-    serviceName: request.serviceName,
-    time: request.time,
-    countsForFairness: request.countsForFairness,
-    seats: request.seats,
-    nextKey,
-  });
-
-  let tx = writeClient
-    .transaction()
-    .patch(role._id, (p) => {
-      const patched = p.ifRevisionId(role._rev).set(editPatch.set);
-      return editPatch.unset.length ? patched.unset(editPatch.unset) : patched;
-    });
-
-  if (ownedLock) {
-    const lockRev = ownedLock._rev;
-    if (isMove) {
-      // Vacate the old target, then claim/reclaim the destination — atomically.
-      const vacate = vacateLockPatch({ generation: ownedLock.generation ?? null, now });
-      tx = tx.patch(ownedLock._id, (p) =>
-        p.ifRevisionId(lockRev).set(vacate.set).unset(vacate.unset),
-      );
-      const destinationKey = `${roleType}:${newDate}`;
-      const destinationLock = await loadLock(roleTargetLockId(destinationKey));
-      const claim = planTargetClaim({ lock: destinationLock, targetKey: destinationKey });
-      if (claim.kind === "integrity" || claim.kind === "occupied") {
-        return reject(
-          serviceError(claim.kind === "occupied" ? "ambiguous_target" : "integrity_conflict", {
-            details: {
-              destinationKey,
-              detail: claim.kind === "occupied" ? "destination_lock_claimed" : claim.detail,
-            },
-          }),
-        );
-      }
-      if (claim.kind === "create") {
-        const created = buildClaimedLock({
-          targetKey: destinationKey,
-          roleId: role._id,
-          claimNonce: randomUUID(),
-          now,
-        });
-        if (!created) {
-          return reject(
-            serviceError("integrity_conflict", { details: { detail: "lock_build", destinationKey } }),
-          );
-        }
-        tx = tx.create(created);
-      } else {
-        const patch = claimLockPatch({ roleId: role._id, claimNonce: randomUUID(), now });
-        tx = tx.patch(claim.lockId, (p) => p.ifRevisionId(claim.lockRev).set(patch.set));
-      }
-    } else {
-      // Same target: heartbeat the owned token under its observed revision.
-      tx = tx.patch(ownedLock._id, (p) => p.ifRevisionId(lockRev).set({ updatedAt: now }));
-    }
-  }
-  if (specialClaim?.ok && specialClaim.kind === "create") {
-    tx = tx.create(specialClaim.document);
-  } else if (specialClaim?.ok && specialClaim.kind === "patch") {
-    tx = tx.patch(specialClaim.id, (p) =>
-      p.ifRevisionId(specialClaim.ifRevisionId).set(specialClaim.set),
-    );
-  }
-  try {
-    await tx.commit();
-  } catch (err) {
-    if (!sanityConflictKind(err)) throw err;
-    if (isSpecial) {
-      const occupancyPromise = loadTargetOccupancy({
-        roleType,
-        date: newDate,
-        serviceName: request.serviceName,
-        excludeRoleId: role._id,
-      });
-      const coordinatorPromise = specialClaim
-        ? loadSpecialIdentityCoordinator()
-        : Promise.resolve(null);
-      const [occupancy, coordinatorAfter] = await Promise.all([
-        occupancyPromise,
-        coordinatorPromise,
-      ]);
-      if (occupancy.rawDraftIds.length) {
-        return reject(
-          serviceError("integrity_conflict", {
-            details: { destinationDate: newDate, rawDrafts: occupancy.rawDraftIds },
-          }),
-        );
-      }
-      if (occupancy.canonicalRoleIds.length) {
-        return reject(
-          serviceError("ambiguous_target", {
-            details: { destinationDate: newDate, roleIds: occupancy.canonicalRoleIds },
-          }),
-        );
-      }
-      if (coordinatorAfter && !coordinatorAfter.ok) {
-        return reject(
-          serviceError("integrity_conflict", {
-            details: { detail: "special_identity_coordinator", issues: coordinatorAfter.issues },
-          }),
-        );
-      }
-      return reject(
-        serviceError("stale_revision", {
-          details: {
-            id,
-            targetKey,
-            ...(coordinatorAfter?.ok && coordinatorAfter.coordinator
-              ? {
-                  coordinatorRev: coordinatorAfter.coordinator._rev,
-                  coordinatorVersion: coordinatorAfter.coordinator.version,
-                }
-              : {}),
-          },
-        }),
-      );
-    }
-    return reject(
-      serviceError("stale_revision", {
-        details: { id, targetKey },
-      }),
-    );
-  }
-
-  // ── Post-commit side effects (§7), all through the one shared module ───────
-  // Solver v3 C1 §5.4.4: a PATCH that carries `countsForFairness` and changes
-  // nothing a notice could report queues no notice and sends no push. A PATCH
-  // without the field always takes the branch below, exactly as before.
-  const noticeNeutral = isNoticeNeutralEdit({
-    carriesCountsForFairness: request.countsForFairness !== undefined,
-    roleType,
-    storedDate: oldDate,
-    requestedDate: newDate,
-    storedServiceName: role.service_name,
-    requestedServiceName: request.serviceName,
-    storedTime: role.time,
-    requestedTime: request.time,
-    before: beforeSeats,
-    after: request.seats,
-  });
-  if (!noticeNeutral) {
-    // Recipients derive from committed server state across all five seat paths:
-    // the previously stored assignees versus the seats just written. A draft edit
-    // stays silent; published or grandfathered notifies only the newly added.
-    notifyRoleAssignments([
-      roleUpdateNotice({
-        published: role.published,
-        beforeAssignees: validateRole(role).assignedRefs,
-        after: request.seats,
-        type: roleType,
-        date: newDate,
-      }),
-    ]);
-    // The debounced email (§2): one notice per member in the UNION of before- and
-    // after-assignees, so a member REMOVED by this edit is finally covered. On a
-    // date move the snapshot stays valid — only the label moved — and the flush
-    // re-dates from live state.
-    queueRoleNotices({
-      roleId: role._id,
-      roleType,
-      serviceDate: newDate,
-      published: role.published,
-      beforeSeats,
-      afterSeats: request.seats,
-    });
-  }
-
-  // Revalidation runs in every case, the toggle-only PATCH included.
-  revalidateRoleMutation();
-
-  // ── Response: the REFRESHED stored read, at the COMMITTED revision ────────
-  // An echo of the request would leave the caller holding the revision it
-  // observed BEFORE this write, so its next edit would necessarily be stale —
-  // the client would have to refetch to keep editing at all, and a refetch that
-  // fails silently downgrades to a guaranteed `409` on the next save. So the
-  // committed revision is part of the success response, read back from the
-  // canonical contract rather than assembled from the request.
-  //
-  // The refresh is BEST EFFORT: the business transaction already committed, and
-  // a committed mutation is never reported as a failure because a follow-up
-  // read did not resolve. When it cannot be resolved unambiguously the response
-  // degrades to the identity-only shape it has always had.
-  let refreshed: Record<string, unknown> | null = null;
-  try {
-    const after = await loadCanonicalRole(role._id);
-    if (after.state === "single" && after.role && !after.draftIds.length) {
-      refreshed = after.role as unknown as Record<string, unknown>;
-    }
-  } catch {
-    refreshed = null;
-  }
-  return NextResponse.json({
-    ...(refreshed ?? {}),
-    _id: role._id,
-    _type: roleType,
-    date: newDate,
-    ok: true,
-  });
+  const outcome = await editRole(id, parsed.value);
+  return NextResponse.json(outcome.body, { status: outcome.status });
 }
 
 /**
