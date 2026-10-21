@@ -12,12 +12,13 @@ import CueDialog from "./ui/CueDialog";
 import { themeColour } from "@/app/utils/themeColour";
 import { paintsDayCard } from "@/app/utils/paintsDayCard";
 import { daysUntil, formatCountdown } from "@/app/utils/daysUntil";
-import { findDuplicates, myNameFromSession, serviceTone, TONE_RAIL } from "@/app/utils/agenda";
+import { myNameFromSession, serviceTone, TONE_RAIL } from "@/app/utils/agenda";
 import { formatLeadNames } from "@/app/utils/songLeads";
 import NumberRoll from "./ui/NumberRoll";
 import QuickActions, { type QuickAction } from "./ui/QuickActions";
 import useLongPress from "./ui/useLongPress";
 import { useToast } from "./ui/Toast";
+import TeamSections from "./TeamSections";
 
 export interface DayCardProps {
   day: string;
@@ -56,6 +57,16 @@ export interface DayCardProps {
   /** Rendered inside `DayCardDisclosure`, which already draws the card's ground,
    *  hairline and rail: drop this card's own so there is one card, not two. */
   nested?: boolean;
+  /** Display-name key → photo URL for the team's faces (`seatPhotos`). Absent:
+   *  initials for everyone and no «+ foto» (see `TeamSections`). */
+  photos?: Record<string, string>;
+  /** The viewer's Tipo, so a member with no seat here still opens their section. */
+  viewerTypes?: string[] | null;
+  /** The viewer's display name as the SERVER read it. A server page passes it so
+   *  the member's own section is open in the first paint; the bare client
+   *  `SessionProvider` only has the session after hydration, and the card would
+   *  otherwise jump open under the reader. */
+  viewerName?: string;
 }
 
 /* The day's identity is ONE device: the 3 px rail down the card's left edge, in the
@@ -67,10 +78,10 @@ export interface DayCardProps {
    is for what can be pressed, green for «tú» (the «premium» audit, approved by Frank
    as "superficies y color"; ADR-0059). */
 
-/** The neutral the card's quiet chrome (medley spine, instrument chips) is drawn in. */
+/** The neutral the card's quiet chrome (the medley spine) is drawn in. */
 const NEUTRAL = "--ink-dim-rgb";
 
-export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instruments, fohTeam, bgvs, chorus, roleId, isNext, layout = "card", hero = false, nested = false }: DayCardProps) {
+export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instruments, fohTeam, bgvs, chorus, roleId, isNext, layout = "card", hero = false, nested = false, photos, viewerTypes, viewerName }: DayCardProps) {
   const { openSheet } = usePlayer();
   const { data: session } = useSession();
   const { toast } = useToast();
@@ -97,17 +108,8 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
 
   // The display name used in role cards is alias || member_name — the same helper
   // the agenda reads (`myNameFromSession`), so the two surfaces can never disagree.
-  const myName = myNameFromSession(session?.user);
-
-  // Detect the same person assigned twice within one section (voces / instrumentos / foh).
-  // A person may appear once in voces AND once in instrumentos — that's fine.
-  const vocesDups = findDuplicates([
-    ...(leads ?? []),
-    ...(bgvs ?? []).map(m => m.alias || m.member_name),
-    ...(chorus ?? []).map(m => m.alias || m.member_name),
-  ]);
-  const instrDups = findDuplicates((instruments ?? []).filter(s => s.person).map(s => s.person));
-  const fohDups   = findDuplicates((fohTeam ?? []).filter(s => s.person).map(s => s.person));
+  // The client session wins once it exists; until then, the server's reading.
+  const myName = myNameFromSession(session?.user) || viewerName || "";
 
   if (!paintsDayCard({ setlist, leads, instruments, fohTeam, bgvs, chorus })) return null;
 
@@ -160,29 +162,19 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
     <>
       <div className={nested ? "relative overflow-hidden rounded-[var(--brand-radius-panel)]" : "brand-facet-panel brand-surface overflow-hidden rounded-[var(--brand-radius-panel)]"}>
         {!nested && <span aria-hidden className={`absolute inset-y-0 left-0 z-[1] w-[3px] ${TONE_RAIL[tone]}`} />}
-        {/* Header — day · date, and at most two things on the right: the
-            countdown (next service only) and the hero's one action. §18 keeps
-            one eyebrow per surface, so the `Servicio` label and the long date
-            are gone; the date the header already shows is the date. */}
+        {/* Header — day · date with the countdown on the right (next service
+            only), and on the hero its one action as a full-width button below.
+            §18 keeps one eyebrow per surface, so the `Servicio` label and the
+            long date are gone; the date the header already shows is the date. */}
         <div className="border-b border-ink/[0.08] px-5 py-4">
-          {/* THE ROW WRAPS, and that is a deliberate visual change on the app's most
-              looked-at surface — verified in the iOS Simulator at every preset,
-              because both cheaper options are worse at one end or the other:
-
-                • `min-w-0` + `break-words` on the title and NO wrap: correct at
-                  Normal (the title takes two lines beside the controls, exactly as
-                  it shipped), but at «Máximo» the right-hand block is ~220px of
-                  unshrinkable pill + «Ensayar», so the title's box collapses to a
-                  couple of characters and paints ONE LETTER PER LINE down the card,
-                  with «Ensayar» clipped by `overflow-hidden` anyway.
-                • no wrap and no break rule — what shipped: the title's text simply
-                  painted over the controls and was cut off.
-
-              At «Máximo» the title and «Ensayar» genuinely do not fit one line on a
-              phone; something has to give, and a second line is the only thing that
-              gives without losing content. `ml-auto` keeps the controls where the
-              design puts them, because a lone item on a wrapped `justify-between`
-              line otherwise falls back to flex-start. */}
+          {/* THE ROW WRAPS. It was written for title + countdown + «Ensayar» side by
+              side, verified in the iOS Simulator at every preset: with no wrap, a
+              long title collapsed to one letter per line at «Máximo» or painted
+              over the controls. «Ensayar» moved below the row on 2026-10-21, but an
+              editor-authored service name beside the countdown pill can still run
+              out of room, and a second line is the only thing that gives without
+              losing content. `ml-auto` keeps the pill right-aligned, because a lone
+              item on a wrapped `justify-between` line falls back to flex-start. */}
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
             <div className="min-w-0">
               <h3 className="font-display text-2xl font-bold uppercase leading-none text-ink md:text-3xl break-words">
@@ -190,22 +182,23 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
               </h3>
               {myLeadSongs && myLeadSongs.length > 0 && <p className="mt-1 font-label text-xs text-accent">Diriges: {myLeadSongs.join(", ")}</p>}
             </div>
-            {/* NO `shrink-0` here, and it wraps too. With `shrink-0` this block sat
-                at its max-content width — pill + «Ensayar» ≈ 350px at «Máximo» —
-                and hung out past a 314px card, where the panel's `overflow-hidden`
-                simply cut «ENSAYAR» in half (seen in the simulator). Letting it
-                shrink lets its own two children stack, right-aligned. */}
+            {/* NO `shrink-0` here, and it wraps too: a pinned block hung out past
+                a 314px card at «Máximo», where `overflow-hidden` cut it in half. */}
             <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
               {isNext && days !== null && (
                 <span className="rounded-full border border-ink-dim/30 px-2.5 py-1 font-label text-[10px] uppercase tracking-widest text-ink-muted">
                   <NumberRoll value={formatCountdown(days)} />
                 </span>
               )}
-              {hero && hasSetlist && (
-                <PracticePlaylistButton variant="hero" songIds={setlist!.songs.map((s) => s._id)} accentVar="--accent-rgb" />
-              )}
             </div>
           </div>
+          {/* The page's one primary action, filled and the card's full width
+              (2026-10-21): beside the countdown it read as one more pill. */}
+          {hero && hasSetlist && (
+            <div className="mt-4">
+              <PracticePlaylistButton variant="hero" songIds={setlist!.songs.map((s) => s._id)} accentVar="--accent-rgb" />
+            </div>
+          )}
         </div>
 
         <div className="space-y-5 p-5 md:p-6">
@@ -285,42 +278,15 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
               </section>
             )}
 
-            {/* Team */}
+            {/* Team — Voces, Banda, Cabina as folding sections of faces. */}
             {hasRole && (
-              <section className={`space-y-5${hasSetlist ? ` border-t border-ink-dim/[0.12] pt-5${wide ? " lg:border-t-0 lg:pt-0" : ""}` : ""}`}>
-                {(leads?.length || bgvs?.length || chorus?.length) ? (
-                  <div>
-                    <SectionDivider label="Voces" />
-                    {/* auto-fit + an em-based floor, not `grid-cols-3`: the track
-                        minimum grows with the TEXT, so a member on «Máximo» text size
-                        gets two columns and then one instead of three columns whose
-                        names overlap each other. `minmax(0,…)`'s upper half keeps a
-                        long name from pushing the card wider than the phone. */}
-                    <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,4.5em),1fr))] gap-x-3 gap-y-3">
-                      <VocalCol label="Lead" names={leads ?? []} highlightName={myName} duplicateNames={vocesDups} />
-                      <VocalCol label="BGVs" names={(bgvs ?? []).map(m => m.alias || m.member_name)} highlightName={myName} duplicateNames={vocesDups} />
-                      <VocalCol label="Coro" names={(chorus ?? []).map(m => m.alias || m.member_name)} highlightName={myName} duplicateNames={vocesDups} />
-                    </div>
-                  </div>
-                ) : null}
-
-                {instruments && instruments.filter(s => s.person).length > 0 && (
-                  <div>
-                    <SectionDivider label="Instrumentos" />
-                    <div className="flex flex-wrap gap-x-3 gap-y-2">
-                      {instruments.filter(s => s.person).map((s, i) => <Row key={i} label={s.label} value={s.person} highlightName={myName} isDuplicate={instrDups.has(s.person.toLowerCase().trim())} />)}
-                    </div>
-                  </div>
-                )}
-
-                {fohTeam && fohTeam.filter(s => s.person).length > 0 && (
-                  <div>
-                    <SectionDivider label="Front of House" />
-                    <div className="flex flex-wrap gap-x-3 gap-y-2">
-                      {fohTeam.filter(s => s.person).map((s, i) => <Row key={i} label={s.label} value={s.person} highlightName={myName} isDuplicate={fohDups.has(s.person.toLowerCase().trim())} />)}
-                    </div>
-                  </div>
-                )}
+              <section className={hasSetlist ? `border-t border-ink-dim/[0.12] pt-2${wide ? " lg:border-t-0 lg:pt-0" : ""}` : ""}>
+                <TeamSections
+                  team={{ leads, bgvs, chorus, instruments, fohTeam }}
+                  myName={myName}
+                  photos={photos}
+                  viewerTypes={viewerTypes}
+                />
               </section>
             )}
           </div>
@@ -414,90 +380,6 @@ function SongRow({ song, n, onOpen, onQuickActions, dense = false }: {
         {song.bpm && <span className="hidden w-10 text-right font-label text-[11px] text-mono-500 tabular-nums sm:inline">{song.bpm}</span>}
       </div>
     </button>
-  );
-}
-
-function VocalCol({ label, names, highlightName, duplicateNames }: { label: string; names: string[]; highlightName?: string; duplicateNames?: Set<string> }) {
-  if (!names.length) return <div />;
-  return (
-    <div className="min-w-0">
-      <p className="font-label text-xs uppercase tracking-widest text-mono-400 mb-0.5">{label}</p>
-      {/* `break-words`, not `anywhere`: a name breaks only when that one name is
-          wider than its column — at «Máximo» text size it is — and the paragraph's
-          min-content stays the longest name rather than a single letter, which is
-          what `anywhere` would do to a flex or grid child. Before this the names
-          could not break at all and simply painted over the next column, where the
-          card's `overflow-hidden` cut them off. */}
-      <p className="font-body text-sm md:text-base lg:text-lg leading-snug break-words">
-        {names.map((name, i) => {
-          const key  = name.toLowerCase().trim();
-          const isDup = !!duplicateNames?.has(key);
-          const isMe  = !isDup && !!highlightName && key === highlightName;
-          return (
-            <span key={i}>
-              {i > 0 && ", "}
-              {isDup ? (
-                <span
-                  className="font-semibold text-warning-strong"
-                  style={{ textShadow: "0 0 10px rgb(var(--warning-strong-rgb) / 0.65)" }}
-                >⚠&nbsp;{name}</span>
-              ) : isMe ? (
-                <span className="font-semibold text-positive-fg">{name}</span>
-              ) : (
-                <span>{name}</span>
-              )}
-            </span>
-          );
-        })}
-      </p>
-    </div>
-  );
-}
-
-function Row({ label, value, highlightName, isDuplicate }: { label: string; value: string; highlightName?: string; isDuplicate?: boolean }) {
-  const isMe = !isDuplicate && !!highlightName && value.toLowerCase().trim() === highlightName;
-  return (
-    <div
-      className="inline-flex items-stretch rounded-lg"
-      style={{
-        border: isDuplicate
-          ? "1px solid rgb(var(--warning-strong-rgb) / 0.6)"
-          : isMe ? "1px solid rgb(var(--positive-fg-rgb) / 0.5)" : `1px solid ${themeColour(NEUTRAL, 0.2)}`,
-        boxShadow: isDuplicate ? "0 0 10px rgb(var(--warning-strong-rgb) / 0.35)" : undefined,
-      }}
-    >
-      <span
-        className="font-label text-xs uppercase tracking-wide px-2.5 flex items-center shrink-0 rounded-l-[7px] text-mono-400"
-        style={{
-          background: `${themeColour(NEUTRAL, 0.08)}`,
-          borderRight: `1px solid ${themeColour(NEUTRAL, 0.16)}`,
-        }}
-      >
-        {label}
-      </span>
-      <span
-        className={`font-body text-sm md:text-base px-3 py-1.5 flex flex-1 items-center justify-center gap-1 leading-tight ${
-          isDuplicate ? "font-semibold text-warning-strong" : isMe ? "font-semibold text-positive-fg" : ""
-        }`}
-        style={isDuplicate ? { background: "rgb(var(--warning-strong-rgb) / 0.10)" } : isMe ? { background: "rgb(var(--positive-fg-rgb) / 0.10)" } : undefined}
-      >
-        {isDuplicate && <span>⚠</span>}
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function SectionDivider({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-2 mb-2">
-      <span className="font-label text-xs md:text-sm lg:text-base text-mono-400 uppercase tracking-wide shrink-0">
-        {label}
-      </span>
-      {/* `ink/8`, not the `mono-200`/`dark:mono-800` pair it replaced: the mono scale
-          INVERTS in light, so `mono-200` drew a near-black rule there (2026-10-20). */}
-      <div className="flex-1 h-px bg-ink/[0.08]" />
-    </div>
   );
 }
 

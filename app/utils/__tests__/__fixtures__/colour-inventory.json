@@ -8,19 +8,19 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 317,
-    "filesScanned": 493,
-    "filesWithColour": 57,
+    "literalRows": 318,
+    "filesScanned": 496,
+    "filesWithColour": 58,
     "byCategory": {
       "2": 2,
       "4": 68,
-      "8": 95,
+      "8": 96,
       "9": 10,
       "11": 8,
       "12": 134
     },
     "byDisposition": {
-      "B": 124,
+      "B": 125,
       "exempt": 55,
       "keep": 239,
       "C": 5,
@@ -403,7 +403,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 234,
+      "line": 266,
       "disposition": "B",
       "reason": null
     },
@@ -3199,7 +3199,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 161,
+      "line": 163,
       "disposition": "B",
       "reason": null
     },
@@ -3211,7 +3211,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 161,
+      "line": 163,
       "disposition": "B",
       "reason": null
     },
@@ -3223,7 +3223,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 506,
+      "line": 388,
       "disposition": "B",
       "reason": null
     },
@@ -3235,7 +3235,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 80,
+      "line": 94,
       "disposition": "B",
       "reason": null
     },
@@ -3247,7 +3247,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 109,
+      "line": 138,
       "disposition": "B",
       "reason": null
     },
@@ -3427,7 +3427,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 124,
+      "line": 127,
       "disposition": "B",
       "reason": null
     },
@@ -3439,31 +3439,31 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 142,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/PracticePlaylistButton.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 140,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/PracticePlaylistButton.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
       "line": 145,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/PracticePlaylistButton.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 143,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/PracticePlaylistButton.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 148,
       "disposition": "B",
       "reason": null
     },
@@ -3596,6 +3596,18 @@
       "utility": null,
       "carrier": "stroke",
       "line": 516,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/TeamSections.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 107,
       "disposition": "B",
       "reason": null
     },

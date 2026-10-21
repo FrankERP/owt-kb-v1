@@ -42,7 +42,7 @@ export function myNameFromSession(user?: { alias?: string | null; name?: string 
 /** The seat labels where `myName` (already lowercased/trimmed) is seated, in DayCard's
  *  own order and casing: Lead, BGVs, Coro, then each instrument, then each FOH seat. An
  *  empty `myName` (signed out, or no alias/name) seats nobody. */
-export function mySeats(e: ActiveDay, myName: string): string[] {
+export function mySeats(e: Pick<ActiveDay, "leads" | "bgvs" | "chorus" | "instruments" | "fohTeam">, myName: string): string[] {
   if (!myName) return [];
   const seated = (name?: string) => !!name && name.toLowerCase().trim() === myName;
   const seats: string[] = [];
