@@ -12,6 +12,13 @@
 // that for the life of the card. The header carries the ⚠ too, so a conflict
 // shows even when someone closes the section.
 //
+// Voces is three groups — Lead, BGV, Coro — each on its own softly shaded
+// panel under its own label (Frank, 2026-10-21: «separar los grupos de forma
+// visual antes de leer»). Shading, not a hue per role: every hue on the card
+// already means something (green «tú», amber ⚠, cyan «se puede tocar», the day's
+// rail), and a fourth meaning would make them all harder to read. Inside a
+// group the seat is the label, so a face carries only its name.
+//
 // The section header is a raw <button>, not the house Button: it is a disclosure
 // row (the row is the affordance), the exemption `DayCardDisclosure` carries.
 
@@ -117,16 +124,48 @@ function Section({ section, open, onToggle, myName, photos }: {
       {/* The padding rides on Collapse's inner div — a padded animated element
           never closes to zero (see Collapse). */}
       <Collapse open={open} id={id} className="pb-4 pt-1">
-        {/* auto-fit + an em floor, not `grid-cols-2`: the track minimum grows with
-            the TEXT, so at «Máximo» the faces drop to one column instead of two
-            columns whose names overlap. */}
-        <ul className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,8.5em),1fr))] gap-x-3 gap-y-3">
-          {people.map((p, i) => (
-            <Person key={`${p.name}-${p.role}-${i}`} person={p} myName={myName} photos={photos} duplicate={dups.has(personKey(p.name))} />
-          ))}
-        </ul>
+        {section.id === "voces" ? (
+          <div className="space-y-2">
+            {roleGroups(people).map((g) => (
+              <div key={g.role} className="rounded-xl bg-ink/[0.04] px-3 pb-3 pt-2">
+                <p className="mb-2 font-label text-[10px] uppercase tracking-widest text-ink-dim">
+                  {g.role} · {g.people.length}
+                </p>
+                <Faces people={g.people} myName={myName} photos={photos} dups={dups} grouped />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Faces people={people} myName={myName} photos={photos} dups={dups} />
+        )}
       </Collapse>
     </div>
+  );
+}
+
+/** Voces' people split by seat, in seat order (Lead, BGV, Coro): `teamSections`
+ *  already lists them that way, so a group is a run of one role. */
+function roleGroups(people: TeamPerson[]): Array<{ role: string; people: TeamPerson[] }> {
+  const groups: Array<{ role: string; people: TeamPerson[] }> = [];
+  for (const p of people) {
+    const last = groups[groups.length - 1];
+    if (last?.role === p.role) last.people.push(p);
+    else groups.push({ role: p.role, people: [p] });
+  }
+  return groups;
+}
+
+function Faces({ people, myName, photos, dups, grouped = false }: { people: TeamPerson[]; myName: string; photos?: Record<string, string>; dups: Set<string>; grouped?: boolean }) {
+  return (
+    // auto-fit + an em floor, not `grid-cols-2`: the track minimum grows with the
+    // TEXT, so at «Máximo» the faces drop to one column instead of two columns
+    // whose names overlap. 7.5em keeps two faces a row inside a Voces panel on a
+    // 375 px phone (measured: 8.5em left one column there).
+    <ul className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,7.5em),1fr))] gap-x-3 gap-y-3">
+      {people.map((p, i) => (
+        <Person key={`${p.name}-${p.role}-${i}`} person={p} myName={myName} photos={photos} duplicate={dups.has(personKey(p.name))} grouped={grouped} />
+      ))}
+    </ul>
   );
 }
 
@@ -153,13 +192,16 @@ function NamesLine({ section, people, myName, dups }: { section: TeamSection; pe
   );
 }
 
-function Person({ person, myName, photos, duplicate }: { person: TeamPerson; myName: string; photos?: Record<string, string>; duplicate: boolean }) {
+function Person({ person, myName, photos, duplicate, grouped }: { person: TeamPerson; myName: string; photos?: Record<string, string>; duplicate: boolean; grouped: boolean }) {
   const key = personKey(person.name);
   const me = !duplicate && !!myName && key === myName;
   const photo = photos?.[key];
   // «+ foto» only where the surface KNOWS photos (the map is present) — and only
   // on your own face: it links to the upload in Ajustes, which only you can use.
   const askForPhoto = me && !!photos && !photo;
+  // In a Voces group the seat is the group's label, so the line under the name
+  // is only for «tú» and «+ foto».
+  const showSeat = !grouped || me;
   return (
     <li className="flex min-w-0 items-center gap-2.5">
       <Avatar name={person.name} photo={photo} me={me} dashed={askForPhoto} />
@@ -171,18 +213,21 @@ function Person({ person, myName, photos, duplicate }: { person: TeamPerson; myN
           {duplicate && "⚠ "}
           {person.name}
         </p>
-        <p className={`break-words font-body text-xs leading-tight ${me ? "text-positive-fg" : "text-ink-dim"}`}>
-          {person.role}
-          {me && " · tú"}
-          {askForPhoto && (
-            <>
-              {" · "}
-              <Link href="/me/ajustes" className="font-semibold text-accent underline-offset-2 hover:underline">
-                + foto
-              </Link>
-            </>
-          )}
-        </p>
+        {showSeat && (
+          <p className={`break-words font-body text-xs leading-tight ${me ? "text-positive-fg" : "text-ink-dim"}`}>
+            {grouped ? "tú" : person.role}
+            {me && !grouped && " · tú"}
+            {askForPhoto && (
+              <>
+                {" · "}
+                <Link href="/me/ajustes" className="font-semibold text-accent underline-offset-2 hover:underline">
+                  {/* A no-break space: «+» alone at a line's end read as a stray mark. */}
+                  +{"\u00a0"}foto
+                </Link>
+              </>
+            )}
+          </p>
+        )}
       </div>
     </li>
   );

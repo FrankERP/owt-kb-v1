@@ -6,6 +6,8 @@ import { SundayRole, SaturdayRole, Setlist, SpecialRole, SetlistSong } from "@/a
 import { parseMonthParam, windowBounds, WINDOW_MONTHS } from "@/app/utils/scheduleMonths";
 import { indexUniqueByKey, serviceDayKey } from "@/app/utils/serviceReadSelect";
 import { requireWorshipPage } from "@/app/utils/worshipPageGate";
+import { seatPhotos } from "@/app/utils/teamSections";
+import { myNameFromSession } from "@/app/utils/agenda";
 
 export const metadata: Metadata = {
   title: "Calendario — Oasis Worship Team",
@@ -31,12 +33,16 @@ const SETLIST_FRAGMENT = `songs[]{
   "author": song->author, "timeSig": song->timeSig, "bpm": song->bpm, "key": song->key
 }, week, team_notes`;
 
+// `photo` per seat: the faces in the day sheet's team sections, the same
+// projection home and /me use (uploaded photo, else the Google picture).
+const PHOTO = `coalesce(profilePhoto.asset->url, googlePhotoUrl)`;
+const PERSON_PHOTO = `coalesce(person->profilePhoto.asset->url, person->googlePhotoUrl)`;
 const ROLE_FIELDS = `_id, week,
-  Lead[]->{ member_name, alias },
-  instruments[]{ instrument, "person": coalesce(person->alias, person->member_name) },
-  foh_team[]{ role, "person": coalesce(person->alias, person->member_name) },
-  BGVs[]->{ member_name, alias },
-  Chorus[]->{ member_name, alias }`;
+  Lead[]->{ member_name, alias, "photo": ${PHOTO} },
+  instruments[]{ instrument, "person": coalesce(person->alias, person->member_name), "photo": ${PERSON_PHOTO} },
+  foh_team[]{ role, "person": coalesce(person->alias, person->member_name), "photo": ${PERSON_PHOTO} },
+  BGVs[]->{ member_name, alias, "photo": ${PHOTO} },
+  Chorus[]->{ member_name, alias, "photo": ${PHOTO} }`;
 
 const SCHEDULE_QUERY = `{
   "sundays":     *[_type == "sunday_role"   && week >= $today && week <= $limit && published != false] | order(week asc)  { ${ROLE_FIELDS} },
@@ -47,10 +53,11 @@ const SCHEDULE_QUERY = `{
     _id, date, time, service_name, team_notes,
     songs[]{ play_key, medley_tag, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "bpm": song->bpm, "key": song->key, "leads": leads[]->{ member_name, alias } },
     ${ROLE_FIELDS}
-  }
+  },
+  "viewer": *[_type == "teamMembers" && _id == $me][0]{ memberType }
 }`;
 
-async function getScheduleData(viewMonth: string | null, today: string) {
+async function getScheduleData(viewMonth: string | null, today: string, me: string) {
   let fetchFrom: string;
   let limit: string;
   let weekStart: string;
@@ -84,7 +91,8 @@ async function getScheduleData(viewMonth: string | null, today: string) {
     sunSetlists: Setlist[];
     satSetlists: Setlist[];
     specials: SpecialRole[];
-  }>(SCHEDULE_QUERY, { today: fetchFrom, limit, weekStart });
+    viewer: { memberType?: string[] } | null;
+  }>(SCHEDULE_QUERY, { today: fetchFrom, limit, weekStart, me });
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -94,7 +102,7 @@ export default async function SchedulePage({
 }: {
   searchParams: Promise<{ m?: string }>;
 }) {
-  await requireWorshipPage("/schedule");
+  const session = await requireWorshipPage("/schedule");
   const viewMonth = parseMonthParam((await searchParams).m);
   // ONE `today`: computed here, once, and threaded both into the fetch (which
   // uses it only in the default rolling view — a browsed month's boundary is
@@ -102,7 +110,7 @@ export default async function SchedulePage({
   // strip's marker and the agenda's countdowns can never read a different
   // "now" than the data they describe.
   const today = localToday();
-  const { sundays, saturdays, sunSetlists, satSetlists, specials } = await getScheduleData(viewMonth, today);
+  const { sundays, saturdays, sunSetlists, satSetlists, specials, viewer } = await getScheduleData(viewMonth, today, session.user.sanityId);
 
   // Fail closed on an ambiguous weekend target. A duplicate canonical role or
   // setlist for the same week yields NO entry for that week rather than a
@@ -176,7 +184,14 @@ export default async function SchedulePage({
             in browse mode the fetch's own boundary is the WINDOW, not `today`,
             so here `todayStr` only marks today on the strip and gates the
             countdown pill. */}
-        <CalendarView activeDays={activeDays} viewMonth={viewMonth} todayStr={today} />
+        <CalendarView
+          activeDays={activeDays}
+          viewMonth={viewMonth}
+          todayStr={today}
+          photos={seatPhotos([...(sundays ?? []), ...(saturdays ?? []), ...(Array.isArray(specials) ? specials : [])])}
+          viewerTypes={viewer?.memberType ?? null}
+          viewerName={myNameFromSession(session.user)}
+        />
       </div>
     </div>
   );
