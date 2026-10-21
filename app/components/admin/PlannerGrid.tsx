@@ -1527,9 +1527,20 @@ export default function PlannerGrid(props: PlannerGridProps) {
 
   function removeRow(rowId: string) {
     if (mutationLocked) return;
-    const hasOccupants = cells.some((c) => c.rowId === rowId && c.occupants.length > 0);
-    if (hasOccupants) {
-      setRemoveError({ rowId, message: "Vacía la fila antes de eliminarla." });
+    const held = cells.filter((c) => c.rowId === rowId && c.occupants.length > 0);
+    if (held.length > 0) {
+      // A row is the month's, not the service's: in «Editar servicio» it can be held only on a
+      // date that is not on screen, so say which one instead of «vacía» an empty-looking row.
+      const shownIds = new Set(shownColumns.map((c) => c.columnId));
+      const hiddenDates = singleColumn && held.every((c) => !shownIds.has(c.columnId))
+        ? [...new Set(held.map((c) => columnById.get(c.columnId)?.date).filter((d): d is string => !!d))].sort()
+        : [];
+      setRemoveError({
+        rowId,
+        message: hiddenDates.length > 0
+          ? `Ocupada en otro servicio (${hiddenDates.map(shortDate).join(", ")}). Vacíala desde «Ver mes completo».`
+          : "Vacía la fila antes de eliminarla.",
+      });
       return;
     }
     setRemoveError(null);
@@ -1783,8 +1794,9 @@ export default function PlannerGrid(props: PlannerGridProps) {
             onRemove={row.category !== "voz" ? () => removeRow(row.id) : undefined}
             mutationLocked={mutationLocked}
             removeError={activeRemoveError?.rowId === row.id ? activeRemoveError.message : null}
+            // «Copiar a todo el mes» writes columns «Editar servicio» does not draw: a month tool.
             onCopy={
-              row.category !== "voz"
+              row.category !== "voz" && !singleColumn
                 ? (columnId) => requestCopyAcrossColumns(row, columnId)
                 : undefined
             }

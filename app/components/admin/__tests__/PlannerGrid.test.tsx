@@ -1881,6 +1881,29 @@ describe("PlannerGrid — «Editar servicio» draws one column, judges the month
     expect(screen.getByRole("button", { name: /Pantalla completa/ })).toBeTruthy();
   });
 
+  it("offers no «Copiar a todo el mes»: it would rewrite services that are not on screen", () => {
+    const cells: InputGridCell[] = [{ date: second.date, rowId: "instrumento:Drums", memberIds: ["d1"], origin: "manual" }];
+    const single = render(
+      <PlannerGrid {...baseProps({ mode: "stored", columns: AUGUST, cells, onlyColumnId: second.columnId })} />,
+    );
+    expect(single.queryByText("Copiar a todo el mes")).toBeNull();
+    single.unmount();
+    const month = render(<PlannerGrid {...baseProps({ mode: "stored", columns: AUGUST, cells })} />);
+    expect(month.queryByText("Copiar a todo el mes")).toBeTruthy();
+  });
+
+  it("a row held only on a hidden date is refused with THAT date, not «vacía la fila»", () => {
+    const cells: InputGridCell[] = [{ date: first.date, rowId: "instrumento:Drums", memberIds: ["d1"], origin: "manual" }];
+    const onRowsChange = vi.fn();
+    render(
+      <PlannerGrid {...baseProps({ mode: "stored", columns: AUGUST, cells, onRowsChange, onlyColumnId: second.columnId })} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Eliminar fila Drums" }));
+    expect(onRowsChange).not.toHaveBeenCalled();
+    expect(screen.getByText(/Ocupada en otro servicio \(2 ago\)/)).toBeTruthy();
+    expect(screen.queryByText(/Vacía la fila/)).toBeNull();
+  });
+
   it("a seat in the HIDDEN column still weighs on the picker's order", () => {
     // Same alphabetical trap as the D12 ranking tests: Ana leads the 2nd and sorts first by
     // name, Zoe has served nothing. If the hidden column stopped feeding the in-grid load,

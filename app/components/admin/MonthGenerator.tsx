@@ -291,13 +291,17 @@ interface Props {
   initialMonth?: string;
   focusRoleId?: string;
   /**
-   * Stored mode, «Editar servicio»: open showing ONLY `focusRoleId`'s column, without the
-   * month tools (Nuevo, Llenar especiales, intercambios, Equidad, Limpiar mes). The editor
-   * underneath is the whole month all the same — the same cells, rule checks, save and
-   * notices — so «Ver mes completo» widens the view without discarding a single edit.
+   * Stored mode, «Editar servicio»: show ONLY `focusRoleId`'s column, without the month tools
+   * (Nuevo, Llenar especiales, intercambios, Equidad, Copiar a todo el mes, Limpiar mes). The
+   * editor underneath is the whole month all the same — the same cells, rule checks, save and
+   * notices — so flipping this to false widens the view without discarding a single edit.
+   * The PARENT owns it (ADR-0063): one value, so the page title and the view cannot disagree.
    */
   singleService?: boolean;
-  /** Told when «Ver mes completo» widens a single-service editor, so the page title follows. */
+  /**
+   * Asked to widen: «Ver mes completo», or the focused service no longer in the month. The
+   * parent flips `singleService` off; without this prop there is no «Ver mes completo».
+   */
   onScopeChange?: (scope: "service" | "month") => void;
   openComposerInitially?: boolean;
   storedSource?: {
@@ -2427,14 +2431,7 @@ export default function MonthGenerator({
   const [touchedStoredRoleIds, setTouchedStoredRoleIds] = useState<Set<string>>(new Set());
   const monthPrefix = `${year}-${String(month).padStart(2, "0")}`;
   const [composerOpen, setComposerOpen] = useState(storedMode && openComposerInitially);
-  // Never re-narrowed once widened: «Ver mes completo» is one way, like the page title it moves.
-  const [onlyRoleId, setOnlyRoleId] = useState<string | null>(
-    storedMode && singleService && !openComposerInitially && focusRoleId ? focusRoleId : null,
-  );
-  function showWholeMonth() {
-    setOnlyRoleId(null);
-    onScopeChange?.("month");
-  }
+  const onlyRoleId = storedMode && singleService && !openComposerInitially && focusRoleId ? focusRoleId : null;
   const [createType, setCreateType] = useState<ServiceType>("sunday_role");
   const [createDate, setCreateDate] = useState(`${monthPrefix}-01`);
   const [createName, setCreateName] = useState("");
@@ -2717,6 +2714,8 @@ export default function MonthGenerator({
   const singleColumnLost = !!onlyRoleId && storedInventory.coherent && !singleColumn;
   /** The month tools hide while this is true; a reload in flight keeps the narrow view. */
   const singleView = !!onlyRoleId && !singleColumnLost;
+  // The parent latches the widen (it never narrows back), so a role that reappears in a later
+  // load cannot silently re-narrow a view whose title already says «Editar mes».
   useEffect(() => {
     if (singleColumnLost) onScopeChange?.("month");
   }, [singleColumnLost, onScopeChange]);
@@ -5109,8 +5108,8 @@ export default function MonthGenerator({
           )}
         </div>
         <div className="flex items-center gap-4">
-          {singleView && (
-            <Button variant="secondary" size="md" onClick={showWholeMonth} disabled={storedTransportActive}>
+          {singleView && onScopeChange && (
+            <Button variant="secondary" size="md" onClick={() => onScopeChange("month")} disabled={storedTransportActive}>
               Ver mes completo
             </Button>
           )}

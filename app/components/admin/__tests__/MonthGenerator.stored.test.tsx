@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { ComponentProps } from "react";
+import { useState, type ComponentProps, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { GridCell, GridColumn, GridRow } from "../plannerModel";
@@ -186,6 +186,13 @@ function source(roles: ServiceRole[]) {
   };
 }
 
+function ScopeHost({ render: renderEditor }: {
+  render: (single: boolean, widen: (scope: "service" | "month") => void) => ReactNode;
+}) {
+  const [single, setSingle] = useState(true);
+  return <>{renderEditor(single, (scope) => { if (scope === "month") setSingle(false); })}</>;
+}
+
 function renderStored(roles: ServiceRole[], options: {
   openComposerInitially?: boolean;
   initialMonth?: string;
@@ -198,7 +205,7 @@ function renderStored(roles: ServiceRole[], options: {
 } = {}) {
   const storedSource = source(roles);
   const onClose = vi.fn();
-  const result = render(
+  const editor = (singleService: boolean | undefined, onScopeChange: ComponentProps<typeof MonthGenerator>["onScopeChange"]) => (
     <MonthGenerator
       mode="stored"
       members={options.members ?? members}
@@ -213,9 +220,15 @@ function renderStored(roles: ServiceRole[], options: {
       onCreated={vi.fn()}
       onCleared={options.onCleared}
       focusRoleId={options.focusRoleId}
-      singleService={options.singleService}
-      onScopeChange={options.onScopeChange}
-    />,
+      singleService={singleService}
+      onScopeChange={onScopeChange}
+    />
+  );
+  const result = render(
+    options.singleService
+      // Owns the scope the way `ServicesPanel` does: a widen request flips it, and nothing narrows it back.
+      ? <ScopeHost render={(single, widen) => editor(single, (scope) => { options.onScopeChange?.(scope); widen(scope); })} />
+      : editor(options.singleService, options.onScopeChange),
     { wrapper: AdminProviders },
   );
   return { ...result, storedSource, onClose };

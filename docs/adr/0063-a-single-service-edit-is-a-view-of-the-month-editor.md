@@ -21,10 +21,16 @@ stored `MonthGenerator`, with `singleService` (`ServicesPanel.openServiceEditor`
   `onlyColumnId`. Every judgement — the picker's load order, rule checks, duplicate
   checks, the participation chart — still reads the whole month.
 - The month tools are hidden, and so is «⛶ Pantalla completa» (one column already
-  fits). The page title reads «Editar servicio»; the footer's button reads «Guardar».
+  fits). «Copiar a todo el mes» on an instrument/FOH row counts as a month tool: it
+  rewrites services that are not on screen. The page title reads «Editar servicio»;
+  the footer's button reads «Guardar».
+- Instrument rows belong to the month, so «Eliminar» on a row held only on another
+  date says which date instead of «Vacía la fila», an empty-looking row's contradiction.
 - «Ver mes completo» widens the view in place. It does not remount the editor, so
-  an unsaved edit survives, and it is one way.
-- A focused service that is not in the month's inventory falls back to the month.
+  an unsaved edit survives. `ServicesPanel` owns the scope and only ever widens it, so
+  the title and the view cannot disagree.
+- A focused service that is not in the month's inventory asks the parent to widen,
+  and stays widened if it reappears in a later load.
 
 The save is the stored editor's own PATCH, so revisions, notices
 (`docs/NOTIFICATIONS.md`, ADR-0054) and cache revalidation are unchanged.
