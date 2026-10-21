@@ -1,7 +1,7 @@
 # OWT MCP — admin parity, phase 1: stored services from the chat (plan)
 
-**Status:** DRAFT 2026-10-21, awaiting Frank's answers to §3, then adversarial review of S2 (critical),
-then Frank's go-ahead.
+**Status:** DRAFT 2026-10-21. Q1 decided A by Frank (16:03Z); Q2 and Q3 proceed on A unless he says
+otherwise. Next: adversarial review of S2 (critical), then Frank's go-ahead.
 **Requirement (Frank, 2026-10-21 15:48Z, verbatim):** «Quiero poder hacer todo lo que hago en la
 página como admin, pero desde el chat». Phase order chosen on a decision card at 15:57Z: «Fase 1
 primero (servicios guardados)». The four phases and the inventory behind them: the Claude Doc «Todo
@@ -53,8 +53,8 @@ What does not change: `/admin`, the PATCH and create routes' rules, the notices,
 
 ## 3. Questions for Frank
 
-- **Q1 — how he edits saved services.** (A, recommended) The same card as proposals, plus the chat.
-  (B) Chat only, no card (about a third less work, but every change is typed).
+- **Q1 — how he edits saved services. DECIDED A (Frank, 2026-10-21 16:03Z, «Tarjeta y chat»).** (A)
+  The same card as proposals, plus the chat. (B) Chat only, no card.
 - **Q2 — where the save happens.** (A, recommended; the plan proceeds on it unless he says otherwise)
   Through the chat, so the Claude app asks before writing and the prompt lists each change (F4).
   (B) Directly from the card after its own confirmation, without the Claude app's prompt.
@@ -74,20 +74,62 @@ What does not change: `/admin`, the PATCH and create routes' rules, the notices,
 
 ### S2 — stored-month edits (critical)
 
-- T2.1 Extract `roleEditCommit.ts` from the PATCH handler and `copyInstrumentsCommit.ts` from
-  `copy-instruments`; the routes keep auth + HTTP only. Existing route tests pass unchanged; the
-  caller guard lists both.
-- T2.2 `storedMonthBoard.ts` (neutral, no I/O): stored roles of a month → `EditorBoard` via
-  `storedRoleReadModel.ts`; every service editable; header fields carried.
-- T2.3 `check_service_edits` (model-visible, names in, never forces) and
-  `check_service_edits_app` (app-only, tokens in, may force): replay the edit list, month check,
-  answer F3's targets and F4's lines, candidates for a seat.
-- T2.4 `save_service_edits` (destructive): F3 + F4 + F5 + F7, notices `before` captured pre-commit,
-  `revalidateServiceViews`, a per-service report (`guardado`, `ya estaba`, `cambió`, `rechazado`,
-  `sin confirmar`). Refuses a month outside the pool's reach, an empty list, more than 31 services.
-- T2.5 Tests: idempotent retry after a partial save; stale `baseRev`; an invented waiver; a `lines`
-  mismatch; a published service's notices equal the route's for the same body; a past-month
-  `countsForFairness` change refused; unknown commit outcome stops the run.
+**Scope of an edit.** Seats in all five sections, a special's `service_name` and `time`, and
+`countsForFairness`. **Never the date**: a date move needs the dependency refusal, a destination
+lock claim and occupancy checks (`route.ts` PATCH, `isMove`), and moving a column also moves every
+rule input the judge reads; it stays in `/admin` until a later phase. A service whose stored
+admission is not `approved` (`storedRoleReadModel.ts` `StoredRoleAdmission`: `bootstrapEligible`,
+`readOnly`) is shown read-only, as the grid shows it, and any edit to it is refused.
+
+- **T2.1 Extract the writers.** `roleEditCommit.ts` takes `{id, request: ParsedEditRequest}` and
+  does everything `patchHandler` does after `denyUnlessManager` and `parseEditRequest`: the dangling
+  ref check, `loadRoleForWrite` under `request.rev`, the stored-type whitelist and refusals, the
+  move path (kept for the route), occupancy, lock heartbeat or bootstrap, the special identity
+  claim, ONE transaction under `ifRevisionId(role._rev)`, the conflict mapping, and the post-commit
+  side effects (`isNoticeNeutralEdit`, `notifyRoleAssignments`, `queueRoleNotices` with `before`
+  captured pre-commit, `revalidateRoleMutation`). It returns the same `{status, body}` the route
+  sends. `copyInstrumentsCommit.ts` likewise from `copy-instruments/route.ts`. The routes keep auth,
+  JSON reading and `withVerificationRunContext` only; their existing tests pass unchanged, and
+  `serviceCommitCallers.test.ts` lists both (eight write paths).
+- **T2.2 The stored-month board** (`storedMonthBoard.ts`, neutral, no I/O): the month's stored
+  roles → `translateStoredRole`/`buildStoredGridRows` → an `EditorBoard` whose `editable` set is
+  the `approved` services, each column carrying `roleId` and `rev`. Rule inputs come only from
+  `columnRuleInputs` (`editorInputs.test.ts`'s grep extends to the new modules) with the CURRENT
+  `solverConfig` (a stored month has no bound rule set; a rule changed between check and save shows
+  up as different lines and F4 refuses).
+- **T2.3 The judge.** An edit list (`place`, `clear`, `exchange`, `move`, header changes) is replayed
+  exactly as ADR-0062 E4 replays it (`pickJudge`, `evaluateMove`, the exchange unit, the
+  whole-board safety net). The month check is `monthCheck` with every editable stored service as a
+  planned column and the window's OTHER stored roles as `storedRoles`; eligibility for fair share
+  comes from the month's `fairnessMonth` record through the ledger GET (a month with no record is
+  judged «sin revisar» for the ledger lines only, E7).
+- **T2.4 The check tools.** `check_service_edits` (model-visible): `{month, edits}` with members by
+  NAME (exact display name, refused when ambiguous), never forces, answers lines, warnings and the
+  F3 change set. `check_service_edits_app` (app-only): the same with month-scoped tokens (F6), a
+  seat's candidates, and `force` on the last edit, which mints F5's waiver tokens.
+- **T2.5 `save_service_edits`** (destructive, `destructiveHint: true`): `{month, changes:
+  [{service, baseRev, target, waivers?}], lines}`. In order: admission (principal, super-admin);
+  every `service` is a role of `month`, `approved`, at most once; `target` parses as a
+  `ParsedEditRequest` for that role with the stored date; the target is judged as a DIFF against the
+  stored role (removals first, then each added person through the pick gate on the board without
+  them, then the safety net), never trusted; every C4 has a valid waiver token for exactly that
+  service, seat, member and rule; the rendered lines equal `lines` (NFC multiset). Only then, one
+  service at a time in date order: semantics already equal the target (`sameRoleSemantics`) →
+  «ya estaba», no write; `_rev` ≠ `baseRev` → «cambió desde que lo revisaste», not written, the run
+  continues with the rest (each service is independent, as `/admin`'s save is); otherwise
+  `roleEditCommit` under `baseRev`. A thrown or non-409 commit failure is «sin confirmar» and STOPS
+  the run (an unknown outcome must not be followed by more writes, as `/admin` breaks on a
+  non-committed transport). The answer lists every service with its status and the next step
+  (repeat the same call: done services answer «ya estaba»).
+- **T2.6 Tests.** Route parity: the route's existing PATCH and copy tests unchanged; the same body
+  through the commit and the route produces the same notices (outbox rows) for a published service
+  and none for a draft. Save: idempotent retry after a partial run; stale `baseRev`; a target that
+  adds a person the gate refuses (C1–C3) is refused before any write; a C4 without a token, with a
+  token for another seat, and with a token after the rule wording changed; a `lines` mismatch; a
+  `countsForFairness` change on a past CDMX month refused; a non-`approved` service refused; a date in
+  `target` different from the stored one refused; a thrown commit stops the run. Hygiene: no member
+  id, rule key or rules revision in any result, and no id or name in any log line
+  (`monthToolHygiene.test.ts`); services cross as the role ids `get_service` already returns.
 
 ### S3 — create and copy (standard, over existing commits)
 
