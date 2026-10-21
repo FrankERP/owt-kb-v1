@@ -88,7 +88,7 @@ describe("studio protection policy", () => {
       "adminChatUsage",
       // The MCP month proposal (P4 on solver v3, D6): written only by proposalStore.ts.
       "mcpProposal",
-      // The conversation before a service's proposal exists (ADR-0064): written only by
+      // The conversation before a service's proposal exists (ADR-0065): written only by
       // the admin service-thread messages route.
       "serviceThread",
     ]);

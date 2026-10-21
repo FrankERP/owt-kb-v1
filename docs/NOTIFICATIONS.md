@@ -427,9 +427,9 @@ real proposal notified NOBODY, in either direction.
 | Admin, standalone message | thread | **push to the lead** + contributors, "Nuevo mensaje" |
 | Admin, via `request_changes` / `reopen` | transition | unchanged review push, exactly one |
 | Lead, first submission | save | unchanged `notifyProposalSubmitted` |
-| Admin, from a **service card** («Mensajes», with or without a proposal; ADR-0064) | `serviceThread` | **push AND email to the service's Leads** (never the author), `/me/propose/<roleId>`; «Nuevo mensaje» / «Mensaje para tu servicio», or «Mensaje del pastor» when marked as the pastor's (`pastor_note`); email gated on `emailProposals` + allowlist, redirected on Preview; nothing while the service is unpublished |
+| Admin, from a **service card** («Mensajes», with or without a proposal; ADR-0065) | `serviceThread` | **push AND email to the service's Leads** (never the author), `/me/propose/<roleId>`; «Nuevo mensaje» / «Mensaje para tu servicio», or «Mensaje del pastor» when marked as the pastor's (`pastor_note`); email gated on `emailProposals` + allowlist, redirected on Preview; nothing while the service is unpublished |
 
-**AT MOST ONE SIGNAL PER MESSAGE** (on the proposal thread — the service-card `serviceThread` row above sends both on purpose, Frank 2026-10-21, ADR-0064) — never both, and in one named case neither — an email or a push, never the pair. The
+**AT MOST ONE SIGNAL PER MESSAGE** (on the proposal thread — the service-card `serviceThread` row above sends both on purpose, Frank 2026-10-21, ADR-0065) — never both, and in one named case neither — an email or a push, never the pair. The
 gate for the lead→admin push is `status === "approved"`, nothing looser: "a
 status the outbox will not cover" is a NECESSARY condition only, and read as
 sufficient it fires on `draft` too. Neither branch is reachable by hand in

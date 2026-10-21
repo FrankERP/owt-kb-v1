@@ -301,7 +301,7 @@ export default function ServicesPanel({
 
   // Setlist
   const [setlistRole, setSetlistRole] = useState<ServiceRole | null>(null);
-  // «Mensajes del servicio» (ADR-0064). The role is kept after closing so the
+  // «Mensajes del servicio» (ADR-0065). The role is kept after closing so the
   // dialog keeps drawing its title while it animates away.
   const [messagesRole, setMessagesRole] = useState<ServiceRole | null>(null);
   const [messagesOpen, setMessagesOpen] = useState(false);

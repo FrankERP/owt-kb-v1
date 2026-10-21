@@ -598,7 +598,7 @@ export function adminRolesQuery(): BoundQuery {
 
 /**
  * One service's whole conversation, for the admin's «Mensajes del servicio»
- * dialog (ADR-0064) — `GET /api/admin/service-threads/[roleId]/messages`, behind
+ * dialog (ADR-0065) — `GET /api/admin/service-threads/[roleId]/messages`, behind
  * an admin check. Drafts are deliberate: an admin may write about a service
  * before its month is published, and the leads read it once it is.
  *

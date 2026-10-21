@@ -66,7 +66,7 @@ export const POST = withVerificationRunContext(postHandler);
 
 /**
  * POST /api/admin/service-threads/[roleId]/messages — an admin writes to a
- * service's leads from the service card, with or without a proposal (ADR-0064).
+ * service's leads from the service card, with or without a proposal (ADR-0065).
  *
  * The message lands in `serviceThread.<roleId>`, NOT in a proposal: minting a
  * proposal to hold a message would make the role undeletable and immovable

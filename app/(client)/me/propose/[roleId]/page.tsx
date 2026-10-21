@@ -59,7 +59,7 @@ async function getSharedProposal(roleId: string) {
   );
 }
 
-// What admins wrote to this service's leads from its card (ADR-0064) — typically
+// What admins wrote to this service's leads from its card (ADR-0065) — typically
 // what the pastor shared. Read for every visit, proposal or not: the lead needs
 // it most BEFORE choosing songs, and once the proposal exists it is part of the
 // same conversation.

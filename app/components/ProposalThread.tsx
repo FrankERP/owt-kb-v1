@@ -43,13 +43,13 @@ interface Props {
   /**
    * Resolves when the post has committed. Must reject on failure. ABSENT means
    * the viewer can read but not post here — the lead's view of what admins wrote
-   * before the proposal existed (ADR-0064), where `readOnlyHint` says where to
+   * before the proposal existed (ADR-0065), where `readOnlyHint` says where to
    * answer instead.
    */
   onPost?: (body: string, opts: { pastor: boolean }) => Promise<void>;
   /**
    * Offer «Es el mensaje del pastor» beside the composer — the admin's service
-   * dialog only (ADR-0064). The post then carries `{ pastor: true }`.
+   * dialog only (ADR-0065). The post then carries `{ pastor: true }`.
    */
   pastorOption?: boolean;
   /** Overrides the heading — e.g. a service thread that talks to several leads. */
@@ -100,7 +100,7 @@ function stamp(at: string | undefined, today: string): string {
  * read to decide things.
  */
 function authorLabel(m: ThreadMessage): string {
-  // What the pastor sent, relayed by an admin (ADR-0064): the pastor is what the
+  // What the pastor sent, relayed by an admin (ADR-0065): the pastor is what the
   // leads look for, the admin is who brought it.
   if (m.kind === "pastor_note") {
     return m.author_name ? `Mensaje del pastor · vía ${m.author_name}` : "Mensaje del pastor";

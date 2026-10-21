@@ -155,7 +155,7 @@ describe("ProposalsPanel — posting into a card's thread", () => {
     for (const box of boxes) expect(box.value).not.toBe(LEGACY);
     for (const box of boxes) expect(box.value).toBe("");
   });
-  it("opens the card's thread with what admins wrote before the proposal existed (ADR-0064)", async () => {
+  it("opens the card's thread with what admins wrote before the proposal existed (ADR-0065)", async () => {
     stubApi(
       [
         row({

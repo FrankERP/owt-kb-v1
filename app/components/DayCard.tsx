@@ -126,7 +126,7 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
   // The client session wins once it exists (an impersonating admin reads as the
   // member they view); until then, the server's reading.
   const openAllSections = session?.user ? canEdit : !!viewerIsAdmin;
-  // «Mensajes» (ADR-0064): admins write to this service's leads — what the pastor
+  // «Mensajes» (ADR-0065): admins write to this service's leads — what the pastor
   // shared, say — from the card itself. Needs the service document's id (absent
   // on the planner's preview cards) and a service that has not happened yet.
   const messageRoleId = serviceId || roleId || null;

@@ -1,4 +1,4 @@
-// What admins write to a service's leads from the service card (ADR-0064).
+// What admins write to a service's leads from the service card (ADR-0065).
 //
 // A `serviceThread` holds those messages — typically what the pastor shared
 // about that Sunday, often before the leads have created the shared

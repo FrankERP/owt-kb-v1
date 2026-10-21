@@ -88,7 +88,7 @@ export const PROTECTED_STUDIO_TYPES = [
   // The MCP month proposal (P4 on solver v3, D6): machine state written only by
   // `app/mcp/monthProposals/proposalStore.ts`. Internal, like the MCP OAuth state above.
   "mcpProposal",
-  // What admins write to a service's leads from its card (ADR-0064): written only by
+  // What admins write to a service's leads from its card (ADR-0065): written only by
   // `POST /api/admin/service-threads/[roleId]/messages`. Human-meaningful like
   // `setlistProposal`, so protected but deliberately NOT internal — it keeps a read-only pane.
   "serviceThread",

@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-// What admins wrote about a service before its proposal existed (ADR-0064) —
+// What admins wrote about a service before its proposal existed (ADR-0065) —
 // typically what the pastor shared — as the lead sees it in the editor.
 //
 // Before the proposal exists the lead READS it (no composer: there is no
