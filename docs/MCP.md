@@ -41,8 +41,8 @@
 > ([plan](superpowers/plans/2026-10-21-owt-mcp-proposal-editor.md)); its first slice, the
 > read-only [proposal card](#the-proposal-card-mcp-apps), is in production (PR #159). The rest —
 > [editing a proposal](#editing-a-proposal) from the card or the chat, and `apply_schedule`'s
-> waiver gate ([ADR-0062](adr/0062-proposal-edits-are-new-records-judged-on-the-server.md)) — is on
-> the editor's branch, not released.
+> waiver gate ([ADR-0062](adr/0062-proposal-edits-are-new-records-judged-on-the-server.md)) — is
+> in production since 2026-10-21 (PR #160, `main` `2e075190`); its live proof with Frank present is still ahead.
 
 > **Summary: P0 released 2026-09-24; P1 released 2026-09-25 (PR #98, `main` `a04edb43`),
 > acceptance complete 2026-09-28; P3 (four write tools) released 2026-09-28 (PR #106, `main`
@@ -53,8 +53,8 @@
 > superseded; P4 was re-baselined onto v3
 > ([plan](superpowers/plans/2026-10-20-owt-mcp-p4-v3-solve-apply.md), approved 2026-10-20) and
 > `solve_month` + `apply_schedule` are in production since 2026-10-20 (PR #156, `main`
-> `78939c71`), live proof pending; `revise_proposal` and the card's editor are on the proposal
-editor's branch (ADR-0062), not released.**
+> `78939c71`), live proof pending; `revise_proposal` and the card's editor are in production since 2026-10-21 (PR #160, `main` `2e075190`),
+ADR-0062, live proof pending.**
 
 This app exposes itself to Claude as an [MCP](https://modelcontextprotocol.io) server, so Frank
 can ask Claude questions against a live OWT Backstage deployment from his phone or desktop. The
@@ -66,7 +66,7 @@ four write tools that make the same changes `/admin` makes, through the same dom
 2026-09-28); P4 adds two month tools that plan a month with `/admin`'s own v3 Auto and create it
 as drafts with its own confirm ([ADR-0061](adr/0061-the-connector-plans-months-only-on-v3-through-the-browsers-own-auto-and-confirm.md);
 released to production 2026-10-20); the proposal editor adds three more
-([ADR-0062](adr/0062-proposal-edits-are-new-records-judged-on-the-server.md); not released yet). See the status banner above. See [ADR-0039](adr/0039-mcp-client-registration-is-stateless-dcr.md) for why client
+([ADR-0062](adr/0062-proposal-edits-are-new-records-judged-on-the-server.md); released to production 2026-10-21). See the status banner above. See [ADR-0039](adr/0039-mcp-client-registration-is-stateless-dcr.md) for why client
 registration is stateless, and [AUTH_AND_SECURITY.md](AUTH_AND_SECURITY.md#mcp--oauth) /
 [API_REFERENCE.md](API_REFERENCE.md) for the route-level contract.
 
@@ -134,8 +134,8 @@ Twelve tools in production: `ping` (P0, released to production 2026-09-24), seve
 (P3, **released to production 2026-09-28** — PR #106, `main` `7c65f2eb`; dev and production both
 expose all twelve). P4 adds two month tools, fourteen in all, registered after the writes
 (see [Month tools](#month-tools-p4-on-solver-v3); in production since 2026-10-20). The proposal
-editor's branch adds three more, seventeen in all, registered after `apply_schedule`
-(see [Editing a proposal](#editing-a-proposal); not released). Every tool is
+editor adds three more, seventeen in all, registered after `apply_schedule`
+(see [Editing a proposal](#editing-a-proposal); in production since 2026-10-21, PR #160). Every tool is
 registered the same way — one file per tool in `app/mcp/tools/`, exporting a
 `register<Tool>(server, deps?)` function that `app/api/mcp/route.ts` calls inside its handler
 init, the writes after the reads. `ping` and every read declare
@@ -711,7 +711,7 @@ MCP Apps ignores both keys and shows the text answer as before.
 
 ### Editing a proposal
 
-Three tools, not released (the editor's branch). Decisions and the rejected alternatives:
+Three tools, in production since 2026-10-21 (PR #160, `main` `2e075190`; live proof pending). Decisions and the rejected alternatives:
 [ADR-0062](adr/0062-proposal-edits-are-new-records-judged-on-the-server.md).
 
 | Tool | Who calls it | What it does |
@@ -852,7 +852,7 @@ list:
   refresh `jti`, the revocation flag.
 - **`mcpOauthCodeRedemption`** (`mcpOauthCode.<sha256(jti)>`) — a replay guard, `redeemedAt` only.
 - **`mcpProposal`** (`mcpProposal.<handle>`, P4) — one per stored `solve_month`
-  result (and, on the editor's branch, one per saved version: a v2 payload adds `waivers`,
+  result (and, since the proposal editor, one per saved version: a v2 payload adds `waivers`,
   `baseline`, `checked` and `saveId`; the record adds `parent`, `revision` and `root`; the base's
   `state` gains `supersededBy`): origin, member id, `createdAt`, `expiresAt` (7 days), engine, the rules `_rev`, months,
   request id, one JSON `payload` (frozen record entries, drafts, the stored service ids at solve)

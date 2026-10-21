@@ -545,7 +545,7 @@ runs the browser's v3 confirm (`runV3ConfirmAttempt`): the records first, throug
 PUT's own `commitFairnessMonths`, then the drafts. Both refuse under any engine but v3. Parity with
 the browser's request is pinned by `app/mcp/tools/__tests__/monthToolParity.test.tsx`.
 
-**Not a caller: the proposal editor's month check** (ADR-0062, on the editor's branch). An edited
+**Not a caller: the proposal editor's month check** (ADR-0062, in production since 2026-10-21). An edited
 proposal is judged by `app/mcp/monthProposals/monthCheck.ts`, never by a solve: for fixed services
 the solver clamps `>=`/`==` to the pinned availability and skips `mandatory_lead` and `unfilled`,
 so it cannot say whether a hand-edited board meets the rules as written. The two judges are kept

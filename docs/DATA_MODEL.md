@@ -374,7 +374,7 @@ toward the same admin's production cap.
 ## `mcpProposal` — a stored month plan of the connector (MCP P4, ADR-0061, ADR-0062)
 
 One document per `solve_month` that stored a plan, and one per saved version of it (the proposal
-editor, ADR-0062, not released: on the editor's branch), `_id` **`mcpProposal.<handle>`**, the handle 26
+editor, ADR-0062, in production since 2026-10-21), `_id` **`mcpProposal.<handle>`**, the handle 26
 lowercase Crockford base32 characters (130 random bits) that the connector hands the model.
 **Dotted**, so never served untokened. Files:
 [`documentTypes.ts`](../app/mcp/monthProposals/documentTypes.ts) (import-free names and fields),
