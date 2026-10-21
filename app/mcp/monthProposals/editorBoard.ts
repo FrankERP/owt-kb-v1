@@ -12,6 +12,7 @@
 
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
 import { newCreationRequestId } from "@/app/utils/monthDraftCreate";
+import { isSpecialRoleType } from "@/app/utils/roleWriteRequest";
 import type { RankMember } from "@/app/components/admin/candidateRanking";
 import { judgePick, pickCandidates, type PickContext } from "@/app/components/admin/pickJudge";
 import { assignedAfterSourceRemoval, evaluateMove, type MoveGateVerdict } from "@/app/components/admin/moveGate";
@@ -114,7 +115,7 @@ export function columnRuleInputs(board: EditorBoard, columnId: string, config: S
   const column = board.columns.find((c) => c.columnId === columnId);
   if (!column) return null;
   const sundayDates = sundaySpineForColumn(column);
-  if (column.type !== "special_role" && sundayDates.length === 0) return null;
+  if (!isSpecialRoleType(column.type) && sundayDates.length === 0) return null;
   return { column, config, sundayDates };
 }
 

@@ -23,6 +23,7 @@
 
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
 import { formatFairnessTenths } from "@/app/utils/fairnessFormat";
+import { isSpecialRoleType } from "@/app/utils/roleWriteRequest";
 import type { LedgerService } from "@/app/utils/fairnessLedger";
 import type { assembleFairnessLedger } from "@/app/utils/fairnessLedgerRead";
 import type { FairnessLedgerResponse, LogicalRecord, RecordEnvironment } from "@/app/utils/fairnessVocabulary";
@@ -172,17 +173,19 @@ function fairnessLines(fair: FairShareLedger, months: readonly string[]): string
       if (!months.includes(pm.month)) continue;
       let seats = 0;
       let share = 0;
+      let shareTenths = 0;
       let received = 0;
       for (const line of FAIR_LINES) {
         const f = pm.lines[line];
         if (!f) continue;
         seats += f.seats;
         share += f.share;
+        shareTenths += f.tenths.share;
         received += f.received;
       }
-      // A full seat apart, in hundredths — the ledger's own figures, never re-derived.
+      // A full seat apart, in hundredths; the share shown in the ledger's own tenths (UI-4).
       if (Math.abs(received - share) < 100) continue;
-      lines.push({ text: E.fairShare(p.name, pm.month, seats, formatFairnessTenths(Math.round(share / 10))), gap: Math.abs(received - share) });
+      lines.push({ text: E.fairShare(p.name, pm.month, seats, formatFairnessTenths(shareTenths)), gap: Math.abs(received - share) });
     }
   }
   return lines.sort((a, b) => b.gap - a.gap).map((l) => l.text);
@@ -203,7 +206,7 @@ export function monthCheck(input: MonthCheckInput): MonthCheck {
   if (!checked) notes.push(E.unchecked, E.omittedLedger);
 
   const plannedColumns = board.columns.filter((c) => board.editable.has(board.localIdOf.get(c.columnId)!));
-  if (plannedColumns.some((c) => c.type === "special_role" && !c.countsForFairness)) notes.push(E.uncountedSpecials);
+  if (plannedColumns.some((c) => isSpecialRoleType(c.type) && !c.countsForFairness)) notes.push(E.uncountedSpecials);
 
   const built = buildV3SolveRequest({
     months: [...months],
