@@ -33,7 +33,8 @@ A second, small document holds the conversation until the proposal exists:
 - **Notification:** a push to the service's Leads (never the author), and none while
   the service is unpublished — its leads cannot open the page yet. No email, the same
   as an admin message on a proposal (ADR-0025: free Gmail, no fan-out).
-- `service_ref` is a **weak** reference.
+- The role is recorded as a plain string, `role_id` — **never a reference**, not even a
+  weak one (see Rejected).
 
 ## Rejected
 
@@ -48,13 +49,18 @@ A second, small document holds the conversation until the proposal exists:
   has neither problem and costs one sub-query per read.
 - **Store it on the role document.** Every role writer asserts the role's `_rev`; a
   chat append would 409 the planner and the setlist editor under whoever is editing.
-- **A strong `service_ref`.** Sanity refuses to delete a document with incoming strong
-  references, so a message would make its service undeletable.
+- **A reference to the role, strong or weak.** Sanity refuses to delete a document with
+  incoming strong references; and GROQ's `references()` matches WEAK ones too, which
+  `roleDependencies` (`documentsReferencingRoleQuery`) reports as a dependency — so
+  either kind would block «Limpiar mes», a role delete and a date move. Found in the
+  code review: the first version used a weak reference.
 
 ## Consequences
 
-- Deleting a role leaves its `serviceThread` behind, unreferenced and unread. Harmless;
-  nothing lists them except the Studio's read-only pane.
+- Deleting a role leaves its `serviceThread` behind, unread. Harmless; nothing lists
+  them except the Studio's read-only pane.
+- No ministry check on the two routes, like the proposal routes beside them
+  (FrankERP/owt-kb-v1#8).
 - Leads cannot post before the proposal exists — they answer when they save. A lead
   composer on this document would need its own writer and the admin push; add it only
   if that turns out to be wanted.

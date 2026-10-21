@@ -113,6 +113,8 @@ import { POST } from "@/app/api/admin/service-threads/[roleId]/messages/route";
 import { GET } from "@/app/api/admin/service-threads/route";
 import { PROPOSAL_MESSAGES_MAX } from "@/app/utils/proposalMessageWrite";
 import { serviceTodayIso } from "@/app/components/admin/serviceReadiness";
+import { evaluate, parse } from "groq-js";
+import { documentsReferencingRoleQuery, servicesWithoutProposalQuery } from "@/app/utils/serviceReadQueries";
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -193,10 +195,11 @@ describe("POST /api/admin/service-threads/[roleId]/messages", () => {
     expect(tx.created).toMatchObject({
       _id: THREAD_ID,
       _type: "serviceThread",
-      // Weak, or the role could never be deleted while a message exists.
-      service_ref: { _type: "reference", _ref: ROLE_ID, _weak: true },
+      // A string, never a reference: `references()` would make it a role dependency.
+      role_id: ROLE_ID,
       messages: [],
     });
+    expect(JSON.stringify(tx.created)).not.toContain("_ref");
     expect(tx.patchedId).toBe(THREAD_ID);
     expect(tx.setIfMissing).toEqual({ messages: [] });
     expect(tx.appended).toHaveLength(1);
@@ -210,6 +213,17 @@ describe("POST /api/admin/service-threads/[roleId]/messages", () => {
     expect(tx.committed).toBe(true);
     const data = await res.json();
     expect(data.messages).toEqual([{ _key: "m1", body: "Tema: gracia" }]);
+  });
+
+  it("writes nothing the role-dependency scan sees, so the role stays deletable and movable", async () => {
+    // The first version stored a WEAK reference; GROQ's `references()` matches
+    // those too, and `roleDependencies` reported the thread as a dependency.
+    await post({ body: "hola" });
+    const created = txs[0].created as Record<string, unknown>;
+    const dataset = [{ _id: ROLE_ID, _type: "sunday_role", week: futureIso(5) }, { ...created, messages: txs[0].appended }];
+    const q = documentsReferencingRoleQuery(ROLE_ID);
+    const hits = await (await evaluate(parse(q.query), { dataset, params: q.params })).get();
+    expect(hits).toEqual([]);
   });
 
   it("pushes the service's leads (never the author) toward their proposal page", async () => {
@@ -283,6 +297,31 @@ describe("POST /api/admin/service-threads/[roleId]/messages", () => {
 });
 
 // ── GET ─────────────────────────────────────────────────────────────────────
+
+describe("servicesWithoutProposalQuery, evaluated", () => {
+  it("lists upcoming services with no proposal, drafts flagged, with their thread", async () => {
+    const today = "2099-03-01";
+    const dataset = [
+      { _id: "past", _type: "sunday_role", week: "2099-02-22" },
+      { _id: "proposed", _type: "sunday_role", week: "2099-03-08" },
+      { _id: "setlistProposal.proposed", _type: "setlistProposal", service_ref: { _type: "reference", _ref: "proposed" } },
+      { _id: "open", _type: "saturday_role", week: "2099-03-07", published: false, Lead: [{ _ref: "lead-1" }] },
+      { _id: "lead-1", _type: "teamMembers", alias: "Ana" },
+      { _id: "special", _type: "special_role", date: "2099-03-10", service_name: "Noche" },
+      { _id: "serviceThread.open", _type: "serviceThread", role_id: "open", messages: [{ _key: "m1", body: "Tema: gracia", author_role: "admin" }] },
+    ];
+    const q = servicesWithoutProposalQuery(today);
+    const rows = (await (await evaluate(parse(q.query), { dataset, params: q.params })).get()) as Array<Record<string, unknown>>;
+    expect(rows.map((r) => r._id)).toEqual(["open", "special"]);
+    expect(rows[0]).toMatchObject({
+      service_date: "2099-03-07",
+      published: false,
+      leads: [{ id: "lead-1", name: "Ana" }],
+      messages: [{ _key: "m1", body: "Tema: gracia" }],
+    });
+    expect(rows[1]).toMatchObject({ published: true, messages: null });
+  });
+});
 
 describe("GET /api/admin/service-threads", () => {
   it("is admin-only", async () => {

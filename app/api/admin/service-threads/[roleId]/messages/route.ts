@@ -88,6 +88,10 @@ export const POST = withVerificationRunContext(postHandler);
  * message still shows on that proposal (both threads are read together), so
  * refusing would only make the admin retype it.
  *
+ * **No ministry check**, inherited deliberately from the proposal message route
+ * beside it, so a kids-only `admin` can post here; tightening both is
+ * FrankERP/owt-kb-v1#8.
+ *
  * Nothing to revalidate: no ISR page reads this document (the proposal page is
  * `revalidate = 0`, the admin list is an API read).
  */
@@ -164,8 +168,11 @@ async function postHandler(req: NextRequest, { params }: { params: Promise<{ rol
       .createIfNotExists({
         _id: threadId,
         _type: SERVICE_THREAD_TYPE,
-        // Weak: a strong reference would block deleting the role.
-        service_ref: { _type: "reference", _ref: roleId, _weak: true },
+        // A plain STRING, never a reference — not even a weak one. GROQ's
+        // `references()` matches weak references too, and `roleDependencies`
+        // turns every document referencing a role into a dependency: one message
+        // would block «Limpiar mes», a role delete and a date move.
+        role_id: roleId,
         messages: [],
       })
       .patch(threadId, (p) => p.setIfMissing({ messages: [] }).append("messages", [message]))

@@ -8,8 +8,10 @@ import { defineType } from "sanity";
  * create one, new messages go to the proposal's own `messages[]` and both lists
  * are shown together. Written only by `POST /api/admin/service-threads/[roleId]/messages`.
  *
- * `service_ref` is a WEAK reference on purpose: a strong one would make Sanity
- * refuse to delete the role («Limpiar mes», a role delete) while a message exists.
+ * `role_id` is a plain STRING on purpose, never a reference (not even a weak one):
+ * GROQ's `references()` matches weak references, and `roleDependencies` turns every
+ * document that references a role into a dependency — one message would block
+ * «Limpiar mes», a role delete and a date move.
  *
  * The message item mirrors `setlistProposal.messages[]` field for field (same
  * `proposal_message` item type, minted by `buildProposalMessage`), so both
@@ -22,11 +24,9 @@ export const serviceThread = defineType({
   readOnly: true,
   fields: [
     {
-      name: "service_ref",
-      title: "Servicio",
-      type: "reference",
-      weak: true,
-      to: [{ type: "sunday_role" }, { type: "saturday_role" }, { type: "special_role" }],
+      name: "role_id",
+      title: "Servicio (id del rol)",
+      type: "string",
     },
     {
       name: "messages",

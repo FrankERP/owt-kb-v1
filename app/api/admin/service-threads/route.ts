@@ -15,6 +15,9 @@ import { servicesWithoutProposalQuery } from "@/app/utils/serviceReadQueries";
  * The query (and why it sees drafts) lives in `servicesWithoutProposalQuery`,
  * with the rest of the admin read model.
  *
+ * No ministry check, like `GET /api/admin/proposals` beside it: a kids-only
+ * `admin` can read this list too. Tightening both is FrankERP/owt-kb-v1#8.
+ *
  * Loaded only when the admin opens the section (the panel fetches lazily), so a
  * plain visit to Propuestas costs no extra Sanity read.
  */
