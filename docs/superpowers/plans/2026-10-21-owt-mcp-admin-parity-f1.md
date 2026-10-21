@@ -113,18 +113,28 @@ admission is not `approved` (`storedRoleReadModel.ts` `StoredRoleAdmission`: `bo
   targets from the planner's rows; a month with
   no record is «sin revisar» for the lines that need it (E7). Members are named by display name; two
   members with the same display name are shown with their Tipo to tell them apart in every line.
-- **T2.4 The check tools.** `check_service_edits` (model-visible): `{month, edits}` with members by
+- **T2.4 The check tools.** Every `target` carries the service's full header as stored: a timed
+  special's `time` is always present, because an absent `time` CLEARS it (`parseEditRequest`); a
+  target built from a chat request inherits the stored header, never a guess. The month check also
+  warns when a worship night's song leader (`songs[].leads`) is no longer in its Lead (the role
+  writer does not check it; ADR-0036 enforces it only at the setlist writer). `check_service_edits` (model-visible): `{month, edits}` with members by
   NAME (exact display name, refused when ambiguous), never forces, answers lines, warnings and the
   F3 change set. `check_service_edits_app` (app-only): the same with month-scoped tokens (F6), a
   seat's candidates, and `force` on the last edit, which mints F5's waiver tokens.
 - **T2.5 `save_service_edits`** (destructive, `destructiveHint: true`): `{month, changes:
-  [{service, baseRev, target, lines, waivers?}]}`.
+  [{service, baseRev, target, diff, mac, lines, waivers?}]}`.
   1. Admission (principal, super-admin). Every `service` is a role of `month`, `approved`, at most
      once; `target` parses as a `ParsedEditRequest` for that role with its STORED date and no
      `lockRev`; at most 31.
   2. One fresh read of the month (roles, locks, the integrity join); sort (F3). Any «cambió» → refuse,
-     nothing written. All «ya estaba» → say so, nothing written. Derive the groups (F3) from the
-     targets of the «por guardar» services against their stored state.
+     nothing written. All «ya estaba» → say so, nothing written. Derive the groups (F3) over EVERY
+     service the call names, «ya estaba» ones included from each change's `diff` (who leaves and who enters
+     each section, as tokens), which the check returns with a MAC (HMAC of `MCP_OAUTH_SECRET` under
+     its own label over `service`, `baseRev`, `target` and `diff`); the save verifies every MAC, and
+     for «por guardar» services also that `diff` equals `target` minus the stored state. A
+     «ya estaba» service's base is gone, so its signed `diff` is the only record of what it changed:
+     on a repeat after a partial group write, the remaining side is still in its group and a failure
+     on it still says who is where.
   3. For the «por guardar» services only: the target is judged as a DIFF against the stored role
      (removals first, then each added person through the pick gate on the board without them, then
      the safety net) on the board made of the current state of every other service; every new
@@ -132,12 +142,24 @@ admission is not `approved` (`storedRoleReadModel.ts` `StoredRoleAdmission`: `bo
      CDMX month is refused (F7); a group over 6 services is refused. Any failure refuses all,
      nothing written.
   4. Writes, through `roleEditCommit` under `baseRev`, one service at a time: groups and single
-     services in order of their earliest date, a group's services back to back. **Time limit:** no
-     group or single service STARTS after 35 s of the call; a started group runs to its end (at most
-     6 writes; the route's `maxDuration` is 60 s and each write's `after()` notices and
-     revalidation must finish inside it, `docs/MCP.md`); what did not start answers «pendiente». A
-     409 on a single service is «no se guardó» with its reason and the run continues. A thrown or
-     unknown outcome is «sin confirmar» and STOPS the run.
+     services in order of their earliest date, a group's services back to back. **Time model:**
+     Next holds every `after()` callback registered during the call until the MCP response closes,
+     then starts them all at once (`next/dist/server/after/after-context.js`, a paused queue), inside
+     the same 60 s. So the post-commit tail of N writes runs AFTER the last write. To keep that tail
+     small and bounded, the MCP save runs each write's side effects with the opportunistic sweep
+     OFF (a `sweep: false` option on the shared side-effect path; the route keeps it ON): each write
+     still upserts its outbox notices (with its pre-commit `before`), sends its push and
+     revalidates, but no layer-2 sweep runs in this call. Nothing is delayed by it: a seat edit's
+     notice is debounced 15 minutes (`DEBOUNCE_MS`, `outboxNotice.ts`), so the sweep after an edit
+     never sends that edit's own notice; layer 1 (every 5 minutes) flushes it when due. No group
+     or single service STARTS after a cut-off set from a dev measurement of the WHOLE call (first
+     write to the end of the `after()` tail, published services, the largest allowed group), so
+     that the tail of the last started group ends with at least 15 s to spare; it starts at 30 s
+     and only moves down. What did not start answers «pendiente». A 409 on a single service is «no
+     se guardó» with its reason and the run continues. **A 409 on a group service not yet written
+     marks every unwritten service of that group «no se guardó»** (none of them is written) and the
+     run continues with the next group or single; if the group already had a written service, item
+     5 applies. A thrown or unknown outcome is «sin confirmar» and STOPS the run.
   5. **A 409 inside a group after one of its services was written** (someone saved that service
      between this call's read and its write — the race no sequential save can close) STOPS the run
      and says, in words, who is now where: «Ana quedó en sábado 7 y domingo 8» or «Ana ya no está en
@@ -156,7 +178,10 @@ admission is not `approved` (`storedRoleReadModel.ts` `StoredRoleAdmission`: `bo
   and none for a draft. Save: a partial run (one service written, then «sin confirmar»; and one cut off as «pendiente»)
   repeated with the same call writes only the rest and answers «ya estaba» for the written ones,
   their waivers unused; a group interrupted by «sin confirmar» is completed by the repeat; a 409 on
-  the second service of a group stops the run and names the person and both services; a group of 7
+  the second service of a group stops the run and names the person and both services; a 409 on the
+  FIRST service of a group writes nothing of that group and the run goes on; a repeat after a
+  partial group write still treats the remaining side as grouped; a save of published services runs
+  no layer-2 sweep and still upserts every notice with its pre-commit `before`; a group of 7
   refused before any write; groups are derived by the server (a client-sent `group` field is
   rejected by the schema); a weekend setlist saved between check and save does not block the save;
   a stale service refuses the whole call; a waiver token replayed on
@@ -166,9 +191,10 @@ admission is not `approved` (`storedRoleReadModel.ts` `StoredRoleAdmission`: `bo
   C4 without a token, with a token for another finding, and after the rule wording changed; a
   `lines` mismatch; a
   `countsForFairness` change on a past CDMX month refused; a non-`approved` service refused; a date in
-  `target` different from the stored one refused. Latency: one stored edit's commit plus its
-  `after()` work is measured on dev; if its p95 exceeds 3 s, the group cap (6) and the 35 s start
-  limit are lowered before release so a started group always ends inside 60 s. Hygiene: no member
+  `target` different from the stored one refused. Latency: the WHOLE call (first write to the end of
+  the `after()` tail) is measured on dev with published services and a 6-service group; the start
+  cut-off (30 s) and the group cap (6) are lowered before release until that tail ends with 15 s to
+  spare. Hygiene: no member
   id, rule key or rules revision in any result, and no id or name in any log line
   (`monthToolHygiene.test.ts`); services cross as the role ids `get_service` already returns.
 
