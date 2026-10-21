@@ -135,7 +135,11 @@ Twelve tools in production: `ping` (P0, released to production 2026-09-24), seve
 expose all twelve). P4 adds two month tools, fourteen in all, registered after the writes
 (see [Month tools](#month-tools-p4-on-solver-v3); in production since 2026-10-20). The proposal
 editor adds three more, seventeen in all, registered after `apply_schedule`
-(see [Editing a proposal](#editing-a-proposal); in production since 2026-10-21, PR #160). Every tool is
+(see [Editing a proposal](#editing-a-proposal); in production since 2026-10-21, PR #160). Admin
+parity phase 1 adds eight, twenty-five in all: three reads registered after the P1 reads
+(`get_fairness_ledger`, `get_solver_rules`, `get_integrity_queue`) and the saved-month editor's
+five registered last (see [Editing saved services](#editing-saved-services-admin-parity-phase-1);
+not yet released). Every tool is
 registered the same way — one file per tool in `app/mcp/tools/`, exporting a
 `register<Tool>(server, deps?)` function that `app/api/mcp/route.ts` calls inside its handler
 init, the writes after the reads. `ping` and every read declare
@@ -748,6 +752,48 @@ Three tools, in production since 2026-10-21 (PR #160, `main` `2e075190`; live pr
   `proposalEditorCard.test.tsx` runs the screen's own sequence (check, ask, save, «Cargar») into
   `apply_schedule`; `editorReplay.test.ts`, `waivers.test.ts`, `monthCheck.test.ts` and the
   `fixtures/month-check/parity.json` pair (vitest and `gcf_v3/tests`) cover the judges.
+
+### Editing saved services (admin parity, phase 1)
+
+Five tools over the services already in `/admin`, plus three reads, not yet released. Plan:
+[2026-10-21-owt-mcp-admin-parity-f1.md](superpowers/plans/2026-10-21-owt-mcp-admin-parity-f1.md);
+decisions and the rejected alternatives:
+[ADR-0064](adr/0064-saved-services-are-edited-from-the-chat-as-checked-change-sets.md).
+
+| Tool | Who calls it | What it does |
+|---|---|---|
+| `get_fairness_ledger` | the model | `/admin`'s «Equidad» for a month: balances, records, who is listed. Read-only |
+| `get_solver_rules` | the model | The solver rules as `/admin` shows them: the lists, and each rule as a Spanish line. Read-only |
+| `get_integrity_queue` | the model | `/admin`'s integrity queue: services whose documents do not line up. Read-only |
+| `check_service_edits` | the model (and it opens the card) | Edits by name and date («pon a Ana en el BGV del 8»): place, clear, move, exchange, and a special's name and time or «Cuenta para equidad» (`header`); or `copy {from, to}` alone. Answers per changed service the change set `save_service_edits` takes, its lines in words, the groups and the month check. Never forces: a per-seat rule refuses. Read-only |
+| `check_service_edits_app` | the card only (`_meta.ui.visibility: ["app"]`) | The same with members as month tokens, `force` per edit (mints a waiver token for each finding the forced edit creates) and a seat's candidates. Read-only |
+| `save_service_edits` | the model | Writes the change sets as the check answered them, one service at a time through `/admin`'s PATCH writer (`roleEditCommit.ts`), notices queued inline. Destructive |
+| `copy_instruments` | the model | One service's instruments onto another through `/admin`'s copy writer, after `check_service_edits` with `copy`. Destructive |
+| `create_service` | the model | One empty, unpublished service (Sunday, Saturday, special or «Noche de alabanza»), as «+ Nuevo servicio» does, through the roles POST's writer. Destructive |
+
+- **The permission prompt says what will happen.** Each change set carries `lines` («domingo 8 nov ·
+  BGV: entra Ana; sale Bruno», and every rule forced); the save re-renders them from a fresh read and
+  refuses the whole call before any write if they differ. A copy's lines name every instrument seat
+  of the result.
+- **Sorted before anything is written.** Already as the target → «ya estaba»; edited since the check
+  (another admin, or a special's setlist) → «cambió», and NOTHING is written; else saved. So a
+  repeat of the same call after «sin confirmar» or «pendiente» finishes the rest.
+- **Moves are saved back to back.** Services joined by someone leaving one and entering another
+  form a group, derived by the server; at most 6 per call. If half a group is written and the other
+  half refused, the save stops and says where each person is now.
+- **Forcing needs the card**, as with proposals: only `check_service_edits_app` mints waiver tokens,
+  bound to the service and its revision. A rule the service already broke before the edit is a
+  warning; forced again, it is named in the prompt «ya estaba rota antes de este cambio». The
+  guarantee rests on the host hiding app-only tools.
+- **Time.** Every write races a 45 s hard stop; no group starts after 30 s («pendiente»).
+- **The card** (`mcp-app/proposal-card/useStoredEditor.tsx`) opens on a `check_service_edits`
+  answer with its edits, edits seats like the proposal editor, and «Guardar» sends the change sets
+  to the chat (in parts when a group is too large); it never writes.
+- **Not in phase 1:** moving a service to another date, legacy services `/admin` bootstraps on save,
+  adding a new instrument or FOH row, header edits from the card, deleting services.
+- **Proof.** `serviceEditor.test.ts`, `serviceCopy.test.ts` and `createService.test.ts` run the tools
+  over an in-memory store with the writers' contracts; `storedMonthCard.test.tsx` runs the card's own
+  sequence into `save_service_edits`.
 
 ### Notification audiences (the write tools)
 
