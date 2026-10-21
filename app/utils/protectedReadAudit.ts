@@ -218,10 +218,10 @@ export const A2_HANDOFF_ALLOWLIST: readonly AuditExemption[] = [];
  */
 export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
   {
-    file: "app/api/admin/roles/route.ts",
-    operation: "POST",
+    file: "app/utils/roleCreateCommit.ts",
+    operation: "module",
     reason:
-      "guarded role create: one transaction creates the deterministic roleCreationReceipt, the role, and the claimed/reclaimed weekend roleTargetLock (A2 §2); the role always stores the effective countsForFairness boolean, and the fingerprint carries it only off the type default (solver v3 C1)",
+      "guarded role create: one transaction creates the deterministic roleCreationReceipt, the role, and the claimed/reclaimed weekend roleTargetLock (A2 §2); the role always stores the effective countsForFairness boolean, and the fingerprint carries it only off the type default (solver v3 C1). The domain body of `POST /api/admin/roles`, moved here so the MCP `apply_schedule` tool calls the same writer (MCP P4); the route keeps only authorization and its JSON parse, and `serviceCommitCallers.test.ts` pins who may import this module",
     removalOwner: "permanent runtime writer (never removed — the create surface itself)",
   },
   {

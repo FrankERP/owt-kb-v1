@@ -236,8 +236,9 @@ several exist precisely to stop a plausible-looking change.
   ADR-0050). `app/utils/fairnessLedger.ts` is the only TypeScript definition of F2–F7 and X1;
   `fixtures/fairness/golden.json` is asserted by both suites (vitest and C5's Python,
   `gcf_v3/tests/test_golden.py`) and its expected values are hand-computed — never regenerated from either implementation's output.
-  `fairnessMonth` records are written only through `fairnessMonthCommit` (the PUT, actor `route`)
-  or the reconstruction actor (C4's consented script), both through `executeFairnessMonthWrites` —
+  `fairnessMonth` records are written only through `fairnessMonthCommit` (actor `route`: the PUT,
+  and the MCP's `apply_schedule`, which runs the browser's own v3 confirm with `recordedBy` the
+  grant's member id — ADR-0061) or the reconstruction actor (C4's consented script), both through `executeFairnessMonthWrites` —
   the ONLY mutation path of the type (`createOrReplace` never; the reconstruction actor's guarded
   delete the only delete). Every reader of `fairnessMonth` carries `SANITY_API_READ_TOKEN` or fails
   closed: the ids are dotted, so private, and an untokened read answers «no record» with no error.
@@ -374,10 +375,15 @@ several exist precisely to stop a plausible-looking change.
   on NextAuth's DEFAULT `redirect` callback preserving its query** — never add a custom
   `redirect` callback without keeping that. `authRedirectCallback.test.ts` is the guard. See
   [`docs/MCP.md`](docs/MCP.md).
-- **The four admin write routes (setlists PUT, swap, publish-ready, unpublish) delegate
-  everything after authorization to `app/utils/*Commit.ts`; `serviceCommitCallers.test.ts` pins
-  their callers and `publishVerdict`'s; MCP writes go only through them; `/api/mcp` buffers SSE so
-  a tool finishes inside the handler.**
+- **The six admin write paths (setlists PUT, roles create, swap, publish-ready, unpublish, the
+  fairness PUT) delegate everything after authorization to `app/utils/*Commit.ts`;
+  `serviceCommitCallers.test.ts` pins their callers and `publishVerdict`'s; MCP writes go only
+  through them; `/api/mcp` buffers SSE so a tool finishes inside the handler.** The MCP's
+  `apply_schedule` (P4 on v3, ADR-0061) calls two of them: `createRole` (`roleCreateCommit.ts`, each
+  draft, always `published: false`) and `commitFairnessMonths` (the month records, first). It runs
+  `runV3ConfirmAttempt` itself, and `solve_month` runs `planV3Month`, which composes the planner's
+  own v3 functions: never re-implement either on the server; `monthToolParity.test.tsx` pins
+  byte-identical solve bodies against `MonthGenerator`.
 - **The admin assistant (`/api/admin/chat`, the `AssistantBubble` on every page) is READ-ONLY** (ADR-0060). Access:
   `super-admin`, or `admin` with the `worship` ministry (`canUseAdminChat`), from the live access
   snapshot, never while impersonating — the spend would land on someone else. Its five tools call

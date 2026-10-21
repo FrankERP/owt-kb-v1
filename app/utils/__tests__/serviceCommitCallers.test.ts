@@ -45,6 +45,8 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 const EXPECTED_CALLERS: Record<string, string[]> = {
   publishReadyCommit: ["app/api/admin/roles/publish-ready/route.ts", "app/mcp/tools/publishService.ts"],
   publishVerdict: ["app/mcp/reads/publishRefusal.ts", "app/utils/publishReadyCommit.ts"],
+  // MCP P4: the create writer — the roles POST and `apply_schedule` (D4).
+  roleCreateCommit: ["app/api/admin/roles/route.ts", "app/mcp/tools/applySchedule.ts"],
   roleSwapCommit: ["app/api/admin/roles/swap/route.ts", "app/mcp/tools/swapAssignment.ts"],
   roleUnpublishCommit: ["app/api/admin/roles/unpublish/route.ts", "app/mcp/tools/unpublishService.ts"],
   setlistSaveCommit: ["app/api/admin/setlists/route.ts", "app/mcp/tools/editSetlist.ts"],
@@ -59,8 +61,9 @@ const EXPECTED_CALLERS: Record<string, string[]> = {
     "scripts/lib/reconstructDecide.ts",
     "scripts/reconstruct-fairness-months.mjs",
   ],
-  // Solver v3 C2 WR-1: the PUT route is the commit module's only caller (no MCP tool).
-  fairnessMonthCommit: ["app/api/admin/fairness/months/route.ts"],
+  // Solver v3 C2 WR-1, amended by MCP P4 (D4): the PUT route and `apply_schedule`, both actor
+  // `route` through the one executor (ADR-0050).
+  fairnessMonthCommit: ["app/api/admin/fairness/months/route.ts", "app/mcp/tools/applySchedule.ts"],
 };
 
 /**

@@ -280,3 +280,15 @@ and must be recorded here as a post-approval change.
 `dbf2c40486a9705a779cbc656a935b329c0a59fd33e64d19f25459dc99e18d3e` (commit `cc05dff0`), approved
 by rounds 3/1 and 3/2, two sequential fresh reviewers on the same immutable snapshot.
 Approval is not authorization to implement.
+
+## Post-approval changes — un-reviewed
+
+Made after `dbf2c404…` was approved; **not covered by that approval**.
+
+1. **2026-10-20, MCP P4 on solver v3** (plan `docs/superpowers/plans/2026-10-20-owt-mcp-p4-v3-solve-apply.md`,
+   approved at critical tier in its own review log; ADR-0061), marked `[Amended 2026-10-20, MCP P4 on
+   v3 — ADR-0061]` in the spec: WR-1 and IF2-23 name the MCP's `apply_schedule` as a second caller of
+   `fairnessMonthCommit` (still actor `route`; `recordedBy` the grant's member id, REC-2's effective
+   identity — the executor is still the one writer, ADR-0050); the non-goal «MCP access to records or
+   the ledger» is narrowed to «no MCP read or edit tool for records» (`solve_month` reads the ledger,
+   `apply_schedule` writes through the commit module).

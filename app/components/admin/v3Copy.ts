@@ -485,6 +485,107 @@ export const V3_LINES = {
   diagUnknownMembers: (n: number) => `Miembros asignados sin ficha — no cuentan: ${n}`,
 } as const;
 
+// ─── MCP P4: the connector's twins (`solve_month`, `apply_schedule`) ─────────
+//
+// The browser's confirm lines say «No se creó nada» and «Otro administrador…» because its session
+// lives in memory and CF-7 never resends a landed PUT. A connector apply may span several calls, any
+// of which may be killed or lose its answer, so its lines obey R-OBS and R-CALL (plan step 6): a
+// negative claim is about THIS call only, and only when the call knows it; a lost answer is
+// «sin confirmar», never «falló»; a conflict may be another call of the same proposal, never
+// «otro administrador». `mcpCopyHygiene` in the tool tests pins the forbidden phrases.
+
+const NO_WRITE_THIS_CALL = "En esta llamada no se escribió nada.";
+const RESOLVE_AGAIN = "vuelve a correr solve_month";
+const connectorConflictLine = (m: string) =>
+  `El registro de elegibilidad de ${monthName(m)} cambió desde que se resolvió esta propuesta. ${NO_WRITE_THIS_CALL} ` +
+  `Si otra llamada de apply_schedule con esta propuesta está en curso, vuelve a llamarla en un momento; si no, ${RESOLVE_AGAIN}.`;
+const connectorTeamLine = () =>
+  `Cambió el equipo desde que se resolvió esta propuesta (un miembro o su Tipo). ${NO_WRITE_THIS_CALL} Vuelve a correr solve_month.`;
+
+const SOURCE_NAMES: Readonly<Record<string, string>> = {
+  roles: "los servicios",
+  members: "los miembros",
+  rules: "las reglas",
+  snapshot: "el estado de los servicios",
+  proposals: "las propuestas",
+  roleTargets: "los destinos de servicio",
+  setlistTargets: "los setlists",
+};
+
+export const V3_CONNECTOR_LINES = {
+  noWriteThisCall: NO_WRITE_THIS_CALL,
+  // Both tools
+  engineNotV3: "El conector solo planea con el solver v3 y este servidor no lo está usando.",
+  noPrincipal: "No se pudo identificar quién llama; vuelve a conectar el conector.",
+  sources: (sources: readonly string[]) =>
+    `No se pudieron leer ${joinEs(sources.map((s) => SOURCE_NAMES[s] ?? s))}. Vuelve a intentar.`,
+  // solve_month
+  invalid: {
+    month: "month debe ser un mes YYYY-MM entre 2024 y 2035.",
+    months: "months debe ser 1 o 2.",
+    exclusion_not_weekend_of_horizon:
+      "Cada fecha excluida debe ser un domingo (en excludeSundays) o un sábado (en excludeSaturdays) de los meses pedidos, sin repetir.",
+    special_not_in_horizon: "Cada especial debe caer en un día de los meses pedidos.",
+    no_columns: "Con esas exclusiones no queda ningún servicio que planear.",
+  } as Readonly<Record<string, string>>,
+  noProposalStored: "No se guardó ninguna propuesta.",
+  timeBudget: "Se acabó el tiempo de esta llamada antes de llamar al solver. No se guardó ninguna propuesta; vuelve a correr solve_month.",
+  nothingToCreate: "Ningún servicio planeado se puede crear (todos están ocupados o bloqueados), así que no se guardó ninguna propuesta.",
+  storeFailed: "No pude guardar la propuesta; vuelve a correr solve_month.",
+  handle: (handle: string, expires: string) =>
+    `Propuesta ${handle} (vence ${expires}). Para crear estos servicios como borradores, llama apply_schedule con esa propuesta.`,
+  refusedSpecial: (date: string, reason: string) => `Especial del ${dayLabel(date)} no agregado: ${reason}`,
+  leftOut: (service: string, reasons: string) => `${service}: no se planeó (${reasons}).`,
+  unfilled: (service: string, seat: string) => `${service}: ${seat} sin cubrir.`,
+  unavailable: (name: string, service: string) => `${name} no está disponible el ${service}.`,
+  fairness: (name: string, tabs: readonly string[]) => `${name}: ${tabs.join(" · ")}`,
+  fairnessTab: (label: string, seats: number, queda: string) => `${label} ${seats} en este plan, queda ${queda}`,
+  // apply_schedule, phases 0–3
+  proposalNotFound: "No encontré esa propuesta o ya venció. Vuelve a correr solve_month.",
+  proposalReadFailed: `No se pudo leer la propuesta; vuelve a intentar. ${NO_WRITE_THIS_CALL}`,
+  rulesChanged: `Las reglas del planificador cambiaron desde que se resolvió esta propuesta. ${NO_WRITE_THIS_CALL} Vuelve a correr solve_month.`,
+  targetLost: (service: string, reasons: string) => `${service} ya no se puede crear (${reasons}).`,
+  specialTaken: (service: string, refusal: string) => `${service}: ${refusal}`,
+  storedChanged: (months: readonly string[]) =>
+    `Cambiaron los servicios guardados de ${monthsList(months)} desde que se resolvió esta propuesta.`,
+  resolveAgain: `${NO_WRITE_THIS_CALL} Vuelve a correr solve_month: el nuevo plan toma lo guardado como fijo.`,
+  exists: (services: readonly string[]) => `Ya existen: ${joinEs(services)}.`,
+  // phase 4, the records
+  recordRefusal: {
+    record_exists: connectorConflictLine,
+    stale_revision: connectorConflictLine,
+    record_missing: connectorConflictLine,
+    month_has_services: (m) =>
+      `${monthNameCap(m)} ya tiene servicios guardados que esta propuesta no creó, así que su registro ya no se puede reemplazar. ${NO_WRITE_THIS_CALL} Vuelve a correr solve_month.`,
+    past_month: (m) => `${monthNameCap(m)} ya pasó desde que se resolvió esta propuesta. ${NO_WRITE_THIS_CALL} Vuelve a correr solve_month.`,
+    engine_not_v3: () => `El solver cambió de versión. ${NO_WRITE_THIS_CALL}`,
+    member_unknown: connectorTeamLine,
+    member_not_worship: connectorTeamLine,
+    tipo_mismatch: connectorTeamLine,
+  } satisfies Record<FairnessPutRefusal, (month: string) => string>,
+  recordInvalid: `El registro de elegibilidad de la propuesta fue rechazado como inválido. ${NO_WRITE_THIS_CALL} Vuelve a correr solve_month.`,
+  recordUnknown:
+    "No pude confirmar si el registro de elegibilidad quedó guardado; volver a llamar apply_schedule es seguro (si quedó, responde sin cambios).",
+  guardPast: (m: string) => `${monthNameCap(m)} ya pasó desde que se resolvió esta propuesta. ${NO_WRITE_THIS_CALL} Vuelve a correr solve_month.`,
+  recordsSaved: (months: readonly string[]) => `El registro de elegibilidad de ${monthsList(months)} quedó guardado.`,
+  // phase 4, per service
+  serviceCreated: (s: string) => `${s}: creado.`,
+  serviceAlready: (s: string) => `${s}: ya estaba creado (confirmado por su recibo).`,
+  serviceDeleted: (s: string) => `${s}: creado y luego eliminado en /admin; esta propuesta no lo vuelve a crear.`,
+  serviceModified: (s: string) => `${s}: creado y luego modificado en /admin.`,
+  serviceRefused: (s: string, why: string) => `${s}: rechazado. ${why}`,
+  serviceUnknown: (s: string) => `${s}: sin confirmar; vuelve a llamar apply_schedule (si quedó creado se reconoce por su recibo).`,
+  servicePending: (s: string) => `${s}: pendiente; vuelve a llamar apply_schedule.`,
+  serviceBlocked: (s: string) => `${s}: bloqueado porque un servicio anterior fue rechazado; vuelve a correr solve_month.`,
+  serviceNotPlanned: (s: string) => `${s}: no se planeó (su fecha estaba bloqueada al resolver).`,
+  monthHeader: (m: string) => `${monthNameCap(m)}:`,
+  cutoffNothing:
+    "Esta llamada llegó a su límite de tiempo antes de crear un servicio nuevo. Vuelve a llamar apply_schedule; si vuelve a pasar, avísale a quien administra la app.",
+  complete: "Listo: todos los servicios de la propuesta están creados como borradores. Revísalos y publícalos en /admin.",
+  // phase 5
+  stateSaveFailed: "No pude guardar el avance; volver a llamar apply_schedule es seguro: lo creado se reconoce por su recibo.",
+} as const;
+
 /** C5's literal `PIN_CAP = 250` (gcf_v3/owt_v3/constants.py), mirrored once (RQ-6, `v3PinCapSync.test.ts`). */
 export const V3_PIN_CAP = 250;
 

@@ -138,7 +138,7 @@ Vocabulary used throughout:
 
 | ID | Requirement | Acceptance |
 |---|---|---|
-| WR-1 | **ADR-0043 shape.** The route authorizes, parses JSON and returns whatever the commit module returns; everything after authorization lives in `app/utils/fairnessMonthCommit.ts` (`import "server-only"`), which returns a `CommitOutcome`. Its only caller is the route (pin row); it imports the server write client itself (never as a parameter) and hands it to the **write executor** (WR-16) with actor `route` — it issues no mutation of its own. It is therefore a `protected-write` site only through GU-5's executor rule (it calls the executor), which is what exercises its `PROTECTED_RUNTIME_WRITERS` entry | `serviceCommitCallers.test.ts`, audit test (the module is a site, and its entry is not dead) |
+| WR-1 | **ADR-0043 shape.** The route authorizes, parses JSON and returns whatever the commit module returns; everything after authorization lives in `app/utils/fairnessMonthCommit.ts` (`import "server-only"`), which returns a `CommitOutcome`. Its callers are the route and the MCP's `apply_schedule` (still actor `route`; `recordedBy` the grant's member id, REC-2's effective identity) (pin row) **[Amended 2026-10-20, MCP P4 on v3 — ADR-0061]**; it imports the server write client itself (never as a parameter) and hands it to the **write executor** (WR-16) with actor `route` — it issues no mutation of its own. It is therefore a `protected-write` site only through GU-5's executor rule (it calls the executor), which is what exercises its `PROTECTED_RUNTIME_WRITERS` entry | `serviceCommitCallers.test.ts`, audit test (the module is a site, and its entry is not dead) |
 | WR-2 | **Auth.** `requireActiveManager()`, then `content-editor` → 403 — the same gate as `solver-config` and `solver-history`. Only `admin` and `super-admin` write | Route tests for the four roles and no session |
 | WR-3 | **Body.** `FairnessMonthsPut` (IF2-4). 1–2 entries; two must be consecutive and ascending. Unknown fields at any level are refused, as is any server-derived stamp of REC-2 (`source` is a body field, WR-4), `_key`, `name` or `contentHash` | 400 `invalid_request` with `details.issues` naming each path |
 | WR-4 | **Validation limits.** `month` matches `^\d{4}-(0[1-9]\|1[0-2])$` and is at most the current month + 12 (CDMX; the validator's `currentMonth` argument, IF2-18); `source ∈ {"auto","manual"}` for actor `route`, and **absent** for actor `reconstruction` (the executor stamps `"reconstructed"` itself, WR-14 — a body never carries it); `expectedRev` is `null` or a non-empty string of at most 64 characters; `people` 1–100 items (C5's request limit, §5.1 — one number for both), unique `memberId`s; `roles` has exactly the six role keys; `exactRules` consistent with `roles` (REC-3), each 1–6 distinct role keys, `count` a whole number 1–31, and no two items of one person sharing a role key (parent A38; issue `overlapping_exact` at that person's path); no person with `sundayCadence` and an `exactRules` item covering `Sun.Lead` (A11); `blocks` at most 31, unique dates inside the month, valid role keys, never both empty; `presence` at most 20, unique `ruleKey`s matching REC-4, 1–6 roles, 2–12 distinct members each listed in `people` | 400 per violated path |
@@ -287,7 +287,7 @@ and «Registrar»; the effective-engine resolver over C1's `SOLVER_ENGINE` const
 - The `countsForFairness` field and its writers (C1); the `sundayCadence` setting and its serializer
   (C3).
 - Deleting records from the app (the only delete is the reconstruction actor's, reached from C4's
-  script — WR-13, WR-14); MCP access to records or the ledger.
+  script — WR-13, WR-14); an MCP read or edit tool for records (**[Amended 2026-10-20, MCP P4 on v3 — ADR-0061]**: narrowed from «MCP access to records or the ledger» — `solve_month` reads the ledger and `apply_schedule` writes through the commit module).
 
 ## 6. Behaviour and invariants
 
@@ -783,7 +783,7 @@ Two files call or declare the executor in this change, and C4 adds the third; no
 | Site | File | Registration |
 |---|---|---|
 | Declaration | the write-request module | `PROTECTED_RUNTIME_WRITERS` by exact `file#module` (GU-1); a `protected-write` site by GU-5's executor rule |
-| Route caller | `app/utils/fairnessMonthCommit.ts` (`server-only`; its only caller is the PUT route) | `PROTECTED_RUNTIME_WRITERS` by exact `file#module`; `DELIVERY_CAPABLE_IMPORTS`; caller-pin row naming the PUT route (GU-1) |
+| Route caller | `app/utils/fairnessMonthCommit.ts` (`server-only`; its callers are the PUT route and the MCP's `apply_schedule`, **[Amended 2026-10-20, MCP P4 on v3 — ADR-0061]**) | `PROTECTED_RUNTIME_WRITERS` by exact `file#module`; `DELIVERY_CAPABLE_IMPORTS`; caller-pin row naming the PUT route (GU-1) |
 | Script caller | `scripts/reconstruct-fairness-months.mjs` — C4's CLI file, the only caller outside `app/` (C4 R20) | always a `protected-write` site (GU-5), so **unconditionally** one exact `OPERATOR_TOOLING_ALLOWLIST` entry (`app/utils/protectedReadAudit.ts:367`), added by C4 in its own change; at retirement it moves to `RETIRED_ONE_SHOT_WRITERS` (`:307`), whose test requires the gate in the registered file itself (`protectedReadAudit.test.ts:457-462`) — which is why the call stays in the CLI file (C4 R22) |
 
 - **Importer pin.** The write-request module's row in `PINNED_BEYOND_COMMIT`

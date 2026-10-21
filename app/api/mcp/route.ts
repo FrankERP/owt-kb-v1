@@ -51,6 +51,8 @@ import { registerUnpublishService } from "@/app/mcp/tools/unpublishService";
 import { registerPublishService } from "@/app/mcp/tools/publishService";
 import { registerSwapAssignment } from "@/app/mcp/tools/swapAssignment";
 import { registerEditSetlist } from "@/app/mcp/tools/editSetlist";
+import { registerSolveMonth } from "@/app/mcp/tools/solveMonth";
+import { registerApplySchedule } from "@/app/mcp/tools/applySchedule";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -96,6 +98,8 @@ const mcpHandler = createMcpHandler(
     registerPublishService(server);
     registerSwapAssignment(server);
     registerEditSetlist(server);
+    registerSolveMonth(server);
+    registerApplySchedule(server);
   },
   {
     serverInfo: SERVER_INFO,

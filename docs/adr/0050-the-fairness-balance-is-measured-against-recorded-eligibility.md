@@ -1,6 +1,6 @@
 # ADR-0050: El saldo de equidad se mide contra la elegibilidad registrada
 
-**Date:** 2026-10-06 · **Status:** Accepted, amended by ADR-0055 (balances count from November 2026)
+**Date:** 2026-10-06 · **Status:** Accepted, amended by ADR-0055 (balances count from November 2026) and ADR-0061 (a second caller of the PUT's commit module)
 
 ## Context
 
@@ -125,3 +125,11 @@ figures and digests of every service and member input — so any edit between th
 Frank back to the table; after a seat edit, a date move, a «cuenta» change or an availability edit in a
 reconstructed month the dry run must be re-run, because nothing else prompts it. The script retires at solver
 v3 C7 Step 12.
+
+## Amendment (2026-10-20, MCP P4 on solver v3, ADR-0061)
+
+`executeFairnessMonthWrites` is still the one writer. Its route actor now has two callers of
+`commitFairnessMonths`: the PUT route and the connector's `apply_schedule`, which runs the
+browser's own confirm (`runV3ConfirmAttempt`) with actor `route` and `recordedBy` the grant's
+member id (REC-2's effective identity). `solve_month` reads the ledger with the arguments the GET
+passes. There is still no MCP tool that reads or edits a record directly.

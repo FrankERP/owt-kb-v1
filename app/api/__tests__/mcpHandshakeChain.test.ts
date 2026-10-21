@@ -308,7 +308,7 @@ describe("the connector handshake, end to end on preview (discovery → ping →
     expect(negotiated).toBe(PROTOCOL);
 
     const list = await rpcResult(await mcp(tokens.access_token, "tools/list", undefined, negotiated));
-    // The dev smoke's own pinned registration (twelve tools since P3), imported
+    // The dev smoke's own pinned registration (fourteen tools since P4), imported
     // rather than re-typed, as `mcpRoute.test.ts` does.
     expect((list.tools as { name: string }[]).map((t) => t.name)).toEqual(EXPECTED_TOOLS);
 

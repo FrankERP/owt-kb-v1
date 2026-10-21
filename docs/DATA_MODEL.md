@@ -11,14 +11,14 @@ exact strings used in GROQ `_type` filters.
 
 ---
 
-## Registered document types (23)
+## Registered document types (24)
 
 `post`, `tag`, `author`, `featuredSongs`, `saturdarSongs`, `saturday_role`, `sunday_role`,
 `teamMembers`, `special_role`, `loginEvent`, `setlistProposal`, the two Oasis Kids types
-`kidsPair` and `kidsSchedule`, and ten **internal** types never authored by hand:
+`kidsPair` and `kidsSchedule`, and eleven **internal** types never authored by hand:
 `roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`, `specialIdentityCoordinator`,
 `solverConfig`, `fairnessMonth`, `mcpOauthGrant`, `mcpOauthCodeRedemption`, `calendarFeed`,
-`adminChatUsage`.
+`adminChatUsage`, `mcpProposal`.
 
 **Not registered** (present but intentionally unused — do not wire in):
 - `sanity/schemas/youtubeType/youtubeType.ts` — object type `youtube`.
@@ -370,6 +370,33 @@ the conversation itself. The cap (`ADMIN_CHAT_MONTHLY_BUDGET_USD`) is compared w
 before each question; a new month is a new document, so it resets on the 1st. Hidden, read-only
 and protected in Studio. Shared with `preview` (same dataset), so questions asked on dev count
 toward the same admin's production cap.
+
+## `mcpProposal` — a stored month plan of the connector (MCP P4, ADR-0061)
+
+One document per `solve_month` that stored a plan, `_id` **`mcpProposal.<handle>`**, the handle 26
+lowercase Crockford base32 characters (130 random bits) that the connector hands the model.
+**Dotted**, so never served untokened. Files:
+[`documentTypes.ts`](../app/mcp/monthProposals/documentTypes.ts) (import-free names and fields),
+[`proposalDocument.ts`](../app/mcp/monthProposals/proposalDocument.ts) (build, strict parse,
+digest, merge), [`proposalStore.ts`](../app/mcp/monthProposals/proposalStore.ts) (the only
+writer). Hidden, read-only and protected in Studio. Not released yet (P4's branch).
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `origin` | string | The canonical origin of the deployment that authenticated the solve. |
+| `principal` | string | The super-admin's `teamMembers` `_id` (the grant's `sub`). Apply refuses any other origin or member with the same answer as an unknown handle. |
+| `createdAt`, `expiresAt` | datetime | `expiresAt` = `createdAt` + 7 days. |
+| `engine` | string | Always `"v3"`. |
+| `rulesRev` | string | The stored `solverConfig` `_rev` the plan used; absent = the defaults. Apply refuses when it changed. |
+| `months` | string[] | 1 or 2 consecutive `YYYY-MM`. |
+| `requestId` | string | The solve's request id. |
+| `payload` | string (JSON) | `{ v: 1, entries, drafts, storedServiceIds }`: the frozen eligibility entries apply will PUT (with their rule keys, as the `fairnessMonth` records they become), each draft with its solve-time preflight state, and the horizon's stored role ids at solve. ≤ 1 MB, ≤ 40 drafts. |
+| `digest` | string | SHA-256 over every field above in one fixed order. A mismatch reads as no record. |
+| `state` | string (JSON) | `{ recordsDone, created: { localId → roleId } }`, the only mutable field: facts that only grow, written under `ifRevisionId` and merged by union on a conflict (≤ 3 retries). |
+
+Writes: `create` at solve (never `createOrReplace`), the `state` patch at apply, and a sweep
+after each solve and after an apply's confirm (not on its refusals) that deletes up to 25 records more than 24 h past their expiry. Nothing reads
+it but `apply_schedule`, and nothing in it is ever returned to the model.
 
 ## `solverConfig` — the shared planner rule set (singleton)
 
@@ -733,16 +760,17 @@ require a Studio deploy to appear in the Studio UI (the app reads/writes via GRO
 
 The Studio is a *second* writer into the same dataset, so it would otherwise bypass every guard in
 [API_REFERENCE → the protected mutation contract](API_REFERENCE.md#the-protected-mutation-contract).
-**Eighteen** types are closed to it — the six protected service types, the ten internal types
+**Nineteen** types are closed to it — the six protected service types, the eleven internal types
 (`notificationOutbox` keeps `delete` alone, so an operator can prune a stray entry) **plus** the two
 Oasis Kids types, whose writer is the app (`/api/kids/pairs`, `/api/kids/schedules`):
 
 `sunday_role`, `saturday_role`, `special_role`, `featuredSongs`, `saturdarSongs`, `setlistProposal`,
 `roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`, `specialIdentityCoordinator`,
 `solverConfig`, `fairnessMonth`, `kidsPair`, `kidsSchedule`, `mcpOauthGrant`, `mcpOauthCodeRedemption`,
-`calendarFeed`, `adminChatUsage`.
+`calendarFeed`, `adminChatUsage`, `mcpProposal`.
 
-`calendarFeed` and `adminChatUsage` are per-member counters (see their sections above). The two MCP types hold OAuth state for the MCP connector (P0 auth): `mcpOauthGrant` is one document per
+`calendarFeed` and `adminChatUsage` are per-member counters, and `mcpProposal` a stored month plan (see their sections above). `mcpOauthGrant` and
+`mcpOauthCodeRedemption` hold OAuth state for the MCP connector (P0 auth): `mcpOauthGrant` is one document per
 authorized connection (member id, a HASH of the client id, origin, timestamps, the current refresh
 `jti`, the revocation flag); `mcpOauthCodeRedemption` is a replay guard, `redeemedAt` only, keyed by
 the hashed authorization-code `jti`. Both are hidden, read-only, and never authored by hand — see
