@@ -1,13 +1,16 @@
-// The proposal card's entry (S1): connects to the host (claude.ai or the Claude app) through
-// MCP Apps, turns each `solve_month` result into a `CardView`, and follows the host's theme,
-// fonts and safe area. Bundled by `mcp-app/build.mjs` into one inline HTML document, because
-// the host's CSP allows no other origin.
+// The proposal card's entry (S1, S4): connects to the host (claude.ai or the Claude app) through
+// MCP Apps, turns each `solve_month` or `revise_proposal` result into a `CardView`, opens the
+// editor on it (`useEditor`, only when the host lets the card call tools), and follows the host's
+// theme, fonts and safe area. Bundled by `mcp-app/build.mjs` into one inline HTML document,
+// because the host's CSP allows no other origin.
 
 import { StrictMode, useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { useApp, useHostStyles, type McpUiHostContext } from "@modelcontextprotocol/ext-apps/react";
 import { cardViewOf, type CardView } from "./model";
 import { ProposalCard } from "./ProposalCard";
+import { Editor } from "./Editor";
+import { useEditor } from "./useEditor";
 import "./styles.css";
 
 function applySafeArea(ctx: McpUiHostContext | undefined) {
@@ -50,7 +53,28 @@ function CardApp() {
     app?.requestDisplayMode({ mode: "fullscreen" }).catch(() => {});
   }, [app]);
 
-  return <ProposalCard view={view} canExpand={canExpand} onExpand={onExpand} />;
+  const editor = useEditor(app ?? null);
+  const canCall = Boolean(app?.getHostCapabilities()?.serverTools);
+  const onEdit = useCallback(() => {
+    if (view.kind === "proposal" && view.handle) editor.start(view.handle, view.revision);
+  }, [editor, view]);
+
+  if (editor.open) {
+    if (editor.props) return <Editor {...editor.props} />;
+    return (
+      <main className="card" aria-busy={editor.opening.notice === null}>
+        <p className={editor.opening.notice ? "unfilled" : "muted"} role="status">
+          {editor.opening.notice ?? "Abriendo la propuesta…"}
+        </p>
+        <div className="actions">
+          <button type="button" onClick={editor.opening.onClose}>
+            Cerrar
+          </button>
+        </div>
+      </main>
+    );
+  }
+  return <ProposalCard view={view} canExpand={canExpand} onExpand={onExpand} onEdit={canCall ? onEdit : undefined} />;
 }
 
 createRoot(document.getElementById("root")!).render(

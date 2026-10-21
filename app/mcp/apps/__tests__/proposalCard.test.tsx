@@ -23,6 +23,7 @@ describe("the view model", () => {
     if (view.kind !== "proposal") throw new Error(`expected a proposal, got ${view.kind}`);
     expect(view.title).toBe("Propuesta de noviembre de 2026");
     expect(view.stored).toBe(true);
+    expect(view).toMatchObject({ handle: (out.structuredContent as { proposal: string }).proposal, revision: 1 });
     expect(view.status).toMatch(/^Guardada hasta el \d{1,2} de [a-z]+, \d{2}:\d{2}$/);
     expect(view.services.length).toBeGreaterThan(0);
     // The fixture's solver puts Ana in the first service's Lead: the card shows her by name.
@@ -105,6 +106,8 @@ describe("the presentational card", () => {
   const view: CardView = {
     kind: "proposal",
     title: "Propuesta de enero de 2027",
+    handle: "r0000000000000000000000001",
+    revision: 1,
     status: "Guardada hasta el 27 de octubre, 15:04",
     stored: true,
     services: [
@@ -137,8 +140,13 @@ describe("the presentational card", () => {
     expect(html(view, true)).toContain("Ver en grande");
   });
 
-  it("never offers a button that acts on the proposal (read-only until S4)", () => {
+  it("offers «Editar» only when the host can call tools and the stored proposal has a service to create", () => {
+    const edit = (v: CardView) => renderToStaticMarkup(<ProposalCard view={v} canExpand={false} onExpand={() => {}} onEdit={() => {}} />);
     expect(html(view, true).match(/<button/g)).toHaveLength(1);
+    expect(edit(view)).toContain(">Editar</button>");
+    expect(edit({ ...view, handle: null })).not.toContain("Editar");
+    if (view.kind !== "proposal") throw new Error("fixture");
+    expect(edit({ ...view, services: view.services.map((s) => ({ ...s, planned: false })) })).not.toContain(">Editar<");
   });
 });
 
