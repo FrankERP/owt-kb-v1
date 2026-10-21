@@ -109,13 +109,16 @@ rollback engine (ADR-0056). Its suite still took ~10 of every PR's ~10.5 minutes
 (ADR-0064), a pull request runs it only when its diff touches it:
 
 - **Who decides.** The `scope` job runs `scripts/ci/ci-scope.mjs`, which reads the
-  PR's merge commit against its first parent (`git diff --no-renames --name-only
-  HEAD^1 HEAD` — exactly what the PR would land; `--no-renames` so a file moved out
-  of `gcf/` lists its old path too) and applies `scopeDecision`
-  (`scripts/lib/ci-scope.mjs`). `solver-v2` runs when any changed path starts with
-  `gcf/`, `.github/`, `scripts/ci/` or `scripts/lib/ci-`. The suite reads nothing
-  outside `gcf/`; the other three are the CI machinery that runs, decides and judges
-  the skip, so changing it re-proves everything.
+  PR's merge commit against its first parent (`git -c core.quotePath=false diff -z
+  --no-renames --name-only HEAD^1 HEAD` — exactly what the PR would land;
+  `--no-renames` so a file moved out of `gcf/` lists its old path too; `-z` and
+  `quotePath=false` so a non-ASCII path is not C-quoted past the prefix test) and
+  applies `scopeDecision` (`scripts/lib/ci-scope.mjs`). `solver-v2` runs when any
+  changed path starts with `gcf/`, `cloudbuild.yaml`, `scripts/deploy-solver-gcf.sh`,
+  `.github/`, `scripts/ci/` or `scripts/lib/ci-`. The suite reads nothing outside
+  `gcf/`; the next two deploy that tree (the job's Python 3.12 mirrors
+  `cloudbuild.yaml`'s runtime); the rest is the CI machinery that runs, decides and
+  judges the skip, so changing it re-proves everything.
 - **Every doubt runs it.** A `push` (to `main` or `preview`) and a manual run always
   run it, so runner-image drift in `GOLDEN_SCHEDULE` still shows up on the next push
   without blocking an unrelated PR. On a PR, an unreadable or empty diff runs it.
@@ -128,6 +131,10 @@ rollback engine (ADR-0056). Its suite still took ~10 of every PR's ~10.5 minutes
 - **What it cannot catch.** A path that affects the v2 suite but is missing from the
   list. Today there is none (the suite reads nothing outside `gcf/`); a v2 test
   that starts reading a file outside `gcf/` must add that path.
+- **Its cost:** `solver-v2` now waits for `scope` (a runner pickup, a depth-2
+  checkout and a `git diff`) before it starts, on every run where it runs. That
+  wait sits on the critical path of a PR that touches `gcf/` and of every push; it
+  was accepted over a second, event-dependent `if:` the guard would also have to pin.
 - **Locally nothing changes:** CLAUDE.md already asks for the solver suite of each
   tree a change touches.
 - **When v2 is retired** (the PR that removes `gcf/` after the rollback window

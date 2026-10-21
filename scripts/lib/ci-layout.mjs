@@ -415,7 +415,8 @@ export function checkNoSilentSkips(ciText) {
         if (key in cfg) {
           problems.push(
             `[no-silent-skips] on.${event}.${key}: a filter skips the WHOLE workflow, gates included, and a ` +
-              "missing or skipped required check either blocks every PR or passes it. A frontend-only PR runs both solver suites",
+              "missing or skipped required check either blocks every PR or passes it. A frontend-only PR runs solver-v3, " +
+              "and skips solver-v2 only on the scope job's word, inside a run gates judges (ADR-0064)",
           );
         }
       }

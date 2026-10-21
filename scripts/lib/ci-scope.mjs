@@ -26,20 +26,35 @@ export const SCOPE_JOB = "scope";
  * or a file-name prefix (`scripts/lib/ci-`).
  *
  * solver-v2: its tree (code, tests, requirements — the suite reads nothing outside
- * it), every workflow (how and where any job runs), and the CI machinery that
- * decides and judges the skip itself.
+ * it), what deploys that tree to the function (`cloudbuild.yaml`, whose
+ * `--runtime=python312` the job's Python mirrors, and the manual deploy script),
+ * every workflow (how and where any job runs), and the CI machinery that decides
+ * and judges the skip itself.
  */
 export const SKIPPABLE_JOBS = Object.freeze({
-  "solver-v2": Object.freeze(["gcf/", ".github/", "scripts/ci/", "scripts/lib/ci-"]),
+  "solver-v2": Object.freeze([
+    "gcf/",
+    "cloudbuild.yaml",
+    "scripts/deploy-solver-gcf.sh",
+    ".github/",
+    "scripts/ci/",
+    "scripts/lib/ci-",
+  ]),
 });
 
 /**
  * The diff the runner reads: the PR's merge commit against its first parent (the
  * base branch tip it was merged onto), so it is exactly what the PR would land.
  * `--no-renames`, so a file moved OUT of gcf/ lists its old path too — with rename
- * detection, `--name-only` prints only the new one.
+ * detection, `--name-only` prints only the new one. `-z` and `core.quotePath=false`,
+ * so every path arrives raw and NUL-separated: without them git prints a non-ASCII
+ * or tab-bearing path C-quoted (`"gcf/caf\303\251.py"`), and the prefix test
+ * would miss it — a skip of a real gcf/ change.
  */
-export const DIFF_ARGS = Object.freeze(["diff", "--no-renames", "--name-only", "HEAD^1", "HEAD"]);
+export const DIFF_ARGS = Object.freeze(["-c", "core.quotePath=false", "diff", "-z", "--no-renames", "--name-only", "HEAD^1", "HEAD"]);
+
+/** Split `git diff -z --name-only` output into paths, untouched (no trim: a space is a legal path byte). */
+export const parseDiffZ = (out) => String(out).split("\0").filter((p) => p !== "");
 
 const touches = (path, prefixes) => prefixes.some((p) => path.startsWith(p));
 

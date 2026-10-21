@@ -13,14 +13,14 @@
 
 import { execFileSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
-import { DIFF_ARGS, scopeDecision } from "../lib/ci-scope.mjs";
+import { DIFF_ARGS, parseDiffZ, scopeDecision } from "../lib/ci-scope.mjs";
 
 const event = process.env.EVENT_NAME;
 let changed = null;
 if (event === "pull_request") {
   try {
     const out = execFileSync("git", DIFF_ARGS, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-    changed = out.split("\n").map((s) => s.trim()).filter(Boolean);
+    changed = parseDiffZ(out);
   } catch (e) {
     console.log(`::warning::scope: git ${DIFF_ARGS.join(" ")} failed (${String(e.message).split("\n")[0]})`);
   }

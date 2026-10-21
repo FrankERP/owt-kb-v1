@@ -1,5 +1,5 @@
-# The gates — the three CLAUDE.md names plus both solver suites — run by a machine
-# instead of asserted by a human. Before this existed, "gates green" was a claim in
+# The gates — the three CLAUDE.md names plus both solver suites (v2 only on a PR
+# that touches it, ADR-0064) — run by a machine instead of asserted by a human. Before this existed, "gates green" was a claim in
 # a chat log: `main` auto-deploys to production, so nothing mechanical stood between
 # a red test suite and the team's app. This is that thing.
 #

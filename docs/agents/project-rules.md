@@ -17,7 +17,8 @@ disagree, `CLAUDE.md` wins and this file is the one to fix.
   `gcf/**`: `python -m unittest discover -s gcf -t gcf`; `gcf_v3/**`:
   `python -m unittest discover -s gcf_v3 -t gcf_v3`. All five are blocking CI
   gates. Since 2026-10-21 a pull request that touches neither `gcf/` nor the CI
-  machinery (`.github/`, `scripts/ci/`, `scripts/lib/ci-*`) skips `solver-v2` — the
+  machinery (`.github/`, `scripts/ci/`, `scripts/lib/ci-*`) nor its deploy
+  (`cloudbuild.yaml`, `scripts/deploy-solver-gcf.sh`) skips `solver-v2` — the
   rollback engine since the v3 cutover — and `gates` accepts that skip only when the
   `scope` job said exactly `false`; pushes to `main`/`preview` always run it
   (ADR-0064, `docs/CI.md` «Scoped skip of `solver-v2`»). Add tests for testable pure logic.

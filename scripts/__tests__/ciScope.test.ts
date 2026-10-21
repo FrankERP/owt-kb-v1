@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { DIFF_ARGS, SCOPE_JOB, SKIPPABLE_JOBS, scopeDecision } from "../lib/ci-scope.mjs";
+import { DIFF_ARGS, parseDiffZ, SCOPE_JOB, SKIPPABLE_JOBS, scopeDecision } from "../lib/ci-scope.mjs";
 
 // The `scope` job decides whether a pull request needs `solver-v2` (ADR-0064).
 // A wrong "false" is the one way an untested gcf/ change could reach `main`, so
@@ -19,8 +19,15 @@ describe("SKIPPABLE_JOBS", () => {
     expect(SCOPE_JOB).toBe("scope");
   });
 
-  it("reads the diff with rename detection off", () => {
+  it("reads the diff raw: rename detection off, NUL-separated, no C-quoting", () => {
     expect(DIFF_ARGS).toContain("--no-renames");
+    expect(DIFF_ARGS).toContain("-z");
+    expect(DIFF_ARGS.slice(0, 2)).toEqual(["-c", "core.quotePath=false"]);
+  });
+
+  it("parseDiffZ keeps every path byte for byte", () => {
+    expect(parseDiffZ("gcf/a b.py\0 app/x.ts\0gcf/café.py\0")).toEqual(["gcf/a b.py", " app/x.ts", "gcf/café.py"]);
+    expect(parseDiffZ("")).toEqual([]);
   });
 });
 
@@ -39,13 +46,15 @@ describe("scopeDecision", () => {
   });
 
   it("skips a PR that touches only the app, docs or the v3 tree", () => {
-    expect(pr(["app/page.tsx", "docs/CI.md", "gcf_v3/owt_v3/solve.py", "scripts/lib/other.mjs", "cloudbuild.yaml"])).toBe("false");
+    expect(pr(["app/page.tsx", "docs/CI.md", "gcf_v3/owt_v3/solve.py", "gcf_v3/cloudbuild.yaml", "scripts/lib/other.mjs", "scripts/deploy-solver-v3-gcf.sh"])).toBe("false");
   });
 
   it("runs when the PR touches gcf/, any workflow, or the CI machinery", () => {
     for (const path of [
       "gcf/owt_solver_v2.py",
       "gcf/requirements.txt",
+      "cloudbuild.yaml",
+      "scripts/deploy-solver-gcf.sh",
       ".github/workflows/ci.yml",
       ".github/workflows/other.yml",
       "scripts/ci/gates-verdict.mjs",
@@ -140,6 +149,11 @@ describe("the scope runner, executed as a process against a real merge commit", 
       mkdirSync(join(r, "lib"));
       git(r, "mv", "gcf/owt_solver_v2.py", "lib/owt_solver_v2.py");
     });
+    expect(run(root, "pull_request").output).toBe("solver-v2=true\n");
+  });
+
+  it("writes solver-v2=true for a PR that adds a gcf/ file git would C-quote", () => {
+    const root = repoWithPr((r) => put(r, "gcf/datos_café\tx.json"));
     expect(run(root, "pull_request").output).toBe("solver-v2=true\n");
   });
 

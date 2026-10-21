@@ -13,10 +13,11 @@ sentido probar el solver v2 porque no lo usamos ya».
 
 ## Decision
 
-On a `pull_request`, `solver-v2` runs only when the PR's diff touches `gcf/`, `.github/`,
-`scripts/ci/` or `scripts/lib/ci-`. A `scope` job decides (`scripts/ci/ci-scope.mjs` over
+On a `pull_request`, `solver-v2` runs only when the PR's diff touches `gcf/`, what deploys it
+(`cloudbuild.yaml`, `scripts/deploy-solver-gcf.sh`), `.github/`, `scripts/ci/` or
+`scripts/lib/ci-`. A `scope` job decides (`scripts/ci/ci-scope.mjs` over
 `scopeDecision` in `scripts/lib/ci-scope.mjs`), reading the merge commit against its first
-parent with `--no-renames`. `solver-v2` has `needs: scope` and
+parent, raw (`-z`, `core.quotePath=false`, `--no-renames`). `solver-v2` has `needs: scope` and
 `if: ${{ needs.scope.outputs.solver-v2 != 'false' }}`, and `gates` accepts its `skipped` only
 when `scope` succeeded and said exactly `false` (`gatesVerdict`). Pushes to `main`/`preview`
 and manual runs always run it. Every doubt (unreadable or empty diff, missing output) runs it.
