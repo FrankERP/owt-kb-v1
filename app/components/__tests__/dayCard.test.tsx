@@ -153,6 +153,17 @@ describe("DayCard", () => {
     expect(seat.className).toContain("text-positive-fg");
   });
 
+  it("opens every team section for an admin, not just the one they serve in", () => {
+    mockUser = { alias: "Sofi", role: "admin" };
+    mount({ leads: ["Ana"], instruments: [{ label: "Keys", person: "Sofi" }], fohTeam: [{ label: "Audio", person: "Beto" }] });
+    for (const s of [/Voces/, /Banda/, /Cabina/]) expect(screen.getByRole("button", { name: s }).getAttribute("aria-expanded")).toBe("true");
+    cleanup();
+    mockUser = { alias: "Sofi", role: "member" };
+    mount({ leads: ["Ana"], instruments: [{ label: "Keys", person: "Sofi" }], fohTeam: [{ label: "Audio", person: "Beto" }] });
+    expect(screen.getByRole("button", { name: /Voces/ }).getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByRole("button", { name: /Banda/ }).getAttribute("aria-expanded")).toBe("true");
+  });
+
   it("shows who leads a song under its title, and nothing when nobody does", () => {
     mount({ setlist: { week: "2026-09-13", songs: [
       song("s1", { leads: [{ member_name: "Ana López", alias: "Ani" }, { member_name: "Beto" }] }),

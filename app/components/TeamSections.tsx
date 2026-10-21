@@ -44,6 +44,7 @@ export default function TeamSections({
   myName,
   photos,
   viewerTypes,
+  openAll = false,
 }: {
   team: TeamInput;
   /** `myNameFromSession`'s lowercased display name; "" seats nobody. */
@@ -54,13 +55,15 @@ export default function TeamSections({
   photos?: Record<string, string>;
   /** The viewer's Tipo, for the default when they hold no seat here. */
   viewerTypes?: string[] | null;
+  /** Every section starts open — an admin's view (see `DayCard`). A tap still closes one. */
+  openAll?: boolean;
 }) {
   const sections = teamSections(team);
   // Overrides, not the open set itself: the default depends on `myName`, which a
   // client-only session fills in AFTER first paint — a set frozen in a useState
   // initializer would keep the member's own section shut once it arrived.
   const [overrides, setOverrides] = useState<Partial<Record<TeamSectionId, boolean>>>({});
-  const defaults = defaultOpenSections(sections, myName, viewerTypes);
+  const defaults = openAll ? new Set(sections.map((s) => s.id)) : defaultOpenSections(sections, myName, viewerTypes);
   if (!sections.length) return null;
 
   return (

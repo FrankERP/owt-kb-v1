@@ -67,6 +67,10 @@ export interface DayCardProps {
    *  `SessionProvider` only has the session after hydration, and the card would
    *  otherwise jump open under the reader. */
   viewerName?: string;
+  /** Whether the viewer is an admin (super-admin or admin), as the SERVER read
+   *  it — same first-paint reason as `viewerName`. Admins see every team section
+   *  open (Frank, 2026-10-21): they read the whole team, not their own seat. */
+  viewerIsAdmin?: boolean;
 }
 
 /* The day's identity is ONE device: the 3 px rail down the card's left edge, in the
@@ -81,7 +85,7 @@ export interface DayCardProps {
 /** The neutral the card's quiet chrome (the medley spine) is drawn in. */
 const NEUTRAL = "--ink-dim-rgb";
 
-export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instruments, fohTeam, bgvs, chorus, roleId, isNext, layout = "card", hero = false, nested = false, photos, viewerTypes, viewerName }: DayCardProps) {
+export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instruments, fohTeam, bgvs, chorus, roleId, isNext, layout = "card", hero = false, nested = false, photos, viewerTypes, viewerName, viewerIsAdmin }: DayCardProps) {
   const { openSheet } = usePlayer();
   const { data: session } = useSession();
   const { toast } = useToast();
@@ -115,6 +119,9 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
 
   const tone = serviceTone({ day, roleId });
   const canEdit = ["super-admin", "admin"].includes(session?.user?.role as string);
+  // The client session wins once it exists (an impersonating admin reads as the
+  // member they view); until then, the server's reading.
+  const openAllSections = session?.user ? canEdit : !!viewerIsAdmin;
   const setlistType: "sunday" | "saturday" | "special" =
     roleId ? "special" : day === "Sábado" ? "saturday" : day === "Domingo" ? "sunday" : "special";
 
@@ -286,6 +293,7 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
                   myName={myName}
                   photos={photos}
                   viewerTypes={viewerTypes}
+                  openAll={openAllSections}
                 />
               </section>
             )}

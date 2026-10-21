@@ -108,6 +108,13 @@ describe("TeamSections", () => {
     expect(screen.queryByText("Lead", { selector: "p.text-xs" })).toBeNull();
   });
 
+  it("opens every section for an admin, whatever their seat or Tipo, and a tap still closes one", () => {
+    mount({ myName: "frank", viewerTypes: ["instrumento"], openAll: true });
+    for (const s of [/Voces/, /Banda/, /Cabina/]) expect(header(s).getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(header(/Cabina/));
+    expect(header(/Cabina/).getAttribute("aria-expanded")).toBe("false");
+  });
+
   it("renders nothing for a service with no one seated", () => {
     const { container } = mount({ team: {} });
     expect(container.textContent).toBe("");
