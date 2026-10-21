@@ -16,6 +16,23 @@
 // The id is dotted (`mcpProposal.<handle>`), so an untokened read never serves it.
 //
 // A build is refused unless its own output parses: whatever is written can be read back.
+//
+// REVISIONS (the MCP proposal editor, plan T2.2, ADR-0062). Frank's hand edit is stored as a NEW
+// record, never by mutating this one: the payload stays digest-bound and immutable, so
+// `apply_schedule` needs no lease. A revision's header adds `parent` (the handle it was made
+// from), `revision` (2…30) and `root` (the lineage's revision-1 handle, which keys the screen's
+// member tokens), all three digest-bound; a solve's record carries none of them and reads as
+// revision 1, its own root. Its payload is v2: v1's fields plus the WAIVERS Frank confirmed (a
+// finding key and the rule's sentence — `apply_schedule` refuses a proposal with waivers unless
+// its call repeats each one), the BASELINE (the solve's own findings, warnings forever), whether
+// the month check judged it (`checked`; false = «sin revisar») and the screen's `saveId` (a lost
+// answer's retry finds its own child). The parser pairs them strictly: a v1 payload with no
+// lineage, a v2 payload with all three fields; anything else reads as no record. A v1 record's
+// digest list is exactly the one every record already in the dataset was signed with.
+//
+// `state` gains `supersededBy`: the child that replaced this record, written in the SAME
+// transaction that creates the child, and kept by every later merge (`mergeState`), so an apply's
+// `state` retry can never clear or replace it.
 
 import { createHash } from "node:crypto";
 
@@ -26,7 +43,7 @@ import type { ConfirmOutcome, V3ConfirmEntry } from "@/app/components/admin/v3Co
 import type { MonthState } from "@/app/components/admin/v3MonthSources";
 import type { TargetPreflightState } from "@/app/components/admin/serviceReadiness";
 import { MCP_PROPOSAL_TYPE, PROPOSAL_FIELDS } from "./documentTypes";
-import { isProposalId, proposalIdOf } from "./handle";
+import { isProposalHandle, isProposalId, proposalIdOf } from "./handle";
 
 export const PROPOSAL_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const PROPOSAL_MAX_MONTHS = 2;
@@ -51,18 +68,72 @@ export interface ProposalDraft {
   reasons: string[];
 }
 
-export interface ProposalPayload {
-  v: 1;
+/** A revision's lineage limits: the solve is revision 1; a save that would make revision 31 is refused. */
+export const PROPOSAL_MAX_REVISION = 30;
+export const PROPOSAL_MAX_WAIVERS = 200;
+export const PROPOSAL_MAX_BASELINE = 500;
+export const WAIVER_SENTENCE_MAX = 300;
+
+export type FindingKind = "exclusion" | "week_exclusion" | "pair";
+const FINDING_KINDS = ["exclusion", "week_exclusion", "pair"] as const satisfies readonly FindingKind[];
+
+/**
+ * One rule breach on a board, keyed ONCE (plan T2.2): the rule by its kind and config ordinal
+ * (`restriction[i].pattern[k]`, `restriction[i].week[j]`, `conflict[i]` — never a config key,
+ * C6 KH-1), the service by its draft `localId`, and the seat: a per-seat rule's row and member, or
+ * a pair's two members (sorted, no row — an exchange inside the column keeps the key).
+ */
+export interface FindingKey {
+  kind: FindingKind;
+  rule: string;
+  service: string;
+  row: string | null;
+  members: string[];
+}
+
+/** A finding Frank confirmed («Asignar de todos modos»), with the rule's sentence as he read it. */
+export interface Waiver {
+  key: FindingKey;
+  sentence: string;
+}
+
+interface PayloadCore {
   entries: V3ConfirmEntry[];
   drafts: ProposalDraft[];
   /** The horizon's stored role ids at solve, from the snapshot's canonical rows (apply's check (c)). */
   storedServiceIds: string[];
 }
 
+export interface ProposalPayloadV1 extends PayloadCore {
+  v: 1;
+}
+
+export interface ProposalPayloadV2 extends PayloadCore {
+  v: 2;
+  waivers: Waiver[];
+  /** The solve's own findings, computed once at the lineage's first revision and copied verbatim. */
+  baseline: FindingKey[];
+  /** Whether the month check judged this board; `false` = «sin revisar» (E7). */
+  checked: boolean;
+  /** The saving screen's id for this save, so a retry after a lost answer finds its own child. */
+  saveId: string;
+}
+
+export type ProposalPayload = ProposalPayloadV1 | ProposalPayloadV2;
+
 export interface ProposalState {
   recordsDone: boolean;
   /** `localId` → the created role's `_id`. */
   created: Record<string, string>;
+  /** The handle of the revision that replaced this record (T2.2's save transaction). */
+  supersededBy?: string;
+}
+
+/** A revision's place in its lineage; absent on a solve's record (revision 1, its own root). */
+export interface ProposalLineage {
+  parent: string;
+  revision: number;
+  root: string;
 }
 
 export interface ProposalHeader {
@@ -76,6 +147,8 @@ export interface ProposalHeader {
   rulesRev: string | null;
   months: string[];
   requestId: string;
+  /** Absent on a solve's record. */
+  lineage?: ProposalLineage;
 }
 
 export interface NewProposalDocument {
@@ -89,6 +162,9 @@ export interface NewProposalDocument {
   rulesRev?: string;
   months: string[];
   requestId: string;
+  parent?: string;
+  revision?: number;
+  root?: string;
   payload: string;
   digest: string;
   state: string;
@@ -106,12 +182,19 @@ export const EMPTY_STATE: ProposalState = Object.freeze({ recordsDone: false, cr
 
 // ── Digest ────────────────────────────────────────────────────────────────────
 
-/** SHA-256 over every immutable field, in one fixed order. */
+/**
+ * SHA-256 over every immutable field, in one fixed order. A solve's record signs exactly the list
+ * every record already stored was signed with; a revision appends its lineage, so altering
+ * `parent`, `revision` or `root` makes it read as no record.
+ */
 export function proposalDigest(header: ProposalHeader, payload: string): string {
-  const canonical = JSON.stringify([
+  const base: unknown[] = [
     header.origin, header.principal, header.createdAt, header.expiresAt, header.engine,
     header.rulesRev, header.months, header.requestId, payload,
-  ]);
+  ];
+  const canonical = JSON.stringify(
+    header.lineage ? [...base, header.lineage.parent, header.lineage.revision, header.lineage.root] : base,
+  );
   return `sha256:${createHash("sha256").update(canonical, "utf8").digest("hex")}`;
 }
 
@@ -163,12 +246,39 @@ function validMonths(v: unknown): v is string[] {
     && new Set(v).size === v.length && v.every((m, i) => i === 0 || m > v[i - 1]);
 }
 
-/** The payload string, parsed and checked against `months`; `null` on any deviation. */
-export function parsePayload(text: unknown, months: readonly string[]): ProposalPayload | null {
+const RULE_ID: Record<FindingKind, RegExp> = {
+  exclusion: /^restriction\[\d{1,4}\]\.pattern\[\d{1,4}\]$/,
+  week_exclusion: /^restriction\[\d{1,4}\]\.week\[\d{1,4}\]$/,
+  pair: /^conflict\[\d{1,4}\]$/,
+};
+const SAVE_ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
+
+export function validFindingKey(v: unknown, localIds: ReadonlySet<string>): v is FindingKey {
+  if (!isObj(v) || !hasOnly(v, ["kind", "rule", "service", "row", "members"])) return false;
+  if (!(FINDING_KINDS as readonly unknown[]).includes(v.kind)) return false;
+  const kind = v.kind as FindingKind;
+  if (typeof v.rule !== "string" || !RULE_ID[kind].test(v.rule)) return false;
+  if (typeof v.service !== "string" || !localIds.has(v.service)) return false;
+  if (!isStrArray(v.members) || !v.members.every(isStr)) return false;
+  if (kind === "pair") {
+    return v.row === null && v.members.length === 2 && v.members[0] < v.members[1];
+  }
+  return isStr(v.row) && v.members.length === 1;
+}
+
+/** One finding key as a string: the identity two keys share exactly when they are the same finding. */
+export function findingKeyText(k: FindingKey): string {
+  return JSON.stringify([k.kind, k.rule, k.service, k.row, k.members]);
+}
+
+/** The payload string, parsed and checked against `months` and its version; `null` on any deviation. */
+export function parsePayload(text: unknown, months: readonly string[], version: 1 | 2 = 1): ProposalPayload | null {
   if (typeof text !== "string" || Buffer.byteLength(text, "utf8") > PROPOSAL_MAX_PAYLOAD_BYTES) return null;
   let o: unknown;
   try { o = JSON.parse(text); } catch { return null; }
-  if (!isObj(o) || !hasOnly(o, ["v", "entries", "drafts", "storedServiceIds"]) || o.v !== 1) return null;
+  if (!isObj(o) || o.v !== version) return null;
+  const v2 = ["waivers", "baseline", "checked", "saveId"] as const;
+  if (!hasOnly(o, version === 1 ? ["v", "entries", "drafts", "storedServiceIds"] : ["v", "entries", "drafts", "storedServiceIds", ...v2])) return null;
   if (!Array.isArray(o.entries) || o.entries.length !== months.length || !o.entries.every((e, i) => validEntry(e, months[i]))) return null;
   if (!Array.isArray(o.drafts) || o.drafts.length > PROPOSAL_MAX_DRAFTS) return null;
   const localIds = new Set<string>();
@@ -182,6 +292,19 @@ export function parsePayload(text: unknown, months: readonly string[]): Proposal
     requestIds.add(p.draft.creationRequestId);
   }
   if (!isStrArray(o.storedServiceIds) || new Set(o.storedServiceIds).size !== o.storedServiceIds.length) return null;
+  if (version === 2) {
+    if (!Array.isArray(o.waivers) || o.waivers.length > PROPOSAL_MAX_WAIVERS) return null;
+    const waived = new Set<string>();
+    for (const w of o.waivers) {
+      if (!isObj(w) || !hasOnly(w, ["key", "sentence"]) || !validFindingKey(w.key, localIds)) return null;
+      if (!isStr(w.sentence) || w.sentence.length > WAIVER_SENTENCE_MAX) return null;
+      const text = findingKeyText(w.key);
+      if (waived.has(text)) return null;
+      waived.add(text);
+    }
+    if (!Array.isArray(o.baseline) || o.baseline.length > PROPOSAL_MAX_BASELINE || !o.baseline.every((k) => validFindingKey(k, localIds))) return null;
+    if (typeof o.checked !== "boolean" || typeof o.saveId !== "string" || !SAVE_ID_RE.test(o.saveId)) return null;
+  }
   return o as unknown as ProposalPayload;
 }
 
@@ -190,22 +313,48 @@ export function parseState(text: unknown, payload: ProposalPayload): ProposalSta
   if (typeof text !== "string") return null;
   let o: unknown;
   try { o = JSON.parse(text); } catch { return null; }
-  if (!isObj(o) || !hasOnly(o, ["recordsDone", "created"]) || typeof o.recordsDone !== "boolean" || !isObj(o.created)) return null;
+  if (!isObj(o) || !hasOnly(o, ["recordsDone", "created"], ["supersededBy"]) || typeof o.recordsDone !== "boolean" || !isObj(o.created)) return null;
+  if ("supersededBy" in o && !isProposalHandle(o.supersededBy)) return null;
   const localIds = new Set(payload.drafts.map((d) => d.draft.localId));
   for (const [k, v] of Object.entries(o.created)) if (!localIds.has(k) || !isStr(v)) return null;
-  return { recordsDone: o.recordsDone, created: { ...(o.created as Record<string, string>) } };
+  return {
+    recordsDone: o.recordsDone,
+    created: { ...(o.created as Record<string, string>) },
+    ...(typeof o.supersededBy === "string" ? { supersededBy: o.supersededBy } : {}),
+  };
 }
 
-/** Facts only grow: `recordsDone` is OR'd and `created` is a union (the stored side wins a clash). */
+/**
+ * Facts only grow: `recordsDone` is OR'd and `created` is a union (the stored side wins a clash).
+ * `supersededBy` is written once, by the save transaction: the STORED value wins over any incoming
+ * one, so an apply's `state` retry can never clear or replace it.
+ */
 export function mergeState(stored: ProposalState, next: ProposalState): ProposalState {
-  return { recordsDone: stored.recordsDone || next.recordsDone, created: { ...next.created, ...stored.created } };
+  const supersededBy = stored.supersededBy ?? next.supersededBy;
+  return {
+    recordsDone: stored.recordsDone || next.recordsDone,
+    created: { ...next.created, ...stored.created },
+    ...(supersededBy ? { supersededBy } : {}),
+  };
 }
 
-export const stateText = (s: ProposalState): string => JSON.stringify({ recordsDone: s.recordsDone, created: s.created });
+export const stateText = (s: ProposalState): string =>
+  JSON.stringify({ recordsDone: s.recordsDone, created: s.created, ...(s.supersededBy ? { supersededBy: s.supersededBy } : {}) });
 
 // ── Build and parse ───────────────────────────────────────────────────────────
 
 export type BuildProposalResult = { ok: true; doc: NewProposalDocument } | { ok: false; reason: "invalid" };
+
+/** What a revision adds to `buildProposal`'s input (T2.2). */
+export interface RevisionInput {
+  lineage: ProposalLineage;
+  /** The base's own expiry: a revision never extends the 7 days of its solve. */
+  expiresAt: string;
+  waivers: Waiver[];
+  baseline: FindingKey[];
+  checked: boolean;
+  saveId: string;
+}
 
 export function buildProposal(input: {
   handle: string;
@@ -215,21 +364,26 @@ export function buildProposal(input: {
   rulesRev: string | null;
   months: string[];
   requestId: string;
-  payload: Omit<ProposalPayload, "v">;
+  payload: PayloadCore;
+  /** Present only for a revision (the editor's save); a solve passes none. */
+  revision?: RevisionInput;
 }): BuildProposalResult {
+  const rev = input.revision;
   const header: ProposalHeader = {
     origin: input.origin,
     principal: input.principal,
     createdAt: new Date(input.nowMs).toISOString(),
-    expiresAt: new Date(input.nowMs + PROPOSAL_TTL_MS).toISOString(),
+    expiresAt: rev ? rev.expiresAt : new Date(input.nowMs + PROPOSAL_TTL_MS).toISOString(),
     engine: "v3",
     rulesRev: input.rulesRev,
     months: [...input.months],
     requestId: input.requestId,
+    ...(rev ? { lineage: { ...rev.lineage } } : {}),
   };
-  const payload = JSON.stringify({
-    v: 1, entries: input.payload.entries, drafts: input.payload.drafts, storedServiceIds: input.payload.storedServiceIds,
-  });
+  const core = { entries: input.payload.entries, drafts: input.payload.drafts, storedServiceIds: input.payload.storedServiceIds };
+  const payload = rev
+    ? JSON.stringify({ v: 2, ...core, waivers: rev.waivers, baseline: rev.baseline, checked: rev.checked, saveId: rev.saveId })
+    : JSON.stringify({ v: 1, ...core });
   const doc: NewProposalDocument = {
     _id: proposalIdOf(input.handle),
     _type: MCP_PROPOSAL_TYPE,
@@ -241,6 +395,7 @@ export function buildProposal(input: {
     ...(header.rulesRev === null ? {} : { rulesRev: header.rulesRev }),
     months: header.months,
     requestId: header.requestId,
+    ...(header.lineage ? { parent: header.lineage.parent, revision: header.lineage.revision, root: header.lineage.root } : {}),
     payload,
     digest: proposalDigest(header, payload),
     state: stateText(EMPTY_STATE),
@@ -263,12 +418,22 @@ export function parseProposal(raw: unknown): StoredProposal | null {
   if (raw.engine !== "v3" || !validMonths(raw.months) || !isStr(raw.requestId) || !isStr(raw.digest)) return null;
   const rulesRev = raw.rulesRev === undefined || raw.rulesRev === null ? null : raw.rulesRev;
   if (rulesRev !== null && !isStr(rulesRev)) return null;
+  // The lineage: all three fields or none (a solve's record), never a mix.
+  const given = (["parent", "revision", "root"] as const).filter((k) => raw[k] !== undefined && raw[k] !== null);
+  if (given.length !== 0 && given.length !== 3) return null;
+  let lineage: ProposalLineage | undefined;
+  if (given.length === 3) {
+    const revision = raw.revision;
+    if (!isProposalHandle(raw.parent) || !isProposalHandle(raw.root)) return null;
+    if (typeof revision !== "number" || !Number.isInteger(revision) || revision < 2 || revision > PROPOSAL_MAX_REVISION) return null;
+    lineage = { parent: raw.parent, revision, root: raw.root };
+  }
   const header: ProposalHeader = {
     origin: raw.origin, principal: raw.principal, createdAt: raw.createdAt, expiresAt: raw.expiresAt,
-    engine: "v3", rulesRev, months: [...raw.months], requestId: raw.requestId,
+    engine: "v3", rulesRev, months: [...raw.months], requestId: raw.requestId, ...(lineage ? { lineage } : {}),
   };
   if (typeof raw.payload !== "string" || proposalDigest(header, raw.payload) !== raw.digest) return null;
-  const payload = parsePayload(raw.payload, header.months);
+  const payload = parsePayload(raw.payload, header.months, lineage ? 2 : 1);
   if (!payload) return null;
   const state = parseState(raw.state, payload);
   if (!state) return null;

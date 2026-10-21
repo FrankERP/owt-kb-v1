@@ -11,6 +11,10 @@ import "server-only";
 // mutable data is `state`, a set of facts that only grow. `writeState` patches it under
 // `ifRevisionId`; on a revision conflict it re-reads, merges (`mergeState`: OR and union) and
 // retries, so two concurrent applies of one proposal can never lose each other's facts.
+//
+// A REVISION (the editor's save, plan T2.2) is a new record plus the base's `supersededBy`, both
+// in ONE transaction (`saveRevision`): a child never exists without its base marked, and a base
+// is never marked without its child.
 
 import { writeClient } from "@/sanity/lib/serverClient";
 import { sanityConflictKind } from "@/app/utils/roleWriteRequest";
@@ -54,6 +58,7 @@ export type ProposalLookup =
   | ProposalStoreFailure;
 
 const NOT_FOUND = Object.freeze({ ok: false, reason: "not_found" } as const);
+const handleOf = (id: string): string => id.slice(id.indexOf(".") + 1);
 
 export async function loadProposal(handle: string): Promise<ProposalLookup> {
   if (!isProposalHandle(handle)) return NOT_FOUND;
@@ -91,8 +96,7 @@ export async function writeState(proposal: StoredProposal, next: ProposalState):
     } catch (cause) {
       if (sanityConflictKind(cause) === null) return { ok: false, reason: "server_error", cause, state: merged };
     }
-    const handle = proposal.id.slice(proposal.id.indexOf(".") + 1);
-    const reread = await loadProposal(handle);
+    const reread = await loadProposal(handleOf(proposal.id));
     if (!reread.ok) {
       return reread.reason === "not_found"
         ? { ok: false, reason: "gone", state: merged }
@@ -102,6 +106,68 @@ export async function writeState(proposal: StoredProposal, next: ProposalState):
     merged = mergeState(reread.proposal.state, merged);
   }
   return { ok: false, reason: "conflict", state: merged };
+}
+
+export type SaveRevisionResult<R> =
+  | { ok: true }
+  /** The base was superseded meanwhile, by another revision (E3 (a)): `by` names it. */
+  | { ok: false; reason: "superseded"; by: string }
+  /** The caller's re-judgement of the fresh base refused the save (E3 (b): it started applying). */
+  | { ok: false; reason: "refused"; refusal: R }
+  /** `conflict`: every attempt lost the revision race; `gone`: the base vanished or no longer parses. */
+  | { ok: false; reason: "conflict" | "gone" }
+  | ProposalStoreFailure;
+
+/**
+ * T2.2's save: ONE transaction that creates `child` and sets the base's `state.supersededBy` to
+ * it, the base's patch under `ifRevisionId` of the read that passed E3, so the two land together
+ * or not at all. The base's other facts are kept as read (`mergeState`).
+ *
+ * On a revision conflict it re-reads the base: superseded by THIS child is our own earlier commit
+ * whose answer was lost (success); superseded by another is refused naming it; otherwise
+ * `recheck` (the caller's E3 over the fresh base — whether it started applying) may refuse, and a
+ * base that passes is retried at its new revision, at most {@link STATE_WRITE_RETRIES} times.
+ * A base already superseded when called is refused without writing.
+ */
+export async function saveRevision<R>(
+  base: StoredProposal,
+  child: NewProposalDocument,
+  recheck: (fresh: StoredProposal) => Promise<R | null>,
+): Promise<SaveRevisionResult<R>> {
+  const childHandle = handleOf(child._id);
+  let current = base;
+  for (let attempt = 0; attempt <= STATE_WRITE_RETRIES; attempt++) {
+    const by = current.state.supersededBy;
+    if (by !== undefined) return by === childHandle ? { ok: true } : { ok: false, reason: "superseded", by };
+    const state = stateText(mergeState(current.state, { recordsDone: false, created: {}, supersededBy: childHandle }));
+    const rev = current.rev;
+    try {
+      await writeClient
+        .transaction()
+        .create(child)
+        .patch(current.id, (p) => p.ifRevisionId(rev).set({ state }))
+        .commit();
+      return { ok: true };
+    } catch (cause) {
+      if (sanityConflictKind(cause) === null) return { ok: false, reason: "server_error", cause };
+    }
+    const reread = await loadProposal(handleOf(base.id));
+    if (!reread.ok) {
+      return reread.reason === "not_found" ? { ok: false, reason: "gone" } : { ok: false, reason: "server_error", cause: reread.cause };
+    }
+    current = reread.proposal;
+    if (current.state.supersededBy !== undefined) continue;
+    let refusal: R | null;
+    try {
+      refusal = await recheck(current);
+    } catch (cause) {
+      return { ok: false, reason: "server_error", cause };
+    }
+    if (refusal !== null) return { ok: false, reason: "refused", refusal };
+  }
+  const by = current.state.supersededBy;
+  if (by !== undefined) return by === childHandle ? { ok: true } : { ok: false, reason: "superseded", by };
+  return { ok: false, reason: "conflict" };
 }
 
 /**
