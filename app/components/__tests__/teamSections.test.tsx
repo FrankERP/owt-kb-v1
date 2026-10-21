@@ -73,14 +73,14 @@ describe("TeamSections", () => {
 
   it("offers «+ foto» only on your own face, only where the surface knows photos", () => {
     mount({ myName: "frank", photos: {} });
-    expect(screen.getByRole("link", { name: "+ foto" }).getAttribute("href")).toBe("/me/ajustes");
+    expect(screen.getByRole("link", { name: /^\+\sfoto$/ }).getAttribute("href")).toBe("/me/ajustes");
     expect(screen.getAllByRole("link")).toHaveLength(1);
     cleanup();
     mount({ myName: "frank" });
-    expect(screen.queryByRole("link", { name: "+ foto" })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^\+\sfoto$/ })).toBeNull();
     cleanup();
     mount({ myName: "frank", photos: { frank: "https://lh3.googleusercontent.com/f" } });
-    expect(screen.queryByRole("link", { name: "+ foto" })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^\+\sfoto$/ })).toBeNull();
   });
 
   it("flags a person seated twice in one section, never as «tú»", () => {
@@ -97,6 +97,15 @@ describe("TeamSections", () => {
     fireEvent.click(cabina);
     expect(header(/Cabina/).getAttribute("aria-expanded")).toBe("false");
     expect(header(/Cabina/).textContent).toContain("⚠ repetido");
+  });
+
+  it("splits an open Voces into Lead, BGV and Coro panels whose label is the seat", () => {
+    mount({ myName: "pau", team: { ...team, chorus: [{ member_name: "Lupe" }] } });
+    expect(header(/Voces/).getAttribute("aria-expanded")).toBe("true");
+    for (const label of ["Lead", "BGV", "Coro"]) expect(screen.getByText(`${label} · 1`, { selector: "p" })).toBeTruthy();
+    // The seat is the panel's label, so only «tú» sits under a name there.
+    expect(screen.getByText("tú").className).toContain("text-positive-fg");
+    expect(screen.queryByText("Lead", { selector: "p.text-xs" })).toBeNull();
   });
 
   it("renders nothing for a service with no one seated", () => {
