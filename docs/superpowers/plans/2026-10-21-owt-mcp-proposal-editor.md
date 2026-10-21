@@ -1,6 +1,6 @@
 # OWT MCP — an interactive editor for a month proposal (plan)
 
-**Status:** DRAFT, 2026-10-21. Reshaped after review round 4 (E5); pending Frank's choice. Not approved, not authorized.
+**Status:** DRAFT, 2026-10-21. E5 reshaped after review round 4 (Frank chose the own checker, 01:02Z). Not approved, not authorized.
 **Requirement (Frank, 2026-10-21 00:05Z, verbatim):** «Es posible hacer que el mcp haga un elemento
 interactivo donde yo pueda modificar el rol como yo quiera que quede una vez que me muestra la
 propuesta y entonces lo puede carga y advertirme si algo no cuadra con las reglas o algo así?» —
