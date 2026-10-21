@@ -290,6 +290,15 @@ interface Props {
   allRoles?: SavedRole[];
   initialMonth?: string;
   focusRoleId?: string;
+  /**
+   * Stored mode, «Editar servicio»: open showing ONLY `focusRoleId`'s column, without the
+   * month tools (Nuevo, Llenar especiales, intercambios, Equidad, Limpiar mes). The editor
+   * underneath is the whole month all the same — the same cells, rule checks, save and
+   * notices — so «Ver mes completo» widens the view without discarding a single edit.
+   */
+  singleService?: boolean;
+  /** Told when «Ver mes completo» widens a single-service editor, so the page title follows. */
+  onScopeChange?: (scope: "service" | "month") => void;
   openComposerInitially?: boolean;
   storedSource?: {
     roles: ServiceRole[];
@@ -490,6 +499,12 @@ async function postDraftToRoles(body: unknown): Promise<{ ok: boolean; status: n
     }
   }
   return { ok: res.ok, status: res.status, error };
+}
+
+/** «Editar servicio»'s heading: a special by its name, a weekend by its day. */
+function singleServiceTitle(column: GridColumn): string {
+  if (column.type === "special_role") return column.serviceName?.trim() || "Especial";
+  return column.type === "saturday_role" ? "Sábado" : "Domingo";
 }
 
 function fmtDate(iso: string) {
@@ -2034,7 +2049,7 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
 
 export default function MonthGenerator({
   mode = "create", members, existingRoles, onClose, onCreated, rules, capability, preflight, allRoles,
-  initialMonth, focusRoleId, openComposerInitially = false, storedSource, storedCapabilities, onCleared,
+  initialMonth, focusRoleId, singleService = false, onScopeChange, openComposerInitially = false, storedSource, storedCapabilities, onCleared,
   showCadencePoolWarning = false,
   engine = "v2",
 }: Props) {
@@ -2412,6 +2427,14 @@ export default function MonthGenerator({
   const [touchedStoredRoleIds, setTouchedStoredRoleIds] = useState<Set<string>>(new Set());
   const monthPrefix = `${year}-${String(month).padStart(2, "0")}`;
   const [composerOpen, setComposerOpen] = useState(storedMode && openComposerInitially);
+  // Never re-narrowed once widened: «Ver mes completo» is one way, like the page title it moves.
+  const [onlyRoleId, setOnlyRoleId] = useState<string | null>(
+    storedMode && singleService && !openComposerInitially && focusRoleId ? focusRoleId : null,
+  );
+  function showWholeMonth() {
+    setOnlyRoleId(null);
+    onScopeChange?.("month");
+  }
   const [createType, setCreateType] = useState<ServiceType>("sunday_role");
   const [createDate, setCreateDate] = useState(`${monthPrefix}-01`);
   const [createName, setCreateName] = useState("");
@@ -2685,6 +2708,18 @@ export default function MonthGenerator({
       today,
     );
   const storedColumns = columns.filter((column): column is StoredGridColumn => "roleId" in column);
+  // «Editar servicio»: the one column on screen, or null for the whole month. A role that is no
+  // longer in this month's inventory (deleted elsewhere, or moved out by a saved date change)
+  // falls back to the month instead of an empty board.
+  const singleColumn = storedMode && onlyRoleId
+    ? storedColumns.find((column) => column.roleId === onlyRoleId) ?? null
+    : null;
+  const singleColumnLost = !!onlyRoleId && storedInventory.coherent && !singleColumn;
+  /** The month tools hide while this is true; a reload in flight keeps the narrow view. */
+  const singleView = !!onlyRoleId && !singleColumnLost;
+  useEffect(() => {
+    if (singleColumnLost) onScopeChange?.("month");
+  }, [singleColumnLost, onScopeChange]);
   const dirtyStoredColumns = storedMode
     ? storedColumns.filter((column) => {
         const serialized = serializeStoredColumn(column, rows, cells);
@@ -2818,7 +2853,7 @@ export default function MonthGenerator({
       el.scrollIntoView({ block: "nearest", inline: "nearest" });
     });
     return () => cancelAnimationFrame(frame);
-  }, [focusRoleId, storedGenerationKey, storedMode]);
+  }, [focusRoleId, onlyRoleId, storedGenerationKey, storedMode]);
   const lastStoredGeneration = useRef(storedGenerationKey);
   useEffect(() => {
     if (!storedMode || lastStoredGeneration.current === storedGenerationKey) return;
@@ -5047,7 +5082,18 @@ export default function MonthGenerator({
       <div className="flex items-center justify-between">
         <div>
           <p className="font-label text-xs uppercase tracking-widest text-mono-500">{horizonTitle(horizon)}</p>
-          {storedMode ? (
+          {singleView ? (
+            <p className="font-body text-sm">
+              {singleColumn ? (
+                <>
+                  <span className="text-accent font-semibold">{singleServiceTitle(singleColumn)}</span>
+                  {" · "}{fmtDate(singleColumn.date)}
+                  {singleColumn.published && <span className="text-mono-500"> · publicado</span>}
+                </>
+              ) : "Cargando servicio…"}
+              {dirtyStoredColumns.length + invalidStoredColumns.length > 0 && <span className="text-warning-soft"> · con cambios</span>}
+            </p>
+          ) : storedMode ? (
             <p className="font-body text-sm">
               <span className="text-accent font-semibold">{storedColumns.length}</span> servicio{storedColumns.length !== 1 ? "s" : ""}
               {dirtyStoredColumns.length + invalidStoredColumns.length > 0 && <span className="text-warning-soft"> · {dirtyStoredColumns.length + invalidStoredColumns.length} con cambios</span>}
@@ -5062,9 +5108,16 @@ export default function MonthGenerator({
             </p>
           )}
         </div>
-        <button type="button" onClick={requestBack} disabled={storedTransportActive} className="font-label text-xs uppercase tracking-widest text-mono-500 hover:text-accent transition-colors disabled:opacity-50">
-          {storedMode ? "Cerrar" : "← Volver"}
-        </button>
+        <div className="flex items-center gap-4">
+          {singleView && (
+            <Button variant="secondary" size="md" onClick={showWholeMonth} disabled={storedTransportActive}>
+              Ver mes completo
+            </Button>
+          )}
+          <button type="button" onClick={requestBack} disabled={storedTransportActive} className="font-label text-xs uppercase tracking-widest text-mono-500 hover:text-accent transition-colors disabled:opacity-50">
+            {storedMode ? "Cerrar" : "← Volver"}
+          </button>
+        </div>
       </div>
 
       {storedMode && (!storedSource || !storedInventory.coherent) && (
@@ -5083,7 +5136,7 @@ export default function MonthGenerator({
         </div>
       )}
 
-      {storedMode && storedInventory.coherent && (
+      {storedMode && storedInventory.coherent && !singleView && (
         <div className="rounded-lg border border-accent/15 bg-accent/5 px-3 py-3">
           {!composerOpen ? (
             <div className="flex flex-col gap-1">
@@ -5310,7 +5363,7 @@ export default function MonthGenerator({
         editor's only view of the history (there is no «Historial» block beside
         it), so the same rule holds: no leader list until the read is `ready`.
       */}
-      {solverConfig && !isV3 && (derivedMode ? (
+      {solverConfig && !isV3 && !singleView && (derivedMode ? (
         <DerivedLeadPoolHistory config={solverConfig} members={members} history={derivedHistory} year={year} month={month} />
       ) : (
         <LeadPoolHistoryPanel
@@ -5323,7 +5376,7 @@ export default function MonthGenerator({
       ))}
 
       {/* Solver v3 C2 UI-1: the read-only «Equidad» preview, beside the lead history. */}
-      {solverConfig && (
+      {solverConfig && !singleView && (
         <FairnessPreviewPanel
           key={monthKeyOf(year, month)}
           month={monthKeyOf(year, month)}
@@ -5336,7 +5389,7 @@ export default function MonthGenerator({
         />
       )}
 
-      {viewMode === "edit" && (
+      {viewMode === "edit" && !singleView && (
         <div>
           <Button
             data-swap-toggle=""
@@ -5379,7 +5432,7 @@ export default function MonthGenerator({
         </div>
       )}
 
-      {storedMode && (
+      {storedMode && !singleView && (
         <div className="grid gap-2 rounded-lg border border-accent/15 p-3 md:grid-cols-[0.8fr_1fr_1fr_auto] md:items-end">
           <Select id="mg-section-swap-path" label="Sección" size="md" value={sectionSwapPath} disabled={storedSwapInteractionBlocked} onChange={(event) => setSectionSwapPath(event.target.value as StoredSectionPath)}>
             {STORED_SECTION_OPTIONS.map((option) => <option key={option.path} value={option.path}>{option.label}</option>)}
@@ -5545,6 +5598,7 @@ export default function MonthGenerator({
             </div>
           }
           monthLabel={`${MONTHS[month - 1]} ${year}`}
+          onlyColumnId={singleView ? onlyRoleId : null}
           fillEmpty={storedMode ? undefined : {
             enabled: fillEmptyOnly,
             onChange: (next) => { if (!autoPending) setFillEmptyOnly(next); },
@@ -5696,7 +5750,7 @@ export default function MonthGenerator({
           <button type="button" onClick={requestBack} disabled={storedTransportActive} className="flex-1 min-h-[44px] rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors disabled:opacity-50">
             Cerrar
           </button>
-          {storedCapabilities?.clear && (
+          {storedCapabilities?.clear && !singleView && (
             <button
               ref={clearTriggerRef}
               type="button"
@@ -5715,7 +5769,7 @@ export default function MonthGenerator({
             title={storedSaveBlocked ?? undefined}
             className="flex-1 min-h-[44px] rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
           >
-            {savingStored ? "Guardando…" : `Guardar ${dirtyStoredColumns.length} servicio${dirtyStoredColumns.length !== 1 ? "s" : ""}`}
+            {savingStored ? "Guardando…" : singleView && dirtyStoredColumns.length <= 1 ? "Guardar" : `Guardar ${dirtyStoredColumns.length} servicio${dirtyStoredColumns.length !== 1 ? "s" : ""}`}
           </button>
         </div>
       ) : (

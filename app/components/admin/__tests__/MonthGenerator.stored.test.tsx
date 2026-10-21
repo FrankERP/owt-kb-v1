@@ -17,6 +17,7 @@ vi.mock("../PlannerGrid", () => ({
     onRowsChange,
     onStoredHeaderChange,
     mutationLocked,
+    onlyColumnId,
   }: {
     columns: GridColumn[];
     rows: GridRow[];
@@ -25,8 +26,9 @@ vi.mock("../PlannerGrid", () => ({
     onRowsChange: (next: GridRow[]) => void;
     onStoredHeaderChange?: (columnId: string, patch: { date?: string; serviceName?: string }) => void;
     mutationLocked?: boolean;
+    onlyColumnId?: string | null;
   }) => (
-    <div data-testid="stored-grid">
+    <div data-testid="stored-grid" data-only-column={onlyColumnId ?? ""}>
       <span data-testid="stored-row-count">{rows.length}</span>
       <div data-planner-scroller="">
         {columns.map((column) => (
@@ -190,6 +192,8 @@ function renderStored(roles: ServiceRole[], options: {
   storedCapabilities?: ComponentProps<typeof MonthGenerator>["storedCapabilities"];
   onCleared?: ComponentProps<typeof MonthGenerator>["onCleared"];
   focusRoleId?: string;
+  singleService?: boolean;
+  onScopeChange?: ComponentProps<typeof MonthGenerator>["onScopeChange"];
   members?: ComponentProps<typeof MonthGenerator>["members"];
 } = {}) {
   const storedSource = source(roles);
@@ -209,6 +213,8 @@ function renderStored(roles: ServiceRole[], options: {
       onCreated={vi.fn()}
       onCleared={options.onCleared}
       focusRoleId={options.focusRoleId}
+      singleService={options.singleService}
+      onScopeChange={options.onScopeChange}
     />,
     { wrapper: AdminProviders },
   );
@@ -1433,5 +1439,80 @@ describe("MonthGenerator — an empty month", () => {
     const date = screen.getByLabelText("Fecha") as HTMLInputElement;
     expect(date.min).toBe("2026-10-01");
     expect(date.max).toBe("2026-10-31");
+  });
+});
+
+describe("MonthGenerator — «Editar servicio» (one service of the stored month)", () => {
+  const CLEAR_GATE = { enabled: true, reason: null };
+  // jsdom has no `scrollIntoView`; the focus effect calls it when the month is shown.
+  const originalScrollIntoView = Element.prototype.scrollIntoView;
+  const scrollIntoViewSpy = vi.fn();
+  beforeEach(() => { scrollIntoViewSpy.mockClear(); Element.prototype.scrollIntoView = scrollIntoViewSpy; });
+  afterEach(() => { Element.prototype.scrollIntoView = originalScrollIntoView; });
+  const twoSundays = () => [
+    role(),
+    role({ _id: "role-b", _rev: "rev-b", date: "2026-02-08" }),
+  ];
+
+  it("draws only the focused service and hides the month tools", () => {
+    renderStored(twoSundays(), {
+      focusRoleId: "role-a",
+      singleService: true,
+      storedCapabilities: {
+        edit: CLEAR_GATE, create: CLEAR_GATE, swap: CLEAR_GATE, changeDate: CLEAR_GATE, clear: CLEAR_GATE,
+      },
+    });
+    expect(screen.getByTestId("stored-grid").getAttribute("data-only-column")).toBe("role-a");
+    // The month is still loaded underneath: the grid gets BOTH columns to judge with.
+    expect(screen.getAllByTestId("stored-column")).toHaveLength(2);
+    for (const name of ["+ Nuevo servicio", "Llenar especiales…", "Limpiar mes", "Intercambiar sección"]) {
+      expect(screen.queryByRole("button", { name })).toBeNull();
+    }
+    expect(screen.queryByRole("button", { name: /Intercambiar equipos/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Ver mes completo" })).toBeTruthy();
+    expect(screen.getByText("Domingo")).toBeTruthy();
+  });
+
+  it("saves the one service through the stored PATCH", async () => {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => response());
+    stubFetchWithHistory(fetchMock);
+    renderStored(twoSundays(), { focusRoleId: "role-a", singleService: true });
+
+    expect((screen.getByRole("button", { name: "Guardar" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Cambiar una celda" }));
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(fetchMock.mock.calls[0]![0]).toBe("/api/admin/roles/role-a");
+    expect(fetchMock.mock.calls[0]![1]).toMatchObject({ method: "PATCH" });
+  });
+
+  it("«Ver mes completo» widens the view in place, keeping the unsaved edit", async () => {
+    const onScopeChange = vi.fn();
+    renderStored(twoSundays(), { focusRoleId: "role-a", singleService: true, onScopeChange });
+
+    fireEvent.click(screen.getByRole("button", { name: "Cambiar una celda" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ver mes completo" }));
+
+    expect(onScopeChange).toHaveBeenCalledWith("month");
+    expect(screen.getByTestId("stored-grid").getAttribute("data-only-column")).toBe("");
+    expect(screen.getByRole("button", { name: "+ Nuevo servicio" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Ver mes completo" })).toBeNull();
+    expect((screen.getByRole("button", { name: "Guardar 1 servicio" }) as HTMLButtonElement).disabled).toBe(false);
+    // …and brings the service's column into view in the widened grid.
+    await waitFor(() => expect(scrollIntoViewSpy).toHaveBeenCalled());
+  });
+
+  it("falls back to the month when the service is not in it", async () => {
+    const onScopeChange = vi.fn();
+    renderStored(twoSundays(), { focusRoleId: "role-gone", singleService: true, onScopeChange });
+    await waitFor(() => expect(onScopeChange).toHaveBeenCalledWith("month"));
+    expect(screen.getByTestId("stored-grid").getAttribute("data-only-column")).toBe("");
+    expect(screen.getByRole("button", { name: "+ Nuevo servicio" })).toBeTruthy();
+  });
+
+  it("without `singleService` a focused card still opens the whole month", () => {
+    renderStored(twoSundays(), { focusRoleId: "role-a" });
+    expect(screen.getByTestId("stored-grid").getAttribute("data-only-column")).toBe("");
+    expect(screen.queryByRole("button", { name: "Ver mes completo" })).toBeNull();
   });
 });

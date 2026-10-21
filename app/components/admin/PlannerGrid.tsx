@@ -311,6 +311,14 @@ export interface PlannerGridProps {
   /** Named on the full-screen bar, where the page's own month header is gone. */
   monthLabel?: string;
   /**
+   * «Editar servicio» (stored mode): DRAW only this column. A display filter and nothing
+   * more — every rule check, duplicate check and participation count still reads ALL of
+   * `columns`/`cells`, because a monthly rule (`Sun.Lead == 2`) judged against one service
+   * alone would wave through the very seat it exists to refuse. Omitted, or naming no
+   * column, draws the whole month.
+   */
+  onlyColumnId?: string | null;
+  /**
    * Solver v3 C6 HZ-5: one band per horizon month above the column headers, INSIDE the grid's own
    * horizontal scroller (ADR-0035), with a visible boundary at the second month's first column.
    * Columns arrive in date order, so each band's columns are contiguous. Omitted under v2.
@@ -587,6 +595,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
     sundayDatesForColumn,
     participation,
     monthLabel,
+    onlyColumnId,
     monthBands,
     v3Report,
     autoConfirmText,
@@ -691,6 +700,13 @@ export default function PlannerGrid(props: PlannerGridProps) {
   const unionRoles = useMemo(() => [...savedWindow, ...inGridRoles], [savedWindow, inGridRoles]);
 
   const columnById = useMemo(() => new Map(columns.map((c) => [c.columnId, c])), [columns]);
+  // What is DRAWN. Everything that judges a seat keeps reading `columns` (see `onlyColumnId`).
+  const shownColumns = useMemo(() => {
+    if (!onlyColumnId) return columns;
+    const only = columns.filter((c) => c.columnId === onlyColumnId);
+    return only.length > 0 ? only : columns;
+  }, [columns, onlyColumnId]);
+  const singleColumn = shownColumns.length === 1 && shownColumns !== columns;
 
   const cellsByKey = useMemo(() => {
     const map = new Map<string, GridCell>();
@@ -1678,7 +1694,9 @@ export default function PlannerGrid(props: PlannerGridProps) {
   // the header and the cells as well, because each of those carries its own
   // `min-w-[150px]` — leaving those behind would make the fitted template a lie
   // and reintroduce the horizontal scroll full screen exists to remove.
-  const dateTrack = fullScreen ? "minmax(0, 1fr)" : "minmax(150px, 1fr)";
+  // One service alone gets a bounded column: stretched across the page, a seat chip is a
+  // 900px-wide bar whose name sits a long way from its row label.
+  const dateTrack = fullScreen ? "minmax(0, 1fr)" : singleColumn ? "minmax(150px, 26rem)" : "minmax(150px, 1fr)";
   const labelTrack = fullScreen ? "minmax(140px, max-content)" : "minmax(176px, max-content)";
   const cellMinW = fullScreen ? "min-w-0" : "min-w-[150px]";
   const labelMinW = fullScreen ? "min-w-[140px]" : "min-w-[176px]";
@@ -1695,13 +1713,13 @@ export default function PlannerGrid(props: PlannerGridProps) {
     // a dark slab with no frame around it. Full screen already sits on an opaque surface.
     <div
       data-planner-scroller=""
-      className={fullScreen ? undefined : "overflow-x-auto rounded-xl border border-accent/15 bg-surface-base"}
+      className={fullScreen ? undefined : `overflow-x-auto rounded-xl border border-accent/15 bg-surface-base${singleColumn ? " w-fit max-w-full" : ""}`}
     >
       <div
         className="grid"
-        style={{ gridTemplateColumns: `${labelTrack} repeat(${columns.length}, ${dateTrack})` }}
+        style={{ gridTemplateColumns: `${labelTrack} repeat(${shownColumns.length}, ${dateTrack})` }}
       >
-        {monthBands && (
+        {monthBands && !singleColumn && (
           <>
             <div className={`${labelMinW} ${stickyLabel}`} />
             {monthBands.map((band, i) => band.columnIds.length > 0 && (
@@ -1717,7 +1735,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
           </>
         )}
         <div className={`${labelMinW} ${stickyLabel}`} />
-        {columns.map((column) => (
+        {shownColumns.map((column) => (
           <ColumnHeader
             guardado={mode === "create" && "admission" in column}
             key={column.columnId}
@@ -1741,7 +1759,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
           <RowGroup
             key={row.id}
             row={row}
-            columns={columns}
+            columns={shownColumns}
             cellsByKey={cellsByKey}
             unfilledByKey={unfilledByKey}
             unfilledReasonByKey={unfilledReasonByKey}
@@ -2097,8 +2115,9 @@ export default function PlannerGrid(props: PlannerGridProps) {
           page nor the three columns can show a ten-column month at 1512, and a
           bigger scroller would not answer the request — so this is a mode, not a
           zoom: both side panels go, the surface leaves the page, and the columns
-          divide the viewport instead of overflowing it.
+          divide the viewport instead of overflowing it. One service alone already fits.
         */}
+        {!singleColumn && (
         <button
           type="button"
           // The anchor focus comes back to on the way out. An attribute rather
@@ -2110,6 +2129,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
         >
           ⛶ Pantalla completa
         </button>
+        )}
         {mode === "create" && autoState.disabledReason && (
           <p className="font-body text-xs text-warning-strong">{autoState.disabledReason}</p>
         )}
