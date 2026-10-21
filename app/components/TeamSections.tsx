@@ -5,10 +5,12 @@
 // were always open — names in columns, then «BATERÍA | Raúl» chips — which made
 // the hero card on a phone a long scroll of labels (Frank, 2026-10-21).
 //
-// A CLOSED section is not empty: it lists its names on one line, so who plays
-// bass is answered without a tap, and opening it adds faces and seats. Which
-// ones start open is `defaultOpenSections` (this service's seat, else the
-// member's Tipo); a tap overrides that for the life of the card.
+// A CLOSED section is not empty: it lists its names (up to two lines), so who
+// plays bass is answered without a tap, and opening it adds faces and seats.
+// Which ones start open is `defaultOpenSections` (this service's seat, else the
+// member's Tipo, and always a section with a ⚠ double booking); a tap overrides
+// that for the life of the card. The header carries the ⚠ too, so a conflict
+// shows even when someone closes the section.
 //
 // The section header is a raw <button>, not the house Button: it is a disclosure
 // row (the row is the affordance), the exemption `DayCardDisclosure` carries.
@@ -95,9 +97,12 @@ function Section({ section, open, onToggle, myName, photos }: {
         <span className="min-w-0 flex-1">
           <span className="block font-label text-xs uppercase tracking-widest text-mono-400">
             {section.label} <span className="text-ink-dim">· {people.length}</span>
+            {dups.size > 0 && <span className="text-warning-strong"> · ⚠ {dups.size === 1 ? "repetido" : `${dups.size} repetidos`}</span>}
           </span>
           {!open && (
-            <span className="mt-0.5 block truncate font-body text-sm text-ink-muted">
+            // Two lines, not `truncate`: one line hid the later names (and a ⚠
+            // among them) behind an ellipsis on a phone.
+            <span className="mt-0.5 line-clamp-2 font-body text-sm text-ink-muted">
               <NamesLine section={section} people={people} myName={myName} dups={dups} />
             </span>
           )}

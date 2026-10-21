@@ -7,6 +7,8 @@
 // rules — what each section holds, which ones open by default, the initials and
 // the avatar URL — are tested here without a DOM.
 
+import { findDuplicates } from "./agenda";
+
 export type TeamSectionId = "voces" | "banda" | "cabina";
 
 export type TeamPerson = {
@@ -60,23 +62,30 @@ const SECTION_OF_TYPE: Record<string, TeamSectionId> = {
   foh: "cabina",
 };
 
+/** Whether one person sits twice in this section — the card's ⚠ conflict. */
+export const hasDuplicate = (s: TeamSection) => findDuplicates(s.people.map((p) => p.name)).size > 0;
+
 /**
  * Which sections start open. THIS service's seat wins: someone whose Tipo is voz
  * but who plays keys this Sunday needs Banda open, not Voces. Only a member with
  * no seat here falls back to their Tipo, and a member with both kinds of Tipo
- * gets both. Nothing matching opens nothing — a closed section still lists its
- * names, so nobody is hidden.
+ * gets both. A section holding a same-section double booking ALWAYS opens: the ⚠
+ * was always visible before the sections folded, and a closed line can cut it
+ * off — this matters most where nothing else opens (a card you do not serve on,
+ * `/schedule`'s day sheet, the admin preview, which pass no Tipo).
  */
 export function defaultOpenSections(sections: TeamSection[], myName: string, viewerTypes?: string[] | null): Set<TeamSectionId> {
+  const conflicts = sections.filter(hasDuplicate).map((s) => s.id);
   const seated = new Set<TeamSectionId>();
   if (myName) {
     for (const s of sections) if (s.people.some((p) => personKey(p.name) === myName)) seated.add(s.id);
   }
-  if (seated.size) return seated;
+  if (seated.size) return new Set([...seated, ...conflicts]);
   const present = new Set(sections.map((s) => s.id));
-  return new Set(
-    (viewerTypes ?? []).map((t) => SECTION_OF_TYPE[t]).filter((id): id is TeamSectionId => !!id && present.has(id)),
-  );
+  return new Set([
+    ...(viewerTypes ?? []).map((t) => SECTION_OF_TYPE[t]).filter((id): id is TeamSectionId => !!id && present.has(id)),
+    ...conflicts,
+  ]);
 }
 
 /** Two letters for a face with no photo: the first two of the display name
@@ -89,17 +98,20 @@ export function initialsOf(name: string): string {
 /**
  * The URL an avatar loads. A Sanity image is asked for at 2× the 36 px circle,
  * cropped square — the original upload can be several MB, and the card shows up
- * to fifteen faces. No `auto=format`: it would hand WebP to the iOS WKWebView,
- * which is why `MeHeader` serves avatars `unoptimized`. Any other URL (the Google
- * photo) is passed through untouched.
+ * to fifteen faces — and as JPEG: the iOS WKWebView fails to decode WebP (why
+ * `MeHeader` serves avatars `unoptimized`), and the photo upload accepts WebP, so
+ * `fm=jpg` rather than trusting the original's format (and never `auto=format`).
+ * Any other URL (the Google photo) is passed through untouched.
  */
 export function avatarSrc(url: string): string {
   if (!url.startsWith("https://cdn.sanity.io/images/")) return url;
-  return `${url}${url.includes("?") ? "&" : "?"}w=96&h=96&fit=crop`;
+  return `${url}${url.includes("?") ? "&" : "?"}w=96&h=96&fit=crop&fm=jpg`;
 }
 
 /** Display name → photo URL, from role projections that carry `photo` per seat.
- *  The card matches seats by display name, so the map is keyed the same way. */
+ *  The card matches seats by display name, so the map is keyed the same way —
+ *  two members sharing a display name would share the first one's face, the same
+ *  conflation the card's «tú» and ⚠ already accept (aliases are unique in use). */
 export function seatPhotos(
   roles: Array<{
     Lead?: Array<{ member_name: string; alias?: string; photo?: string | null }> | null;

@@ -105,7 +105,7 @@ export default function PracticePlaylistButton({
       <Menu
         label="Practicar el set en YouTube"
         align="end"
-        className={variant === "hero" ? "block w-full" : ""}
+        className={variant === "hero" ? "block w-full" : undefined}
         trigger={
           variant === "hero" ? (
             // Manual label swap + `aria-disabled`, not `Button`'s `busy` prop:

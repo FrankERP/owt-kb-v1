@@ -41,6 +41,12 @@ describe("defaultOpenSections", () => {
     expect(ids(defaultOpenSections(sections, "nadie", ["support"]))).toEqual([]);
     expect(ids(defaultOpenSections(sections, "nadie", undefined))).toEqual([]);
   });
+  it("always opens a section holding a double booking, on top of the seat or Tipo default", () => {
+    const dup = teamSections({ ...team, fohTeam: [{ label: "Audio", person: "Toño" }, { label: "Luces", person: "toño " }] });
+    expect(ids(defaultOpenSections(dup, "", null))).toEqual(["cabina"]);
+    expect(ids(defaultOpenSections(dup, "frank", null))).toEqual(["banda", "cabina"]);
+    expect(ids(defaultOpenSections(dup, "nadie", ["voz"]))).toEqual(["cabina", "voces"]);
+  });
   it("never opens a section this service does not have", () => {
     expect(ids(defaultOpenSections(teamSections({ leads: ["Gaby"] }), "nadie", ["foh"]))).toEqual([]);
   });
@@ -52,9 +58,9 @@ describe("initialsOf / avatarSrc", () => {
     expect(initialsOf(" ana maría ")).toBe("AN");
     expect(initialsOf("")).toBe("?");
   });
-  it("asks Sanity for a 96 px square crop and passes any other URL through", () => {
-    expect(avatarSrc("https://cdn.sanity.io/images/p/d/abc.jpg")).toBe("https://cdn.sanity.io/images/p/d/abc.jpg?w=96&h=96&fit=crop");
-    expect(avatarSrc("https://cdn.sanity.io/images/p/d/abc.jpg?rect=0,0,10,10")).toBe("https://cdn.sanity.io/images/p/d/abc.jpg?rect=0,0,10,10&w=96&h=96&fit=crop");
+  it("asks Sanity for a 96 px square JPEG crop and passes any other URL through", () => {
+    expect(avatarSrc("https://cdn.sanity.io/images/p/d/abc.jpg")).toBe("https://cdn.sanity.io/images/p/d/abc.jpg?w=96&h=96&fit=crop&fm=jpg");
+    expect(avatarSrc("https://cdn.sanity.io/images/p/d/abc.jpg?rect=0,0,10,10")).toBe("https://cdn.sanity.io/images/p/d/abc.jpg?rect=0,0,10,10&w=96&h=96&fit=crop&fm=jpg");
     expect(avatarSrc("https://lh3.googleusercontent.com/a/x=s96-c")).toBe("https://lh3.googleusercontent.com/a/x=s96-c");
   });
 });

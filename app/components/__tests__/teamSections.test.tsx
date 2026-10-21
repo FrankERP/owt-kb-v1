@@ -90,6 +90,15 @@ describe("TeamSections", () => {
     expect(screen.queryByText(/· tú/)).toBeNull();
   });
 
+  it("opens a section with a double booking even for a viewer with no seat or Tipo, and keeps the ⚠ in its header when closed", () => {
+    mount({ team: { ...team, fohTeam: [{ label: "Audio", person: "Toño" }, { label: "Luces", person: "Toño" }] } });
+    const cabina = header(/Cabina/);
+    expect(cabina.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(cabina);
+    expect(header(/Cabina/).getAttribute("aria-expanded")).toBe("false");
+    expect(header(/Cabina/).textContent).toContain("⚠ repetido");
+  });
+
   it("renders nothing for a service with no one seated", () => {
     const { container } = mount({ team: {} });
     expect(container.textContent).toBe("");

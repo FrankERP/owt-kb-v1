@@ -11,6 +11,7 @@
 
 import { mySeats } from "./agenda";
 import { daysUntil } from "./daysUntil";
+import { compareServiceTime } from "./serviceTime";
 
 export type GreetingService = {
   day: string;
@@ -62,7 +63,9 @@ export function homeGreeting(
 
   const mine = services
     .filter((s) => !!s.date && daysUntil(s.date, now) >= 0 && mySeats(s, myName).length > 0)
-    .sort((a, b) => a.date!.localeCompare(b.date!) || (a.time ?? "").localeCompare(b.time ?? ""))[0];
+    // `compareServiceTime`, the one comparator: an untimed set sorts LAST, as the
+    // page's own `order(date asc, time asc)` puts it.
+    .sort((a, b) => a.date!.localeCompare(b.date!) || compareServiceTime(a.time, b.time))[0];
 
   if (!mine) return { hello, lead: "Esta semana", day: "", sub: "Esta vez no te toca servir." };
 

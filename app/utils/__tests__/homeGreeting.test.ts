@@ -49,6 +49,9 @@ describe("homeGreeting", () => {
     const late: GreetingService = { day: "Tarde", date: "2026-10-24", time: "18:00", leads: ["Frank"] };
     const early: GreetingService = { day: "Mañana", date: "2026-10-24", time: "09:00", fohTeam: [{ label: "Audio", person: "Frank" }] };
     expect(homeGreeting([late, early], { alias: "Frank" }, "frank", NOW).sub).toBe("Mañana · 09:00 · Audio · en 3 días");
+    // An untimed set comes after a timed one, as `compareServiceTime` orders them.
+    const untimed: GreetingService = { day: "Sin hora", date: "2026-10-24", leads: ["Frank"] };
+    expect(homeGreeting([untimed, late], { alias: "Frank" }, "frank", NOW).sub).toMatch(/^Tarde · 18:00/);
   });
 
   it("ignores a past service and says so when there is nothing to serve", () => {
