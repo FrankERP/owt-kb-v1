@@ -668,6 +668,85 @@ export const V3_EDITOR_LINES = {
   applyWaiverItem: (service: string, members: string, rule: string) => `${service} · ${members} · ${rule}`,
 } as const;
 
+/**
+ * The MCP editor over a SAVED month (admin parity phase 1, S2): `check_service_edits`,
+ * `check_service_edits_app` and `save_service_edits`. The change lines are what the Claude app's
+ * permission prompt shows before anything is written (F4), so they name people and seats in words.
+ */
+export const V3_STORED_EDITOR_LINES = {
+  // The change lines (F4)
+  seatChange: (service: string, seat: string, enters: readonly string[], leaves: readonly string[]) => {
+    const parts = [
+      enters.length ? `${enters.length === 1 ? "entra" : "entran"} ${joinEs(enters)}` : "",
+      leaves.length ? `${leaves.length === 1 ? "sale" : "salen"} ${joinEs(leaves)}` : "",
+    ].filter(Boolean);
+    return `${service} · ${seat}: ${parts.join("; ")}`;
+  },
+  rename: (service: string, from: string, to: string) => `${service} · nombre: «${from}» → «${to}»`,
+  time: (service: string, from: string | null, to: string | null) => `${service} · hora: ${from ?? "sin hora"} → ${to ?? "sin hora"}`,
+  counts: (service: string, to: boolean) => `${service} · Cuenta para equidad: ${to ? "sí" : "no"}`,
+  forced: (sentence: string, where: string) => `${where}: ${sentence} (asignado de todos modos).`,
+  reforced: (sentence: string, where: string) => `${where}: ${sentence} (asignado de todos modos; ya estaba rota antes de este cambio).`,
+  baseline: (sentence: string, where: string) => `${where}: ${sentence} (ya estaba así antes de este cambio).`,
+  // The judge's refusals beyond the replay's
+  judge: {
+    not_editable: "Ese servicio no se puede editar desde el chat (su documento no está listo para editarse); hazlo en /admin.",
+    unknown_service: "Ese servicio no es de este mes.",
+    date_changed: "Desde el chat no se cambia la fecha de un servicio; hazlo en /admin.",
+    type_changed: "El tipo de servicio no se puede cambiar.",
+    header_invalid: "El nombre o la hora del servicio no son válidos (solo un especial lleva nombre y hora).",
+    past_counts: "«Cuenta para equidad» no se puede cambiar en un mes que ya pasó.",
+    unknown_row: "Ese lugar no existe en este mes (desde el chat solo se editan los lugares que ya existen).",
+  },
+  needsCard: "Forzar una regla por lugar solo se puede desde la tarjeta («Asignar de todos modos»); desde el chat no se fuerza nada.",
+  noChanges: "No hay cambios: así está guardado.",
+  readOnlyMonth: "Este mes no se puede editar desde el chat ahora: el inventario de servicios no cuadra. Revisa la cola de integridad (get_integrity_queue) o edítalo en /admin.",
+  untranslated: (n: number) => `${n === 1 ? "Un servicio" : `${n} servicios`} de este mes no se pueden leer como el planificador los lee; no aparecen aquí.`,
+  checkHead: (n: number) => `${n === 1 ? "Un servicio cambia" : `${n} servicios cambian`}. Para guardar, llama save_service_edits con estos cambios tal cual (changes):`,
+  groupNote: (labels: readonly string[]) => `${joinEs(labels)} se guardan juntos, uno tras otro (alguien sale de uno y entra a otro).`,
+  groupTooBig: (n: number, max: number) =>
+    `Estos cambios ligan ${n} servicios (gente que sale de uno y entra a otro); se pueden guardar como máximo ${max} ligados por llamada. Guarda esos cambios en partes.`,
+  // The save
+  noneToSave: "Todo ya estaba guardado así; no se escribió nada.",
+  changed: (services: readonly string[]) =>
+    `${joinEs(services)} ${services.length === 1 ? "cambió" : "cambiaron"} desde que lo revisaste (alguien lo editó o se guardó su setlist). ${NO_WRITE_THIS_CALL} Revisa el mes de nuevo con check_service_edits.`,
+  notTheChecked: (service: string) =>
+    `Los cambios de ${service} no son los que se revisaron (o cambiaron los nombres o las reglas). ${NO_WRITE_THIS_CALL} Revisa de nuevo con check_service_edits.`,
+  waiverMissing: (sentence: string, where: string) => `${where}: ${sentence}`,
+  waiverMissingHead: `Estos cambios rompen reglas por lugar que solo se pueden forzar desde la tarjeta. ${NO_WRITE_THIS_CALL}`,
+  refusedAll: (service: string, why: string) => `${service}: ${why} ${NO_WRITE_THIS_CALL}`,
+  status: {
+    already: "ya estaba",
+    saved: "guardado",
+    savedNoticesUnknown: "guardado, avisos sin confirmar",
+    unknown: "sin confirmar",
+    pending: "pendiente (no se empezó)",
+    notSavedRepeat: "no se guardó: otra edición llegó al mismo tiempo; repite la misma llamada",
+    notSavedRecheck: (why: string) => `no se guardó: ${why}; revisa el mes de nuevo`,
+    notSavedGroup: "no se guardó (otro servicio de su grupo no se pudo guardar)",
+  },
+  reason: {
+    stale_revision: "alguien lo cambió mientras se guardaba",
+    not_found: "ese servicio ya no existe",
+    integrity_conflict: "sus datos no cuadran (revisa la cola de integridad)",
+    ambiguous_target: "hay más de un documento para ese servicio",
+    dependency_conflict: "otro documento depende de él",
+    invalid_request: "la petición no es válida",
+    forbidden: "no está permitido",
+  } as Record<string, string>,
+  line: (service: string, status: string) => `${service}: ${status}.`,
+  savedHead: "Resultado del guardado:",
+  noticesUnknown: "Algunos servicios quedaron guardados pero no pude confirmar sus avisos por correo; revisa que el equipo reciba el aviso.",
+  repeatSame: "Repite exactamente la misma llamada: lo que ya quedó se reconoce como «ya estaba» y se guarda el resto.",
+  recheck: "Revisa el mes de nuevo con check_service_edits antes de volver a guardar.",
+  stoppedGroup: "Me detuve: un servicio de un grupo ya guardado a medias no se pudo guardar.",
+  whereNow: (name: string, services: readonly string[]) =>
+    services.length ? `${name} quedó en ${joinEs(services)}.` : `${name} ya no está en ningún servicio del mes.`,
+  storedNotice: "Los servicios publicados avisan por correo a su equipo como en /admin.",
+  songLeadGone: (service: string, name: string) => `${service}: ${name} dirige una canción del setlist y ya no está en el Lead.`,
+  headerOnlySpecial: "Solo un servicio especial tiene nombre y hora.",
+} as const;
+
 /** C5's literal `PIN_CAP = 250` (gcf_v3/owt_v3/constants.py), mirrored once (RQ-6, `v3PinCapSync.test.ts`). */
 export const V3_PIN_CAP = 250;
 
