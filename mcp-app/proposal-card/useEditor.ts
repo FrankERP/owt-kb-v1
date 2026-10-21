@@ -34,8 +34,15 @@ const SAVED_BOARD_LOST = "Se guardó, pero no pude volver a cargar la propuesta;
 const MAX_FOLLOW = 30;
 
 type Ask =
-  | { kind: "force"; sentence: string; items: Array<{ where: string; sentence: string }> }
+  | { kind: "force"; at: SeatRef | null; sentence: string; items: Array<{ where: string; sentence: string }> }
   | { kind: "save"; sentence: string; items: Array<{ where: string; sentence: string }>; keys: KeyView[] };
+
+/** The seat an edit lands on: where its «¿Asignar de todos modos?» is shown. */
+export function seatOf(edit: TokenEdit | undefined): SeatRef | null {
+  if (!edit) return null;
+  if (edit.op === "exchange") return { service: edit.b.service, row: edit.b.row };
+  return { service: edit.service, row: edit.row };
+}
 
 export interface EditorState {
   open: boolean;
@@ -92,7 +99,7 @@ export function useEditor(app: App | null): EditorState {
         const after = afterRefusal(next, view);
         setEdits(after.edits);
         if (after.askForce && view.refusal) {
-          setAsk({ kind: "force", sentence: view.refusal.sentence, items: (view.prompt ?? []).map((x) => ({ where: x.where, sentence: x.sentence })) });
+          setAsk({ kind: "force", at: seatOf(next[next.length - 1]), sentence: view.refusal.sentence, items: (view.prompt ?? []).map((x) => ({ where: x.where, sentence: x.sentence })) });
           setNotice(null);
         } else if (view.refusal) {
           setNotice(view.refusal.sentence);
@@ -200,7 +207,7 @@ export function useEditor(app: App | null): EditorState {
         busy,
         notice,
         sheet,
-        ask: ask ? { sentence: ask.sentence, items: ask.items } : null,
+        ask: ask ? { at: ask.kind === "force" ? ask.at : null, sentence: ask.sentence, items: ask.items } : null,
         exchanging,
         saved,
         loadSent,
