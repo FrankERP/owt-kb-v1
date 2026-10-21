@@ -326,6 +326,13 @@ export const WRITE_TOOL_NAMES = ["unpublish_service", "publish_service", "swap_a
  */
 export const MONTH_TOOL_NAMES = ["solve_month", "apply_schedule"];
 
+/**
+ * The proposal editor (ADR-0062), after the month tools. Never called here
+ * either: `check_proposal_edits` only reads, but needs a proposal; the other two
+ * write a proposal record. The first two are app-only (the card calls them).
+ */
+export const EDITOR_TOOL_NAMES = ["check_proposal_edits", "save_proposal_edits", "revise_proposal"];
+
 /** The registration this deployment is expected to carry (`app/api/mcp/route.ts`), in order. */
 export const EXPECTED_TOOLS = [
   "ping",
@@ -338,6 +345,7 @@ export const EXPECTED_TOOLS = [
   "list_proposals",
   ...WRITE_TOOL_NAMES,
   ...MONTH_TOOL_NAMES,
+  ...EDITOR_TOOL_NAMES,
 ];
 
 /** What `ping` and every read tool declare (spec I14). */
@@ -361,7 +369,8 @@ export const SOLVE_MONTH_ANNOTATIONS = Object.freeze({
 
 /** The annotations `name` must declare: `solve_month`'s, a write's (`apply_schedule` included), or a read's. Pure. */
 export function expectedAnnotations(name) {
-  if (name === "solve_month") return SOLVE_MONTH_ANNOTATIONS;
+  // A saved version is a private record like solve_month's; the check only reads.
+  if (name === "solve_month" || name === "save_proposal_edits" || name === "revise_proposal") return SOLVE_MONTH_ANNOTATIONS;
   return WRITE_TOOL_NAMES.includes(name) || name === "apply_schedule" ? WRITE_ANNOTATIONS : READ_ONLY_ANNOTATIONS;
 }
 
@@ -459,7 +468,7 @@ export const TOOLS_CALL_METHOD = "tools/call";
  * job, below.
  */
 export function toolCallRequest(name, args, id = 1) {
-  if (WRITE_TOOL_NAMES.includes(name) || MONTH_TOOL_NAMES.includes(name)) {
+  if (WRITE_TOOL_NAMES.includes(name) || MONTH_TOOL_NAMES.includes(name) || EDITOR_TOOL_NAMES.includes(name)) {
     throw new Error(`refusing to call the write tool "${name}": the dev smoke never calls a write tool (DV1)`);
   }
   if (!CALLABLE_TOOLS.includes(name)) {

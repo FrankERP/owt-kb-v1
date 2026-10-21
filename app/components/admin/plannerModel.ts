@@ -1986,6 +1986,55 @@ export function cellsToDrafts(
 }
 
 /**
+ * The inverse of `cellsToDrafts` over `buildRows()`: a stored month proposal holds DRAFTS, and the
+ * MCP proposal editor replays hand edits on the grid's own cells (plan T2.3 (3)). One column per
+ * draft, with the id `buildColumns` gives it, and one cell per non-empty seat row in the draft's
+ * order, so `cellsToDrafts(draftsToCells(d).cells, …, d)` gives back `d`'s seats exactly.
+ *
+ * `null` when a draft cannot be represented on `rows` — a seat label with no row, a Coro on a
+ * Saturday, two drafts on one date — rather than a board that would silently drop a seat when
+ * written back (E18).
+ */
+export function draftsToCells(
+  drafts: readonly DraftCard[],
+  rows: readonly GridRow[],
+): { columns: GridColumn[]; cells: GridCell[] } | null {
+  const rowIds = new Set(rows.map((r) => r.id));
+  const columns: GridColumn[] = [];
+  const cells: GridCell[] = [];
+  const dates = new Set<string>();
+  for (const d of drafts) {
+    if (dates.has(d.date)) return null;
+    dates.add(d.date);
+    const columnId = createColumnId(d._type, d.date);
+    columns.push({
+      columnId,
+      date: d.date,
+      type: d._type,
+      ...(d.service_name !== undefined ? { serviceName: d.service_name } : {}),
+      countsForFairness: d.countsForFairness,
+    });
+    const byRow = new Map<string, string[]>();
+    const seat = (rowId: string, memberId: string) => {
+      const list = byRow.get(rowId);
+      if (list) list.push(memberId);
+      else byRow.set(rowId, [memberId]);
+    };
+    d.leads.forEach((id) => seat("lead", id));
+    d.bgvs.forEach((id) => seat("bgv", id));
+    d.chorus.forEach((id) => seat("coro", id));
+    d.instruments.forEach((s) => seat(`${INSTRUMENT_PREFIX}${s.instrument}`, s.personId));
+    d.foh.forEach((s) => seat(`${FOH_PREFIX}${s.role}`, s.personId));
+    for (const [rowId, memberIds] of byRow) {
+      if (!rowIds.has(rowId) || !columnShowsRowId(d._type, rowId)) return null;
+      cells.push({ columnId, rowId, occupants: memberIds.map((memberId) => ({ memberId })), origin: "auto" });
+    }
+  }
+  columns.sort((a, b) => a.date.localeCompare(b.date));
+  return { columns, cells };
+}
+
+/**
  * A `special_role` draft whose `service_name` normalizes to empty — the exact
  * payload `canonicalizeCreatePayload` files issue `"service_name"` for
  * (`roleCreationReceipt.ts`), which the create route answers with

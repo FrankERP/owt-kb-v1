@@ -586,6 +586,87 @@ export const V3_CONNECTOR_LINES = {
   stateSaveFailed: "No pude guardar el avance; volver a llamar apply_schedule es seguro: lo creado se reconoce por su recibo.",
 } as const;
 
+/**
+ * The MCP proposal editor (docs/superpowers/plans/2026-10-21-owt-mcp-proposal-editor.md): the month
+ * check's lines (E5, grouped «Reglas del mes», «Servicios incompletos», «Equidad»), the per-seat
+ * rule warnings and waivers (T2.2), and the editor tools' and apply's new answers. People by name
+ * and rules by their card label (`V3Names`) — never a rule key or an id (C6 U8, KH-1).
+ */
+export const V3_EDITOR_LINES = {
+  // The month check (E5)
+  groupRules: "Reglas del mes:",
+  groupServices: "Servicios incompletos:",
+  groupFairness: "Equidad (lugares en el plan contra lo que le tocaba):",
+  groupSeatRules: "Reglas por lugar:",
+  count: (rule: string, month: string, op: "==" | "<=" | ">=", observed: number, limit: number, available: number) => {
+    const asks = op === "==" ? `pide ${limit}` : op === ">=" ? `pide al menos ${limit}` : `pide como máximo ${limit}`;
+    const short = op !== "<=" && available < limit ? `; solo estaba disponible ${available}` : "";
+    return `«${rule}» en ${monthName(month)}: quedó en ${observed} (${asks}${short}).`;
+  },
+  pair: (rule: string, service: string) => `«${rule}» el ${service}: quedaron juntos.`,
+  presence: (rule: string, service: string) => `«${rule}» el ${service}: no quedó nadie de la regla.`,
+  noLead: (service: string) => `El ${service} quedó sin Lead.`,
+  seats: (service: string, seat: string, held: number, target: number) => `${service}: ${seat} ${held} de ${target}.`,
+  unavailableSeated: (name: string, service: string) => `${name} está en el ${service} y marcó que no puede ese día.`,
+  fairShare: (name: string, month: string, seats: number, share: string) =>
+    `${name} en ${monthName(month)}: ${seats} ${seats === 1 ? "lugar" : "lugares"}; le tocaban ${share}.`,
+  uncountedSpecials: "Los especiales que no cuentan para equidad no se revisan contra las reglas del mes.",
+  allClear: "Todo cuadra con las reglas del mes.",
+  unchecked: "Sin revisar: no pude leer el registro de equidad, así que la revisión del mes quedó incompleta.",
+  uncheckedBuild: "Sin revisar: no pude armar la revisión del mes con las reglas guardadas.",
+  omittedLedger: "No revisé «Mes por medio», «Domingo cada dos meses», las demás protecciones del solver ni la equidad (necesitan el registro de equidad).",
+  ledgerToday: "Las protecciones se revisan según el registro de equidad de hoy.",
+  // The replay's refusals (T2.3; R1–R14 of the P4 plan)
+  notEligible: "Ese id no es de un miembro del equipo de alabanza con el Tipo de este lugar.",
+  replay: {
+    unknown_service: "Ese servicio no está en la propuesta.",
+    column_not_created: "Ese servicio no se va a crear con esta propuesta; no se puede editar.",
+    unknown_row: "Ese lugar no existe en el planificador.",
+    row_not_on_column: "Ese lugar no existe en este servicio.",
+    already_in_cell: "Ya está en esta casilla",
+    member_not_in_cell: "Esa persona no está en ese lugar.",
+    same_seat: "El origen y el destino son el mismo lugar.",
+    judge_disagreement: "No pude confirmar esta regla; no se guardó nada.",
+    server_error: "No pude preparar las reglas de este servicio; no se guardó nada.",
+  },
+  cellLimit: (n: number) => `Una casilla admite como máximo ${n} personas.`,
+  tooManyEdits: (n: number) => `Se aceptan como máximo ${n} cambios por llamada.`,
+  // Per-seat rules (T2.2)
+  solverWarning: (sentence: string, where: string) => `${where}: ${sentence} (lo traía el plan del solver).`,
+  appeared: (sentence: string, where: string) => `${where}: ${sentence} (apareció sin que editaras).`,
+  waived: (sentence: string, where: string) => `${where}: ${sentence} (asignado de todos modos).`,
+  dormant: (sentence: string, where: string) => `${where}: ${sentence} (asignado de todos modos; sin efecto por ahora).`,
+  dropped: (sentence: string, where: string) => `${where}: ${sentence} (ya no aplica: ese lugar cambió).`,
+  needsConfirm: (sentence: string, where: string) => `${where}: ${sentence}`,
+  forceNotice: "Lo que tú fuerces aparece en el permiso al cargar; lo que el solver ya traía o lo que cambió solo se muestra como aviso.",
+  // Tools
+  saved: (handle: string, revision: number) => `Guardé la versión ${revision} de la propuesta: ${handle}. Para crear estos servicios como borradores, llama apply_schedule con esa propuesta.`,
+  savedUnchecked: "Se guardó «sin revisar».",
+  superseded: (handle: string) => `Esta propuesta ya fue reemplazada por una versión más nueva: ${handle}. Usa esa.`,
+  startedApplying: "Esta propuesta ya empezó a crear servicios, así que ya no se puede editar. Termina de cargarla o vuelve a correr solve_month.",
+  revisionLimit: "Esta propuesta ya tiene 30 versiones; vuelve a correr solve_month para seguir editando.",
+  mustResolve: "Esta propuesta ya no se puede cargar tal cual; hay que volver a generar el mes con solve_month antes de editarla.",
+  editRefused: (index: number, why: string) => `El cambio ${index + 1} no se aplicó: ${why}`,
+  confirmFirst: "Estos cambios rompen reglas que hay que confirmar antes de guardar:",
+  staleCheck: "Algo cambió desde la revisión (los miembros o las reglas); revisa de nuevo lo que hay que confirmar:",
+  ambiguousName: (name: string, options: readonly string[]) =>
+    options.length ? `«${name}» puede ser ${joinEs(options)}; usa el nombre completo.` : `No encontré a «${name}» en el equipo de alabanza.`,
+  unknownSeat: (seat: string) => `No reconozco el lugar «${seat}».`,
+  noSecret: "El conector no está configurado para editar propuestas; avisa a quien administra la app.",
+  saveFailed: "No pude guardar la versión; vuelve a intentar. No se guardó nada.",
+  saveConflict: "Otra edición de esta propuesta llegó al mismo tiempo; vuelve a intentar.",
+  // apply_schedule (Q1, E3)
+  applySuperseded: (handle: string) =>
+    `Esta propuesta fue reemplazada por una versión más nueva: ${handle}. ${NO_WRITE_THIS_CALL} Carga la versión más nueva.`,
+  applySupersededContinuing: (handle: string) =>
+    `Esta propuesta fue reemplazada por ${handle}, pero ya había creado servicios, así que se termina de cargar esta.`,
+  applyRevision: (revision: number) => `Versión ${revision} de la propuesta.`,
+  applyUnchecked: "Esta versión se guardó «sin revisar»: la revisión del mes no se pudo completar.",
+  applyWaiversMissing: (n: number) =>
+    `Esta versión tiene ${n === 1 ? "un lugar asignado" : `${n} lugares asignados`} de todos modos contra una regla. ${NO_WRITE_THIS_CALL} Vuelve a llamar apply_schedule repitiendo en waivers exactamente estos (lugares y nombres como están hoy):`,
+  applyWaiverItem: (service: string, members: string, rule: string) => `${service} · ${members} · ${rule}`,
+} as const;
+
 /** C5's literal `PIN_CAP = 250` (gcf_v3/owt_v3/constants.py), mirrored once (RQ-6, `v3PinCapSync.test.ts`). */
 export const V3_PIN_CAP = 250;
 

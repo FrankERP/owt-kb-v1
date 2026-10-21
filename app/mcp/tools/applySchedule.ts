@@ -17,6 +17,12 @@
 // Phases: 0 gate (engine, handle, load, D10) · 1 observe (reads, sources, rules rev) · 2 done? ·
 // 3 check (D7: the whole call refuses before any write) · 4 confirm (inside `callDomain`) ·
 // 5 save `state` (merge under `ifRevisionId`) and sweep.
+//
+// An edited version (ADR-0062) changes three things only: a superseded version is refused naming
+// its successor unless it already created a service (the save/apply race, finished not stranded);
+// one that carries waivers is refused before any write unless `waivers` repeats each one (Q1), so a
+// seat forced past a rule always reaches the destructive call's arguments; and the answer names
+// the version and repeats «sin revisar».
 
 import "server-only";
 
@@ -24,7 +30,8 @@ import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprot
 import { z } from "zod";
 
 import { serviceTodayIso } from "@/app/components/admin/serviceReadiness";
-import { V3_CONNECTOR_LINES as L, V3_LINES } from "@/app/components/admin/v3Copy";
+import { V3_CONNECTOR_LINES as L, V3_EDITOR_LINES as E, V3_LINES } from "@/app/components/admin/v3Copy";
+import { v3Names } from "@/app/components/admin/v3RunReport";
 import { classifyRecordPut, confirmGuard, draftsByMonth, type V3ConfirmEntry } from "@/app/components/admin/v3Confirm";
 import { runV3ConfirmAttempt, type V3ConfirmResult } from "@/app/components/admin/v3ConfirmRun";
 import type { DraftCard } from "@/app/components/admin/plannerModel";
@@ -37,19 +44,30 @@ import type { DraftPostOutcome, draftCreateBody } from "@/app/utils/monthDraftCr
 import { serviceRefusalLine, type DomainRefusal } from "../writes/refusals";
 import { runWriteTool, type WriteFailureCopy } from "../writes/runWriteTool";
 import { isProposalHandle } from "../monthProposals/handle";
-import { admitsProposal, type ProposalState, type StoredProposal } from "../monthProposals/proposalDocument";
+import { admitsProposal, PROPOSAL_MAX_WAIVERS, WAIVER_SENTENCE_MAX, type ProposalState, type StoredProposal } from "../monthProposals/proposalDocument";
 import { loadProposal, sweepExpired, writeState } from "../monthProposals/proposalStore";
 import { observeProposal, phase3Refusals, type ProposalObservation } from "../monthProposals/observe";
 import { draftLabel } from "../monthProposals/labels";
 import { principalOf, type McpPrincipal } from "../monthProposals/principal";
+import { proposalBoard } from "../monthProposals/editorBoard";
+import { sameWaiverItems, waiverItems, type WaiverItem } from "../monthProposals/editorView";
 
 /** D5: no create starts after this much of the call. */
 export const APPLY_CREATE_CUTOFF_MS = 40_000;
 /** D12: no sweep once this much of the call has passed. */
 export const APPLY_SWEEP_DEADLINE_MS = 45_000;
 
+/** Q1: one item per waiver the proposal carries, repeated from save_proposal_edits' answer or apply's refusal. */
+const WAIVER_ITEM = z
+  .object({
+    service: z.string().max(200),
+    members: z.array(z.string().max(200)).max(12),
+    rule: z.string().max(WAIVER_SENTENCE_MAX),
+  })
+  .strict();
+
 export const APPLY_SCHEDULE_INPUT = z
-  .object({ proposal: z.string().max(64) })
+  .object({ proposal: z.string().max(64), waivers: z.array(WAIVER_ITEM).max(PROPOSAL_MAX_WAIVERS).optional() })
   .strict();
 
 export type ApplyScheduleArgs = z.infer<typeof APPLY_SCHEDULE_INPUT>;
@@ -69,7 +87,11 @@ export const APPLY_SCHEDULE_DESCRIPTION =
   "escribe nada y pide volver a correr solve_month. Si una llamada no alcanza a crear todo (límite de tiempo) o " +
   "pierde una respuesta, volver a llamarla con la misma propuesta es seguro: nunca crea un servicio dos veces, y " +
   "lo ya creado se reconoce por su recibo. La respuesta dice, por mes y por servicio, qué se creó, qué ya existía, " +
-  "qué quedó pendiente o sin confirmar y qué se rechazó, y si la propuesta quedó completa.";
+  "qué quedó pendiente o sin confirmar y qué se rechazó, y si la propuesta quedó completa. Una versión editada " +
+  "(save_proposal_edits) reemplaza a la anterior: aplica siempre la más nueva; una reemplazada se rechaza nombrando " +
+  "a la nueva, salvo que ya haya creado servicios. Si la versión tiene lugares asignados contra una regla, waivers " +
+  "debe repetir exactamente cada uno ({service, members, rule}, tal como los dio save_proposal_edits o el rechazo " +
+  "de apply_schedule); si falta o cambia alguno, no escribe nada y responde la lista exacta.";
 
 type PutKnown =
   | { kind: "none" }
@@ -235,19 +257,54 @@ export async function applyScheduleResult(
       }
       const obs = observeProposal(proposal, sources.snapshot.roles);
 
+      // ── E3: a superseded version, unless it already created a service (T2.2's race) ──
+      const payload = proposal.payload;
+      const revision = proposal.header.lineage?.revision ?? 1;
+      const successor = proposal.state.supersededBy;
+      if (successor && obs.created.size === 0) {
+        return refusal([E.applySuperseded(successor)], { code: "stale_revision", detail: "superseded", supersededBy: successor, next: "apply_schedule" });
+      }
+      const head = [
+        ...(proposal.header.lineage ? [E.applyRevision(revision)] : []),
+        ...(successor ? [E.applySupersededContinuing(successor)] : []),
+        ...(payload.v === 2 && !payload.checked ? [E.applyUnchecked] : []),
+      ];
+      const about = {
+        revision,
+        ...(payload.v === 2 ? { checked: payload.checked } : {}),
+        ...(successor ? { supersededBy: successor } : {}),
+      };
+
       // ── 2. Done? ─────────────────────────────────────────────────────────
       if (obs.pending.length === 0) {
         const rows = serviceRows(proposal, obs, new Map());
         const complete = isComplete(rows);
-        return answer(false, [...(complete ? [L.complete] : []), ...serviceLines(rows), L.noWriteThisCall], {
-          ok: true, complete, months, services: rows, ...(complete ? {} : { next: "solve_month" }),
+        return answer(false, [...head, ...(complete ? [L.complete] : []), ...serviceLines(rows), L.noWriteThisCall], {
+          ok: true, complete, months, ...about, services: rows, ...(complete ? {} : { next: "solve_month" }),
         });
       }
 
       // ── 3. Check (D7): refuse the whole call before any write ────────────
       const lost = phase3Refusals(proposal, obs, sources);
       if (lost.length) {
-        return refusal([...lost, ...existsLine(proposal, obs), L.resolveAgain], { code: "integrity_conflict", detail: "target_lost", next: "solve_month" });
+        return refusal([...head, ...lost, ...existsLine(proposal, obs), L.resolveAgain], { code: "integrity_conflict", detail: "target_lost", next: "solve_month" });
+      }
+
+      // ── Q1: every waiver repeated in this call's arguments, before any write ──
+      if (payload.v === 2 && payload.waivers.length > 0) {
+        const board = proposalBoard(payload.drafts);
+        if (!board) {
+          console.error("[mcp-month] proposal board unreadable");
+          return refusal([E.replay.server_error, L.noWriteThisCall], { code: "server_error" });
+        }
+        const person = v3Names({ members: sources.members, serviceLabels: new Map(), ruleLabels: new Map() }).person;
+        const expected: WaiverItem[] = waiverItems(board, payload.waivers, person);
+        if (!sameWaiverItems(args.waivers ?? [], expected)) {
+          return refusal(
+            [...head, E.applyWaiversMissing(expected.length), ...expected.map((w) => E.applyWaiverItem(w.service, w.members.join(" y "), w.rule))],
+            { code: "invalid_request", detail: "waivers", expectedWaivers: expected, next: "apply_schedule" },
+          );
+        }
       }
 
       // ── 4. Confirm (D4), every call resending the PUT ────────────────────
@@ -328,7 +385,7 @@ export async function applyScheduleResult(
       if (result.kind === "refused_guard") {
         const guard = confirmGuard(months, currentMonth);
         const line = guard?.kind === "ceiling" ? V3_LINES.horizonCeiling(guard.month, guard.limit) : L.guardPast(guard?.month ?? months[0]);
-        return refusal([line, ...(guard?.kind === "ceiling" ? [L.noWriteThisCall] : []), ...existsLine(proposal, obs), ...tail], {
+        return refusal([...head, line, ...(guard?.kind === "ceiling" ? [L.noWriteThisCall] : []), ...existsLine(proposal, obs), ...tail], {
           code: "integrity_conflict", detail: guard?.kind ?? "guard", next: "solve_month",
         });
       }
@@ -336,11 +393,11 @@ export async function applyScheduleResult(
         if (putAnswer.kind === "answered" && putAnswer.status < 500 && putAnswer.status !== 200) {
           const verdict = classifyRecordPut(proposal.payload.entries, { kind: "http", status: putAnswer.status, body: putAnswer.body });
           const line = !verdict.ok && verdict.kind === "refusal" ? L.recordRefusal[verdict.detail](verdict.month) : L.recordInvalid;
-          return refusal([line, ...existsLine(proposal, obs), ...tail], {
+          return refusal([...head, line, ...existsLine(proposal, obs), ...tail], {
             code: "record_refused", detail: !verdict.ok && verdict.kind === "refusal" ? verdict.detail : "invalid", next: "solve_month",
           });
         }
-        return refusal([L.recordUnknown, ...existsLine(proposal, obs), ...tail], { code: "record_unknown", retry: true, next: "apply_schedule" });
+        return refusal([...head, L.recordUnknown, ...existsLine(proposal, obs), ...tail], { code: "record_unknown", retry: true, next: "apply_schedule" });
       }
 
       const rows = serviceRows(proposal, obs, posts);
@@ -352,6 +409,7 @@ export async function applyScheduleResult(
       const owesSolve = rows.some((r) => r.status === "refused" || r.status === "blocked" || r.status === "deleted" || r.status === "modified");
       const owesCall = rows.some((r) => r.status === "pending" || r.status === "unknown");
       const lines = [
+        ...head,
         ...(complete ? [L.complete] : []),
         ...(recordsLanded ? [L.recordsSaved(months)] : []),
         ...serviceLines(rows),
@@ -362,6 +420,7 @@ export async function applyScheduleResult(
         ok: true,
         complete,
         months,
+        ...about,
         recordsSaved: recordsLanded,
         services: rows,
         ...(complete ? {} : { next: owesCall ? "apply_schedule" : owesSolve ? "solve_month" : "apply_schedule", retry: owesCall }),

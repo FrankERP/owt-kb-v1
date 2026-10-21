@@ -127,7 +127,7 @@ import { songResponder } from "@/app/mcp/reads/__tests__/songFixtures";
 // The dev-smoke script's own expectation of the route's registration — imported,
 // never re-typed, so the two can't drift apart silently (a 9th tool would fail
 // THIS test, not just surface on Frank's next `--reads` run).
-import { EXPECTED_TOOLS, MONTH_TOOL_NAMES, WRITE_TOOL_NAMES, expectedAnnotations } from "@/scripts/mcp-dev-smoke.mjs";
+import { EDITOR_TOOL_NAMES, EXPECTED_TOOLS, MONTH_TOOL_NAMES, WRITE_TOOL_NAMES, expectedAnnotations } from "@/scripts/mcp-dev-smoke.mjs";
 import { WRITE_REREAD_RULE } from "@/app/mcp/writes/runWriteTool";
 import { NOTHING_WRITTEN, STALE_COPY } from "@/app/mcp/writes/refusals";
 import { serviceError } from "@/app/utils/serviceMutation";
@@ -632,7 +632,7 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     expect(result.capabilities).toMatchObject({ tools: { listChanged: false } });
   });
 
-  it("tools/list shows exactly the fourteen tools — ping, the seven reads, the four writes, then the two month tools — each with its own annotations (I14), strict (I13), described in Spanish", async () => {
+  it("tools/list shows exactly the seventeen tools — ping, the seven reads, the four writes, the two month tools, then the three editor tools — each with its own annotations (I14), strict (I13), described in Spanish", async () => {
     const token = await accessToken(await liveGrant());
     const result = await rpcResult(await POST(mcpRequest(rpc("tools/list"), { token })));
     const tools = result.tools as Record<string, unknown>[];
@@ -641,7 +641,8 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     // route's registration and the script's expectation fails HERE.
     expect(tools.map((t) => t.name)).toEqual(EXPECTED_TOOLS);
     expect(tools.slice(8, 12).map((t) => t.name)).toEqual(WRITE_TOOL_NAMES);
-    expect(tools.slice(-2).map((t) => t.name)).toEqual(MONTH_TOOL_NAMES);
+    expect(tools.slice(12, 14).map((t) => t.name)).toEqual(MONTH_TOOL_NAMES);
+    expect(tools.slice(-3).map((t) => t.name)).toEqual(EDITOR_TOOL_NAMES);
     // The same per-tool annotations the smoke checks on dev. Written out here as
     // well, so a change to the smoke's own map cannot quietly redefine what a
     // read or a destructive write declares.
@@ -649,7 +650,7 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
       const name = String(tool.name);
       const write = (WRITE_TOOL_NAMES as string[]).includes(name) || name === "apply_schedule";
       expect(tool.annotations, name).toEqual(
-        name === "solve_month"
+        name === "solve_month" || name === "save_proposal_edits" || name === "revise_proposal"
           ? { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }
           : write
             ? { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false }
@@ -1641,13 +1642,20 @@ describe("/api/mcp — the proposal card resource (MCP Apps, S1)", () => {
     expect((init.capabilities as { resources: { subscribe?: boolean } }).resources.subscribe).not.toBe(true);
   });
 
-  it("solve_month, and only solve_month, names the card in both the current and the legacy key", async () => {
+  it("solve_month and revise_proposal name the card in both keys; the card's own two tools are app-only", async () => {
     const token = await accessToken(await liveGrant());
     const { tools } = (await rpcResult(await POST(mcpRequest(rpc("tools/list"), { token })))) as {
       tools: { name: string; _meta?: Record<string, unknown> }[];
     };
     const withCard = tools.filter((t) => t._meta && ("ui" in t._meta || "ui/resourceUri" in t._meta));
-    expect(withCard.map((t) => t.name)).toEqual(["solve_month"]);
-    expect(withCard[0]!._meta).toEqual({ ui: { resourceUri: PROPOSAL_CARD_URI }, "ui/resourceUri": PROPOSAL_CARD_URI });
+    expect(withCard.map((t) => t.name)).toEqual(["solve_month", "check_proposal_edits", "save_proposal_edits", "revise_proposal"]);
+    const meta = new Map(withCard.map((t) => [t.name, t._meta]));
+    for (const name of ["solve_month", "revise_proposal"]) {
+      expect(meta.get(name), name).toEqual({ ui: { resourceUri: PROPOSAL_CARD_URI }, "ui/resourceUri": PROPOSAL_CARD_URI });
+    }
+    // Q1 (1): the force flag lives only on a tool a host that honours MCP Apps hides from the model.
+    for (const name of ["check_proposal_edits", "save_proposal_edits"]) {
+      expect(meta.get(name), name).toEqual({ ui: { resourceUri: PROPOSAL_CARD_URI, visibility: ["app"] } });
+    }
   });
 });
