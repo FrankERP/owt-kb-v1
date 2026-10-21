@@ -144,11 +144,13 @@ describe("DayCard", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("F1 — highlights the positive `isMe` glow for a session alias seated on an instrument", () => {
+  it("F1 — marks «tú» in the positive tone for a session alias seated on an instrument", () => {
     mockUser = { alias: "Sofi", role: "member" };
     mount({ leads: ["Ana"], instruments: [{ label: "Keys", person: "Sofi" }] });
-    const row = screen.getByText("Sofi");
-    expect(row.className).toContain("text-positive-fg");
+    // Her seat opens Banda (the section she serves in), so her face shows with
+    // the seat line «Keys · tú» in the positive tone.
+    const seat = screen.getByText((_, el) => el?.tagName === "P" && el.textContent === "Keys · tú");
+    expect(seat.className).toContain("text-positive-fg");
   });
 
   it("shows who leads a song under its title, and nothing when nobody does", () => {
