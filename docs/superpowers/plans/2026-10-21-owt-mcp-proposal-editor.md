@@ -51,7 +51,7 @@ Each row names the alternative it rejects. The ADR (§7) carries the ones the co
 | E2 | **A revision is a NEW proposal record** (`mcpProposal.<new handle>`) that copies the base's frozen confirm entries, solve-time stored ids, rules revision, expiry and principal, carries `parent` and `revision: n+1`, and gets **fresh `creationRequestId`s**. Creating it and marking the base `supersededBy` happen in ONE transaction (T2.2) | Mutate the base's payload in place (the pre-v3 design, which then needed an apply lease, `A14`/`proposal_busy`) | The payload is digest-bound and immutable (`proposalDocument.ts:1-20`, D10); keeping it so means `apply_schedule` needs no lease and no new write path (its only changes are E3's refusal, the waiver confirmation of Q1, and naming the revision it applied). Applied **one after another**, revisions of one solve cannot both land: once one created a service, every other finds that date taken and is refused **before** any record or create (`phase3Refusals`, `applySchedule.ts:248`; `observe.ts:100-133`). Applied **at the same time**, two lineages fall into ADR-0061's accepted interleave (identical frozen entries): the month can end up mixed from both, never duplicated (the create path's weekend lock and special identity coordinator, `roleCreateCommit.ts`). E3's fork refusal makes two live lineages of one solve impossible, so this needs two applies of a base and its successor racing, which E3's supersede refusal also narrows. Fresh request ids matter: a receipt keyed by the base's id would answer «already created» for a body that holds the base's seats, and apply would report Frank's edited service as created when it is not |
 | E3 | **No forks, no revising a started apply, no applying a superseded proposal.** A save is refused when its base (a) is already superseded — naming the successor (`stale_revision`, `detail: "superseded"`); (b) has started applying, judged by `observeProposal` over a fresh roles read, receipts first (R-OBS, `observe.ts:3-6`), never by the `state` cache alone; (c) would fail apply's own D7 checks (a), (b) or (c) today, so Frank learns «hay que volver a generar el mes» before editing, not after; (d) fails `admitsProposal` (origin, principal, expiry; `proposalDocument.ts:279`). `apply_schedule` refuses a superseded proposal naming its successor | Allow these and let D7 sort it out | D7 keeps the data safe either way; these refusals keep Frank from losing his edits silently (applying the solver's original after editing, or a stale tab's sibling revision) and from editing a month that is half in `/admin` already. A base whose `state` lags its receipts falls to D7 at apply, and the edits are lost loudly (apply refuses), never silently |
 | E4 | **Per-edit gate = the planner's own gate for each gesture**, against CURRENT members (a fresh pool read) and the proposal's BOUND rules (a changed rule set refuses, `rules_changed`, as apply does): **`place`** (a member from the candidate list into a seat) = the manual pick, `toggleCandidate`/`overrideCandidate` (`PlannerGrid.tsx:921-1010`) — C3 by absence from `rankCandidates` (`candidateRanking.ts:109`), C2 `blockedReason`, C4 `ruleBlockedReason`; **`move`** (a seated member to another seat) = the drag gate `evaluateMove` (`moveGate.ts:231`), which needs a source seat holding the member; **`clear`** = always allowed, as the planner allows removal; **`exchange`** (two seated members trade seats) = ONE judged unit: both are removed, then each placement is judged as a `place` on the board without either, so neither sees the other in its column (no spurious pair-rule C4); either refusal refuses the unit, and each C4 names its own member and rule. C1–C3 refuse; C4 asks (Q1) | Re-implement the checks for the connector; or judge `place` with `evaluateMove` | `evaluateMove` answers `unresolved` for a pick from the pool (`moveGate.ts:252`), so it cannot be the place gate. The pick's verdict AND the assembly of its inputs (`rankFor`, `PlannerGrid.tsx:850-866`) are inline in a client component, so both are **extracted** (T2.3) into a neutral module that `PlannerGrid` calls too — one definition, not a second judge. Sharing only the verdict is not enough: `rankCandidates` enforces no rule when `column` or `config` is missing and no week exclusion without the right `sundayDates` (`candidateRanking.ts:116-135`, `ruleEnforcement.ts:372`), and the solver cannot catch the miss, because exclusions are eligibility, not rule instances (`v3MonthSources.ts:128-146`), and a pinned ineligible person is accepted silently (`gcf_v3/owt_v3/facts.py:38`). So on the server those inputs are required, and a safety net re-checks every edited column after the replay (T2.3) |
-| E5 | **The whole-month check is a small checker of its own, `monthCheck.ts`, that judges the board against the rules AS WRITTEN**: every `<=`/`>=`/`==` count rule per person and month with the rule's own value (never clamped), presence («al menos uno de … cada semana»), pairs, «Mes por medio» cadence, each creatable weekend without a Lead, and each draft's voice seats against the solve's targets. Where the rule could not have been met (a `>=`/`==` above the person's availability), the line says so («pide 2; solo estaba disponible 1»). It reads the same rule objects the solve sent (`collectV3Rules`/`emitV3Rules`, `v3Rules.ts`) and the same eligibility as the solve (the proposal's frozen entries' months, `v3MonthSources.ts`) | (a) Send the board to solver v3 with every draft fixed and read its report (this plan's rounds 1–4). (b) Port the solver's model | (a) was tried on paper and failed four ways, all for one reason: the solver answers «what is the best achievable», not «does this board meet the rules as written». For a fixed service it clamps `>=`/`==` to the pinned availability (`gcf_v3/owt_v3/facts.py:46-57, 84-97`), skips `mandatory_lead` (`instances.py:93`) and `unfilled` (`report.py:92`), and sizes rows to the pins (`facts.py:32`), so removing Ana from one of two Sunday Leads under `Sun.Lead == 2` reports nothing. (b) would copy CP-SAT staging that a check does not need. **Drift guard:** `gcf_v3/acceptance/checker.py` already recomputes broken instances from assignments alone; `monthCheckParity.test.ts` runs both on shared fixtures (the acceptance worlds, solved boards) where its semantics and ours coincide — no clamping in play, services not fixed — and asserts the same broken set; the two deliberate differences (no clamping; Lead and seats judged on every draft) have their own hand-computed cases, never regenerated from output |
+| E5 | **The whole-month check is a small checker of its own, `monthCheck.ts`, that judges the board against the rules AS WRITTEN**: every `<=`/`>=`/`==` count rule per person and month with the rule's own value (never clamped), presence («al menos uno de … cada semana»), pairs, «Mes por medio» cadence, each creatable weekend without a Lead, and each draft's voice seats against the solve's targets. Where the rule could not have been met (a `>=`/`==` above the person's availability), the line says so («pide 2; solo estaba disponible 1»). It reads the same rule objects the solve sent (`collectV3Rules`/`emitV3Rules`, `v3Rules.ts`) and the same eligibility as the solve (the proposal's frozen entries' months, `v3MonthSources.ts`) | (a) Send the board to solver v3 with every draft fixed and read its report (this plan's rounds 1–4). (b) Port the solver's model | (a) was tried on paper and failed four ways, all for one reason: the solver answers «what is the best achievable», not «does this board meet the rules as written». For a fixed service it clamps `>=`/`==` to the pinned availability (`gcf_v3/owt_v3/facts.py:46-57, 84-97`), skips `mandatory_lead` (`instances.py:93`) and `unfilled` (`report.py:92`), and sizes rows to the pins (`facts.py:32`), so removing Ana from one of two Sunday Leads under `Sun.Lead == 2` reports nothing. (b) would copy CP-SAT staging that a check does not need. **Drift guard, on BOTH sides (the `fixtures/fairness/golden.json` pattern, ADR-0050):** committed fixtures `fixtures/month-check/parity.json` — wire request + assignments + expected broken set, in cases where `checker.py`'s semantics and ours coincide (no clamping in play, services not fixed) — are asserted by a `gcf_v3/tests` unittest against `checker.py`'s instance recomputation (through a small public wrapper that returns `(family, rule, scope)` tuples to the test only, so `check()`'s counts-only output, C5-17, is unchanged) AND by vitest against `monthCheck.ts`'s judging core. If the solver's semantics change and `checker.py` follows (the acceptance suite forces it), the Python test goes red until the fixture and the TypeScript core follow too. The two deliberate differences (no clamping; Lead and seats judged on every draft) have their own hand-computed cases, never regenerated from output |
 | E6 | **The month check runs on every check and every save** (it is pure and local), and the screen shows its lines live | Run it only on save | With no solver call it costs milliseconds, so Frank sees «Ana: Lead 1 de 2» the moment he removes her, not after saving |
 | E7 | **If a read the month check needs fails, the revision is still saved**, marked «sin revisar», and the screen says so in its first line | Refuse to save | `apply_schedule` never depended on caps; refusing would make a failed read an outage of editing. The model, the screen and apply all repeat «sin revisar» |
 | E8 | **The screen is an MCP App** (`@modelcontextprotocol/ext-apps` 2.0.x): `solve_month` and `revise_proposal` declare `_meta.ui.resourceUri = "ui://owt/proposal-editor"` (so the card follows a proposal into the chat; the screen itself saves only through the app-only `save_proposal_edits`, T2.5), the route serves that resource (`text/html;profile=mcp-app`), and the per-edit check is an app-only tool (`_meta.ui.visibility: ["app"]`) | An Artifact page, or a link to `/admin` | Frank asked for the screen *in* the conversation, after the proposal. MCP Apps is the official extension Claude renders on web, desktop and mobile for custom connectors; ext-apps 2.0.3 peers on `@modelcontextprotocol/server ^2` (the repo pins 2.1.0) and zod ^4.2 (4.3.6). An Artifact cannot call our server with Frank's OAuth grant; `/admin` already exists and is what he is trying not to open |
@@ -103,12 +103,16 @@ connector»).
 
 ### S2 — the revision record and the judge (critical)
 
-- T2.1 **Fixtures first:** the parity fixtures of E5 (from `gcf_v3/acceptance/world_realistic.json`
-  and `smoke.json`, run through `checker.py` once to capture its broken set, committed with the
-  command that made them) and the hand-computed cases: a `>=` floor and an `==` exact each
-  under-assigned by an edit, one above availability, a `<=` cap broken, a presence rule whose only
-  holder was cleared, a pair, a «Mes por medio» break, a weekend whose Lead was cleared, an emptied
-  BGV seat. Each case states the expected Spanish line.
+- T2.1 **Fixtures first:** `fixtures/month-check/parity.json`, built by
+  `python gcf_v3/acceptance/month_check_fixtures.py` (committed with the fixture; it chains and
+  solves `acceptance/world_realistic.json` and `smoke.json` with the existing acceptance tools and
+  writes each case's wire request, assignments and the broken set from the new public wrapper in
+  `checker.py`), plus `fixtures/month-check/cases.json`, hand-computed: a `>=` floor and an `==`
+  exact each under-assigned by an edit, one above availability, a `<=` cap broken, a presence rule
+  whose only holder was cleared, a pair, a «Mes por medio» break, a weekend whose Lead was cleared,
+  an emptied BGV seat. Each case states the expected Spanish line.
+  `gcf_v3/tests/test_month_check_parity.py` asserts the wrapper reproduces every parity case;
+  because S2 touches `gcf_v3/**`, the gcf_v3 suite is a required gate for it (§5).
 - T2.2 **The record contract** (`proposalDocument.ts`, `documentTypes.ts`,
   `sanity/schemas/mcpProposal.ts`):
   - Header gains `parent` (a handle) and `revision` (integer ≥ 2), both present on a revision and
@@ -182,18 +186,23 @@ connector»).
   edited column, with the replay's waivers as the overridden set, compared against the same call on
   the replay's STARTING board (the base's seats with the base's waivers). A finding refuses the
   save when it has no waiver and either is NEW — absent from the starting board, keyed by
-  `violationKey` and reason; for a pair rule keyed by (the two members, rule), so an exchange inside
-  one column is not new — or was WAIVED on the base (a forced seat that lost its waiver is never
+  (column, `violationKey`, reason); for a pair rule (column, the two members, rule), so an exchange
+  inside one column is not new and a finding on one column never masks one on another — or was WAIVED on the base (a forced seat that lost its waiver is never
   downgraded to a warning); it catches a gate whose inputs were wrong, independently of the gate. A finding
   already on the starting board is answered as a warning, never a refusal: the solver may break a
   pair to meet a floor (pair rules are soft, `gcf_v3/owt_v3/model.py:118`; the TS rules may disagree
   on a weekend, `ruleEnforcement.ts:440-448`), and a solve's record carries no waivers, so refusing
   it would block Frank over a seat he never touched. `check_proposal_edits` runs the same net, so
   the screen shows both kinds before any save.
-- T2.4 `monthCheck.ts` (neutral, pure): input = the replayed board's creatable drafts, the month's
-  stored services (counted as the solve counted them, `v3Services.ts`), the rules as the solve
-  collected them (`collectV3Rules`, bound `rulesRev`), the eligibility of the frozen entries'
-  months, and the solve's seat targets. Output = Spanish lines through `v3Copy.ts` (C6 U8: no rule
+- T2.4 `monthCheck.ts` (neutral, pure), in two layers so parity covers what production runs: a
+  **judging core** over the WIRE shapes (services, per-service eligibility, emitted rules,
+  assignments — exactly what the parity fixtures hold), and an **adapter** that builds those shapes
+  from the replayed board with the solve's own functions (`buildV3Services`, the month sources'
+  eligibility, `collectV3Rules`/`emitV3Rules` under the bound `rulesRev`, seat targets from
+  `buildRows()`), with every draft non-fixed and judged against its targets. The fair-share and
+  «Mes por medio» lines come from `computeFairnessLedger` (`fairnessLedger.ts`) fed with the frozen
+  entries as the month's records and the board's drafts as its services, over a fresh ledger read
+  (so cadence states may differ from the solve's, and the line says «según el registro de hoy»). Output = Spanish lines through `v3Copy.ts` (C6 U8: no rule
   key on the wire, a line or a log), grouped «Reglas del mes», «Servicios incompletos», and per
   person seats received against share (the ledger's own share, `fairnessLedger.ts`, never
   re-derived). No network, so no time budget and never «sin revisar» for an outage; E7 stays only
@@ -230,6 +239,13 @@ connector»).
   non-seat field from the base (`localId`, `exists`, `isExisting`, `skipped`, `countsForFairness`,
   `service_name`, `atSolve`) and get fresh `creationRequestId`s; nothing is recomputed against
   fresh `existingRoles`. Waivers key on the kept `localId`.
+  **Forcing:** the C4 prompt lists EVERY blocking reason for the pick (`blockingReasons`, not only
+  the first, which is what `ruleBlockedReason` carries), and a confirmed force stores one waiver
+  per reason; an `exchange` forced as a unit shows and stores both members' reasons. A `force` on
+  an edit the gate judges clean is accepted with no waiver, never refused.
+  **The spine:** `judgePick` derives it from the column type: for a weekend, the Sunday spine as
+  `ruleContextForTarget` gives it (required, non-empty); for a special, `[]`, as `MonthGenerator`
+  passes (`serviceRuleContext.ts:75-102`, `MonthGenerator.tsx:5500`).
   **I5 sentence:** the collapsed sentence is used only for ids outside the worship audience; a
   worship member with the wrong Tipo gets the planner's own C3 sentence.
   `apply_schedule` gains: refuse a superseded proposal naming its successor (E3); refuse a proposal
@@ -237,7 +253,8 @@ connector»).
   `{ service, member, rule }` — the service label, the member's display name and the rule's
   sentence, all server text — matched as a multiset after Unicode NFC, nothing else normalized, so
   two seats with the same sentence each need their own item and the permission prompt says who and
-  where; repeat
+  where; a refusal for missing or different items gives the exact expected list, so the next call
+  can repeat it (a member renamed between save and apply changes the name; the refusal says so); repeat
   «sin revisar» from the payload; and name the revision it applied.
 - T2.6 Tests (vitest, the existing fake-store harness of `applySchedule.test.ts`): `judgePick`
   parity — the grid calls it, and the grid's pick tests stay green; replay cases where a week
@@ -277,7 +294,7 @@ merge-range code review.
 ## 5. Gates and release
 
 Every slice: `npx tsc --noEmit`, `npm test`, `npx eslint .` (0 errors), and the v3 solver suite
-when `gcf_v3/**` is touched. Release order per CLAUDE.md: one code review per merge range, preview
+when `gcf_v3/**` is touched — which S2 does (the parity wrapper and test), so for S2 it is required. Release order per CLAUDE.md: one code review per merge range, preview
 (alias + SHA verified), PR to `main`, `gates`, merge, prod alias verified. S1 and S2+S4 are two
 releases; S2 is never released without S4's screen, and S4 never without S2's judge.
 
