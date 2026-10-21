@@ -30,14 +30,16 @@
 > be proven for any path**, `/admin`'s included, because production has no registered device (see
 > the record); email is the delivery proof.
 >
-> **P4 status (on solver v3): implemented on its branch, not released.** The two month tools
+> **P4 status (on solver v3): in production since 2026-10-21 (PR #156, `main` `78939c71`); the
+> live proof with Frank present is still ahead.** The two month tools
 > (`solve_month`, `apply_schedule`, see [Month tools](#month-tools-p4-on-solver-v3)) follow the
 > critical-tier plan approved 2026-10-20
 > ([plan](superpowers/plans/2026-10-20-owt-mcp-p4-v3-solve-apply.md),
 > [review log](superpowers/plans/2026-10-20-owt-mcp-p4-v3-solve-apply-review-log.md),
 > [ADR-0061](adr/0061-the-connector-plans-months-only-on-v3-through-the-browsers-own-auto-and-confirm.md)).
-> Release (preview, then `main`) and the live proof with Frank present are still ahead.
-> `revise_proposal` is a separate, later plan.
+> `revise_proposal` belongs to the proposal editor's plan
+> ([plan](superpowers/plans/2026-10-21-owt-mcp-proposal-editor.md)); its first slice, the
+> read-only [proposal card](#the-proposal-card-mcp-apps), ships ahead of it.
 
 > **Summary: P0 released 2026-09-24; P1 released 2026-09-25 (PR #98, `main` `a04edb43`),
 > acceptance complete 2026-09-28; P3 (four write tools) released 2026-09-28 (PR #106, `main`
@@ -47,8 +49,8 @@
 > ([plan](superpowers/plans/2026-09-28-owt-mcp-p4-solve-apply.md)) was never implemented and is
 > superseded; P4 was re-baselined onto v3
 > ([plan](superpowers/plans/2026-10-20-owt-mcp-p4-v3-solve-apply.md), approved 2026-10-20) and
-> `solve_month` + `apply_schedule` are implemented on its branch, not released; `revise_proposal`
-> is a separate, later plan.**
+> `solve_month` + `apply_schedule` are in production since 2026-10-21 (PR #156, `main`
+> `78939c71`), live proof pending; `revise_proposal` is part of the proposal editor's plan.**
 
 This app exposes itself to Claude as an [MCP](https://modelcontextprotocol.io) server, so Frank
 can ask Claude questions against a live OWT Backstage deployment from his phone or desktop. The
@@ -664,6 +666,34 @@ the decisions and the rejected alternatives are
   create bodies. `applySchedule.test.ts` covers recovery and concurrency, `monthToolGates.test.ts`
   indexes every row of the plan's admin-surface tables, `monthToolHygiene.test.ts` covers key
   hygiene and both time zones.
+
+### The proposal card (MCP Apps)
+
+`solve_month` names one resource in its tool `_meta` (`ui.resourceUri` plus the legacy
+`ui/resourceUri`): `ui://owt/proposal-editor`, served as `text/html;profile=mcp-app`. A host that
+supports [MCP Apps](https://github.com/modelcontextprotocol/ext-apps) (claude.ai, the Claude app)
+reads it with `resources/read` — through the same bearer check as every tool — and draws the
+solve's result as a card next to the chat: the months, how long the proposal is kept, each
+service with its seats by name, the seats left unfilled and the fairness table. A host without
+MCP Apps ignores both keys and shows the text answer as before.
+
+- **Read-only (slice S1 of the [editor plan](superpowers/plans/2026-10-21-owt-mcp-proposal-editor.md)).**
+  The card shows the tool result the host hands it and nothing else: no data of its own, no
+  call back to the server, no button that acts on the proposal (only «Ver en grande», which asks
+  the host for fullscreen). Changing or loading a proposal still goes through the chat.
+- **One inline document.** The host's sandbox admits no other origin, so
+  `mcp-app/build.mjs` bundles `mcp-app/proposal-card/` (React, the MCP Apps client) with esbuild
+  into one HTML string, committed as `mcp-app/generated/proposalCardHtml.ts` (~600 000
+  characters). After changing anything under `mcp-app/proposal-card/`, run
+  `node mcp-app/build.mjs`; `app/mcp/apps/__tests__/proposalCard.test.tsx` rebuilds it and fails
+  on stale bytes, an external load or a bundle over 800 000 characters.
+- **Looks like the host.** Colours, fonts and radii come from the host's style variables, with
+  CSS system colours as fallbacks, so it follows the host's light or dark theme; touch targets
+  are 44 px and the safe-area insets are honoured.
+- **Proof.** `mcpRoute.test.ts` («the proposal card resource») covers the 401 without a token,
+  the authenticated read in both protocol eras, `resources/list`, the advertised capability and
+  that only `solve_month` carries the link; claude.ai cannot reach dev (Deployment Protection),
+  so the card itself can only be seen in production.
 
 ### Notification audiences (the write tools)
 

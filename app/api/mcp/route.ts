@@ -53,6 +53,7 @@ import { registerSwapAssignment } from "@/app/mcp/tools/swapAssignment";
 import { registerEditSetlist } from "@/app/mcp/tools/editSetlist";
 import { registerSolveMonth } from "@/app/mcp/tools/solveMonth";
 import { registerApplySchedule } from "@/app/mcp/tools/applySchedule";
+import { registerProposalCard } from "@/app/mcp/apps/proposalCard";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -100,10 +101,12 @@ const mcpHandler = createMcpHandler(
     registerEditSetlist(server);
     registerSolveMonth(server);
     registerApplySchedule(server);
+    // The one resource: `solve_month`'s card (MCP Apps). Fixed per deployment, like the tools.
+    registerProposalCard(server);
   },
   {
     serverInfo: SERVER_INFO,
-    capabilities: { tools: { listChanged: false } },
+    capabilities: { tools: { listChanged: false }, resources: { listChanged: false } },
     maxSubscriptions: 0,
   },
 );

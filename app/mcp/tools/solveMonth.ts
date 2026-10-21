@@ -36,6 +36,7 @@ import { buildProposal } from "../monthProposals/proposalDocument";
 import { createProposal, sweepExpired } from "../monthProposals/proposalStore";
 import { solveReport } from "../monthProposals/reports";
 import { principalOf, type McpPrincipal } from "../monthProposals/principal";
+import { PROPOSAL_CARD_TOOL_META } from "../apps/proposalCard";
 
 /** D12: no sweep once this much of the call has passed. */
 export const SWEEP_DEADLINE_MS = 45_000;
@@ -222,6 +223,8 @@ export function registerSolveMonth(server: McpServer): void {
       inputSchema: SOLVE_MONTH_INPUT,
       // D13: it writes only its own private record.
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+      // MCP Apps (S1): a host that supports them draws the result as the proposal card.
+      _meta: PROPOSAL_CARD_TOOL_META,
     },
     async (args, ctx: ServerContext) => solveMonthResult(args, principalOf(ctx)),
   );

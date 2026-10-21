@@ -39,6 +39,9 @@ export default defineConfig([
     "android/**",
     "public/**",
     "next-env.d.ts",
+    // The MCP Apps card's bundle (`node mcp-app/build.mjs`): one minified line of React and
+    // the MCP Apps client, rebuilt and compared by `app/mcp/apps/__tests__/proposalCard.test.tsx`.
+    "mcp-app/generated/**",
   ]),
   nextCoreWebVitals,
   nextTypescript,

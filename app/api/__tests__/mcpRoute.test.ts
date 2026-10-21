@@ -119,6 +119,8 @@ vi.mock("mcp-handler", async (importOriginal) => {
 });
 
 import { DELETE, GET, POST } from "@/app/api/mcp/route";
+import { PROPOSAL_CARD_URI } from "@/app/mcp/apps/proposalCard";
+import { PROPOSAL_CARD_HTML } from "@/mcp-app/generated/proposalCardHtml";
 import { memberResponder } from "@/app/mcp/reads/__tests__/memberFixtures";
 import { FROZEN_EVENING, readToolStore, scopedResponder } from "@/app/mcp/reads/__tests__/readToolFixtures";
 import { songResponder } from "@/app/mcp/reads/__tests__/songFixtures";
@@ -1600,5 +1602,52 @@ describe("/api/mcp — reaches delivery only transitively, and is deliberately u
   it("control: a name in a comment is prose, not reach", () => {
     const commented = stripComments(`// delegates to publishReadyCommit\n/* utils/push */\nconst x = 1;\n`);
     expect(directDeliveryReach(commented)).toEqual([]);
+  });
+});
+
+describe("/api/mcp — the proposal card resource (MCP Apps, S1)", () => {
+  const READ = rpc("resources/read", { uri: PROPOSAL_CARD_URI });
+
+  it("is behind the bearer check like every tool: no token, no document", async () => {
+    const forwardedBefore = h.forwarded.length;
+    await expectUnauthorized(await POST(mcpRequest(READ)), "no_token");
+    expect(h.forwarded).toHaveLength(forwardedBefore);
+  });
+
+  it("an authenticated read answers the inline card as an MCP App document", async () => {
+    const token = await accessToken(await liveGrant());
+    const result = await rpcResult(await POST(mcpRequest(READ, { token })));
+    const [content] = result.contents as Record<string, unknown>[];
+    expect(content).toMatchObject({ uri: PROPOSAL_CARD_URI, mimeType: "text/html;profile=mcp-app" });
+    expect(content!.text).toBe(PROPOSAL_CARD_HTML);
+  });
+
+  it("the 2026-07-28 era reads it too (Mcp-Name is the resource URI)", async () => {
+    const token = await accessToken(await liveGrant());
+    const result = await modernResult(
+      await POST(modernRequest("resources/read", { uri: PROPOSAL_CARD_URI }, { token, name: PROPOSAL_CARD_URI })),
+    );
+    expect((result.contents as Record<string, unknown>[])[0]).toMatchObject({ mimeType: "text/html;profile=mcp-app" });
+  });
+
+  it("is listed, and initialize advertises resources without list-changed notifications", async () => {
+    const token = await accessToken(await liveGrant());
+    const list = await rpcResult(await POST(mcpRequest(rpc("resources/list"), { token })));
+    expect((list.resources as Record<string, unknown>[]).map((r) => [r.uri, r.mimeType])).toEqual([
+      [PROPOSAL_CARD_URI, "text/html;profile=mcp-app"],
+    ]);
+    const init = await rpcResult(await POST(mcpRequest(INITIALIZE, { token })));
+    expect(init.capabilities).toMatchObject({ resources: { listChanged: false } });
+    expect((init.capabilities as { resources: { subscribe?: boolean } }).resources.subscribe).not.toBe(true);
+  });
+
+  it("solve_month, and only solve_month, names the card in both the current and the legacy key", async () => {
+    const token = await accessToken(await liveGrant());
+    const { tools } = (await rpcResult(await POST(mcpRequest(rpc("tools/list"), { token })))) as {
+      tools: { name: string; _meta?: Record<string, unknown> }[];
+    };
+    const withCard = tools.filter((t) => t._meta && ("ui" in t._meta || "ui/resourceUri" in t._meta));
+    expect(withCard.map((t) => t.name)).toEqual(["solve_month"]);
+    expect(withCard[0]!._meta).toEqual({ ui: { resourceUri: PROPOSAL_CARD_URI }, "ui/resourceUri": PROPOSAL_CARD_URI });
   });
 });
