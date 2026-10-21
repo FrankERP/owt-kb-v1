@@ -3,7 +3,7 @@
 **Date:** 2026-10-20 · **Status:** Accepted
 
 > **Numbering.** Written as the next free number on `preview` at the time (0059 and 0060 were
-> taken there by the admin assistant and the day rail). ADR numbers follow the order records reach
+> taken there by the day rail and the admin assistant). ADR numbers follow the order records reach
 > `main`; renumber if another record lands first.
 
 ## Context
