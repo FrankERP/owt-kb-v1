@@ -16,8 +16,10 @@ const requireActiveManagerMock = vi.fn();
 const operationalFetch = vi.fn();
 const sendPushMock = vi.fn();
 const loadCanonicalRoleMock = vi.fn();
+const sendEmailMock = vi.fn();
 
 vi.mock("@/app/utils/push", () => ({ sendPush: (...a: unknown[]) => sendPushMock(...a) }));
+vi.mock("@/app/utils/email", () => ({ sendEmail: (...a: unknown[]) => sendEmailMock(...a) }));
 
 const afterCallbacks: (() => unknown)[] = [];
 vi.mock("next/server", async (orig) => {
@@ -146,7 +148,7 @@ let threadCount = 0;
 let readBackFails = false;
 
 function admin(role = "admin", sanityId = "admin-1") {
-  return { user: { role, sanityId } };
+  return { user: { role, sanityId, alias: "Frank" } };
 }
 
 function post(body: unknown, roleId = ROLE_ID) {
@@ -164,8 +166,19 @@ beforeEach(() => {
   requireActiveManagerMock.mockResolvedValue(admin());
   loadCanonicalRoleMock.mockResolvedValue({ role: role(), state: "single", draftIds: [] });
   sendPushMock.mockResolvedValue({ sent: 0, pruned: 0 });
-  operationalFetch.mockImplementation(async (query: string) => {
+  sendEmailMock.mockResolvedValue({ ok: true });
+  vi.unstubAllEnvs();
+  vi.stubEnv("EMAIL_ALLOWLIST", "*");
+  vi.stubEnv("EMAIL_REDIRECT_TO", "");
+  operationalFetch.mockImplementation(async (query: string, params?: { ids?: string[] }) => {
     if (query.includes('"count": count(messages)')) return { count: threadCount };
+    if (query.includes('_type == "teamMembers"')) {
+      return [
+        { _id: "lead-1", email: "Ana@Example.com" },
+        { _id: "lead-2", email: "beto@example.com", notifPrefs: { emailProposals: false } },
+        { _id: "admin-1", email: "frank@example.com" },
+      ].filter((m) => (params?.ids ?? []).includes(m._id));
+    }
     if (query.includes("_id == $threadId")) {
       if (readBackFails) throw new Error("read failed");
       return { _id: THREAD_ID, _rev: "t2", messages: [{ _key: "m1", body: "Tema: gracia" }] };
@@ -248,6 +261,51 @@ describe("POST /api/admin/service-threads/[roleId]/messages", () => {
     expect(payload).toMatchObject({ title: "Nuevo mensaje", path: `/me/propose/${ROLE_ID}` });
   });
 
+  it("emails the leads who want proposal mail, never the author, with the message", async () => {
+    loadCanonicalRoleMock.mockResolvedValueOnce({
+      role: role({
+        Lead: [
+          { _key: "a", _type: "reference", _ref: "lead-1" },
+          { _key: "b", _type: "reference", _ref: "lead-2" },
+          { _key: "c", _type: "reference", _ref: "admin-1" },
+        ],
+      }),
+      state: "single",
+      draftIds: [],
+    });
+    await post({ body: "El pastor predica sobre <gracia>." });
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    await drainAfter();
+    // lead-2 opted out of proposal mail; admin-1 is the author.
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    const [{ to, subject, html }] = sendEmailMock.mock.calls[0];
+    expect(to).toBe("ana@example.com");
+    expect(subject).toMatch(/^Mensaje para tu servicio — /);
+    expect(html).toContain("El pastor predica sobre &lt;gracia&gt;.");
+    expect(html).toContain("Frank");
+    expect(html).toContain(`/me/propose/${ROLE_ID}`);
+    // The member read asked only for the leads, not the author.
+    const memberRead = operationalFetch.mock.calls.find(([q]) => String(q).includes('_type == "teamMembers"'));
+    expect(memberRead?.[1]).toEqual({ ids: ["lead-1", "lead-2"] });
+  });
+
+  it("redirects the email on Preview, like every app email", async () => {
+    vi.stubEnv("EMAIL_REDIRECT_TO", "frank@example.com");
+    await post({ body: "hola" });
+    await drainAfter();
+    const [{ to, subject }] = sendEmailMock.mock.calls[0];
+    expect(to).toBe("frank@example.com");
+    expect(subject).toMatch(/^\[→ ana@example\.com\] /);
+  });
+
+  it("still emails when the push fails, and still answers 200", async () => {
+    sendPushMock.mockRejectedValueOnce(new Error("fcm down"));
+    const res = await post({ body: "hola" });
+    expect(res.status).toBe(200);
+    await drainAfter();
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+  });
+
   it("stores but does not push for an unpublished service", async () => {
     loadCanonicalRoleMock.mockResolvedValueOnce({
       role: role({ published: false }),
@@ -259,6 +317,7 @@ describe("POST /api/admin/service-threads/[roleId]/messages", () => {
     expect(txs[0].committed).toBe(true);
     await drainAfter();
     expect(sendPushMock).not.toHaveBeenCalled();
+    expect(sendEmailMock).not.toHaveBeenCalled();
   });
 
   it("refuses a service that already happened", async () => {

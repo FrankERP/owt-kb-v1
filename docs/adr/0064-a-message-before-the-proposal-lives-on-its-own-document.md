@@ -30,9 +30,13 @@ A second, small document holds the conversation until the proposal exists:
 - **Where the admin writes:** Propuestas → «Mensaje antes de la propuesta», a lazy
   picker of upcoming services with no proposal (`servicesWithoutProposalQuery`, drafts
   included — an admin may write before the month is published).
-- **Notification:** a push to the service's Leads (never the author), and none while
-  the service is unpublished — its leads cannot open the page yet. No email, the same
-  as an admin message on a proposal (ADR-0025: free Gmail, no fan-out).
+- **Notification:** a push AND an email to the service's Leads (never the author),
+  `serviceThreadNotify.ts`; nothing while the service is unpublished — its leads cannot
+  open the page yet. This differs from an admin message on a proposal (push only) by
+  Frank's decision (2026-10-21): few members have push on, so push alone reached almost
+  nobody, and this is the message the leads need before choosing songs. The email goes
+  to the Lead seat only (one or two people), so it stays far inside the Gmail account's
+  daily limit (ADR-0025); `emailProposals`, the allowlist and `EMAIL_REDIRECT_TO` apply.
 - The role is recorded as a plain string, `role_id` — **never a reference**, not even a
   weak one (see Rejected).
 

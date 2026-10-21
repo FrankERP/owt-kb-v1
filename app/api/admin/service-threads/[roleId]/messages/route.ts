@@ -1,7 +1,7 @@
 import { after, NextRequest, NextResponse } from "next/server";
 
-// Matches the sibling message writers: the push to the leads runs in `after()`,
-// and the budget is what keeps it alive past the response.
+// Matches the sibling message writers: the push and email to the leads run in
+// `after()`, and the budget is what keeps them alive past the response.
 export const maxDuration = 60;
 
 import { requireActiveManager } from "@/app/utils/authGuards";
@@ -25,41 +25,12 @@ import {
   SERVICE_THREAD_TYPE,
   serviceThreadId,
 } from "@/app/utils/serviceThread";
-import { sendPush } from "@/app/utils/push";
+import { notifyLeadsAboutServiceMessage } from "@/app/utils/serviceThreadNotify";
+import { serviceIdentity } from "@/app/utils/emailServiceLabel";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
 
 function reject(res: { status: number; body: unknown }) {
   return NextResponse.json(res.body, { status: res.status });
-}
-
-/**
- * Push the service's leads that an admin wrote about it. Push only, like an
- * admin message on a proposal — no email: the app mails through a free Gmail
- * account, and a chat message must not become a fan-out (ADR-0025).
- *
- * Skipped for an unpublished service: its leads cannot open the proposal page
- * yet (it 404s on `published == false`), so the push would lead nowhere. They
- * read the message once the month is published.
- *
- * The date is rendered at local noon — never a bare `new Date(iso)`.
- */
-async function pushLeadsAboutServiceMessage(o: {
-  leadIds: string[];
-  authorId: string | null;
-  roleId: string;
-  serviceDate: string;
-}): Promise<void> {
-  const recipients = o.leadIds.filter((id) => id && id !== o.authorId);
-  if (!recipients.length) return;
-  const when = new Date(`${o.serviceDate.slice(0, 10)}T12:00:00`).toLocaleDateString("es-MX", {
-    day: "numeric",
-    month: "short",
-  });
-  await sendPush(recipients, "proposals", {
-    title: "Nuevo mensaje",
-    body: `Un admin escribió sobre el servicio del ${when}.`,
-    path: `/me/propose/${encodeURIComponent(o.roleId)}`,
-  });
 }
 
 // Declared BEFORE the handler, like the proposal message routes:
@@ -158,9 +129,11 @@ async function postHandler(req: NextRequest, { params }: { params: Promise<{ rol
     return reject(serviceError("invalid_request", { details: { issues: ["body"] } }));
   }
 
-  // PRE-COMMIT: the push audience is the role's Lead seat as loaded here.
+  // PRE-COMMIT: the audience is the role's Lead seat as loaded here, and the
+  // email's service label comes from the same read.
   const leadIds = canonicalLeadRefs(role);
   const published = role.published !== false;
+  const authorName = session.user.alias || session.user.name || "";
 
   try {
     await writeClient
@@ -183,18 +156,27 @@ async function postHandler(req: NextRequest, { params }: { params: Promise<{ rol
     return reject(serviceError("stale_revision", { details: { id: threadId } }));
   }
 
-  // Swallowed and logged: a push failure must not turn a stored message into an
-  // error response (the retry would be a permanent duplicate). The callback
-  // AWAITS so the send finishes before the runtime freezes the instance.
+  // Push AND email to the service's leads (never the author) — see
+  // `serviceThreadNotify.ts` for why this differs from a proposal's admin message.
+  // Skipped for an unpublished service: its leads cannot open the proposal page
+  // yet (it 404s on `published == false`); they read it once the month is.
+  //
+  // Swallowed and logged: a delivery failure must not turn a stored message into
+  // an error response (the retry would be a permanent duplicate). The callback
+  // AWAITS so delivery finishes before the runtime freezes the instance.
   if (published) {
-    attemptSync("service thread message push register", () =>
+    attemptSync("service thread message notify register", () =>
       after(() =>
-        attempt("service thread message push", () =>
-          pushLeadsAboutServiceMessage({
+        attempt("service thread message notify", () =>
+          notifyLeadsAboutServiceMessage({
             leadIds,
             authorId: adminId,
+            authorName,
             roleId,
+            roleType: role._type,
             serviceDate: target.serviceDate,
+            identity: serviceIdentity(role),
+            body: message.body,
           }),
         ),
       ),
