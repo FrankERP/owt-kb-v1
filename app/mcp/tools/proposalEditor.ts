@@ -672,12 +672,11 @@ async function saveEdits(
     if (!swept.ok) console.error("[mcp-editor] proposal sweep failed");
   }
 
-  const childBoard = { ...board };
   const lines = [
     E.saved(newHandle, revision),
     ...(check.checked ? [] : [E.savedUnchecked]),
     ...(judgement.waivers.length ? [E.forceNotice] : []),
-    ...seatRuleLines(childBoard, judgement),
+    ...seatRuleLines(board, judgement),
     ...monthCheckLines(check),
   ];
   return answer(false, lines, {
@@ -686,15 +685,14 @@ async function saveEdits(
     revision,
     expiresAt: proposal.header.expiresAt,
     checked: check.checked,
-    board: boardView(childBoard, ctx.namer),
-    rules: judgementView(childBoard, judgement, ctx.namer),
+    board: boardView(board, ctx.namer),
+    rules: judgementView(board, judgement, ctx.namer),
     monthCheck: check,
     // What apply_schedule's `waivers` must repeat (Q1): live names, the bound sentence.
-    waivers: waiverItems(childBoard, judgement.waivers, ctx.namer.nameOf),
+    waivers: waiverItems(board, judgement.waivers, ctx.namer.nameOf),
   });
 }
 
-/** One waiver as `apply_schedule` asks for it back: the service and the people by name, the rule's sentence verbatim. */
 export async function saveProposalEditsResult(
   args: SaveProposalEditsArgs,
   principal: McpPrincipal | null,

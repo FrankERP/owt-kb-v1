@@ -440,6 +440,14 @@ vercel env rm MCP_OAUTH_SECRET <env>` first — `vercel env add` refuses an exis
 `printf '%s' "$SECRET" | npx vercel env add MCP_OAUTH_SECRET <env>`), then **redeploy that
 environment**. Env vars bind at build time, same as every other variable in this file.
 
+**A second use: the proposal editor's member tokens** (ADR-0062, on the editor's branch; no new
+secret or env var). The editor's tools name members by a 22-character token, an HMAC-SHA256 of this
+key over the proposal lineage's root handle and the member id (`app/mcp/monthProposals/memberTokens.ts`),
+so no member id crosses the wire. Without the key the editor's tools refuse (as every MCP route
+does). Rotating it changes every token: an editor screen open at that moment has its pending edits
+refused and dropped, and Frank closes and reopens it; stored proposals are unaffected (they hold
+ids, never tokens).
+
 **Blast radius.** Every access and refresh token that environment's routes ever signed stops
 verifying the instant the new key is live — a rotated secret cannot check a token signed under
 the old one, by construction. That is **that one environment's grants only**: on production, every

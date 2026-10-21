@@ -166,7 +166,8 @@ looks wrong** — several exist to stop a plausible-looking change.
   `executeFairnessMonthWrites` (`fairnessMonthCommit` — the PUT and the MCP's `apply_schedule` —
   or C4's consented reconstruction script; never `createOrReplace`; the reconstruction actor's guarded delete is the only delete). Every reader carries `SANITY_API_READ_TOKEN` or fails
   closed — the dotted ids are private, and an untokened read answers «no record» with no error.
-  Balances count from `FAIRNESS_BALANCE_START` (`2026-11`, ADR-0055), passed only by the GET; an
+  Balances count from `FAIRNESS_BALANCE_START` (`2026-11`, ADR-0055), passed only by
+  `assembleFairnessLedger` (the GET's and the editor's month check's one call); an
   earlier month still feeds who is listed and `firstRecordedIn` (its record) and «Mes por medio» (its seats).
 - **Cache:** admin/API routes that mutate content call the matching `revalidate*`
   (`app/utils/revalidate.ts`) or `revalidatePath`, or the ISR page stays stale.
@@ -235,6 +236,11 @@ looks wrong** — several exist to stop a plausible-looking change.
   fairness PUT) delegate everything after authorization to `app/utils/*Commit.ts`; MCP writes go
   only through them (`apply_schedule`: roles create + fairness PUT, ADR-0061;
   `serviceCommitCallers.test.ts`); `/api/mcp` buffers SSE so a tool finishes in the handler.
+- **The MCP proposal editor: the server judges, the card only shows** (ADR-0062). Every check and
+  save replays the whole edit list through the planner's gate in `editorBoard.ts` only; a saved edit
+  is a NEW `mcpProposal` (base `supersededBy` in the same transaction), never a mutated payload;
+  `force` only on the app-only save, every force a waiver `apply_schedule` makes the call repeat;
+  «Cargar» goes through the chat. Members on the wire are tokens, never ids.
 - **The admin assistant (`/api/admin/chat`, a bubble on every page) is READ-ONLY**: super-admin or
   worship admin, never impersonating; its tools call the MCP read handlers in process, never a write
   tool or the connector; spend is capped per admin per CDMX month in `adminChatUsage.*` (fail

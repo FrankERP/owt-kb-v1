@@ -39,7 +39,10 @@
 > [ADR-0061](adr/0061-the-connector-plans-months-only-on-v3-through-the-browsers-own-auto-and-confirm.md)).
 > `revise_proposal` belongs to the proposal editor's plan
 > ([plan](superpowers/plans/2026-10-21-owt-mcp-proposal-editor.md)); its first slice, the
-> read-only [proposal card](#the-proposal-card-mcp-apps), ships ahead of it.
+> read-only [proposal card](#the-proposal-card-mcp-apps), is in production (PR #159). The rest —
+> [editing a proposal](#editing-a-proposal) from the card or the chat, and `apply_schedule`'s
+> waiver gate ([ADR-0062](adr/0062-proposal-edits-are-new-records-judged-on-the-server.md)) — is on
+> the editor's branch, not released.
 
 > **Summary: P0 released 2026-09-24; P1 released 2026-09-25 (PR #98, `main` `a04edb43`),
 > acceptance complete 2026-09-28; P3 (four write tools) released 2026-09-28 (PR #106, `main`
@@ -50,7 +53,8 @@
 > superseded; P4 was re-baselined onto v3
 > ([plan](superpowers/plans/2026-10-20-owt-mcp-p4-v3-solve-apply.md), approved 2026-10-20) and
 > `solve_month` + `apply_schedule` are in production since 2026-10-20 (PR #156, `main`
-> `78939c71`), live proof pending; `revise_proposal` is part of the proposal editor's plan.**
+> `78939c71`), live proof pending; `revise_proposal` and the card's editor are on the proposal
+editor's branch (ADR-0062), not released.**
 
 This app exposes itself to Claude as an [MCP](https://modelcontextprotocol.io) server, so Frank
 can ask Claude questions against a live OWT Backstage deployment from his phone or desktop. The
@@ -127,8 +131,10 @@ response therefore means Frank reconnects from Claude; there is no partial-recov
 Twelve tools in production: `ping` (P0, released to production 2026-09-24), seven read tools
 (P1, **released to production 2026-09-25** — PR #98, `main` `a04edb43`), and four write tools
 (P3, **released to production 2026-09-28** — PR #106, `main` `7c65f2eb`; dev and production both
-expose all twelve). P4's branch adds two month tools, fourteen in all, registered after the writes
-(see [Month tools](#month-tools-p4-on-solver-v3); not released). Every tool is
+expose all twelve). P4 adds two month tools, fourteen in all, registered after the writes
+(see [Month tools](#month-tools-p4-on-solver-v3); in production since 2026-10-20). The proposal
+editor's branch adds three more, seventeen in all, registered after `apply_schedule`
+(see [Editing a proposal](#editing-a-proposal); not released). Every tool is
 registered the same way — one file per tool in `app/mcp/tools/`, exporting a
 `register<Tool>(server, deps?)` function that `app/api/mcp/route.ts` calls inside its handler
 init, the writes after the reads. `ping` and every read declare
@@ -611,7 +617,7 @@ Hides ONE published service (`published: false`), exactly as «Ocultar» does.
 
 ### Month tools (P4 on solver v3)
 
-Two tools plan and create a month. Not released yet: they are on P4's branch. The plan is
+Two tools plan and create a month, in production since 2026-10-20 (PR #156). The plan is
 [2026-10-20-owt-mcp-p4-v3-solve-apply.md](superpowers/plans/2026-10-20-owt-mcp-p4-v3-solve-apply.md);
 the decisions and the rejected alternatives are
 [ADR-0061](adr/0061-the-connector-plans-months-only-on-v3-through-the-browsers-own-auto-and-confirm.md).
@@ -677,10 +683,12 @@ solve's result as a card next to the chat: the months, how long the proposal is 
 service with its seats by name, the seats left unfilled and the fairness table. A host without
 MCP Apps ignores both keys and shows the text answer as before.
 
-- **Read-only (slice S1 of the [editor plan](superpowers/plans/2026-10-21-owt-mcp-proposal-editor.md)).**
-  The card shows the tool result the host hands it and nothing else: no data of its own, no
-  call back to the server, no button that acts on the proposal (only «Ver en grande», which asks
-  the host for fullscreen). Changing or loading a proposal still goes through the chat.
+- **Shows, and edits through the server (slices S1 and S4 of the
+  [editor plan](superpowers/plans/2026-10-21-owt-mcp-proposal-editor.md)).** The card draws the
+  tool result the host hands it (`solve_month` or `revise_proposal`). «Editar» appears only when the
+  host lets the card call tools (`getHostCapabilities().serverTools`) and the stored proposal has a
+  service to create; it opens the editor (below). Without it the card is read-only and changes go
+  through the chat.
 - **One inline document.** The host's sandbox admits no other origin, so
   `mcp-app/build.mjs` bundles `mcp-app/proposal-card/` (React, the MCP Apps client) with esbuild
   into one HTML string, committed as `mcp-app/generated/proposalCardHtml.ts` (~600 000
@@ -694,8 +702,51 @@ MCP Apps ignores both keys and shows the text answer as before.
   are 44 px and the safe-area insets are honoured.
 - **Proof.** `mcpRoute.test.ts` («the proposal card resource») covers the 401 without a token,
   the authenticated read in both protocol eras, `resources/list`, the advertised capability and
-  that only `solve_month` carries the link; claude.ai cannot reach dev (Deployment Protection),
+  which tools carry the link; claude.ai cannot reach dev (Deployment Protection),
   so the card itself can only be seen in production.
+- **«La tarjeta no aparece».** The host reads the tool list when the connector connects; after a
+  release that adds the card or its tools, disconnect and reconnect the connector in Claude
+  (Settings → Connectors) so it reads the new list.
+
+### Editing a proposal
+
+Three tools, not released (the editor's branch). Decisions and the rejected alternatives:
+[ADR-0062](adr/0062-proposal-edits-are-new-records-judged-on-the-server.md).
+
+| Tool | Who calls it | What it does |
+|---|---|---|
+| `check_proposal_edits` | the card only (`_meta.ui.visibility: ["app"]`) | Replays a list of edits (place, clear, exchange; members as tokens) from the stored proposal through the planner's own gate and answers the board, the per-seat rule lines, the month check and, for one seat, its candidates. Stores nothing. `readOnlyHint: true` |
+| `save_proposal_edits` | the card only | The same replay, then stores it as a NEW version: `mcpProposal.<new handle>` with `parent`/`revision`/`root`, and marks the base `supersededBy` in the same transaction. Takes `force` (a C4 Frank chose to assign anyway) with `confirms` (the keys the last check showed) and a `saveId` (a retry after a lost answer finds its own child) |
+| `revise_proposal` | the model (chat) | The same save from names and dates («pon a Dani en el BGV del 22»). Never forces: a per-seat rule refuses |
+
+- **The server judges; the screen shows (E1).** The card holds a list of edits, never a board;
+  every gesture re-sends the whole list. The planner's own refusals (a wrong Tipo, someone
+  already in that section, C1–C3) refuse; a C4 (a role or week exclusion, a pair) asks «¿Asignar de
+  todos modos?».
+- **The month check** judges the edited board against the rules as written: counts, presence,
+  pairs, «Mes por medio», the solver's named protections, Lead and empty seats, fair share. A
+  failed fairness-ledger read still saves, «sin revisar», and every answer says so.
+- **Forcing and `apply_schedule` (Q1).** Each forced seat stores a waiver (where, who, the rule's
+  sentence). `apply_schedule` now takes `waivers` and refuses a version with waivers, before any
+  write, unless the call repeats each one exactly (`detail: "waivers"`, with the expected list), so
+  every forced seat appears in the permission prompt. Month rules and breaches nobody forced (the
+  solver's own, or one that appeared after a rename) are warnings only, on the screen and in the
+  chat, never in the prompt. **The guarantee that the model cannot force rests on the host hiding
+  app-only tools**: the Claude app does; a client without MCP Apps support may show
+  `save_proposal_edits` and its `force` to the model.
+- **«Cargar»** puts a message in the chat naming the version and its waivers as JSON; Claude calls
+  `apply_schedule`, so the Claude app asks before writing.
+- **Versions.** `apply_schedule` refuses a superseded version naming the newer one (unless it
+  already created a service: then it continues). A version that started creating services cannot
+  be edited, and a version cannot be edited twice (the second save is refused naming the first's
+  result). Up to 30 versions per solve. Every version keeps the solve's expiry.
+- **Tokens.** Members cross the wire as 22-character tokens (an HMAC of `MCP_OAUTH_SECRET` over the
+  solve's handle and the member id), never as ids; rotating the secret invalidates an open
+  screen's pending edits ([SECRETS.md](SECRETS.md#mcp_oauth_secret)).
+- **Proof.** `proposalEditor.test.ts` runs the three tools and `apply_schedule` over one store;
+  `proposalEditorCard.test.tsx` runs the screen's own sequence (check, ask, save, «Cargar») into
+  `apply_schedule`; `editorReplay.test.ts`, `waivers.test.ts`, `monthCheck.test.ts` and the
+  `fixtures/month-check/parity.json` pair (vitest and `gcf_v3/tests`) cover the judges.
 
 ### Notification audiences (the write tools)
 
@@ -799,8 +850,10 @@ list:
   HASH of the client id (never the raw value), the issuing origin, timestamps, the current
   refresh `jti`, the revocation flag.
 - **`mcpOauthCodeRedemption`** (`mcpOauthCode.<sha256(jti)>`) — a replay guard, `redeemedAt` only.
-- **`mcpProposal`** (`mcpProposal.<handle>`, P4, not released) — one per stored `solve_month`
-  result: origin, member id, `createdAt`, `expiresAt` (7 days), engine, the rules `_rev`, months,
+- **`mcpProposal`** (`mcpProposal.<handle>`, P4) — one per stored `solve_month`
+  result (and, on the editor's branch, one per saved version: a v2 payload adds `waivers`,
+  `baseline`, `checked` and `saveId`; the record adds `parent`, `revision` and `root`; the base's
+  `state` gains `supersededBy`): origin, member id, `createdAt`, `expiresAt` (7 days), engine, the rules `_rev`, months,
   request id, one JSON `payload` (frozen record entries, drafts, the stored service ids at solve)
   under a SHA-256 `digest`, and the mutable JSON `state` (`recordsDone`, created drafts). Written
   only by `app/mcp/monthProposals/proposalStore.ts` (`create`, `ifRevisionId` merges, and a sweep

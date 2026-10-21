@@ -244,8 +244,9 @@ several exist precisely to stop a plausible-looking change.
   closed: the ids are dotted, so private, and an untokened read answers «no record» with no error.
   **Balances count from `FAIRNESS_BALANCE_START`** (`"2026-11"`, `fairnessVocabulary.ts`; ADR-0055):
   August–October 2026 were planned by v2 with no history, and v3 paid their gaps back in one plan.
-  `computeFairnessLedger` takes it as `balanceStart` and only the ledger GET passes it — never make
-  it a default (the golden fixture and C4's reconstruction preview are August–October). A month
+  `computeFairnessLedger` takes it as `balanceStart` and only `assembleFairnessLedger`
+  (`fairnessLedgerRead.ts`) passes it — the one assembly that both the ledger GET and the proposal
+  editor's month check (fair share, ADR-0062) call — never make it a default (the golden fixture and C4's reconstruction preview are August–October). A month
   before it still feeds who is listed, `firstRecordedIn` and the exemption (from its record) and
   `countedSundayLeads`/`held` (from its seats, which never needed a record); it adds nothing to
   `window`, `cumulative`, `tabs`, `sang`, `setAsides` or `notInRecordSeats`. The boundary is one
@@ -384,6 +385,19 @@ several exist precisely to stop a plausible-looking change.
   `runV3ConfirmAttempt` itself, and `solve_month` runs `planV3Month`, which composes the planner's
   own v3 functions: never re-implement either on the server; `monthToolParity.test.tsx` pins
   byte-identical solve bodies against `MonthGenerator`.
+- **The MCP proposal editor: the server judges, the card only shows** (ADR-0062). The card
+  (`mcp-app/proposal-card/`) holds a list of edits, never a board; every check and save replays the
+  whole list from the stored proposal through the planner's own gate. Only `editorBoard.ts` calls
+  the gates, the finder and the spine, each after `columnRuleInputs` (`editorInputs.test.ts`): a
+  rule judged without its inputs passes silently and the solver cannot catch it. A saved edit is a
+  NEW `mcpProposal` record (`parent`/`revision`/`root`, a v2 payload) whose base gets `supersededBy`
+  in the same transaction — never mutate a stored payload. `force` lives only on the app-only
+  `save_proposal_edits`; every confirmed force stores a waiver, and `apply_schedule` refuses a
+  version with waivers unless its `waivers` argument repeats each one (`sameWaiverItems`), so a
+  forced seat reaches the permission prompt. «Cargar» goes through the chat (`sendMessage`), never
+  a direct `apply_schedule` call from the frame. The month check (`monthCheck.ts`) judges the rules
+  as written and never calls the solver; `fixtures/month-check/parity.json` pins it to
+  `gcf_v3/acceptance/checker.py` from both sides. Members cross the wire as tokens, never ids.
 - **The admin assistant (`/api/admin/chat`, the `AssistantBubble` on every page) is READ-ONLY** (ADR-0060). Access:
   `super-admin`, or `admin` with the `worship` ministry (`canUseAdminChat`), from the live access
   snapshot, never while impersonating — the spend would land on someone else. Its five tools call

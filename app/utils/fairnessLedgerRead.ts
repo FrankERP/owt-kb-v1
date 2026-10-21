@@ -3,13 +3,14 @@ import "server-only";
 // app/utils/fairnessLedgerRead.ts
 //
 // `loadFairnessLedger` — the server-side reader behind `GET /api/admin/fairness` (solver
-// v3 C2 RD-1 … RD-3). It reads the eligibility records, the voice services, the horizon's
+// v3 C2 RD-1 … RD-3); `loadFairnessLedgerWith` is the same read for the MCP proposal editor's
+// month check (ADR-0062), which adjusts the records and services before the one assembly. It reads the eligibility records, the voice services, the horizon's
 // freezing-service counts and the referenced members through `operationalClient`
 // imported DIRECTLY (published perspective, no CDN, the read token), every query a
 // `serviceReadQueries.ts` builder with no `published` filter (prior-month drafts count),
 // passes each record through the ONE record-schema check (`parseStoredFairnessMonth`)
-// and hands everything to THE ledger (`computeFairnessLedger`) with the balance start
-// (`FAIRNESS_BALANCE_START`, ADR-0055). It performs no authorization: the route gates.
+// and hands everything to THE ledger through `assembleFairnessLedger`, the only call that passes
+// the balance start (`FAIRNESS_BALANCE_START`, ADR-0055). It performs no authorization: the route gates.
 //
 // FAIL CLOSED (RD-2): a record's id is DOTTED, so a read made WITHOUT the read token
 // answers zero records with no error and the past would read as «sin registro» — the
