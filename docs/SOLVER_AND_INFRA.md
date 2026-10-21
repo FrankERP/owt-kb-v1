@@ -1052,7 +1052,7 @@ Strategy: **wrap the existing Next.js app** (not a React Native rewrite). Full r
 `gates` — the required check — requires it (and `solver-v3`, the same command over `gcf_v3/`; see
 [CI.md](CI.md) «Solver suites»); before that a `gcf/**`-only PR went green on a
 job that never opened the file, on code that deploys to the Cloud Function from `main` with
-no `preview` rehearsal. Since 2026-10-21 (ADR-0065) a pull request that touches neither `gcf/`
+no `preview` rehearsal. Since 2026-10-21 (ADR-0064) a pull request that touches neither `gcf/`
 nor the CI machinery skips `solver-v2` (the rollback engine since the v3 cutover), and `gates`
 accepts that skip only on the `scope` job's word; pushes to `main`/`preview` always run it. Run it locally the same way from the repo root before claiming done —
 the three Node gates are no longer the whole set.

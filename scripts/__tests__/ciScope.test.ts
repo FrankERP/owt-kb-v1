@@ -5,7 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { DIFF_ARGS, parseDiffZ, SCOPE_JOB, SKIPPABLE_JOBS, scopeDecision } from "../lib/ci-scope.mjs";
 
-// The `scope` job decides whether a pull request needs `solver-v2` (ADR-0065).
+// The `scope` job decides whether a pull request needs `solver-v2` (ADR-0064).
 // A wrong "false" is the one way an untested gcf/ change could reach `main`, so
 // every doubt must come out "true", and the runner is executed as a process
 // against a real merge commit — a model of `git diff` would not catch a rename
