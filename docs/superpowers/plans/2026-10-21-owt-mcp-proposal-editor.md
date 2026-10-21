@@ -49,12 +49,12 @@ Each row names the alternative it rejects. The ADR (§7) carries the ones the co
 |---|---|---|---|
 | E1 | **The server judges every edit; the screen only shows.** The screen holds a list of edits, never a board it trusts. Every check, and the save, sends the base handle plus the whole edit list; the server replays it from the stored proposal through the planner's gate and answers the resulting board | (a) Bundle the planner's gate into the screen and trust its verdict. (b) Let the screen send a finished board | (a) makes a second judge that drifts from the planner's and from the server's; (b) lets any client — or the model, through `revise_proposal` — write an unjudged board into a record `apply_schedule` will turn into services. Replaying edits is stateless (the route has no session, `app/api/mcp/route.ts`), deterministic, and testable without a browser |
 | E2 | **A revision is a NEW proposal record** (`mcpProposal.<new handle>`) that copies the base's frozen confirm entries, solve-time stored ids, rules revision, expiry and principal, carries `parent` and `revision: n+1`, and gets **fresh `creationRequestId`s**. Creating it and marking the base `supersededBy` happen in ONE transaction (T2.2) | Mutate the base's payload in place (the pre-v3 design, which then needed an apply lease, `A14`/`proposal_busy`) | The payload is digest-bound and immutable (`proposalDocument.ts:1-20`, D10); keeping it so means `apply_schedule` needs no lease and no new write path (its only changes are E3's refusal, the waiver confirmation of Q1, and naming the revision it applied). Applied **one after another**, revisions of one solve cannot both land: once one created a service, every other finds that date taken and is refused **before** any record or create (`phase3Refusals`, `applySchedule.ts:248`; `observe.ts:100-133`). Applied **at the same time**, two lineages fall into ADR-0061's accepted interleave (identical frozen entries): the month can end up mixed from both, never duplicated (the create path's weekend lock and special identity coordinator, `roleCreateCommit.ts`). E3's fork refusal makes two live lineages of one solve impossible, so this needs two applies of a base and its successor racing, which E3's supersede refusal also narrows. Fresh request ids matter: a receipt keyed by the base's id would answer «already created» for a body that holds the base's seats, and apply would report Frank's edited service as created when it is not |
-| E3 | **No forks, no revising a started apply, no applying a superseded proposal.** A save is refused when its base (a) is already superseded — naming the successor (`stale_revision`, `detail: "superseded"`); (b) has started applying, judged by `observeProposal` over a fresh roles read, receipts first (R-OBS, `observe.ts:3-6`), never by the `state` cache alone; (c) would fail apply's own D7 checks (a)/(c) today, so Frank learns «hay que volver a generar el mes» before editing, not after; (d) fails `admitsProposal` (origin, principal, expiry; `proposalDocument.ts:279`). `apply_schedule` refuses a superseded proposal naming its successor | Allow these and let D7 sort it out | D7 keeps the data safe either way; these refusals keep Frank from losing his edits silently (applying the solver's original after editing, or a stale tab's sibling revision) and from editing a month that is half in `/admin` already. A base whose `state` lags its receipts falls to D7 at apply, and the edits are lost loudly (apply refuses), never silently |
+| E3 | **No forks, no revising a started apply, no applying a superseded proposal.** A save is refused when its base (a) is already superseded — naming the successor (`stale_revision`, `detail: "superseded"`); (b) has started applying, judged by `observeProposal` over a fresh roles read, receipts first (R-OBS, `observe.ts:3-6`), never by the `state` cache alone; (c) would fail apply's own D7 checks (a), (b) or (c) today, so Frank learns «hay que volver a generar el mes» before editing, not after; (d) fails `admitsProposal` (origin, principal, expiry; `proposalDocument.ts:279`). `apply_schedule` refuses a superseded proposal naming its successor | Allow these and let D7 sort it out | D7 keeps the data safe either way; these refusals keep Frank from losing his edits silently (applying the solver's original after editing, or a stale tab's sibling revision) and from editing a month that is half in `/admin` already. A base whose `state` lags its receipts falls to D7 at apply, and the edits are lost loudly (apply refuses), never silently |
 | E4 | **Per-edit gate = the planner's own gate for each gesture**, against CURRENT members (a fresh pool read) and the proposal's BOUND rules (a changed rule set refuses, `rules_changed`, as apply does): **`place`** (a member from the candidate list into a seat) = the manual pick, `toggleCandidate`/`overrideCandidate` (`PlannerGrid.tsx:921-1010`) — C3 by absence from `rankCandidates` (`candidateRanking.ts:109`), C2 `blockedReason`, C4 `ruleBlockedReason`; **`move`** (a seated member to another seat) = the drag gate `evaluateMove` (`moveGate.ts:231`), which needs a source seat holding the member; **`clear`** = always allowed, as the planner allows removal; **`exchange`** (two seated members trade seats) = ONE judged unit: both are removed, then each placement is judged as a `place` on the board without either, so neither sees the other in its column (no spurious pair-rule C4); either refusal refuses the unit, and each C4 names its own member and rule. C1–C3 refuse; C4 asks (Q1) | Re-implement the checks for the connector; or judge `place` with `evaluateMove` | `evaluateMove` answers `unresolved` for a pick from the pool (`moveGate.ts:252`), so it cannot be the place gate. The pick's verdict AND the assembly of its inputs (`rankFor`, `PlannerGrid.tsx:850-866`) are inline in a client component, so both are **extracted** (T2.3) into a neutral module that `PlannerGrid` calls too — one definition, not a second judge. Sharing only the verdict is not enough: `rankCandidates` enforces no rule when `column` or `config` is missing and no week exclusion without the right `sundayDates` (`candidateRanking.ts:116-135`, `ruleEnforcement.ts:372`), and the solver cannot catch the miss, because exclusions are eligibility, not rule instances (`v3MonthSources.ts:128-146`), and a pinned ineligible person is accepted silently (`gcf_v3/owt_v3/facts.py:38`). So on the server those inputs are required, and a safety net re-checks every edited column after the replay (T2.3) |
 | E5 | **The whole-month check is the solver itself**, on the board exactly as apply would store it: every draft of the board — weekend and counted special — is sent as a **fixed** service holding exactly Frank's voice seats as pins, with **no** pre-fill (`prefillCountedSpecials` skipped) and no row targets, through a named builder option `asStoredBoard` (T2.4). With nothing left to decide, the solver's report is the verdict: `violations`, `missed`, cadence and per-person planned-vs-share | (a) Port `gcf_v3/acceptance/checker.py` (or the rule semantics) to TypeScript. (b) Reuse «Solo llenar vacíos» as it is | (a): one definition of what a rule means; a port mirrors §6.7 instances and §7.1 protections and needs a sync test against Python forever, while the solver already judges stored services, which it receives as fixed. (b) is wrong: that path sends planned weekends `fixed:false` with row targets (`v3Services.ts:163-167`) and pre-fills counted specials (`v3SolveRequest.ts:249-258`), so the solver would FILL the seats Frank emptied and the check would judge a board he did not make (clearing the only person who met «al menos uno … cada semana» would show no warning). **Premise to prove first** (T2.1, through `asStoredBoard` itself): such a request answers a report, not an infeasibility, when a cap is broken. If it does not, the fallback is the port, golden-tested against `checker.py` on `acceptance/world_realistic.json` |
 | E6 | **The month check runs on «Revisar y guardar», not on every tap** | Live month check after each edit | A solve round trip is seconds (Cloud Run, cold start); a tap must answer in about one. The per-edit gate (E4) is fast and covers what can be judged at pick time; caps and presence are statements about a month (`ruleEnforcement.ts` header, «What is NOT») |
 | E7 | **If the month check fails to run, the revision is still saved**, marked «sin revisar», and the screen says so in its first line | Refuse to save | `apply_schedule` never depended on caps; refusing would make an outage of the solver an outage of editing. The model and the screen both repeat «sin revisar» before any apply |
-| E8 | **The screen is an MCP App** (`@modelcontextprotocol/ext-apps` 2.0.x): `solve_month` and `revise_proposal` declare `_meta.ui.resourceUri = "ui://owt/proposal-editor"`, the route serves that resource (`text/html;profile=mcp-app`), and the per-edit check is an app-only tool (`_meta.ui.visibility: ["app"]`) | An Artifact page, or a link to `/admin` | Frank asked for the screen *in* the conversation, after the proposal. MCP Apps is the official extension Claude renders on web, desktop and mobile for custom connectors; ext-apps 2.0.3 peers on `@modelcontextprotocol/server ^2` (the repo pins 2.1.0) and zod ^4.2 (4.3.6). An Artifact cannot call our server with Frank's OAuth grant; `/admin` already exists and is what he is trying not to open |
+| E8 | **The screen is an MCP App** (`@modelcontextprotocol/ext-apps` 2.0.x): `solve_month` and `revise_proposal` declare `_meta.ui.resourceUri = "ui://owt/proposal-editor"` (so the card follows a proposal into the chat; the screen itself saves only through the app-only `save_proposal_edits`, T2.5), the route serves that resource (`text/html;profile=mcp-app`), and the per-edit check is an app-only tool (`_meta.ui.visibility: ["app"]`) | An Artifact page, or a link to `/admin` | Frank asked for the screen *in* the conversation, after the proposal. MCP Apps is the official extension Claude renders on web, desktop and mobile for custom connectors; ext-apps 2.0.3 peers on `@modelcontextprotocol/server ^2` (the repo pins 2.1.0) and zod ^4.2 (4.3.6). An Artifact cannot call our server with Frank's OAuth grant; `/admin` already exists and is what he is trying not to open |
 | E9 | **One self-contained HTML file, bundled at build time** (esbuild, the existing devDependency, pinned; React 19, the repo's own) and committed, with a vitest guard that rebuilds it and compares bytes | Load scripts from our origin; build only on Vercel | The app's sandbox blocks every external origin unless declared (`_meta.ui.csp`); inline needs no CSP entry and nothing new on `/api/*`. Committed + guarded keeps the gates (tsc, vitest, eslint) the whole truth, as `colour-inventory` does |
 | E10 | **«Cargar» sends a message to the conversation** (`app.sendMessage`), and Claude calls `apply_schedule` | The screen calls `apply_schedule` directly | `apply_schedule` is declared destructive (I14) so the Claude app asks before running it; a call from inside an app's frame is not guaranteed that same prompt. The chat also shows apply's report, refusals and `next` exactly as today (decision Q2) |
 | E11 | **Instruments and FOH are editable, judged by E4 only** | Leave them read-only | The solver never seats them (it plans voices), so the month check has nothing to say about them; the planner's manual pick does, and Frank edits them in `/admin` today |
@@ -176,8 +176,15 @@ connector»).
   4. `moveOccupant.ts` drops its `"use client"` (it imports nothing client-only once (1) lands) and
      performs `move` and each half of `exchange`, so a move has one definition (DD10).
   **Safety net after the replay:** `ruleViolationsForColumn` (`ruleEnforcement.ts:479`) over every
-  edited column, with the replay's waivers as the overridden set; any finding without a waiver
-  refuses the save. It catches a gate whose inputs were wrong, independently of the gate.
+  edited column, with the replay's waivers as the overridden set, compared against the same call on
+  the replay's STARTING board (the base's seats plus its inherited waivers). Only a finding that is
+  NEW — absent from the starting board, keyed by `violationKey` and reason — and has no waiver
+  refuses the save; it catches a gate whose inputs were wrong, independently of the gate. A finding
+  already on the starting board is answered as a warning, never a refusal: the solver may break a
+  pair to meet a floor (pair rules are soft, `gcf_v3/owt_v3/model.py:118`; the TS rules may disagree
+  on a weekend, `ruleEnforcement.ts:440-448`), and a solve's record carries no waivers, so refusing
+  it would block Frank over a seat he never touched. `check_proposal_edits` runs the same net, so
+  the screen shows both kinds before any save.
 - T2.4 `monthCheck.ts`: `buildV3SolveRequest` gains the option `asStoredBoard` (default off; the
   planner never sets it): every planned column of the horizon becomes a fixed service whose pins
   are its voice occupants, `prefillCountedSpecials` is skipped, no row targets are sent. What
@@ -204,13 +211,34 @@ connector»).
     the sweep. Its edits may carry `force` (Q1-A); a forced edit is accepted only if the gate
     answers C4 for it, and its waiver is stored with that rule's wording.
   - `revise_proposal` (model-visible): the same save, with no `force` field in its schema; from the
-    chat a rule block is refused and names the rule. It still carries forward inherited waivers
+    chat a rule block is refused and names the rule. **Its schema must never gain `force`**: a test
+    asserts the registered input schema is strict and refuses an edit carrying `force`. The screen
+    never calls it (T4.2); it exists for edits asked for in the chat. It still carries forward inherited waivers
     (T2.2), and its answer lists them.
   Neither save is destructive (each writes only a private record, like `solve_month`, I14). All
-  three refuse unless the engine is v3, as `apply_schedule` does (D2).
+  three refuse unless the engine is v3, as `apply_schedule` does (D2), and all three apply
+  `admitsProposal` (D10) before answering anything with names.
+  **Save time budget:** the month check gets its own deadline (`MCP_SOLVE_MAX_MS`-style, set so the
+  fresh re-read and the transaction still fit under the route's 60 s `maxDuration` with a margin,
+  as `solve_month` budgets with `MCP_SOFT_DEADLINE_MS`, `v3MonthPlan.ts:64-70`); past it the save
+  proceeds as «sin revisar» (E7).
+  **Lost answer:** each save carries a client `saveId` stored in the child's payload; a retry whose
+  base is superseded by a child with the same `saveId` returns that child as success, so the screen
+  never mistakes its own save for a sibling tab's.
+  **Replay limits:** a `place` into a row the column does not show (`rowAppliesTo`, as
+  `evaluateMove` refuses, e.g. Coro on a Saturday) or outside `buildRows()` is refused, never
+  accepted and then dropped by `cellsToDrafts` (E18). Only seats change: a child's drafts copy every
+  non-seat field from the base (`localId`, `exists`, `isExisting`, `skipped`, `countsForFairness`,
+  `service_name`, `atSolve`) and get fresh `creationRequestId`s; nothing is recomputed against
+  fresh `existingRoles`. Waivers key on the kept `localId`.
+  **I5 sentence:** the collapsed sentence is used only for ids outside the worship audience; a
+  worship member with the wrong Tipo gets the planner's own C3 sentence.
   `apply_schedule` gains: refuse a superseded proposal naming its successor (E3); refuse a proposal
-  with waivers unless `waivers` repeats each one's wording exactly (Q1, before any write; compared
-  after Unicode NFC, nothing else normalized — the wording is the server's own text, copied); repeat
+  with waivers unless `waivers` repeats each one exactly (Q1, before any write): each item is
+  `{ service, member, rule }` — the service label, the member's display name and the rule's
+  sentence, all server text — matched as a multiset after Unicode NFC, nothing else normalized, so
+  two seats with the same sentence each need their own item and the permission prompt says who and
+  where; repeat
   «sin revisar» from the payload; and name the revision it applied.
 - T2.6 Tests (vitest, the existing fake-store harness of `applySchedule.test.ts`): `judgePick`
   parity — the grid calls it, and the grid's pick tests stay green; replay cases where a week
@@ -237,7 +265,7 @@ merge-range code review.
 - T4.1 Seat sheet: tap a seat → `check_proposal_edits` for its candidates → place / clear /
   exchange. Optimistic local board, replaced by the server's answer; a refusal reverts and shows
   the planner's sentence. Q1-A's confirm for C4.
-- T4.2 «Revisar y guardar» → `revise_proposal`; the warnings panel (month check, waivers,
+- T4.2 «Revisar y guardar» → `save_proposal_edits` (never `revise_proposal`, T2.5); the warnings panel (month check, waivers,
   «sin revisar»); the new handle becomes the base.
 - T4.3 «Cargar» → `app.sendMessage` with the handle, the revision and every waiver's wording
   verbatim, so Claude's `apply_schedule` call can repeat them (Q2-A, Q1).
@@ -263,10 +291,13 @@ for both.
   builder already supports it («Solo llenar vacíos»); a later slice once the editor is in use.
 - Editing setlists, publishing, or the kids rotation from the screen.
 - Any write from the in-app assistant bubble (ADR-0060 stays read-only).
+- Adding or removing a service, renaming a special, or changing «Cuenta para equidad» from the
+  screen: the editor changes seats only. Those stay in `/admin` or a new `solve_month`.
 
 ## 7. Docs in the same delivery
 
-ADR-0062 (E2, E5, E8–E10: revisions as new records, the solver as the month's checker, MCP Apps
+ADR-0062 (E2, E5, E8–E10, and the rollback note: after reverting this release every record with a
+v2 payload or a `supersededBy` reads as no record, which fails closed; revisions as new records, the solver as the month's checker, MCP Apps
 over an Artifact, «Cargar» through the chat, Q1's exact guarantee); the MCP spec amended: the
 `revise_proposal` row and the «Editing a proposal» decision («the connector never forces», spec
 `:221`, `:306`) rewritten to Q1's guarantee, I14 and I5 (the candidate list);
