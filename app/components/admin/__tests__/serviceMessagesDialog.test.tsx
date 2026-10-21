@@ -54,12 +54,16 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function renderDialog(open = true) {
-  return render(
+function dialog(open: boolean, roleId = ROLE_ID) {
+  return (
     <CueDialogProvider>
-      <ServiceMessagesDialog open={open} roleId={ROLE_ID} title="Mensajes · Domingo 8 mar" viewerId="adm-1" onClose={() => {}} />
-    </CueDialogProvider>,
+      <ServiceMessagesDialog open={open} roleId={roleId} title="Mensajes · Domingo 8 mar" viewerId="adm-1" onClose={() => {}} />
+    </CueDialogProvider>
   );
+}
+
+function renderDialog(open = true) {
+  return render(dialog(open));
 }
 
 describe("ServiceMessagesDialog", () => {
@@ -143,5 +147,35 @@ describe("ServiceMessagesDialog", () => {
     getOk = true;
     fireEvent.click(screen.getByText("Reintentar"));
     await waitFor(() => expect(screen.getByText("Líderes: Ana, Beto")).toBeTruthy());
+  });
+
+  it("shows a landed message even when the read-back failed, so nobody retypes it", async () => {
+    postReply = {
+      ok: true,
+      body: {
+        ok: true,
+        messages: null,
+        message: { _key: "m2", author: { _ref: "adm-1", _type: "reference" }, author_role: "admin", kind: "admin_change_request", body: "Llegó", at: "2099-03-03T15:00:00.000Z" },
+      },
+    };
+    renderDialog();
+    await waitFor(() => expect(screen.getByText("Efesios 2")).toBeTruthy());
+    fireEvent.change(screen.getByPlaceholderText("Escribe un mensaje…"), { target: { value: "Llegó" } });
+    fireEvent.click(screen.getByText("Enviar"));
+    await waitFor(() => expect(screen.getByText("Llegó")).toBeTruthy());
+    expect(screen.getByText("Efesios 2")).toBeTruthy();
+  });
+
+  it("never shows one service's conversation under another's", async () => {
+    const { rerender } = render(dialog(true));
+    await waitFor(() => expect(screen.getByText("Efesios 2")).toBeTruthy());
+    let release: (v: unknown) => void = () => {};
+    fetchMock.mockImplementationOnce(() => new Promise((r) => (release = r)));
+    rerender(dialog(false));
+    rerender(dialog(true, "role-sat-2"));
+    // The previous service's thread is gone at once, before the new read answers.
+    expect(screen.queryByText("Efesios 2")).toBeNull();
+    release({ ok: true, json: async () => conversation({ service: { _id: "role-sat-2", service_date: "2099-03-07", leads: [] }, messages: [] }) });
+    await waitFor(() => expect(screen.getByText("Este servicio aún no tiene líder.")).toBeTruthy());
   });
 });

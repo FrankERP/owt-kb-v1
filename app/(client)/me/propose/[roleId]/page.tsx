@@ -59,10 +59,10 @@ async function getSharedProposal(roleId: string) {
   );
 }
 
-// What admins wrote on this service before any proposal existed (ADR-0064) —
-// typically what the pastor shared. Read for every visit, proposal or not: the
-// lead needs it most BEFORE choosing songs, and once the proposal exists it is
-// the start of the same conversation.
+// What admins wrote to this service's leads from its card (ADR-0064) — typically
+// what the pastor shared. Read for every visit, proposal or not: the lead needs
+// it most BEFORE choosing songs, and once the proposal exists it is part of the
+// same conversation.
 async function getServiceThreadMessages(roleId: string): Promise<ThreadMessageRow[]> {
   const threadId = serviceThreadId(roleId);
   if (!threadId) return [];

@@ -47,7 +47,7 @@ interface Proposal {
   team_notes?: string;
   admin_notes?: string;
   messages?: ThreadMessage[] | null;
-  /** What admins wrote on the service before this proposal existed (ADR-0064). */
+  /** What admins wrote to the service's leads from its card (ADR-0064). */
   earlier_messages?: ThreadMessage[] | null;
   submitted_at?: string;
   contributors?: Array<{ id: string; name: string }>;

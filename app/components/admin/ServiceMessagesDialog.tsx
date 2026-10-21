@@ -29,6 +29,16 @@ interface Conversation {
   proposal?: { _id: string; status?: string; messages?: ThreadMessage[] | null } | null;
 }
 
+/** The message as stored — `author` a reference, no resolved name — which the
+ *  POST returns beside its read-back. */
+type StoredMessage = Omit<ThreadMessage, "author"> & { author?: { _ref?: string } | null };
+
+/** The stored message in the read rows' shape, its author named the way the
+ *  read-back would: the admin who just sent it. */
+function asThreadMessage(m: StoredMessage, viewerId: string | null): ThreadMessage {
+  return { ...m, author: m.author?._ref ?? viewerId, author_name: m.author_name ?? null };
+}
+
 export default function ServiceMessagesDialog({
   open,
   roleId,
@@ -44,50 +54,62 @@ export default function ServiceMessagesDialog({
   viewerId?: string | null;
   onClose: () => void;
 }) {
-  const [data, setData] = useState<Conversation | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  // One read per (service, attempt), and what it answered, tagged with that key.
+  // Deriving what to show from the tag — rather than resetting state in the
+  // effect — means a dialog reopened on ANOTHER service never paints the previous
+  // service's conversation under the new title, not even for one frame.
+  const key = open && roleId ? `${roleId}#${attempt}` : null;
+  const [result, setResult] = useState<{ key: string; data: Conversation | null; error: boolean } | null>(null);
 
   useEffect(() => {
-    if (!open || !roleId) return;
+    if (!key || !roleId) return;
     let live = true;
-    setLoading(true);
-    setError(false);
-    setData(null);
     (async () => {
       try {
         const res = await fetch(`/api/admin/service-threads/${encodeURIComponent(roleId)}/messages`);
         if (!res.ok) throw new Error("load failed");
         const body: Conversation = await res.json();
-        if (live) setData(body);
+        if (live) setResult({ key, data: body, error: false });
       } catch {
-        if (live) setError(true);
-      } finally {
-        if (live) setLoading(false);
+        if (live) setResult({ key, data: null, error: true });
       }
     })();
     return () => {
       live = false;
     };
-  }, [open, roleId, attempt]);
+  }, [key, roleId]);
+
+  const current = result && result.key === key ? result : null;
+  const data = current?.data ?? null;
+  const error = current?.error ?? false;
+  const loading = !!key && !current;
 
   /**
    * Post, then replace ONLY the service thread from the response — the proposal's
    * messages stay as loaded. `messages: null` means the post landed but the
-   * read-back did not: keep what is on screen. Rethrows so the composer keeps
-   * its text.
+   * read-back did not: append the message the route returns, so the admin sees
+   * it sent (a silent clear would invite a retype, and a second email to the
+   * leads). The update applies only to the service it was posted for: the
+   * dialog may have been reopened on another one meanwhile. Rethrows so the
+   * composer keeps its text.
    */
   async function post(body: string, opts: { pastor: boolean }) {
     if (!roleId) throw new Error("no service");
-    const res = await fetch(`/api/admin/service-threads/${encodeURIComponent(roleId)}/messages`, {
+    const postedFor = roleId;
+    const res = await fetch(`/api/admin/service-threads/${encodeURIComponent(postedFor)}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ body, pastor: opts.pastor }),
     });
     if (!res.ok) throw new Error("post failed");
-    const out: { messages?: ThreadMessage[] | null } = await res.json();
-    setData((current) => (current ? { ...current, messages: out.messages ?? current.messages } : current));
+    const out: { message?: StoredMessage | null; messages?: ThreadMessage[] | null } = await res.json();
+    setResult((prev) => {
+      if (!prev?.data || prev.data.service._id !== postedFor) return prev;
+      const sent = out.message ? asThreadMessage(out.message, viewerId) : null;
+      const messages = out.messages ?? (sent ? [...(prev.data.messages ?? []), sent] : prev.data.messages);
+      return { ...prev, data: { ...prev.data, messages } };
+    });
   }
 
   const leadNames = (data?.service.leads ?? []).map((l) => l?.name).filter((n): n is string => !!n);

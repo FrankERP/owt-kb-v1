@@ -5,6 +5,7 @@ import { Setlist, SetlistSong } from "../utils/interface";
 import { buildRuns } from "../utils/medley";
 import { ChainLinkIcon } from "./ChainLinkIcon";
 import PracticePlaylistButton from "./PracticePlaylistButton";
+import Button from "./ui/Button";
 import { usePlayer } from "@/app/context/PlayerContext";
 import { useSession } from "next-auth/react";
 import { SetlistEditor } from "./admin/SetlistEditor";
@@ -210,14 +211,10 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
                 </span>
               )}
               {canMessage && (
-                <button
-                  type="button"
-                  onClick={() => setMessagesOpen(true)}
-                  className="flex items-center gap-1 font-label text-[11px] uppercase tracking-widest text-mono-500 hover:text-accent transition-colors"
-                >
+                <Button variant="ghost" size="sm" onClick={() => setMessagesOpen(true)}>
                   <ChatIcon />
                   Mensajes
-                </button>
+                </Button>
               )}
               {hero && hasSetlist && (
                 <PracticePlaylistButton variant="hero" songIds={setlist!.songs.map((s) => s._id)} accentVar="--accent-rgb" />

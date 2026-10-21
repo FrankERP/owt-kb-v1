@@ -123,6 +123,7 @@ export default async function SchedulePage({
     push(dateStr, {
       day: "Domingo",
       date: dateStr,
+      serviceId: sun._id,
       leads: sun.Lead?.map((m) => m.alias || m.member_name) ?? [],
       setlist: sunSetlistMap.get(dateStr),
       instruments: sun.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
@@ -136,6 +137,7 @@ export default async function SchedulePage({
     push(dateStr, {
       day: "Sábado",
       date: dateStr,
+      serviceId: sat._id,
       leads: sat.Lead?.map((m) => m.alias || m.member_name) ?? [],
       setlist: satSetlistMap.get(dateStr),
       instruments: sat.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
@@ -158,6 +160,7 @@ export default async function SchedulePage({
       date: dateStr,
       time: sp.time ?? null,
       roleId: sp._id,
+      serviceId: sp._id,
       leads: sp.Lead?.map((m) => m.alias || m.member_name) ?? [],
       setlist,
       instruments: sp.instruments?.map((s) => ({ label: s.instrument, person: s.person })),

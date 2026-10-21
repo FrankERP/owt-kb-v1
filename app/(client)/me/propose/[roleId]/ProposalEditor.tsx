@@ -66,8 +66,8 @@ interface Props {
   proposal: SharedProposal | null;
   currentUserId: string;
   /**
-   * What admins wrote on this service before any proposal existed (ADR-0064) —
-   * typically what the pastor shared. Read-only here; it opens the thread.
+   * What admins wrote to this service's leads from its card (ADR-0064) —
+   * typically what the pastor shared. Read-only here; merged into the thread by `at`.
    */
   earlierMessages?: ThreadMessage[] | null;
 }

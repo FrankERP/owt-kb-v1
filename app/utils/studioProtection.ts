@@ -88,7 +88,7 @@ export const PROTECTED_STUDIO_TYPES = [
   // The MCP month proposal (P4 on solver v3, D6): machine state written only by
   // `app/mcp/monthProposals/proposalStore.ts`. Internal, like the MCP OAuth state above.
   "mcpProposal",
-  // The conversation about a service before its proposal exists (ADR-0064): written only by
+  // What admins write to a service's leads from its card (ADR-0064): written only by
   // `POST /api/admin/service-threads/[roleId]/messages`. Human-meaningful like
   // `setlistProposal`, so protected but deliberately NOT internal — it keeps a read-only pane.
   "serviceThread",
@@ -562,5 +562,5 @@ export const PROTECTED_STUDIO_TITLES: Readonly<Record<ProtectedStudioType, strin
   calendarFeed: "Enlaces de calendario (solo lectura)",
   adminChatUsage: "Asistente — Gasto por admin (solo lectura)",
   mcpProposal: "MCP — Propuestas de mes (solo lectura)",
-  serviceThread: "Mensajes antes de la propuesta (solo lectura)",
+  serviceThread: "Mensajes del servicio (solo lectura)",
 });
