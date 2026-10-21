@@ -52,7 +52,7 @@ Each row names the alternative it rejects. The ADR (§7) carries the ones the co
 | E3 | **No forks, no revising a started apply, no applying a superseded proposal.** A save is refused when its base (a) is already superseded — naming the successor (`stale_revision`, `detail: "superseded"`); (b) has started applying, judged by `observeProposal` over a fresh roles read, receipts first (R-OBS, `observe.ts:3-6`), never by the `state` cache alone; (c) would fail apply's own D7 checks (a), (b) or (c) today, so Frank learns «hay que volver a generar el mes» before editing, not after; (d) fails `admitsProposal` (origin, principal, expiry; `proposalDocument.ts:279`). `apply_schedule` refuses a superseded proposal naming its successor | Allow these and let D7 sort it out | D7 keeps the data safe either way; these refusals keep Frank from losing his edits silently (applying the solver's original after editing, or a stale tab's sibling revision) and from editing a month that is half in `/admin` already. A base whose `state` lags its receipts falls to D7 at apply, and the edits are lost loudly (apply refuses), never silently |
 | E4 | **Per-edit gate = the planner's own gate for each gesture**, against CURRENT members (a fresh pool read) and the proposal's BOUND rules (a changed rule set refuses, `rules_changed`, as apply does): **`place`** (a member from the candidate list into a seat) = the manual pick, `toggleCandidate`/`overrideCandidate` (`PlannerGrid.tsx:921-1010`) — C3 by absence from `rankCandidates` (`candidateRanking.ts:109`), C2 `blockedReason`, C4 `ruleBlockedReason`; **`move`** (a seated member to another seat) = the drag gate `evaluateMove` (`moveGate.ts:231`), which needs a source seat holding the member; **`clear`** = always allowed, as the planner allows removal; **`exchange`** (two seated members trade seats) = ONE judged unit: both are removed, then each placement is judged as a `place` on the board without either, so neither sees the other in its column (no spurious pair-rule C4); either refusal refuses the unit, and each C4 names its own member and rule. C1–C3 refuse; C4 asks (Q1) | Re-implement the checks for the connector; or judge `place` with `evaluateMove` | `evaluateMove` answers `unresolved` for a pick from the pool (`moveGate.ts:252`), so it cannot be the place gate. The pick's verdict AND the assembly of its inputs (`rankFor`, `PlannerGrid.tsx:850-866`) are inline in a client component, so both are **extracted** (T2.3) into a neutral module that `PlannerGrid` calls too — one definition, not a second judge. Sharing only the verdict is not enough: `rankCandidates` enforces no rule when `column` or `config` is missing and no week exclusion without the right `sundayDates` (`candidateRanking.ts:116-135`, `ruleEnforcement.ts:372`), and the solver cannot catch the miss, because exclusions are eligibility, not rule instances (`v3MonthSources.ts:128-146`), and a pinned ineligible person is accepted silently (`gcf_v3/owt_v3/facts.py:38`). So on the server those inputs are required, and a safety net re-checks every edited column after the replay (T2.3) |
 | E5 | **The whole-month check is a small checker of its own, `monthCheck.ts`, that judges the board against the rules AS WRITTEN**: every `<=`/`>=`/`==` count rule per person and month with the rule's own value (never clamped), presence («al menos uno de … cada semana»), pairs, «Mes por medio» cadence, each creatable weekend without a Lead, and each draft's voice seats against the solve's targets. Where the rule could not have been met (a `>=`/`==` above the person's availability), the line says so («pide 2; solo estaba disponible 1»). It reads the same rule objects the solve sent (`collectV3Rules`/`emitV3Rules`, `v3Rules.ts`) and the same eligibility as the solve (the proposal's frozen entries' months, `v3MonthSources.ts`) | (a) Send the board to solver v3 with every draft fixed and read its report (this plan's rounds 1–4). (b) Port the solver's model | (a) was tried on paper and failed four ways, all for one reason: the solver answers «what is the best achievable», not «does this board meet the rules as written». For a fixed service it clamps `>=`/`==` to the pinned availability (`gcf_v3/owt_v3/facts.py:46-57, 84-97`), skips `mandatory_lead` (`instances.py:93`) and `unfilled` (`report.py:92`), and sizes rows to the pins (`facts.py:32`), so removing Ana from one of two Sunday Leads under `Sun.Lead == 2` reports nothing. (b) would copy CP-SAT staging that a check does not need. **Drift guard, on BOTH sides (the `fixtures/fairness/golden.json` pattern, ADR-0050):** committed fixtures `fixtures/month-check/parity.json` — wire request + assignments + expected broken set, in cases where `checker.py`'s semantics and ours coincide (no clamping in play, services not fixed) — are asserted by a `gcf_v3/tests` unittest against `checker.py`'s instance recomputation (through a small public wrapper that returns `(family, rule, scope)` tuples to the test only, so `check()`'s counts-only output, C5-17, is unchanged) AND by vitest against `monthCheck.ts`'s judging core. If the solver's semantics change and `checker.py` follows (the acceptance suite forces it), the Python test goes red until the fixture and the TypeScript core follow too. The two deliberate differences (no clamping; Lead and seats judged on every draft) have their own hand-computed cases, never regenerated from output |
-| E6 | **The month check runs on every check and every save** (it is pure and local), and the screen shows its lines live | Run it only on save | With no solver call it costs milliseconds, so Frank sees «Ana: Lead 1 de 2» the moment he removes her, not after saving |
+| E6 | **The month check runs on every check and every save**, and the screen shows its lines live | Run it only on save | With no solver call the computation costs milliseconds; the call's cost is its reads (proposal, pool, rules, roles, ledger), measured against T4.4's budget. Frank sees «Ana: Lead 1 de 2» the moment he removes her, not after saving |
 | E7 | **If a read the month check needs fails, the revision is still saved**, marked «sin revisar», and the screen says so in its first line | Refuse to save | `apply_schedule` never depended on caps; refusing would make a failed read an outage of editing. The model, the screen and apply all repeat «sin revisar» |
 | E8 | **The screen is an MCP App** (`@modelcontextprotocol/ext-apps` 2.0.x): `solve_month` and `revise_proposal` declare `_meta.ui.resourceUri = "ui://owt/proposal-editor"` (so the card follows a proposal into the chat; the screen itself saves only through the app-only `save_proposal_edits`, T2.5), the route serves that resource (`text/html;profile=mcp-app`), and the per-edit check is an app-only tool (`_meta.ui.visibility: ["app"]`) | An Artifact page, or a link to `/admin` | Frank asked for the screen *in* the conversation, after the proposal. MCP Apps is the official extension Claude renders on web, desktop and mobile for custom connectors; ext-apps 2.0.3 peers on `@modelcontextprotocol/server ^2` (the repo pins 2.1.0) and zod ^4.2 (4.3.6). An Artifact cannot call our server with Frank's OAuth grant; `/admin` already exists and is what he is trying not to open |
 | E9 | **One self-contained HTML file, bundled at build time** (esbuild, the existing devDependency, pinned; React 19, the repo's own) and committed, with a vitest guard that rebuilds it and compares bytes | Load scripts from our origin; build only on Vercel | The app's sandbox blocks every external origin unless declared (`_meta.ui.csp`); inline needs no CSP entry and nothing new on `/api/*`. Committed + guarded keeps the gates (tsc, vitest, eslint) the whole truth, as `colour-inventory` does |
@@ -106,12 +106,18 @@ connector»).
 - T2.1 **Fixtures first:** `fixtures/month-check/parity.json`, built by
   `python gcf_v3/acceptance/month_check_fixtures.py` (committed with the fixture; it chains and
   solves `acceptance/world_realistic.json` and `smoke.json` with the existing acceptance tools and
-  writes each case's wire request, assignments and the broken set from the new public wrapper in
-  `checker.py`), plus `fixtures/month-check/cases.json`, hand-computed: a `>=` floor and an `==`
+  then APPLIES EDITS to the solved assignments — clear, place, add — so that every family
+  `checker.py` recomputes is broken in at least one case: count with `<=`, with `>=` and with `==`
+  (values within availability, so no clamping), presence, pair, and `mandatory_lead` on a non-fixed
+  weekend — and writes each case's wire request, assignments and the broken set from the new
+  public wrapper in `checker.py`), plus `fixtures/month-check/cases.json`, hand-computed: a `>=` floor and an `==`
   exact each under-assigned by an edit, one above availability, a `<=` cap broken, a presence rule
   whose only holder was cleared, a pair, a «Mes por medio» break, a weekend whose Lead was cleared,
   an emptied BGV seat. Each case states the expected Spanish line.
-  `gcf_v3/tests/test_month_check_parity.py` asserts the wrapper reproduces every parity case;
+  Every `cases.json` case whose semantics match `checker.py` (all but the clamping and fixed-service
+  differences) is also run through the wrapper. `gcf_v3/tests/test_month_check_parity.py` asserts
+  the wrapper reproduces every parity case, and BOTH suites assert that `parity.json` holds at
+  least one broken instance of each family above, so the guard can never pass vacuously;
   because S2 touches `gcf_v3/**`, the gcf_v3 suite is a required gate for it (§5).
 - T2.2 **The record contract** (`proposalDocument.ts`, `documentTypes.ts`,
   `sanity/schemas/mcpProposal.ts`):
@@ -119,7 +125,7 @@ connector»).
     both absent on a solve's record, which reads as revision 1. `PROPOSAL_FIELDS` and the schema
     gain them (read-only in Studio, like the rest).
   - Payload **v2** = v1's `{entries, drafts, storedServiceIds}` plus `waivers: [{ localId, rowId,
-    memberId, rule }]` (`rule` = the C4 sentence the gate gave, verbatim). Waivers live in the
+    memberId, reasons }]` and `baseline` (both defined below). Waivers live in the
     digest-bound payload, never in the mutable `state`. `parseProposal` accepts v1 (no waivers) and
     v2; `hasOnly` per version.
   - **Digest:** a v1 record keeps today's canonical list exactly (`proposalDigest`,
@@ -134,7 +140,7 @@ connector»).
     `PROPOSAL_FIELDS` by its test) gains the header fields.
   - Payload v2 also carries `checked: boolean` (false = «sin revisar», E7), so `apply_schedule`
     repeats it itself, and `saveId` (T2.5). v2's `hasOnly` = `{v, entries, drafts,
-    storedServiceIds, waivers, checked, saveId}`.
+    storedServiceIds, waivers, baseline, checked, saveId}`.
   - **The save transaction:** ONE Sanity transaction = `create` the child + `patch` the base's
     `state` (adding `supersededBy`) under `ifRevisionId` of the base read that passed E3. On a
     revision conflict: re-read the base and re-judge E3 — superseded → refused naming the
@@ -145,14 +151,27 @@ connector»).
   - A base superseded while an apply of it was already running (a race E3 narrows but cannot
     close) is refused on that apply's next call; the way out is a new `solve_month`, and the
     refusal says so. D7 keeps the data safe meanwhile.
-  - **Waivers across revisions:** the rules are bound (`rulesRev` never changes across a lineage),
-    so a finding on an unchanged seat is the same finding. A child inherits each base waiver whose
-    seat (`localId`, row, member) is unchanged, through `ruleViolationsForColumn` with the waiver as
-    `overridden` (it re-asks with the seat removed, so it does not self-exempt like the pick
-    verdict): inherited exactly when the finding comes back overridden with the same reason. A
-    waiver whose seat changed is dropped, and the answer says which. Never re-judged with the pick
-    verdict, which self-exempts a seated member (`ruleEnforcement.ts:350`) and would drop every
-    waiver while the forced seat stays.
+  - **Waivers and the baseline** (one invariant, judged over the WHOLE board on every check and
+    every save — never only over edited columns, so a waiver can never vanish from a seat that
+    still breaks its rule):
+    - A waiver is `{ localId, rowId, memberId, reasons: string[] }` — the SET of rule sentences
+      Frank confirmed for that seat, verbatim. `ruleViolationsForColumn`'s `overridden` becomes
+      `ReadonlyMap<violationKey, ReadonlySet<string>>`: a seat stands sanctioned iff every live
+      reason is in its set (today one string must equal every reason, `ruleEnforcement.ts:540`);
+      the grid passes singleton sets, so `/admin` behaves exactly as today.
+    - `baseline` (payload v2) = the findings of the SOLVE's board, computed once when the first
+      revision is made from a revision-1 record, and copied verbatim to every later revision. Key:
+      (column, `violationKey`, reason); for a pair rule (column, the two members, rule), so an
+      exchange inside one column keeps its key.
+    - The invariant: every finding on the board is either in `baseline` (answered as a warning: the
+      solver may break a soft pair to meet a floor, `gcf_v3/owt_v3/model.py:116-117`, and the TS
+      rules may disagree on a weekend, `ruleEnforcement.ts:440-448`), or covered by its seat's
+      waiver, or confirmed by a `force` in this very call (T2.5, all its reasons); anything else
+      refuses the save. A waiver is carried to the child exactly while its seat holds the same
+      member and at least one of its reasons is still live; one whose seat changed, or none of
+      whose reasons is live any more, is dropped, and the answer says which. Rules are bound
+      (`rulesRev` fixed across a lineage), so a finding on an unchanged seat is the same finding.
+    - So the waivers apply must hear repeated are exactly the stored set, every one still needed.
   - Revision cap: a save whose child would be `revision` 31 is refused (`revision_limit`); with
     forks refused (E3) the lineage is a chain, so `revision` is its length.
 - T2.3 `app/mcp/monthProposals/revise.ts` (neutral): `replayEdits(proposal, edits, members, rules,
@@ -182,26 +201,20 @@ connector»).
      order.
   4. `moveOccupant.ts` drops its `"use client"` (it imports nothing client-only once (1) lands) and
      performs `move` and each half of `exchange`, so a move has one definition (DD10).
-  **Safety net after the replay:** `ruleViolationsForColumn` (`ruleEnforcement.ts:479`) over every
-  edited column, with the replay's waivers as the overridden set, compared against the same call on
-  the replay's STARTING board (the base's seats with the base's waivers). A finding refuses the
-  save when it has no waiver and either is NEW — absent from the starting board, keyed by
-  (column, `violationKey`, reason); for a pair rule (column, the two members, rule), so an exchange
-  inside one column is not new and a finding on one column never masks one on another — or was WAIVED on the base (a forced seat that lost its waiver is never
-  downgraded to a warning); it catches a gate whose inputs were wrong, independently of the gate. A finding
-  already on the starting board is answered as a warning, never a refusal: the solver may break a
-  pair to meet a floor (pair rules are soft, `gcf_v3/owt_v3/model.py:118`; the TS rules may disagree
-  on a weekend, `ruleEnforcement.ts:440-448`), and a solve's record carries no waivers, so refusing
-  it would block Frank over a seat he never touched. `check_proposal_edits` runs the same net, so
-  the screen shows both kinds before any save.
+  **Safety net after the replay:** the T2.2 invariant over the whole board. It catches a gate whose
+  inputs were wrong, independently of the gate, and `check_proposal_edits` runs it too, so the
+  screen shows forced seats and baseline warnings before any save.
 - T2.4 `monthCheck.ts` (neutral, pure), in two layers so parity covers what production runs: a
   **judging core** over the WIRE shapes (services, per-service eligibility, emitted rules,
   assignments — exactly what the parity fixtures hold), and an **adapter** that builds those shapes
   from the replayed board with the solve's own functions (`buildV3Services`, the month sources'
   eligibility, `collectV3Rules`/`emitV3Rules` under the bound `rulesRev`, seat targets from
   `buildRows()`), with every draft non-fixed and judged against its targets. The fair-share and
-  «Mes por medio» lines come from `computeFairnessLedger` (`fairnessLedger.ts`) fed with the frozen
-  entries as the month's records and the board's drafts as its services, over a fresh ledger read
+  «Mes por medio» lines come from `computeFairnessLedger` (`fairnessLedger.ts:753`) with
+  `balanceStart: FAIRNESS_BALANCE_START` as the GET passes it, fed with the frozen entries turned
+  into `LogicalRecord`s by the same builder the fairness PUT path uses for a body, and the board's
+  drafts as services (counted specials included as the solve counted them), over a fresh ledger
+  read that carries `SANITY_API_READ_TOKEN` (fail closed, ADR-0050)
   (so cadence states may differ from the solve's, and the line says «según el registro de hoy»). Output = Spanish lines through `v3Copy.ts` (C6 U8: no rule
   key on the wire, a line or a log), grouped «Reglas del mes», «Servicios incompletos», and per
   person seats received against share (the ledger's own share, `fairnessLedger.ts`, never
@@ -233,15 +246,17 @@ connector»).
   **Lost answer:** each save carries a client `saveId` stored in the child's payload; a retry whose
   base is superseded by a child with the same `saveId` returns that child as success, so the screen
   never mistakes its own save for a sibling tab's.
-  **Replay limits:** a `place` into a row the column does not show (`rowAppliesTo`, as
+  **Replay limits:** a `place` of a member already in that same cell is refused with C1 (the grid's
+  `toggleCandidate` would REMOVE them; the replay never toggles). A `place` into a row the column does not show (`rowAppliesTo`, as
   `evaluateMove` refuses, e.g. Coro on a Saturday) or outside `buildRows()` is refused, never
   accepted and then dropped by `cellsToDrafts` (E18). Only seats change: a child's drafts copy every
   non-seat field from the base (`localId`, `exists`, `isExisting`, `skipped`, `countsForFairness`,
   `service_name`, `atSolve`) and get fresh `creationRequestId`s; nothing is recomputed against
   fresh `existingRoles`. Waivers key on the kept `localId`.
-  **Forcing:** the C4 prompt lists EVERY blocking reason for the pick (`blockingReasons`, not only
-  the first, which is what `ruleBlockedReason` carries), and a confirmed force stores one waiver
-  per reason; an `exchange` forced as a unit shows and stores both members' reasons. A `force` on
+  **Forcing:** the C4 prompt lists EVERY blocking reason (`blockingReasons`, `ruleEnforcement.ts:345`,
+  exported; not only the first, which is all `ruleBlockedReason` and `evaluateMove`'s C4 carry,
+  `moveGate.ts:333-340`) for `place`, `move` and each half of `exchange`, and a confirmed force
+  stores them all as that seat's waiver set; an `exchange` forced as a unit shows and stores both members' reasons. A `force` on
   an edit the gate judges clean is accepted with no waiver, never refused.
   **The spine:** `judgePick` derives it from the column type: for a weekend, the Sunday spine as
   `ruleContextForTarget` gives it (required, non-empty); for a special, `[]`, as `MonthGenerator`
@@ -263,7 +278,9 @@ connector»).
   and `config` in turn; the safety net refuses an unwaived violation planted past a stubbed gate;
   every T2.1 case through `monthCheck.ts`, and `monthCheckParity.test.ts`; force in revision 2,
   an unrelated `revise_proposal` edit in revision 3, the waiver is inherited and an apply without
-  `waivers` is refused; replay of each edit kind, the
+  `waivers` is refused; the same with a seat forced past TWO rules and the revision-3 edit in a
+  different column (both reasons carried; apply without both refused); `ruleViolationsForColumn`
+  with singleton sets reproduces today's grid results; replay of each edit kind, the
   exchange unit with a pair rule between the two members (no spurious C4); every refusal code; the
   save transaction under a conflict (base superseded meanwhile → refused naming the successor; an
   unrelated state fact → retried and saved); two saves on one base → exactly one child; apply after
