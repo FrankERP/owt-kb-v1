@@ -3,13 +3,14 @@ import "server-only";
 // app/utils/fairnessLedgerRead.ts
 //
 // `loadFairnessLedger` — the server-side reader behind `GET /api/admin/fairness` (solver
-// v3 C2 RD-1 … RD-3). It reads the eligibility records, the voice services, the horizon's
+// v3 C2 RD-1 … RD-3); `loadFairnessLedgerWith` is the same read for the MCP proposal editor's
+// month check (ADR-0062), which adjusts the records and services before the one assembly. It reads the eligibility records, the voice services, the horizon's
 // freezing-service counts and the referenced members through `operationalClient`
 // imported DIRECTLY (published perspective, no CDN, the read token), every query a
 // `serviceReadQueries.ts` builder with no `published` filter (prior-month drafts count),
 // passes each record through the ONE record-schema check (`parseStoredFairnessMonth`)
-// and hands everything to THE ledger (`computeFairnessLedger`) with the balance start
-// (`FAIRNESS_BALANCE_START`, ADR-0055). It performs no authorization: the route gates.
+// and hands everything to THE ledger through `assembleFairnessLedger`, the only call that passes
+// the balance start (`FAIRNESS_BALANCE_START`, ADR-0055). It performs no authorization: the route gates.
 //
 // FAIL CLOSED (RD-2): a record's id is DOTTED, so a read made WITHOUT the read token
 // answers zero records with no error and the past would read as «sin registro» — the
@@ -25,7 +26,7 @@ import "server-only";
 
 import { operationalClient } from "@/sanity/lib/operationalClient";
 
-import { computeFairnessLedger, type LedgerService } from "./fairnessLedger";
+import { computeFairnessLedger, type LedgerInput, type LedgerService } from "./fairnessLedger";
 import { parseStoredFairnessMonth } from "./fairnessMonthWriteRequest";
 import {
   FAIRNESS_BALANCE_START,
@@ -114,24 +115,20 @@ function toLedgerService(row: unknown): LedgerService | null {
   };
 }
 
-export async function loadFairnessLedger(input: {
-  month: string;
-  horizon: 1 | 2;
-  currentMonth: string;
-  engine: FairnessLedgerResponse["engine"];
-  environment: FairnessLedgerResponse["environment"];
-  env?: Readonly<Record<string, string | undefined>>;
-}): Promise<FairnessLedgerResponse> {
-  const env = input.env ?? process.env;
+/** A ledger member as `computeFairnessLedger` takes it. */
+export type LedgerMember = LedgerInput["members"][number];
+
+/** The token check (RD-2): without it a record read answers zero rows and no error. */
+function requireReadToken(env: Readonly<Record<string, string | undefined>>): void {
   if (!env.SANITY_API_READ_TOKEN) {
     console.error("[fairnessLedgerRead] SANITY_API_READ_TOKEN is not set: fairnessMonth ids are private, refusing to read");
     throw new FairnessLedgerUnavailableError();
   }
-  const target = input.month;
-  const horizonMonths = input.horizon === 2 ? [target, shiftMonth(target, 1)] : [target];
+}
 
-  // Records through the last horizon month, each through the ONE record-schema check.
-  const recordRows = await readList("records", fairnessMonthsThroughQuery(horizonMonths[horizonMonths.length - 1]));
+/** Records through `through` (each through the ONE record-schema check) and the services the ledger for `target` reads. */
+async function readRecordsAndServices(target: string, through: string): Promise<{ records: LogicalRecord[]; services: LedgerService[] }> {
+  const recordRows = await readList("records", fairnessMonthsThroughQuery(through));
   const records: LogicalRecord[] = [];
   recordRows.forEach((row, i) => {
     const parsed = parseStoredFairnessMonth(row);
@@ -149,24 +146,68 @@ export async function loadFairnessLedger(input: {
   const earliest = records.map((r) => r.month).filter((m) => monthIndex(m) < monthIndex(target)).sort(compareCodepoint)[0];
   const windowStart = shiftMonth(target, -3);
   const from = earliest && monthIndex(earliest) < monthIndex(windowStart) ? earliest : windowStart;
-  const [serviceRows, countRows] = await Promise.all([
-    readList("services", voiceRolesInRangeQuery(`${from}-01`, `${target}-01`)),
-    readList("service counts", serviceCountsInMonths(horizonMonths)),
-  ]);
-  const services = serviceRows.map(toLedgerService).filter((s): s is LedgerService => s !== null);
+  const serviceRows = await readList("services", voiceRolesInRangeQuery(`${from}-01`, `${target}-01`));
+  return { records, services: serviceRows.map(toLedgerService).filter((s): s is LedgerService => s !== null) };
+}
 
-  // The members the records and the seats reference (RD-5: nobody else).
+/** The members the records and the seats reference (RD-5: nobody else). */
+async function readLedgerMembers(records: readonly LogicalRecord[], services: readonly LedgerService[]): Promise<LedgerMember[]> {
   const ids = new Set<string>();
   for (const r of records) for (const p of r.people) ids.add(p.memberId);
   for (const s of services) for (const id of [...s.Lead, ...s.BGVs, ...s.Chorus]) ids.add(id);
   const memberRows = ids.size ? await readList("members", fairnessMembersByIdsQuery([...ids].sort(compareCodepoint))) : [];
-  const members = memberRows.filter(isObj).filter((m) => typeof m._id === "string").map((m) => ({
+  return memberRows.filter(isObj).filter((m) => typeof m._id === "string").map((m) => ({
     id: m._id as string,
     name: displayMemberName({ member_name: typeof m.member_name === "string" ? m.member_name : undefined, alias: typeof m.alias === "string" ? m.alias : undefined }),
     unavailableDates: Array.isArray(m.unavailableDates) ? m.unavailableDates.filter((d): d is string => typeof d === "string") : [],
   }));
+}
 
-  const ledger = computeFairnessLedger({ target, balanceStart: FAIRNESS_BALANCE_START, records, services, members });
+/**
+ * THE ledger assembly (ADR-0055): the one call that hands the ledger `FAIRNESS_BALANCE_START`. The
+ * GET (`loadFairnessLedger`) and the MCP proposal editor's month check (`loadFairnessLedgerWith`)
+ * both go through it, so the panel, Auto and the check read one balance.
+ */
+export function assembleFairnessLedger(input: { target: string; records: LogicalRecord[]; services: LedgerService[]; members: LedgerMember[] }) {
+  return computeFairnessLedger({ target: input.target, balanceStart: FAIRNESS_BALANCE_START, records: input.records, services: input.services, members: input.members });
+}
+
+/**
+ * The ledger for `target` over the stored records through `recordsThrough` and the stored services,
+ * after `adjust` replaced or added what a caller is judging (the month check: a proposal's frozen
+ * records and its board's drafts). Same reads, same fail-closed rules and same assembly as the GET.
+ */
+export async function loadFairnessLedgerWith(input: {
+  target: string;
+  recordsThrough: string;
+  adjust: (stored: { records: LogicalRecord[]; services: LedgerService[] }) => { records: LogicalRecord[]; services: LedgerService[] };
+  env?: Readonly<Record<string, string | undefined>>;
+}): Promise<ReturnType<typeof assembleFairnessLedger>> {
+  requireReadToken(input.env ?? process.env);
+  const { records, services } = input.adjust(await readRecordsAndServices(input.target, input.recordsThrough));
+  const members = await readLedgerMembers(records, services);
+  return assembleFairnessLedger({ target: input.target, records, services, members });
+}
+
+export async function loadFairnessLedger(input: {
+  month: string;
+  horizon: 1 | 2;
+  currentMonth: string;
+  engine: FairnessLedgerResponse["engine"];
+  environment: FairnessLedgerResponse["environment"];
+  env?: Readonly<Record<string, string | undefined>>;
+}): Promise<FairnessLedgerResponse> {
+  requireReadToken(input.env ?? process.env);
+  const target = input.month;
+  const horizonMonths = input.horizon === 2 ? [target, shiftMonth(target, 1)] : [target];
+
+  const [{ records, services }, countRows] = await Promise.all([
+    readRecordsAndServices(target, horizonMonths[horizonMonths.length - 1]),
+    readList("service counts", serviceCountsInMonths(horizonMonths)),
+  ]);
+  const members = await readLedgerMembers(records, services);
+
+  const ledger = assembleFairnessLedger({ target, records, services, members });
   const freezing = new Map<string, number>();
   for (const row of countRows) {
     if (isObj(row) && typeof row.month === "string") freezing.set(row.month, Number(row.weekend ?? 0) + Number(row.countedSpecials ?? 0));

@@ -2,6 +2,7 @@
 // the Studio policy share, the handle (D9), and the strict build/parse pair (D6, D10): a real
 // plan round-trips; anything else that is not exactly what `buildProposal` writes reads as no
 // record at all.
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -19,6 +20,7 @@ import { isProposalHandle, isProposalId, newProposalHandle, proposalIdOf } from 
 import {
   EMPTY_STATE,
   PROPOSAL_MAX_DRAFTS,
+  PROPOSAL_MAX_REVISION,
   PROPOSAL_TTL_MS,
   admitsProposal,
   buildProposal,
@@ -26,7 +28,9 @@ import {
   parseProposal,
   proposalDigest,
   stateText,
+  type FindingKey,
   type NewProposalDocument,
+  type RevisionInput,
 } from "../proposalDocument";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -73,8 +77,26 @@ function resigned(doc: NewProposalDocument, payload: unknown): NewProposalDocume
   const header = {
     origin: doc.origin, principal: doc.principal, createdAt: doc.createdAt, expiresAt: doc.expiresAt,
     engine: doc.engine, rulesRev: doc.rulesRev ?? null, months: doc.months, requestId: doc.requestId,
+    ...(doc.parent !== undefined ? { lineage: { parent: doc.parent, revision: doc.revision!, root: doc.root! } } : {}),
   };
   return { ...doc, payload: text, digest: proposalDigest(header, text) };
+}
+
+const ROOT = "0123456789abcdefghjkmnpqrs";
+const CHILD = "abcdefghjkmnpqrs0123456789";
+
+function revisionOf(plan: V3MonthPlan, over: Partial<RevisionInput> = {}): RevisionInput {
+  const service = plan.drafts[0].draft.localId;
+  const key: FindingKey = { kind: "exclusion", rule: "restriction[0].pattern[1]", service, row: "Lead", members: ["member-a"] };
+  return {
+    lineage: { parent: ROOT, revision: 2, root: ROOT },
+    expiresAt: new Date(NOW + PROPOSAL_TTL_MS).toISOString(),
+    waivers: [{ key, sentence: "Regla: Ana no puede ser Lead el domingo" }],
+    baseline: [{ kind: "pair", rule: "conflict[0]", service, row: null, members: ["member-a", "member-b"] }],
+    checked: true,
+    saveId: "save_0123456789",
+    ...over,
+  };
 }
 
 describe("documentTypes.ts and the schema", () => {
@@ -211,5 +233,84 @@ describe("state and admission", () => {
     expect(admitsProposal(p, { origin: "https://dev-owt-backstage.vercel.app", principal: "member-frank", nowMs: NOW })).toBe(false);
     expect(admitsProposal(p, { origin: PROD, principal: "member-other", nowMs: NOW })).toBe(false);
     expect(admitsProposal(p, { origin: PROD, principal: "member-frank", nowMs: NOW + PROPOSAL_TTL_MS })).toBe(false);
+  });
+});
+
+describe("revisions (editor plan T2.2)", () => {
+  it("a solve's record signs exactly the nine fields every stored record was signed with", async () => {
+    const doc = built(await realPlan());
+    const legacy = JSON.stringify([
+      doc.origin, doc.principal, doc.createdAt, doc.expiresAt, doc.engine, doc.rulesRev ?? null, doc.months, doc.requestId, doc.payload,
+    ]);
+    expect(doc.digest).toBe(`sha256:${createHash("sha256").update(legacy, "utf8").digest("hex")}`);
+    expect(JSON.parse(doc.payload).v).toBe(1);
+    expect(["parent", "revision", "root"].some((k) => k in doc)).toBe(false);
+  });
+
+  it("a revision round-trips its lineage and its v2 payload, keeping the base's expiry", async () => {
+    const plan = await realPlan();
+    const rev = revisionOf(plan, { expiresAt: "2026-10-25T00:00:00.000Z" });
+    const doc = built(plan, { handle: CHILD, nowMs: NOW + 1000, revision: rev });
+    expect(doc).toMatchObject({ parent: ROOT, revision: 2, root: ROOT, expiresAt: "2026-10-25T00:00:00.000Z" });
+    const parsed = parseProposal({ ...doc, _rev: "r1" });
+    expect(parsed?.header.lineage).toEqual(rev.lineage);
+    expect(parsed?.payload).toMatchObject({ v: 2, waivers: rev.waivers, baseline: rev.baseline, checked: true, saveId: rev.saveId });
+  });
+
+  it.each([
+    ["the parent", (d: NewProposalDocument) => ({ ...d, parent: CHILD })],
+    ["the revision", (d: NewProposalDocument) => ({ ...d, revision: 3 })],
+    ["the root", (d: NewProposalDocument) => ({ ...d, root: CHILD })],
+    ["the lineage, dropped whole", (d: NewProposalDocument) => { const { parent: _p, revision: _r, root: _o, ...rest } = d; return rest; }],
+  ])("altering %s reads as no record", async (_name, tamper) => {
+    const plan = await realPlan();
+    expect(parseProposal({ ...tamper(built(plan, { handle: CHILD, revision: revisionOf(plan) })), _rev: "r1" })).toBeNull();
+  });
+
+  it("refuses, even re-signed, a partial lineage, a revision out of range, a version that does not match", async () => {
+    const plan = await realPlan();
+    const doc = built(plan, { handle: CHILD, revision: revisionOf(plan) });
+    const payload = JSON.parse(doc.payload);
+    const { root: _root, ...partial } = doc;
+    expect(parseProposal({ ...resigned(partial as NewProposalDocument, payload), _rev: "r1" })).toBeNull();
+    for (const revision of [1, PROPOSAL_MAX_REVISION + 1, 2.5]) {
+      expect(parseProposal({ ...resigned({ ...doc, revision }, payload), _rev: "r1" })).toBeNull();
+    }
+    expect(parseProposal({ ...resigned({ ...doc, revision: PROPOSAL_MAX_REVISION }, payload), _rev: "r1" })).not.toBeNull();
+    expect(parseProposal({ ...resigned(doc, { ...payload, v: 1 }), _rev: "r1" })).toBeNull();
+    const v1 = built(plan);
+    expect(parseProposal({ ...resigned(v1, { ...JSON.parse(v1.payload), v: 2 }), _rev: "r1" })).toBeNull();
+  });
+
+  it("refuses, even re-signed, a malformed waiver or baseline key", async () => {
+    const plan = await realPlan();
+    const doc = built(plan, { handle: CHILD, revision: revisionOf(plan) });
+    const payload = JSON.parse(doc.payload);
+    const w = payload.waivers[0];
+    const bad: unknown[] = [
+      { ...payload, waivers: [w, w] },
+      { ...payload, waivers: [{ ...w, key: { ...w.key, service: "nope" } }] },
+      { ...payload, waivers: [{ ...w, key: { ...w.key, rule: "Sun.Lead" } }] },
+      { ...payload, waivers: [{ ...w, key: { ...w.key, row: null } }] },
+      { ...payload, waivers: [{ ...w, sentence: "x".repeat(301) }] },
+      { ...payload, waivers: [{ ...w, extra: 1 }] },
+      { ...payload, baseline: [{ ...payload.baseline[0], members: ["member-b", "member-a"] }] },
+      { ...payload, baseline: [{ ...payload.baseline[0], row: "Lead" }] },
+      { ...payload, checked: "yes" },
+      { ...payload, saveId: "short" },
+    ];
+    for (const p of bad) expect(parseProposal({ ...resigned(doc, p), _rev: "r1" })).toBeNull();
+    expect(parseProposal({ ...resigned(doc, payload), _rev: "r1" })).not.toBeNull();
+  });
+
+  it("supersededBy parses, and every merge keeps the stored one", async () => {
+    const doc = built(await realPlan());
+    const state = { recordsDone: false, created: {}, supersededBy: CHILD };
+    expect(parseProposal({ ...doc, _rev: "r1", state: stateText(state) })?.state).toEqual(state);
+    expect(parseProposal({ ...doc, _rev: "r1", state: JSON.stringify({ ...state, supersededBy: "nope" }) })).toBeNull();
+    expect(mergeState(state, { recordsDone: true, created: {} })).toEqual({ ...state, recordsDone: true });
+    expect(mergeState(state, { recordsDone: false, created: {}, supersededBy: ROOT }).supersededBy).toBe(CHILD);
+    expect(mergeState(EMPTY_STATE, state).supersededBy).toBe(CHILD);
+    expect(stateText(EMPTY_STATE)).toBe(JSON.stringify({ recordsDone: false, created: {} }));
   });
 });

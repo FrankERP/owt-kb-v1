@@ -19,6 +19,8 @@ import type { SolverConfig } from "@/app/components/admin/plannerModel";
 import { applyScheduleResult } from "../applySchedule";
 import { solveMonthResult } from "../solveMonth";
 import { HANDLE, PRINCIPAL, applyWorld, solveDeps, storedFrom, textOf } from "./monthToolFixtures";
+import { checkProposalEditsResult, reviseProposalResult, saveProposalEditsResult } from "../proposalEditor";
+import { editorWorld } from "./editorToolFixtures";
 
 const MEMBER_IDS = ["m-ana", "m-bruno", "m-carla", "m-dani", "m-admin"];
 const SECRETS = [...NAME_SHAPED_KEYS, ...MEMBER_IDS, "rules-rev-1"];
@@ -95,6 +97,30 @@ describe("key hygiene over a name-shaped config", () => {
     expect(putThrew.isError).toBe(true);
     expect(textOf(refused)).toContain("rechazado");
     expectClean([...surfaces(thrown), ...surfaces(putThrew), ...surfaces(refused), ...consoleCalls]);
+  });
+});
+
+describe("key hygiene through the proposal editor (check, save, revise, apply)", () => {
+  it("the board, the findings, the waivers, the month check and apply's waiver gate name no key, id or revision", async () => {
+    const w = await editorWorld({ config: NAME_SHAPED });
+    const nov1 = w.sid("2026-11-01");
+    // Bruno next to Ana on Nov 1 breaks the name-shaped pair rule: forced from the screen.
+    const edits = [{ op: "place" as const, service: nov1, row: "bgv", member: w.tok("m-bruno"), force: true }];
+    const checked = await checkProposalEditsResult({ proposal: HANDLE, edits }, PRINCIPAL, w.deps);
+    const diff = (checked.structuredContent as { rules: { diff: Array<Record<string, unknown>> } }).rules.diff;
+    expect(diff).toHaveLength(1);
+    const confirms = diff.map(({ kind, rule, service, row, members }) => ({ kind, rule, service, row, members })) as never;
+    const saved = await saveProposalEditsResult({ proposal: HANDLE, edits, confirms, saveId: "save-hygiene" }, PRINCIPAL, w.deps);
+    const child = (saved.structuredContent as { proposal: string }).proposal;
+    const revised = await reviseProposalResult({ proposal: child, edits: [{ op: "place", service: "2026-11-08", seat: "BGV", member: "Dani" }] }, PRINCIPAL, w.deps);
+    const grandchild = (revised.structuredContent as { proposal: string }).proposal;
+    const refused = await applyScheduleResult({ proposal: grandchild }, PRINCIPAL, w.applyDeps);
+    const waivers = (refused.structuredContent as { expectedWaivers: unknown[] }).expectedWaivers;
+    const applied = await applyScheduleResult({ proposal: grandchild, waivers } as never, PRINCIPAL, w.applyDeps);
+    expect(applied.structuredContent).toMatchObject({ complete: true, revision: 3 });
+    const all = [checked, saved, revised, refused, applied];
+    expectClean([...all.flatMap(surfaces), ...consoleCalls]);
+    for (const line of consoleCalls) for (const h of [HANDLE, child, grandchild]) expect(line).not.toContain(h);
   });
 });
 

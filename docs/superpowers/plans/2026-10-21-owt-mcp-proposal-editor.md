@@ -1,6 +1,6 @@
 # OWT MCP — an interactive editor for a month proposal (plan)
 
-**Status:** DRAFT, 2026-10-21. E5 reshaped after review round 4 (Frank chose the own checker, 01:02Z). Round 10 approved; round 11 found one blocker (the waiver finder's inputs), fixed here structurally with every non-blocking item of rounds 10–11 (Frank, 02:43Z). Not approved, not authorized. S1 (the read-only card) is implemented ahead of the review, on the name-only result (T1.3).
+**Status:** APPROVED (critical tier) 2026-10-21: rounds 12 and 13 returned `APPROVED` on the same snapshot (sha256 `32bb32ca…7ff0`); review log `2026-10-21-owt-mcp-proposal-editor-review-log.md`. §8 holds the non-blocking notes of rounds 12–13 adopted AFTER the approval — un-reviewed, and they win where they differ from the body. Implementation of S2–S4 needs Frank's go-ahead. S1 (the read-only card) is in production (PR #159, `2744278b`).
 **Requirement (Frank, 2026-10-21 00:05Z, verbatim):** «Es posible hacer que el mcp haga un elemento
 interactivo donde yo pueda modificar el rol como yo quiera que quede una vez que me muestra la
 propuesta y entonces lo puede carga y advertirme si algo no cuadra con las reglas o algo así?» —
@@ -494,3 +494,45 @@ form: the editor is presentational and the server judges (E1); `docs/SECRETS.md`
 `MCP_OAUTH_SECRET` gains the member-token use (T1.3) and its rotation note; the C6 spec's KH-1 and
 the P4 plan's hygiene rule amended to name the editor's payload (finding keys by kind and ordinal,
 no config key) and wire (member tokens).
+
+## 8. Amendments after approval (rounds 12–13 non-blocking notes; un-reviewed)
+
+Adopted after the two approvals, so no adversarial reviewer has seen them; S2's merge-range code
+review checks them against the code. Where this section and the body differ, this section wins.
+
+- **A1 — eligibility and the ledger (E5, E7, T2.4).** The month check takes each horizon month's
+  eligibility, `==` rules and presence from the proposal's FROZEN confirm entries (the `write`
+  bodies apply will PUT), never from a fresh ledger: it builds the month sources from a synthetic
+  horizon in which each month is bound to its frozen entry. The fresh ledger read feeds only
+  `people` (cadence, exemptions, `dl_since`, `prev_dl_leads`) and the fair-share lines. **If it
+  fails** («sin revisar», saved): still judged are the count rules (`<= >= ==` against the frozen
+  eligibility), presence, pairs, Lead and empty seats; omitted are the fair-share lines and EVERY
+  protection (all of them read `people`), and the answer names what was omitted.
+- **A2 — the adapter overrides the builder where the check needs it (T2.4).** `buildV3SolveRequest`
+  marks counted specials `fixed: true` with pins from `prefillCountedSpecials`
+  (`v3Services.ts:160`); the adapter takes the builder's output and then sets every service
+  `fixed: false`, drops every pin, and passes the BOARD's seats as the assignments, so a special is
+  judged on what Frank left in it, not on the prefill. Lead and empty-seat lines are computed from
+  the board directly (every draft, counted or not). The wire-equality test compares everything
+  except those overridden fields.
+- **A3 — a builder refusal never blocks editing (T2.4, T2.2's «never stuck»).** Any refusal from
+  `collectV3Rules` (a cap's or pair's person no longer resolves) or from `buildV3SolveRequest`
+  (horizon past or ceiling, cadence names, flag disagreements, `V3_LIMITS`, the pin cap) makes the
+  month check «sin revisar» with the refusal's own lines; the save proceeds. The per-edit gate and
+  the safety net do not depend on them (they read the bound config through `columnRuleInputs`).
+  Only a failed pool, rules or roles read still refuses the check and the save.
+- **A4 — every confirmed force is stored (Q1 (2), T2.2, T2.5).** A `force` Frank confirms stores a
+  waiver for every rule its C4 named, EVEN WHEN the diff is empty (a re-force of a seat whose
+  breach is in `baseline` or already on the base board): so everything Frank forces reaches apply's
+  permission prompt. What is never stored, and so never in the prompt, is a breach nobody forced:
+  the solver's own (`baseline`) and one that appeared with no edit (a rename since the solve). Both
+  are warnings on the screen and in the revise answer before «Cargar», and ADR-0062 states this next
+  to Q1's guarantee. Frank is told: «Lo que tú fuerces aparece en el permiso al cargar; lo que el
+  solver ya traía o lo que cambió solo se muestra como aviso».
+- **A5 — `confirms` on the wire (T2.2, T1.3).** Finding keys name members, so `confirms` crosses as
+  `(kind, ordinal, column localId, row, member TOKENS)`, never member ids; `monthToolHygiene.test.ts`
+  covers the save tool's input echo.
+- **A6 — the accepted race (ADR-0062).** An apply of the base that loaded before a save commits
+  finishes with the solver's seats, and the child's apply is then refused by D7 (c): Frank's edits
+  are lost loudly, after he approved both calls. The ADR names it; nothing is built for it.
+

@@ -105,18 +105,17 @@ import {
   assignedForColumn,
   cellsToParticipantRoles,
   hasTarget,
-  reconcileOccupants,
   rowAppliesTo,
-  seatDefForRow,
   type GridCell,
   type GridColumn,
   type GridRow,
   type SolverConfig,
+  withUpdatedCell,
 } from "./plannerModel";
+import { judgePick, pickCandidates } from "./pickJudge";
 import { ruleViolationsForColumn, violationKey, type SeatedViolation } from "./ruleEnforcement";
 import {
   displayName,
-  rankCandidates,
   type RankedCandidate,
   type RankMember,
 } from "./candidateRanking";
@@ -150,12 +149,9 @@ import DateField from "@/app/components/ui/DateField";
 import Menu, { MenuHeader, MenuItem } from "@/app/components/ui/Menu";
 import Switch from "@/app/components/ui/Switch";
 import { CLEAR_WHAT_LABEL, type ClearScope, type ClearWhat } from "./clearCells";
-// T4 of the drag-and-drop plan. `moveOccupant` imports `withUpdatedCell` back
-// out of this file, so these two modules are a cycle — a deliberate one: T2's
-// whole point is that the move composes THIS file's single write helper twice
-// rather than mutating cells itself. Both sides are hoisted function
-// declarations used only at event time, so nothing is read during module
-// evaluation.
+// T4 of the drag-and-drop plan. `moveOccupant` composes the grid's single write
+// helper, `withUpdatedCell` (now in `plannerModel.ts`, so the MCP proposal editor
+// can replay a move on the server), twice rather than mutating cells itself.
 import { moveOccupant, type MoveOccupantEndpoint, type MoveOccupantSource } from "./moveOccupant";
 import type { SolverEngine } from "./solverEngine";
 import {
@@ -521,64 +517,6 @@ interface CellDragHandlers {
 }
 
 /**
- * Writes `memberIds` into one cell, and keeps `overrides` (P10) honest:
- * an id no longer seated cannot stay overridden, so removing a member clears
- * their entry — the alternative is a stale exception that would silence E13's
- * re-flag if the same person were ever seated here again.
- *
- * `addOverride` is the ONLY way an entry is created, and it is reachable from
- * exactly one place: the picker's secondary "Asignar de todos modos" action.
- * It carries the RULE that was waived, not just the person: the two fields are
- * written and pruned together here, so `overrideReasons` can never outlive the
- * seating it describes. See `GridCell.overrideReasons`.
- */
-export function withUpdatedCell(
-  cells: GridCell[],
-  rowId: string,
-  columnId: string,
-  memberIds: string[],
-  addOverride?: { memberId: string; reason: string },
-): GridCell[] {
-  const idx = cells.findIndex((c) => c.columnId === columnId && c.rowId === rowId);
-  const seated = new Set(memberIds);
-  const prior = idx === -1 ? [] : (cells[idx].overrides ?? []);
-  const priorReasons = idx === -1 ? {} : (cells[idx].overrideReasons ?? {});
-  const kept = prior.filter((id) => seated.has(id));
-  const add =
-    addOverride && seated.has(addOverride.memberId) && !kept.includes(addOverride.memberId)
-      ? addOverride
-      : null;
-  const overrides = add ? [...kept, add.memberId] : kept;
-  const overrideReasons: Record<string, string> = {};
-  for (const id of overrides) {
-    const reason = id === add?.memberId ? add.reason : priorReasons[id];
-    if (reason !== undefined) overrideReasons[id] = reason;
-  }
-  if (idx === -1) {
-    return [
-      ...cells,
-      {
-        columnId,
-        rowId,
-        occupants: reconcileOccupants([], memberIds),
-        origin: "manual" as const,
-        overrides,
-        overrideReasons,
-      },
-    ];
-  }
-  const next = [...cells];
-  next[idx] = {
-    ...next[idx],
-    occupants: reconcileOccupants(next[idx].occupants, memberIds),
-    origin: "manual",
-    overrides,
-    overrideReasons,
-  };
-  return next;
-}
-
-/**
  * Same person, two different rows of the SAME category, on the same date.
  * `blockedReason` (`candidateRanking.ts:134-137`) only refuses this at manual
  * pick time — Auto is not a manual pick, so a hand-assigned Lead the solver
@@ -846,37 +784,25 @@ export default function PlannerGrid(props: PlannerGridProps) {
     return map;
   }, [cells, rows, columns, members, sundayDates, sundayDatesForColumn, config]);
 
+  /** The picker's context for one cell — the grid's own inputs, for `pickJudge` (the one assembly). */
+  function pickContext(row: GridRow, column: GridColumn) {
+    return {
+      cells,
+      rows,
+      column,
+      row,
+      members,
+      windowRoles: unionRoles,
+      recentRoles: savedWindow,
+      sundayDates: sundayDatesForColumn?.(column) ?? sundayDates,
+      config,
+    };
+  }
+
   function rankFor(row: GridRow, columnId: string): RankedCandidate[] {
     const column = columnById.get(columnId);
     if (!column) return [];
-    const seat = seatDefForRow(row);
-    const assigned = assignedForColumn(cells, rows, columnId);
-    const columnSundayDates = sundayDatesForColumn?.(column) ?? sundayDates;
-    // Passed to BOTH calls: the merge below keeps only `recent` from the second,
-    // so its verdict is discarded and cannot disagree — but a later change to
-    // what the merge keeps would make a divergence here a real hazard.
-    const order = rankCandidates({
-      seat,
-      date: column.date,
-      members,
-      windowRoles: unionRoles,
-      assigned,
-      column,
-      sundayDates: columnSundayDates,
-      config,
-    });
-    const recentOnly = rankCandidates({
-      seat,
-      date: column.date,
-      members,
-      windowRoles: savedWindow,
-      assigned,
-      column,
-      sundayDates: columnSundayDates,
-      config,
-    });
-    const recentById = new Map(recentOnly.map((c) => [c.id, c.recent]));
-    return order.map((c) => ({ ...c, recent: recentById.get(c.id) ?? c.recent }));
+    return pickCandidates(pickContext(row, column));
   }
 
   /**
@@ -948,13 +874,16 @@ export default function PlannerGrid(props: PlannerGridProps) {
     clearDragNotice();
     const current =
       cellsByKey.get(cellKey(columnId, row.id))?.occupants.map((o) => o.memberId) ?? [];
-    if (current.includes(memberId)) {
+    const column = columnById.get(columnId);
+    if (!column) return;
+    const verdict = judgePick(pickContext(row, column), memberId, candidates);
+    if (verdict.kind === "seated") {
       onCellsChange(withUpdatedCell(cells, row.id, columnId, current.filter((id) => id !== memberId)));
       return;
     }
-    const candidate = candidates.find((c) => c.id === memberId);
-    if (candidate?.blockedReason) return; // refuse a same-category double (D6)
-    if (candidate?.ruleBlockedReason) return; // refuse a hard rule (E6) — see `overrideCandidate`
+    // A same-category double (D6) and a hard rule (E6, see `overrideCandidate`) refuse; so does a
+    // member the list does not carry (C3), which the picker never renders.
+    if (verdict.kind !== "clean") return;
     onCellsChange(withUpdatedCell(cells, row.id, columnId, [...current, memberId]));
   }
 
@@ -982,30 +911,19 @@ export default function PlannerGrid(props: PlannerGridProps) {
     if (mutationLocked) return;
     clearRemoveError();
     clearDragNotice();
-    const candidate = candidates.find((c) => c.id === memberId);
-    if (!candidate?.ruleBlockedReason) return;
-    // A BACKSTOP, and no test can kill this line ALONE: `CandidateRow` renders
-    // the button on the same two conditions, so a double-blocked candidate has
-    // no button to click. The line that carries D6 here is `overridable`, which
-    // IS pinned — by a candidate holding both refusals at once ("offers NO
-    // override for a same-category double"). Kept because this is a write path
-    // into a cell and the cost is one line.
-    if (candidate.blockedReason) return;
+    const column = columnById.get(columnId);
+    if (!column) return;
+    // Only a C4 verdict is overridable. A BACKSTOP, not the enforcement: `CandidateRow`
+    // renders the button only for a rule-blocked candidate without a same-category
+    // double (`overridable`, pinned by "offers NO override for a same-category
+    // double"), and `judgePick` answers C2 before C4 and `seated` before either — the
+    // self-exemption already clears a seated member's rule block. Kept because this is
+    // a write path into a cell.
+    const verdict = judgePick(pickContext(row, column), memberId, candidates);
+    if (verdict.kind !== "prompt") return;
     const current =
       cellsByKey.get(cellKey(columnId, row.id))?.occupants.map((o) => o.memberId) ?? [];
-    // A BACKSTOP, not the enforcement. Nobody already seated here can reach this
-    // line: `evaluate` exempts a cell's own occupants outright (E6/P9,
-    // `ruleEnforcement.ts`'s self-exemption), so their `ruleBlockedReason` is
-    // `null` and the guard above has already returned. Deleting this line fails
-    // no test. It is kept because "an override adds a seat" is what the line
-    // below assumes, and re-stating it costs one line.
-    if (current.includes(memberId)) return;
-    onCellsChange(
-      withUpdatedCell(cells, row.id, columnId, [...current, memberId], {
-        memberId,
-        reason: candidate.ruleBlockedReason,
-      }),
-    );
+    onCellsChange(withUpdatedCell(cells, row.id, columnId, [...current, memberId], verdict.addOverride));
   }
 
   // ── The drag, gated ────────────────────────────────────────────────────────

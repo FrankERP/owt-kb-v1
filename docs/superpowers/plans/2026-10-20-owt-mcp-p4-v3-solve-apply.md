@@ -128,7 +128,11 @@ Verified at `d65871e2` unless marked «measured».
   `ruleKey`, a minted rule id's source, a member id in a log, or a request/response body. Rules are
   named by their card labels through the run's own label maps. The proposal record stores the
   frozen PUT entries (which carry `ruleKey`s, as the `fairnessMonth` records they become do) under a
-  private dotted id and never returns them.
+  private dotted id and never returns them. **[Amended 2026-10-21, the proposal editor — ADR-0062]**
+  A saved version's payload adds finding keys by kind and config ordinal (never a config key), and
+  the editor's tools carry members as tokens (`memberTokens.ts`), never ids;
+  `monthToolHygiene.test.ts` runs the three editor tools and the waiver gate over the name-shaped
+  fixture.
 - **Draft gating** (I2): no `MAY_SEE_DRAFTS` entry; the two shared builders sit in
   `serviceReadQueries.ts` (already exempt); no protected-type GROQ literal in `app/mcp/**`.
 - **I5:** the solve's member input admits every member (`{ all: true }`), as a super-admin's browser

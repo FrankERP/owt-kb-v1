@@ -73,6 +73,7 @@ import {
   WRITE_ANNOTATIONS,
   WRITE_TOOL_NAMES,
   MONTH_TOOL_NAMES,
+  EDITOR_TOOL_NAMES,
   SOLVE_MONTH_ANNOTATIONS,
 } from "../mcp-dev-smoke.mjs";
 
@@ -404,10 +405,10 @@ describe("checkToolList", () => {
   /** A tools/list result exactly as the P3 route registers it. */
   const solve = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
   const annotationsOf = (name: string) =>
-    name === "solve_month" ? solve : WRITE_TOOL_NAMES.includes(name) || name === "apply_schedule" ? destructive : readOnly;
+    name === "solve_month" || name === "save_proposal_edits" || name === "revise_proposal" ? solve : WRITE_TOOL_NAMES.includes(name) || name === "apply_schedule" ? destructive : readOnly;
   const registered = () => EXPECTED_TOOLS.map((name) => ({ name, annotations: annotationsOf(name) }));
 
-  it("pins fourteen tools: ping, the seven reads, the four writes, then the two month tools, in registration order", () => {
+  it("pins seventeen tools: ping, the seven reads, the four writes, the two month tools, then the three editor tools, in registration order", () => {
     expect(EXPECTED_TOOLS).toEqual([
       "ping",
       "get_service",
@@ -423,12 +424,16 @@ describe("checkToolList", () => {
       "edit_setlist",
       "solve_month",
       "apply_schedule",
+      "check_proposal_edits",
+      "save_proposal_edits",
+      "revise_proposal",
     ]);
     expect(WRITE_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(8, 12));
-    expect(MONTH_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(-2));
+    expect(MONTH_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(12, 14));
+    expect(EDITOR_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(-3));
   });
 
-  it("per-tool annotations: every read read-only, every write destructive (I14), solve_month writing only its record", () => {
+  it("per-tool annotations: every read read-only, every write destructive (I14), solve_month and the two editor saves writing only their record", () => {
     expect(READ_ONLY_ANNOTATIONS).toEqual(readOnly);
     expect(WRITE_ANNOTATIONS).toEqual(destructive);
     expect(SOLVE_MONTH_ANNOTATIONS).toEqual(solve);
@@ -437,7 +442,7 @@ describe("checkToolList", () => {
     }
   });
 
-  it("accepts the exact fourteen names, in order, each with its own annotations", () => {
+  it("accepts the exact seventeen names, in order, each with its own annotations", () => {
     expect(checkToolList(registered())).toEqual({ ok: true });
   });
 
@@ -512,10 +517,11 @@ describe("toolCallRequest — DV1: the dev smoke never calls a write tool", () =
   const SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../mcp-dev-smoke.mjs");
   const code = stripComments(readFileSync(SCRIPT, "utf8"));
 
-  it("refuses each of the four write tools and the two month tools by name, in any argument shape", () => {
+  it("refuses each of the four write tools, the two month tools and the three editor tools by name, in any argument shape", () => {
     expect(WRITE_TOOL_NAMES).toHaveLength(4);
     expect(MONTH_TOOL_NAMES).toHaveLength(2);
-    for (const name of [...WRITE_TOOL_NAMES, ...MONTH_TOOL_NAMES]) {
+    expect(EDITOR_TOOL_NAMES).toHaveLength(3);
+    for (const name of [...WRITE_TOOL_NAMES, ...MONTH_TOOL_NAMES, ...EDITOR_TOOL_NAMES]) {
       expect(() => toolCallRequest(name, {}), name).toThrow(/DV1/);
       expect(() => toolCallRequest(name, { serviceId: "role-1", rev: "rev-1" }, 9), name).toThrow(/DV1/);
     }
@@ -539,14 +545,14 @@ describe("toolCallRequest — DV1: the dev smoke never calls a write tool", () =
     }
   });
 
-  it("classifies every registered tool: callable or a write (month tools included), never both, nothing left over", () => {
-    const writes = [...WRITE_TOOL_NAMES, ...MONTH_TOOL_NAMES];
+  it("classifies every registered tool: callable or a write (month and editor tools included), never both, nothing left over", () => {
+    const writes = [...WRITE_TOOL_NAMES, ...MONTH_TOOL_NAMES, ...EDITOR_TOOL_NAMES];
     expect(CALLABLE_TOOLS.filter((name) => writes.includes(name))).toEqual([]);
     expect([...CALLABLE_TOOLS, ...writes].sort()).toEqual([...EXPECTED_TOOLS].sort());
   });
 
   it("the --reads pass has no arguments for a write tool or a month tool either", () => {
-    for (const name of [...WRITE_TOOL_NAMES, ...MONTH_TOOL_NAMES]) expect(() => readCheckArguments(name, {}), name).toThrow();
+    for (const name of [...WRITE_TOOL_NAMES, ...MONTH_TOOL_NAMES, ...EDITOR_TOOL_NAMES]) expect(() => readCheckArguments(name, {}), name).toThrow();
   });
 
   it("is the ONLY place the script builds a tools/call: one \"tools/call\" quoted literal, shared via TOOLS_CALL_METHOD", () => {

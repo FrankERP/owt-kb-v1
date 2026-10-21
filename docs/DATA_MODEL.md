@@ -371,15 +371,16 @@ before each question; a new month is a new document, so it resets on the 1st. Hi
 and protected in Studio. Shared with `preview` (same dataset), so questions asked on dev count
 toward the same admin's production cap.
 
-## `mcpProposal` — a stored month plan of the connector (MCP P4, ADR-0061)
+## `mcpProposal` — a stored month plan of the connector (MCP P4, ADR-0061, ADR-0062)
 
-One document per `solve_month` that stored a plan, `_id` **`mcpProposal.<handle>`**, the handle 26
+One document per `solve_month` that stored a plan, and one per saved version of it (the proposal
+editor, ADR-0062, not released: on the editor's branch), `_id` **`mcpProposal.<handle>`**, the handle 26
 lowercase Crockford base32 characters (130 random bits) that the connector hands the model.
 **Dotted**, so never served untokened. Files:
 [`documentTypes.ts`](../app/mcp/monthProposals/documentTypes.ts) (import-free names and fields),
 [`proposalDocument.ts`](../app/mcp/monthProposals/proposalDocument.ts) (build, strict parse,
 digest, merge), [`proposalStore.ts`](../app/mcp/monthProposals/proposalStore.ts) (the only
-writer). Hidden, read-only and protected in Studio. Not released yet (P4's branch).
+writer). Hidden, read-only and protected in Studio. In production since 2026-10-20 (P4).
 
 | Field | Type | Notes |
 |-------|------|-------|
@@ -389,14 +390,16 @@ writer). Hidden, read-only and protected in Studio. Not released yet (P4's branc
 | `engine` | string | Always `"v3"`. |
 | `rulesRev` | string | The stored `solverConfig` `_rev` the plan used; absent = the defaults. Apply refuses when it changed. |
 | `months` | string[] | 1 or 2 consecutive `YYYY-MM`. |
-| `requestId` | string | The solve's request id. |
-| `payload` | string (JSON) | `{ v: 1, entries, drafts, storedServiceIds }`: the frozen eligibility entries apply will PUT (with their rule keys, as the `fairnessMonth` records they become), each draft with its solve-time preflight state, and the horizon's stored role ids at solve. ≤ 1 MB, ≤ 40 drafts. |
+| `requestId` | string | The solve's (or the version's own) request id. |
+| `parent`, `revision`, `root` | string, number, string | A saved version only: the handle it was made from, its number (2–30) and the lineage's revision-1 handle (which keys the member tokens). A solve's record has none and reads as revision 1. |
+| `payload` | string (JSON) | `{ v: 1, entries, drafts, storedServiceIds }`: the frozen eligibility entries apply will PUT (with their rule keys, as the `fairnessMonth` records they become), each draft with its solve-time preflight state, and the horizon's stored role ids at solve. ≤ 1 MB, ≤ 40 drafts. A version's is `v: 2`: the same plus `waivers` (each forced seat's finding key and rule sentence, ≤ 200), `baseline` (the solve's own findings, ≤ 500), `checked` (false = «sin revisar») and `saveId`. The parser pairs them strictly: v1 with no `parent`/`revision`/`root`, v2 with all three. |
 | `digest` | string | SHA-256 over every field above in one fixed order. A mismatch reads as no record. |
-| `state` | string (JSON) | `{ recordsDone, created: { localId → roleId } }`, the only mutable field: facts that only grow, written under `ifRevisionId` and merged by union on a conflict (≤ 3 retries). |
+| `state` | string (JSON) | `{ recordsDone, created: { localId → roleId }, supersededBy? }`, the only mutable field: facts that only grow, written under `ifRevisionId` and merged by union on a conflict (≤ 3 retries). `supersededBy` is the version that replaced this record, written once, in the same transaction that creates that version, and kept by every later merge. |
 
-Writes: `create` at solve (never `createOrReplace`), the `state` patch at apply, and a sweep
+Writes: `create` at solve (never `createOrReplace`), a version's `create` together with its base's `supersededBy` patch in one transaction, the `state` patch at apply, and a sweep
 after each solve and after an apply's confirm (not on its refusals) that deletes up to 25 records more than 24 h past their expiry. Nothing reads
-it but `apply_schedule`, and nothing in it is ever returned to the model.
+it but `apply_schedule` and the editor's three tools, and nothing in it is ever returned to the
+model (members cross the wire as tokens, never ids).
 
 ## `solverConfig` — the shared planner rule set (singleton)
 

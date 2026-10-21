@@ -1,7 +1,6 @@
 // The proposal card's presentational half (S1): one `CardView` in, markup out. No host, no
 // network, no state of its own beyond what a native <details> keeps — `main.tsx` owns the
-// connection and hands this the view. Read-only on purpose: every change still goes through
-// the chat until the editing slice (S4) lands.
+// connection and hands this the view. «Editar» opens the editing screen (`Editor.tsx`, S4).
 
 import type { CardService, CardView } from "./model";
 
@@ -10,6 +9,10 @@ export interface ProposalCardProps {
   /** The host offers fullscreen and the card is not already in it. */
   canExpand: boolean;
   onExpand: () => void;
+  /** Opens the editor on this proposal; absent when the host cannot call tools. */
+  onEdit?: () => void;
+  /** A newer version saved from this card: the card below still shows the version it was handed. */
+  note?: string;
 }
 
 function ServiceBlock({ service }: { service: CardService }) {
@@ -35,7 +38,7 @@ function ServiceBlock({ service }: { service: CardService }) {
   );
 }
 
-export function ProposalCard({ view, canExpand, onExpand }: ProposalCardProps) {
+export function ProposalCard({ view, canExpand, onExpand, onEdit, note }: ProposalCardProps) {
   if (view.kind === "waiting") {
     return (
       <main className="card" aria-busy="true">
@@ -68,6 +71,12 @@ export function ProposalCard({ view, canExpand, onExpand }: ProposalCardProps) {
           </button>
         )}
       </header>
+
+      {note && (
+        <p className="hint" role="status">
+          {note}
+        </p>
+      )}
 
       {view.stages.length + view.notices.length > 0 && (
         <ul className="notices">
@@ -167,7 +176,16 @@ export function ProposalCard({ view, canExpand, onExpand }: ProposalCardProps) {
         </details>
       )}
 
-      <p className="foot muted">Para cambiar algo o cargarla, díselo a Claude en el chat.</p>
+      {onEdit && view.handle && view.services.some((x) => x.planned) ? (
+        <div className="actions">
+          <button type="button" className="primary" onClick={onEdit}>
+            Editar
+          </button>
+        </div>
+      ) : null}
+      <p className="foot muted">
+        {onEdit && view.handle ? "Edita los lugares aquí, o pídeselo a Claude en el chat. Para cargarla, díselo a Claude." : "Para cambiar algo o cargarla, díselo a Claude en el chat."}
+      </p>
     </main>
   );
 }

@@ -77,7 +77,8 @@ export interface LedgerInput {
    * `cumulative`, `tabs`, `sang`, `setAsides` or `notInRecordSeats`, and its month carries
    * the `before_balance_start` note. The month's stored seats still feed `held` and
    * `countedSundayLeads`, which never depended on a record.
-   * The GET passes `FAIRNESS_BALANCE_START`; the golden fixture and C4's preview pass none.
+   * `assembleFairnessLedger` (the GET, the MCP editor's month check) passes `FAIRNESS_BALANCE_START`;
+   * the golden fixture and C4's preview pass none.
    */
   balanceStart?: string | null;
   records: LogicalRecord[];
