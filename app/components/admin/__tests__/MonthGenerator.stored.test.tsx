@@ -533,6 +533,13 @@ describe("MonthGenerator — stored mode", () => {
     expect(within(bar).getByRole("button", { name: "Cerrar" })).toBeTruthy();
   });
 
+  it("never says «Sin cambios» over a rows-only change that «Cerrar» would discard", () => {
+    const { container } = renderStored([role()]);
+    fireEvent.click(screen.getByRole("button", { name: "Añadir fila simulada" }));
+    const bar = container.querySelector("[data-stored-save-bar]") as HTMLElement;
+    expect(within(bar).getByText("Cambios sin guardar")).toBeTruthy();
+  });
+
   it("treats an invalid special-name edit as unsaved work and refuses Save", () => {
     renderStored([role({ _type: "special_role", service_name: "Bodas" })]);
 
@@ -1048,6 +1055,18 @@ describe("MonthGenerator — stored mode", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("returns focus to «⇄ Intercambiar ▾» when a swap panel's «Cerrar» closes it", () => {
+    renderStored([role(), role({ _id: "role-b", _rev: "rev-b", date: "2026-02-08" })]);
+    const trigger = screen.getByRole("button", { name: /Intercambiar ▾/ });
+    openSectionSwap();
+    fireEvent.click(screen.getByRole("button", { name: "Cerrar intercambio de sección" }));
+    expect(screen.queryByLabelText("Sección")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    openTeamSwap();
+    fireEvent.click(screen.getByRole("button", { name: "Cerrar intercambio de equipos" }));
+    expect(document.activeElement).toBe(trigger);
+  });
+
   it("refuses a whole-team swap between Saturday and non-Saturday topology", () => {
     const saturday = role({
       _id: "role-sat",
@@ -1267,6 +1286,26 @@ describe("MonthGenerator — «Limpiar mes» edge paths", () => {
     expect(onClose).not.toHaveBeenCalled();
     // Back on «⋯», the trigger the confirmation was opened from (its menu row is gone).
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Más acciones del mes" }));
+  });
+
+  it("leaves an Escape a menu already handled to the menu, never closing the editor with it", () => {
+    // In production Next hydrates on `document`, so `Menu`'s `stopPropagation()` cannot keep
+    // the editor's own `document` listener from seeing the same key. What it CAN see is the
+    // menu's `preventDefault()`: an Escape arriving already handled is not the editor's.
+    const { onClose } = renderStored([role()], { storedCapabilities: clearGate });
+    openMonthMenu();
+    const handled = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    handled.preventDefault();
+    document.dispatchEvent(handled);
+    expect(onClose).not.toHaveBeenCalled();
+    // And a key pressed with focus on an open menu's trigger is the menu's too.
+    const more = screen.getByRole("button", { name: "Más acciones del mes" });
+    expect(more.getAttribute("aria-expanded")).toBe("true");
+    more.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    expect(onClose).not.toHaveBeenCalled();
+    // An unhandled Escape with no menu open still closes the (clean) editor.
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it("moves focus onto Cancelar (never the destructive confirm) and back to the trigger on Cancelar", () => {

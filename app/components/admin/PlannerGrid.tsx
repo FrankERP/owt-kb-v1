@@ -2574,16 +2574,16 @@ function ColumnHeader({
               No cuenta para equidad
             </span>
           )}
-          <button
-            type="button"
+          <Button
+            variant="icon"
             aria-expanded={editing}
             aria-controls={editRegionId}
             aria-label={`Editar datos del servicio ${column.date}`}
             onClick={() => setEditing((open) => !open)}
-            className={`ml-auto min-h-[32px] min-w-[32px] rounded font-body text-sm transition-colors hover:text-accent ${editing ? "text-accent" : "text-mono-500"}`}
+            className="ml-auto"
           >
             ✎
-          </button>
+          </Button>
         </div>
       )}
       {stored && readOnly && <p className="font-body text-[10px] text-warning-strong">Solo lectura: revisa la integridad del servicio.</p>}
@@ -2788,16 +2788,17 @@ function RowGroup({
               {row.label}
             </span>
             {onRemove && !manualTag && (
-              <button
-                type="button"
+              <Button
+                variant="icon"
+                tone="danger"
                 onClick={onRemove}
                 disabled={mutationLocked}
                 aria-label={`Eliminar fila ${row.label}`}
                 title="Eliminar fila"
-                className="-my-2 min-h-[44px] min-w-[32px] rounded font-label text-xs text-mono-500 hover:text-negative-fg disabled:opacity-50"
+                className="-my-2"
               >
                 ✕
-              </button>
+              </Button>
             )}
           </span>
           {manualTag && row.category !== "voz" && (

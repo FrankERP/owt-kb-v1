@@ -2407,6 +2407,8 @@ export default function MonthGenerator({
   // The «⋯» menu's trigger: «Limpiar mes…» and «Llenar especiales…» live in that menu, so it is
   // where focus goes back to when either panel closes (the menu itself returns focus there too).
   const moreTriggerRef = useRef<HTMLButtonElement>(null);
+  // «⇄ Intercambiar ▾»: where focus returns when a swap panel's «Cerrar» unmounts it.
+  const swapTriggerRef = useRef<HTMLButtonElement>(null);
   const clearRegionRef = useRef<HTMLDivElement>(null);
   const clearCancelRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -2808,6 +2810,15 @@ export default function MonthGenerator({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      // An open `Menu` («⇄ Intercambiar ▾», «⋯», a desktop `Select`) owns Escape: it closes
+      // itself and calls `preventDefault()`. Its `stopPropagation()` does NOT keep this
+      // listener from running in production — Next hydrates on `document`, the same node
+      // this listens on — so without this the key that dismissed the menu also closed the
+      // editor. The `closest` half mirrors `CueDialog`'s yield, for a key that reaches here
+      // before the menu's own handler.
+      if (event.defaultPrevented) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('[role="menu"], [aria-haspopup="menu"][aria-expanded="true"]')) return;
       if (storedTransportActive) return;
       // An open «Limpiar mes» confirmation is the nearest thing to dismiss —
       // Escape must not leap past a destructive prompt to close the editor.
@@ -5168,7 +5179,7 @@ export default function MonthGenerator({
                 // in flight or the grid holds unsaved work (the same gate the panels always
                 // had), so the admin can still see what the swap would be.
                 trigger={(
-                  <Button variant="secondary" size="lg">
+                  <Button ref={swapTriggerRef} variant="secondary" size="lg">
                     ⇄ Intercambiar ▾
                   </Button>
                 )}
@@ -5500,7 +5511,7 @@ export default function MonthGenerator({
                 variant="ghost"
                 size="sm"
                 aria-label="Cerrar intercambio de equipos"
-                onClick={() => { setSwapSel(null); setSwapOpen(false); }}
+                onClick={() => { setSwapSel(null); setSwapOpen(false); swapTriggerRef.current?.focus(); }}
               >
                 Cerrar
               </Button>
@@ -5570,7 +5581,7 @@ export default function MonthGenerator({
           >
             Intercambiar sección
           </button>
-          <Button variant="ghost" size="lg" aria-label="Cerrar intercambio de sección" onClick={() => setSectionSwapOpen(false)}>
+          <Button variant="ghost" size="lg" aria-label="Cerrar intercambio de sección" onClick={() => { setSectionSwapOpen(false); swapTriggerRef.current?.focus(); }}>
             Cerrar
           </Button>
         </div>
@@ -5888,7 +5899,10 @@ export default function MonthGenerator({
           <p aria-live="polite" className="min-w-0 flex-1 text-center font-body text-sm text-mono-500">
             {(() => {
               const changed = dirtyStoredColumns.length + invalidStoredColumns.length;
-              return changed > 0 ? `${changed} servicio${changed !== 1 ? "s" : ""} con cambios` : "Sin cambios";
+              // A rows-only change (an added, still-empty row) touches no service, yet «Cerrar»
+              // asks to discard it — so it must not read «Sin cambios».
+              if (changed > 0) return `${changed} servicio${changed !== 1 ? "s" : ""} con cambios`;
+              return storedHasUnresolvedWork ? "Cambios sin guardar" : "Sin cambios";
             })()}
           </p>
           <button
