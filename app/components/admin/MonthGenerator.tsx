@@ -5893,10 +5893,16 @@ export default function MonthGenerator({
           data-stored-save-bar=""
           className="sticky bottom-[var(--bottom-nav-h,0px)] z-20 -mx-1 flex items-center gap-3 border-t border-accent/15 bg-surface-base px-1 py-3 pr-[calc(var(--assistant-fab-w,0px)+0.25rem)]"
         >
-          <button type="button" onClick={requestBack} disabled={storedTransportActive} className="min-h-[44px] rounded-lg border border-surface-accent-30 px-6 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors disabled:opacity-50">
+          {/*
+            On a phone (measured on dev at 390px) the three did not fit beside the assistant
+            bubble's reserve: the count wrapped onto two lines and «Guardar 0 servicios» broke
+            under it. Below `sm` the count steps aside — the Guardar label already carries it —
+            and the buttons keep one line each.
+          */}
+          <button type="button" onClick={requestBack} disabled={storedTransportActive} className="min-h-[44px] shrink-0 whitespace-nowrap rounded-lg border border-surface-accent-30 px-4 sm:px-6 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors disabled:opacity-50">
             Cerrar
           </button>
-          <p aria-live="polite" className="min-w-0 flex-1 text-center font-body text-sm text-mono-500">
+          <p aria-live="polite" className="hidden min-w-0 flex-1 text-center font-body text-sm text-mono-500 sm:block">
             {(() => {
               const changed = dirtyStoredColumns.length + invalidStoredColumns.length;
               // A rows-only change (an added, still-empty row) touches no service, yet «Cerrar»
@@ -5910,7 +5916,7 @@ export default function MonthGenerator({
             onClick={() => void handleStoredSave()}
             disabled={storedMutationLocked || dirtyStoredColumns.length === 0 || invalidStoredColumns.length > 0 || !storedInventory.coherent || !!storedSaveBlocked}
             title={storedSaveBlocked ?? undefined}
-            className="min-h-[44px] rounded-lg px-6 bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+            className="ml-auto min-h-[44px] shrink-0 whitespace-nowrap rounded-lg px-4 sm:px-6 bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
           >
             {savingStored ? "Guardando…" : singleView && dirtyStoredColumns.length <= 1 ? "Guardar" : `Guardar ${dirtyStoredColumns.length} servicio${dirtyStoredColumns.length !== 1 ? "s" : ""}`}
           </button>
