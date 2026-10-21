@@ -91,7 +91,7 @@ admission is not `approved` (`storedRoleReadModel.ts` `StoredRoleAdmission`: `bo
   sends. `copyInstrumentsCommit.ts` likewise from `copy-instruments/route.ts`. The routes keep auth,
   JSON reading and `withVerificationRunContext` only; their existing tests pass unchanged, and
   `serviceCommitCallers.test.ts` (with its `DELIVERY_CAPABLE_IMPORTS` fixture) and
-  `protectedReadAudit.test.ts`'s `PROTECTED_RUNTIME_WRITERS` list both (eight write paths).
+  `protectedReadAudit.ts`'s `PROTECTED_RUNTIME_WRITERS` list both (eight write paths).
 - **T2.2 The stored-month board** (`storedMonthBoard.ts`, neutral, no I/O): the month's stored
   roles → `translateStoredRole`/`buildStoredGridRows` → an `EditorBoard` whose `editable` set is
   the `approved` services, each column carrying `roleId` and `rev`. Rule inputs come only from
