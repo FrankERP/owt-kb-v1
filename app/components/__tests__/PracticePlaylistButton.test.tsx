@@ -169,14 +169,17 @@ describe("PracticePlaylistButton", () => {
     expect((popup as any).close).toHaveBeenCalled();
   });
 
-  it("as the hero, is the house primary button labelled Ensayar and opens the same menu", async () => {
+  it("as the hero, is the screen's one filled CTA labelled Ensayar and opens the same menu", async () => {
     const { getByRole } = renderButton({ songIds: ["song-1"], accentVar: "--accent-rgb", variant: "hero" });
     await act(async () => {});
 
     const trigger = getByRole("button", { name: /Ensayar/i });
-    // The house primary, not the accent pill: the variant is chrome only, so the
-    // menu behind it must be the same one.
-    expect(trigger.className).toContain("bg-surface-accent-solid");
+    // The `cta` button, full width (the Inicio redesign, 2026-10-21), not the
+    // accent pill: the variant is chrome only, so the menu behind it must be the
+    // same one.
+    expect(trigger.className).toContain("bg-accent");
+    expect(trigger.className).toContain("w-full");
+    expect(trigger.textContent).toContain("Ensayar el setlist");
     expect(trigger.getAttribute("aria-haspopup")).toBe("menu");
 
     fireEvent.click(trigger);

@@ -240,6 +240,8 @@ export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine
     month: string;
     focusRoleId?: string;
     openComposerInitially?: boolean;
+    /** «Editar servicio» (a card's edit) vs «Editar mes»; only the title and the editor's first view differ. */
+    scope: "service" | "month";
   } | null>(null);
   // D10: the generator is a full-width panel that replaces this whole view
   // rather than an overlay on top of it, so its own trigger button unmounts
@@ -805,8 +807,24 @@ export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine
     }
     monthEditorOpenerRef.current = opener;
     setShowGenerator(false);
-    setMonthEditor({ month, focusRoleId, openComposerInitially });
+    setMonthEditor({ month, focusRoleId, openComposerInitially, scope: "month" });
   }
+
+  /**
+   * A card's «Editar equipo» (and its primary action): the same stored editor, opened on that one
+   * service. It is NOT a second editor — the month is loaded underneath, so the rule checks, the
+   * save and its notices are the month editor's own, and «Ver mes completo» widens the view in place.
+   */
+  function openServiceEditor(role: ServiceRole) {
+    monthEditorOpenerRef.current = { kind: "card", roleId: role._id };
+    setShowGenerator(false);
+    setMonthEditor({ month: role.date.slice(0, 7), focusRoleId: role._id, scope: "service" });
+  }
+
+  // Stable, so the editor's «lost its service» effect does not re-fire on every render.
+  const onMonthEditorScope = useCallback((scope: "service" | "month") => {
+    setMonthEditor((current) => (current && current.scope !== scope ? { ...current, scope } : current));
+  }, []);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -886,7 +904,7 @@ export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine
   function runPrimaryAction(card: ServiceCardModel) {
     switch (primaryActionRoute(card.readiness)) {
       case "service_modal":
-        openMonthEditor(card.role.date.slice(0, 7), card.role._id, false, { kind: "card", roleId: card.role._id });
+        openServiceEditor(card.role);
         return;
       case "setlist_editor":
         // Unreachable for a non-editable target (the route falls back), but the
@@ -979,7 +997,9 @@ export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine
     return (
       <div className="space-y-5">
         <div className="flex items-center justify-between">
-          <h1 className="font-display text-2xl uppercase tracking-wide">Editar mes</h1>
+          <h1 className="font-display text-2xl uppercase tracking-wide">
+            {monthEditor.scope === "service" ? "Editar servicio" : "Editar mes"}
+          </h1>
         </div>
         <PanelBoundary>
           <MonthGenerator
@@ -988,6 +1008,8 @@ export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine
             engine={engine}
             initialMonth={monthEditor.month}
             focusRoleId={monthEditor.focusRoleId}
+            singleService={monthEditor.scope === "service"}
+            onScopeChange={onMonthEditorScope}
             openComposerInitially={monthEditor.openComposerInitially}
             members={members}
             existingRoles={roles}
@@ -1376,7 +1398,7 @@ export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine
               todayIso={today}
               gates={cardGates}
               onPrimaryAction={() => runPrimaryAction(card)}
-              onEdit={() => openMonthEditor(card.role.date.slice(0, 7), card.role._id, false, { kind: "card", roleId: card.role._id })}
+              onEdit={() => openServiceEditor(card.role)}
               onDelete={() => openEditModal({ type: "delete", role: card.role })}
               onSetlist={() => openSetlist(card.role)}
               // The menu's `Publicar` is the explicit override path when workflow

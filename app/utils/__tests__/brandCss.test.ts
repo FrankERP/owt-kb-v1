@@ -128,10 +128,14 @@ describe("brand.css — (a) every colour var() referenced is declared", () => {
     // chrome (ADR-0035), so the same property is read from `DayCard`'s
     // "this is you" ring — a member-facing surface, and no more likely to be
     // the last of its kind than the pill was.
+    //
+    // That ring went with the card's chip grid in the Inicio redesign
+    // (2026-10-21: faces in folding sections, coloured by token classes only),
+    // so the property is read from the agenda's "you serve this day" dot glow.
     const admin = read("app/components/ui/SlidingIndicator.tsx");
-    const dayCard = read("app/components/DayCard.tsx");
+    const agenda = read("app/components/AgendaView.tsx");
     expect(referencedProperties(admin)).toContain("--accent-rgb");
-    expect(referencedProperties(dayCard)).toContain("--positive-fg-rgb");
+    expect(referencedProperties(agenda)).toContain("--positive-fg-rgb");
   });
 
   it("FIRES on an undeclared colour reference (synthetic — the fire-proof)", () => {

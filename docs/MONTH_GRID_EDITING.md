@@ -25,7 +25,12 @@ The existing three-part month-planning layout is now the sole free-form editor
 for stored service rosters:
 
 - **Editar mes** opens the selected month against stored services.
-- A service card's roster edit action opens the same grid focused on that role.
+- A service card's roster edit action (**Editar equipo**, and its primary action)
+  opens **Editar servicio** (since 2026-10-21): the same stored editor showing only
+  that service, without the month tools, with **Ver mes completo** to widen it in
+  place. The whole month stays loaded underneath, so the picker and rule checks are
+  the month editor's own and the save is its PATCH
+  ([ADR-0063](adr/0063-a-single-service-edit-is-a-view-of-the-month-editor.md)).
 - **Nuevo** opens a one-service composer. It creates one empty unpublished
   service and never invokes the solver or fills a roster automatically — that
   holds for the one-service composer; the toolbar's **«Llenar especiales…»**

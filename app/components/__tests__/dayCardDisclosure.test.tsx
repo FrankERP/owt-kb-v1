@@ -30,12 +30,12 @@ const song: SetlistSong = {
 
 // `DayCard` raises a toast from its quick-actions sheet (F3), so it needs the stack
 // its real host mounts app-wide in `app/utils/Provider.tsx`.
-function mount() {
+function mount(extra: Partial<Parameters<typeof DayCardDisclosure>[0]> = {}) {
   return render(
     <MotionProvider>
       <ToastProvider>
         <CueDialogProvider>
-          <DayCardDisclosure day="Sábado" date="2026-09-19" setlist={{ week: "2026-09-19", songs: [song] }} leads={["Ana"]} />
+          <DayCardDisclosure day="Sábado" date="2026-09-19" setlist={{ week: "2026-09-19", songs: [song] }} leads={["Ana"]} {...extra} />
         </CueDialogProvider>
       </ToastProvider>
     </MotionProvider>,
@@ -55,6 +55,19 @@ function longPress(el: Element) {
 }
 
 describe("DayCardDisclosure", () => {
+  it("summarizes the closed row — who leads, how many songs — with no «tú» chip for a service you do not serve", () => {
+    mount({ leads: ["Ana", "Gaby"] });
+    const row = screen.getByRole("button", { expanded: false });
+    expect(row.textContent).toContain("Lead Ana y Gaby · 1 canción");
+    expect(within(row).queryByText(/^Tú ·/)).toBeNull();
+  });
+
+  it("chips the seats you hold, matched by the session's display name", () => {
+    mount({ leads: ["Ani"], instruments: [{ label: "Keys", person: "ani" }] });
+    const row = screen.getByRole("button", { expanded: false });
+    expect(within(row).getByText("Tú · Lead, Keys").className).toContain("text-positive-fg");
+  });
+
   it("collapses the service to one line: day · date and the countdown", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(2026, 8, 8, 9, 0, 0)); // 2026-09-08 local
