@@ -55,26 +55,29 @@
 // this component's root widens through `:has()`:
 //   1512 viewport − 24 frame padding = 1488 usable
 //   1488 − 56 (the collapsed section rail) − 32 (its gap) = 1400 workspace
-//   216 (Participaciones) + 12 + 920 (grid) + 12 + 240 (picker) = 1400
+//   300 (Participaciones) + 12 + 836 (grid) + 12 + 240 (picker) = 1400
 // The picker's 240px is only spent while a cell is ACTIVE; with none open the
-// grid gets it back and runs at 1172. (The bordered `.brand-admin-shell` this
+// grid gets it back and runs at 1076. (The bordered `.brand-admin-shell` this
 // sum used to pay a border and 24px of padding to is gone — ADR-0035; what
 // spends width now is `AdminRail`, which collapses to icons while this grid is
 // open precisely so the sum still leaves the grid four figures.)
 //
-// **216 is a FLOOR, not a preference** — `CHART_COLUMN_WIDTH` below, now the
-// only place it is declared. It shipped at
-// 190 for one release and the count column printed itself on top of the bar:
-// `ParticipationSidebar`'s member row is a hard 150px INLINE bar (it cannot
-// shrink) + a 10px gap + a 24px count column, inside 12px of padding and a 1px
-// border either side, plus the 2px right padding of the `overflow-y-auto`
-// scroller the rows actually live in — 212px before the count starts
-// overlapping the bar, and the `flex-1 min-w-0` name block shrinks around the
-// bar rather than clipping it, so nothing overflows the box to give it away.
-// Measured in Chromium at 1512 inside the real frame: at 190 the bar's right
-// edge is x=163 and the count column starts at x=151 (a 12px overlap, on every
-// member row); at 216 the count starts at x=177 and clears by 14px.
-// `participationAlongside.test.tsx` re-derives that floor from
+// **300 is a choice above a FLOOR** — `CHART_COLUMN_WIDTH` below, now the only
+// place it is declared. It was 216 until the «Editar mes» redesign (2026-10-21):
+// the participation count is the part of this surface the admin actually uses,
+// and at 216 its names truncated and its detail line wrapped. The grid paid for
+// it (920 → 836), which it absorbs by scrolling sideways like it already did.
+// The floor under it is real: the column shipped at 190 for one release and the
+// count column printed itself on top of the bar. `ParticipationSidebar`'s member
+// row is a hard INLINE bar (220px now; it cannot shrink) + a 10px gap + a 24px
+// count column, inside 12px of padding and a 1px border either side, plus the
+// 2px right padding of the scroller the rows live in — 282px before the count
+// starts overlapping the bar, and the `flex-1 min-w-0` name block shrinks around
+// the bar rather than clipping it, so nothing overflows the box to give it away.
+// That arithmetic was checked in Chromium at 1512 inside the real frame when
+// the bar was 150 (floor 212: at 190 the bar's right edge was x=163 and the
+// count started at x=151, a 12px overlap; at 216 it cleared by 14px).
+// `participationAlongside.test.tsx` re-derives the floor from
 // `ParticipationSidebar`'s own source, so widening the bar or the count column
 // fails there instead of on the admin's screen.
 //
@@ -144,6 +147,7 @@ import {
 } from "./serviceCardModel";
 import CueDialog from "../ui/CueDialog";
 import Button from "@/app/components/ui/Button";
+import Collapse from "@/app/components/ui/Collapse";
 import Checkbox from "@/app/components/ui/Checkbox";
 import DateField from "@/app/components/ui/DateField";
 import Menu, { MenuHeader, MenuItem } from "@/app/components/ui/Menu";
@@ -304,7 +308,7 @@ export interface PlannerGridProps {
    *
    * A `ReactNode` rather than the roles themselves, so this component owns the
    * three widths and none of the arithmetic. Omitted, the left column is not
-   * rendered at all and the grid takes its 216px — which is what every
+   * rendered at all and the grid takes its 300px — which is what every
    * `PlannerGrid` unit test does.
    */
   participation?: ReactNode;
@@ -331,6 +335,12 @@ export interface PlannerGridProps {
   fillEmpty?: { enabled: boolean; onChange: (next: boolean) => void; emptyVoiceSeats: number };
   /** «Solo llenar vacíos»: conflicts of each seat that will be pinned, by `pinSeatKey` (spec §3.3). */
   pinConflicts?: ReadonlyMap<string, PinConflictKind[]>;
+  /**
+   * The member picked in Participaciones (a tap on a name): every chip of theirs gets an
+   * outline, so "where is Gaby this month?" is answered by looking, not by reading 40 cells.
+   * Display only — nothing about picking, dragging or the rules reads it.
+   */
+  highlightMemberId?: string | null;
   /**
    * «Borrar» (create mode, E6). Omitted ⇒ no menus. Counts are LIVE — `MonthGenerator` computes
    * them from the current cells on every render. `disabled` is true while Auto is pending.
@@ -364,7 +374,7 @@ function ClearItems({ clear, scope }: { clear: NonNullable<PlannerGridProps["cle
  * header is stated in, and a FLOOR derived from `ParticipationSidebar`'s widest
  * row rather than a design preference. See the header.
  *
- * Exported because `xl:w-[216px]` is a Tailwind literal that cannot be built
+ * Exported because `xl:w-[300px]` is a Tailwind literal that cannot be built
  * from a constant at runtime (the JIT only sees whole class names in the
  * source), so the constant and the rendered class can drift. The test that
  * re-derives the floor from `ParticipationSidebar` pins THIS number, and a
@@ -372,15 +382,16 @@ function ClearItems({ clear, scope }: { clear: NonNullable<PlannerGridProps["cle
  *
  * **This is now the ONLY declaration of the chart's width.** A retired gutter
  * rail held a second copy, and the guard that kept the two equal went with it.
- * 216 shipped at 190 for one release and the count column printed itself on top
- * of the bar on every member row; the floor is derived from
- * `ParticipationSidebar`'s widest row — a 150px inline bar that cannot shrink,
- * a 10px gap, a 24px count column, 12px padding either side, a 1px border
- * either side and the scroller's 2px right padding, 212px in total, measured in
- * a real browser rather than read off the source. If either of the sidebar's
- * two rows grows past this, the test fails rather than someone's screen.
+ * It once shipped at 190 and the count column printed itself on top of the bar
+ * on every member row; the floor is derived from `ParticipationSidebar`'s widest
+ * row — a 220px inline bar that cannot shrink, a 10px gap, a 24px count column,
+ * 12px padding either side, a 1px border either side and the scroller's 2px
+ * right padding, 282px in total (the same arithmetic a real browser confirmed to
+ * the pixel at the old 150px bar). 300 leaves the name block room to breathe
+ * above that. If either of the sidebar's two rows grows past this, the test
+ * fails rather than someone's screen.
  */
-export const CHART_COLUMN_WIDTH = 216;
+export const CHART_COLUMN_WIDTH = 300;
 
 /** The right column's width, spent only while a cell is active. */
 export const PICKER_COLUMN_WIDTH = 240;
@@ -601,6 +612,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
     autoConfirmText,
     fillEmpty,
     pinConflicts,
+    highlightMemberId = null,
     clear,
     fairness,
     engine = "v2",
@@ -620,6 +632,8 @@ export default function PlannerGrid(props: PlannerGridProps) {
   const fillEmptyLabelId = useId();
   const [removeError, setRemoveError] = useState<{ rowId: string; message: string } | null>(null);
   const [fullScreen, setFullScreen] = useState(false);
+  const [addRowOpen, setAddRowOpen] = useState(false);
+  const addRowRegionId = useId();
   // ── Drag state (T4) ────────────────────────────────────────────────────────
   // The occupant currently being dragged, or `null`. Held in state rather than
   // in `dataTransfer` for the reason both shipped drags in this repo do
@@ -1781,6 +1795,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
               violationsByColumnId.get(columnId) ?? emptyViolations
             }
             pinConflicts={pinConflicts}
+            highlightMemberId={highlightMemberId}
             memberName={memberName}
             seatMismatch={seatMismatch}
             instrumentUndeclared={instrumentUndeclared}
@@ -1792,6 +1807,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
               openPicker(row, columnId);
             }}
             onRemove={row.category !== "voz" ? () => removeRow(row.id) : undefined}
+            manualTag={mode === "create"}
             mutationLocked={mutationLocked}
             removeError={activeRemoveError?.rowId === row.id ? activeRemoveError.message : null}
             // «Copiar a todo el mes» writes columns «Editar servicio» does not draw: a month tool.
@@ -1894,10 +1910,24 @@ export default function PlannerGrid(props: PlannerGridProps) {
           {dragNotice?.message ?? ""}
         </p>
       </div>
+      {/* Behind one «+ Agregar fila»: two always-open text fields under every month read as a
+          form to fill in, for a row added a few times a year. */}
       {!fullScreen && (
-        <div className="flex flex-wrap gap-3">
-          <AddRowForm placeholder="Nuevo instrumento" onAdd={addInstrumentRow} disabled={mutationLocked} />
-          <AddRowForm placeholder="Nuevo rol FOH" onAdd={addFohRow} disabled={mutationLocked} />
+        <div className="space-y-2">
+          <Button
+            data-add-row-toggle=""
+            variant="ghost"
+            size="sm"
+            aria-expanded={addRowOpen}
+            aria-controls={addRowRegionId}
+            onClick={() => setAddRowOpen((open) => !open)}
+          >
+            + Agregar fila
+          </Button>
+          <Collapse id={addRowRegionId} open={addRowOpen} className="flex flex-wrap gap-3">
+            <AddRowForm placeholder="Nuevo instrumento" onAdd={addInstrumentRow} disabled={mutationLocked} />
+            <AddRowForm placeholder="Nuevo rol FOH" onAdd={addFohRow} disabled={mutationLocked} />
+          </Collapse>
         </div>
       )}
     </div>
@@ -1995,18 +2025,26 @@ export default function PlannerGrid(props: PlannerGridProps) {
   // panel stays findable by the same selector it always had — but the VALUE is
   // honest about what changed: `column`, never `gutter` or `inline`.
   //
-  // `xl:w-[216px]` is `CHART_COLUMN_WIDTH`, and it is the content FLOOR of
-  // `ParticipationSidebar`'s member row, not a budget: below 212px the 24px
-  // count column is drawn on top of the 150px inline bar it is supposed to sit
-  // beside. See this file's header, and the guard in
-  // `participationAlongside.test.tsx` that re-derives the floor from the
-  // sidebar's own source.
+  // `xl:w-[300px]` is `CHART_COLUMN_WIDTH`, above the content FLOOR of
+  // `ParticipationSidebar`'s member row: below 282px the 24px count column is
+  // drawn on top of the 220px inline bar it is supposed to sit beside. See this
+  // file's header, and the guard in `participationAlongside.test.tsx` that
+  // re-derives the floor from the sidebar's own source.
+  //
+  // STICKY here, on the flex item, and not on the sidebar's own `<aside>`: the
+  // row is `xl:items-start`, so this column is exactly as tall as its contents
+  // and an `<aside>` sticky inside it has nowhere to travel (which is what the
+  // old `lg:sticky lg:top-4` on the aside quietly did — nothing). The top is the
+  // admin rail's own sticky top, the same calc as `BOARD_STICKY` (the lg:h-24
+  // navbar plus the impersonation banner), so the chart stays beside the rows
+  // being edited while the page scrolls; the sidebar caps its own height against
+  // the same offset.
   const participationColumn =
     participation && !fullScreen ? (
       <div
         data-participation-rail="panel"
         data-rail-placement="column"
-        className="min-w-0 xl:order-1 xl:w-[216px] xl:shrink-0"
+        className="min-w-0 xl:order-1 xl:w-[300px] xl:shrink-0 xl:sticky xl:top-[calc(6rem+env(safe-area-inset-top)+var(--impersonation-offset))]"
       >
         {participation}
       </div>
@@ -2235,9 +2273,12 @@ export default function PlannerGrid(props: PlannerGridProps) {
       {/* Today's honest short-staffing signal, alongside the degradation
           explainer — the solver degrades Coro -> BGV -> 2nd Lead, always
           keeping at least one Lead. */}
-      <p className="font-body text-[11px] text-mono-500">
-        El líder siempre se asigna; primero queda vacío el coro, luego BGV.
-      </p>
+      {/* Create mode only: it explains how Auto trims a short month, and the stored editor has no Auto. */}
+      {mode === "create" && (
+        <p className="font-body text-[11px] text-mono-500">
+          El líder siempre se asigna; primero queda vacío el coro, luego BGV.
+        </p>
+      )}
       {visibleUnfilled.length > 0 && (
         <p className="font-body text-xs text-warning-strong">
           Lugares sin cubrir (faltó gente): {visibleUnfilled.length}
@@ -2464,6 +2505,12 @@ function ColumnHeader({
   const date = new Date(column.date.slice(0, 10) + "T12:00:00");
   // §6.0 — evaluated on every render, against CDMX "today".
   const todayIso = serviceTodayIso();
+  // Stored mode: Fecha / Nombre / Hora / «Cuenta para equidad» open behind the ✎, not on every
+  // column at once (four controls × ten columns was the bulk of the screen). The values still
+  // show, as the header's own text, so an edit made and folded away stays visible.
+  const [editing, setEditing] = useState(false);
+  const editRegionId = useId();
+  const storedCounts = stored && fairness ? effectiveColumnCounts(column, todayIso) : true;
   const day = date.getDate();
   const month = date.toLocaleDateString("es-MX", { month: "short" });
   // The shared `Record<ServiceType, string>` — not a third hardcoded ternary.
@@ -2517,11 +2564,31 @@ function ColumnHeader({
       {column.serviceName && (
         <span className={`block font-body text-[11px] text-ink-muted/80 ${CARD_STYLE.longText}`}>
           {column.serviceName}
+          {stored && column.time ? ` · ${column.time}` : ""}
         </span>
       )}
       {stored && (
-        <div className="space-y-1.5 pt-1">
-          {readOnly && <p className="font-body text-[10px] text-warning-strong">Solo lectura: revisa la integridad del servicio.</p>}
+        <div className="flex flex-wrap items-center gap-1">
+          {!storedCounts && (
+            <span data-counts-off="" className="rounded-full border border-warning-fg/40 px-1.5 py-0.5 font-label text-[10px] uppercase tracking-widest text-warning-strong">
+              No cuenta para equidad
+            </span>
+          )}
+          <button
+            type="button"
+            aria-expanded={editing}
+            aria-controls={editRegionId}
+            aria-label={`Editar datos del servicio ${column.date}`}
+            onClick={() => setEditing((open) => !open)}
+            className={`ml-auto min-h-[32px] min-w-[32px] rounded font-body text-sm transition-colors hover:text-accent ${editing ? "text-accent" : "text-mono-500"}`}
+          >
+            ✎
+          </button>
+        </div>
+      )}
+      {stored && readOnly && <p className="font-body text-[10px] text-warning-strong">Solo lectura: revisa la integridad del servicio.</p>}
+      {stored && (
+        <Collapse id={editRegionId} open={editing} className="space-y-1.5 pt-1">
           <DateField
             kind="date"
             size="sm"
@@ -2563,7 +2630,7 @@ function ColumnHeader({
               ariaLabel={fairnessSwitchLabel(column)}
             />
           )}
-        </div>
+        </Collapse>
       )}
       {/* A blocked column is skipped whatever the toggle says, so the checkbox
           shows it as skipped and refuses the toggle instead of offering an
@@ -2638,11 +2705,13 @@ function RowGroup({
   duplicatesByColumnId,
   violationsByColumnId,
   pinConflicts,
+  highlightMemberId,
   memberName,
   seatMismatch,
   instrumentUndeclared,
   onOpen,
   onRemove,
+  manualTag,
   removeError,
   onCopy,
   mutationLocked,
@@ -2663,6 +2732,7 @@ function RowGroup({
   violationsByColumnId: (columnId: string) => Map<string, SeatedViolation>;
   /** «Solo llenar vacíos», by `pinSeatKey` — see the main component. */
   pinConflicts?: ReadonlyMap<string, PinConflictKind[]>;
+  highlightMemberId: string | null;
   memberName: (id: string) => string;
   /** Seated but no longer carrying this seat's «Tipo» — see the main component. */
   seatMismatch: (memberId: string, category: SeatCategory) => boolean;
@@ -2670,6 +2740,11 @@ function RowGroup({
   instrumentUndeclared: (memberId: string, row: GridRow) => boolean;
   onOpen: (columnId: string) => void;
   onRemove?: () => void;
+  /**
+   * The «asignación manual» line under an instrument/FOH label. Create mode only: it tells the
+   * admin Auto does not seat that row, and the stored editor has no Auto to contrast it with.
+   */
+  manualTag: boolean;
   removeError: string | null;
   onCopy?: (columnId: string) => void;
   mutationLocked: boolean;
@@ -2704,16 +2779,33 @@ function RowGroup({
           {/* Legibility pass — one step up from `text-xs`. The track is
               `minmax(176px, max-content)` and the label already wraps
               (`break-words`), so a wider word grows the track instead of
-              spilling into the first cell (D-defect-2). */}
-          <span className="font-label text-sm uppercase tracking-widest text-ink-muted/70 break-words">
-            {row.label}
+              spilling into the first cell (D-defect-2). The stored editor's
+              «Eliminar» is a ✕ on the label's own line: six «ELIMINAR» words
+              down the column read as six warnings (the accessible name is the
+              same either way). */}
+          <span className="flex items-center gap-1">
+            <span className="font-label text-sm uppercase tracking-widest text-ink-muted/70 break-words">
+              {row.label}
+            </span>
+            {onRemove && !manualTag && (
+              <button
+                type="button"
+                onClick={onRemove}
+                disabled={mutationLocked}
+                aria-label={`Eliminar fila ${row.label}`}
+                title="Eliminar fila"
+                className="-my-2 min-h-[44px] min-w-[32px] rounded font-label text-xs text-mono-500 hover:text-negative-fg disabled:opacity-50"
+              >
+                ✕
+              </button>
+            )}
           </span>
-          {row.category !== "voz" && (
+          {manualTag && row.category !== "voz" && (
             <span className="font-label text-[9px] uppercase tracking-widest text-mono-500">
               asignación manual
             </span>
           )}
-          {onRemove && (
+          {onRemove && manualTag && (
             <button
               type="button"
               onClick={onRemove}
@@ -2748,6 +2840,7 @@ function RowGroup({
             duplicates={duplicates}
             violations={violationsByColumnId(column.columnId)}
             pinConflicts={pinConflicts}
+            highlightMemberId={highlightMemberId}
             unfilled={unfilledByKey.has(cellKey(column.columnId, row.id))}
             unfilledReason={unfilledReasonByKey?.get(cellKey(column.columnId, row.id)) ?? null}
             onOpen={() => onOpen(column.columnId)}
@@ -2796,6 +2889,7 @@ function GridCellView({
   duplicates,
   violations,
   pinConflicts,
+  highlightMemberId,
   unfilled,
   unfilledReason = null,
   onOpen,
@@ -2818,6 +2912,8 @@ function GridCellView({
   violations: Map<string, SeatedViolation>;
   /** «Solo llenar vacíos», by `pinSeatKey` — shown, never blocking (spec §3.3). */
   pinConflicts?: ReadonlyMap<string, PinConflictKind[]>;
+  /** Participaciones' picked member — outlined, never otherwise treated differently. */
+  highlightMemberId: string | null;
   unfilled: boolean;
   unfilledReason?: string | null;
   onOpen: () => void;
@@ -3047,6 +3143,7 @@ function GridCellView({
                 data-occupant={id}
                 data-over-target={overTarget ? "true" : undefined}
                 data-picked={marked ? "true" : undefined}
+                data-highlighted={highlightMemberId === id ? "true" : undefined}
                 // Legibility pass — the member chip is the thing the admin
                 // actually reads across the whole month, and `text-[10px]` was
                 // the smallest type on the surface. One step up, to `text-xs`.
@@ -3068,6 +3165,10 @@ function GridCellView({
                         : "border-accent/25 bg-accent/10"
                 } ${drag.enabled ? "cursor-grab" : "cursor-not-allowed"} ${dragging ? "opacity-30" : ""} ${
                   marked ? "ring-2 ring-accent" : ""
+                } ${
+                  // An OUTLINE, not the ring: the ring already means "marked to move", and
+                  // a highlighted member who is also marked must still read as both.
+                  highlightMemberId === id ? "outline outline-2 outline-offset-1 outline-accent" : ""
                 }`}
               >
                 {memberName(id)}
@@ -3079,9 +3180,16 @@ function GridCellView({
         {/* Finding 6: the brief says a solvable cell over target "warns and
             still accepts" — an amber border alone carries no words, so make
             the warning legible as Spanish text, not just a color. */}
+        {/* A short «3/2» on screen (the amber cell already says "something is off"); the
+            whole sentence stays in the DOM for assistive tech and as the tooltip. Three
+            uppercase lines of it, on every camp set, buried the names it was about. */}
         {overflow && (
-          <p className="font-label text-[9px] uppercase tracking-widest text-warning-strong">
-            Por encima del objetivo — se acepta de todos modos
+          <p
+            title="Por encima del objetivo — se acepta de todos modos"
+            className="mt-1 font-label text-[10px] uppercase tracking-widest text-warning-strong"
+          >
+            <span aria-hidden="true">{memberIds.length}/{target} · sobre el objetivo</span>
+            <span className="sr-only">Por encima del objetivo — se acepta de todos modos</span>
           </p>
         )}
         {/* E13 — a seated person a hard rule now refuses. Named in words, not just
@@ -3135,7 +3243,9 @@ function GridCellView({
         {unfilled && unfilledReason && (
           <p className={`font-body text-[9px] text-warning-strong ${CARD_STYLE.longText}`}>{unfilledReason}</p>
         )}
-        {onCopy && memberIds.length > 0 && (
+        {/* Only on the cell being edited: on every instrument cell it was 36 copies of the same
+            words in one month, for an action taken a few times a year. */}
+        {onCopy && active && memberIds.length > 0 && (
           <button
             type="button"
             onClick={(e) => {

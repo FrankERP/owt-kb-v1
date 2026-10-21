@@ -205,7 +205,10 @@ describe("Auto on a month whose only column is a special", () => {
     const lead = cellAt(container, "lead", SPECIAL_DATE);
     expect(lead.textContent).toContain("Lucía");
     expect(lead.textContent).not.toContain("Niza");
-    expect(container.textContent).not.toContain("Niza");
+    // Seated nowhere. (Participaciones' «Sin participar este mes» does name her — which is
+    // the same answer, so the check is on every seat rather than on the whole page.)
+    expect([...container.querySelectorAll("[data-occupant]")].map((el) => el.textContent).join(" ")).not.toContain("Niza");
+    expect(container.querySelector("[data-idle-pool]")?.textContent ?? "").toContain("Niza");
   });
 
   it("renders the under-filled seat as «Sin cubrir» and counts it — the filler's own unfilled channel", async () => {

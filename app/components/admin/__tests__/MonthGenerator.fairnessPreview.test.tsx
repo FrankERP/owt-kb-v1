@@ -73,10 +73,14 @@ describe("the «Equidad» preview mounts (C2 UI-1, UI-2)", () => {
       />,
       { wrapper: AdminProviders },
     );
-    const toggle = await screen.findByRole("button", { name: "Equidad · vista previa" });
+    // In the stored editor the panel waits behind «⋯ → Equidad · saldo acumulado» and reads
+    // as soon as it is asked for — the ask IS the menu item, so it opens already expanded.
+    expect(screen.queryByRole("button", { name: "Equidad · vista previa" })).toBeNull();
     expect(fairnessCalls()).toEqual([]);
-    fireEvent.click(toggle);
+    fireEvent.click(await screen.findByRole("button", { name: "Más acciones del mes" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Equidad · saldo acumulado" }));
     await waitFor(() => expect(fairnessCalls()).toEqual(["/api/admin/fairness?month=2026-11&horizon=1"]));
     expect((await screen.findByText("No se pudo leer el saldo de equidad.")).getAttribute("role")).toBe("alert");
+    expect(screen.getByRole("button", { name: "Equidad · vista previa" }).getAttribute("aria-expanded")).toBe("true");
   });
 });

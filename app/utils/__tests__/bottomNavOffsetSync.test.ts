@@ -36,8 +36,11 @@ describe("bottom nav offset sync", () => {
     ["app/components/AudioPlayer.tsx"],
     ["app/components/EditSongButton.tsx"],
     ["app/components/assistant/AssistantBubble.tsx"],
+    // «Editar mes»'s sticky save bar (Cerrar · N con cambios · Guardar).
+    ["app/components/admin/MonthGenerator.tsx"],
   ])("%s offsets its fixed bottom by the variable", (rel) => {
-    expect(read(rel)).toMatch(/var\(--bottom-nav-h(, 0px)?\)/);
+    // `,0px` without the space too: a Tailwind arbitrary value cannot hold one.
+    expect(read(rel)).toMatch(/var\(--bottom-nav-h(, ?0px)?\)/);
   });
 
   // The assistant bubble sits above the audio transport too, and the song FAB steps aside for it.

@@ -822,6 +822,42 @@ describe("PlannerGrid — instrument/FOH manual label (D5)", () => {
   });
 });
 
+describe("PlannerGrid — «Editar mes» keeps row chrome to what is actionable", () => {
+  it("drops the «asignación manual» line in stored mode and keeps one ✕ per instrument/FOH row", () => {
+    render(<PlannerGrid {...baseProps({ mode: "stored" })} />);
+    expect(screen.queryByText(/asignación manual/i)).toBeNull();
+    // 5 instrument rows + 1 FOH row, each with its own named delete beside its label.
+    expect(screen.getAllByRole("button", { name: /^Eliminar fila / })).toHaveLength(6);
+  });
+
+  it("folds both add-row forms under «+ Agregar fila»", () => {
+    render(<PlannerGrid {...baseProps()} />);
+    const toggle = screen.getByRole("button", { name: "+ Agregar fila" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    // `Collapse` keeps a closed fold mounted but inert: out of reach, not out of the tree.
+    expect(screen.getByPlaceholderText("Nuevo instrumento").closest("[inert]")).not.toBeNull();
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByPlaceholderText("Nuevo instrumento").closest("[inert]")).toBeNull();
+  });
+});
+
+describe("PlannerGrid — a member picked in Participaciones", () => {
+  it("outlines that member's chips and no one else's", () => {
+    const columns = buildColumns({ sundayDates: ["2026-08-02", "2026-08-09"], activeSatDates: [] });
+    const cells: InputGridCell[] = [
+      { date: "2026-08-02", rowId: "instrumento:Drums", memberIds: ["d1"], origin: "manual" },
+      { date: "2026-08-09", rowId: "instrumento:Drums", memberIds: ["d1"], origin: "manual" },
+      { date: "2026-08-09", rowId: "instrumento:Bass", memberIds: ["d2"], origin: "manual" },
+    ];
+    const { container, rerender } = render(<PlannerGrid {...baseProps({ columns, cells })} />);
+    expect(container.querySelector("[data-highlighted]")).toBeNull();
+    rerender(<PlannerGrid {...baseProps({ columns, cells, highlightMemberId: "d1" })} />);
+    const lit = [...container.querySelectorAll('[data-highlighted="true"]')];
+    expect(lit.map((el) => el.getAttribute("data-occupant"))).toEqual(["d1", "d1"]);
+  });
+});
+
 describe("PlannerGrid — preflight markers, and no unaddressable one", () => {
   it("shows each date column's TargetPreflight state and reasons", () => {
     const preflight: TargetPreflight = {
@@ -941,6 +977,8 @@ describe("PlannerGrid — row management", () => {
     expect(onCellsChange).not.toHaveBeenCalled();
     expect((screen.getByDisplayValue("2026-08-09") as HTMLInputElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: /eliminar fila drums/i }) as HTMLButtonElement).disabled).toBe(true);
+    // The add-row forms fold under «+ Agregar fila»; locked or not, the fold itself opens.
+    fireEvent.click(screen.getByRole("button", { name: "+ Agregar fila" }));
     expect((screen.getByPlaceholderText("Nuevo instrumento") as HTMLInputElement).disabled).toBe(true);
     expect(screen.getAllByRole("button", { name: "Añadir" }).every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
     expect(onRowsChange).not.toHaveBeenCalled();
@@ -1070,6 +1108,9 @@ describe("PlannerGrid — copy across dates (fact 26, grid-only)", () => {
     const onCellsChange = vi.fn();
     const { container } = renderWithDialog(baseProps({ columns, cells, onCellsChange }));
     const sourceCell = cellFor(container, "instrumento:Drums", "2026-08-02");
+    // Offered on the ACTIVE cell only — one button, where the admin is working, not on every filled cell.
+    expect(within(sourceCell).queryByRole("button", { name: COPY_BUTTON })).toBeNull();
+    fireEvent.click(sourceCell);
     fireEvent.click(within(sourceCell).getByRole("button", { name: COPY_BUTTON }));
 
     // The click alone must not write.
@@ -1091,6 +1132,7 @@ describe("PlannerGrid — copy across dates (fact 26, grid-only)", () => {
     ];
     const onCellsChange = vi.fn();
     const { container } = renderWithDialog(baseProps({ columns, cells, onCellsChange }));
+    fireEvent.click(cellFor(container, "instrumento:Drums", "2026-08-02"));
     fireEvent.click(
       within(cellFor(container, "instrumento:Drums", "2026-08-02")).getByRole("button", { name: COPY_BUTTON }),
     );
@@ -1107,6 +1149,7 @@ describe("PlannerGrid — copy across dates (fact 26, grid-only)", () => {
       { date: "2026-08-09", rowId: "instrumento:Drums", memberIds: ["d2"], origin: "manual" },
     ];
     const { container } = renderWithDialog(baseProps({ columns, cells }));
+    fireEvent.click(cellFor(container, "instrumento:Drums", "2026-08-02"));
     fireEvent.click(
       within(cellFor(container, "instrumento:Drums", "2026-08-02")).getByRole("button", { name: COPY_BUTTON }),
     );
@@ -1886,9 +1929,12 @@ describe("PlannerGrid — «Editar servicio» draws one column, judges the month
     const single = render(
       <PlannerGrid {...baseProps({ mode: "stored", columns: AUGUST, cells, onlyColumnId: second.columnId })} />,
     );
+    // The copy is offered on the active cell, so both halves activate the same one first.
+    fireEvent.click(cellFor(single.container, "instrumento:Drums", second.date));
     expect(single.queryByText("Copiar a todo el mes")).toBeNull();
     single.unmount();
     const month = render(<PlannerGrid {...baseProps({ mode: "stored", columns: AUGUST, cells })} />);
+    fireEvent.click(cellFor(month.container, "instrumento:Drums", second.date));
     expect(month.queryByText("Copiar a todo el mes")).toBeTruthy();
   });
 
