@@ -5,7 +5,6 @@ import { useToast } from "@/app/components/ui/Toast";
 import SegmentedControl from "@/app/components/ui/SegmentedControl";
 import Skeleton, { SkeletonGroup } from "@/app/components/ui/Skeleton";
 import ProposalThread, { type ThreadMessage } from "@/app/components/ProposalThread";
-import ServiceThreadsSection from "./ServiceThreadsSection";
 
 import {
   HANDOFF_NOTICE,
@@ -661,8 +660,6 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
 
   return (
     <div className="space-y-6">
-      <ServiceThreadsSection viewerId={viewerId} />
-
       <SegmentedControl
         label="Filtrar propuestas"
         tone="filled"

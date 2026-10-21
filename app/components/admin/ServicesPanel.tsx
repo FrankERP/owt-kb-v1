@@ -90,6 +90,7 @@ import { BOARD_STICKY, ParticipationSidebar } from "@/app/components/admin/Parti
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
 import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
+import ServiceMessagesDialog from "./ServiceMessagesDialog";
 import Button from "../ui/Button";
 import Skeleton, { SkeletonGroup } from "../ui/Skeleton";
 import { revealProps } from "@/app/utils/reveal";
@@ -192,7 +193,14 @@ function Modal({
 
 // ─── Main panel ───────────────────────────────────────────────────────────────
 
-export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine } = {}) {
+export default function ServicesPanel({
+  engine = "v2",
+  viewerId = null,
+}: {
+  engine?: SolverEngine;
+  /** The signed-in admin's Sanity id — right-aligns their own bubbles in «Mensajes». */
+  viewerId?: string | null;
+} = {}) {
   const [roles, setRoles]       = useState<ServiceRole[]>([]);
   const [members, setMembers]   = useState<MemberOption[]>([]);
   // The five read domains are tracked INDEPENDENTLY: a failure in one never
@@ -279,6 +287,10 @@ export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine
 
   // Setlist
   const [setlistRole, setSetlistRole] = useState<ServiceRole | null>(null);
+  // «Mensajes del servicio» (ADR-0064). The role is kept after closing so the
+  // dialog keeps drawing its title while it animates away.
+  const [messagesRole, setMessagesRole] = useState<ServiceRole | null>(null);
+  const [messagesOpen, setMessagesOpen] = useState(false);
   const [setlistOpen, setSetlistOpen] = useState(false);
 
   // Copy-instruments mode: pick a source card, then a target day to repeat its lineup.
@@ -1401,6 +1413,7 @@ export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine
               onEdit={() => openServiceEditor(card.role)}
               onDelete={() => openEditModal({ type: "delete", role: card.role })}
               onSetlist={() => openSetlist(card.role)}
+              onMessages={() => { setMessagesRole(card.role); setMessagesOpen(true); }}
               // The menu's `Publicar` is the explicit override path when workflow
               // blockers remain; a clean draft goes through the ready confirmation.
               onPublish={() =>
@@ -1420,6 +1433,18 @@ export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine
           </div>
         </div>
       )}
+
+      <ServiceMessagesDialog
+        open={messagesOpen}
+        roleId={messagesRole?._id ?? null}
+        title={[
+          "Mensajes",
+          messagesRole ? formatDate(messagesRole.date) : null,
+          messagesRole?._type === "special_role" ? messagesRole.service_name : null,
+        ].filter(Boolean).join(" · ")}
+        viewerId={viewerId}
+        onClose={() => setMessagesOpen(false)}
+      />
 
       {/* ── Modals: mounted always, opened by the prop, bodies keyed on the open
              so a close keeps drawing what it is animating away. ── */}

@@ -232,7 +232,7 @@ export default function AdminPanel({
                 target={integrityTarget}
                 onResolved={integrity.resolve}
               />
-              <ServicesPanel engine={engine} />
+              <ServicesPanel engine={engine} viewerId={viewerId} />
             </div>
           </ServiceHandoffProvider>
         );

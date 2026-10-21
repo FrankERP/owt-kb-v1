@@ -28,9 +28,36 @@ import {
 import { notifyLeadsAboutServiceMessage } from "@/app/utils/serviceThreadNotify";
 import { serviceIdentity } from "@/app/utils/emailServiceLabel";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
+import { serviceConversationQuery } from "@/app/utils/serviceReadQueries";
 
 function reject(res: { status: number; body: unknown }) {
   return NextResponse.json(res.body, { status: res.status });
+}
+
+/**
+ * GET — one service's whole conversation for the «Mensajes del servicio» dialog
+ * that the admin opens from a service card: the service thread, plus the shared
+ * proposal's own thread when the leads have created one. Same audience as POST.
+ * Wrapped like POST only because `srVerificationRunContext.test.ts` requires every
+ * handler of a delivery-capable module to be; this one sends nothing.
+ */
+export const GET = withVerificationRunContext(getHandler);
+
+async function getHandler(_req: NextRequest, { params }: { params: Promise<{ roleId: string }> }) {
+  const session = await requireActiveManager();
+  if (!session) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (session.user.role === "content-editor") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const { roleId } = await params;
+  const threadId = serviceThreadId(roleId);
+  if (!isCanonicalDocumentId(roleId) || !threadId) {
+    return reject(serviceError("invalid_request", { details: { issues: ["roleId"] } }));
+  }
+  const bound = serviceConversationQuery(roleId, threadId);
+  const data = await operationalClient.fetch<{ service?: unknown } | null>(bound.query, bound.params);
+  if (!data?.service) return reject(serviceError("not_found", { details: { roleId } }));
+  return NextResponse.json(data);
 }
 
 // Declared BEFORE the handler, like the proposal message routes:
@@ -38,26 +65,27 @@ function reject(res: { status: number; body: unknown }) {
 export const POST = withVerificationRunContext(postHandler);
 
 /**
- * POST /api/admin/service-threads/[roleId]/messages — an admin writes about a
- * service whose setlist proposal does not exist yet (ADR-0064).
+ * POST /api/admin/service-threads/[roleId]/messages — an admin writes to a
+ * service's leads from the service card, with or without a proposal (ADR-0064).
  *
  * The message lands in `serviceThread.<roleId>`, NOT in a proposal: minting a
  * proposal to hold a message would make the role undeletable and immovable
  * (`roleDependencies` blocks on any proposal) and turn its readiness into
- * "Revisar propuesta". Both readers (the admin card, the lead's editor) show this
- * thread together with the proposal's own once the leads create one.
+ * "Revisar propuesta". Every reader (the card's dialog, the proposal card, the
+ * lead's editor) shows this thread together with the proposal's own.
  *
  * Deliberate, and the same as `admin/proposals/[id]/messages`:
  *  - **No `ifRevisionId`.** Two admins posting at once must both land.
  *    `createIfNotExists` + `setIfMissing` + `append` in one transaction is what
  *    makes the first message and every later one the same write.
  *  - **`isThreadOpen` is enforced here**, not only in the UI.
- *  - **`kind: "admin_change_request"`** — the only admin-facing kind the message
- *    enum offers; see the proposal messages route for why.
+ *  - **`kind`** is `pastor_note` when the admin marks it «Es el mensaje del
+ *    pastor» (`{ pastor: true }`), else `admin_change_request`, the admin kind the
+ *    proposal messages route uses too.
  *
- * Accepted even if a proposal appeared since the admin's list loaded: the
- * message still shows on that proposal (both threads are read together), so
- * refusing would only make the admin retype it.
+ * Written here even when a proposal exists: one writer and one notification
+ * rule behind the card's button, never a choice decided by a race with the
+ * lead's first save. The proposal's readers show it anyway.
  *
  * **No ministry check**, inherited deliberately from the proposal message route
  * beside it, so a kids-only `admin` can post here; tightening both is
@@ -91,6 +119,13 @@ async function postHandler(req: NextRequest, { params }: { params: Promise<{ rol
   if (!parsed.ok) {
     return reject(serviceError("invalid_request", { details: { issues: parsed.issues } }));
   }
+  // «Es el mensaje del pastor»: what the pastor sent, relayed by this admin. Absent
+  // = an ordinary admin message; anything but a boolean is refused, not coerced.
+  const pastorFlag = (raw as Record<string, unknown>).pastor;
+  if (pastorFlag !== undefined && typeof pastorFlag !== "boolean") {
+    return reject(serviceError("invalid_request", { details: { issues: ["pastor"] } }));
+  }
+  const pastor = pastorFlag === true;
 
   const lookup = await loadCanonicalRole(roleId);
   if (lookup.state === "none" || !lookup.role) {
@@ -119,8 +154,10 @@ async function postHandler(req: NextRequest, { params }: { params: Promise<{ rol
 
   const message = buildProposalMessage({
     authorId: adminId,
+    // WHO spoke is the admin who relayed it; WHAT it is, a pastor's note — the
+    // kind the enum reserved for exactly this (`pastor_note`).
     authorRole: "admin",
-    kind: "admin_change_request",
+    kind: pastor ? "pastor_note" : "admin_change_request",
     body: parsed.value.body,
     now: nowIso(),
     key: nextKey(),
@@ -177,6 +214,7 @@ async function postHandler(req: NextRequest, { params }: { params: Promise<{ rol
             serviceDate: target.serviceDate,
             identity: serviceIdentity(role),
             body: message.body,
+            pastor,
           }),
         ),
       ),

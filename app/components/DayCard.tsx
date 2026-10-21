@@ -8,6 +8,8 @@ import PracticePlaylistButton from "./PracticePlaylistButton";
 import { usePlayer } from "@/app/context/PlayerContext";
 import { useSession } from "next-auth/react";
 import { SetlistEditor } from "./admin/SetlistEditor";
+import ServiceMessagesDialog from "./admin/ServiceMessagesDialog";
+import { isThreadOpen } from "@/app/utils/proposalThread";
 import CueDialog from "./ui/CueDialog";
 import { themeColour } from "@/app/utils/themeColour";
 import { paintsDayCard } from "@/app/utils/paintsDayCard";
@@ -70,11 +72,12 @@ export interface DayCardProps {
 /** The neutral the card's quiet chrome (medley spine, instrument chips) is drawn in. */
 const NEUTRAL = "--ink-dim-rgb";
 
-export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instruments, fohTeam, bgvs, chorus, roleId, isNext, layout = "card", hero = false, nested = false }: DayCardProps) {
+export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instruments, fohTeam, bgvs, chorus, roleId, serviceId, isNext, layout = "card", hero = false, nested = false }: DayCardProps) {
   const { openSheet } = usePlayer();
   const { data: session } = useSession();
   const { toast } = useToast();
   const [editSetlist, setEditSetlist] = useState(false);
+  const [messagesOpen, setMessagesOpen] = useState(false);
   const [setlistSaving, setSetlistSaving] = useState(false);
 
   // ONE quick-actions sheet for the whole card, never one per row — the same rule
@@ -113,6 +116,11 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
 
   const tone = serviceTone({ day, roleId });
   const canEdit = ["super-admin", "admin"].includes(session?.user?.role as string);
+  // «Mensajes» (ADR-0064): admins write to this service's leads — what the pastor
+  // shared, say — from the card itself. Needs the service document's id (absent
+  // on the planner's preview cards) and a service that has not happened yet.
+  const messageRoleId = serviceId || roleId || null;
+  const canMessage = canEdit && !!messageRoleId && !!date && isThreadOpen({ serviceDate: date });
   const setlistType: "sunday" | "saturday" | "special" =
     roleId ? "special" : day === "Sábado" ? "saturday" : day === "Domingo" ? "sunday" : "special";
 
@@ -200,6 +208,16 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
                 <span className="rounded-full border border-ink-dim/30 px-2.5 py-1 font-label text-[10px] uppercase tracking-widest text-ink-muted">
                   <NumberRoll value={formatCountdown(days)} />
                 </span>
+              )}
+              {canMessage && (
+                <button
+                  type="button"
+                  onClick={() => setMessagesOpen(true)}
+                  className="flex items-center gap-1 font-label text-[11px] uppercase tracking-widest text-mono-500 hover:text-accent transition-colors"
+                >
+                  <ChatIcon />
+                  Mensajes
+                </button>
               )}
               {hero && hasSetlist && (
                 <PracticePlaylistButton variant="hero" songIds={setlist!.songs.map((s) => s._id)} accentVar="--accent-rgb" />
@@ -334,6 +352,16 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
         subtitle={actionsFor?.author || undefined}
         actions={quickActions}
       />
+
+      {canMessage && (
+        <ServiceMessagesDialog
+          open={messagesOpen}
+          roleId={messageRoleId}
+          title={`Mensajes · ${day} ${shortDate}`}
+          viewerId={session?.user?.sanityId ?? null}
+          onClose={() => setMessagesOpen(false)}
+        />
+      )}
 
       {/* Setlist editor modal */}
       {editSetlist && date && (
@@ -506,6 +534,14 @@ function PencilIcon() {
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
+  );
+}
+
+function ChatIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
     </svg>
   );
 }
