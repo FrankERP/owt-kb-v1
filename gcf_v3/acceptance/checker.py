@@ -257,6 +257,21 @@ def _reported_missed(resp):
     return out
 
 
+def recompute(req, assignments):
+    """The broken rule instances and the protection misses of `assignments` under `req`, exactly
+    as `check` recomputes them: `(instances, missed)`, each a sorted list of
+    `(family, rule, scope)` / `(code, person, scope)` tuples.
+
+    For the month-check parity test only (`tests/test_month_check_parity.py` over
+    `fixtures/month-check/parity.json`, editor plan T2.1): the TypeScript month check
+    (`app/mcp/monthProposals/monthCheck.ts`) must reproduce these sets. It names rule ids and
+    person ids, so nothing public prints it; `check()` stays counts-only (C5-17)."""
+    R = _Request(req)
+    seated = _seated(req, {"assignments": assignments})
+    missed, _ = _protections(R, seated)
+    return sorted(_instances(R, seated)), sorted(missed)
+
+
 def check(req, resp):
     """Counts only. `problems` maps a fixed category to how many times it failed."""
     problems = Counter()

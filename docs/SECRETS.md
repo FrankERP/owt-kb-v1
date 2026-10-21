@@ -294,7 +294,7 @@ cannot be recovered — see [Retrievability](#retrievability-assume-nothing-is-r
   fairness ledger GET fails closed (`500 fairness_unavailable`) and, after C6, Auto refuses
   to solve; the record writer refuses to read without it too. **Needed to read `loginEvent`**:
   new ids are dotted, so private — without the token Actividad (`GET /api/admin/login-events`)
-  fails closed (`500 activity_unavailable`). The MCP month tools (P4, not released) read the
+  fails closed (`500 activity_unavailable`). The MCP month tools (P4, in production since 2026-10-20) read the
   ledger and the records through the same reader, so without it `solve_month` refuses before
   solving and `apply_schedule`'s PUT fails closed; their `mcpProposal` records are dotted too.
 - **Role needed:** Viewer.
@@ -439,6 +439,14 @@ there is no dashboard-issued value to copy from.
 vercel env rm MCP_OAUTH_SECRET <env>` first — `vercel env add` refuses an existing key — then
 `printf '%s' "$SECRET" | npx vercel env add MCP_OAUTH_SECRET <env>`), then **redeploy that
 environment**. Env vars bind at build time, same as every other variable in this file.
+
+**A second use: the proposal editor's member tokens** (ADR-0062, on the editor's branch; no new
+secret or env var). The editor's tools name members by a 22-character token, an HMAC-SHA256 of this
+key over the proposal lineage's root handle and the member id (`app/mcp/monthProposals/memberTokens.ts`),
+so no member id crosses the wire. Without the key the editor's tools refuse (as every MCP route
+does). Rotating it changes every token: an editor screen open at that moment has its pending edits
+refused and dropped, and Frank closes and reopens it; stored proposals are unaffected (they hold
+ids, never tokens).
 
 **Blast radius.** Every access and refresh token that environment's routes ever signed stops
 verifying the instant the new key is live — a rotated secret cannot check a token signed under
@@ -616,7 +624,7 @@ secret.
 
 | Platform | Role |
 |---|---|
-| Vercel Preview + Production | `app/api/admin/solve/route.ts` sends it as the `X-Api-Key` header — to v2 itself, and to v3 through `app/utils/solverV3Upstream.ts` (solver v3 C6; the path production takes since the 2026-10-15 cutover, ADR-0056 — v2's only after a flip-back). The MCP's `solve_month` (P4, not released) calls the same `solveV3`, so it sends the same header from `/api/mcp` |
+| Vercel Preview + Production | `app/api/admin/solve/route.ts` sends it as the `X-Api-Key` header — to v2 itself, and to v3 through `app/utils/solverV3Upstream.ts` (solver v3 C6; the path production takes since the 2026-10-15 cutover, ADR-0056 — v2's only after a flip-back). The MCP's `solve_month` (P4, in production since 2026-10-20) calls the same `solveV3`, so it sends the same header from `/api/mcp` |
 | Secret Manager `owt-solver-api-key` | Cloud Build deploys each function with `--set-secrets=OWT_SOLVER_API_KEY=owt-solver-api-key:latest`: v2 from `cloudbuild.yaml` (manual: `scripts/deploy-solver-gcf.sh`), v3 from `gcf_v3/cloudbuild.yaml` (first creation and manual: `scripts/deploy-solver-v3-gcf.sh`) |
 
 **Purpose.** The only barrier on each publicly invokable function (`allUsers` holds
@@ -725,7 +733,7 @@ answer the constant. Both `VERCEL_*` variables are set by Vercel automatically.
 «Registrar elegibilidad de {mes}», `PUT /api/admin/fairness/months` accepts writes and Auto runs
 the v3 solver; under `v2`, the PUT answers a 409 (`details.detail` `engine_not_v3`) and Auto runs
 v2 — the way to rehearse the rollback engine on dev. The MCP month tools (`solve_month`,
-`apply_schedule`; P4, not released) read the same resolver and refuse `engine_not_v3` under `v2`. Without it (the normal state) the deployment
+`apply_schedule`; P4, in production since 2026-10-20) read the same resolver and refuse `engine_not_v3` under `v2`. Without it (the normal state) the deployment
 runs the constant's engine, `"v3"` since the 2026-10-15 cutover (ADR-0056).
 
 **Where it comes from.** A literal typed by Frank: Vercel → project `owt-backstage` → Settings →
@@ -784,7 +792,7 @@ Function.
 `X-Api-Key` on every v3 call too, C5-14), not by its URL.
 
 **Purpose — what breaks without it.** `app/utils/solverV3Upstream.ts` (called by
-`app/api/admin/solve/route.ts`, and by the MCP's `solve_month` — P4, not released) posts every
+`app/api/admin/solve/route.ts`, and by the MCP's `solve_month` — P4, in production since 2026-10-20) posts every
 `contract: 3` request here; without it `solve_month` stores nothing and answers the same
 `not_configured` line. Since the 2026-10-15
 cutover every deployment's engine is `v3` unless flipped back (ADR-0056), so on a deployment

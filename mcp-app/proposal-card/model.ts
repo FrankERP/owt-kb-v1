@@ -2,8 +2,8 @@
 // docs/superpowers/plans/2026-10-21-owt-mcp-proposal-editor.md): what `solve_month` answered,
 // read from its own result and nothing else. Pure, so it is tested without a browser.
 //
-// The card only SHOWS. It never judges, stores or sends anything back (plan E1): every name,
-// label and line here is server text, and anything the result does not carry is not invented.
+// The card only SHOWS what the result carries: every name, label and line here is server text,
+// and anything the result does not carry is not invented. Editing (S4) is `editorModel.ts`.
 
 export interface CardRow {
   label: string;
@@ -30,6 +30,10 @@ export type CardView =
   | {
       kind: "proposal";
       title: string;
+      /** The stored proposal's handle (what the editor and «Cargar» act on), when it was stored. */
+      handle: string | null;
+      /** 1 for a solve; a saved edit's revision otherwise. */
+      revision: number;
       /** «Guardada hasta …», «No se pudo guardar…» or «No hay nada que crear». */
       status: string;
       stored: boolean;
@@ -119,6 +123,33 @@ export function cardViewOf(result: { content?: unknown; structuredContent?: unkn
     return { kind: "unreadable", lines: lines.length ? lines : ["La respuesta está en el chat."] };
   }
 
+  // A `revise_proposal` answer: the edited version's board, by the same names.
+  if (Array.isArray(s.board) && !Array.isArray(s.services)) {
+    const revision = typeof s.revision === "number" ? s.revision : 1;
+    return {
+      kind: "proposal",
+      title: `Propuesta · versión ${revision}`,
+      handle: str(s.proposal) || null,
+      revision,
+      status: str(s.expiresAt) ? `Guardada hasta el ${expiryLabel(str(s.expiresAt))}` : "",
+      stored: true,
+      services: objects(s.board).map((svc) => ({
+        label: str(svc.label) || "Servicio",
+        planned: svc.editable === true,
+        rows: objects(svc.seats)
+          .map((seat) => ({ label: str(seat.label), names: objects(seat.members).map((m) => str(m.name)) }))
+          .filter((r) => r.names.length > 0),
+      })),
+      unfilled: [],
+      notices: textLines(result.content),
+      stages: [],
+      leftOut: [],
+      refusedSpecials: [],
+      unavailability: [],
+      fairness: [],
+    };
+  }
+
   const services: CardService[] = objects(s.services).map((svc) => {
     const seats = isObj(svc.seats) ? svc.seats : {};
     return {
@@ -139,6 +170,8 @@ export function cardViewOf(result: { content?: unknown; structuredContent?: unkn
   return {
     kind: "proposal",
     title: monthsTitle(strings(s.months)),
+    handle: stored ? str(s.proposal) || null : null,
+    revision: 1,
     status,
     stored,
     services,

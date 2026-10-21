@@ -5,7 +5,8 @@ import { MCP_PROPOSAL_TYPE, PROPOSAL_FIELD } from "../../app/mcp/monthProposals/
 /**
  * Internal MCP month proposal (P4 on solver v3, D6).
  *
- * One document per successful `solve_month`: who solved it (origin and member id), when it
+ * One document per successful `solve_month`, and one per revision saved in the editor (with
+ * `parent`, `revision` and `root`; plan 2026-10-21, ADR-0062): who solved it (origin and member id), when it
  * expires (7 days), the rules revision and months it was solved for, and the plan itself as one
  * JSON string (`payload`) bound by a SHA-256 `digest`, plus the JSON string `state` that
  * `apply_schedule` grows. `_id` is `mcpProposal.<handle>` — dotted, so an untokened read never
@@ -39,6 +40,14 @@ export const mcpProposal = defineType({
     },
     { name: PROPOSAL_FIELD.months, title: "Meses", type: "array", of: [{ type: "string" }] },
     { name: PROPOSAL_FIELD.requestId, title: "Request id", type: "string" },
+    {
+      name: PROPOSAL_FIELD.parent,
+      title: "Revisión de",
+      type: "string",
+      description: "Solo en una revisión hecha en el editor: la propuesta de la que salió.",
+    },
+    { name: PROPOSAL_FIELD.revision, title: "Revisión", type: "number" },
+    { name: PROPOSAL_FIELD.root, title: "Propuesta original", type: "string" },
     { name: PROPOSAL_FIELD.payload, title: "Plan (JSON)", type: "text" },
     { name: PROPOSAL_FIELD.digest, title: "Digest", type: "string" },
     { name: PROPOSAL_FIELD.state, title: "Avance (JSON)", type: "text" },

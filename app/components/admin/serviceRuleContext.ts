@@ -103,6 +103,16 @@ export function ruleContextForTarget(
   };
 }
 
+/**
+ * The Sunday spine a column's rules are judged against — exactly what the planner grid is handed
+ * per column (`MonthGenerator`'s `sundayDatesForColumn`) and what the MCP proposal editor judges
+ * with (`columnRuleInputs`): a weekend's own month spine, the trailing Saturday's included; `[]`
+ * for a special (no week exclusion reaches one). One definition, so the two cannot drift.
+ */
+export function sundaySpineForColumn(column: { type: ServiceType; date: string }): string[] {
+  return ruleContextForTarget(column.type, column.date)?.sundayDates ?? [];
+}
+
 export function allWeekendTargetsAddressable(
   targets: readonly { type: ServiceType; date: string }[],
 ): boolean {

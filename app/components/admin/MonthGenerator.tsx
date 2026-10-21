@@ -60,7 +60,7 @@ import {
   type ClearScope,
   type ClearWhat,
 } from "./clearCells";
-import { ruleContextForTarget } from "./serviceRuleContext";
+import { sundaySpineForColumn } from "./serviceRuleContext";
 import { unresolvedRuleNames } from "./ruleEnforcement";
 import { ParticipationSidebar } from "./ParticipationSidebar";
 import LeadPoolHistoryPanel from "./LeadPoolHistoryPanel";
@@ -5497,7 +5497,7 @@ export default function MonthGenerator({
           // the `createdTargets`/`canReceiveDrop`/`setDrafts` coupling holding
           // — do so only alongside re-verifying that coupling, not as an
           // unrelated cleanup.
-          sundayDatesForColumn={(column) => ruleContextForTarget(column.type, column.date)?.sundayDates ?? []}
+          sundayDatesForColumn={sundaySpineForColumn}
           /*
             The participation chart, handed to the grid as the LEFT COLUMN of
             its three-column workspace (`PlannerGrid.tsx`'s header has the

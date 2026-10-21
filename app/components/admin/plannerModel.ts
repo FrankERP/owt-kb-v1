@@ -126,6 +126,68 @@ export interface GridCell {
   overrideReasons?: Record<string, string>;
 }
 
+// `withUpdatedCell` lives here, not in `PlannerGrid.tsx`, so a server module can call it: the
+// MCP proposal editor replays a hand edit through the very helper the grid writes with (plan
+// T2.3 (1)), and a value exported from a `"use client"` module is a client reference on the server
+// (ADR-0028). `PlannerGrid` and `moveOccupant` import it from here.
+/**
+ * Writes `memberIds` into one cell, and keeps `overrides` (P10) honest:
+ * an id no longer seated cannot stay overridden, so removing a member clears
+ * their entry — the alternative is a stale exception that would silence E13's
+ * re-flag if the same person were ever seated here again.
+ *
+ * `addOverride` is the ONLY way an entry is created, and it is reachable from
+ * exactly one place: the picker's secondary "Asignar de todos modos" action.
+ * It carries the RULE that was waived, not just the person: the two fields are
+ * written and pruned together here, so `overrideReasons` can never outlive the
+ * seating it describes. See `GridCell.overrideReasons`.
+ */
+export function withUpdatedCell(
+  cells: GridCell[],
+  rowId: string,
+  columnId: string,
+  memberIds: string[],
+  addOverride?: { memberId: string; reason: string },
+): GridCell[] {
+  const idx = cells.findIndex((c) => c.columnId === columnId && c.rowId === rowId);
+  const seated = new Set(memberIds);
+  const prior = idx === -1 ? [] : (cells[idx].overrides ?? []);
+  const priorReasons = idx === -1 ? {} : (cells[idx].overrideReasons ?? {});
+  const kept = prior.filter((id) => seated.has(id));
+  const add =
+    addOverride && seated.has(addOverride.memberId) && !kept.includes(addOverride.memberId)
+      ? addOverride
+      : null;
+  const overrides = add ? [...kept, add.memberId] : kept;
+  const overrideReasons: Record<string, string> = {};
+  for (const id of overrides) {
+    const reason = id === add?.memberId ? add.reason : priorReasons[id];
+    if (reason !== undefined) overrideReasons[id] = reason;
+  }
+  if (idx === -1) {
+    return [
+      ...cells,
+      {
+        columnId,
+        rowId,
+        occupants: reconcileOccupants([], memberIds),
+        origin: "manual" as const,
+        overrides,
+        overrideReasons,
+      },
+    ];
+  }
+  const next = [...cells];
+  next[idx] = {
+    ...next[idx],
+    occupants: reconcileOccupants(next[idx].occupants, memberIds),
+    origin: "manual",
+    overrides,
+    overrideReasons,
+  };
+  return next;
+}
+
 export interface GridRow {
   id: string;
   label: string;
@@ -1921,6 +1983,55 @@ export function cellsToDrafts(
   }
 
   return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
+ * The inverse of `cellsToDrafts` over `buildRows()`: a stored month proposal holds DRAFTS, and the
+ * MCP proposal editor replays hand edits on the grid's own cells (plan T2.3 (3)). One column per
+ * draft, with the id `buildColumns` gives it, and one cell per non-empty seat row in the draft's
+ * order, so `cellsToDrafts(draftsToCells(d).cells, …, d)` gives back `d`'s seats exactly.
+ *
+ * `null` when a draft cannot be represented on `rows` — a seat label with no row, a Coro on a
+ * Saturday, two drafts on one date — rather than a board that would silently drop a seat when
+ * written back (E18).
+ */
+export function draftsToCells(
+  drafts: readonly DraftCard[],
+  rows: readonly GridRow[],
+): { columns: GridColumn[]; cells: GridCell[] } | null {
+  const rowIds = new Set(rows.map((r) => r.id));
+  const columns: GridColumn[] = [];
+  const cells: GridCell[] = [];
+  const dates = new Set<string>();
+  for (const d of drafts) {
+    if (dates.has(d.date)) return null;
+    dates.add(d.date);
+    const columnId = createColumnId(d._type, d.date);
+    columns.push({
+      columnId,
+      date: d.date,
+      type: d._type,
+      ...(d.service_name !== undefined ? { serviceName: d.service_name } : {}),
+      countsForFairness: d.countsForFairness,
+    });
+    const byRow = new Map<string, string[]>();
+    const seat = (rowId: string, memberId: string) => {
+      const list = byRow.get(rowId);
+      if (list) list.push(memberId);
+      else byRow.set(rowId, [memberId]);
+    };
+    d.leads.forEach((id) => seat("lead", id));
+    d.bgvs.forEach((id) => seat("bgv", id));
+    d.chorus.forEach((id) => seat("coro", id));
+    d.instruments.forEach((s) => seat(`${INSTRUMENT_PREFIX}${s.instrument}`, s.personId));
+    d.foh.forEach((s) => seat(`${FOH_PREFIX}${s.role}`, s.personId));
+    for (const [rowId, memberIds] of byRow) {
+      if (!rowIds.has(rowId) || !columnShowsRowId(d._type, rowId)) return null;
+      cells.push({ columnId, rowId, occupants: memberIds.map((memberId) => ({ memberId })), origin: "auto" });
+    }
+  }
+  columns.sort((a, b) => a.date.localeCompare(b.date));
+  return { columns, cells };
 }
 
 /**

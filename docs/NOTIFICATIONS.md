@@ -496,7 +496,7 @@ preferences, `EMAIL_ALLOWLIST` and `EMAIL_REDIRECT_TO`. Nothing else in this doc
 an MCP write, and there is no MCP-specific notification path to operate. The per-tool audiences
 are tabled in [MCP.md](MCP.md#notification-audiences-the-write-tools).
 
-**The month tools notify nobody** (MCP P4, not released; ADR-0061). `solve_month` writes only its
+**The month tools notify nobody** (MCP P4, in production since 2026-10-20; ADR-0061). `solve_month` writes only its
 private proposal record. `apply_schedule` creates every service as a draft (`published: false`)
 through the roles POST's own `createRole`, so `notifyRoleAssignments` and `queueRoleNotices` send
 and queue nothing, exactly as «Crear N borradores» in `/admin`; its eligibility-record PUT

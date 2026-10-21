@@ -328,22 +328,53 @@ export interface EvaluateInput {
  */
 export function evaluate(input: EvaluateInput): RuleVerdict {
   const reasons = blockingReasons(input);
-  return reasons.length > 0 ? { blocked: true, reason: reasons[0] } : NOT_BLOCKED;
+  return reasons.length > 0 ? { blocked: true, reason: reasons[0].sentence } : NOT_BLOCKED;
 }
 
 /**
- * EVERY hard rule that refuses this pick, in `evaluate`'s own fixed order,
- * deduplicated — `evaluate` is this list's first element and nothing else.
- *
- * Kept private, and separate from `evaluate`, for exactly one caller:
- * `ruleViolationsForColumn` has to answer "is the rule this seat was overridden
- * past still the ONLY rule that refuses it?" (P10). A single first-match verdict
- * cannot answer that — waive an exclusion, then add a conflict that arrives
- * afterwards. Exclusions sort ahead (exclusions precede conflicts in `evaluate`'s
- * order), so first-match keeps returning the waived reason and masks the new
- * rule. The order below is still what decides which single reason the picker shows.
+ * Which rule refuses a pick, by IDENTITY: its kind and its ordinals in the config arrays —
+ * `restriction[i].pattern[k]` (a person exclusion), `restriction[i].week[j]` (a week exclusion),
+ * `conflict[i]` (a pair). Name-free by construction (C6 KH-1: a config `_key` may spell a first
+ * name, so no identity here ever copies one), and stable for as long as the config is: the MCP
+ * proposal editor binds a whole lineage to one rules revision, so an ordinal means the same rule
+ * from the first revision to the last. The `sentence` is display only and never identity — two
+ * rules with the same wording stay two rules.
  */
-function blockingReasons(input: EvaluateInput): string[] {
+export type RuleRefusalKind = "exclusion" | "week_exclusion" | "pair";
+
+export interface RuleRefusal {
+  kind: RuleRefusalKind;
+  ruleId: string;
+  /** The member refused, then — for a pair — the seated member the rule pairs them with. */
+  members: string[];
+  /** The planner's own Spanish reason, exactly as `evaluate` gives it. */
+  sentence: string;
+}
+
+/**
+ * EVERY hard rule refusing this pick, structured, in `evaluate`'s fixed order — the gate's C4
+ * rules for the MCP proposal editor's cross-check (plan T2.2), which compares them with
+ * `ruleFindings` by identity, never by sentence. `evaluate` is the first item's sentence.
+ */
+export function ruleRefusals(input: EvaluateInput): RuleRefusal[] {
+  return blockingReasons(input);
+}
+
+/**
+ * EVERY hard rule that refuses this pick, in `evaluate`'s own fixed order, as structured items —
+ * `evaluate` is the first item's sentence and nothing else.
+ *
+ * Kept separate from `evaluate` for its two consumers. `ruleViolationsForColumn` has to answer
+ * "is the rule this seat was overridden past still the ONLY rule that refuses it?" (P10). A single
+ * first-match verdict cannot answer that — waive an exclusion, then add a conflict that arrives
+ * afterwards. Exclusions sort ahead (exclusions precede conflicts in `evaluate`'s order), so
+ * first-match keeps returning the waived reason and masks the new rule; that consumer reads the
+ * deduplicated sentences (`blockingSentences`), exactly the strings this returned before it was
+ * structured. And `ruleFindings` keys every breach by its rule's identity (the MCP proposal
+ * editor's waivers), which a deduplicated sentence cannot carry: two rules with one wording.
+ * The order below is still what decides which single reason the picker shows.
+ */
+function blockingReasons(input: EvaluateInput): RuleRefusal[] {
   const { member, row, column, sundayDates, assigned, members, config } = input;
   if (!config) return [];
 
@@ -353,32 +384,34 @@ function blockingReasons(input: EvaluateInput): string[] {
   const me = member.member_name;
   const canonical = (raw: string) => ruleNameToCanonical(raw, members);
   const { restrictions, conflicts } = ruleLists(config);
-  const out: string[] = [];
-  const add = (reason: string) => {
-    if (!out.includes(reason)) out.push(reason);
-  };
+  const out: RuleRefusal[] = [];
 
   // 1. Person exclusions (E15) — the service half must match.
-  for (const r of restrictions) {
-    if (canonical(r.person) !== me) continue;
-    for (const pattern of r.excludedPatterns) {
-      if (patternMatches(pattern, column, row)) add(`Regla: excluido de ${pattern}`);
-    }
-  }
+  restrictions.forEach((r, ri) => {
+    if (canonical(r.person) !== me) return;
+    r.excludedPatterns.forEach((pattern, pi) => {
+      if (patternMatches(pattern, column, row)) {
+        out.push({ kind: "exclusion", ruleId: `restriction[${ri}].pattern[${pi}]`, members: [member._id], sentence: `Regla: excluido de ${pattern}` });
+      }
+    });
+  });
 
   // 2. Week exclusions (E7) — WEEKEND columns only. `weekForColumn` returns
   //    `null` for a special by construction, so the exclusion here is the
   //    spine's own answer rather than a second, drift-prone column-type test.
   const week = column && sundayDates ? weekForColumn(column, sundayDates) : null;
   if (week !== null) {
-    for (const r of restrictions) {
-      if (canonical(r.person) !== me) continue;
-      for (const we of r.weekExclusions) {
+    restrictions.forEach((r, ri) => {
+      if (canonical(r.person) !== me) return;
+      r.weekExclusions.forEach((we, wi) => {
         if (we.week === week && patternMatches(we.pattern, column, row)) {
-          add(`Regla: excluido en la semana ${week} (${we.pattern})`);
+          out.push({
+            kind: "week_exclusion", ruleId: `restriction[${ri}].week[${wi}]`, members: [member._id],
+            sentence: `Regla: excluido en la semana ${week} (${we.pattern})`,
+          });
         }
-      }
-    }
+      });
+    });
   }
 
   // 3. Pairwise conflicts (E14), scoped BY THE PATTERN, not by the rule.
@@ -387,29 +420,37 @@ function blockingReasons(input: EvaluateInput): string[] {
   //    `*.LeadBGV`/`*.*` bind across rows within the same COLUMN. E14's "same
   //    column" is the outer bound; the pattern narrows it. A Saturday and its
   //    adjacent Sunday are one week but two columns, and never conflict.
-  for (const c of conflicts) {
+  conflicts.forEach((c, ci) => {
     const a = canonical(c.personA);
     const b = canonical(c.personB);
-    if (a === null || b === null) continue;
+    if (a === null || b === null) return;
     const otherName = a === me ? b : b === me ? a : null;
     // `null` = neither side is this member; `me` = a rule naming one person
     // twice, which binds nobody (the solver's `sum(lt) + sum(rt) <= 1` would
     // count the same variable twice and refuse a legal single seat).
-    if (otherName === null || otherName === me) continue;
+    if (otherName === null || otherName === me) return;
     const parsed = patternMatches(c.pattern, column, row) ? parsePattern(c.pattern) : null;
-    if (!parsed) continue;
-    const clash = assigned.some(
+    if (!parsed) return;
+    const clash = assigned.find(
       (x) => parsed.rows.includes(x.seatId) && memberIdToName(x.memberId, members) === otherName,
     );
     if (clash) {
       // Named with the RULE's own wording (an alias, as the admin typed it),
       // not the occupant's `member_name` — the message has to point at the rule
       // the admin can go and edit.
-      add(`Regla: no puede coincidir con ${a === me ? c.personB : c.personA}`);
+      out.push({
+        kind: "pair", ruleId: `conflict[${ci}]`, members: [member._id, clash.memberId],
+        sentence: `Regla: no puede coincidir con ${a === me ? c.personB : c.personA}`,
+      });
     }
-  }
+  });
 
   return out;
+}
+
+/** `blockingReasons`' sentences, deduplicated in order — what P10's comparison reads. */
+function blockingSentences(input: EvaluateInput): string[] {
+  return [...new Set(blockingReasons(input).map((r) => r.sentence))];
 }
 
 // ─── E13: the post-fill re-check ─────────────────────────────────────────────
@@ -522,7 +563,7 @@ export function ruleViolationsForColumn(input: {
       }
       return true;
     });
-    return blockingReasons({ member, row, column, sundayDates, assigned: others, members, config });
+    return blockingSentences({ member, row, column, sundayDates, assigned: others, members, config });
   };
 
   // Pass 1 — which sanctions still stand. An overridden seat is judged against
@@ -560,3 +601,66 @@ export function ruleViolationsForColumn(input: {
 }
 
 const EMPTY_WAIVERS: ReadonlyMap<string, string> = new Map<string, string>();
+
+// ─── Findings: every breach on a column, keyed by rule identity ──────────────
+
+/**
+ * One rule breach on a column, keyed ONCE (the MCP proposal editor's findings, plan T2.2):
+ * a per-seat rule (an exclusion, a week exclusion) by its seat's row and member; a pair by the two
+ * members, sorted — one finding however many of its seats are forced, and unchanged by an exchange
+ * inside the column. `ruleId` is the rule's identity (`RuleRefusal`), never its sentence.
+ */
+export interface RuleFinding {
+  kind: RuleRefusalKind;
+  ruleId: string;
+  /** The seat's row for a per-seat rule; `null` for a pair (it binds members, not a row). */
+  rowId: string | null;
+  /** `[member]` for a per-seat rule; both members, sorted, for a pair. */
+  members: string[];
+  /** Display only: the planner's sentence for a per-seat rule; both of the rule's names for a pair. */
+  sentence: string;
+}
+
+/**
+ * EVERY rule breach among a column's seated occupants, each judged against the column WITHOUT its
+ * own seat (as `ruleViolationsForColumn` does, so a seated member is never self-exempted) and
+ * reported once per finding. Not `ruleViolationsForColumn`: that keeps one reason per seat, as
+ * strings, for the grid's marker — it cannot tell two rules apart or key a pair once.
+ *
+ * Its inputs must be the gate's own: a week exclusion is skipped without the right `sundayDates`
+ * (`blockingReasons`), so a caller that judges with a different spine than its gate would miss what
+ * the gate saw. The editor takes both from one builder (`columnRuleInputs`) and cross-checks them.
+ */
+export function ruleFindings(input: {
+  column: RuleColumn;
+  assigned: AssignedSeat[];
+  members: RankMember[];
+  sundayDates?: string[];
+  config?: SolverConfig;
+}): RuleFinding[] {
+  const { column, assigned, members, sundayDates, config } = input;
+  if (!config) return [];
+  const memberById = new Map(members.map((m) => [m._id, m]));
+  const { conflicts } = ruleLists(config);
+  const out: RuleFinding[] = [];
+  const seen = new Set<string>();
+  assigned.forEach((seat, index) => {
+    const member = memberById.get(seat.memberId);
+    if (!member) return;
+    const others = assigned.filter((_, i) => i !== index);
+    for (const r of blockingReasons({ member, row: { id: seat.seatId }, column, sundayDates, assigned: others, members, config })) {
+      const pair = r.kind === "pair";
+      const finding: RuleFinding = pair
+        ? (() => {
+            const c = conflicts[Number(/^conflict\[(\d+)\]$/.exec(r.ruleId)![1])];
+            return { kind: r.kind, ruleId: r.ruleId, rowId: null, members: [...r.members].sort(), sentence: `Regla: ${c.personA} y ${c.personB} no pueden coincidir` };
+          })()
+        : { kind: r.kind, ruleId: r.ruleId, rowId: seat.seatId, members: [seat.memberId], sentence: r.sentence };
+      const key = `${finding.ruleId}|${finding.rowId ?? ""}|${finding.members.join(",")}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(finding);
+    }
+  });
+  return out;
+}
