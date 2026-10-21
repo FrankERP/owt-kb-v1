@@ -238,11 +238,16 @@ describe("ServicesPanel wires ONE rule set to its roster surfaces", () => {
     expect(src).toContain('loadSources(["roles", "roleTargets"])');
   });
 
-  it("routes card roster actions into the stored month editor", () => {
-    expect(src.match(/openMonthEditor\(card\.role\.date\.slice\(0, 7\), card\.role\._id, false, \{ kind: "card", roleId: card\.role\._id \}\)/g) ?? [])
-      .toHaveLength(2);
+  it("routes card roster actions into the stored editor, opened on that one service", () => {
+    // The card's «Editar equipo» and its `service_modal` primary action.
+    expect(src.match(/openServiceEditor\(card\.role\)/g) ?? []).toHaveLength(2);
+    const opener = src.slice(src.indexOf("function openServiceEditor"), src.indexOf("// ── Render", src.indexOf("function openServiceEditor")));
+    expect(opener).toContain('monthEditorOpenerRef.current = { kind: "card", roleId: role._id }');
+    expect(opener).toContain('focusRoleId: role._id, scope: "service"');
+    expect(src).toContain("singleService={monthEditor.scope === \"service\"}");
     expect(src).toContain('data-card-id="${escaped}"');
     expect(src).toContain("Editar mes");
+    expect(src).toContain("Editar servicio");
     expect(src).not.toContain('openEditModal({ type: "edit"');
   });
 
