@@ -1,8 +1,9 @@
 // app/api/mcp/route.ts
 //
 // The MCP endpoint (P0 plan step 9, spec I6/O2/E1): Streamable HTTP through
-// `mcp-handler`, stateless, tools registered below: `ping`, the seven P1 reads
-// and the four P3 writes. Ungated by the session
+// `mcp-handler`, stateless, tools registered below: `ping`, the seven P1 reads,
+// the four P3 writes and the two P4 month tools, plus one resource (the MCP Apps
+// card `solve_month` links to, `app/mcp/apps/proposalCard.ts`). Ungated by the session
 // middleware (`api/mcp(?:/|$)` in `app/utils/routeMatcher.ts`, P0 step 5), so
 // it authenticates EVERY request itself, on every method, and nothing reaches
 // the MCP server — no `initialize`, no `tools/list`, no tool — until all of
@@ -76,6 +77,8 @@ const SERVER_INFO = { name: MCP_SERVER_NAME, version: mcpServerVersion() };
  * answer a completed JSON-RPC error instead, and `listChanged: false` stops
  * advertising a notification this server never sends (the tool list is fixed
  * per deployment). The capability MERGES with what `registerTool` sets up.
+ * `resources.listChanged: false` does the same for the one resource; the SDK
+ * never advertises `resources.subscribe` nor answers `resources/subscribe`.
  *
  * NO WORK AFTER THE RESPONSE, either. The SDK can answer with an SSE stream
  * while a tool is still running (always in the 2025-06-18 era; after a

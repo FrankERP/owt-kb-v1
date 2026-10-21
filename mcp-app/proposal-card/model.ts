@@ -24,7 +24,9 @@ export interface CardFairness {
 
 export type CardView =
   | { kind: "waiting" }
+  /** A refusal (`isError`), or a result the card cannot read: the server's own lines. */
   | { kind: "refused"; lines: string[] }
+  | { kind: "unreadable"; lines: string[] }
   | {
       kind: "proposal";
       title: string;
@@ -34,6 +36,12 @@ export type CardView =
       services: CardService[];
       unfilled: { service: string; seat: string }[];
       notices: string[];
+      /** The solver's stage lines (all proven, or which stage was not and why). */
+      stages: string[];
+      /** Services the solve did not plan, each with the planner's reasons. */
+      leftOut: { service: string; reasons: string[] }[];
+      refusedSpecials: { name: string; day: string; reason: string }[];
+      unavailability: { name: string; service: string; day: string }[];
       fairness: CardFairness[];
     };
 
@@ -62,6 +70,15 @@ export function expiryLabel(iso: string): string {
   const date = d.toLocaleDateString("es-MX", { timeZone: TIME_ZONE, day: "numeric", month: "long" });
   const time = d.toLocaleTimeString("es-MX", { timeZone: TIME_ZONE, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
   return `${date}, ${time}`;
+}
+
+const SHORT_MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+/** A service date (`YYYY-MM-DD`) as «9 ene», as the text answer prints it (`dayLabel`) — string math, no `Date`. */
+export function dayOf(iso: string): string {
+  const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(iso);
+  const month = m ? SHORT_MONTHS[Number(m[1]) - 1] : undefined;
+  return m && month ? `${Number(m[2])} ${month}` : iso;
 }
 
 type Obj = Record<string, unknown>;
@@ -96,7 +113,10 @@ export function cardViewOf(result: { content?: unknown; structuredContent?: unkn
   const s = result.structuredContent;
   if (result.isError || !isObj(s) || s.ok !== true) {
     const lines = textLines(result.content);
-    return { kind: "refused", lines: lines.length ? lines : ["No se pudo planear el mes."] };
+    // Only `isError` is a refusal; anything else the card cannot read keeps the server's text
+    // under a neutral heading (it may well be a stored proposal).
+    if (result.isError) return { kind: "refused", lines: lines.length ? lines : ["No se pudo planear el mes."] };
+    return { kind: "unreadable", lines: lines.length ? lines : ["La respuesta está en el chat."] };
   }
 
   const services: CardService[] = objects(s.services).map((svc) => {
@@ -124,6 +144,10 @@ export function cardViewOf(result: { content?: unknown; structuredContent?: unkn
     services,
     unfilled: objects(s.unfilled).map((u) => ({ service: str(u.service), seat: str(u.seat) })),
     notices: strings(s.notices),
+    stages: strings(s.stages),
+    leftOut: objects(s.leftOut).map((l) => ({ service: str(l.service), reasons: strings(l.reasons) })),
+    refusedSpecials: objects(s.refusedSpecials).map((r) => ({ name: str(r.name), day: dayOf(str(r.date)), reason: str(r.reason) })),
+    unavailability: objects(s.unavailability).map((u) => ({ name: str(u.name), service: str(u.service), day: dayOf(str(u.date)) })),
     fairness: objects(s.fairness).map((p) => ({
       name: str(p.name),
       tabs: objects(p.tabs).map((t) => ({

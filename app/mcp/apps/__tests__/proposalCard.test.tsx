@@ -11,7 +11,7 @@ vi.mock("@/sanity/env", () => ({ apiVersion: "2024-07-23", dataset: "test", proj
 
 import { solveMonthResult } from "@/app/mcp/tools/solveMonth";
 import { PRINCIPAL, solveDeps, textOf } from "@/app/mcp/tools/__tests__/monthToolFixtures";
-import { cardViewOf, expiryLabel, monthsTitle, type CardView } from "@/mcp-app/proposal-card/model";
+import { cardViewOf, dayOf, expiryLabel, monthsTitle, type CardView } from "@/mcp-app/proposal-card/model";
 import { ProposalCard } from "@/mcp-app/proposal-card/ProposalCard";
 import { GENERATED_FILE, buildProposalCardHtml, generatedModule } from "@/mcp-app/build.mjs";
 import { PROPOSAL_CARD_HTML } from "@/mcp-app/generated/proposalCardHtml";
@@ -37,12 +37,44 @@ describe("the view model", () => {
     expect(cardViewOf(out)).toEqual({ kind: "refused", lines: textOf(out).split("\n").filter((l) => l.trim()) });
   });
 
-  it("no result yet is waiting; an unreadable one is a refusal with a fixed line", () => {
+  it("no result yet is waiting; only isError is a refusal, anything else unreadable keeps the server's text", () => {
     expect(cardViewOf(undefined)).toEqual({ kind: "waiting" });
-    expect(cardViewOf({ content: [], structuredContent: { ok: "yes" } })).toEqual({
-      kind: "refused",
-      lines: ["No se pudo planear el mes."],
+    expect(cardViewOf({ isError: true, content: [] })).toEqual({ kind: "refused", lines: ["No se pudo planear el mes."] });
+    // A host that hands only `content` (no structuredContent) — maybe a stored proposal: no «No hay propuesta».
+    expect(cardViewOf({ content: [{ type: "text", text: "Propuesta X (vence …)" }] })).toEqual({
+      kind: "unreadable",
+      lines: ["Propuesta X (vence …)"],
     });
+  });
+
+  it("carries every warning the text answer carries: stages, left-out services, refused specials, unavailability", async () => {
+    const out = await solveMonthResult({ month: "2026-11" }, PRINCIPAL, solveDeps());
+    const view = cardViewOf(out);
+    if (view.kind !== "proposal") throw new Error(`expected a proposal, got ${view.kind}`);
+    expect(view.stages.length).toBeGreaterThan(0);
+    for (const line of view.stages) expect(textOf(out)).toContain(line);
+    const synthetic = cardViewOf({
+      structuredContent: {
+        ok: true,
+        stored: false,
+        months: ["2027-01"],
+        services: [],
+        leftOut: [{ service: "Dom 3 ene", reasons: ["ya existe"] }],
+        refusedSpecials: [{ date: "2027-01-09", name: "Noche de alabanza", reason: "choca" }],
+        unavailability: [{ name: "Ana", date: "2027-01-10", service: "Dom" }],
+      },
+    });
+    expect(synthetic).toMatchObject({
+      leftOut: [{ service: "Dom 3 ene", reasons: ["ya existe"] }],
+      refusedSpecials: [{ name: "Noche de alabanza", day: "9 ene", reason: "choca" }],
+      unavailability: [{ name: "Ana", service: "Dom", day: "10 ene" }],
+    });
+  });
+
+  it("prints a service date as the text answer does (`dayLabel`), with no Date to shift the day", () => {
+    expect(dayOf("2027-01-03")).toBe("3 ene");
+    expect(dayOf("2026-12-31")).toBe("31 dic");
+    expect(dayOf("not-a-date")).toBe("not-a-date");
   });
 
   it("a proposal that could not be stored, or has nothing to create, says so", () => {
@@ -81,6 +113,10 @@ describe("the presentational card", () => {
     ],
     unfilled: [{ service: "Dom 3 ene", seat: "Bajo" }],
     notices: [],
+    stages: ["Todas las etapas quedaron probadas."],
+    leftOut: [{ service: "Sáb 2 ene", reasons: ["ya existe"] }],
+    refusedSpecials: [],
+    unavailability: [],
     fairness: [{ name: "Ana", tabs: [{ tab: "Dom Lead", enEstePlan: 2, queda: "al corriente" }] }],
   };
   const html = (v: CardView, canExpand = false) =>
@@ -92,6 +128,8 @@ describe("the presentational card", () => {
     expect(out).toMatch(/<details class="service"><summary><span class="service-label">Sáb 9 ene<\/span><span class="tag">No se creará/);
     expect(out).toContain("<li>Dom 3 ene: Bajo</li>");
     expect(out).toContain("al corriente");
+    expect(out).toContain("<li>Todas las etapas quedaron probadas.</li>");
+    expect(out).toContain("<li>Sáb 2 ene: ya existe</li>");
   });
 
   it("offers «Ver en grande» only when the host can go fullscreen", () => {

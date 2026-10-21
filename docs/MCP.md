@@ -30,7 +30,7 @@
 > be proven for any path**, `/admin`'s included, because production has no registered device (see
 > the record); email is the delivery proof.
 >
-> **P4 status (on solver v3): in production since 2026-10-21 (PR #156, `main` `78939c71`); the
+> **P4 status (on solver v3): in production since 2026-10-20 (PR #156, `main` `78939c71`); the
 > live proof with Frank present is still ahead.** The two month tools
 > (`solve_month`, `apply_schedule`, see [Month tools](#month-tools-p4-on-solver-v3)) follow the
 > critical-tier plan approved 2026-10-20
@@ -49,7 +49,7 @@
 > ([plan](superpowers/plans/2026-09-28-owt-mcp-p4-solve-apply.md)) was never implemented and is
 > superseded; P4 was re-baselined onto v3
 > ([plan](superpowers/plans/2026-10-20-owt-mcp-p4-v3-solve-apply.md), approved 2026-10-20) and
-> `solve_month` + `apply_schedule` are in production since 2026-10-21 (PR #156, `main`
+> `solve_month` + `apply_schedule` are in production since 2026-10-20 (PR #156, `main`
 > `78939c71`), live proof pending; `revise_proposal` is part of the proposal editor's plan.**
 
 This app exposes itself to Claude as an [MCP](https://modelcontextprotocol.io) server, so Frank
@@ -686,7 +686,9 @@ MCP Apps ignores both keys and shows the text answer as before.
   into one HTML string, committed as `mcp-app/generated/proposalCardHtml.ts` (~600 000
   characters). After changing anything under `mcp-app/proposal-card/`, run
   `node mcp-app/build.mjs`; `app/mcp/apps/__tests__/proposalCard.test.tsx` rebuilds it and fails
-  on stale bytes, an external load or a bundle over 800 000 characters.
+  on stale bytes, an external load or a bundle over 800 000 characters. That includes a bump of
+  React, zod or the MCP Apps packages (dependabot): the freshness test turns red until someone
+  runs the build and commits the result — on purpose, so a bump is never shipped unseen.
 - **Looks like the host.** Colours, fonts and radii come from the host's style variables, with
   CSS system colours as fallbacks, so it follows the host's light or dark theme; touch targets
   are 44 px and the safe-area insets are honoured.

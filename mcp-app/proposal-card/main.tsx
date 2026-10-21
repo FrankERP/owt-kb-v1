@@ -30,8 +30,13 @@ function CardApp() {
     capabilities: { availableDisplayModes: ["inline", "fullscreen"] },
     onAppCreated: (created) => {
       created.ontoolresult = (result) => setView(cardViewOf(result));
+      // The route runs every call to completion even when the host gives up (`signal: null`),
+      // so a cancel says nothing about whether a proposal was stored: claim nothing.
       created.ontoolcancelled = () =>
-        setView({ kind: "refused", lines: ["Se canceló la planeación; no se guardó ninguna propuesta."] });
+        setView({
+          kind: "unreadable",
+          lines: ["Se interrumpió la respuesta. Pide el mes de nuevo o revisa las propuestas guardadas."],
+        });
       created.addEventListener("hostcontextchanged", () => setContextVersion((v) => v + 1));
     },
   });

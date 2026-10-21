@@ -44,10 +44,10 @@ export function ProposalCard({ view, canExpand, onExpand }: ProposalCardProps) {
     );
   }
 
-  if (view.kind === "refused") {
+  if (view.kind === "refused" || view.kind === "unreadable") {
     return (
       <main className="card">
-        <h1>No hay propuesta</h1>
+        <h1>{view.kind === "refused" ? "No hay propuesta" : "Propuesta del mes"}</h1>
         {view.lines.map((line, i) => (
           <p key={i}>{line}</p>
         ))}
@@ -60,7 +60,7 @@ export function ProposalCard({ view, canExpand, onExpand }: ProposalCardProps) {
       <header className="head">
         <div>
           <h1>{view.title}</h1>
-          <p className={view.stored ? "muted" : "warning"}>{view.status}</p>
+          <p className={view.stored || !view.services.some((x) => x.planned) ? "muted" : "warning"}>{view.status}</p>
         </div>
         {canExpand && (
           <button type="button" className="expand" onClick={onExpand}>
@@ -69,9 +69,9 @@ export function ProposalCard({ view, canExpand, onExpand }: ProposalCardProps) {
         )}
       </header>
 
-      {view.notices.length > 0 && (
+      {view.stages.length + view.notices.length > 0 && (
         <ul className="notices">
-          {view.notices.map((n, i) => (
+          {[...view.stages, ...view.notices].map((n, i) => (
             <li key={i}>{n}</li>
           ))}
         </ul>
@@ -84,6 +84,45 @@ export function ProposalCard({ view, canExpand, onExpand }: ProposalCardProps) {
             {view.unfilled.map((u, i) => (
               <li key={i}>
                 {u.service}: {u.seat}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {view.leftOut.length > 0 && (
+        <section className="unfilled" aria-label="No se planearon">
+          <h2>No se planearon</h2>
+          <ul>
+            {view.leftOut.map((l, i) => (
+              <li key={i}>
+                {l.service}: {l.reasons.join(", ")}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {view.refusedSpecials.length > 0 && (
+        <section className="unfilled" aria-label="Especiales no agregados">
+          <h2>Especiales no agregados</h2>
+          <ul>
+            {view.refusedSpecials.map((r, i) => (
+              <li key={i}>
+                {r.name} ({r.day}): {r.reason}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {view.unavailability.length > 0 && (
+        <section aria-label="No disponibles">
+          <h2>No disponibles</h2>
+          <ul className="notices">
+            {view.unavailability.map((u, i) => (
+              <li key={i}>
+                {u.name}: {u.service} {u.day}
               </li>
             ))}
           </ul>
