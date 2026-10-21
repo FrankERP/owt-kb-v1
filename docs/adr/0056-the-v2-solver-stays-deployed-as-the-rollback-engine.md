@@ -1,6 +1,6 @@
 # ADR-0056: The v2 solver stays deployed as the rollback engine
 
-**Date:** 2026-10-15 · **Status:** Accepted, amended by [ADR-0065](0065-a-pull-request-runs-the-v2-suite-only-when-it-touches-it.md) (2026-10-21: a pull request runs the v2 suite only when it touches `gcf/` or CI)
+**Date:** 2026-10-15 · **Status:** Accepted, amended by [ADR-0064](0064-a-pull-request-runs-the-v2-suite-only-when-it-touches-it.md) (2026-10-21: a pull request runs the v2 suite only when it touches `gcf/` or CI)
 
 > Solver v3 C7, the cutover (plan `docs/superpowers/plans/2026-10-05-solver-v3-c7-cutover.md`,
 > decisions K1, K3, K5–K7; parent amendments A28–A31). Amends nothing by itself: the seven
@@ -76,7 +76,7 @@ meantime. v2 builds a Saturday anchor: a dedicated «Líderes Sábado» member o
 - Two functions stay deployed and share one key (`OWT_SOLVER_API_KEY`); a rotation still redeploys
   both, and a gap on `owt-solver-v3` is now what breaks production Auto (`docs/SECRETS.md`).
 - `solver-v2` stays a required CI job: its goldens guard the rollback engine, not production.
-  Since ADR-0065 a pull request that touches neither `gcf/` nor CI skips it (`gates` vouches).
+  Since ADR-0064 a pull request that touches neither `gcf/` nor CI skips it (`gates` vouches).
 - A rollback leaves v3's records and drafts in place; the «Under v3» sections and this record
   gain a dated «rolled back» note, and `CLAUDE.md` and `docs/SOLVER_AND_INFRA.md` say v2 serves
   Auto again, in the flip-back PR itself.

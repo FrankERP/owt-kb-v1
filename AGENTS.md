@@ -18,7 +18,7 @@ rule changes, change both; if they disagree, this file wins.
   `eslint.config.mjs`); plus the solver suite of each tree the change touches — `gcf/**`:
   `python -m unittest discover -s gcf -t gcf`; `gcf_v3/**`:
   `python -m unittest discover -s gcf_v3 -t gcf_v3`. All five are blocking CI gates (a PR
-  that touches neither `gcf/` nor CI skips `solver-v2`; `gates` vouches — ADR-0065). Add
+  that touches neither `gcf/` nor CI skips `solver-v2`; `gates` vouches — ADR-0064). Add
   tests for testable pure logic.
 
 ## Conventions

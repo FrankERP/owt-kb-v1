@@ -6,7 +6,7 @@
 // request, and only there, a job listed in SKIPPABLE_JOBS runs only when the PR's
 // diff touches one of its paths. Pushes to `main`/`preview` and manual runs keep
 // running everything, so a runner-image drift in GOLDEN_SCHEDULE still surfaces
-// on the next push without blocking an unrelated PR. ADR-0065.
+// on the next push without blocking an unrelated PR. ADR-0064.
 //
 // Every doubt runs the suite: a non-PR event, a diff that could not be read, an
 // empty diff. The job's `if:` runs it unless the output is exactly "false", and
