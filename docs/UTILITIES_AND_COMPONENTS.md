@@ -62,6 +62,10 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   ([proposalNotify.ts](../app/utils/proposalNotify.ts)) — on proposal submit, fans out push to
   admins + co-leads and email to admins. The admin email includes the proposed setlist (same
   table as "Setlist listo", no Mov. column) and lead notes when present; push stays one-line.
+- **`notifyLeadsAboutServiceMessage(...)`**, **`buildServiceThreadEmail(...)`**
+  ([serviceThreadNotify.ts](../app/utils/serviceThreadNotify.ts)) — an admin's message on a service
+  with no proposal yet (ADR-0064): push AND email to that service's Lead seat, never the author;
+  email gated like `proposalNotify`'s (`emailProposals`, allowlist, `EMAIL_REDIRECT_TO`).
   A special is named by `serviceLabel` from the canonical role the notify already reads
   («Nueva propuesta — Sábado 3 oct · CAMP - Set 2 · 09:00», no longer «Especial 3 oct»); a
   weekend keeps «Domingo 5 jul». Every step swallowed so a notify never fails the write.

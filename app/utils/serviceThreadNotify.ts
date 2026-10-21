@@ -46,7 +46,9 @@ export function buildServiceThreadEmail(o: {
     `<a href="${o.link}" style="display:inline-block;background:${C.accent};color:${C.field};text-decoration:none;padding:10px 18px;border-radius:6px;font:700 13px system-ui,sans-serif">Abrir mi propuesta →</a>`,
     { style: "padding:0 24px 20px" },
   ));
-  return { subject, html: shell(header + intro + message + cta, o.link) };
+  // The footer's «Ajustar mis avisos» goes to `/me`, where the lead can turn this
+  // mail off; the proposal page is only on the button.
+  return { subject, html: shell(header + intro + message + cta, `${appBaseUrl()}/me`) };
 }
 
 /**
