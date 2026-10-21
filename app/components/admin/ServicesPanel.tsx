@@ -192,7 +192,19 @@ function Modal({
 
 // ─── Main panel ───────────────────────────────────────────────────────────────
 
-export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine } = {}) {
+export default function ServicesPanel({
+  engine = "v2",
+  onMonthEditorOpenChange,
+}: {
+  engine?: SolverEngine;
+  /**
+   * Told when the stored month editor («Editar mes» / «Editar servicio») opens and closes, so
+   * `AdminPanel` can drop the «Integridad de datos» panel above it. The editor runs the SAME
+   * integrity read for its own edit admission and says so itself when it refuses, so the panel
+   * only repeats an «OK» there. The queue, its routes and the rail's dot are untouched.
+   */
+  onMonthEditorOpenChange?: (open: boolean) => void;
+} = {}) {
   const [roles, setRoles]       = useState<ServiceRole[]>([]);
   const [members, setMembers]   = useState<MemberOption[]>([]);
   // The five read domains are tracked INDEPENDENTLY: a failure in one never
@@ -254,6 +266,12 @@ export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine
   const monthEditorOpenerRef = useRef<{ kind: "toolbar" | "new" | "card"; roleId?: string }>({ kind: "toolbar" });
   const wasShowingGeneratorRef = useRef(false);
   const wasShowingMonthEditorRef = useRef(false);
+  const monthEditorOpen = monthEditor !== null;
+  useEffect(() => {
+    onMonthEditorOpenChange?.(monthEditorOpen);
+  }, [monthEditorOpen, onMonthEditorOpenChange]);
+  // The panel comes back if this one unmounts mid-edit (a tab change keeps nothing open).
+  useEffect(() => () => onMonthEditorOpenChange?.(false), [onMonthEditorOpenChange]);
   useEffect(() => {
     if (wasShowingGeneratorRef.current && !showGenerator) {
       generatorTriggerRef.current?.focus();

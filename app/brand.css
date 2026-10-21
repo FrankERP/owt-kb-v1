@@ -958,11 +958,11 @@ html.has-bottom-nav .audio-player { padding-bottom: 0; }
  *
  * `app/(client)/admin/page.tsx` caps its content at `max-w-7xl` (1280px) inside
  * `px-6` — so a 1512px 14" MacBook Pro reaches the grid with 1232px.
- * Participaciones (216) + the candidate picker (240) + two 12px gaps leaves the
- * grid itself 752px, i.e. four or five date columns of the six the admin is
- * looking at. Widening the CONTENT is the only remedy: the grid's columns have
- * a floor, and the chart's 216 is a measured content floor too
- * (`participationAlongside.test.tsx`).
+ * Participaciones (300) + the candidate picker (240) + two 12px gaps leaves the
+ * grid itself 668px, i.e. four date columns of the six the admin is looking at.
+ * Widening the CONTENT is the only remedy: the grid's columns have a floor, and
+ * the chart's 300 sits above a derived content floor of its own (282,
+ * `participationAlongside.test.tsx`).
  *
  * So the FRAME widens, scoped by `:has()` to the one surface that needs it —
  * `PlannerGrid` marks its root `planner-wide`. Nothing else on `/admin` moves,
@@ -970,7 +970,7 @@ html.has-bottom-nav .audio-player { padding-bottom: 0; }
  *
  *   1512 − 24 (frame padding-inline: 0.75rem a side) = 1488
  *   56 (rail, collapsed) + 32 (gap-8) + 1400 (workspace) = 1488
- *   216 (chart) + 12 + 920 (grid) + 12 + 240 (picker) = 1400
+ *   300 (chart) + 12 + 836 (grid) + 12 + 240 (picker) = 1400
  *
  * The 24px is the `padding-inline: 0.75rem` in the frame rule below, replacing
  * the page's own `px-6`; it looks like a cosmetic tidy-up and is load-bearing

@@ -102,10 +102,22 @@ function useIncludeSpecials(): [boolean, (next: boolean) => void] {
 // the planner column's width floor from THIS string's padding and border.
 const ASIDE_BASE = "rounded-xl border border-accent/20 bg-surface-ink-l40-d100-base p-3 self-start";
 
-// The planner's placement, unchanged: it sits in `PlannerGrid`'s left column
-// (or stacked under the day cards in «Vista»), where `top-4` was always the
-// offset and nothing asked it to stay on screen.
-const DEFAULT_PLACEMENT = "lg:sticky lg:top-4";
+/**
+ * The planner's placement: `PlannerGrid`'s left column (or stacked under the day
+ * cards in «Vista»). The COLUMN is what sticks — `PlannerGrid` puts `xl:sticky`
+ * on the flex item, because an aside sticky inside a column exactly its own
+ * height has nowhere to travel (the old `lg:sticky lg:top-4` here never moved).
+ * What this half owns is the height: from `xl`, where the column sits beside the
+ * grid, the aside is capped at the viewport under the navbar — the same offset
+ * the column's sticky top adds, `--impersonation-offset` included — less 5.5rem:
+ * 1.5rem of breath plus room for «Editar mes»'s sticky save bar or create mode's
+ * «Cuenta» control above the chart, whichever this planner has. Under the cap
+ * the aside is a flex column and the rows list (`PLANNER_LIST`) is the scroller.
+ * Below `xl` nothing is capped: the chart stacks after the grid and the PAGE
+ * scrolls, so a phone never gets a scroller inside a scroller.
+ */
+const DEFAULT_PLACEMENT =
+  "xl:flex xl:flex-col xl:max-h-[calc(100dvh-6rem-env(safe-area-inset-top)-var(--impersonation-offset)-5.5rem)] xl:overflow-y-auto";
 
 /**
  * The Servicios board's placement (ADR-0044): the chart stays in view while the
@@ -132,22 +144,73 @@ const DEFAULT_PLACEMENT = "lg:sticky lg:top-4";
 export const BOARD_STICKY = "lg:sticky lg:top-[calc(6rem+env(safe-area-inset-top)+var(--impersonation-offset))]";
 const BOARD_PLACEMENT = `${BOARD_STICKY} lg:flex lg:flex-col lg:max-h-[calc(100dvh-6rem-env(safe-area-inset-top)-var(--impersonation-offset)-1.5rem)] lg:overflow-y-auto`;
 
-// The rows' scroller. The planner renders `LIST_BASE` alone, unchanged —
-// `participationAlongside.test.tsx` reads its `pr-0.5` into the column's width
-// floor. On the board, from `lg`, it drops its own 60vh cap and fills the capped
-// aside instead (`min-h-0` so a flex item may shrink below its rows).
+// The board's rows scroller: below `lg` its own 60vh cap, from `lg` it fills the
+// capped aside instead (`min-h-0` so a flex item may shrink below its rows).
 const LIST_BASE = "space-y-0 max-h-[60vh] overflow-y-auto pr-0.5";
 const BOARD_LIST = `${LIST_BASE} lg:min-h-0 lg:flex-1 lg:max-h-none`;
+
+// The planner's rows list: no cap of its own below `xl` (see DEFAULT_PLACEMENT),
+// the one scroller of the capped aside from `xl`. `participationAlongside.test.tsx`
+// reads its `pr-0.5` into the column's width floor — the 2px a scrollbar may take.
+const PLANNER_LIST = "space-y-0 pr-0.5 xl:min-h-0 xl:flex-1 xl:overflow-y-auto";
+
+/**
+ * The member bar's width, in px, as an INLINE style: it cannot shrink, which is
+ * what makes it the floor `participationAlongside.test.tsx` derives the planner
+ * column's width from (it reads this constant). 220 since the «Editar mes»
+ * redesign widened the column to 300.
+ */
+const BAR_W = 220;
+
+/** Someone the month could have counted, for «Sin participar este mes». */
+export interface ParticipationPoolMember {
+  id: string;
+  name: string;
+  /** Their Tipo can put them in a voice seat (Lead, BGV, Coro). */
+  voces: boolean;
+  /** Their Tipo can put them on an instrument or FOH. */
+  instrumentos: boolean;
+  /** Marked unavailable on every service of the month — the reason they are here. */
+  unavailable: boolean;
+}
+
+const decimal = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 1 });
+
+/**
+ * Saturday SERVICES per member, voice seats only — «1 en sábado» on the caption.
+ * Counted here rather than added to `computeParticipation`, whose shape is also
+ * the MCP's `get_participation` answer: its Saturday chorus is folded into
+ * `coro`, so its own fields cannot say this, and a caption is not a reason to
+ * change a wire format.
+ */
+function saturdayServices(roles: ParticipantRole[]): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const r of roles) {
+    if (r._type !== "saturday_role") continue;
+    const ids = new Set([...(r.leads ?? []), ...(r.bgvs ?? []), ...(r.chorus ?? [])].map(m => m._id));
+    for (const id of ids) out.set(id, (out.get(id) ?? 0) + 1);
+  }
+  return out;
+}
 
 export function ParticipationSidebar({
   roles,
   monthLabel,
   placement = "default",
+  selectedId = null,
+  onSelect,
+  pool,
 }: {
   roles: ParticipantRole[];
   monthLabel: string;
   /** `"board"` only from `ServicesPanel`; the planner keeps the default. */
   placement?: "default" | "board";
+  /** The member whose chips the grid outlines — the planner's, never the board's. */
+  selectedId?: string | null;
+  /** Given ⇒ each name is a toggle that picks (or, again, drops) that member. */
+  onSelect?: (id: string | null) => void;
+  /** Given ⇒ «Sin participar este mes» lists who in it has no seat of the shown kind. */
+  pool?: readonly ParticipationPoolMember[];
 }) {
   const [view, setView] = useState<View>("voces");
   const [includeSpecials, setIncludeSpecials] = useIncludeSpecials();
@@ -156,10 +219,12 @@ export function ParticipationSidebar({
   // `computeParticipation` itself branches on. Dropping the ROLE (not just the
   // `especial` bucket) is what keeps a special's instrument and FOH seats out
   // of the week counts too.
-  const all = useMemo(
-    () => computeParticipation(includeSpecials ? roles : roles.filter(r => r._type !== "special_role")),
+  const counted = useMemo(
+    () => (includeSpecials ? roles : roles.filter(r => r._type !== "special_role")),
     [roles, includeSpecials],
   );
+  const all = useMemo(() => computeParticipation(counted), [counted]);
+  const saturdays = useMemo(() => saturdayServices(counted), [counted]);
 
   const rows = useMemo(() => {
     if (view === "voces") {
@@ -170,9 +235,28 @@ export function ParticipationSidebar({
       .sort((a, b) => (b.instrWeeks + b.fohWeeks) - (a.instrWeeks + a.fohWeeks) || a.name.localeCompare(b.name));
   }, [all, view]);
 
-  const max = view === "voces"
-    ? Math.max(1, ...rows.map(r => r.total))
-    : Math.max(1, ...rows.map(r => r.instrWeeks + r.fohWeeks));
+  const valueOf = (r: MemberParticipation) => (view === "voces" ? r.total : r.instrWeeks + r.fohWeeks);
+  const max = Math.max(1, ...rows.map(valueOf));
+  // Among the people who served, not the whole roster: «is this one above or
+  // below the others who are serving» is the question the marker answers, and
+  // the roster's idle half has its own list below. Two rows at least, or the
+  // marker only restates the one bar it sits on.
+  const average = rows.length >= 2 ? rows.reduce((n, r) => n + valueOf(r), 0) / rows.length : null;
+
+  // «Sin participar» is judged on EVERY service of the month, specials included
+  // whatever the switch says: someone who only sang at a vigil did participate,
+  // and listing them as idle would be the one wrong answer this list can give.
+  const idle = useMemo(() => {
+    if (!pool) return [];
+    const served = new Set(
+      computeParticipation(roles)
+        .filter(r => (view === "voces" ? r.total > 0 : r.instrWeeks + r.fohWeeks > 0))
+        .map(r => r.id),
+    );
+    return pool
+      .filter(p => (view === "voces" ? p.voces : p.instrumentos) && !served.has(p.id))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [pool, roles, view]);
 
   const legend: readonly (readonly [string, string])[] = view === "voces"
     ? [
@@ -253,6 +337,15 @@ export function ParticipationSidebar({
             <span style={{ width: 9, height: 9, borderRadius: 2, background: c, display: "inline-block" }} />{l}
           </span>
         ))}
+        {average !== null && (
+          <span data-average className="text-xs text-mono-500 inline-flex items-center gap-1">
+            <span aria-hidden="true" className="inline-block h-[11px] w-0.5 rounded-full bg-ink-muted" />
+            Promedio {decimal.format(average)}
+          </span>
+        )}
+        {onSelect && rows.length > 0 && (
+          <span className="basis-full text-xs text-mono-500">Toca un nombre para verlo en el mes.</span>
+        )}
       </div>
 
       {rows.length === 0 && (
@@ -261,33 +354,112 @@ export function ParticipationSidebar({
         </p>
       )}
 
-      <div className={placement === "board" ? BOARD_LIST : LIST_BASE}>
-        {rows.map(r => <Row key={r.id} r={r} max={max} view={view} includeSpecials={includeSpecials} />)}
+      <div className={placement === "board" ? BOARD_LIST : PLANNER_LIST}>
+        {rows.map(r => (
+          <Row
+            key={r.id}
+            r={r}
+            max={max}
+            average={average}
+            view={view}
+            includeSpecials={includeSpecials}
+            saturdays={saturdays.get(r.id) ?? 0}
+            selected={selectedId === r.id}
+            onSelect={onSelect}
+          />
+        ))}
+        {idle.length > 0 && (
+          <div data-idle-pool className="mt-2 pt-2">
+            <p className="font-label text-xs uppercase tracking-widest text-mono-500">
+              Sin participar este mes · {idle.length}
+            </p>
+            <p className="mt-1 text-xs text-ink-muted">
+              {idle.map((p, i) => (
+                <span key={p.id} data-idle-member={p.id}>
+                  {p.name}
+                  {p.unavailable && <span className="text-mono-500"> (no disponible)</span>}
+                  {i < idle.length - 1 && ", "}
+                </span>
+              ))}
+            </p>
+          </div>
+        )}
       </div>
     </aside>
   );
 }
 
-function Row({ r, max, view, includeSpecials }: { r: MemberParticipation; max: number; view: View; includeSpecials: boolean }) {
+/** «1 Líder · 2 BGV · 1 en sábado»: what the bar is made of, zeros left out. */
+function caption(r: MemberParticipation, view: View, includeSpecials: boolean, saturdays: number): string {
+  const parts = view === "voces"
+    ? [
+        [r.sunLead + r.satLead, "Líder"],
+        [r.sunBGV + r.satBGV, "BGV"],
+        [r.coro, "Coro"],
+        [includeSpecials ? r.especial : 0, "Especial"],
+        [saturdays, "en sábado"],
+      ] as const
+    : [
+        [r.instrWeeks, "sem instrumento"],
+        [r.fohWeeks, "sem FOH"],
+      ] as const;
+  return parts.filter(([n]) => n > 0).map(([n, label]) => `${n} ${label}`).join(" · ");
+}
+
+function Row({ r, max, average, view, includeSpecials, saturdays, selected, onSelect }: {
+  r: MemberParticipation;
+  max: number;
+  average: number | null;
+  view: View;
+  includeSpecials: boolean;
+  saturdays: number;
+  selected: boolean;
+  onSelect?: (id: string | null) => void;
+}) {
   const value = view === "voces" ? r.total : r.instrWeeks + r.fohWeeks;
-  const barW = Math.round((value / max) * 150);
+  const barW = Math.round((value / max) * BAR_W);
   const u = value > 0 ? barW / value : 0;
   const seg = (n: number, c: string) => n > 0
     ? <span style={{ display: "inline-block", height: 8, width: Math.round(n * u), background: c }} /> : null;
+  const nameClass = "block max-w-full truncate text-left text-[13px] font-medium text-ink-muted";
 
   return (
-    <div className="flex items-center gap-2.5 py-1.5 border-b border-accent/10">
+    <div
+      data-member-row={r.id}
+      data-selected={selected ? "true" : undefined}
+      className={`flex items-center gap-2.5 py-1 border-b border-accent/10 ${selected ? "bg-accent/10" : ""}`}
+    >
       <div className="flex-1 min-w-0">
-        <div className="text-[13px] font-medium text-ink-muted truncate">{r.name}</div>
-        <div className="text-xs text-mono-500">
-          {view === "voces"
-            ? <>Líder {r.sunLead}·{r.satLead}  ·  BGV {r.sunBGV}·{r.satBGV}  ·  Coro {r.coro}{includeSpecials && <>  ·  Especial {r.especial}</>}</>
-            : <>Instrumentos {r.instrWeeks} sem  ·  FOH {r.fohWeeks} sem</>}
-        </div>
-        <div className="mt-1 rounded overflow-hidden flex" style={{ width: 150, background: themeColour("--accent-rgb", 0.08) }}>
+        {onSelect ? (
+          // A bare <button>, not `Button`: that primitive is a label-styled
+          // control (uppercase, centred, padded) and this is a member's NAME,
+          // which must read exactly like the board's plain one. A toggle, so
+          // `aria-pressed` carries the state a sighted admin reads off the tint.
+          <button
+            type="button"
+            aria-pressed={selected}
+            title={selected ? "Quitar el resaltado" : "Resaltar en el mes"}
+            onClick={() => onSelect(selected ? null : r.id)}
+            className={`${nameClass} rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 ${selected ? "text-accent" : ""}`}
+          >
+            {r.name}
+          </button>
+        ) : (
+          <div className={nameClass}>{r.name}</div>
+        )}
+        <div className="text-xs text-mono-500 truncate">{caption(r, view, includeSpecials, saturdays)}</div>
+        <div className="relative mt-1 rounded overflow-hidden flex" style={{ width: BAR_W, background: themeColour("--accent-rgb", 0.08) }}>
           {view === "voces"
             ? <>{seg(r.sunLead + r.satLead, COLORS.lead)}{seg(r.sunBGV + r.satBGV, COLORS.bgv)}{seg(r.coro, COLORS.coro)}{includeSpecials && seg(r.especial, COLORS.especial)}</>
             : <>{seg(r.instrWeeks, COLORS.instr)}{seg(r.fohWeeks, COLORS.foh)}</>}
+          {average !== null && (
+            <span
+              aria-hidden="true"
+              data-average-marker
+              className="absolute inset-y-0 w-0.5 bg-ink-muted"
+              style={{ left: Math.min(BAR_W - 2, Math.round((average / max) * BAR_W)) }}
+            />
+          )}
         </div>
       </div>
       <div className="text-xl font-medium text-ink-muted min-w-[24px] text-right">

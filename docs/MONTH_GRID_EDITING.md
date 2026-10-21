@@ -22,7 +22,41 @@ the parent/child plans and review ledger preserve the design history.
 ## User-visible result
 
 The existing three-part month-planning layout is now the sole free-form editor
-for stored service rosters:
+for stored service rosters.
+
+**Layout of «Editar mes» (redesign, 2026-10-21).** The month tools are one header
+row: **«+ Nuevo servicio»**, **«⇄ Intercambiar ▾»** (a menu: «Equipo completo entre
+dos fechas» or «Una sección entre dos servicios», each opening its own inline panel
+with a «Cerrar», one at a time; the trigger is never disabled — the panels disable
+their own controls under the same gates as before), and **«⋯»** («Llenar
+especiales…» only when the month has specials, «Equidad · saldo acumulado», and
+«Limpiar mes…» after a separator; a disabled item shows its reason as a second
+line). «⛶ Pantalla completa» stays on the grid's toolbar. Each stored column header
+is the date, type and name, a «No cuenta para equidad» chip when it does not count,
+and a **✎** that unfolds Fecha/Nombre/Hora/«Cuenta para equidad». Instrument and
+FOH rows carry a ✕ beside their label instead of the «asignación manual» line;
+**«Copiar a todo el mes»** is offered on the ACTIVE cell only; an over-target cell
+says «3/2 · sobre el objetivo» (the full sentence stays for screen readers and as
+the tooltip); the add-row forms fold under **«+ Agregar fila»**; the solver hint is
+create-mode only. One **sticky bar** at the bottom holds Cerrar · «N servicios con
+cambios» · Guardar. AdminPanel hides **«Integridad de datos»** while the month
+editor is open (`ServicesPanel`'s `onMonthEditorOpenChange`) — the check keeps
+running, the rail's dot still shows it, and the editor's edit admission
+(`storedInventory.coherent`) still reads it.
+
+**Participaciones (both modes).** The chart column is 300 px (`CHART_COLUMN_WIDTH`,
+was 216) and the COLUMN is sticky from `xl` under the navbar; from `xl` the chart is
+capped to the viewport with its rows list as the one scroller, and below `xl` it has
+no inner scroller at all (the page scrolls). Each row's caption says what the bar is
+made of with zeros left out — «2 Líder · 2 BGV · 1 en sábado» (Saturday SERVICES
+served) or «1 sem instrumento · 1 sem FOH». With two rows or more, a marker on every
+bar and a «Promedio» legend entry show the average of the people serving. In the
+planner, a name is a toggle: tapping it outlines that member's chips across the grid
+(`highlightMemberId`; display only), tapping again drops it. Under the rows,
+**«Sin participar este mes»** lists the worship members whose Tipo fits the view
+(voces / instrumentos) and who have no seat of that kind in the month — judged on
+every service, specials included, whatever «Incluir especiales» says — with «(no
+disponible)» on those marked unavailable on every service date counted.
 
 - **Editar mes** opens the selected month against stored services.
 - A service card's roster edit action (**Editar equipo**, and its primary action)
@@ -33,9 +67,10 @@ for stored service rosters:
   ([ADR-0063](adr/0063-a-single-service-edit-is-a-view-of-the-month-editor.md)).
 - **Nuevo** opens a one-service composer. It creates one empty unpublished
   service and never invokes the solver or fills a roster automatically — that
-  holds for the one-service composer; the toolbar's **«Llenar especiales…»**
-  (below) is the explicit exception.
-- **«Llenar especiales…»** (stored mode toolbar, spec
+  holds for the one-service composer; **«Llenar especiales…»** (below) is the
+  explicit exception.
+- **«Llenar especiales…»** (stored mode, «⋯» menu since 2026-10-21, offered only
+  when the month has specials; spec
   `2026-09-22-camp-group-fill-design.md`) opens an inline picker listing every
   approved special of the month — all ticked by default, published ones
   marked **«· publicado»**. **«Llenar vacíos»** fills the ticked group's empty
@@ -60,7 +95,8 @@ for stored service rosters:
   dated note at the end of `docs/adr/0010-specials-fill-locally-not-in-the-solver.md`.
 - Card-owned delete, copy-instruments, publish/unpublish, setlist, proposal, and
   integrity workflows remain in `ServicesPanel`.
-- **Limpiar mes** (stored editor footer, since 2026-09-01) deletes the month's
+- **Limpiar mes** (since 2026-09-01; the «⋯» menu since 2026-10-21, was the editor
+  footer) deletes the month's
   stored services so the admin can run **Generar mes** again after corrections.
   Drafts (`published === false`) by default; published services are an explicit
   checkbox opt-in because each queues a «ya no participas» notice. There is no
