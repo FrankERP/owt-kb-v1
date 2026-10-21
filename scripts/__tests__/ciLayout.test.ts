@@ -10,6 +10,7 @@ import {
   checkNoSilentSkips,
   checkPartition,
   checkRequiredCheck,
+  checkScopeJob,
   checkSolverCommands,
   discoverTests,
   gatesVerdict,
@@ -93,9 +94,9 @@ describe("the real repository", () => {
     expect(discoverTests("gcf_v3", trees.gcf_v3).reachable).toContain("gcf_v3/test_scaffold.py");
   });
 
-  it("parses the real ci.yml into the four jobs, gates last", () => {
+  it("parses the real ci.yml into the five jobs, gates last", () => {
     const doc = parseWorkflow(CI) as { jobs: Record<string, unknown> };
-    expect(Object.keys(doc.jobs)).toEqual(["node", "solver-v2", "solver-v3", "gates"]);
+    expect(Object.keys(doc.jobs)).toEqual(["node", "solver-v2", "solver-v3", "scope", "gates"]);
   });
 });
 
@@ -114,7 +115,7 @@ describe("required check: `gates` (negative cases — each must be red)", () => 
 
   it("refuses a `needs` that leaves a job out", () => {
     expectRule(
-      layoutProblems(mutate(CI, "needs: [node, solver-v2, solver-v3]", "needs: [node, solver-v2]")),
+      layoutProblems(mutate(CI, "needs: [node, solver-v2, solver-v3, scope]", "needs: [node, solver-v2, solver-v3]")),
       "required-check",
     );
   });
@@ -140,7 +141,13 @@ describe("required check: `gates` (negative cases — each must be red)", () => 
 
   it("refuses a `gates` with a matrix", () => {
     expectRule(
-      layoutProblems(mutate(CI, "    timeout-minutes: 5\n", "    timeout-minutes: 5\n    strategy:\n      matrix:\n        x: [1, 2]\n")),
+      layoutProblems(
+        mutate(
+          CI,
+          "    if: ${{ always() }}\n    runs-on: ubuntu-latest\n    timeout-minutes: 5\n",
+          "    if: ${{ always() }}\n    runs-on: ubuntu-latest\n    timeout-minutes: 5\n    strategy:\n      matrix:\n        x: [1, 2]\n",
+        ),
+      ),
       "required-check",
     );
   });
@@ -177,6 +184,33 @@ describe("no silent skips (negative cases)", () => {
   it("refuses a job-level `if:` outside `gates`", () => {
     const text = mutate(CI, "    name: solver-v3\n", "    name: solver-v3\n    if: ${{ github.event_name == 'push' }}\n");
     expectRule(checkNoSilentSkips(text), "no-silent-skips");
+  });
+
+  it("refuses the scoped `if:` on a job SKIPPABLE_JOBS does not list", () => {
+    const text = mutate(
+      CI,
+      "    name: solver-v3\n",
+      "    name: solver-v3\n    needs: scope\n    if: ${{ needs.scope.outputs.solver-v3 != 'false' }}\n",
+    );
+    expectRule(checkNoSilentSkips(text), "no-silent-skips");
+  });
+
+  const V2_IF = "    if: ${{ needs.scope.outputs.solver-v2 != 'false' }}\n";
+
+  it("refuses any other `if:` on solver-v2 — only `!= 'false'` runs it when scope wrote nothing", () => {
+    for (const cond of [
+      "${{ needs.scope.outputs.solver-v2 == 'true' }}",
+      "${{ always() }}",
+      "${{ github.event_name == 'push' }}",
+      "${{ needs.scope.outputs.solver-v3 != 'false' }}",
+    ]) {
+      expectRule(checkNoSilentSkips(mutate(CI, V2_IF, `    if: ${cond}\n`)), "no-silent-skips");
+    }
+  });
+
+  it("refuses the scoped `if:` without `needs: scope`", () => {
+    expectRule(checkNoSilentSkips(mutate(CI, "    needs: scope\n", "")), "no-silent-skips");
+    expectRule(checkNoSilentSkips(mutate(CI, "    needs: scope\n", "    needs: [scope, node]\n")), "no-silent-skips");
   });
 
   it("refuses a step-level `if:` — a skipped test step leaves its job green", () => {
@@ -222,6 +256,36 @@ describe("no silent skips (negative cases)", () => {
   });
 });
 
+describe("the scope job (negative cases)", () => {
+  it("passes on the real ci.yml", () => {
+    expect(checkScopeJob(CI)).toEqual([]);
+  });
+
+  it("refuses a constant output — it would skip solver-v2 on every PR with gates' blessing", () => {
+    const text = mutate(CI, "      solver-v2: ${{ steps.decide.outputs.solver-v2 }}\n", "      solver-v2: 'false'\n");
+    expectRule(checkScopeJob(text), "scope");
+  });
+
+  it("refuses a decide step that runs anything but the scope script", () => {
+    expectRule(checkScopeJob(mutate(CI, "run: node scripts/ci/ci-scope.mjs", "run: echo solver-v2=false >> $GITHUB_OUTPUT")), "scope");
+  });
+
+  it("refuses a decide step that lost its EVENT_NAME", () => {
+    expectRule(checkScopeJob(mutate(CI, "          EVENT_NAME: ${{ github.event_name }}\n", "          OTHER: x\n")), "scope");
+  });
+
+  it("refuses an `if:` or a `needs:` on scope", () => {
+    const head = "    name: scope\n";
+    expectRule(checkScopeJob(mutate(CI, head, `${head}    if: \${{ github.event_name == 'push' }}\n`)), "scope");
+    expectRule(checkScopeJob(mutate(CI, head, `${head}    needs: node\n`)), "scope");
+  });
+
+  it("refuses a ci.yml with a scoped job but no scope job", () => {
+    const text = mutate(CI, "  scope:\n    name: scope\n", "  decider:\n    name: decider\n");
+    expectRule(checkScopeJob(text), "scope");
+  });
+});
+
 describe("solver commands (negative cases)", () => {
   it("refuses a matrix on solver-v2 — the golden would run N times", () => {
     const text = mutate(
@@ -261,7 +325,7 @@ describe("solver commands (negative cases)", () => {
   });
 
   it("refuses a solver job on another runner", () => {
-    const text = mutate(CI, "    name: solver-v2\n    runs-on: ubuntu-latest\n", "    name: solver-v2\n    runs-on: ubuntu-24.04-arm\n");
+    const text = mutate(CI, "!= 'false' }}\n    runs-on: ubuntu-latest\n", "!= 'false' }}\n    runs-on: ubuntu-24.04-arm\n");
     expectRule(checkSolverCommands(text).problems, "commands");
   });
 
@@ -416,6 +480,42 @@ describe("gatesVerdict", () => {
     }
   });
 
+  const SKIPPED_V2 = { ...ok, "solver-v2": { result: "skipped", outputs: {} } };
+  const withScope = (scope: unknown) => JSON.stringify({ ...SKIPPED_V2, scope });
+
+  it("accepts a skipped solver-v2 only on a successful scope that said exactly \"false\"", () => {
+    const v = gatesVerdict(withScope({ result: "success", outputs: { "solver-v2": "false" } }));
+    expect(v.ok).toBe(true);
+    expect(v.lines.join("\n")).toContain("solver-v2: skipped");
+    for (const scope of [
+      { result: "success", outputs: { "solver-v2": "true" } },
+      { result: "success", outputs: { "solver-v2": "" } },
+      { result: "success", outputs: {} },
+      { result: "success" },
+      { result: "failure", outputs: { "solver-v2": "false" } },
+      { result: "skipped", outputs: { "solver-v2": "false" } },
+      undefined,
+    ]) {
+      expect(gatesVerdict(withScope(scope)).ok, JSON.stringify(scope)).toBe(false);
+    }
+  });
+
+  it("never accepts a skip of a job SKIPPABLE_JOBS does not list, whatever scope says", () => {
+    const scope = { result: "success", outputs: { "solver-v2": "false", node: "false", "solver-v3": "false" } };
+    for (const id of ["node", "solver-v3"]) {
+      const v = gatesVerdict(JSON.stringify({ ...ok, [id]: { result: "skipped" }, scope }));
+      expect(v.ok, id).toBe(false);
+      expect(v.lines.join("\n")).toContain(`${id} (skipped)`);
+    }
+  });
+
+  it("still refuses a solver-v2 that failed or was cancelled, even when scope said \"false\"", () => {
+    const scope = { result: "success", outputs: { "solver-v2": "false" } };
+    for (const result of ["failure", "cancelled"]) {
+      expect(gatesVerdict(JSON.stringify({ ...ok, "solver-v2": { result }, scope })).ok, result).toBe(false);
+    }
+  });
+
   it("fails on an empty, malformed or missing input", () => {
     expect(gatesVerdict("{}").ok).toBe(false);
     expect(gatesVerdict("not json").ok).toBe(false);
@@ -452,6 +552,20 @@ describe("the verdict runner, executed as a process", () => {
       expect(r.stdout, result).toContain("solver-v3");
       expect(r.stdout, result).toContain(result);
     }
+  });
+
+  it("exits 0 for a solver-v2 skip that scope vouched for, and non-zero for one it did not", () => {
+    const needs = (v2: string) =>
+      JSON.stringify({
+        node: { result: "success" },
+        "solver-v2": { result: "skipped" },
+        "solver-v3": { result: "success" },
+        scope: { result: "success", outputs: { "solver-v2": v2 } },
+      });
+    expect(runVerdict(needs("false")).status).toBe(0);
+    const r = runVerdict(needs("true"));
+    expect(r.status).not.toBe(0);
+    expect(r.stdout).toContain("solver-v2 (skipped)");
   });
 
   it("exits non-zero for `{}`, malformed JSON and a missing NEEDS_JSON", () => {
