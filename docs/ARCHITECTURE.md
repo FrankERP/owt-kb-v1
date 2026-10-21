@@ -149,7 +149,7 @@ bugs — respect it.
 
 | Page | Strategy | Detail |
 |------|----------|--------|
-| `/` (home / "Esta semana") | ISR `revalidate = 60` | This weekend's services as a run sheet (R1): the next service in full, every other one collapsed to a line via `DayCardDisclosure`. |
+| `/` (home) | **Dynamic** (`requireWorshipPage`, ADR-0020; its `revalidate = 60` only bounds the fetch cache) | Per member since 2026-10-21: the greeting («Te toca el sábado …», `homeGreeting`), then this weekend's services as a run sheet (R1) — the next service in full, every other one collapsed to a summary row via `DayCardDisclosure`. Never static: the greeting and the card's open sections are per viewer. |
 | `/schedule` | ISR `revalidate = 60` | Upcoming services; `?m=` month browse. |
 | `/biblioteca` | ISR `revalidate = 60` fetch, dynamic by `searchParams` | R1: the song library — A–Z index of rows with a search console, letter rail and filter drawer (Tipo, tema, artista, tonalidad). One cached fetch (catalogue + tags + authors) serves every `?q=`/`?tag=`/`?author=`/`?key=`; filtering is client-side, so `searchParams` makes the page dynamic without invalidating the fetch cache. |
 | `/me` | ISR `revalidate = 60` | Member's assignments/profile (session-scoped data fetched fresh via `serverClient`). |
@@ -462,7 +462,7 @@ See [API_REFERENCE.md](API_REFERENCE.md) for which endpoints fire what, and
 owt-kb-v1/
 ├─ app/                      # Next.js App Router
 │  ├─ (client)/              # member-facing route group (own <html> root layout)
-│  │  ├─ page.tsx            # / home "Esta semana"
+│  │  ├─ page.tsx            # / home (per-member greeting + run sheet)
 │  │  ├─ admin/              # /admin dashboard (manager-gated)
 │  │  ├─ auth/               # signin, not-a-member
 │  │  ├─ author/, tag/       # indexes + [slug] filtered song lists

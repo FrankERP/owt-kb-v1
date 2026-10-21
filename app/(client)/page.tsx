@@ -8,6 +8,9 @@ import { paintsDayCard } from "../utils/paintsDayCard";
 import { publishedSetlist } from "../utils/draftGating";
 import { pickUnique } from "../utils/serviceReadSelect";
 import { requireWorshipPage } from "../utils/worshipPageGate";
+import { myNameFromSession } from "../utils/agenda";
+import { homeGreeting } from "../utils/homeGreeting";
+import { seatPhotos } from "../utils/teamSections";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -39,12 +42,18 @@ const SETLIST_FIELDS = `songs[]{
   "author": song->author, "timeSig": song->timeSig, "bpm": song->bpm, "key": song->key
 }, week, team_notes`;
 
+// `photo` per seat feeds the team's faces: an uploaded photo first, else the
+// Google account's picture (24 of 27 members with a Tipo had one on 2026-10-21,
+// almost all of it Google's). Members are public on this dataset, so the URLs
+// need no token.
+const PHOTO = `coalesce(profilePhoto.asset->url, googlePhotoUrl)`;
+const PERSON_PHOTO = `coalesce(person->profilePhoto.asset->url, person->googlePhotoUrl)`;
 const ROLE_FIELDS = `_id, week,
-  Lead[]->{ member_name, alias },
-  instruments[]{ instrument, "person": coalesce(person->alias, person->member_name) },
-  foh_team[]{ role, "person": coalesce(person->alias, person->member_name) },
-  BGVs[]->{ member_name, alias },
-  Chorus[]->{ member_name, alias }`;
+  Lead[]->{ member_name, alias, "photo": ${PHOTO} },
+  instruments[]{ instrument, "person": coalesce(person->alias, person->member_name), "photo": ${PERSON_PHOTO} },
+  foh_team[]{ role, "person": coalesce(person->alias, person->member_name), "photo": ${PERSON_PHOTO} },
+  BGVs[]->{ member_name, alias, "photo": ${PHOTO} },
+  Chorus[]->{ member_name, alias, "photo": ${PHOTO} }`;
 
 // One combined GROQ fetch for all weekend data — GROQ params prevent query cache
 // misses. Weekend single-target keys return arrays (no `[0]`); the page picks a
@@ -60,7 +69,8 @@ const WEEKEND_QUERY = `{
     _id, date, time, service_name, team_notes,
     songs[]{ play_key, medley_tag, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "bpm": song->bpm, "key": song->key, "leads": leads[]->{ member_name, alias } },
     ${ROLE_FIELDS}
-  }
+  },
+  "viewer": *[_type == "teamMembers" && _id == $me][0]{ memberType }
 }`;
 
 export const revalidate = 60;
@@ -68,7 +78,7 @@ export const revalidate = 60;
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default async function Home() {
-  await requireWorshipPage("/");
+  const session = await requireWorshipPage("/");
   const { sat, sun } = getThisWeekend();
   const today = localToday();
 
@@ -88,7 +98,8 @@ export default async function Home() {
     sunRole: WeekendRole[];
     satRole: WeekendRole[];
     specials: SpecialRole[];
-  }>(WEEKEND_QUERY, { sun, sat, today });
+    viewer: { memberType?: string[] } | null;
+  }>(WEEKEND_QUERY, { sun, sat, today, me: session.user.sanityId });
 
   // Fail closed on an ambiguous weekend target: a duplicate canonical document
   // yields null (nothing rendered) rather than an arbitrary `[0]`.
@@ -218,15 +229,37 @@ export default async function Home() {
   const hero = services.find((s) => s.props.isNext) ?? [...services].sort(byDate)[0];
   const rest = services.filter((s) => s !== hero);
 
+  // Who "you" are, decided HERE as well as in the card: the session the cards
+  // read is client-side and arrives after hydration, so without this the first
+  // paint would open nobody's section and the greeting would have no one to
+  // greet. Same rule (`myNameFromSession`), so the two can never disagree.
+  const myName = myNameFromSession(session.user);
+  const viewer = {
+    photos: seatPhotos([satRole, sunRole, ...specials]),
+    viewerTypes: weekend.viewer?.memberType ?? null,
+    viewerName: myName,
+    viewerIsAdmin: ["super-admin", "admin"].includes(session.user.role),
+  };
+  const greeting = homeGreeting(services.map((s) => s.props), session.user, myName);
+
   return (
     <div>
       {/* `cue={false}`: the hero card below is the countdown. */}
       <Navbar title="OWT" cue={false} />
 
       <div className="mx-auto mb-16 max-w-7xl px-6 pt-12">
+        {/* The page opens on the member's own answer — «Te toca el sábado · Lead
+            con Gaby» — not a label that read the same for everyone. The day word
+            is green: the colour the card uses for «tú». */}
         <div className="brand-section-heading mb-7" {...revealProps(0)}>
-          <p className="font-label text-[10px] uppercase tracking-[0.24em] text-accent">Programación</p>
-          <h2 className="mt-1 font-display text-3xl font-semibold text-ink md:text-4xl">Esta semana</h2>
+          {greeting.hello && (
+            <p className="font-label text-[10px] uppercase tracking-[0.24em] text-accent">{greeting.hello}</p>
+          )}
+          <h2 className="mt-1 font-display text-3xl font-semibold text-ink md:text-4xl">
+            {greeting.lead}
+            {greeting.day && <span className="text-positive-fg">{greeting.day}</span>}
+          </h2>
+          {hero && <p className="mt-1.5 font-body text-sm text-ink-muted">{greeting.sub}</p>}
         </div>
         {/* No hero means no painting service at all — the quiet-week state. */}
         {!hero ? (
@@ -247,13 +280,13 @@ export default async function Home() {
                 cannot. Neutral since 2026-10-20: an accent glow under it was
                 one more colour on the most-seen card. */}
             <div className="brand-lit-card shadow-md shadow-elevation/10" data-lit {...revealProps(1)}>
-              <DayCard {...hero.props} layout="wide" hero />
+              <DayCard {...hero.props} {...viewer} layout="wide" hero />
             </div>
             {rest.length > 0 && (
               <div className="mt-4 space-y-3">
                 {rest.map((s, i) => (
                   <div key={s.key} {...revealProps(2 + i)}>
-                    <DayCardDisclosure {...s.props} />
+                    <DayCardDisclosure {...s.props} {...viewer} />
                   </div>
                 ))}
               </div>
