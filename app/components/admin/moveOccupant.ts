@@ -1,12 +1,10 @@
-// `"use client"` is DECLARED here rather than inherited from the importers that
-// happen to be client components today. This module calls `withUpdatedCell` out
-// of `PlannerGrid.tsx`, which is a client module — so a server component that
-// imported this one would get a client reference and throw at render. That is
-// exactly how `/` fell over on 2026-09-02 (ADR-0028). The header below advertises
-// this as the primitive "every drag must go through", which invites new callers;
-// the directive makes the boundary a property of the file instead of a fact about
-// who currently imports it.
-"use client";
+// Neutral (no `"use client"`): it composes `withUpdatedCell`, which lives in
+// `plannerModel.ts`, so the MCP proposal editor's server replay performs a move
+// and each half of an exchange through this same primitive (plan T2.3 (4), DD10).
+// It used to declare `"use client"` because it imported `withUpdatedCell` out of
+// `PlannerGrid.tsx`, a client module — a server caller would have received a
+// client reference and thrown at render (ADR-0028). That import is gone; keep it
+// gone: nothing here may import a client module.
 
 // T2 of the grid drag-and-drop plan
 // (docs/superpowers/plans/2026-08-06-grid-drag-and-drop.md) — the single move
@@ -15,14 +13,13 @@
 // UNCALLED in production here; T3 gates a proposed move before anything calls
 // this, T4/T5 wire it in.
 //
-// Composes `withUpdatedCell` (`PlannerGrid.tsx`) TWICE over one array — source
+// Composes `withUpdatedCell` (`plannerModel.ts`) TWICE over one array — source
 // minus the member, target plus the member — and returns ONE array for ONE
 // `onCellsChange` (DD1). Never add-then-remove, never two updates against
 // stale state: the second `withUpdatedCell` call runs against the FIRST
 // call's output, so a same-cell move and override pruning both see a
 // consistent, already-updated cell rather than the pre-move snapshot.
-import { withUpdatedCell } from "./PlannerGrid";
-import type { GridCell } from "./plannerModel";
+import { withUpdatedCell, type GridCell } from "./plannerModel";
 
 export interface MoveOccupantEndpoint {
   rowId: string;

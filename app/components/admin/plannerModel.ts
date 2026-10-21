@@ -126,6 +126,68 @@ export interface GridCell {
   overrideReasons?: Record<string, string>;
 }
 
+// `withUpdatedCell` lives here, not in `PlannerGrid.tsx`, so a server module can call it: the
+// MCP proposal editor replays a hand edit through the very helper the grid writes with (plan
+// T2.3 (1)), and a value exported from a `"use client"` module is a client reference on the server
+// (ADR-0028). `PlannerGrid` and `moveOccupant` import it from here.
+/**
+ * Writes `memberIds` into one cell, and keeps `overrides` (P10) honest:
+ * an id no longer seated cannot stay overridden, so removing a member clears
+ * their entry — the alternative is a stale exception that would silence E13's
+ * re-flag if the same person were ever seated here again.
+ *
+ * `addOverride` is the ONLY way an entry is created, and it is reachable from
+ * exactly one place: the picker's secondary "Asignar de todos modos" action.
+ * It carries the RULE that was waived, not just the person: the two fields are
+ * written and pruned together here, so `overrideReasons` can never outlive the
+ * seating it describes. See `GridCell.overrideReasons`.
+ */
+export function withUpdatedCell(
+  cells: GridCell[],
+  rowId: string,
+  columnId: string,
+  memberIds: string[],
+  addOverride?: { memberId: string; reason: string },
+): GridCell[] {
+  const idx = cells.findIndex((c) => c.columnId === columnId && c.rowId === rowId);
+  const seated = new Set(memberIds);
+  const prior = idx === -1 ? [] : (cells[idx].overrides ?? []);
+  const priorReasons = idx === -1 ? {} : (cells[idx].overrideReasons ?? {});
+  const kept = prior.filter((id) => seated.has(id));
+  const add =
+    addOverride && seated.has(addOverride.memberId) && !kept.includes(addOverride.memberId)
+      ? addOverride
+      : null;
+  const overrides = add ? [...kept, add.memberId] : kept;
+  const overrideReasons: Record<string, string> = {};
+  for (const id of overrides) {
+    const reason = id === add?.memberId ? add.reason : priorReasons[id];
+    if (reason !== undefined) overrideReasons[id] = reason;
+  }
+  if (idx === -1) {
+    return [
+      ...cells,
+      {
+        columnId,
+        rowId,
+        occupants: reconcileOccupants([], memberIds),
+        origin: "manual" as const,
+        overrides,
+        overrideReasons,
+      },
+    ];
+  }
+  const next = [...cells];
+  next[idx] = {
+    ...next[idx],
+    occupants: reconcileOccupants(next[idx].occupants, memberIds),
+    origin: "manual",
+    overrides,
+    overrideReasons,
+  };
+  return next;
+}
+
 export interface GridRow {
   id: string;
   label: string;
