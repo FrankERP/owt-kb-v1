@@ -322,7 +322,7 @@ describe("saveRevision (editor plan T2.2)", () => {
     expect((await stateOf(HANDLE))?.supersededBy).toBe(CHILD);
   });
 
-  it("losing every race is a conflict; a base swept away is gone; any other failure is server_error, not retried", async () => {
+  it("losing every race is a conflict; a base swept away is gone; any other commit failure is unknown (it may have landed), not retried", async () => {
     let base = await stored();
     forcedConflicts.set(base.id, STATE_WRITE_RETRIES + 1);
     expect(await saveRevision(base, await childDoc(), passes)).toEqual({ ok: false, reason: "conflict" });
@@ -332,7 +332,7 @@ describe("saveRevision (editor plan T2.2)", () => {
     if (!l.ok) throw new Error("expected a record");
     base = l.proposal;
     txFailure = new Error("network");
-    expect(await saveRevision(base, await childDoc(), passes)).toMatchObject({ ok: false, reason: "server_error" });
+    expect(await saveRevision(base, await childDoc(), passes)).toMatchObject({ ok: false, reason: "unknown" });
 
     docs.delete(base.id);
     expect(await saveRevision(base, await childDoc(), passes)).toEqual({ ok: false, reason: "gone" });

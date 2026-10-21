@@ -655,6 +655,7 @@ export const V3_EDITOR_LINES = {
   noSecret: "El conector no está configurado para editar propuestas; avisa a quien administra la app.",
   saveFailed: "No pude guardar la versión; vuelve a intentar. No se guardó nada.",
   saveConflict: "Otra edición de esta propuesta llegó al mismo tiempo; vuelve a intentar.",
+  saveUnknown: "No pude confirmar si la versión se guardó. Vuelve a guardar los mismos cambios: si ya quedó, se reconoce y no se crea otra.",
   // apply_schedule (Q1, E3)
   applySuperseded: (handle: string) =>
     `Esta propuesta fue reemplazada por una versión más nueva: ${handle}. ${NO_WRITE_THIS_CALL} Carga la versión más nueva.`,

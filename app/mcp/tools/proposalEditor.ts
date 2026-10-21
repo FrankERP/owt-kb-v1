@@ -19,6 +19,8 @@
 
 import "server-only";
 
+import { createHash } from "node:crypto";
+
 import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
@@ -665,6 +667,8 @@ async function saveEdits(
     if (saved.reason === "refused") return refusal([E.startedApplying], { code: "stale_revision", detail: "started_applying" });
     if (saved.reason === "gone") return notFound();
     console.error("[mcp-editor] revision save failed:", saved.reason);
+    // The commit may have landed: never «no se guardó». The same saveId again finds the child.
+    if (saved.reason === "unknown") return refusal([E.saveUnknown], { code: "server_error", detail: "unknown", retry: true });
     return refusal([saved.reason === "conflict" ? E.saveConflict : E.saveFailed], { code: saved.reason === "conflict" ? "conflict" : "server_error", retry: true });
   }
   if (deps.nowMs() - startedAt < EDITOR_SWEEP_DEADLINE_MS) {
@@ -741,7 +745,10 @@ export async function reviseProposalResult(
         return refusal([E.editRefused(resolved.refusal.index, resolved.refusal.sentence)], { code: "invalid_request", detail: resolved.refusal.code });
       }
       // From the chat nothing is forced: `confirms` is null, so any new rule finding refuses.
-      return saveEdits(ctx, resolved.edits, null, `chat-${deps.mintRequestId()}`.slice(0, 64).replace(/[^A-Za-z0-9_-]/g, "-"), deps, callDomain, startedAt);
+      // The save id is the edits' own digest, so the model repeating a call whose answer was lost
+      // finds the version it made instead of being told the base was replaced.
+      const saveId = `chat-${createHash("sha256").update(JSON.stringify([ctx.handle, resolved.edits])).digest("hex").slice(0, 40)}`;
+      return saveEdits(ctx, resolved.edits, null, saveId, deps, callDomain, startedAt);
     },
     EDITOR_COPY,
   );

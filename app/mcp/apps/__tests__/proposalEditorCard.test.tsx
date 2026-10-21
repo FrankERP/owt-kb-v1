@@ -79,7 +79,11 @@ describe("the editor model against the real tools", () => {
 
     // The new base, judged with no edits, keeps the waiver in the words apply asks for.
     const fresh = await check(w, [], saved.proposal!);
+    expect(fresh).toMatchObject({ proposal: saved.proposal, revision: 2 });
     expect(fresh.waivers).toEqual(saved.waivers);
+    // The old base now answers with its successor, which the screen follows on opening.
+    const old = await check(w, []);
+    expect(old).toMatchObject({ ok: false, successor: saved.proposal });
 
     const message = loadMessage(saved.proposal!, saved.revision!, fresh.waivers);
     expect(message).toContain(`Carga la versión 2 de la propuesta ${saved.proposal}`);
@@ -136,7 +140,7 @@ describe("the editor model against the real tools", () => {
 
 describe("the editor model's own rules", () => {
   const checkWith = (refusal: CheckView["refusal"]): CheckView => ({
-    ok: true, board: [], lines: [], diff: [], refusal, prompt: null, candidates: null, waivers: [],
+    ok: true, proposal: null, revision: null, successor: null, board: [], lines: [], diff: [], refusal, prompt: null, candidates: null, waivers: [],
   });
   const a: TokenEdit = { op: "place", service: "s1", row: "lead", member: "t1" };
   const b: TokenEdit = { op: "clear", service: "s1", row: "bgv", member: "t2" };
@@ -146,6 +150,11 @@ describe("the editor model's own rules", () => {
     expect(afterRefusal([b, a], checkWith({ index: 1, code: "hard_rule", sentence: "x" }))).toEqual({ edits: [b, a], askForce: true });
     expect(afterRefusal([a, b], checkWith({ index: 0, code: "hard_rule", sentence: "x" }))).toEqual({ edits: [b], askForce: false });
     expect(afterRefusal([a, b], checkWith({ index: 1, code: "not_seated", sentence: "x" }))).toEqual({ edits: [a], askForce: false });
+  });
+
+  it("a save the server could not confirm is a retry (the screen keeps its saveId); a refusal is not", () => {
+    expect(saveViewOf({ isError: true, structuredContent: { refused: true, code: "server_error", detail: "unknown", retry: true } })).toMatchObject({ ok: false, retry: true });
+    expect(saveViewOf({ isError: true, structuredContent: { refused: true, code: "stale_revision", detail: "superseded" } })).toMatchObject({ ok: false, retry: false });
   });
 
   it("forces only the last edit, and never a clear", () => {

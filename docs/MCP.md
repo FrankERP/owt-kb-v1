@@ -65,7 +65,8 @@ four write tools that make the same changes `/admin` makes, through the same dom
 ([ADR-0043](adr/0043-admin-writes-delegate-to-commit-modules.md); released to production
 2026-09-28); P4 adds two month tools that plan a month with `/admin`'s own v3 Auto and create it
 as drafts with its own confirm ([ADR-0061](adr/0061-the-connector-plans-months-only-on-v3-through-the-browsers-own-auto-and-confirm.md);
-not released yet). See the status banner above. See [ADR-0039](adr/0039-mcp-client-registration-is-stateless-dcr.md) for why client
+released to production 2026-10-20); the proposal editor adds three more
+([ADR-0062](adr/0062-proposal-edits-are-new-records-judged-on-the-server.md); not released yet). See the status banner above. See [ADR-0039](adr/0039-mcp-client-registration-is-stateless-dcr.md) for why client
 registration is stateless, and [AUTH_AND_SECURITY.md](AUTH_AND_SECURITY.md#mcp--oauth) /
 [API_REFERENCE.md](API_REFERENCE.md) for the route-level contract.
 
@@ -715,7 +716,7 @@ Three tools, not released (the editor's branch). Decisions and the rejected alte
 
 | Tool | Who calls it | What it does |
 |---|---|---|
-| `check_proposal_edits` | the card only (`_meta.ui.visibility: ["app"]`) | Replays a list of edits (place, clear, exchange; members as tokens) from the stored proposal through the planner's own gate and answers the board, the per-seat rule lines, the month check and, for one seat, its candidates. Stores nothing. `readOnlyHint: true` |
+| `check_proposal_edits` | the card only (`_meta.ui.visibility: ["app"]`) | Replays a list of edits (place, clear, move, exchange; members as tokens) from the stored proposal through the planner's own gate and answers the board, the per-seat rule lines, the month check and, for one seat, its candidates. Stores nothing. `readOnlyHint: true` |
 | `save_proposal_edits` | the card only | The same replay, then stores it as a NEW version: `mcpProposal.<new handle>` with `parent`/`revision`/`root`, and marks the base `supersededBy` in the same transaction. Takes `force` (a C4 Frank chose to assign anyway) with `confirms` (the keys the last check showed) and a `saveId` (a retry after a lost answer finds its own child) |
 | `revise_proposal` | the model (chat) | The same save from names and dates («pon a Dani en el BGV del 22»). Never forces: a per-seat rule refuses |
 
@@ -970,8 +971,9 @@ registered — it passes against BOTH a P0-only deployment and a P1 one (product
 both carried P1 since 2026-09-25), since the plain smoke's job is proving the handshake and
 `ping`, not P1's or P3's registration. **`--reads`** adds a sub-step right after `ping` and before
 refresh. Its OWN `tools/list` check (`checkToolList`) requires the full tool list, in order,
-each with its own annotations — twelve tools, and fourteen on P4's branch (`MONTH_TOOL_NAMES`,
-never called either: a solve stores a record and an apply writes real drafts): it is about to call
+each with its own annotations — fourteen tools in production with P4 (`MONTH_TOOL_NAMES`), and
+seventeen with the proposal editor (`EDITOR_TOOL_NAMES`), none of those five ever called by the
+smoke (a solve or a save stores a record and an apply writes real drafts): it is about to call
 the seven reads, and that listing is the ONLY proof the four P3 writes get on dev — present, with
 `destructiveHint: true`. **So `--reads` passes
 only against a deployment that carries P3** (dev has carried it since 2026-09-28; it passed there

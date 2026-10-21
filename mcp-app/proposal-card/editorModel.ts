@@ -63,6 +63,11 @@ export type TokenEdit =
 /** What one check answered, read defensively: anything missing is empty, never invented. */
 export interface CheckView {
   ok: boolean;
+  /** The proposal this answer judged, and its version (absent on a refusal). */
+  proposal: string | null;
+  revision: number | null;
+  /** A refusal because a newer version replaced this one: its handle. */
+  successor: string | null;
   board: ServiceView[];
   /** The server's text lines (rules, the month check, «todo cuadra»). */
   lines: string[];
@@ -86,6 +91,8 @@ export interface SaveView {
   lines: string[];
   /** `needs_confirmation` / `stale_check`: the diff to confirm again, with where and why. */
   detail: string | null;
+  /** The server says trying again is safe (`unknown`: it may have saved; the same `saveId` finds it). */
+  retry: boolean;
   diff: Array<KeyView & { where: string; sentence: string }>;
 }
 
@@ -131,6 +138,9 @@ export function checkViewOf(result: { content?: unknown; structuredContent?: unk
     : null;
   return {
     ok: !result?.isError && s.ok === true,
+    proposal: typeof s.proposal === "string" ? s.proposal : null,
+    revision: typeof s.revision === "number" ? s.revision : null,
+    successor: typeof s.successor === "string" ? s.successor : null,
     board: boardOf(s.board),
     lines: textLines(result?.content),
     diff: objects(rules.diff).map(keyOf),
@@ -160,6 +170,7 @@ export function saveViewOf(result: { content?: unknown; structuredContent?: unkn
     board: boardOf(s.board),
     lines: textLines(result?.content),
     detail: typeof s.detail === "string" ? s.detail : null,
+    retry: s.retry === true,
     diff: objects(s.diff).map((d) => ({ ...keyOf(d), where: str(d.where), sentence: str(d.sentence) })),
   };
 }
@@ -183,7 +194,11 @@ export function forceLast(edits: readonly TokenEdit[]): TokenEdit[] {
   return out;
 }
 
-/** A fresh id for one save attempt, reused on a retry after a lost answer. */
+/**
+ * A fresh id for one save attempt. Reused only to retry the SAME edit list (a lost answer, or the
+ * server's «no sé si se guardó»): the server recognises its own child by it, so reusing it for a
+ * different list would answer that list's save with the earlier one's version.
+ */
 export function newSaveId(random: () => number = Math.random): string {
   const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
   let id = "card-";

@@ -11,6 +11,8 @@ export interface ProposalCardProps {
   onExpand: () => void;
   /** Opens the editor on this proposal; absent when the host cannot call tools. */
   onEdit?: () => void;
+  /** A newer version saved from this card: the card below still shows the version it was handed. */
+  note?: string;
 }
 
 function ServiceBlock({ service }: { service: CardService }) {
@@ -36,7 +38,7 @@ function ServiceBlock({ service }: { service: CardService }) {
   );
 }
 
-export function ProposalCard({ view, canExpand, onExpand, onEdit }: ProposalCardProps) {
+export function ProposalCard({ view, canExpand, onExpand, onEdit, note }: ProposalCardProps) {
   if (view.kind === "waiting") {
     return (
       <main className="card" aria-busy="true">
@@ -69,6 +71,12 @@ export function ProposalCard({ view, canExpand, onExpand, onEdit }: ProposalCard
           </button>
         )}
       </header>
+
+      {note && (
+        <p className="hint" role="status">
+          {note}
+        </p>
+      )}
 
       {view.stages.length + view.notices.length > 0 && (
         <ul className="notices">

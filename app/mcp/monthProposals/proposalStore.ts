@@ -116,6 +116,12 @@ export type SaveRevisionResult<R> =
   | { ok: false; reason: "refused"; refusal: R }
   /** `conflict`: every attempt lost the revision race; `gone`: the base vanished or no longer parses. */
   | { ok: false; reason: "conflict" | "gone" }
+  /**
+   * The commit failed with something other than a revision conflict (a lost response, a timeout):
+   * it may have landed. The caller says «no sé si se guardó», never «no se guardó» — a retry with
+   * the same `saveId` finds the child if it did.
+   */
+  | { ok: false; reason: "unknown"; cause: unknown }
   | ProposalStoreFailure;
 
 /**
@@ -149,7 +155,7 @@ export async function saveRevision<R>(
         .commit();
       return { ok: true };
     } catch (cause) {
-      if (sanityConflictKind(cause) === null) return { ok: false, reason: "server_error", cause };
+      if (sanityConflictKind(cause) === null) return { ok: false, reason: "unknown", cause };
     }
     const reread = await loadProposal(handleOf(base.id));
     if (!reread.ok) {

@@ -74,7 +74,12 @@ function CardApp() {
       </main>
     );
   }
-  return <ProposalCard view={view} canExpand={canExpand} onExpand={onExpand} onEdit={canCall ? onEdit : undefined} />;
+  const saved = editor.lastSaved;
+  const note =
+    saved && view.kind === "proposal" && saved.revision !== view.revision
+      ? `Guardaste la versión ${saved.revision}; «Editar» la abre. Abajo sigue la versión ${view.revision}.`
+      : undefined;
+  return <ProposalCard view={view} canExpand={canExpand} onExpand={onExpand} onEdit={canCall ? onEdit : undefined} note={note} />;
 }
 
 createRoot(document.getElementById("root")!).render(

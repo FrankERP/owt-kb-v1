@@ -174,6 +174,20 @@ describe("save_proposal_edits", () => {
     expect(w.store.size).toBe(2);
   });
 
+  it("a commit whose outcome is unknown never says «no se guardó»; the same saveId then finds the child", async () => {
+    const w = await editorWorld();
+    const confirms = await confirmsFor(w, [forceAna(w)]);
+    const real = w.deps.saveRevision.getMockImplementation() as (...a: unknown[]) => Promise<unknown>;
+    // The transaction lands, but its answer is lost.
+    w.deps.saveRevision.mockImplementationOnce(async (...a: unknown[]) => (await real(...a), { ok: false, reason: "unknown", cause: new Error("socket") }));
+    const lost = await save(w, { edits: [forceAna(w)], confirms, saveId: "save-lost" });
+    expect(sc(lost)).toMatchObject({ code: "server_error", detail: "unknown", retry: true });
+    expect(textOf(lost)).toBe(E.saveUnknown);
+    const again = await save(w, { edits: [forceAna(w)], confirms, saveId: "save-lost" });
+    expect(sc(again)).toMatchObject({ ok: true, revision: 2, replayed: true, proposal: w.store.get(HANDLE)!.state.supersededBy });
+    expect(w.store.size).toBe(2);
+  });
+
   it("two saves on one base: exactly one child; the second is refused naming it", async () => {
     const w = await editorWorld();
     const confirms = await confirmsFor(w, [forceAna(w)]);
@@ -304,6 +318,17 @@ describe("revise_proposal (the chat)", () => {
     expect(text).not.toContain("Kira");
     const kira = await revise(w, HANDLE, [{ op: "place", service: "2026-11-08", seat: "BGV", member: "Kira" }]);
     expect(textOf(kira)).toContain(E.ambiguousName("Kira", []));
+  });
+
+  it("the same chat edit twice on one base (a lost answer repeated) answers the version it made", async () => {
+    const w = await editorWorld();
+    const edit = [{ op: "place" as const, service: "2026-11-22", seat: "BGV", member: "Dani" }];
+    const first = await revise(w, HANDLE, edit);
+    const second = await revise(w, HANDLE, edit);
+    expect(sc(second)).toMatchObject({ ok: true, replayed: true, proposal: sc(first).proposal, revision: 2 });
+    // A different edit on the same base is a fork: refused naming the version that exists.
+    const other = await revise(w, HANDLE, [{ op: "place", service: "2026-11-29", seat: "BGV", member: "Dani" }]);
+    expect(sc(other)).toMatchObject({ detail: "superseded", successor: sc(first).proposal });
   });
 
   it("unknown dates and seats are refused by name", async () => {
