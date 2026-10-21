@@ -502,6 +502,18 @@ function anyServiceOf(ctx: MonthContext, s: string): ServiceRef {
   return serviceByIdOrDate(services, s, S.copy.noSource);
 }
 
+/** The resolved edits as the card sends them (members as the month's tokens): the card continues from them (S4). */
+function tokenEditsOf(edits: ReadonlyArray<EditorEdit | HeaderEdit>, tokens: MemberTokens): TokenEdit[] {
+  const seat = (x: { service: string; row: string; member: string }) => ({ service: x.service, row: x.row, member: tokens.tokenOf(x.member) });
+  return edits.map((e): TokenEdit => {
+    if (e.op === "header") return e;
+    if (e.op === "place") return { op: "place", service: e.service, row: e.row, member: tokens.tokenOf(e.member), ...(e.force ? { force: true } : {}) };
+    if (e.op === "clear") return { op: "clear", service: e.service, row: e.row, member: tokens.tokenOf(e.member) };
+    if (e.op === "move") return { op: "move", from: seat(e.from), to: { service: e.to.service, row: e.to.row }, ...(e.force ? { force: true } : {}) };
+    return { op: "exchange", a: seat(e.a), b: seat(e.b), ...(e.force ? { force: true } : {}) };
+  });
+}
+
 function resolveNameEdits(edits: readonly NameEdit[], ctx: MonthContext): Resolved {
   const { board } = ctx;
   const seated = new Set(seatedIds(board.cells));
@@ -745,7 +757,7 @@ async function checkMonth(
   deps: ServiceEditorDeps,
   options: { app: boolean; seat?: { service: string; row: string } },
 ): Promise<CallToolResult> {
-  const head = { ok: true, month: ctx.month };
+  const head = { ok: true, month: ctx.month, edits: tokenEditsOf(edits, ctx.tokens) };
   const notes = [
     ...(ctx.board.coherent ? [] : [S.readOnlyMonth]),
     ...(ctx.board.untranslated ? [S.untranslated(ctx.board.untranslated)] : []),

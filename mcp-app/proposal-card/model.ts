@@ -3,7 +3,10 @@
 // read from its own result and nothing else. Pure, so it is tested without a browser.
 //
 // The card only SHOWS what the result carries: every name, label and line here is server text,
-// and anything the result does not carry is not invented. Editing (S4) is `editorModel.ts`.
+// and anything the result does not carry is not invented. Editing (S4) is `editorModel.ts`; a
+// SAVED month's check (`check_service_edits`, admin parity S4) is read by `storedModel.ts`.
+
+import { isStoredMonthResult, monthName, storedCheckViewOf, type StoredEdit } from "./storedModel";
 
 export interface CardRow {
   label: string;
@@ -27,6 +30,8 @@ export type CardView =
   /** A refusal (`isError`), or a result the card cannot read: the server's own lines. */
   | { kind: "refused"; lines: string[] }
   | { kind: "unreadable"; lines: string[] }
+  /** A saved month's check: its services as the check left them, its lines, and the edits it judged. */
+  | { kind: "storedMonth"; title: string; month: string; services: CardService[]; lines: string[]; edits: StoredEdit[]; changed: number }
   | {
       kind: "proposal";
       title: string;
@@ -121,6 +126,23 @@ export function cardViewOf(result: { content?: unknown; structuredContent?: unkn
     // under a neutral heading (it may well be a stored proposal).
     if (result.isError) return { kind: "refused", lines: lines.length ? lines : ["No se pudo planear el mes."] };
     return { kind: "unreadable", lines: lines.length ? lines : ["La respuesta está en el chat."] };
+  }
+
+  if (isStoredMonthResult(s)) {
+    const view = storedCheckViewOf(result);
+    return {
+      kind: "storedMonth",
+      title: `Servicios de ${monthName(view.month)}`,
+      month: view.month,
+      services: view.board.map((svc) => ({
+        label: svc.label || "Servicio",
+        planned: svc.editable,
+        rows: svc.seats.map((seat) => ({ label: seat.label, names: seat.members.map((m) => m.name) })).filter((r) => r.names.length > 0),
+      })),
+      lines: view.lines,
+      edits: view.edits,
+      changed: view.changes.length,
+    };
   }
 
   // A `revise_proposal` answer: the edited version's board, by the same names.
