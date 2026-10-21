@@ -13,23 +13,26 @@ meant to do.
 
 ## The workflow
 
-`.github/workflows/ci.yml`: three jobs do the work, in parallel, and a fourth,
-**`gates`**, is the check branch protection requires. Until 2026-10 it was one
-serial job named `gates`; it was split when the v2 solver step reached ~10 of the
-job's 15 minutes and solver v3 was about to add a second suite (see «Timing»).
+`.github/workflows/ci.yml`: three jobs do the work, in parallel; a fourth,
+`scope`, decides whether a pull request needs `solver-v2` at all (since 2026-10-21,
+ADR-0065 — see «Scoped skip of `solver-v2`»); and a fifth, **`gates`**, is the check
+branch protection requires. Until 2026-10 it was one serial job named `gates`; it
+was split when the v2 solver step reached ~10 of the job's 15 minutes and solver v3
+was about to add a second suite (see «Timing»).
 
 | | |
 |---|---|
-| Triggers | `push` to `main` and `preview`; `pull_request` targeting `main` or `preview`; manual `workflow_dispatch`. Every job runs on every trigger — no path filters, no job `if:` except `gates`' `always()` |
+| Triggers | `push` to `main` and `preview`; `pull_request` targeting `main` or `preview`; manual `workflow_dispatch`. No path filters. Every job runs on every trigger, with one exception: on a `pull_request` that touches neither `gcf/` nor the CI machinery, `solver-v2` is skipped on `scope`'s word. No job `if:` but that one and `gates`' `always()` |
 | Concurrency | one run per branch (or per PR); a newer push cancels the in-flight run |
 | Permissions | `contents: read` only |
 
 | Job (display name) | Runner | Steps | Timeout |
 |---|---|---|---|
 | `node` | `ubuntu-latest`, Node from `.nvmrc` (22), npm cache | checkout → `npm ci` → `npx tsc --noEmit` → `npm test` (vitest) → `npx eslint .` | 15 min |
-| `solver-v2` | `ubuntu-latest` (x86_64), Python 3.12 with pip cache keyed on `gcf/requirements.txt` | checkout → `pip install -r gcf/requirements.txt` → `python -m unittest discover -s gcf -t gcf -v` | 25 min |
+| `solver-v2` | `ubuntu-latest` (x86_64), Python 3.12 with pip cache keyed on `gcf/requirements.txt` | `needs: scope`, `if: ${{ needs.scope.outputs.solver-v2 != 'false' }}`; checkout → `pip install -r gcf/requirements.txt` → `python -m unittest discover -s gcf -t gcf -v` | 25 min |
 | `solver-v3` | `ubuntu-latest` (x86_64), Python 3.12 with pip cache keyed on `gcf_v3/requirements.txt` | checkout → `pip install -r gcf_v3/requirements.txt` → `python -m unittest discover -s gcf_v3 -t gcf_v3 -v` | 15 min |
-| `gates` | `ubuntu-latest`, the runner's preinstalled Node | `needs: [node, solver-v2, solver-v3]`, `if: ${{ always() }}`; checkout → `node scripts/ci/gates-verdict.mjs` with `NEEDS_JSON: ${{ toJSON(needs) }}` in `env:` | 5 min |
+| `scope` | `ubuntu-latest`, the runner's preinstalled Node | checkout with `fetch-depth: 2` → `node scripts/ci/ci-scope.mjs` (step `decide`) with `EVENT_NAME: ${{ github.event_name }}` in `env:`; output `solver-v2` = `true`/`false` | 5 min |
+| `gates` | `ubuntu-latest`, the runner's preinstalled Node | `needs: [node, solver-v2, solver-v3, scope]`, `if: ${{ always() }}`; checkout → `node scripts/ci/gates-verdict.mjs` with `NEEDS_JSON: ${{ toJSON(needs) }}` in `env:` | 5 min |
 
 `npm ci`, not `npm install`: it fails on a lockfile that drifted from
 `package.json`, rather than silently resolving something new. Python 3.12 matches
@@ -56,14 +59,17 @@ other job is.
 - **The verdict is a script, not an expression.** `scripts/ci/gates-verdict.mjs`
   reads `toJSON(needs)` from `NEEDS_JSON` (through `env:`, so job data never enters
   the shell source) and exits 0 only if that object is non-empty and every entry's
-  `result` is exactly `success`; its log names every job that was not. It is generic
+  `result` is exactly `success` — except a job listed in `SKIPPABLE_JOBS`
+  (`solver-v2` alone) that is `skipped` while `scope` succeeded with output exactly
+  `false` for it; its log names every job that was not. It is generic
   over `needs`, so a job added later needs no script change — and Node builtins
   only, so `gates` needs no `npm ci`. An inline `jq 'all(...)'` was rejected: it is
   true on an empty object and cannot be tested as a process.
 - **No path filters.** A filter decides from the changed files whether the
   workflow runs at all, and a skipped or missing `gates` either blocks a PR forever
-  or passes it. A frontend-only PR runs both solver suites; a change to a shared
-  fixture runs every suite that reads it.
+  or passes it. The one scoped skip (`solver-v2`, below) is decided INSIDE the run,
+  by a job `gates` needs, so `gates` always runs and judges it. A frontend-only PR
+  still runs `solver-v3`; a change to a shared fixture runs every suite that reads it.
 - **Why the three jobs are not required individually.** That needs a protection
   change with admin rights, and every future job would need another one. With the
   aggregator, adding a job means adding it to `gates.needs` — and the guard fails
@@ -77,7 +83,12 @@ asserts on the real files: exactly one job across all workflows reports as
 no job `name:` in any workflow is a `${{ }}` expression, which could evaluate to
 `gates` unseen; its `needs` is every other `ci.yml` job; it has `always()`, a
 timeout, no matrix, and the verdict step fed through `env:`; no
-`paths`/`paths-ignore`/`branches-ignore` filter; no job `if:` but `gates`', and no
+`paths`/`paths-ignore`/`branches-ignore` filter; no job `if:` but `gates`' and, on a
+job in `SKIPPABLE_JOBS`, exactly `${{ needs.scope.outputs.<id> != 'false' }}` with
+`needs: scope`; `scope` itself has no `if:`/`needs:`/matrix, one step `decide` that
+runs exactly `node scripts/ci/ci-scope.mjs` fed `EVENT_NAME` through `env:`, and one
+output per skippable job mapped straight from that step (a constant `'false'` would
+skip the suite on every PR with `gates`' blessing); no
 step `if:` at all (a skipped test step leaves its job green); no
 `continue-on-error`; no sparse checkout; no step `shell:` or `working-directory:`
 and no `defaults:` (`shell: bash -c 'true' {0}` runs nothing and exits 0); a
@@ -90,13 +101,56 @@ pass a test that only reads the file. It reads workflows with a small YAML-subse
 reader (no YAML parser is a direct dependency) that throws on anything it does not
 model, so a reformatted workflow fails red, never green.
 
+### Scoped skip of `solver-v2`
+
+Since 2026-10-15 production plans with solver v3, and v2 (`gcf/`) is only the
+rollback engine (ADR-0056). Its suite still took ~10 of every PR's ~10.5 minutes
+(«Timing»), on PRs that could not change what it proves. Since 2026-10-21
+(ADR-0065), a pull request runs it only when its diff touches it:
+
+- **Who decides.** The `scope` job runs `scripts/ci/ci-scope.mjs`, which reads the
+  PR's merge commit against its first parent (`git -c core.quotePath=false diff -z
+  --no-renames --name-only HEAD^1 HEAD` — exactly what the PR would land;
+  `--no-renames` so a file moved out of `gcf/` lists its old path too; `-z` and
+  `quotePath=false` so a non-ASCII path is not C-quoted past the prefix test) and
+  applies `scopeDecision` (`scripts/lib/ci-scope.mjs`). `solver-v2` runs when any
+  changed path starts with `gcf/`, `cloudbuild.yaml`, `scripts/deploy-solver-gcf.sh`,
+  `.github/`, `scripts/ci/` or `scripts/lib/ci-`. The suite reads nothing outside
+  `gcf/`; the next two deploy that tree (the job's Python 3.12 mirrors
+  `cloudbuild.yaml`'s runtime); the rest is the CI machinery that runs, decides and
+  judges the skip, so changing it re-proves everything.
+- **Every doubt runs it.** A `push` (to `main` or `preview`) and a manual run always
+  run it, so runner-image drift in `GOLDEN_SCHEDULE` still shows up on the next push
+  without blocking an unrelated PR. On a PR, an unreadable or empty diff runs it.
+  The job's `if:` is `!= 'false'`, so a `scope` that wrote nothing runs it too. A
+  `scope` that fails skips it by `needs`, and `gates` is red.
+- **Who vouches.** `gates` accepts `solver-v2: skipped` only when `scope` concluded
+  `success` with output exactly `false` (`gatesVerdict`); a skip of any job not in
+  `SKIPPABLE_JOBS` is red whatever `scope` says. In the PR's checks `solver-v2` shows
+  as skipped, not green, and `gates`' log says it was skipped on `scope`'s word.
+- **What it cannot catch.** A path that affects the v2 suite but is missing from the
+  list. Today there is none (the suite reads nothing outside `gcf/`); a v2 test
+  that starts reading a file outside `gcf/` must add that path.
+- **Its cost:** `solver-v2` now waits for `scope` (a runner pickup, a depth-2
+  checkout and a `git diff`) before it starts, on every run where it runs. That
+  wait sits on the critical path of a PR that touches `gcf/` and of every push; it
+  was accepted over a second, event-dependent `if:` the guard would also have to pin.
+- **Locally nothing changes:** CLAUDE.md already asks for the solver suite of each
+  tree a change touches.
+- **When v2 is retired** (the PR that removes `gcf/` after the rollback window
+  closes, ADR-0056), `solver-v2`, `scope` and `SKIPPABLE_JOBS` go with it.
+
+`scripts/__tests__/ciScope.test.ts` pins the decision and runs the runner as a
+process against real merge commits (an app-only PR, a `gcf/` edit, a move out of
+`gcf/`, a push, a parentless HEAD, a missing `GITHUB_OUTPUT`).
+
 ### Solver suites
 
 Two jobs, one per tree, each running exactly one command from the repository
 root:
 
 ```bash
-python -m unittest discover -s gcf -t gcf -v        # solver-v2 — the rollback engine (ADR-0056)
+python -m unittest discover -s gcf -t gcf -v        # solver-v2 — the rollback engine (ADR-0056); on a PR only when it touches gcf/ (ADR-0065)
 python -m unittest discover -s gcf_v3 -t gcf_v3 -v  # solver-v3 — package owt_v3, the engine Auto runs
 ```
 

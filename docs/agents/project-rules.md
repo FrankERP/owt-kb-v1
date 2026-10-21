@@ -16,14 +16,19 @@ disagree, `CLAUDE.md` wins and this file is the one to fix.
   see `eslint.config.mjs`); plus the solver suite of each tree the change touches —
   `gcf/**`: `python -m unittest discover -s gcf -t gcf`; `gcf_v3/**`:
   `python -m unittest discover -s gcf_v3 -t gcf_v3`. All five are blocking CI
-  gates. Add tests for testable pure logic.
+  gates. Since 2026-10-21 a pull request that touches neither `gcf/` nor the CI
+  machinery (`.github/`, `scripts/ci/`, `scripts/lib/ci-*`) nor its deploy
+  (`cloudbuild.yaml`, `scripts/deploy-solver-gcf.sh`) skips `solver-v2` — the
+  rollback engine since the v3 cutover — and `gates` accepts that skip only when the
+  `scope` job said exactly `false`; pushes to `main`/`preview` always run it
+  (ADR-0065, `docs/CI.md` «Scoped skip of `solver-v2`»). Add tests for testable pure logic.
 
 ## Conventions
 - Work on a branch, **merge to `main` periodically** (don't commit routine work
   straight to `main`). **`main` is protected and takes NO direct pushes** — it is
   reached through a PR whose `gates` check is green (`.github/workflows/ci.yml`:
   `gates` requires every CI job — `tsc --noEmit`, `vitest`, `eslint` with 0
-  errors, and both solver suites). `preview` still takes direct
+  errors, and both solver suites, `solver-v2` only when the PR touches it). `preview` still takes direct
   pushes; CI runs there too, but does not block. Protection applies to admins as
   well, so there is no silent bypass: an emergency override means deliberately
   turning protection off, doing the push, and turning it back on. See

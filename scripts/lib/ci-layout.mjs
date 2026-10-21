@@ -2,7 +2,8 @@
 //
 // `main`'s branch protection requires ONE check, `gates`, matched by check-run
 // NAME. Since the CI split, `.github/workflows/ci.yml` runs three working jobs in
-// parallel (`node`, `solver-v2`, `solver-v3`) and a fourth, `gates`, that only
+// parallel (`node`, `solver-v2`, `solver-v3`), a `scope` job that decides whether a
+// pull request needs `solver-v2` at all (ADR-0065), and `gates`, that only
 // aggregates them. That shape has a fail-open edge GitHub does not warn about: a
 // job skipped by an unmet `needs` (or a false `if:`) concludes `skipped`, and a
 // skipped required check counts as PASSING. So the rules below pin the shape, and
@@ -23,10 +24,14 @@
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { SCOPE_JOB, SKIPPABLE_JOBS } from "./ci-scope.mjs";
 
 export const CI_WORKFLOW = ".github/workflows/ci.yml";
 export const REQUIRED_CHECK = "gates";
 export const VERDICT_SCRIPT = "scripts/ci/gates-verdict.mjs";
+export const SCOPE_SCRIPT = "scripts/ci/ci-scope.mjs";
+/** The one `if:` a skippable job may carry: run unless `scope` said exactly "false". */
+export const scopedIf = (id) => `\${{ needs.${SCOPE_JOB}.outputs.${id} != 'false' }}`;
 /** The two solver start directories, one CI job each. */
 export const SOLVER_TREES = Object.freeze(["gcf", "gcf_v3"]);
 /** The one module that holds `GOLDEN_SCHEDULE` (Linux x86_64 only; fails, not skips, in Actions). */
@@ -392,7 +397,8 @@ export function checkRequiredCheck(workflows) {
 
 /**
  * Nothing in ci.yml may skip a job or a step, or let one fail green: no path or
- * branch-ignore filter, no `if:` (except gates' `always()`), no continue-on-error,
+ * branch-ignore filter, no `if:` (except gates' `always()` and, on a job listed in
+ * SKIPPABLE_JOBS, exactly `scopedIf(id)` with `needs: scope`), no continue-on-error,
  * no sparse checkout, no step `shell:`/`working-directory:` and no `defaults:`, and
  * every job has a timeout.
  * @param {string} ciText
@@ -409,7 +415,8 @@ export function checkNoSilentSkips(ciText) {
         if (key in cfg) {
           problems.push(
             `[no-silent-skips] on.${event}.${key}: a filter skips the WHOLE workflow, gates included, and a ` +
-              "missing or skipped required check either blocks every PR or passes it. A frontend-only PR runs both solver suites",
+              "missing or skipped required check either blocks every PR or passes it. A frontend-only PR runs solver-v3, " +
+              "and skips solver-v2 only on the scope job's word, inside a run gates judges (ADR-0065)",
           );
         }
       }
@@ -426,7 +433,18 @@ export function checkNoSilentSkips(ciText) {
       problems.push(`[no-silent-skips] job ${id} has \`defaults:\` — a default shell or working directory changes what its run: steps execute`);
     }
     if (id !== REQUIRED_CHECK && "if" in job) {
-      problems.push(`[no-silent-skips] job ${id} has \`if:\` — a skipped job reports \`skipped\`, which gates would have to vouch for`);
+      const scoped = Object.prototype.hasOwnProperty.call(SKIPPABLE_JOBS, id);
+      const cond = typeof job.if === "string" ? job.if.trim() : null;
+      const needs = asList(job.needs);
+      if (!scoped) {
+        problems.push(`[no-silent-skips] job ${id} has \`if:\` — a skipped job reports \`skipped\`, which gates would have to vouch for`);
+      } else if (cond !== scopedIf(id) || needs.length !== 1 || needs[0] !== SCOPE_JOB) {
+        problems.push(
+          `[no-silent-skips] job ${id} may only be skipped by \`needs: ${SCOPE_JOB}\` plus exactly \`if: ${scopedIf(id)}\`, ` +
+            `found needs ${oneLine(job.needs ?? null)} and if ${oneLine(cond)} — any other condition skips it where ` +
+            "gates cannot tell a vouched-for skip from a silent one (ADR-0065)",
+        );
+      }
     }
     if (!isPositiveInt(job["timeout-minutes"])) {
       problems.push(`[no-silent-skips] job ${id} needs a timeout-minutes (docs/CI.md «Timing» sets each one)`);
@@ -454,6 +472,59 @@ export function checkNoSilentSkips(ciText) {
   }
   if (lines.some((l) => l.includes("sparse-checkout"))) {
     problems.push("[no-silent-skips] ci.yml uses sparse-checkout — every job needs the full tree (fixtures, both solver trees)");
+  }
+  return problems;
+}
+
+// ── The scope job ─────────────────────────────────────────────────────────────
+
+/**
+ * When ci.yml has a scoped job, `scope` exists and decides it the one way the
+ * verdict trusts: no `if:`, `needs` or matrix of its own, a step `decide` running
+ * exactly `node scripts/ci/ci-scope.mjs` fed `EVENT_NAME` through env:, and one
+ * output per skippable job, mapped straight from that step. A constant output
+ * (`solver-v2: 'false'`) would skip the suite on every PR with gates' blessing.
+ * @param {string} ciText
+ * @returns {string[]}
+ */
+export function checkScopeJob(ciText) {
+  const problems = [];
+  const doc = tryParse(CI_WORKFLOW, ciText, problems);
+  if (!doc) return problems;
+  const ids = Object.keys(SKIPPABLE_JOBS);
+  const scoped = ids.filter((id) => id in doc.jobs);
+  if (scoped.length !== ids.length) {
+    problems.push(`[scope] SKIPPABLE_JOBS lists [${ids.join(", ")}] but ci.yml has only [${scoped.join(", ")}] of them`);
+  }
+  const job = doc.jobs[SCOPE_JOB];
+  if (!job) {
+    problems.push(`[scope] ci.yml has no \`${SCOPE_JOB}\` job, so nothing can decide (or vouch for) a skip of ${ids.join(", ")}`);
+    return problems;
+  }
+  for (const key of ["if", "needs", "strategy", "continue-on-error"]) {
+    if (key in job) problems.push(`[scope] job ${SCOPE_JOB} may not have \`${key}:\` — it must run, once, on every run`);
+  }
+  const decide = stepsOf(job).filter((s) => s.id === "decide");
+  if (decide.length !== 1) {
+    problems.push(`[scope] job ${SCOPE_JOB} must have exactly one step with \`id: decide\`, found ${decide.length}`);
+  } else {
+    const [step] = decide;
+    if (typeof step.run !== "string" || step.run.trim() !== `node ${SCOPE_SCRIPT}`) {
+      problems.push(`[scope] the decide step must run exactly \`node ${SCOPE_SCRIPT}\`, found ${oneLine(step.run ?? null)}`);
+    }
+    const fed = isMap(step.env) && typeof step.env.EVENT_NAME === "string" ? step.env.EVENT_NAME.replace(/\s+/g, "") : null;
+    if (fed !== "${{github.event_name}}") {
+      problems.push("[scope] the decide step must receive `EVENT_NAME: ${{ github.event_name }}` through env:");
+    }
+  }
+  const outputs = isMap(job.outputs) ? job.outputs : {};
+  const want = ids.map((id) => `${id}=\${{steps.decide.outputs.${id}}}`).sort();
+  const got = Object.entries(outputs).map(([k, v]) => `${k}=${typeof v === "string" ? v.replace(/\s+/g, "") : oneLine(v)}`).sort();
+  if (JSON.stringify(got) !== JSON.stringify(want)) {
+    problems.push(
+      `[scope] job ${SCOPE_JOB}'s outputs must be exactly one per skippable job, each \`<id>: \${{ steps.decide.outputs.<id> }}\` — ` +
+        `expected [${want.join(", ")}], found [${got.join(", ")}]`,
+    );
   }
   return problems;
 }
@@ -711,6 +782,7 @@ export function checkCiLayout({ workflows, trees }) {
   if (ci) {
     problems.push(
       ...checkNoSilentSkips(ci.text),
+      ...checkScopeJob(ci.text),
       ...checkSolverCommands(ci.text).problems,
       ...checkGoldenPlacement(ci.text, trees),
     );
@@ -749,8 +821,10 @@ export function walkTree(root, tree) {
 
 /**
  * The `gates` job's verdict over `toJSON(needs)`: ok only for a non-empty object
- * whose every entry's `result` is exactly "success". `skipped`, `cancelled`,
- * `failure` and a missing result are all red.
+ * whose every entry's `result` is exactly "success" — with ONE exception: a job
+ * listed in SKIPPABLE_JOBS may be `skipped` when `scope` itself succeeded and its
+ * output for that job is exactly "false" (ADR-0065). Every other `skipped`, and
+ * every `cancelled`, `failure` or missing result, is red.
  * @param {string | undefined} raw
  * @returns {{ ok: boolean, lines: string[] }}
  */
@@ -769,10 +843,18 @@ export function gatesVerdict(raw) {
   const ids = Object.keys(needs);
   if (ids.length === 0) return refuse("NEEDS_JSON lists no jobs, so there is nothing to vouch for");
 
+  const scope = needs[SCOPE_JOB];
+  const vouched = isMap(scope) && scope.result === "success" && isMap(scope.outputs) ? scope.outputs : {};
   const lines = [];
   const failed = [];
+  let skipped = 0;
   for (const id of ids) {
     const result = isMap(needs[id]) && typeof needs[id].result === "string" ? needs[id].result : "missing";
+    if (result === "skipped" && Object.prototype.hasOwnProperty.call(SKIPPABLE_JOBS, id) && vouched[id] === "false") {
+      lines.push(`${id}: skipped — ${SCOPE_JOB} found nothing in this pull request that it tests`);
+      skipped++;
+      continue;
+    }
     lines.push(`${id}: ${result}`);
     if (result !== "success") failed.push(`${id} (${result})`);
   }
@@ -780,6 +862,10 @@ export function gatesVerdict(raw) {
     lines.push(`::error::gates: not every CI job succeeded — ${failed.join(", ")}`);
     return { ok: false, lines };
   }
-  lines.push(`gates: all ${ids.length} jobs succeeded`);
+  lines.push(
+    skipped
+      ? `gates: ${ids.length - skipped} jobs succeeded, ${skipped} skipped on ${SCOPE_JOB}'s word`
+      : `gates: all ${ids.length} jobs succeeded`,
+  );
   return { ok: true, lines };
 }
