@@ -44,9 +44,9 @@ What does not change: `/admin`, the PATCH and create routes' rules, the notices,
 |---|---|---|---|
 | F1 | **One writer.** The PATCH handler of `app/api/admin/roles/[id]/route.ts` (seats, date, name, time, `countsForFairness`; lock, receipt and special-identity coordination; notices; revalidation) is extracted into `app/utils/roleEditCommit.ts`, called by the route and by the MCP. `copy-instruments` likewise into `copyInstrumentsCommit.ts`. Both join `serviceCommitCallers.test.ts` (six → eight write paths) | A second writer for the connector | The repo's rule since ADR-0043: MCP writes go only through the admin's own commit modules. The route keeps its auth and HTTP mapping only |
 | F2 | **The judge is the proposal editor's.** A stored month becomes a board through `storedRoleReadModel.ts` (the grid's own stored-mode reader); every edit is replayed server-side through `pickJudge`/`evaluateMove`/`ruleFindings` with inputs from `columnRuleInputs` (`editorBoard.ts`), and the whole month through `monthCheck.ts` | Trust the card's board; or let the PATCH route's (rule-free) validation be the only check | ADR-0062 E1 and E4: one judge, on the server. The PATCH route enforces no solver rule, so without this a chat edit would skip what `/admin`'s grid checks |
-| F3 | **Stateless change sets, target state per service.** A check answers, per changed service, `{service, baseRev, target}` (the full five-section seats + header fields as `serializeStoredColumn` would send them, members as tokens) plus the Spanish lines. `save_service_edits` takes that list back, re-judges it, and per service: current semantics == target → «ya estaba» (no write); current `_rev` == `baseRev` → write through `roleEditCommit` under that rev; else refused «cambió desde que lo revisaste». Services go one at a time, in date order; an unknown commit outcome stops the run and says so | (a) Ops (place/clear) replayed against CURRENT state at save. (b) A stored change-set record like `mcpProposal` | (a) is not idempotent: a retry after a partial save would replay «pon a Ana» onto a seat she already holds. Target state + `baseRev` is `/admin`'s own model (`freezeSaveAttempt`, `reconcileSaveAttempt`, `plannerSaveModel.ts`), so a retry of the same call finishes the rest and reports the rest as «ya estaba». (b) adds a record type and a lifecycle for a list that lives minutes; nothing needs it to outlive the chat turn |
-| F4 | **The permission prompt shows what will happen.** `save_service_edits` requires `lines`: the Spanish change and waiver lines, which must equal the server's own rendering of the submitted targets against the stored services (the `sameWaiverItems` pattern, NFC multiset). A mismatch refuses before any write | Show only the JSON | The prompt is the guarantee Frank was given in ADR-0062 Q1 (2); tokens are unreadable, sentences are not |
-| F5 | **Forcing a per-seat rule needs the card.** A C4 (role or week exclusion, pair) is accepted at save only with a waiver token minted by the app-only `check_service_edits_app` when Frank answers «Asignar de todos modos» (HMAC of `MCP_OAUTH_SECRET` over the service, seat, member and rule wording, under a distinct label); the waiver's line is also in `lines` | Let the save accept any echoed waiver | Keeps ADR-0062's «Claude desde el chat nunca puede forzar» true for stored services as it is for proposals: the model-visible preview never forces, and a waiver the model invents has no valid token |
+| F3 | **Stateless change sets, target state per service, sorted before anything is judged.** A check answers, per changed service, `{service, baseRev, target, lines, waivers}`: the full five-section seats + header fields as `serializeStoredColumn` would send them (members as tokens), that service's Spanish change lines, and its waiver tokens. `save_service_edits` takes the list back and FIRST sorts every service on a fresh read: semantics equal to `target` (`sameRoleSemantics`) → «ya estaba»; `_rev` ≠ `baseRev` and not equal to `target` → «cambió desde que lo revisaste»; otherwise «por guardar». Any «cambió» refuses the WHOLE call before any write (Frank re-checks): a cross-service move or exchange can then never half-land on a stale side. Only «por guardar» services are judged, have their lines compared and their waivers verified (for them, current == base, so the server's rendering reproduces the check's). Writes go one at a time in date order | (a) Ops (place/clear) replayed against CURRENT state at save. (b) A stored change-set record like `mcpProposal`. (c) `/admin`'s «skip the stale one and continue» | (a) is not idempotent: a retry after a partial save would replay «pon a Ana» onto a seat she already holds. Target state + `baseRev` is `/admin`'s own model (`freezeSaveAttempt`, `reconcileSaveAttempt`, `plannerSaveModel.ts`), and sorting first makes a repeat of the same call finish the rest: written services answer «ya estaba» and are not re-judged. (b) adds a record type and a lifecycle for a list that lives minutes. (c) lets one side of a move land while the other is stale, doubling or dropping a person; the grid at least shows Frank the result on screen, the chat does not |
+| F4 | **The permission prompt shows what will happen.** Each change carries its `lines` (the Spanish change lines and, for a forced seat, its waiver line); for every «por guardar» service they must equal the server's own rendering of `target` against that service's stored state (NFC multiset, the `sameWaiverItems` pattern). A mismatch refuses the whole call before any write. Lines on «ya estaba» services are not compared, and their waivers are not needed | Show only the JSON | The prompt is the guarantee Frank was given in ADR-0062 Q1 (2); tokens are unreadable, sentences are not |
+| F5 | **Forcing a per-seat rule needs the card.** Every NEW rule finding on a «por guardar» service (the whole-board safety net, keyed by `FindingKey` as `editorBoard.ts`/`waivers.ts` key them: a role or week exclusion by service, seat and member; a pair by the unordered pair of members in that service) needs a waiver token minted by the app-only `check_service_edits_app` when Frank answers «Asignar de todos modos»: HMAC of `MCP_OAUTH_SECRET` under its own label over the `FindingKey`, the rule wording, the service and its `baseRev`. Binding `baseRev` makes a token die with the write it was minted for. Findings already on the stored service before the edit (forced earlier in `/admin`, stored nowhere) are the baseline: warnings, never refusals, as `waivers.ts` treats the base board. A token for a finding that no longer arises is ignored | Let the save accept any echoed waiver; or key tokens by the seat the card asked about | Keeps ADR-0062's «Claude desde el chat nunca puede forzar» true for stored services: the model-visible preview never forces, and a waiver the model invents or reuses has no valid token. The save judges additions order-independently, so a pair finding may name the other member than the one the card asked about; `FindingKey` is what the safety net actually produces |
 | F6 | **Member tokens scoped to the month**, HMAC over `"mcp-member-token|month|" + YYYY-MM + "|" + memberId`, reversed over the pool plus the month's seated ids | Reuse the proposal tokens (scoped to a lineage root) | A stored month has no lineage; a month scope still keeps ids off the wire (KH-1) |
 | F7 | **«Cuenta para equidad» keeps its read rule** (`countsForFairness.ts`): absent = unchanged; a change on a service in a past CDMX month is refused on the server (the planner's Switch is client-only, C1-D7; the connector has no such client) | Mirror only the client | The connector is a second client; the server is the only place both share |
 | F8 | **No delete in phase 1.** | — | Phase 2, with its own echo-list confirmation |
@@ -90,7 +90,8 @@ admission is not `approved` (`storedRoleReadModel.ts` `StoredRoleAdmission`: `bo
   captured pre-commit, `revalidateRoleMutation`). It returns the same `{status, body}` the route
   sends. `copyInstrumentsCommit.ts` likewise from `copy-instruments/route.ts`. The routes keep auth,
   JSON reading and `withVerificationRunContext` only; their existing tests pass unchanged, and
-  `serviceCommitCallers.test.ts` lists both (eight write paths).
+  `serviceCommitCallers.test.ts` (with its `DELIVERY_CAPABLE_IMPORTS` fixture) and
+  `protectedReadAudit.ts`'s `PROTECTED_RUNTIME_WRITERS` list both (eight write paths).
 - **T2.2 The stored-month board** (`storedMonthBoard.ts`, neutral, no I/O): the month's stored
   roles → `translateStoredRole`/`buildStoredGridRows` → an `EditorBoard` whose `editable` set is
   the `approved` services, each column carrying `roleId` and `rev`. Rule inputs come only from
@@ -98,8 +99,11 @@ admission is not `approved` (`storedRoleReadModel.ts` `StoredRoleAdmission`: `bo
   `solverConfig` (a stored month has no bound rule set; a rule changed between check and save shows
   up as different lines and F4 refuses).
 - **T2.3 The judge.** An edit list (`place`, `clear`, `exchange`, `move`, header changes) is replayed
-  exactly as ADR-0062 E4 replays it (`pickJudge`, `evaluateMove`, the exchange unit, the
-  whole-board safety net). The month check is `monthCheck` with every editable stored service as a
+  as ADR-0062 E4 replays it (`pickJudge`, the exchange unit, the whole-board safety net), except that
+  a `move` is judged in STORED mode: both endpoints must be editable and pass `canReceive`/P2
+  (`moveGate.ts`), not the create-mode `serverEvaluateMove` that checks only the target. The safety
+  net's baseline is the stored board as read (F5). The check marks every group of services joined by
+  a cross-service `move` or `exchange`. The month check is `monthCheck` with every editable stored service as a
   planned column and the window's OTHER stored roles as `storedRoles`; eligibility for fair share
   comes from the month's `fairnessMonth` record through the ledger GET (a month with no record is
   judged «sin revisar» for the ledger lines only, E7).
@@ -108,22 +112,32 @@ admission is not `approved` (`storedRoleReadModel.ts` `StoredRoleAdmission`: `bo
   F3 change set. `check_service_edits_app` (app-only): the same with month-scoped tokens (F6), a
   seat's candidates, and `force` on the last edit, which mints F5's waiver tokens.
 - **T2.5 `save_service_edits`** (destructive, `destructiveHint: true`): `{month, changes:
-  [{service, baseRev, target, waivers?}], lines}`. In order: admission (principal, super-admin);
-  every `service` is a role of `month`, `approved`, at most once; `target` parses as a
-  `ParsedEditRequest` for that role with the stored date; the target is judged as a DIFF against the
-  stored role (removals first, then each added person through the pick gate on the board without
-  them, then the safety net), never trusted; every C4 has a valid waiver token for exactly that
-  service, seat, member and rule; the rendered lines equal `lines` (NFC multiset). Only then, one
-  service at a time in date order: semantics already equal the target (`sameRoleSemantics`) →
-  «ya estaba», no write; `_rev` ≠ `baseRev` → «cambió desde que lo revisaste», not written, the run
-  continues with the rest (each service is independent, as `/admin`'s save is); otherwise
-  `roleEditCommit` under `baseRev`. A thrown or non-409 commit failure is «sin confirmar» and STOPS
-  the run (an unknown outcome must not be followed by more writes, as `/admin` breaks on a
-  non-committed transport). The answer lists every service with its status and the next step
-  (repeat the same call: done services answer «ya estaba»).
+  [{service, baseRev, target, lines, waivers?, group?}]}`.
+  1. Admission (principal, super-admin). Every `service` is a role of `month`, `approved`, at most
+     once; `target` parses as a `ParsedEditRequest` for that role with its STORED date; at most 31.
+  2. One fresh read of the month's roles; sort every change (F3). Any «cambió» → refuse all, nothing
+     written. All «ya estaba» → answer that, nothing written.
+  3. For the «por guardar» services only: the target is judged as a DIFF against the stored role
+     (removals first, then each added person through the pick gate on the board without them, then
+     the safety net) on the board made of the current state of every other service; every new
+     finding has a valid token (F5); the lines match (F4); a `countsForFairness` change on a past
+     CDMX month is refused (F7). Any failure refuses all, nothing written.
+  4. Writes, one service at a time in date order, each through `roleEditCommit` under `baseRev`. A
+     409 is «no se guardó» with its reason; the run continues unless that service is in a `group`
+     (then it stops, so the other side of a move is not written alone). A thrown or unknown commit
+     outcome is «sin confirmar» and STOPS the run. **Time limit:** no write starts after 40 s of the
+     call (the route's `maxDuration` is 60 s and each write's `after()` notices and revalidation must
+     finish inside it, `docs/MCP.md`); the rest answer «pendiente».
+  5. The answer lists every service with its status and the next step: repeat the SAME call; done
+     services then answer «ya estaba» and only the rest are judged and written.
 - **T2.6 Tests.** Route parity: the route's existing PATCH and copy tests unchanged; the same body
   through the commit and the route produces the same notices (outbox rows) for a published service
-  and none for a draft. Save: idempotent retry after a partial run; stale `baseRev`; a target that
+  and none for a draft. Save: a partial run (at least one service written, then «sin confirmar», then «pendiente»)
+  repeated with the same call writes only the rest and answers «ya estaba» for the written ones,
+  their waivers unused; a stale service refuses the whole call before any write; a waiver token
+  replayed on a later `baseRev` refused; a pair forced from the card accepted whichever member the
+  save's finding names; a stored service already breaking a rule can still be edited (baseline); a
+  move out of a non-`approved` service refused at check; a 409 inside a group stops the run; a target that
   adds a person the gate refuses (C1–C3) is refused before any write; a C4 without a token, with a
   token for another seat, and with a token after the rule wording changed; a `lines` mismatch; a
   `countsForFairness` change on a past CDMX month refused; a non-`approved` service refused; a date in
@@ -151,7 +165,9 @@ from the chat, a retry of the same save («ya estaba»), and `/admin` shows the 
 
 ## 6. Out of scope
 
-Deleting services and «Limpiar mes» (phase 2); proposals, songs, Kids (phase 3); rules and members
+What `/admin` does that phase 1 still leaves there: moving a service to another date, and editing
+legacy services the integrity join marks `bootstrapEligible` (the grid bootstraps their lock on save;
+the chat shows them read-only). Deleting services and «Limpiar mes» (phase 2); proposals, songs, Kids (phase 3); rules and members
 (phase 4); passwords, photos, login activity (never from the chat).
 
 ## 7. Docs in the same delivery
