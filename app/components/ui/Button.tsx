@@ -1,10 +1,14 @@
 // The house button (spec §4, §19.3). NEUTRAL module — no hooks — so Server
 // Components render it as JSX and client components pass it handlers.
 //
-// Six variants replace the ~6 inline spellings the inventory counted across 305
-// <button>s. Physics live in utilities so the 300 adopters carry no JS: press is
+// Seven variants (six replace the ~6 inline spellings the inventory counted across 305
+// <button>s; `cta` came later). Physics live in utilities so the 300 adopters carry no JS: press is
 // `active:translate-y-px active:scale-[0.985]` over --motion-fast; the primary sheen
 // is a brand.css class gated on (hover: hover); focus is always visible.
+//
+// `cta` is the page's ONE call to action, filled in the accent itself rather than
+// `primary`'s deep tint — the hero card's «Ensayar el setlist» (2026-10-21). A
+// screen with two of them has no call to action; use `primary` for the rest.
 //
 // `tone` is the one exception to "pick a variant": the pill's pressed colour and the
 // icon variant's destructive hover both live in this file, never in a caller's
@@ -19,7 +23,7 @@
 import Link from "next/link";
 import type { ComponentPropsWithoutRef, ReactNode, Ref } from "react";
 
-export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "icon" | "pill";
+export type ButtonVariant = "primary" | "cta" | "secondary" | "ghost" | "danger" | "icon" | "pill";
 export type ButtonSize = "sm" | "md" | "lg";
 /** The pill's pressed colour — `accent` (the default) or the availability tone. */
 export type PillTone = "accent" | "availability";
@@ -36,6 +40,7 @@ const BASE =
 const VARIANT: Record<ButtonVariant, string> = {
   primary:
     "brand-btn-sheen rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30",
+  cta: "rounded-xl bg-accent text-surface-base shadow-lg shadow-accent/20 hover:bg-accent/85",
   secondary:
     "rounded-lg border border-surface-accent-30 text-ink hover:border-accent dark:hover:border-surface-accent-30",
   ghost: "rounded-lg text-mono-500 hover:text-accent",

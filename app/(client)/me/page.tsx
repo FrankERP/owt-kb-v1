@@ -16,6 +16,8 @@ import { pickUnique, serviceDayKey } from "@/app/utils/serviceReadSelect";
 import { orderProposals } from "@/app/utils/serviceReadModel";
 import { nextSeatLine, seatLabel } from "@/app/utils/myWeek";
 import { paintsDayCard } from "@/app/utils/paintsDayCard";
+import { seatPhotos } from "@/app/utils/teamSections";
+import { myNameFromSession } from "@/app/utils/agenda";
 import { compareServiceTime } from "@/app/utils/serviceTime";
 import { revealProps } from "@/app/utils/reveal";
 import { horizon } from "./queries";
@@ -143,11 +145,11 @@ export default async function MePage() {
           "isChorus": $id in Chorus[]._ref,
           "myInstrument": instruments[person._ref == $id][0].instrument,
           "myFohRole": foh_team[person._ref == $id][0].role,
-          Lead[]-> { member_name, alias },
-          instruments[] { instrument, "person": coalesce(person->alias, person->member_name) },
-          foh_team[] { role, "person": coalesce(person->alias, person->member_name) },
-          BGVs[]-> { member_name, alias },
-          Chorus[]-> { member_name, alias },
+          Lead[]-> { member_name, alias, "photo": coalesce(profilePhoto.asset->url, googlePhotoUrl) },
+          instruments[] { instrument, "person": coalesce(person->alias, person->member_name), "photo": coalesce(person->profilePhoto.asset->url, person->googlePhotoUrl) },
+          foh_team[] { role, "person": coalesce(person->alias, person->member_name), "photo": coalesce(person->profilePhoto.asset->url, person->googlePhotoUrl) },
+          BGVs[]-> { member_name, alias, "photo": coalesce(profilePhoto.asset->url, googlePhotoUrl) },
+          Chorus[]-> { member_name, alias, "photo": coalesce(profilePhoto.asset->url, googlePhotoUrl) },
           "setlistCandidates": *[_type == "featuredSongs" && week == ^.week] {
             songs[] {
               play_key,
@@ -166,11 +168,11 @@ export default async function MePage() {
           "isChorus": $id in Chorus[]._ref,
           "myInstrument": instruments[person._ref == $id][0].instrument,
           "myFohRole": foh_team[person._ref == $id][0].role,
-          Lead[]-> { member_name, alias },
-          instruments[] { instrument, "person": coalesce(person->alias, person->member_name) },
-          foh_team[] { role, "person": coalesce(person->alias, person->member_name) },
-          BGVs[]-> { member_name, alias },
-          Chorus[]-> { member_name, alias },
+          Lead[]-> { member_name, alias, "photo": coalesce(profilePhoto.asset->url, googlePhotoUrl) },
+          instruments[] { instrument, "person": coalesce(person->alias, person->member_name), "photo": coalesce(person->profilePhoto.asset->url, person->googlePhotoUrl) },
+          foh_team[] { role, "person": coalesce(person->alias, person->member_name), "photo": coalesce(person->profilePhoto.asset->url, person->googlePhotoUrl) },
+          BGVs[]-> { member_name, alias, "photo": coalesce(profilePhoto.asset->url, googlePhotoUrl) },
+          Chorus[]-> { member_name, alias, "photo": coalesce(profilePhoto.asset->url, googlePhotoUrl) },
           "setlistCandidates": *[_type == "saturdarSongs" && week == ^.week] {
             songs[] {
               play_key,
@@ -189,11 +191,11 @@ export default async function MePage() {
           "isChorus": $id in Chorus[]._ref,
           "myInstrument": instruments[person._ref == $id][0].instrument,
           "myFohRole": foh_team[person._ref == $id][0].role,
-          Lead[]-> { member_name, alias },
-          instruments[] { instrument, "person": coalesce(person->alias, person->member_name) },
-          foh_team[] { role, "person": coalesce(person->alias, person->member_name) },
-          BGVs[]-> { member_name, alias },
-          Chorus[]-> { member_name, alias },
+          Lead[]-> { member_name, alias, "photo": coalesce(profilePhoto.asset->url, googlePhotoUrl) },
+          instruments[] { instrument, "person": coalesce(person->alias, person->member_name), "photo": coalesce(person->profilePhoto.asset->url, person->googlePhotoUrl) },
+          foh_team[] { role, "person": coalesce(person->alias, person->member_name), "photo": coalesce(person->profilePhoto.asset->url, person->googlePhotoUrl) },
+          BGVs[]-> { member_name, alias, "photo": coalesce(profilePhoto.asset->url, googlePhotoUrl) },
+          Chorus[]-> { member_name, alias, "photo": coalesce(profilePhoto.asset->url, googlePhotoUrl) },
           songs[] {
             play_key,
             medley_tag,
@@ -314,7 +316,16 @@ export default async function MePage() {
   // The `DayCardProps` for one assignment, so the hero and the collapsed rows
   // below it are fed from ONE place — they were two copies of the same nine
   // props, and the R1 split is exactly where a drift between them would hide.
+  // The team's faces (the Inicio redesign, 2026-10-21), and who "you" are before
+  // the client session arrives — the same three props home passes.
+  const viewer = {
+    photos: seatPhotos(allAssignments.map((a) => a.doc)),
+    viewerTypes: member?.memberType ?? null,
+    viewerName: myNameFromSession(session.user),
+    viewerIsAdmin: ["super-admin", "admin"].includes(session.user.role),
+  };
   const cardProps = ({ day, doc, dateKey }: (typeof allAssignments)[number]): DayCardProps => ({
+    ...viewer,
     day,
     date: dateKey,
     time: doc.time ?? null,

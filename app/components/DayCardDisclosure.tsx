@@ -1,7 +1,9 @@
 "use client";
 
-// A service that is NOT the next one, collapsed to a single line (spec §12.1):
-// "SÁBADO · 19 sep        en 11 días ▾". Opening reveals the ordinary `DayCard`.
+// A service that is NOT the next one, collapsed to a row (spec §12.1):
+// "SÁBADO · 19 sep        en 11 días ▾" over a summary — «Lead Gaby y Pau · 5
+// canciones» and, when you serve, a «Tú · BGVs» chip (the Inicio redesign,
+// 2026-10-21). Opening reveals the ordinary `DayCard`.
 // Home renders the next service in full and every other one through this, so the
 // page is the run sheet plus a couple of lines instead of a wall of cards.
 //
@@ -19,6 +21,7 @@
 
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { DayCard, type DayCardProps } from "./DayCard";
 import Collapse from "./ui/Collapse";
 import QuickActions, { type QuickAction } from "./ui/QuickActions";
@@ -26,7 +29,8 @@ import useLongPress from "./ui/useLongPress";
 import { daysUntil, formatCountdown } from "@/app/utils/daysUntil";
 import { buildICS, type ICSEvent } from "@/app/utils/ics";
 import { normalizeText } from "@/app/utils/normalizeText";
-import { serviceTone, TONE_RAIL } from "@/app/utils/agenda";
+import { myNameFromSession, mySeats, serviceTone, TONE_RAIL } from "@/app/utils/agenda";
+import { joinNames } from "@/app/utils/homeGreeting";
 
 export default function DayCardDisclosure(props: DayCardProps) {
   const [open, setOpen] = useState(false);
@@ -39,6 +43,16 @@ export default function DayCardDisclosure(props: DayCardProps) {
     ? new Date(props.date.slice(0, 10) + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" })
     : "";
   const days = props.date ? daysUntil(props.date) : null;
+  // `viewerName` covers first paint, before the client session arrives — the
+  // card inside reads the same pair, so the chip and its green «tú» agree.
+  const { data: session } = useSession();
+  const myName = myNameFromSession(session?.user) || props.viewerName || "";
+  const seats = mySeats(props, myName);
+  const songs = props.setlist?.songs?.length ?? 0;
+  const summary = [
+    ...(props.leads?.length ? [`Lead ${joinNames(props.leads)}`] : []),
+    ...(songs ? [`${songs} ${songs === 1 ? "canción" : "canciones"}`] : []),
+  ].join(" · ");
 
   // The same blob-download mechanics as `AddToCalendarButton`, for the ONE service
   // this row stands for rather than the member's whole upcoming list. The UID
@@ -89,12 +103,27 @@ export default function DayCardDisclosure(props: DayCardProps) {
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60"
       >
-        <span className="font-display text-lg uppercase text-ink">
-          {props.day}
-          {shortDate && <span className="text-ink-dim font-normal"> · {shortDate}</span>}
-          {/* Same-day sets differ only by the clock, so the collapsed row carries
-              it too — matching `DayCard`'s own `day · date · time` header. */}
-          {props.time && <span className="text-ink-dim font-normal tabular-nums"> · {props.time}</span>}
+        <span className="min-w-0">
+          <span className="block font-display text-lg uppercase text-ink">
+            {props.day}
+            {shortDate && <span className="text-ink-dim font-normal"> · {shortDate}</span>}
+            {/* Same-day sets differ only by the clock, so the collapsed row carries
+                it too — matching `DayCard`'s own `day · date · time` header. */}
+            {props.time && <span className="text-ink-dim font-normal tabular-nums"> · {props.time}</span>}
+          </span>
+          {(summary || seats.length > 0) && (
+            // Wraps rather than truncates: at «Máximo» the chip drops under the
+            // summary instead of pushing the countdown off the row.
+            <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-body text-sm text-ink-muted">
+              {summary && <span className="break-words">{summary}</span>}
+              {/* The agenda's «tú» chip, class for class: one signal on both surfaces. */}
+              {seats.length > 0 && (
+                <span className="rounded-full border border-positive-fg/35 bg-positive-fg/10 px-2.5 py-0.5 font-label text-[10px] uppercase tracking-widest text-positive-fg">
+                  Tú · {seats.join(", ")}
+                </span>
+              )}
+            </span>
+          )}
         </span>
         <span className="flex shrink-0 items-center gap-3 font-label text-[11px] uppercase tracking-widest text-ink-dim">
           {days !== null && formatCountdown(days).toLowerCase()}

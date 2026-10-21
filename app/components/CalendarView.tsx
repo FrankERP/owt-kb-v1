@@ -64,6 +64,12 @@ interface Props {
   viewMonth?: string | null; // "YYYY-MM" in browse mode; undefined/null = default rolling view
   /** "Today" as the SERVER computed it (CDMX) — the same boundary the fetch used. */
   todayStr: string;
+  /** The day sheet's faces and default-open sections — the same three viewer
+   *  props home and /me hand `DayCard` (see `TeamSections`). */
+  photos?: Record<string, string>;
+  viewerTypes?: string[] | null;
+  viewerName?: string;
+  viewerIsAdmin?: boolean;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -83,7 +89,7 @@ function firstDayOffset(year: number, month: number) {
 
 // ─── Root component ───────────────────────────────────────────────────────────
 
-export default function CalendarView({ activeDays, viewMonth, todayStr }: Props) {
+export default function CalendarView({ activeDays, viewMonth, todayStr, photos, viewerTypes, viewerName, viewerIsAdmin }: Props) {
   const [mode, setMode] = useState<"agenda" | "month">("agenda");
   // `false` until the reader actually flips the SegmentedControl: first paint
   // renders at rest (M0b — never `appear` above the fold, ADR-0031), the
@@ -225,6 +231,10 @@ export default function CalendarView({ activeDays, viewMonth, todayStr }: Props)
                 chorus={d.chorus}
                 roleId={d.roleId}
                 serviceId={d.serviceId}
+                photos={photos}
+                viewerTypes={viewerTypes}
+                viewerName={viewerName}
+                viewerIsAdmin={viewerIsAdmin}
               />
             ))}
           </div>

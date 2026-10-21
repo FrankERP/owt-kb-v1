@@ -14,9 +14,10 @@ type PracticeState = "idle" | "loading" | "empty" | "blocked" | "error";
 //
 // `variant` is chrome only — the menu, the popup reservation and every failure
 // state are shared. `inline` is the accent pill that sits on the Setlist rail;
-// `hero` is the run sheet's one primary action (spec §12.1), the house Button at
-// `lg` in the card header. Only the IDLE label differs: "Practicar" reads as one
-// affordance among several, "Ensayar" as the thing you came to do.
+// `hero` is the run sheet's one primary action (spec §12.1): the house Button's
+// `cta` variant at `lg`, the card's full width under its header (2026-10-21).
+// Only the IDLE label differs: "Practicar" reads as one affordance among several,
+// "Ensayar el setlist" as the thing you came to do.
 export default function PracticePlaylistButton({
   songIds,
   accentVar,
@@ -97,13 +98,14 @@ export default function PracticePlaylistButton({
         ? "Permitir popup"
         : state === "error"
           ? "Reintentar"
-          : variant === "hero" ? "Ensayar" : "Practicar";
+          : variant === "hero" ? "Ensayar el setlist" : "Practicar";
 
   return (
-    <div className="relative inline-block">
+    <div className={variant === "hero" ? "relative block w-full" : "relative inline-block"}>
       <Menu
         label="Practicar el set en YouTube"
         align="end"
+        className={variant === "hero" ? "block w-full" : undefined}
         trigger={
           variant === "hero" ? (
             // Manual label swap + `aria-disabled`, not `Button`'s `busy` prop:
@@ -114,8 +116,9 @@ export default function PracticePlaylistButton({
             // breaking restoration for the pending Ensayar trigger.
             <Button
               ref={triggerRef}
-              variant="primary"
+              variant="cta"
               size="lg"
+              className="w-full"
               onClick={(event) => { guardPending(event); }}
               onKeyDown={onTriggerKeyDown}
               aria-disabled={pending ? "true" : undefined}
