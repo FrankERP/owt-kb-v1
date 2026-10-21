@@ -375,6 +375,16 @@ took the alias, carrying #152 with it. So a later commit's ordinary build is
 also a fix, and that build kept the cache: one data point for "a failed fetch
 from Google", against "a bad font entry in the restored cache".
 
+**Third occurrence (2026-10-21, on `preview`).** The merge of the MCP Apps proposal card into
+`preview` (`2cb74f16`) failed with the same signature under `./app/(admin)/layout.tsx`. Its diff
+added three packages to `package.json`/`package-lock.json`, so the "no lockfile change" condition
+below was not met. The lockfile diff only added packages (`@modelcontextprotocol/client`,
+`@modelcontextprotocol/ext-apps`, `pkce-challenge`) and changed no existing entry, `next`
+included, and the identical tree passed `tsc`, `vitest` and `eslint`. One no-cache redeploy of
+that deployment (`POST /v13/deployments?forceNew=1`, preview, no `target`) went `READY` and took
+`dev-owt-backstage`. Like the first time, the retry skipped the cache, so it does not separate the
+two causes.
+
 **Recognising it** — all of these, not some:
 
 - every error sits under `[next]/internal/font/google/`;
