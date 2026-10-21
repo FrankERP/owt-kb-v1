@@ -1,4 +1,4 @@
-# ADR-0064: A pull request runs the v2 solver suite only when it touches it
+# ADR-0065: A pull request runs the v2 solver suite only when it touches it
 
 **Date:** 2026-10-21 · **Status:** Accepted · amends [ADR-0056](0056-the-v2-solver-stays-deployed-as-the-rollback-engine.md) («`solver-v2` stays a required CI job»)
 

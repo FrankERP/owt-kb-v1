@@ -21,7 +21,7 @@ disagree, `CLAUDE.md` wins and this file is the one to fix.
   (`cloudbuild.yaml`, `scripts/deploy-solver-gcf.sh`) skips `solver-v2` — the
   rollback engine since the v3 cutover — and `gates` accepts that skip only when the
   `scope` job said exactly `false`; pushes to `main`/`preview` always run it
-  (ADR-0064, `docs/CI.md` «Scoped skip of `solver-v2`»). Add tests for testable pure logic.
+  (ADR-0065, `docs/CI.md` «Scoped skip of `solver-v2`»). Add tests for testable pure logic.
 
 ## Conventions
 - Work on a branch, **merge to `main` periodically** (don't commit routine work

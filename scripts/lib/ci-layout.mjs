@@ -3,7 +3,7 @@
 // `main`'s branch protection requires ONE check, `gates`, matched by check-run
 // NAME. Since the CI split, `.github/workflows/ci.yml` runs three working jobs in
 // parallel (`node`, `solver-v2`, `solver-v3`), a `scope` job that decides whether a
-// pull request needs `solver-v2` at all (ADR-0064), and `gates`, that only
+// pull request needs `solver-v2` at all (ADR-0065), and `gates`, that only
 // aggregates them. That shape has a fail-open edge GitHub does not warn about: a
 // job skipped by an unmet `needs` (or a false `if:`) concludes `skipped`, and a
 // skipped required check counts as PASSING. So the rules below pin the shape, and
@@ -416,7 +416,7 @@ export function checkNoSilentSkips(ciText) {
           problems.push(
             `[no-silent-skips] on.${event}.${key}: a filter skips the WHOLE workflow, gates included, and a ` +
               "missing or skipped required check either blocks every PR or passes it. A frontend-only PR runs solver-v3, " +
-              "and skips solver-v2 only on the scope job's word, inside a run gates judges (ADR-0064)",
+              "and skips solver-v2 only on the scope job's word, inside a run gates judges (ADR-0065)",
           );
         }
       }
@@ -442,7 +442,7 @@ export function checkNoSilentSkips(ciText) {
         problems.push(
           `[no-silent-skips] job ${id} may only be skipped by \`needs: ${SCOPE_JOB}\` plus exactly \`if: ${scopedIf(id)}\`, ` +
             `found needs ${oneLine(job.needs ?? null)} and if ${oneLine(cond)} — any other condition skips it where ` +
-            "gates cannot tell a vouched-for skip from a silent one (ADR-0064)",
+            "gates cannot tell a vouched-for skip from a silent one (ADR-0065)",
         );
       }
     }
@@ -823,7 +823,7 @@ export function walkTree(root, tree) {
  * The `gates` job's verdict over `toJSON(needs)`: ok only for a non-empty object
  * whose every entry's `result` is exactly "success" — with ONE exception: a job
  * listed in SKIPPABLE_JOBS may be `skipped` when `scope` itself succeeded and its
- * output for that job is exactly "false" (ADR-0064). Every other `skipped`, and
+ * output for that job is exactly "false" (ADR-0065). Every other `skipped`, and
  * every `cancelled`, `failure` or missing result, is red.
  * @param {string | undefined} raw
  * @returns {{ ok: boolean, lines: string[] }}

@@ -9,7 +9,7 @@
 // skip. Without $GITHUB_OUTPUT it exits 1: `scope` goes red, the skippable jobs
 // are skipped by their failed `needs`, and `gates` refuses the run.
 //
-// Node builtins only, so the runner's preinstalled Node runs it. ADR-0064.
+// Node builtins only, so the runner's preinstalled Node runs it. ADR-0065.
 
 import { execFileSync } from "node:child_process";
 import { appendFileSync } from "node:fs";

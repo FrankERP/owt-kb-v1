@@ -1,12 +1,12 @@
 # The gates — the three CLAUDE.md names plus both solver suites (v2 only on a PR
-# that touches it, ADR-0064) — run by a machine instead of asserted by a human. Before this existed, "gates green" was a claim in
+# that touches it, ADR-0065) — run by a machine instead of asserted by a human. Before this existed, "gates green" was a claim in
 # a chat log: `main` auto-deploys to production, so nothing mechanical stood between
 # a red test suite and the team's app. This is that thing.
 #
 # Three jobs do the work, in parallel: `node` (tsc, vitest, eslint), `solver-v2`
 # (the v2 CP-SAT solver, gcf/ — the rollback engine since ADR-0056) and `solver-v3`
 # (gcf_v3/). `scope` decides, on a pull request only, whether `solver-v2` runs at
-# all (ADR-0064). A fifth, `gates`, runs no test of its own: it is the ONE check
+# all (ADR-0065). A fifth, `gates`, runs no test of its own: it is the ONE check
 # `main`'s branch protection requires, and it is green only when every other job
 # here concluded `success` — or, for `solver-v2` alone, `skipped` because `scope`
 # said the PR does not touch it. It aggregates rather than tests because GitHub
@@ -81,7 +81,7 @@ jobs:
   # nor the CI machinery skips this job (~10 of the run's ~10.5 minutes): `scope`
   # says "false" and `gates` accepts the skip on that word only. Anything else
   # (a push, a manual run, an unreadable diff, a `scope` that wrote nothing) runs
-  # it. ADR-0064; docs/CI.md «Scoped skip of solver-v2».
+  # it. ADR-0065; docs/CI.md «Scoped skip of solver-v2».
   solver-v2:
     name: solver-v2
     needs: scope

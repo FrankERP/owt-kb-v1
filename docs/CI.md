@@ -15,7 +15,7 @@ meant to do.
 
 `.github/workflows/ci.yml`: three jobs do the work, in parallel; a fourth,
 `scope`, decides whether a pull request needs `solver-v2` at all (since 2026-10-21,
-ADR-0064 — see «Scoped skip of `solver-v2`»); and a fifth, **`gates`**, is the check
+ADR-0065 — see «Scoped skip of `solver-v2`»); and a fifth, **`gates`**, is the check
 branch protection requires. Until 2026-10 it was one serial job named `gates`; it
 was split when the v2 solver step reached ~10 of the job's 15 minutes and solver v3
 was about to add a second suite (see «Timing»).
@@ -106,7 +106,7 @@ model, so a reformatted workflow fails red, never green.
 Since 2026-10-15 production plans with solver v3, and v2 (`gcf/`) is only the
 rollback engine (ADR-0056). Its suite still took ~10 of every PR's ~10.5 minutes
 («Timing»), on PRs that could not change what it proves. Since 2026-10-21
-(ADR-0064), a pull request runs it only when its diff touches it:
+(ADR-0065), a pull request runs it only when its diff touches it:
 
 - **Who decides.** The `scope` job runs `scripts/ci/ci-scope.mjs`, which reads the
   PR's merge commit against its first parent (`git -c core.quotePath=false diff -z
@@ -150,7 +150,7 @@ Two jobs, one per tree, each running exactly one command from the repository
 root:
 
 ```bash
-python -m unittest discover -s gcf -t gcf -v        # solver-v2 — the rollback engine (ADR-0056); on a PR only when it touches gcf/ (ADR-0064)
+python -m unittest discover -s gcf -t gcf -v        # solver-v2 — the rollback engine (ADR-0056); on a PR only when it touches gcf/ (ADR-0065)
 python -m unittest discover -s gcf_v3 -t gcf_v3 -v  # solver-v3 — package owt_v3, the engine Auto runs
 ```
 
