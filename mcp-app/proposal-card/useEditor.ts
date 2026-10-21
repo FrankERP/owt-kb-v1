@@ -38,7 +38,7 @@ type Ask =
   | { kind: "save"; sentence: string; items: Array<{ where: string; sentence: string }>; keys: KeyView[] };
 
 /** The seat an edit lands on: where its «¿Asignar de todos modos?» is shown. */
-function seatOf(edit: TokenEdit | undefined): SeatRef | null {
+export function seatOf(edit: TokenEdit | undefined): SeatRef | null {
   if (!edit) return null;
   if (edit.op === "exchange") return { service: edit.b.service, row: edit.b.row };
   return { service: edit.service, row: edit.row };

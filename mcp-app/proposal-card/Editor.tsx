@@ -62,6 +62,14 @@ function Chip({ person, selected, onClear, onExchange, disabled }: {
 
 const sameSeat = (a: SeatRef | null | undefined, service: string, row: string) => a?.service === service && a.row === row;
 
+/**
+ * An open question holds the board: the overlay it replaced blocked every other tap, and «Cancelar»
+ * or «Asignar de todos modos» act on the LAST edit, so a tap elsewhere before answering would make
+ * the answer drop or force a different edit than the one asked about. Only the question's own
+ * buttons (and «Cerrar») stay live.
+ */
+const locked = (p: EditorProps) => p.busy || p.ask !== null;
+
 function Picker({ p }: { p: EditorProps }) {
   if (!p.sheet) return null;
   return (
@@ -75,7 +83,7 @@ function Picker({ p }: { p: EditorProps }) {
         <ul className="candidates">
           {p.sheet.candidates.map((c) => (
             <li key={c.token}>
-              <button type="button" onClick={() => p.onPick(c.token)} disabled={p.busy || c.blocked !== null}>
+              <button type="button" onClick={() => p.onPick(c.token)} disabled={locked(p) || c.blocked !== null}>
                 <span>{c.name}</span>
                 {!c.available && <span className="badge">No disp.</span>}
                 {(c.blocked ?? c.rule) && <span className="muted small">{c.blocked ?? c.rule}</span>}
@@ -162,13 +170,13 @@ export function Editor(p: EditorProps) {
                         <Chip
                           key={m.token}
                           person={m}
-                          disabled={p.busy}
+                          disabled={locked(p)}
                           selected={p.exchanging?.member === m.token && p.exchanging.service === s.service && p.exchanging.row === seat.row}
                           onClear={() => p.onClear(ref, m.token)}
                           onExchange={() => p.onExchange(ref, m)}
                         />
                       ))}
-                      <button type="button" className="add" onClick={() => p.onOpenSeat(ref, `${s.label} · ${seat.label}`)} disabled={p.busy} aria-label={`Agregar en ${seat.label}`}>
+                      <button type="button" className="add" onClick={() => p.onOpenSeat(ref, `${s.label} · ${seat.label}`)} disabled={locked(p)} aria-label={`Agregar en ${seat.label}`}>
                         +
                       </button>
                     </dd>
@@ -226,13 +234,13 @@ export function Editor(p: EditorProps) {
       {p.ask && !p.board.some((s) => s.editable && s.seats.some((seat) => sameSeat(p.ask?.at, s.service, seat.row))) && <Ask p={p} />}
 
       <div className="actions">
-        <button type="button" className="primary" onClick={p.onSave} disabled={p.busy || p.pending === 0}>
+        <button type="button" className="primary" onClick={p.onSave} disabled={locked(p) || p.pending === 0}>
           Revisar y guardar
         </button>
-        <button type="button" onClick={p.onDiscard} disabled={p.busy || p.pending === 0}>
+        <button type="button" onClick={p.onDiscard} disabled={locked(p) || p.pending === 0}>
           Descartar cambios
         </button>
-        <button type="button" onClick={p.onLoad} disabled={p.busy || p.pending > 0 || p.loadSent}>
+        <button type="button" onClick={p.onLoad} disabled={locked(p) || p.pending > 0 || p.loadSent}>
           {p.loadSent ? "Enviado al chat" : "Cargar"}
         </button>
       </div>

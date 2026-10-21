@@ -14,6 +14,7 @@ import { checkProposalEditsResult, reviseProposalResult, saveProposalEditsResult
 import { HANDLE, PRINCIPAL } from "@/app/mcp/tools/__tests__/monthToolFixtures";
 import { editorWorld, type EditorWorld } from "@/app/mcp/tools/__tests__/editorToolFixtures";
 import { Editor, type EditorProps } from "@/mcp-app/proposal-card/Editor";
+import { seatOf } from "@/mcp-app/proposal-card/useEditor";
 import {
   afterRefusal,
   checkViewOf,
@@ -186,6 +187,7 @@ describe("the presentational editor", () => {
     board: [
       { service: "s1", label: "domingo 8 nov", date: "2026-11-08", type: "sunday", editable: true, seats: [
         { row: "lead", label: "Lead", target: 2, members: [{ token: "t1", name: "Ana", unavailable: true }] },
+        { row: "bgv", label: "BGV", target: 1, members: [{ token: "t4", name: "Eva", unavailable: false }] },
       ] },
       { service: "s2", label: "sábado 14 nov", date: "2026-11-14", type: "saturday", editable: false, seats: [] },
     ],
@@ -228,16 +230,41 @@ describe("the presentational editor", () => {
     return at > out.indexOf(after) && at < out.indexOf(before);
   };
 
-  it("asks before forcing, with where and why, under the seat the edit touched", () => {
-    const ask = { sentence: "Regla: excluido de Sun.Lead", items: [{ where: "domingo 8 nov · Lead", sentence: "Regla: excluido de Sun.Lead" }] };
+  const ask = { sentence: "Regla: excluido de Sun.Lead", items: [{ where: "domingo 8 nov · Lead", sentence: "Regla: excluido de Sun.Lead" }] };
+  const count = (out: string, needle: string) => out.split(needle).length - 1;
+
+  it("asks before forcing, with where and why, once, under the row the edit touched", () => {
     const out = html({ ask: { at: { service: "s1", row: "lead" }, ...ask } });
-    expect(out).toContain('role="alertdialog"');
+    expect(count(out, 'role="alertdialog"')).toBe(1);
     expect(out).toContain("¿Asignar de todos modos?");
     expect(out).toContain("<li>domingo 8 nov · Lead: Regla: excluido de Sun.Lead</li>");
-    expect(between(out, 'role="alertdialog"', 'aria-label="Agregar en Lead"', "sábado 14 nov")).toBe(true);
-    // A save's ask has no seat: it opens by the buttons that asked for it.
-    const save = html({ ask: { at: null, ...ask } });
-    expect(between(save, 'role="alertdialog"', "<li>Todo cuadra.</li>", "Revisar y guardar")).toBe(true);
+    expect(between(out, 'role="alertdialog"', 'aria-label="Agregar en Lead"', 'aria-label="Agregar en BGV"')).toBe(true);
+    const bgv = html({ ask: { at: { service: "s1", row: "bgv" }, ...ask } });
+    expect(count(bgv, 'role="alertdialog"')).toBe(1);
+    expect(between(bgv, 'role="alertdialog"', 'aria-label="Agregar en BGV"', "sábado 14 nov")).toBe(true);
+    // A save's ask has no seat, and a seat not on the board has no row to sit under: either opens,
+    // once, by the buttons.
+    for (const at of [null, { service: "s2", row: "lead" }, { service: "s1", row: "nope" }]) {
+      const out = html({ ask: { at, ...ask } });
+      expect(count(out, 'role="alertdialog"')).toBe(1);
+      expect(between(out, 'role="alertdialog"', "<li>Todo cuadra.</li>", "Revisar y guardar")).toBe(true);
+    }
+  });
+
+  it("an open question holds the board: only its own buttons and «Cerrar» stay live", () => {
+    const enabled = (out: string, label: string) => new RegExp(`<button(?![^>]*disabled="")[^>]*>${label}<`).test(out);
+    const out = html({ pending: 1, ask: { at: { service: "s1", row: "lead" }, ...ask } });
+    expect(out).not.toMatch(/<button(?![^>]*disabled="")[^>]*aria-label="(Agregar|Quitar)/);
+    expect(out).not.toMatch(/<button(?![^>]*disabled="")[^>]*title="Intercambiar"/);
+    for (const label of ["Revisar y guardar", "Descartar cambios", "Cargar"]) expect(enabled(out, label)).toBe(false);
+    for (const label of ["Asignar de todos modos", "Cancelar", "Cerrar"]) expect(enabled(out, label)).toBe(true);
+    expect(enabled(html({ pending: 1 }), "Revisar y guardar")).toBe(true);
+  });
+
+  it("an exchange's question sits under the seat tapped last", () => {
+    expect(seatOf({ op: "exchange", a: { service: "s1", row: "lead", member: "t1" }, b: { service: "s3", row: "bgv", member: "t4" } })).toEqual({ service: "s3", row: "bgv" });
+    expect(seatOf({ op: "place", service: "s1", row: "lead", member: "t2" })).toEqual({ service: "s1", row: "lead" });
+    expect(seatOf(undefined)).toBeNull();
   });
 
   it("lists a seat's candidates under that seat; a blocked one cannot be picked", () => {
@@ -245,7 +272,8 @@ describe("the presentational editor", () => {
       { token: "t2", name: "Dani", available: true, blocked: null, rule: null },
       { token: "t3", name: "Bruno", available: false, blocked: "Ya está en este servicio", rule: null },
     ] } });
-    expect(between(out, 'class="picker"', 'aria-label="Agregar en Lead"', "sábado 14 nov")).toBe(true);
+    expect(count(out, 'class="picker"')).toBe(1);
+    expect(between(out, 'class="picker"', 'aria-label="Agregar en Lead"', 'aria-label="Agregar en BGV"')).toBe(true);
     expect(out).toMatch(/<button type="button"><span>Dani<\/span>/);
     expect(out).toMatch(/<button type="button" disabled=""><span>Bruno<\/span><span class="badge">No disp.<\/span>/);
   });
