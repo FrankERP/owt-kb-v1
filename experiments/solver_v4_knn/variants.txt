@@ -1,0 +1,9 @@
+v3                                       vacíos=  0.0 reglas=  0.0 protecciones=  0.0 Σ²líneas=  4.26 Σ²total=  3.12 más_debido_total=0.89
+v4 (todo)                                vacíos=  0.0 reglas=  0.0 protecciones=  0.0 Σ²líneas=  4.85 Σ²total=  4.15 más_debido_total=0.89
+deuda en medios asientos (0.5)           vacíos=  0.0 reglas=  0.0 protecciones=  0.0 Σ²líneas=  6.59 Σ²total=  4.98 más_debido_total=1.03
+deuda en asientos enteros (1.0)          vacíos=  0.0 reglas=  0.0 protecciones=  0.0 Σ²líneas=  9.63 Σ²total=  4.73 más_debido_total=1.02
+sin escasez futura                       vacíos=  0.0 reglas=  0.0 protecciones=  0.0 Σ²líneas=  5.55 Σ²total=  4.91 más_debido_total=0.9
+sin obligaciones                         vacíos=  0.0 reglas=  6.0 protecciones=  4.6 Σ²líneas=   6.2 Σ²total=  4.27 más_debido_total=1.19
+por fecha (no lo más escaso primero)     vacíos=  0.0 reglas=  0.0 protecciones=  0.0 Σ²líneas=  5.71 Σ²total=  5.39 más_debido_total=0.93
+1 dimensión (solo conteo total)          vacíos=  0.0 reglas=  3.2 protecciones=  1.0 Σ²líneas= 67.65 Σ²total= 72.85 más_debido_total=4.29
+v4 + intercambios (búsqueda local)       vacíos=  0.0 reglas=  0.0 protecciones=  0.0 Σ²líneas=  4.77 Σ²total=  3.82 más_debido_total=0.89

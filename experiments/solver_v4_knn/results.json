@@ -1,0 +1,5693 @@
+{
+ "nov_dec": {
+  "v3": [
+   {
+    "ok": true,
+    "checker_ok": true,
+    "checker_problems": {},
+    "unfilled": 0,
+    "rules_broken": 0,
+    "rules_broken_by_family": {},
+    "missed": {},
+    "missed_total": 0,
+    "sq_by_line": {
+     "BGV": 1.77,
+     "CORO": 0.9,
+     "DL": 0.46,
+     "P:pres-pair": 0.0,
+     "SL": 0.79
+    },
+    "sq_lines": 3.92,
+    "most_owed_by_line": {
+     "BGV": 0.64,
+     "CORO": 0.42,
+     "DL": 0.21,
+     "P:pres-pair": 0,
+     "SL": 0.61
+    },
+    "sq_total": 1.85,
+    "most_owed_total": 0.9,
+    "ms": 1194
+   },
+   {
+    "ok": true,
+    "checker_ok": true,
+    "checker_problems": {},
+    "unfilled": 0,
+    "rules_broken": 0,
+    "rules_broken_by_family": {},
+    "missed": {},
+    "missed_total": 0,
+    "sq_by_line": {
+     "BGV": 1.45,
+     "CORO": 0.99,
+     "DL": 1.15,
+     "P:pres-pair": 0.0,
+     "SL": 0.79
+    },
+    "sq_lines": 4.38,
+    "most_owed_by_line": {
+     "BGV": 0.59,
+     "CORO": 0.51,
+     "DL": 0.64,
+     "P:pres-pair": 0,
+     "SL": 0.61
+    },
+    "sq_total": 3.68,
+    "most_owed_total": 0.86,
+    "ms": 1201
+   },
+   {
+    "ok": true,
+    "checker_ok": true,
+    "checker_problems": {},
+    "unfilled": 0,
+    "rules_broken": 0,
+    "rules_broken_by_family": {},
+    "missed": {},
+    "missed_total": 0,
+    "sq_by_line": {
+     "BGV": 1.75,
+     "CORO": 0.93,
+     "DL": 0.63,
+     "P:pres-pair": 0.0,
+     "SL": 0.79
+    },
+    "sq_lines": 4.1,
+    "most_owed_by_line": {
+     "BGV": 0.59,
+     "CORO": 0.48,
+     "DL": 0.36,
+     "P:pres-pair": 0,
+     "SL": 0.61
+    },
+    "sq_total": 2.31,
+    "most_owed_total": 0.71,
+    "ms": 1093
+   },
+   {
+    "ok": true,
+    "checker_ok": true,
+    "checker_problems": {},
+    "unfilled": 0,
+    "rules_broken": 0,
+    "rules_broken_by_family": {},
+    "missed": {},
+    "missed_total": 0,
+    "sq_by_line": {
+     "BGV": 1.7,
+     "CORO": 1.13,
+     "DL": 0.97,
+     "P:pres-pair": 0.0,
+     "SL": 0.79
+    },
+    "sq_lines": 4.59,
+    "most_owed_by_line": {
+     "BGV": 0.58,
+     "CORO": 0.48,
+     "DL": 0.68,
+     "P:pres-pair": 0,
+     "SL": 0.61
+    },
+    "sq_total": 4.4,
+    "most_owed_total": 1.03,
+    "ms": 1332
+   },
+   {
+    "ok": true,
+    "checker_ok": true,
+    "checker_problems": {},
+    "unfilled": 0,
+    "rules_broken": 0,
+    "rules_broken_by_family": {},
+    "missed": {},
+    "missed_total": 0,
+    "sq_by_line": {
+     "BGV": 1.57,
+     "CORO": 1.06,
+     "DL": 0.91,
+     "P:pres-pair": 0.0,
+     "SL": 0.79
+    },
+    "sq_lines": 4.33,
+    "most_owed_by_line": {
+     "BGV": 0.59,
+     "CORO": 0.43,
+     "DL": 0.38,
+     "P:pres-pair": 0,
+     "SL": 0.61
+    },
+    "sq_total": 3.35,
+    "most_owed_total": 0.95,
+    "ms": 1271
+   }
+  ],
+  "v4": [
+   {
+    "ok": true,
+    "checker_ok": true,
+    "checker_problems": {},
+    "unfilled": 0,
+    "rules_broken": 0,
+    "rules_broken_by_family": {},
+    "missed": {},
+    "missed_total": 0,
+    "sq_by_line": {
+     "BGV": 2.26,
+     "CORO": 1.05,
+     "DL": 0.34,
+     "P:pres-pair": 0.0,
+     "SL": 0.79
+    },
+    "sq_lines": 4.45,
+    "most_owed_by_line": {
+     "BGV": 0.67,
+     "CORO": 0.49,
+     "DL": 0.25,
+     "P:pres-pair": 0,
+     "SL": 0.61
+    },
+    "sq_total": 3.65,
+    "most_owed_total": 0.82,
+    "ms": 342
+   },
+   {
+    "ok": true,
+    "checker_ok": true,
+    "checker_problems": {},
+    "unfilled": 0,
+    "rules_broken": 0,
+    "rules_broken_by_family": {},
+    "missed": {},
+    "missed_total": 0,
+    "sq_by_line": {
+     "BGV": 1.62,
+     "CORO": 1.27,
+     "DL": 1.38,
+     "P:pres-pair": 0.0,
+     "SL": 0.79
+    },
+    "sq_lines": 5.06,
+    "most_owed_by_line": {
+     "BGV": 0.67,
+     "CORO": 0.58,
+     "DL": 0.78,
+     "P:pres-pair": 0,
+     "SL": 0.61
+    },
+    "sq_total": 4.2,
+    "most_owed_total": 1.04,
+    "ms": 418
+   },
+   {
+    "ok": true,
+    "checker_ok": true,
+    "checker_problems": {},
+    "unfilled": 0,
+    "rules_broken": 0,
+    "rules_broken_by_family": {},
+    "missed": {},
+    "missed_total": 0,
+    "sq_by_line": {
+     "BGV": 2.24,
+     "CORO": 1.09,
+     "DL": 0.63,
+     "P:pres-pair": 0.0,
+     "SL": 0.79
+    },
+    "sq_lines": 4.75,
+    "most_owed_by_line": {
+     "BGV": 0.67,
+     "CORO": 0.47,
+     "DL": 0.36,
+     "P:pres-pair": 0,
+     "SL": 0.61
+    },
+    "sq_total": 4.26,
+    "most_owed_total": 0.81,
+    "ms": 328
+   },
+   {
+    "ok": true,
+    "checker_ok": true,
+    "checker_problems": {},
+    "unfilled": 0,
+    "rules_broken": 0,
+    "rules_broken_by_family": {},
+    "missed": {},
+    "missed_total": 0,
+    "sq_by_line": {
+     "BGV": 1.75,
+     "CORO": 1.35,
+     "DL": 1.21,
+     "P:pres-pair": 0.0,
+     "SL": 0.79
+    },
+    "sq_lines": 5.1,
+    "most_owed_by_line": {
+     "BGV": 0.67,
+     "CORO": 0.57,
+     "DL": 0.82,
+     "P:pres-pair": 0,
+     "SL": 0.61
+    },
+    "sq_total": 4.64,
+    "most_owed_total": 1.08,
+    "ms": 380
+   },
+   {
+    "ok": true,
+    "checker_ok": true,
+    "checker_problems": {},
+    "unfilled": 0,
+    "rules_broken": 0,
+    "rules_broken_by_family": {},
+    "missed": {},
+    "missed_total": 0,
+    "sq_by_line": {
+     "BGV": 2.38,
+     "CORO": 1.06,
+     "DL": 0.68,
+     "P:pres-pair": 0.0,
+     "SL": 0.79
+    },
+    "sq_lines": 4.91,
+    "most_owed_by_line": {
+     "BGV": 0.67,
+     "CORO": 0.54,
+     "DL": 0.36,
+     "P:pres-pair": 0,
+     "SL": 0.61
+    },
+    "sq_total": 3.98,
+    "most_owed_total": 0.72,
+    "ms": 336
+   }
+  ],
+  "v4+swaps": [
+   {
+    "ok": true,
+    "checker_ok": true,
+    "checker_problems": {},
+    "unfilled": 0,
+    "rules_broken": 0,
+    "rules_broken_by_family": {},
+    "missed": {},
+    "missed_total": 0,
+    "sq_by_line": {
+     "BGV": 2.26,
+     "CORO": 1.05,
+     "DL": 0.34,
+     "P:pres-pair": 0.0,
+     "SL": 0.79
+    },
+    "sq_lines": 4.45,
+    "most_owed_by_line": {
+     "BGV": 0.67,
+     "CORO": 0.49,
+     "DL": 0.25,
+     "P:pres-pair": 0,
+     "SL": 0.61
+    },
+    "sq_total": 3.65,
+    "most_owed_total": 0.82,
+    "ms": 701
+   },
+   {
+    "ok": true,
+    "checker_ok": true,
+    "checker_problems": {},
+    "unfilled": 0,
+    "rules_broken": 0,
+    "rules_broken_by_family": {},
+    "missed": {},
+    "missed_total": 0,
+    "sq_by_line": {
+     "BGV": 1.62,
+     "CORO": 1.13,
+     "DL": 1.38,
+     "P:pres-pair": 0.0,
+     "SL": 0.79
+    },
+    "sq_lines": 4.92,
+    "most_owed_by_line": {
+     "BGV": 0.67,
+     "CORO": 0.58,
+     "DL": 0.78,
+     "P:pres-pair": 0,
+     "SL": 0.61
+    },
+    "sq_total": 3.58,
+    "most_owed_total": 1.04,
+    "ms": 785
+   },
+   {
+    "ok": true,
+    "checker_ok": true,
+    "checker_problems": {},
+    "unfilled": 0,
+    "rules_broken": 0,
+    "rules_broken_by_family": {},
+    "missed": {},
+    "missed_total": 0,
+    "sq_by_line": {
+     "BGV": 2.24,
+     "CORO": 1.09,
+     "DL": 0.63,
+     "P:pres-pair": 0.0,
+     "SL": 0.79
+    },
+    "sq_lines": 4.75,
+    "most_owed_by_line": {
+     "BGV": 0.67,
+     "CORO": 0.47,
+     "DL": 0.36,
+     "P:pres-pair": 0,
+     "SL": 0.61
+    },
+    "sq_total": 4.26,
+    "most_owed_total": 0.81,
+    "ms": 585
+   },
+   {
+    "ok": true,
+    "checker_ok": true,
+    "checker_problems": {},
+    "unfilled": 0,
+    "rules_broken": 0,
+    "rules_broken_by_family": {},
+    "missed": {},
+    "missed_total": 0,
+    "sq_by_line": {
+     "BGV": 1.75,
+     "CORO": 1.07,
+     "DL": 1.21,
+     "P:pres-pair": 0.0,
+     "SL": 0.79
+    },
+    "sq_lines": 4.82,
+    "most_owed_by_line": {
+     "BGV": 0.67,
+     "CORO": 0.51,
+     "DL": 0.82,
+     "P:pres-pair": 0,
+     "SL": 0.61
+    },
+    "sq_total": 3.64,
+    "most_owed_total": 1.08,
+    "ms": 1267
+   },
+   {
+    "ok": true,
+    "checker_ok": true,
+    "checker_problems": {},
+    "unfilled": 0,
+    "rules_broken": 0,
+    "rules_broken_by_family": {},
+    "missed": {},
+    "missed_total": 0,
+    "sq_by_line": {
+     "BGV": 2.38,
+     "CORO": 1.06,
+     "DL": 0.68,
+     "P:pres-pair": 0.0,
+     "SL": 0.79
+    },
+    "sq_lines": 4.91,
+    "most_owed_by_line": {
+     "BGV": 0.67,
+     "CORO": 0.54,
+     "DL": 0.36,
+     "P:pres-pair": 0,
+     "SL": 0.61
+    },
+    "sq_total": 3.98,
+    "most_owed_total": 0.72,
+    "ms": 665
+   }
+  ]
+ },
+ "chain": {
+  "v3": [
+   {
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.01,
+       "CORO": 1.7,
+       "DL": 1.98,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 6.77,
+      "most_owed_by_line": {
+       "BGV": 0.45,
+       "CORO": 0.92,
+       "DL": 0.7,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 3.22,
+      "most_owed_total": 0.94,
+      "ms": 658
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.21,
+       "CORO": 1.03,
+       "DL": 0.79,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 5.11,
+      "most_owed_by_line": {
+       "BGV": 0.47,
+       "CORO": 0.62,
+       "DL": 0.38,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 5.92,
+      "most_owed_total": 1.18,
+      "ms": 496
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.05,
+       "CORO": 0.37,
+       "DL": 2.54,
+       "P:pres-pair": 0.5,
+       "SL": 1.08
+      },
+      "sq_lines": 6.54,
+      "most_owed_by_line": {
+       "BGV": 0.53,
+       "CORO": 0.28,
+       "DL": 0.67,
+       "P:pres-pair": 0.5,
+       "SL": 0.45
+      },
+      "sq_total": 4.02,
+      "most_owed_total": 0.74,
+      "ms": 568
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.57,
+       "CORO": 0.98,
+       "DL": 0.75,
+       "P:pres-pair": 0.5,
+       "SL": 2.26
+      },
+      "sq_lines": 6.06,
+      "most_owed_by_line": {
+       "BGV": 0.35,
+       "CORO": 0.39,
+       "DL": 0.48,
+       "P:pres-pair": 0.5,
+       "SL": 0.91
+      },
+      "sq_total": 9.88,
+      "most_owed_total": 1.08,
+      "ms": 437
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.63,
+       "CORO": 1.6,
+       "DL": 0.99,
+       "P:pres-pair": 0.0,
+       "SL": 0.36
+      },
+      "sq_lines": 5.59,
+      "most_owed_by_line": {
+       "BGV": 1.06,
+       "CORO": 0.68,
+       "DL": 0.84,
+       "P:pres-pair": 0,
+       "SL": 0.19
+      },
+      "sq_total": 3.49,
+      "most_owed_total": 1.06,
+      "ms": 473
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.83,
+       "CORO": 3.4,
+       "DL": 0.55,
+       "P:pres-pair": 0.5,
+       "SL": 0.5
+      },
+      "sq_lines": 6.78,
+      "most_owed_by_line": {
+       "BGV": 0.44,
+       "CORO": 1.43,
+       "DL": 0.58,
+       "P:pres-pair": 0.5,
+       "SL": 0.23
+      },
+      "sq_total": 2.31,
+      "most_owed_total": 0.87,
+      "ms": 571
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.57,
+       "CORO": 4.23,
+       "DL": 1.7,
+       "P:pres-pair": 0.0,
+       "SL": 1.66
+      },
+      "sq_lines": 9.16,
+      "most_owed_by_line": {
+       "BGV": 0.47,
+       "CORO": 1.19,
+       "DL": 1.12,
+       "P:pres-pair": 0,
+       "SL": 0.43
+      },
+      "sq_total": 7.42,
+      "most_owed_total": 1.53,
+      "ms": 636
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.84,
+       "CORO": 2.75,
+       "DL": 0.41,
+       "P:pres-pair": 0.0,
+       "SL": 1.66
+      },
+      "sq_lines": 6.66,
+      "most_owed_by_line": {
+       "BGV": 0.48,
+       "CORO": 1.13,
+       "DL": 0.42,
+       "P:pres-pair": 0,
+       "SL": 0.43
+      },
+      "sq_total": 6.48,
+      "most_owed_total": 1.45,
+      "ms": 542
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.58,
+       "CORO": 0.93,
+       "DL": 0.36,
+       "P:pres-pair": 0.0,
+       "SL": 0.9
+      },
+      "sq_lines": 3.77,
+      "most_owed_by_line": {
+       "BGV": 0.32,
+       "CORO": 0.81,
+       "DL": 0.26,
+       "P:pres-pair": 0,
+       "SL": 0.48
+      },
+      "sq_total": 3.35,
+      "most_owed_total": 0.67,
+      "ms": 602
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.03,
+       "CORO": 1.27,
+       "DL": 0.43,
+       "P:pres-pair": 0.0,
+       "SL": 1.45
+      },
+      "sq_lines": 5.18,
+      "most_owed_by_line": {
+       "BGV": 0.58,
+       "CORO": 0.55,
+       "DL": 0.24,
+       "P:pres-pair": 0,
+       "SL": 0.59
+      },
+      "sq_total": 3.24,
+      "most_owed_total": 1.08,
+      "ms": 747
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 0.72,
+       "CORO": 0.45,
+       "DL": 0.61,
+       "P:pres-pair": 0.5,
+       "SL": 1.73
+      },
+      "sq_lines": 4.0,
+      "most_owed_by_line": {
+       "BGV": 0.26,
+       "CORO": 0.29,
+       "DL": 0.4,
+       "P:pres-pair": 0.5,
+       "SL": 0.57
+      },
+      "sq_total": 4.28,
+      "most_owed_total": 0.94,
+      "ms": 539
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.53,
+       "CORO": 2.55,
+       "DL": 1.08,
+       "P:pres-pair": 0.5,
+       "SL": 0.89
+      },
+      "sq_lines": 6.56,
+      "most_owed_by_line": {
+       "BGV": 0.4,
+       "CORO": 1.06,
+       "DL": 0.48,
+       "P:pres-pair": 0.5,
+       "SL": 0.52
+      },
+      "sq_total": 5.06,
+      "most_owed_total": 0.93,
+      "ms": 838
+     }
+    ],
+    "cum_abs_max": 1.74,
+    "cum_abs_p95": 1.51,
+    "cum_abs_mean": 0.604,
+    "regular_gap_le_1": true,
+    "floor_seat_proof": true
+   },
+   {
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.78,
+       "CORO": 1.55,
+       "DL": 0.8,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 5.21,
+      "most_owed_by_line": {
+       "BGV": 0.45,
+       "CORO": 0.89,
+       "DL": 0.63,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 3.04,
+      "most_owed_total": 0.48,
+      "ms": 499
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.07,
+       "CORO": 0.94,
+       "DL": 0.64,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 4.73,
+      "most_owed_by_line": {
+       "BGV": 0.47,
+       "CORO": 0.61,
+       "DL": 0.36,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 3.4,
+      "most_owed_total": 0.87,
+      "ms": 531
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.19,
+       "CORO": 0.38,
+       "DL": 2.36,
+       "P:pres-pair": 0.5,
+       "SL": 1.74
+      },
+      "sq_lines": 7.17,
+      "most_owed_by_line": {
+       "BGV": 0.53,
+       "CORO": 0.31,
+       "DL": 0.67,
+       "P:pres-pair": 0.5,
+       "SL": 0.45
+      },
+      "sq_total": 4.04,
+      "most_owed_total": 0.81,
+      "ms": 600
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.02,
+       "CORO": 1.03,
+       "DL": 0.89,
+       "P:pres-pair": 0.5,
+       "SL": 0.34
+      },
+      "sq_lines": 4.78,
+      "most_owed_by_line": {
+       "BGV": 0.46,
+       "CORO": 0.31,
+       "DL": 0.6,
+       "P:pres-pair": 0.5,
+       "SL": 0.24
+      },
+      "sq_total": 3.65,
+      "most_owed_total": 0.93,
+      "ms": 486
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.09,
+       "CORO": 1.66,
+       "DL": 1.0,
+       "P:pres-pair": 0.0,
+       "SL": 0.36
+      },
+      "sq_lines": 4.11,
+      "most_owed_by_line": {
+       "BGV": 0.33,
+       "CORO": 0.67,
+       "DL": 0.76,
+       "P:pres-pair": 0,
+       "SL": 0.19
+      },
+      "sq_total": 1.93,
+      "most_owed_total": 0.54,
+      "ms": 419
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.58,
+       "CORO": 1.62,
+       "DL": 0.49,
+       "P:pres-pair": 0.5,
+       "SL": 0.5
+      },
+      "sq_lines": 4.69,
+      "most_owed_by_line": {
+       "BGV": 0.47,
+       "CORO": 0.47,
+       "DL": 0.47,
+       "P:pres-pair": 0.5,
+       "SL": 0.23
+      },
+      "sq_total": 2.71,
+      "most_owed_total": 0.77,
+      "ms": 426
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.51,
+       "CORO": 2.72,
+       "DL": 1.15,
+       "P:pres-pair": 0.0,
+       "SL": 1.66
+      },
+      "sq_lines": 7.04,
+      "most_owed_by_line": {
+       "BGV": 0.5,
+       "CORO": 1.25,
+       "DL": 0.87,
+       "P:pres-pair": 0,
+       "SL": 0.43
+      },
+      "sq_total": 6.44,
+      "most_owed_total": 1.36,
+      "ms": 596
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.26,
+       "CORO": 1.16,
+       "DL": 0.69,
+       "P:pres-pair": 0.0,
+       "SL": 1.66
+      },
+      "sq_lines": 4.78,
+      "most_owed_by_line": {
+       "BGV": 0.48,
+       "CORO": 0.38,
+       "DL": 0.64,
+       "P:pres-pair": 0,
+       "SL": 0.43
+      },
+      "sq_total": 5.82,
+      "most_owed_total": 1.29,
+      "ms": 583
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.58,
+       "CORO": 0.68,
+       "DL": 0.91,
+       "P:pres-pair": 0.0,
+       "SL": 0.9
+      },
+      "sq_lines": 4.07,
+      "most_owed_by_line": {
+       "BGV": 0.46,
+       "CORO": 0.68,
+       "DL": 0.61,
+       "P:pres-pair": 0,
+       "SL": 0.48
+      },
+      "sq_total": 3.81,
+      "most_owed_total": 1.14,
+      "ms": 452
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.9,
+       "CORO": 1.4,
+       "DL": 0.5,
+       "P:pres-pair": 0.0,
+       "SL": 1.45
+      },
+      "sq_lines": 5.25,
+      "most_owed_by_line": {
+       "BGV": 0.47,
+       "CORO": 0.63,
+       "DL": 0.32,
+       "P:pres-pair": 0,
+       "SL": 0.59
+      },
+      "sq_total": 4.37,
+      "most_owed_total": 0.9,
+      "ms": 444
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.11,
+       "CORO": 1.46,
+       "DL": 1.04,
+       "P:pres-pair": 0.5,
+       "SL": 1.73
+      },
+      "sq_lines": 5.83,
+      "most_owed_by_line": {
+       "BGV": 0.48,
+       "CORO": 0.65,
+       "DL": 0.62,
+       "P:pres-pair": 0.5,
+       "SL": 0.57
+      },
+      "sq_total": 8.34,
+      "most_owed_total": 1.57,
+      "ms": 495
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.36,
+       "CORO": 1.04,
+       "DL": 0.94,
+       "P:pres-pair": 0.5,
+       "SL": 0.89
+      },
+      "sq_lines": 4.73,
+      "most_owed_by_line": {
+       "BGV": 0.47,
+       "CORO": 0.4,
+       "DL": 0.52,
+       "P:pres-pair": 0.5,
+       "SL": 0.52
+      },
+      "sq_total": 4.2,
+      "most_owed_total": 0.91,
+      "ms": 698
+     }
+    ],
+    "cum_abs_max": 1.35,
+    "cum_abs_p95": 1.3,
+    "cum_abs_mean": 0.489,
+    "regular_gap_le_1": true,
+    "floor_seat_proof": true
+   },
+   {
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.95,
+       "CORO": 1.67,
+       "DL": 2.66,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 7.37,
+      "most_owed_by_line": {
+       "BGV": 0.45,
+       "CORO": 0.94,
+       "DL": 0.81,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 3.32,
+      "most_owed_total": 0.94,
+      "ms": 506
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.88,
+       "CORO": 1.22,
+       "DL": 0.79,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 4.98,
+      "most_owed_by_line": {
+       "BGV": 0.47,
+       "CORO": 0.64,
+       "DL": 0.38,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 6.08,
+      "most_owed_total": 1.26,
+      "ms": 500
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.05,
+       "CORO": 0.31,
+       "DL": 2.61,
+       "P:pres-pair": 0.5,
+       "SL": 1.08
+      },
+      "sq_lines": 6.55,
+      "most_owed_by_line": {
+       "BGV": 0.5,
+       "CORO": 0.31,
+       "DL": 0.69,
+       "P:pres-pair": 0.5,
+       "SL": 0.45
+      },
+      "sq_total": 4.37,
+      "most_owed_total": 0.74,
+      "ms": 571
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.47,
+       "CORO": 0.93,
+       "DL": 0.83,
+       "P:pres-pair": 0.5,
+       "SL": 0.34
+      },
+      "sq_lines": 4.08,
+      "most_owed_by_line": {
+       "BGV": 0.28,
+       "CORO": 0.4,
+       "DL": 0.51,
+       "P:pres-pair": 0.5,
+       "SL": 0.24
+      },
+      "sq_total": 4.72,
+      "most_owed_total": 0.79,
+      "ms": 410
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.72,
+       "CORO": 1.77,
+       "DL": 1.0,
+       "P:pres-pair": 0.0,
+       "SL": 0.36
+      },
+      "sq_lines": 5.84,
+      "most_owed_by_line": {
+       "BGV": 1.12,
+       "CORO": 0.68,
+       "DL": 0.79,
+       "P:pres-pair": 0,
+       "SL": 0.19
+      },
+      "sq_total": 4.19,
+      "most_owed_total": 1.12,
+      "ms": 456
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.19,
+       "CORO": 1.64,
+       "DL": 0.49,
+       "P:pres-pair": 0.5,
+       "SL": 0.5
+      },
+      "sq_lines": 5.32,
+      "most_owed_by_line": {
+       "BGV": 0.58,
+       "CORO": 0.47,
+       "DL": 0.46,
+       "P:pres-pair": 0.5,
+       "SL": 0.23
+      },
+      "sq_total": 4.6,
+      "most_owed_total": 0.91,
+      "ms": 487
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.63,
+       "CORO": 2.6,
+       "DL": 1.37,
+       "P:pres-pair": 0.0,
+       "SL": 1.66
+      },
+      "sq_lines": 7.26,
+      "most_owed_by_line": {
+       "BGV": 0.48,
+       "CORO": 1.23,
+       "DL": 0.97,
+       "P:pres-pair": 0,
+       "SL": 0.43
+      },
+      "sq_total": 5.6,
+      "most_owed_total": 0.98,
+      "ms": 550
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 3.98,
+       "CORO": 1.43,
+       "DL": 0.53,
+       "P:pres-pair": 0.0,
+       "SL": 1.1
+      },
+      "sq_lines": 7.05,
+      "most_owed_by_line": {
+       "BGV": 0.46,
+       "CORO": 0.37,
+       "DL": 0.48,
+       "P:pres-pair": 0,
+       "SL": 0.43
+      },
+      "sq_total": 6.06,
+      "most_owed_total": 1.53,
+      "ms": 441
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.02,
+       "CORO": 0.81,
+       "DL": 0.71,
+       "P:pres-pair": 0.0,
+       "SL": 1.56
+      },
+      "sq_lines": 5.1,
+      "most_owed_by_line": {
+       "BGV": 0.37,
+       "CORO": 0.73,
+       "DL": 0.64,
+       "P:pres-pair": 0,
+       "SL": 0.48
+      },
+      "sq_total": 5.99,
+      "most_owed_total": 1.19,
+      "ms": 581
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.33,
+       "CORO": 1.16,
+       "DL": 0.55,
+       "P:pres-pair": 0.0,
+       "SL": 2.11
+      },
+      "sq_lines": 6.14,
+      "most_owed_by_line": {
+       "BGV": 0.46,
+       "CORO": 0.45,
+       "DL": 0.38,
+       "P:pres-pair": 0,
+       "SL": 0.59
+      },
+      "sq_total": 5.08,
+      "most_owed_total": 1.21,
+      "ms": 452
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 3.35,
+       "CORO": 0.54,
+       "DL": 0.64,
+       "P:pres-pair": 0.5,
+       "SL": 3.83
+      },
+      "sq_lines": 8.85,
+      "most_owed_by_line": {
+       "BGV": 0.65,
+       "CORO": 0.27,
+       "DL": 0.37,
+       "P:pres-pair": 0.5,
+       "SL": 1.02
+      },
+      "sq_total": 10.79,
+      "most_owed_total": 1.02,
+      "ms": 407
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.38,
+       "CORO": 2.44,
+       "DL": 1.57,
+       "P:pres-pair": 0.5,
+       "SL": 1.55
+      },
+      "sq_lines": 7.44,
+      "most_owed_by_line": {
+       "BGV": 0.36,
+       "CORO": 1.05,
+       "DL": 0.51,
+       "P:pres-pair": 0.5,
+       "SL": 0.52
+      },
+      "sq_total": 4.65,
+      "most_owed_total": 1.18,
+      "ms": 573
+     }
+    ],
+    "cum_abs_max": 1.87,
+    "cum_abs_p95": 1.57,
+    "cum_abs_mean": 0.59,
+    "regular_gap_le_1": true,
+    "floor_seat_proof": true
+   }
+  ],
+  "v4": [
+   {
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.96,
+       "CORO": 1.71,
+       "DL": 1.93,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 6.68,
+      "most_owed_by_line": {
+       "BGV": 0.45,
+       "CORO": 0.96,
+       "DL": 0.68,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 3.75,
+      "most_owed_total": 0.93,
+      "ms": 82
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.49,
+       "CORO": 1.37,
+       "DL": 0.7,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 5.64,
+      "most_owed_by_line": {
+       "BGV": 0.47,
+       "CORO": 0.72,
+       "DL": 0.36,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 4.32,
+      "most_owed_total": 1.11,
+      "ms": 90
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.08,
+       "CORO": 0.42,
+       "DL": 3.27,
+       "P:pres-pair": 0.5,
+       "SL": 1.08
+      },
+      "sq_lines": 7.36,
+      "most_owed_by_line": {
+       "BGV": 0.53,
+       "CORO": 0.27,
+       "DL": 0.68,
+       "P:pres-pair": 0.5,
+       "SL": 0.45
+      },
+      "sq_total": 4.35,
+      "most_owed_total": 0.76,
+      "ms": 119
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.5,
+       "CORO": 1.23,
+       "DL": 1.35,
+       "P:pres-pair": 0.5,
+       "SL": 0.34
+      },
+      "sq_lines": 4.92,
+      "most_owed_by_line": {
+       "BGV": 0.31,
+       "CORO": 0.43,
+       "DL": 0.63,
+       "P:pres-pair": 0.5,
+       "SL": 0.24
+      },
+      "sq_total": 6.02,
+      "most_owed_total": 0.79,
+      "ms": 95
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.99,
+       "CORO": 1.44,
+       "DL": 0.76,
+       "P:pres-pair": 0.0,
+       "SL": 0.36
+      },
+      "sq_lines": 4.55,
+      "most_owed_by_line": {
+       "BGV": 0.42,
+       "CORO": 0.67,
+       "DL": 0.66,
+       "P:pres-pair": 0,
+       "SL": 0.19
+      },
+      "sq_total": 3.68,
+      "most_owed_total": 0.83,
+      "ms": 99
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.61,
+       "CORO": 1.6,
+       "DL": 0.93,
+       "P:pres-pair": 0.5,
+       "SL": 0.5
+      },
+      "sq_lines": 5.14,
+      "most_owed_by_line": {
+       "BGV": 0.67,
+       "CORO": 0.5,
+       "DL": 0.72,
+       "P:pres-pair": 0.5,
+       "SL": 0.23
+      },
+      "sq_total": 3.45,
+      "most_owed_total": 1.21,
+      "ms": 123
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.0,
+       "CORO": 2.96,
+       "DL": 1.27,
+       "P:pres-pair": 0.0,
+       "SL": 1.66
+      },
+      "sq_lines": 7.9,
+      "most_owed_by_line": {
+       "BGV": 0.52,
+       "CORO": 1.21,
+       "DL": 0.88,
+       "P:pres-pair": 0,
+       "SL": 0.43
+      },
+      "sq_total": 7.88,
+      "most_owed_total": 1.55,
+      "ms": 89
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.12,
+       "CORO": 2.85,
+       "DL": 0.41,
+       "P:pres-pair": 2.0,
+       "SL": 1.68
+      },
+      "sq_lines": 9.06,
+      "most_owed_by_line": {
+       "BGV": 0.68,
+       "CORO": 1.16,
+       "DL": 0.45,
+       "P:pres-pair": 1.0,
+       "SL": 0.43
+      },
+      "sq_total": 5.77,
+      "most_owed_total": 1.65,
+      "ms": 89
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.98,
+       "CORO": 2.34,
+       "DL": 1.73,
+       "P:pres-pair": 0.0,
+       "SL": 0.9
+      },
+      "sq_lines": 6.94,
+      "most_owed_by_line": {
+       "BGV": 0.45,
+       "CORO": 0.78,
+       "DL": 1.12,
+       "P:pres-pair": 0,
+       "SL": 0.48
+      },
+      "sq_total": 7.38,
+      "most_owed_total": 1.22,
+      "ms": 91
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.8,
+       "CORO": 1.52,
+       "DL": 1.49,
+       "P:pres-pair": 0.0,
+       "SL": 0.65
+      },
+      "sq_lines": 6.46,
+      "most_owed_by_line": {
+       "BGV": 0.89,
+       "CORO": 0.57,
+       "DL": 0.52,
+       "P:pres-pair": 0,
+       "SL": 0.3
+      },
+      "sq_total": 5.91,
+      "most_owed_total": 1.4,
+      "ms": 138
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.4,
+       "CORO": 1.89,
+       "DL": 0.88,
+       "P:pres-pair": 0.5,
+       "SL": 0.39
+      },
+      "sq_lines": 6.05,
+      "most_owed_by_line": {
+       "BGV": 1.05,
+       "CORO": 1.0,
+       "DL": 0.52,
+       "P:pres-pair": 0.5,
+       "SL": 0.3
+      },
+      "sq_total": 6.17,
+      "most_owed_total": 1.05,
+      "ms": 87
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.39,
+       "CORO": 3.41,
+       "DL": 0.68,
+       "P:pres-pair": 0.5,
+       "SL": 0.89
+      },
+      "sq_lines": 6.87,
+      "most_owed_by_line": {
+       "BGV": 0.37,
+       "CORO": 1.05,
+       "DL": 0.39,
+       "P:pres-pair": 0.5,
+       "SL": 0.52
+      },
+      "sq_total": 5.65,
+      "most_owed_total": 1.34,
+      "ms": 167
+     }
+    ],
+    "cum_abs_max": 2.56,
+    "cum_abs_p95": 1.17,
+    "cum_abs_mean": 0.582,
+    "regular_gap_le_1": true,
+    "floor_seat_proof": true
+   },
+   {
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.11,
+       "CORO": 2.03,
+       "DL": 0.75,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 5.97,
+      "most_owed_by_line": {
+       "BGV": 0.69,
+       "CORO": 0.94,
+       "DL": 0.66,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 4.02,
+      "most_owed_total": 0.75,
+      "ms": 80
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 3.4,
+       "CORO": 1.05,
+       "DL": 0.68,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 6.22,
+      "most_owed_by_line": {
+       "BGV": 0.75,
+       "CORO": 0.61,
+       "DL": 0.38,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 7.27,
+      "most_owed_total": 1.17,
+      "ms": 90
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.66,
+       "CORO": 0.3,
+       "DL": 3.14,
+       "P:pres-pair": 0.5,
+       "SL": 1.08
+      },
+      "sq_lines": 7.69,
+      "most_owed_by_line": {
+       "BGV": 0.79,
+       "CORO": 0.24,
+       "DL": 0.7,
+       "P:pres-pair": 0.5,
+       "SL": 0.45
+      },
+      "sq_total": 4.63,
+      "most_owed_total": 0.83,
+      "ms": 105
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.44,
+       "CORO": 1.5,
+       "DL": 1.35,
+       "P:pres-pair": 0.5,
+       "SL": 0.34
+      },
+      "sq_lines": 5.13,
+      "most_owed_by_line": {
+       "BGV": 0.31,
+       "CORO": 0.6,
+       "DL": 0.63,
+       "P:pres-pair": 0.5,
+       "SL": 0.24
+      },
+      "sq_total": 5.91,
+      "most_owed_total": 0.78,
+      "ms": 80
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.7,
+       "CORO": 1.62,
+       "DL": 0.96,
+       "P:pres-pair": 0.0,
+       "SL": 0.36
+      },
+      "sq_lines": 4.64,
+      "most_owed_by_line": {
+       "BGV": 0.3,
+       "CORO": 0.66,
+       "DL": 0.72,
+       "P:pres-pair": 0,
+       "SL": 0.19
+      },
+      "sq_total": 4.79,
+      "most_owed_total": 0.87,
+      "ms": 70
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.04,
+       "CORO": 3.48,
+       "DL": 0.41,
+       "P:pres-pair": 0.5,
+       "SL": 0.5
+      },
+      "sq_lines": 5.93,
+      "most_owed_by_line": {
+       "BGV": 0.32,
+       "CORO": 1.44,
+       "DL": 0.45,
+       "P:pres-pair": 0.5,
+       "SL": 0.23
+      },
+      "sq_total": 5.67,
+      "most_owed_total": 1.22,
+      "ms": 71
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.62,
+       "CORO": 4.58,
+       "DL": 0.67,
+       "P:pres-pair": 0.0,
+       "SL": 1.66
+      },
+      "sq_lines": 8.53,
+      "most_owed_by_line": {
+       "BGV": 0.49,
+       "CORO": 1.23,
+       "DL": 0.67,
+       "P:pres-pair": 0,
+       "SL": 0.43
+      },
+      "sq_total": 8.38,
+      "most_owed_total": 1.51,
+      "ms": 84
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.78,
+       "CORO": 3.13,
+       "DL": 0.67,
+       "P:pres-pair": 0.0,
+       "SL": 1.68
+      },
+      "sq_lines": 7.26,
+      "most_owed_by_line": {
+       "BGV": 0.71,
+       "CORO": 1.18,
+       "DL": 0.67,
+       "P:pres-pair": 0,
+       "SL": 0.43
+      },
+      "sq_total": 7.28,
+      "most_owed_total": 1.59,
+      "ms": 91
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.54,
+       "CORO": 0.66,
+       "DL": 1.61,
+       "P:pres-pair": 0.0,
+       "SL": 0.9
+      },
+      "sq_lines": 4.71,
+      "most_owed_by_line": {
+       "BGV": 0.37,
+       "CORO": 0.67,
+       "DL": 0.99,
+       "P:pres-pair": 0,
+       "SL": 0.48
+      },
+      "sq_total": 2.75,
+      "most_owed_total": 0.5,
+      "ms": 88
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.91,
+       "CORO": 1.55,
+       "DL": 0.37,
+       "P:pres-pair": 0.0,
+       "SL": 0.65
+      },
+      "sq_lines": 4.47,
+      "most_owed_by_line": {
+       "BGV": 0.64,
+       "CORO": 0.59,
+       "DL": 0.41,
+       "P:pres-pair": 0,
+       "SL": 0.3
+      },
+      "sq_total": 3.46,
+      "most_owed_total": 0.93,
+      "ms": 115
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.88,
+       "CORO": 4.19,
+       "DL": 0.88,
+       "P:pres-pair": 0.5,
+       "SL": 0.39
+      },
+      "sq_lines": 8.83,
+      "most_owed_by_line": {
+       "BGV": 1.05,
+       "CORO": 1.32,
+       "DL": 0.52,
+       "P:pres-pair": 0.5,
+       "SL": 0.3
+      },
+      "sq_total": 6.98,
+      "most_owed_total": 1.05,
+      "ms": 55
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.4,
+       "CORO": 2.62,
+       "DL": 1.87,
+       "P:pres-pair": 0.5,
+       "SL": 1.55
+      },
+      "sq_lines": 7.94,
+      "most_owed_by_line": {
+       "BGV": 0.46,
+       "CORO": 1.04,
+       "DL": 0.86,
+       "P:pres-pair": 0.5,
+       "SL": 0.52
+      },
+      "sq_total": 6.19,
+      "most_owed_total": 1.19,
+      "ms": 95
+     }
+    ],
+    "cum_abs_max": 2.54,
+    "cum_abs_p95": 1.5,
+    "cum_abs_mean": 0.649,
+    "regular_gap_le_1": true,
+    "floor_seat_proof": true
+   },
+   {
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.28,
+       "CORO": 2.69,
+       "DL": 2.57,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 8.63,
+      "most_owed_by_line": {
+       "BGV": 0.45,
+       "CORO": 0.98,
+       "DL": 0.79,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 3.03,
+      "most_owed_total": 1.01,
+      "ms": 118
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.85,
+       "CORO": 1.01,
+       "DL": 0.7,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 5.64,
+      "most_owed_by_line": {
+       "BGV": 0.55,
+       "CORO": 0.54,
+       "DL": 0.36,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 5.26,
+      "most_owed_total": 0.82,
+      "ms": 103
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.69,
+       "CORO": 1.37,
+       "DL": 3.27,
+       "P:pres-pair": 0.5,
+       "SL": 1.08
+      },
+      "sq_lines": 8.92,
+      "most_owed_by_line": {
+       "BGV": 0.75,
+       "CORO": 0.75,
+       "DL": 0.68,
+       "P:pres-pair": 0.5,
+       "SL": 0.45
+      },
+      "sq_total": 5.74,
+      "most_owed_total": 0.82,
+      "ms": 109
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.5,
+       "CORO": 1.2,
+       "DL": 1.35,
+       "P:pres-pair": 0.5,
+       "SL": 0.34
+      },
+      "sq_lines": 4.89,
+      "most_owed_by_line": {
+       "BGV": 0.34,
+       "CORO": 0.44,
+       "DL": 0.63,
+       "P:pres-pair": 0.5,
+       "SL": 0.24
+      },
+      "sq_total": 2.77,
+      "most_owed_total": 0.77,
+      "ms": 82
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.07,
+       "CORO": 1.48,
+       "DL": 0.76,
+       "P:pres-pair": 0.0,
+       "SL": 0.36
+      },
+      "sq_lines": 3.67,
+      "most_owed_by_line": {
+       "BGV": 0.3,
+       "CORO": 0.68,
+       "DL": 0.66,
+       "P:pres-pair": 0,
+       "SL": 0.19
+      },
+      "sq_total": 2.82,
+      "most_owed_total": 0.83,
+      "ms": 69
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.27,
+       "CORO": 2.37,
+       "DL": 0.93,
+       "P:pres-pair": 0.5,
+       "SL": 0.5
+      },
+      "sq_lines": 6.57,
+      "most_owed_by_line": {
+       "BGV": 0.67,
+       "CORO": 0.88,
+       "DL": 0.72,
+       "P:pres-pair": 0.5,
+       "SL": 0.23
+      },
+      "sq_total": 5.52,
+      "most_owed_total": 1.21,
+      "ms": 91
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.66,
+       "CORO": 2.65,
+       "DL": 1.27,
+       "P:pres-pair": 0.0,
+       "SL": 1.66
+      },
+      "sq_lines": 7.25,
+      "most_owed_by_line": {
+       "BGV": 0.42,
+       "CORO": 1.21,
+       "DL": 0.88,
+       "P:pres-pair": 0,
+       "SL": 0.43
+      },
+      "sq_total": 8.07,
+      "most_owed_total": 1.48,
+      "ms": 156
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.06,
+       "CORO": 2.97,
+       "DL": 0.41,
+       "P:pres-pair": 2.0,
+       "SL": 1.68
+      },
+      "sq_lines": 9.12,
+      "most_owed_by_line": {
+       "BGV": 0.7,
+       "CORO": 1.16,
+       "DL": 0.45,
+       "P:pres-pair": 1.0,
+       "SL": 0.43
+      },
+      "sq_total": 4.9,
+      "most_owed_total": 1.67,
+      "ms": 98
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.46,
+       "CORO": 0.67,
+       "DL": 1.73,
+       "P:pres-pair": 0.0,
+       "SL": 1.56
+      },
+      "sq_lines": 5.41,
+      "most_owed_by_line": {
+       "BGV": 0.38,
+       "CORO": 0.68,
+       "DL": 1.12,
+       "P:pres-pair": 0,
+       "SL": 0.48
+      },
+      "sq_total": 4.37,
+      "most_owed_total": 1.22,
+      "ms": 115
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.46,
+       "CORO": 1.41,
+       "DL": 1.49,
+       "P:pres-pair": 0.0,
+       "SL": 1.31
+      },
+      "sq_lines": 5.67,
+      "most_owed_by_line": {
+       "BGV": 0.47,
+       "CORO": 0.57,
+       "DL": 0.52,
+       "P:pres-pair": 0,
+       "SL": 0.59
+      },
+      "sq_total": 4.61,
+      "most_owed_total": 0.99,
+      "ms": 142
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.23,
+       "CORO": 1.89,
+       "DL": 0.88,
+       "P:pres-pair": 0.5,
+       "SL": 1.59
+      },
+      "sq_lines": 7.09,
+      "most_owed_by_line": {
+       "BGV": 0.98,
+       "CORO": 1.0,
+       "DL": 0.52,
+       "P:pres-pair": 0.5,
+       "SL": 0.57
+      },
+      "sq_total": 5.04,
+      "most_owed_total": 0.98,
+      "ms": 93
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.31,
+       "CORO": 2.67,
+       "DL": 0.68,
+       "P:pres-pair": 0.5,
+       "SL": 0.89
+      },
+      "sq_lines": 6.05,
+      "most_owed_by_line": {
+       "BGV": 0.38,
+       "CORO": 1.05,
+       "DL": 0.39,
+       "P:pres-pair": 0.5,
+       "SL": 0.52
+      },
+      "sq_total": 3.47,
+      "most_owed_total": 1.24,
+      "ms": 176
+     }
+    ],
+    "cum_abs_max": 2.59,
+    "cum_abs_p95": 1.28,
+    "cum_abs_mean": 0.568,
+    "regular_gap_le_1": true,
+    "floor_seat_proof": true
+   }
+  ],
+  "v4+swaps": [
+   {
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.96,
+       "CORO": 1.71,
+       "DL": 1.93,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 6.68,
+      "most_owed_by_line": {
+       "BGV": 0.45,
+       "CORO": 0.96,
+       "DL": 0.68,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 3.01,
+      "most_owed_total": 0.93,
+      "ms": 189
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.55,
+       "CORO": 1.37,
+       "DL": 0.7,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 5.69,
+      "most_owed_by_line": {
+       "BGV": 0.46,
+       "CORO": 0.72,
+       "DL": 0.36,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 4.36,
+      "most_owed_total": 1.1,
+      "ms": 223
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.16,
+       "CORO": 0.42,
+       "DL": 3.27,
+       "P:pres-pair": 0.5,
+       "SL": 1.08
+      },
+      "sq_lines": 7.44,
+      "most_owed_by_line": {
+       "BGV": 0.49,
+       "CORO": 0.27,
+       "DL": 0.68,
+       "P:pres-pair": 0.5,
+       "SL": 0.45
+      },
+      "sq_total": 4.1,
+      "most_owed_total": 0.72,
+      "ms": 294
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.49,
+       "CORO": 1.11,
+       "DL": 1.35,
+       "P:pres-pair": 0.5,
+       "SL": 2.26
+      },
+      "sq_lines": 6.72,
+      "most_owed_by_line": {
+       "BGV": 0.37,
+       "CORO": 0.43,
+       "DL": 0.63,
+       "P:pres-pair": 0.5,
+       "SL": 0.91
+      },
+      "sq_total": 11.65,
+      "most_owed_total": 1.18,
+      "ms": 196
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.94,
+       "CORO": 1.64,
+       "DL": 0.76,
+       "P:pres-pair": 0.0,
+       "SL": 1.14
+      },
+      "sq_lines": 6.47,
+      "most_owed_by_line": {
+       "BGV": 1.02,
+       "CORO": 0.67,
+       "DL": 0.66,
+       "P:pres-pair": 0,
+       "SL": 0.58
+      },
+      "sq_total": 5.13,
+      "most_owed_total": 1.02,
+      "ms": 293
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.63,
+       "CORO": 1.65,
+       "DL": 0.93,
+       "P:pres-pair": 0.5,
+       "SL": 1.26
+      },
+      "sq_lines": 5.98,
+      "most_owed_by_line": {
+       "BGV": 0.74,
+       "CORO": 0.53,
+       "DL": 0.72,
+       "P:pres-pair": 0.5,
+       "SL": 0.61
+      },
+      "sq_total": 5.01,
+      "most_owed_total": 1.19,
+      "ms": 151
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.0,
+       "CORO": 2.7,
+       "DL": 1.27,
+       "P:pres-pair": 0.0,
+       "SL": 1.68
+      },
+      "sq_lines": 7.66,
+      "most_owed_by_line": {
+       "BGV": 0.52,
+       "CORO": 1.21,
+       "DL": 0.88,
+       "P:pres-pair": 0,
+       "SL": 0.43
+      },
+      "sq_total": 5.19,
+      "most_owed_total": 1.12,
+      "ms": 216
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 3.08,
+       "CORO": 3.03,
+       "DL": 0.41,
+       "P:pres-pair": 2.0,
+       "SL": 1.1
+      },
+      "sq_lines": 9.62,
+      "most_owed_by_line": {
+       "BGV": 0.95,
+       "CORO": 1.16,
+       "DL": 0.45,
+       "P:pres-pair": 1.0,
+       "SL": 0.43
+      },
+      "sq_total": 9.47,
+      "most_owed_total": 1.65,
+      "ms": 186
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 3.32,
+       "CORO": 1.3,
+       "DL": 0.36,
+       "P:pres-pair": 0.0,
+       "SL": 1.56
+      },
+      "sq_lines": 6.54,
+      "most_owed_by_line": {
+       "BGV": 0.98,
+       "CORO": 1.0,
+       "DL": 0.26,
+       "P:pres-pair": 0,
+       "SL": 0.48
+      },
+      "sq_total": 6.19,
+      "most_owed_total": 1.33,
+      "ms": 222
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.85,
+       "CORO": 1.52,
+       "DL": 1.23,
+       "P:pres-pair": 0.0,
+       "SL": 2.11
+      },
+      "sq_lines": 7.71,
+      "most_owed_by_line": {
+       "BGV": 0.76,
+       "CORO": 0.57,
+       "DL": 0.64,
+       "P:pres-pair": 0,
+       "SL": 0.59
+      },
+      "sq_total": 5.97,
+      "most_owed_total": 1.31,
+      "ms": 239
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.91,
+       "CORO": 1.88,
+       "DL": 0.61,
+       "P:pres-pair": 0.5,
+       "SL": 3.83
+      },
+      "sq_lines": 8.73,
+      "most_owed_by_line": {
+       "BGV": 0.55,
+       "CORO": 1.01,
+       "DL": 0.4,
+       "P:pres-pair": 0.5,
+       "SL": 1.02
+      },
+      "sq_total": 7.71,
+      "most_owed_total": 1.81,
+      "ms": 152
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.65,
+       "CORO": 2.49,
+       "DL": 1.13,
+       "P:pres-pair": 0.5,
+       "SL": 1.55
+      },
+      "sq_lines": 7.33,
+      "most_owed_by_line": {
+       "BGV": 0.52,
+       "CORO": 1.07,
+       "DL": 0.51,
+       "P:pres-pair": 0.5,
+       "SL": 0.52
+      },
+      "sq_total": 5.05,
+      "most_owed_total": 1.37,
+      "ms": 394
+     }
+    ],
+    "cum_abs_max": 1.68,
+    "cum_abs_p95": 1.58,
+    "cum_abs_mean": 0.571,
+    "regular_gap_le_1": true,
+    "floor_seat_proof": true
+   },
+   {
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.11,
+       "CORO": 1.67,
+       "DL": 0.75,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 5.61,
+      "most_owed_by_line": {
+       "BGV": 0.69,
+       "CORO": 0.94,
+       "DL": 0.66,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 4.42,
+      "most_owed_total": 0.75,
+      "ms": 197
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.9,
+       "CORO": 1.05,
+       "DL": 0.68,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 5.72,
+      "most_owed_by_line": {
+       "BGV": 0.54,
+       "CORO": 0.61,
+       "DL": 0.38,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 4.43,
+      "most_owed_total": 1.17,
+      "ms": 224
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.74,
+       "CORO": 1.46,
+       "DL": 3.14,
+       "P:pres-pair": 0.5,
+       "SL": 1.08
+      },
+      "sq_lines": 8.92,
+      "most_owed_by_line": {
+       "BGV": 0.79,
+       "CORO": 0.82,
+       "DL": 0.7,
+       "P:pres-pair": 0.5,
+       "SL": 0.45
+      },
+      "sq_total": 6.96,
+      "most_owed_total": 1.53,
+      "ms": 173
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.38,
+       "CORO": 0.82,
+       "DL": 1.35,
+       "P:pres-pair": 0.5,
+       "SL": 0.34
+      },
+      "sq_lines": 4.39,
+      "most_owed_by_line": {
+       "BGV": 0.28,
+       "CORO": 0.29,
+       "DL": 0.63,
+       "P:pres-pair": 0.5,
+       "SL": 0.24
+      },
+      "sq_total": 2.15,
+      "most_owed_total": 0.75,
+      "ms": 226
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 3.16,
+       "CORO": 2.46,
+       "DL": 0.96,
+       "P:pres-pair": 0.0,
+       "SL": 0.36
+      },
+      "sq_lines": 6.94,
+      "most_owed_by_line": {
+       "BGV": 1.02,
+       "CORO": 1.04,
+       "DL": 0.72,
+       "P:pres-pair": 0,
+       "SL": 0.19
+      },
+      "sq_total": 4.44,
+      "most_owed_total": 1.02,
+      "ms": 116
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.47,
+       "CORO": 3.48,
+       "DL": 0.41,
+       "P:pres-pair": 0.5,
+       "SL": 0.5
+      },
+      "sq_lines": 7.36,
+      "most_owed_by_line": {
+       "BGV": 0.77,
+       "CORO": 1.44,
+       "DL": 0.45,
+       "P:pres-pair": 0.5,
+       "SL": 0.23
+      },
+      "sq_total": 5.34,
+      "most_owed_total": 1.2,
+      "ms": 269
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.86,
+       "CORO": 4.58,
+       "DL": 0.67,
+       "P:pres-pair": 0.0,
+       "SL": 1.66
+      },
+      "sq_lines": 8.77,
+      "most_owed_by_line": {
+       "BGV": 0.54,
+       "CORO": 1.23,
+       "DL": 0.67,
+       "P:pres-pair": 0,
+       "SL": 0.43
+      },
+      "sq_total": 7.52,
+      "most_owed_total": 1.58,
+      "ms": 222
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 3.29,
+       "CORO": 2.97,
+       "DL": 0.67,
+       "P:pres-pair": 0.0,
+       "SL": 1.68
+      },
+      "sq_lines": 8.61,
+      "most_owed_by_line": {
+       "BGV": 0.96,
+       "CORO": 1.18,
+       "DL": 0.67,
+       "P:pres-pair": 0,
+       "SL": 0.43
+      },
+      "sq_total": 7.52,
+      "most_owed_total": 1.58,
+      "ms": 177
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 3.09,
+       "CORO": 1.38,
+       "DL": 1.68,
+       "P:pres-pair": 0.0,
+       "SL": 0.9
+      },
+      "sq_lines": 7.05,
+      "most_owed_by_line": {
+       "BGV": 0.98,
+       "CORO": 1.03,
+       "DL": 1.13,
+       "P:pres-pair": 0,
+       "SL": 0.48
+      },
+      "sq_total": 2.42,
+      "most_owed_total": 0.52,
+      "ms": 331
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.38,
+       "CORO": 2.36,
+       "DL": 1.21,
+       "P:pres-pair": 0.0,
+       "SL": 0.65
+      },
+      "sq_lines": 6.6,
+      "most_owed_by_line": {
+       "BGV": 0.51,
+       "CORO": 0.93,
+       "DL": 0.55,
+       "P:pres-pair": 0,
+       "SL": 0.3
+      },
+      "sq_total": 8.27,
+      "most_owed_total": 1.68,
+      "ms": 232
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.98,
+       "CORO": 2.79,
+       "DL": 0.7,
+       "P:pres-pair": 0.5,
+       "SL": 0.39
+      },
+      "sq_lines": 7.37,
+      "most_owed_by_line": {
+       "BGV": 0.45,
+       "CORO": 0.99,
+       "DL": 0.43,
+       "P:pres-pair": 0.5,
+       "SL": 0.3
+      },
+      "sq_total": 9.04,
+      "most_owed_total": 0.85,
+      "ms": 145
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.43,
+       "CORO": 2.55,
+       "DL": 1.41,
+       "P:pres-pair": 0.5,
+       "SL": 1.55
+      },
+      "sq_lines": 7.44,
+      "most_owed_by_line": {
+       "BGV": 0.47,
+       "CORO": 1.04,
+       "DL": 0.47,
+       "P:pres-pair": 0.5,
+       "SL": 0.52
+      },
+      "sq_total": 4.46,
+      "most_owed_total": 1.51,
+      "ms": 283
+     }
+    ],
+    "cum_abs_max": 2.54,
+    "cum_abs_p95": 1.5,
+    "cum_abs_mean": 0.473,
+    "regular_gap_le_1": true,
+    "floor_seat_proof": true
+   },
+   {
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.28,
+       "CORO": 2.69,
+       "DL": 2.57,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 8.63,
+      "most_owed_by_line": {
+       "BGV": 0.45,
+       "CORO": 0.98,
+       "DL": 0.79,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 3.03,
+      "most_owed_total": 1.01,
+      "ms": 136
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.85,
+       "CORO": 1.01,
+       "DL": 0.7,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 5.64,
+      "most_owed_by_line": {
+       "BGV": 0.55,
+       "CORO": 0.54,
+       "DL": 0.36,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 5.26,
+      "most_owed_total": 0.82,
+      "ms": 144
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.69,
+       "CORO": 0.41,
+       "DL": 3.27,
+       "P:pres-pair": 0.5,
+       "SL": 1.08
+      },
+      "sq_lines": 7.96,
+      "most_owed_by_line": {
+       "BGV": 0.75,
+       "CORO": 0.27,
+       "DL": 0.68,
+       "P:pres-pair": 0.5,
+       "SL": 0.45
+      },
+      "sq_total": 5.56,
+      "most_owed_total": 0.77,
+      "ms": 236
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.5,
+       "CORO": 1.2,
+       "DL": 1.35,
+       "P:pres-pair": 0.5,
+       "SL": 0.34
+      },
+      "sq_lines": 4.89,
+      "most_owed_by_line": {
+       "BGV": 0.34,
+       "CORO": 0.44,
+       "DL": 0.63,
+       "P:pres-pair": 0.5,
+       "SL": 0.24
+      },
+      "sq_total": 2.77,
+      "most_owed_total": 0.77,
+      "ms": 147
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.07,
+       "CORO": 1.48,
+       "DL": 0.76,
+       "P:pres-pair": 0.0,
+       "SL": 0.36
+      },
+      "sq_lines": 3.67,
+      "most_owed_by_line": {
+       "BGV": 0.3,
+       "CORO": 0.68,
+       "DL": 0.66,
+       "P:pres-pair": 0,
+       "SL": 0.19
+      },
+      "sq_total": 2.82,
+      "most_owed_total": 0.83,
+      "ms": 114
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.57,
+       "CORO": 2.37,
+       "DL": 0.93,
+       "P:pres-pair": 0.5,
+       "SL": 0.5
+      },
+      "sq_lines": 5.87,
+      "most_owed_by_line": {
+       "BGV": 0.65,
+       "CORO": 0.88,
+       "DL": 0.72,
+       "P:pres-pair": 0.5,
+       "SL": 0.23
+      },
+      "sq_total": 5.34,
+      "most_owed_total": 1.21,
+      "ms": 183
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.86,
+       "CORO": 2.67,
+       "DL": 1.27,
+       "P:pres-pair": 0.0,
+       "SL": 1.66
+      },
+      "sq_lines": 7.47,
+      "most_owed_by_line": {
+       "BGV": 0.5,
+       "CORO": 1.21,
+       "DL": 0.88,
+       "P:pres-pair": 0,
+       "SL": 0.43
+      },
+      "sq_total": 8.3,
+      "most_owed_total": 1.48,
+      "ms": 231
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.06,
+       "CORO": 2.97,
+       "DL": 0.41,
+       "P:pres-pair": 2.0,
+       "SL": 1.68
+      },
+      "sq_lines": 9.12,
+      "most_owed_by_line": {
+       "BGV": 0.7,
+       "CORO": 1.16,
+       "DL": 0.45,
+       "P:pres-pair": 1.0,
+       "SL": 0.43
+      },
+      "sq_total": 5.52,
+      "most_owed_total": 1.67,
+      "ms": 221
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.46,
+       "CORO": 0.67,
+       "DL": 1.73,
+       "P:pres-pair": 0.0,
+       "SL": 0.9
+      },
+      "sq_lines": 4.75,
+      "most_owed_by_line": {
+       "BGV": 0.38,
+       "CORO": 0.68,
+       "DL": 1.12,
+       "P:pres-pair": 0,
+       "SL": 0.48
+      },
+      "sq_total": 4.09,
+      "most_owed_total": 1.22,
+      "ms": 209
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.72,
+       "CORO": 1.41,
+       "DL": 1.49,
+       "P:pres-pair": 0.0,
+       "SL": 1.45
+      },
+      "sq_lines": 6.07,
+      "most_owed_by_line": {
+       "BGV": 0.6,
+       "CORO": 0.57,
+       "DL": 0.52,
+       "P:pres-pair": 0,
+       "SL": 0.59
+      },
+      "sq_total": 2.87,
+      "most_owed_total": 0.8,
+      "ms": 301
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 3.95,
+       "CORO": 0.49,
+       "DL": 0.88,
+       "P:pres-pair": 0.5,
+       "SL": 1.73
+      },
+      "sq_lines": 7.55,
+      "most_owed_by_line": {
+       "BGV": 0.98,
+       "CORO": 0.3,
+       "DL": 0.52,
+       "P:pres-pair": 0.5,
+       "SL": 0.57
+      },
+      "sq_total": 6.78,
+      "most_owed_total": 0.98,
+      "ms": 195
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.49,
+       "CORO": 1.25,
+       "DL": 0.68,
+       "P:pres-pair": 0.5,
+       "SL": 0.89
+      },
+      "sq_lines": 4.81,
+      "most_owed_by_line": {
+       "BGV": 0.47,
+       "CORO": 0.43,
+       "DL": 0.39,
+       "P:pres-pair": 0.5,
+       "SL": 0.52
+      },
+      "sq_total": 3.09,
+      "most_owed_total": 0.73,
+      "ms": 265
+     }
+    ],
+    "cum_abs_max": 1.59,
+    "cum_abs_p95": 0.96,
+    "cum_abs_mean": 0.52,
+    "regular_gap_le_1": true,
+    "floor_seat_proof": true
+   }
+  ]
+ },
+ "scenarios": {
+  "v3": [
+   {
+    "scenario": "P1",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.27,
+       "CORO": 1.65,
+       "DL": 1.93,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 6.93,
+      "most_owed_by_line": {
+       "BGV": 0.45,
+       "CORO": 0.9,
+       "DL": 0.68,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 4.8,
+      "most_owed_total": 0.59,
+      "ms": 571
+     }
+    ]
+   },
+   {
+    "scenario": "P2",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {
+       "consecutive_sundays": 1
+      },
+      "missed_total": 1,
+      "sq_by_line": {
+       "BGV": 2.32,
+       "CORO": 1.73,
+       "DL": 1.31,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 6.44,
+      "most_owed_by_line": {
+       "BGV": 0.45,
+       "CORO": 0.9,
+       "DL": 0.49,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 3.1,
+      "most_owed_total": 0.67,
+      "ms": 525
+     }
+    ]
+   },
+   {
+    "scenario": "P3",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {
+       "consecutive_sundays": 1
+      },
+      "missed_total": 1,
+      "sq_by_line": {
+       "BGV": 2.11,
+       "CORO": 1.56,
+       "DL": 1.98,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 6.74,
+      "most_owed_by_line": {
+       "BGV": 0.41,
+       "CORO": 0.9,
+       "DL": 0.67,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 4.01,
+      "most_owed_total": 0.63,
+      "ms": 453
+     }
+    ]
+   },
+   {
+    "scenario": "P4",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {
+       "sunday_cap_exceeded": 2,
+       "consecutive_sundays": 1
+      },
+      "missed_total": 3,
+      "sq_by_line": {
+       "BGV": 2.35,
+       "CORO": 2.38,
+       "DL": 1.95,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 7.76,
+      "most_owed_by_line": {
+       "BGV": 0.45,
+       "CORO": 0.9,
+       "DL": 0.82,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 2.11,
+      "most_owed_total": 0.45,
+      "ms": 423
+     }
+    ]
+   },
+   {
+    "scenario": "P5",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {
+       "cadence_off_led": 1
+      },
+      "missed_total": 1,
+      "sq_by_line": {
+       "BGV": 1.88,
+       "CORO": 1.7,
+       "DL": 0.82,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 5.48,
+      "most_owed_by_line": {
+       "BGV": 0.45,
+       "CORO": 0.92,
+       "DL": 0.35,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 2.6,
+      "most_owed_total": 0.58,
+      "ms": 434
+     }
+    ]
+   },
+   {
+    "scenario": "P6",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {
+       "sunday_cap_exceeded": 1,
+       "consecutive_sundays": 4
+      },
+      "missed_total": 5,
+      "sq_by_line": {
+       "BGV": 2.03,
+       "CORO": 4.68,
+       "DL": 14.32,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 22.11,
+      "most_owed_by_line": {
+       "BGV": 0.56,
+       "CORO": 1.8,
+       "DL": 1.1,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 5.93,
+      "most_owed_total": 0.87,
+      "ms": 400
+     }
+    ]
+   },
+   {
+    "scenario": "P7",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.27,
+       "CORO": 1.61,
+       "DL": 1.93,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 6.9,
+      "most_owed_by_line": {
+       "BGV": 0.45,
+       "CORO": 0.9,
+       "DL": 0.68,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 3.43,
+      "most_owed_total": 0.7,
+      "ms": 512
+     }
+    ]
+   },
+   {
+    "scenario": "P8",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {
+       "sunday_cap_exceeded": 1
+      },
+      "missed_total": 1,
+      "sq_by_line": {
+       "BGV": 1.84,
+       "CORO": 2.1,
+       "DL": 2.45,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 7.48,
+      "most_owed_by_line": {
+       "BGV": 0.48,
+       "CORO": 0.97,
+       "DL": 0.88,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 6.0,
+      "most_owed_total": 0.69,
+      "ms": 531
+     }
+    ]
+   },
+   {
+    "scenario": "P9",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 3.04,
+       "CORO": 1.93,
+       "DL": 1.93,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 7.98,
+      "most_owed_by_line": {
+       "BGV": 0.67,
+       "CORO": 0.87,
+       "DL": 0.68,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 1.82,
+      "most_owed_total": 0.6,
+      "ms": 472
+     }
+    ]
+   },
+   {
+    "scenario": "P10",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.69,
+       "CORO": 1.09,
+       "DL": 1.21,
+       "P:pres-pair": 0.5,
+       "SL": 1.08
+      },
+      "sq_lines": 6.57,
+      "most_owed_by_line": {
+       "BGV": 0.55,
+       "CORO": 0.41,
+       "DL": 0.55,
+       "P:pres-pair": 0.5,
+       "SL": 0.44
+      },
+      "sq_total": 3.14,
+      "most_owed_total": 0.53,
+      "ms": 489
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.01,
+       "CORO": 1.7,
+       "DL": 1.98,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 6.77,
+      "most_owed_by_line": {
+       "BGV": 0.45,
+       "CORO": 0.92,
+       "DL": 0.7,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 3.22,
+      "most_owed_total": 0.94,
+      "ms": 477
+     }
+    ]
+   },
+   {
+    "scenario": "P11",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {
+       "sunday_cap_exceeded": 1
+      },
+      "missed_total": 1,
+      "sq_by_line": {
+       "BGV": 1.88,
+       "CORO": 1.69,
+       "DL": 1.43,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 6.08,
+      "most_owed_by_line": {
+       "BGV": 0.48,
+       "CORO": 0.92,
+       "DL": 0.66,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 6.49,
+      "most_owed_total": 1.14,
+      "ms": 530
+     }
+    ]
+   },
+   {
+    "scenario": "P12",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.13,
+       "CORO": 0.91,
+       "DL": 1.02,
+       "P:pres-pair": 0.0,
+       "SL": 1.0
+      },
+      "sq_lines": 5.06,
+      "most_owed_by_line": {
+       "BGV": 0.55,
+       "CORO": 0.4,
+       "DL": 0.61,
+       "P:pres-pair": 0,
+       "SL": 0.52
+      },
+      "sq_total": 5.38,
+      "most_owed_total": 1.14,
+      "ms": 1603
+     }
+    ]
+   },
+   {
+    "scenario": "P13",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {
+       "sunday_cap_exceeded": 1
+      },
+      "missed_total": 1,
+      "sq_by_line": {
+       "BGV": 2.01,
+       "CORO": 2.01,
+       "DL": 1.45,
+       "P:pres-pair": 0.0,
+       "SL": 0.78
+      },
+      "sq_lines": 6.25,
+      "most_owed_by_line": {
+       "BGV": 0.45,
+       "CORO": 1.01,
+       "DL": 0.69,
+       "P:pres-pair": 0,
+       "SL": 0.3
+      },
+      "sq_total": 5.4,
+      "most_owed_total": 1.11,
+      "ms": 518
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.75,
+       "CORO": 3.87,
+       "DL": 0.83,
+       "P:pres-pair": 0.0,
+       "SL": 2.22
+      },
+      "sq_lines": 9.68,
+      "most_owed_by_line": {
+       "BGV": 0.68,
+       "CORO": 1.21,
+       "DL": 0.43,
+       "P:pres-pair": 0,
+       "SL": 0.76
+      },
+      "sq_total": 5.52,
+      "most_owed_total": 0.81,
+      "ms": 481
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.65,
+       "CORO": 1.58,
+       "DL": 2.39,
+       "P:pres-pair": 0.5,
+       "SL": 0.58
+      },
+      "sq_lines": 6.7,
+      "most_owed_by_line": {
+       "BGV": 0.53,
+       "CORO": 0.48,
+       "DL": 0.62,
+       "P:pres-pair": 0.5,
+       "SL": 0.58
+      },
+      "sq_total": 3.58,
+      "most_owed_total": 0.71,
+      "ms": 669
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.87,
+       "CORO": 1.73,
+       "DL": 0.43,
+       "P:pres-pair": 0.5,
+       "SL": 1.47
+      },
+      "sq_lines": 6.0,
+      "most_owed_by_line": {
+       "BGV": 0.44,
+       "CORO": 0.53,
+       "DL": 0.58,
+       "P:pres-pair": 0.5,
+       "SL": 0.52
+      },
+      "sq_total": 7.88,
+      "most_owed_total": 1.73,
+      "ms": 493
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.75,
+       "CORO": 0.87,
+       "DL": 0.58,
+       "P:pres-pair": 0.0,
+       "SL": 0.73
+      },
+      "sq_lines": 3.95,
+      "most_owed_by_line": {
+       "BGV": 0.31,
+       "CORO": 0.67,
+       "DL": 0.68,
+       "P:pres-pair": 0,
+       "SL": 0.61
+      },
+      "sq_total": 4.69,
+      "most_owed_total": 0.77,
+      "ms": 541
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.56,
+       "CORO": 1.41,
+       "DL": 0.78,
+       "P:pres-pair": 0.5,
+       "SL": 1.26
+      },
+      "sq_lines": 5.51,
+      "most_owed_by_line": {
+       "BGV": 0.49,
+       "CORO": 0.42,
+       "DL": 0.7,
+       "P:pres-pair": 0.5,
+       "SL": 0.61
+      },
+      "sq_total": 6.46,
+      "most_owed_total": 1.16,
+      "ms": 526
+     }
+    ]
+   },
+   {
+    "scenario": "P14",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.4,
+       "CORO": 1.61,
+       "DL": 1.56,
+       "P:pres-pair": 0.0,
+       "SL": 1.33
+      },
+      "sq_lines": 5.9,
+      "most_owed_by_line": {
+       "BGV": 0.47,
+       "CORO": 0.53,
+       "DL": 0.44,
+       "P:pres-pair": 0,
+       "SL": 0.33
+      },
+      "sq_total": 3.93,
+      "most_owed_total": 1.16,
+      "ms": 588
+     }
+    ]
+   },
+   {
+    "scenario": "P16",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 12.66,
+       "CORO": 1.53,
+       "DL": 0.46,
+       "P:pres-pair": 0.5,
+       "SL": 0.79
+      },
+      "sq_lines": 15.94,
+      "most_owed_by_line": {
+       "BGV": 0.75,
+       "CORO": 0.72,
+       "DL": 0.41,
+       "P:pres-pair": 0.5,
+       "SL": 0.61
+      },
+      "sq_total": 11.66,
+      "most_owed_total": 0.79,
+      "ms": 1201
+     }
+    ]
+   }
+  ],
+  "v4": [
+   {
+    "scenario": "P1",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.24,
+       "CORO": 2.03,
+       "DL": 1.93,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 7.28,
+      "most_owed_by_line": {
+       "BGV": 0.45,
+       "CORO": 0.95,
+       "DL": 0.68,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 4.16,
+      "most_owed_total": 0.69,
+      "ms": 90
+     }
+    ]
+   },
+   {
+    "scenario": "P2",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {
+       "consecutive_sundays": 1
+      },
+      "missed_total": 1,
+      "sq_by_line": {
+       "BGV": 2.24,
+       "CORO": 2.21,
+       "DL": 1.98,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 7.52,
+      "most_owed_by_line": {
+       "BGV": 0.45,
+       "CORO": 0.93,
+       "DL": 0.67,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 5.98,
+      "most_owed_total": 0.89,
+      "ms": 68
+     }
+    ]
+   },
+   {
+    "scenario": "P3",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {
+       "consecutive_sundays": 1
+      },
+      "missed_total": 1,
+      "sq_by_line": {
+       "BGV": 2.72,
+       "CORO": 1.71,
+       "DL": 1.98,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 7.49,
+      "most_owed_by_line": {
+       "BGV": 0.69,
+       "CORO": 0.96,
+       "DL": 0.67,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 6.18,
+      "most_owed_total": 0.67,
+      "ms": 66
+     }
+    ]
+   },
+   {
+    "scenario": "P4",
+    "passed": false,
+    "failed_checks": [
+     "same_outcome"
+    ],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {
+       "sunday_cap_exceeded": 2,
+       "consecutive_sundays": 2
+      },
+      "missed_total": 4,
+      "sq_by_line": {
+       "BGV": 2.35,
+       "CORO": 2.42,
+       "DL": 1.95,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 7.8,
+      "most_owed_by_line": {
+       "BGV": 0.45,
+       "CORO": 0.9,
+       "DL": 0.82,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 3.9,
+      "most_owed_total": 0.85,
+      "ms": 48
+     }
+    ]
+   },
+   {
+    "scenario": "P5",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {
+       "cadence_off_led": 1
+      },
+      "missed_total": 1,
+      "sq_by_line": {
+       "BGV": 2.44,
+       "CORO": 1.69,
+       "DL": 0.82,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 6.03,
+      "most_owed_by_line": {
+       "BGV": 0.69,
+       "CORO": 0.95,
+       "DL": 0.32,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 4.44,
+      "most_owed_total": 0.76,
+      "ms": 104
+     }
+    ]
+   },
+   {
+    "scenario": "P6",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {
+       "sunday_cap_exceeded": 1,
+       "consecutive_sundays": 4
+      },
+      "missed_total": 5,
+      "sq_by_line": {
+       "BGV": 2.03,
+       "CORO": 5.89,
+       "DL": 14.32,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 23.33,
+      "most_owed_by_line": {
+       "BGV": 0.56,
+       "CORO": 1.82,
+       "DL": 1.1,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 5.29,
+      "most_owed_total": 0.87,
+      "ms": 86
+     }
+    ]
+   },
+   {
+    "scenario": "P7",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.96,
+       "CORO": 2.05,
+       "DL": 1.93,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 7.03,
+      "most_owed_by_line": {
+       "BGV": 0.54,
+       "CORO": 0.95,
+       "DL": 0.68,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 2.88,
+      "most_owed_total": 0.86,
+      "ms": 115
+     }
+    ]
+   },
+   {
+    "scenario": "P8",
+    "passed": false,
+    "failed_checks": [
+     "nothing_unfilled"
+    ],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 1,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {
+       "sunday_cap_exceeded": 1
+      },
+      "missed_total": 1,
+      "sq_by_line": {
+       "BGV": 1.96,
+       "CORO": 2.24,
+       "DL": 2.37,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 7.66,
+      "most_owed_by_line": {
+       "BGV": 0.48,
+       "CORO": 0.97,
+       "DL": 0.85,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 4.69,
+      "most_owed_total": 0.6,
+      "ms": 84
+     }
+    ]
+   },
+   {
+    "scenario": "P9",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.56,
+       "CORO": 2.55,
+       "DL": 1.93,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 8.11,
+      "most_owed_by_line": {
+       "BGV": 0.81,
+       "CORO": 0.92,
+       "DL": 0.68,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 2.62,
+      "most_owed_total": 0.74,
+      "ms": 79
+     }
+    ]
+   },
+   {
+    "scenario": "P10",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.92,
+       "CORO": 0.84,
+       "DL": 1.21,
+       "P:pres-pair": 0.5,
+       "SL": 1.08
+      },
+      "sq_lines": 5.56,
+      "most_owed_by_line": {
+       "BGV": 0.45,
+       "CORO": 0.36,
+       "DL": 0.55,
+       "P:pres-pair": 0.5,
+       "SL": 0.44
+      },
+      "sq_total": 4.03,
+      "most_owed_total": 0.7,
+      "ms": 91
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.96,
+       "CORO": 1.71,
+       "DL": 1.93,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 6.68,
+      "most_owed_by_line": {
+       "BGV": 0.45,
+       "CORO": 0.96,
+       "DL": 0.68,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 3.75,
+      "most_owed_total": 0.93,
+      "ms": 119
+     }
+    ]
+   },
+   {
+    "scenario": "P11",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {
+       "sunday_cap_exceeded": 1
+      },
+      "missed_total": 1,
+      "sq_by_line": {
+       "BGV": 1.86,
+       "CORO": 2.05,
+       "DL": 1.43,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 6.41,
+      "most_owed_by_line": {
+       "BGV": 0.51,
+       "CORO": 0.95,
+       "DL": 0.66,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 6.1,
+      "most_owed_total": 1.16,
+      "ms": 104
+     }
+    ]
+   },
+   {
+    "scenario": "P12",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.26,
+       "CORO": 0.87,
+       "DL": 1.76,
+       "P:pres-pair": 0.0,
+       "SL": 1.0
+      },
+      "sq_lines": 5.9,
+      "most_owed_by_line": {
+       "BGV": 0.63,
+       "CORO": 0.4,
+       "DL": 0.58,
+       "P:pres-pair": 0,
+       "SL": 0.52
+      },
+      "sq_total": 6.21,
+      "most_owed_total": 0.98,
+      "ms": 541
+     }
+    ]
+   },
+   {
+    "scenario": "P13",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {
+       "sunday_cap_exceeded": 1
+      },
+      "missed_total": 1,
+      "sq_by_line": {
+       "BGV": 2.17,
+       "CORO": 1.99,
+       "DL": 1.43,
+       "P:pres-pair": 0.0,
+       "SL": 0.78
+      },
+      "sq_lines": 6.37,
+      "most_owed_by_line": {
+       "BGV": 0.52,
+       "CORO": 1.03,
+       "DL": 0.66,
+       "P:pres-pair": 0,
+       "SL": 0.3
+      },
+      "sq_total": 7.58,
+      "most_owed_total": 1.42,
+      "ms": 71
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 3.85,
+       "CORO": 4.19,
+       "DL": 0.84,
+       "P:pres-pair": 0.0,
+       "SL": 5.0
+      },
+      "sq_lines": 13.87,
+      "most_owed_by_line": {
+       "BGV": 1.0,
+       "CORO": 1.22,
+       "DL": 0.41,
+       "P:pres-pair": 0,
+       "SL": 0.89
+      },
+      "sq_total": 8.09,
+      "most_owed_total": 1.43,
+      "ms": 64
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.87,
+       "CORO": 3.71,
+       "DL": 2.86,
+       "P:pres-pair": 0.5,
+       "SL": 1.34
+      },
+      "sq_lines": 10.28,
+      "most_owed_by_line": {
+       "BGV": 0.46,
+       "CORO": 1.51,
+       "DL": 0.64,
+       "P:pres-pair": 0.5,
+       "SL": 0.71
+      },
+      "sq_total": 5.68,
+      "most_owed_total": 1.15,
+      "ms": 115
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.66,
+       "CORO": 2.28,
+       "DL": 0.74,
+       "P:pres-pair": 0.5,
+       "SL": 3.3
+      },
+      "sq_lines": 8.49,
+      "most_owed_by_line": {
+       "BGV": 0.37,
+       "CORO": 0.64,
+       "DL": 0.59,
+       "P:pres-pair": 0.5,
+       "SL": 0.97
+      },
+      "sq_total": 6.74,
+      "most_owed_total": 1.01,
+      "ms": 83
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 4.42,
+       "CORO": 0.82,
+       "DL": 0.65,
+       "P:pres-pair": 0.0,
+       "SL": 0.95
+      },
+      "sq_lines": 6.83,
+      "most_owed_by_line": {
+       "BGV": 1.02,
+       "CORO": 0.6,
+       "DL": 0.65,
+       "P:pres-pair": 0,
+       "SL": 0.73
+      },
+      "sq_total": 5.47,
+      "most_owed_total": 0.95,
+      "ms": 110
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.27,
+       "CORO": 1.54,
+       "DL": 0.62,
+       "P:pres-pair": 0.5,
+       "SL": 2.5
+      },
+      "sq_lines": 7.42,
+      "most_owed_by_line": {
+       "BGV": 0.94,
+       "CORO": 0.52,
+       "DL": 0.55,
+       "P:pres-pair": 0.5,
+       "SL": 1.23
+      },
+      "sq_total": 5.31,
+      "most_owed_total": 0.97,
+      "ms": 92
+     }
+    ]
+   },
+   {
+    "scenario": "P14",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.46,
+       "CORO": 1.62,
+       "DL": 1.3,
+       "P:pres-pair": 0.0,
+       "SL": 1.33
+      },
+      "sq_lines": 6.71,
+      "most_owed_by_line": {
+       "BGV": 0.9,
+       "CORO": 0.53,
+       "DL": 0.42,
+       "P:pres-pair": 0,
+       "SL": 0.33
+      },
+      "sq_total": 4.58,
+      "most_owed_total": 1.1,
+      "ms": 148
+     }
+    ]
+   },
+   {
+    "scenario": "P16",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 12.53,
+       "CORO": 1.97,
+       "DL": 0.59,
+       "P:pres-pair": 1.5,
+       "SL": 0.79
+      },
+      "sq_lines": 17.38,
+      "most_owed_by_line": {
+       "BGV": 0.75,
+       "CORO": 0.74,
+       "DL": 0.47,
+       "P:pres-pair": 0.5,
+       "SL": 0.61
+      },
+      "sq_total": 10.05,
+      "most_owed_total": 1.41,
+      "ms": 427
+     }
+    ]
+   }
+  ],
+  "v4+swaps": [
+   {
+    "scenario": "P1",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.24,
+       "CORO": 2.03,
+       "DL": 1.93,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 7.28,
+      "most_owed_by_line": {
+       "BGV": 0.45,
+       "CORO": 0.95,
+       "DL": 0.68,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 4.16,
+      "most_owed_total": 0.69,
+      "ms": 203
+     }
+    ]
+   },
+   {
+    "scenario": "P2",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {
+       "consecutive_sundays": 1
+      },
+      "missed_total": 1,
+      "sq_by_line": {
+       "BGV": 2.32,
+       "CORO": 2.19,
+       "DL": 1.98,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 7.57,
+      "most_owed_by_line": {
+       "BGV": 0.45,
+       "CORO": 0.9,
+       "DL": 0.67,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 6.05,
+      "most_owed_total": 0.88,
+      "ms": 256
+     }
+    ]
+   },
+   {
+    "scenario": "P3",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {
+       "consecutive_sundays": 1
+      },
+      "missed_total": 1,
+      "sq_by_line": {
+       "BGV": 2.72,
+       "CORO": 1.71,
+       "DL": 1.98,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 7.49,
+      "most_owed_by_line": {
+       "BGV": 0.69,
+       "CORO": 0.96,
+       "DL": 0.67,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 6.18,
+      "most_owed_total": 0.67,
+      "ms": 115
+     }
+    ]
+   },
+   {
+    "scenario": "P4",
+    "passed": false,
+    "failed_checks": [
+     "same_outcome"
+    ],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {
+       "cadence_off_led": 1,
+       "sunday_cap_exceeded": 1,
+       "consecutive_sundays": 1
+      },
+      "missed_total": 3,
+      "sq_by_line": {
+       "BGV": 2.35,
+       "CORO": 2.42,
+       "DL": 2.45,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 8.3,
+      "most_owed_by_line": {
+       "BGV": 0.45,
+       "CORO": 0.9,
+       "DL": 0.68,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 5.28,
+      "most_owed_total": 1.27,
+      "ms": 128
+     }
+    ]
+   },
+   {
+    "scenario": "P5",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {
+       "cadence_off_led": 1
+      },
+      "missed_total": 1,
+      "sq_by_line": {
+       "BGV": 1.86,
+       "CORO": 1.69,
+       "DL": 0.82,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 5.45,
+      "most_owed_by_line": {
+       "BGV": 0.45,
+       "CORO": 0.95,
+       "DL": 0.32,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 3.82,
+      "most_owed_total": 0.74,
+      "ms": 189
+     }
+    ]
+   },
+   {
+    "scenario": "P6",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {
+       "sunday_cap_exceeded": 1,
+       "consecutive_sundays": 4
+      },
+      "missed_total": 5,
+      "sq_by_line": {
+       "BGV": 2.03,
+       "CORO": 4.71,
+       "DL": 14.32,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 22.15,
+      "most_owed_by_line": {
+       "BGV": 0.56,
+       "CORO": 1.82,
+       "DL": 1.1,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 6.15,
+      "most_owed_total": 0.87,
+      "ms": 138
+     }
+    ]
+   },
+   {
+    "scenario": "P7",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.96,
+       "CORO": 1.61,
+       "DL": 1.93,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 6.59,
+      "most_owed_by_line": {
+       "BGV": 0.54,
+       "CORO": 0.95,
+       "DL": 0.68,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 4.5,
+      "most_owed_total": 0.88,
+      "ms": 221
+     }
+    ]
+   },
+   {
+    "scenario": "P8",
+    "passed": false,
+    "failed_checks": [
+     "nothing_unfilled"
+    ],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 1,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {
+       "sunday_cap_exceeded": 1
+      },
+      "missed_total": 1,
+      "sq_by_line": {
+       "BGV": 1.96,
+       "CORO": 2.24,
+       "DL": 2.37,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 7.66,
+      "most_owed_by_line": {
+       "BGV": 0.48,
+       "CORO": 0.97,
+       "DL": 0.85,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 4.69,
+      "most_owed_total": 0.6,
+      "ms": 111
+     }
+    ]
+   },
+   {
+    "scenario": "P9",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.84,
+       "CORO": 1.63,
+       "DL": 1.93,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 6.47,
+      "most_owed_by_line": {
+       "BGV": 0.45,
+       "CORO": 0.92,
+       "DL": 0.68,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 1.9,
+      "most_owed_total": 0.5,
+      "ms": 169
+     }
+    ]
+   },
+   {
+    "scenario": "P10",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.92,
+       "CORO": 0.84,
+       "DL": 1.21,
+       "P:pres-pair": 0.5,
+       "SL": 1.08
+      },
+      "sq_lines": 5.56,
+      "most_owed_by_line": {
+       "BGV": 0.45,
+       "CORO": 0.36,
+       "DL": 0.55,
+       "P:pres-pair": 0.5,
+       "SL": 0.44
+      },
+      "sq_total": 3.15,
+      "most_owed_total": 0.7,
+      "ms": 196
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.96,
+       "CORO": 1.71,
+       "DL": 1.93,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 6.68,
+      "most_owed_by_line": {
+       "BGV": 0.45,
+       "CORO": 0.96,
+       "DL": 0.68,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 3.01,
+      "most_owed_total": 0.93,
+      "ms": 228
+     }
+    ]
+   },
+   {
+    "scenario": "P11",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {
+       "sunday_cap_exceeded": 1
+      },
+      "missed_total": 1,
+      "sq_by_line": {
+       "BGV": 1.86,
+       "CORO": 1.69,
+       "DL": 1.43,
+       "P:pres-pair": 0.0,
+       "SL": 1.08
+      },
+      "sq_lines": 6.05,
+      "most_owed_by_line": {
+       "BGV": 0.51,
+       "CORO": 0.95,
+       "DL": 0.66,
+       "P:pres-pair": 0,
+       "SL": 0.44
+      },
+      "sq_total": 6.48,
+      "most_owed_total": 1.16,
+      "ms": 216
+     }
+    ]
+   },
+   {
+    "scenario": "P12",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 2.26,
+       "CORO": 0.87,
+       "DL": 1.76,
+       "P:pres-pair": 0.0,
+       "SL": 1.0
+      },
+      "sq_lines": 5.9,
+      "most_owed_by_line": {
+       "BGV": 0.63,
+       "CORO": 0.4,
+       "DL": 0.58,
+       "P:pres-pair": 0,
+       "SL": 0.52
+      },
+      "sq_total": 6.21,
+      "most_owed_total": 0.98,
+      "ms": 971
+     }
+    ]
+   },
+   {
+    "scenario": "P13",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {
+       "sunday_cap_exceeded": 1
+      },
+      "missed_total": 1,
+      "sq_by_line": {
+       "BGV": 2.14,
+       "CORO": 1.99,
+       "DL": 1.43,
+       "P:pres-pair": 0.0,
+       "SL": 0.78
+      },
+      "sq_lines": 6.34,
+      "most_owed_by_line": {
+       "BGV": 0.52,
+       "CORO": 1.03,
+       "DL": 0.66,
+       "P:pres-pair": 0,
+       "SL": 0.3
+      },
+      "sq_total": 5.53,
+      "most_owed_total": 1.15,
+      "ms": 201
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 3.43,
+       "CORO": 4.19,
+       "DL": 0.84,
+       "P:pres-pair": 0.0,
+       "SL": 2.22
+      },
+      "sq_lines": 10.68,
+      "most_owed_by_line": {
+       "BGV": 0.8,
+       "CORO": 1.22,
+       "DL": 0.41,
+       "P:pres-pair": 0,
+       "SL": 0.76
+      },
+      "sq_total": 3.68,
+      "most_owed_total": 0.87,
+      "ms": 185
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.9,
+       "CORO": 3.71,
+       "DL": 2.86,
+       "P:pres-pair": 0.5,
+       "SL": 0.58
+      },
+      "sq_lines": 9.55,
+      "most_owed_by_line": {
+       "BGV": 0.52,
+       "CORO": 1.51,
+       "DL": 0.64,
+       "P:pres-pair": 0.5,
+       "SL": 0.58
+      },
+      "sq_total": 3.87,
+      "most_owed_total": 1.13,
+      "ms": 243
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.74,
+       "CORO": 1.84,
+       "DL": 0.74,
+       "P:pres-pair": 0.5,
+       "SL": 2.13
+      },
+      "sq_lines": 6.96,
+      "most_owed_by_line": {
+       "BGV": 0.37,
+       "CORO": 0.54,
+       "DL": 0.59,
+       "P:pres-pair": 0.5,
+       "SL": 0.85
+      },
+      "sq_total": 6.19,
+      "most_owed_total": 0.99,
+      "ms": 189
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 3.46,
+       "CORO": 0.8,
+       "DL": 0.65,
+       "P:pres-pair": 0.0,
+       "SL": 1.37
+      },
+      "sq_lines": 6.29,
+      "most_owed_by_line": {
+       "BGV": 1.02,
+       "CORO": 0.57,
+       "DL": 0.65,
+       "P:pres-pair": 0,
+       "SL": 0.65
+      },
+      "sq_total": 4.62,
+      "most_owed_total": 0.91,
+      "ms": 139
+     },
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.86,
+       "CORO": 1.81,
+       "DL": 0.62,
+       "P:pres-pair": 0.5,
+       "SL": 2.5
+      },
+      "sq_lines": 7.29,
+      "most_owed_by_line": {
+       "BGV": 0.65,
+       "CORO": 0.51,
+       "DL": 0.55,
+       "P:pres-pair": 0.5,
+       "SL": 1.23
+      },
+      "sq_total": 7.17,
+      "most_owed_total": 1.02,
+      "ms": 126
+     }
+    ]
+   },
+   {
+    "scenario": "P14",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 1.52,
+       "CORO": 1.62,
+       "DL": 1.3,
+       "P:pres-pair": 0.0,
+       "SL": 1.33
+      },
+      "sq_lines": 5.77,
+      "most_owed_by_line": {
+       "BGV": 0.53,
+       "CORO": 0.53,
+       "DL": 0.42,
+       "P:pres-pair": 0,
+       "SL": 0.33
+      },
+      "sq_total": 4.68,
+      "most_owed_total": 1.1,
+      "ms": 304
+     }
+    ]
+   },
+   {
+    "scenario": "P16",
+    "passed": true,
+    "failed_checks": [],
+    "runs": [
+     {
+      "ok": true,
+      "checker_ok": true,
+      "checker_problems": {},
+      "unfilled": 0,
+      "rules_broken": 0,
+      "rules_broken_by_family": {},
+      "missed": {},
+      "missed_total": 0,
+      "sq_by_line": {
+       "BGV": 12.53,
+       "CORO": 1.83,
+       "DL": 0.59,
+       "P:pres-pair": 1.5,
+       "SL": 0.79
+      },
+      "sq_lines": 17.24,
+      "most_owed_by_line": {
+       "BGV": 0.75,
+       "CORO": 0.74,
+       "DL": 0.47,
+       "P:pres-pair": 0.5,
+       "SL": 0.61
+      },
+      "sq_total": 8.15,
+      "most_owed_total": 0.77,
+      "ms": 847
+     }
+    ]
+   }
+  ]
+ }
+}

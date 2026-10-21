@@ -1,0 +1,12 @@
+NOV+DEC (2 months, same history) — mean per seed
+  v3: unfilled=0.0 rules=0.0 missed=0.0 sq_lines=4.26 most_owed_total=0.89 sq_total=3.12 checker_ok=True
+  v4: unfilled=0.0 rules=0.0 missed=0.0 sq_lines=4.85 most_owed_total=0.89 sq_total=4.15 checker_ok=True
+  v4+swaps: unfilled=0.0 rules=0.0 missed=0.0 sq_lines=4.77 most_owed_total=0.89 sq_total=3.82 checker_ok=True
+CHAIN (12 months, own history) — totals over the year, mean per seed
+  v3: unfilled=0.0 rules=0.0 missed=0.0 cum|bal| max=1.65 p95=1.46 mean=0.561
+  v4: unfilled=0.0 rules=0.0 missed=0.0 cum|bal| max=2.56 p95=1.32 mean=0.600
+  v4+swaps: unfilled=0.0 rules=0.0 missed=0.0 cum|bal| max=1.94 p95=1.35 mean=0.521
+SCENARIOS (set P)
+  v3: 15/15 pass; failed: 
+  v4: 13/15 pass; failed: P4(same_outcome), P8(nothing_unfilled)
+  v4+swaps: 13/15 pass; failed: P4(same_outcome), P8(nothing_unfilled)
