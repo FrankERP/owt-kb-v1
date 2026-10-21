@@ -48,7 +48,7 @@ What does not change: `/admin`, the PATCH and create routes' rules, the notices,
 | F4 | **The permission prompt shows what will happen.** Each change carries its `lines` (the Spanish change lines and, for a forced seat, its waiver line); for every «por guardar» service they must equal the server's own rendering of `target` against that service's stored state (NFC multiset, the `sameWaiverItems` pattern). A mismatch refuses the whole call before any write. Lines on «ya estaba» services are not compared, and their waivers are not needed | Show only the JSON | The prompt is the guarantee Frank was given in ADR-0062 Q1 (2); tokens are unreadable, sentences are not |
 | F5 | **Forcing a per-seat rule needs the card.** Every NEW rule finding on a «por guardar» service (the whole-board safety net, keyed by `FindingKey` as `editorBoard.ts`/`waivers.ts` key them: a role or week exclusion by service, seat and member; a pair by the unordered pair of members in that service) needs a waiver token minted by the app-only `check_service_edits_app` when Frank answers «Asignar de todos modos»: HMAC of `MCP_OAUTH_SECRET` under its own label over the `FindingKey`, the rule wording, the service and its `baseRev`. Binding `baseRev` makes a token die with the write it was minted for. Findings already on the stored service before the edit (forced earlier in `/admin`, stored nowhere) are the baseline: warnings, never refusals, as `waivers.ts` treats the base board. A token for a finding that no longer arises is ignored | Let the save accept any echoed waiver; or key tokens by the seat the card asked about | Keeps ADR-0062's «Claude desde el chat nunca puede forzar» true for stored services: the model-visible preview never forces, and a waiver the model invents or reuses has no valid token. The save judges additions order-independently, so a pair finding may name the other member than the one the card asked about; `FindingKey` is what the safety net actually produces |
 | F6 | **Member tokens scoped to the month**, HMAC over `"mcp-member-token|month|" + YYYY-MM + "|" + memberId`, reversed over the pool plus the month's seated ids | Reuse the proposal tokens (scoped to a lineage root) | A stored month has no lineage; a month scope still keeps ids off the wire (KH-1) |
-| F7 | **«Cuenta para equidad» keeps its read rule** (`countsForFairness.ts`): absent = unchanged; a change on a service in a past CDMX month is refused on the server (the planner's Switch is client-only, C1-D7; the connector has no such client) | Mirror only the client | The connector is a second client; the server is the only place both share |
+| F7 | **«Cuenta para equidad» keeps its read rule** (`countsForFairness.ts`): absent = unchanged; a change (a value that differs from the service's effective stored value, `effectiveStoredCounts` in `fairnessToggleModel.ts` over the `countsForFairness.ts` read rule) on a service in a past CDMX month is refused on the server (the planner's Switch is client-only, C1-D7; the connector has no such client) | Mirror only the client | The connector is a second client; the server is the only place both share |
 | F8 | **No delete in phase 1.** | — | Phase 2, with its own echo-list confirmation |
 
 ## 3. Questions for Frank
@@ -87,7 +87,9 @@ admission is not `approved` (`storedRoleReadModel.ts` `StoredRoleAdmission`: `bo
   move path (kept for the route), occupancy, lock heartbeat or bootstrap, the special identity
   claim, ONE transaction under `ifRevisionId(role._rev)`, the conflict mapping, and the post-commit
   side effects (`isNoticeNeutralEdit`, `notifyRoleAssignments`, `queueRoleNotices` with `before`
-  captured pre-commit, `revalidateRoleMutation`). It returns the same `{status, body}` the route
+  captured pre-commit, `revalidateRoleMutation`). It takes the side-effect options
+  `{deferred, sweep, timeoutMs}` (route: deferred, sweep on, no timeout — unchanged; MCP save:
+  inline, sweep off, the time left; T2.5 item 4). It returns the same `{status, body}` the route
   sends. `copyInstrumentsCommit.ts` likewise from `copy-instruments/route.ts`. The routes keep auth,
   JSON reading and `withVerificationRunContext` only; their existing tests pass unchanged, and
   `serviceCommitCallers.test.ts` (with its `DELIVERY_CAPABLE_IMPORTS` fixture) and
@@ -138,30 +140,44 @@ admission is not `approved` (`storedRoleReadModel.ts` `StoredRoleAdmission`: `bo
   3. For the «por guardar» services only: the target is judged as a DIFF against the stored role
      (removals first, then each added person through the pick gate on the board without them, then
      the safety net) on the board made of the current state of every other service; every new
-     finding has a valid token (F5); the lines match (F4); a `countsForFairness` change on a past
-     CDMX month is refused (F7); a group over 6 services is refused. Any failure refuses all,
+     finding has a valid token (F5); the lines match (F4); a `countsForFairness` value that differs from the effective
+     stored one (`effectiveStoredCounts`) on a past CDMX month is refused (F7); a group over 6 services is refused. Any failure refuses all,
      nothing written.
   4. Writes, through `roleEditCommit` under `baseRev`, one service at a time: groups and single
      services in order of their earliest date, a group's services back to back. **Time model:**
      Next holds every `after()` callback registered during the call until the MCP response closes,
      then starts them all at once (`next/dist/server/after/after-context.js`, a paused queue), inside
-     the same 60 s. So the post-commit tail of N writes runs AFTER the last write. To keep that tail
-     small and bounded, the MCP save runs each write's side effects with the opportunistic sweep
-     OFF (a `sweep: false` option on the shared side-effect path; the route keeps it ON): each write
-     still upserts its outbox notices (with its pre-commit `before`), sends its push and
-     revalidates, but no layer-2 sweep runs in this call. Nothing is delayed by it: a seat edit's
-     notice is debounced 15 minutes (`DEBOUNCE_MS`, `outboxNotice.ts`), so the sweep after an edit
-     never sends that edit's own notice; layer 1 (every 5 minutes) flushes it when due. No group
-     or single service STARTS after a cut-off set from a dev measurement of the WHOLE call (first
-     write to the end of the `after()` tail, published services, the largest allowed group), so
-     that the tail of the last started group ends with at least 15 s to spare; it starts at 30 s
-     and only moves down. What did not start answers «pendiente». A 409 on a single service is «no
-     se guardó» with its reason and the run continues. **A 409 on a group service not yet written
-     marks every unwritten service of that group «no se guardó»** (none of them is written) and the
-     run continues with the next group or single; if the group already had a written service, item
-     5 applies. A thrown or unknown outcome is «sin confirmar» and STOPS the run.
-  5. **A 409 inside a group after one of its services was written** (someone saved that service
-     between this call's read and its write — the race no sequential save can close) STOPS the run
+     the same 60 s. So anything left in `after()` runs only once the
+     whole call is over, and a call killed at 60 s loses it: the services already written would
+     answer «ya estaba» on the repeat and never queue their notices. Therefore the MCP save runs
+     each write's DURABLE side effects INLINE, awaited, before the next write starts (a
+     `deferred: false` mode on the shared side-effect path; the route keeps its `after()`): the
+     outbox upsert (`queueRoleNotices` with that write's pre-commit `before`) and the revalidation.
+     Only the push stays in `after()` (best-effort, as on the route; the outbox is the record).
+     The opportunistic layer-2 sweep is OFF in this call (`sweep: false`; the route keeps it ON).
+     Nothing is lost by that: a seat edit's notice is debounced 15 minutes (`DEBOUNCE_MS`,
+     `outboxNotice.ts`), and any notice that is due waits at most until layer 1 (every 5 minutes)
+     flushes it. **Every Sanity request in the save carries a timeout** derived from the time left
+     (`writeClient` has none of its own, so @sanity/client's 5-minute default would apply), with a
+     hard stop at 45 s from the call's start: a request that times out is «sin confirmar» and
+     STOPS the run. No group or single service STARTS after a cut-off set from a dev measurement of
+     the WHOLE call (first write to the response, published services, the largest allowed group,
+     each write with its inline upsert and revalidation), so that the last started group ends with
+     at least 15 s to spare; it starts at 30 s and only moves down. What did not start answers
+     «pendiente». **Each write's outcome is classified as the planner classifies a PATCH**
+     (`classifyPatchOutcome` in `plannerSaveModel.ts`, applied to the commit's status and error
+     code): `knownCommitted`; `knownFailure` (only the proven pre-write codes in
+     `PROVEN_PREWRITE_FAILURES`: nothing was written); anything else (a throw, a timeout, a 5xx, an
+     unlisted code) is «sin confirmar» and STOPS the run. After a `knownFailure` the save re-reads
+     that service's `_rev`: unchanged (the write lost to the service lock or a transient
+     contention) → «no se guardó, repite la misma llamada»; changed → «no se guardó, alguien la
+     cambió: revisa el mes de nuevo». A `knownFailure` on a single service lets the run continue.
+     **A `knownFailure` on a group service not yet written marks every unwritten service of that
+     group «no se guardó»** (none of them is written) and the run continues with the next group or
+     single; if the group already had a written service, item 5 applies.
+  5. **A `knownFailure` inside a group after one of its services was written** (typically
+     someone saved that service between this call's read and its write — the race no sequential
+     save can close — or it was deleted, `not_found`) STOPS the run
      and says, in words, who is now where: «Ana quedó en sábado 7 y domingo 8» or «Ana ya no está en
      ningún servicio del mes», computed from the written targets against the unwritten side's stored
      state. The next step is a NEW check of the month (the same call would now be refused as
@@ -178,10 +194,16 @@ admission is not `approved` (`storedRoleReadModel.ts` `StoredRoleAdmission`: `bo
   and none for a draft. Save: a partial run (one service written, then «sin confirmar»; and one cut off as «pendiente»)
   repeated with the same call writes only the rest and answers «ya estaba» for the written ones,
   their waivers unused; a group interrupted by «sin confirmar» is completed by the repeat; a 409 on
-  the second service of a group stops the run and names the person and both services; a 409 on the
-  FIRST service of a group writes nothing of that group and the run goes on; a repeat after a
+  the second service of a group stops the run and names the person and both services; a 404
+  (service deleted) on the second service of a group does the same; a 409 on the
+  FIRST service of a group writes nothing of that group and the run goes on; a lock contention
+  (`knownFailure` with the `_rev` unchanged) answers «repite la misma llamada» and the repeat
+  writes it; a stalled Sanity request (a fake that never answers) times out as «sin confirmar»
+  before 45 s and stops the run; each write's outbox upsert is awaited before the next write
+  starts (a fake that records the order), so a call killed after write k has queued the notices
+  of writes 1..k; a repeat after a
   partial group write still treats the remaining side as grouped; a save of published services runs
-  no layer-2 sweep and still upserts every notice with its pre-commit `before`; a group of 7
+  no layer-2 sweep and still upserts every notice, inline, with its pre-commit `before`; a group of 7
   refused before any write; groups are derived by the server (a client-sent `group` field is
   rejected by the schema); a weekend setlist saved between check and save does not block the save;
   a stale service refuses the whole call; a waiver token replayed on
@@ -191,9 +213,9 @@ admission is not `approved` (`storedRoleReadModel.ts` `StoredRoleAdmission`: `bo
   C4 without a token, with a token for another finding, and after the rule wording changed; a
   `lines` mismatch; a
   `countsForFairness` change on a past CDMX month refused; a non-`approved` service refused; a date in
-  `target` different from the stored one refused. Latency: the WHOLE call (first write to the end of
-  the `after()` tail) is measured on dev with published services and a 6-service group; the start
-  cut-off (30 s) and the group cap (6) are lowered before release until that tail ends with 15 s to
+  `target` different from the stored one refused. Latency: the WHOLE call (first write to the response,
+  inline side effects included) is measured on dev with published services and a 6-service group; the start
+  cut-off (30 s) and the group cap (6) are lowered before release until the call ends with 15 s to
   spare. Hygiene: no member
   id, rule key or rules revision in any result, and no id or name in any log line
   (`monthToolHygiene.test.ts`); services cross as the role ids `get_service` already returns.
@@ -203,8 +225,10 @@ admission is not `approved` (`storedRoleReadModel.ts` `StoredRoleAdmission`: `bo
 - `create_service {date, type, name?, time?, worshipNight?}` (destructive) through
   `roleCreateCommit` with the composer's `countsForFairness` rule and an idempotent
   `creationRequestId` = hash of the call; seats empty.
-- `copy_instruments {from, to, lines}` (destructive) through T2.1's commit, both revisions read
-  fresh; `lines` names every person the copy seats («domingo 8 nov · Batería: Carlos»), compared as
+- `copy_instruments {from, to, lines, waivers?}` (destructive) through T2.1's commit, both
+  revisions read fresh; the resulting `to` service is judged by T2.3's judge (the same diff
+  judge as a seat edit), its new findings need F5 tokens from `check_service_edits_app`, and its
+  side effects run inline as in T2.5 item 4; `lines` names every person the copy seats («domingo 8 nov · Batería: Carlos»), compared as
   in F4, so the permission prompt shows who is seated.
 
 ### S4 — the card over a stored month (standard)
