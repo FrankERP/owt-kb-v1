@@ -115,7 +115,7 @@ function Section({ section, open, onToggle, myName, photos }: {
         {/* auto-fit + an em floor, not `grid-cols-2`: the track minimum grows with
             the TEXT, so at «Máximo» the faces drop to one column instead of two
             columns whose names overlap. */}
-        <ul className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,10em),1fr))] gap-x-3 gap-y-3">
+        <ul className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,8.5em),1fr))] gap-x-3 gap-y-3">
           {people.map((p, i) => (
             <Person key={`${p.name}-${p.role}-${i}`} person={p} myName={myName} photos={photos} duplicate={dups.has(personKey(p.name))} />
           ))}
