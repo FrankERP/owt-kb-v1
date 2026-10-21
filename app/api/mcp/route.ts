@@ -1,7 +1,8 @@
 // app/api/mcp/route.ts
 //
 // The MCP endpoint (P0 plan step 9, spec I6/O2/E1): Streamable HTTP through
-// `mcp-handler`, stateless, tools registered below: `ping`, the seven P1 reads,
+// `mcp-handler`, stateless, tools registered below: `ping`, the seven P1 reads, the three
+// admin-parity reads (fairness ledger, solver rules, integrity queue),
 // the four P3 writes and the two P4 month tools, plus one resource (the MCP Apps
 // card `solve_month` links to, `app/mcp/apps/proposalCard.ts`). Ungated by the session
 // middleware (`api/mcp(?:/|$)` in `app/utils/routeMatcher.ts`, P0 step 5), so
@@ -42,6 +43,9 @@ import { MCP_SERVER_NAME, mcpServerVersion } from "@/app/mcp/serverInfo";
 import { completeResponse } from "@/app/mcp/transport/completeResponse";
 import { registerGetMemberAvailability } from "@/app/mcp/tools/getMemberAvailability";
 import { registerGetParticipation } from "@/app/mcp/tools/getParticipation";
+import { registerGetFairnessLedger } from "@/app/mcp/tools/getFairnessLedger";
+import { registerGetSolverRules } from "@/app/mcp/tools/getSolverRules";
+import { registerGetIntegrityQueue } from "@/app/mcp/tools/getIntegrityQueue";
 import { registerGetService } from "@/app/mcp/tools/getService";
 import { registerGetSong } from "@/app/mcp/tools/getSong";
 import { registerListProposals } from "@/app/mcp/tools/listProposals";
@@ -97,6 +101,9 @@ const mcpHandler = createMcpHandler(
     registerGetMemberAvailability(server);
     registerGetParticipation(server);
     registerListProposals(server);
+    registerGetFairnessLedger(server);
+    registerGetSolverRules(server);
+    registerGetIntegrityQueue(server);
     // The four writes (P3), after the reads. Each calls its admin counterpart's
     // own `*Commit` module (ADR-0043) and declares itself destructive (I14).
     registerUnpublishService(server);

@@ -64,7 +64,8 @@ async function settle<T>(run: () => Promise<T>): Promise<{ ok: true; value: T } 
   }
 }
 
-async function readRules(): Promise<V3PlanRules> {
+/** The stored rules as the planner reads them (exported for `get_solver_rules`). */
+export async function readRules(): Promise<V3PlanRules> {
   const source = sourceFromGet(true, viaJson(solverConfigGetBody(await loadStoredSolverConfig())));
   const config = editableConfig(source);
   if (!config) throw new Error("rules");

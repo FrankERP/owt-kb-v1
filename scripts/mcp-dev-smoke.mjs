@@ -333,6 +333,12 @@ export const MONTH_TOOL_NAMES = ["solve_month", "apply_schedule"];
  */
 export const EDITOR_TOOL_NAMES = ["check_proposal_edits", "save_proposal_edits", "revise_proposal"];
 
+/**
+ * Admin parity phase 1: three reads after the P1 reads (`/admin`'s Equidad, rules and integrity
+ * queue). Read-only, so the smoke may call them, but it does not need to.
+ */
+export const ADMIN_READ_TOOL_NAMES = ["get_fairness_ledger", "get_solver_rules", "get_integrity_queue"];
+
 /** The registration this deployment is expected to carry (`app/api/mcp/route.ts`), in order. */
 export const EXPECTED_TOOLS = [
   "ping",
@@ -343,6 +349,7 @@ export const EXPECTED_TOOLS = [
   "get_member_availability",
   "get_participation",
   "list_proposals",
+  ...ADMIN_READ_TOOL_NAMES,
   ...WRITE_TOOL_NAMES,
   ...MONTH_TOOL_NAMES,
   ...EDITOR_TOOL_NAMES,
@@ -443,9 +450,10 @@ export const READ_TOOL_NAMES = [
 
 /**
  * Every tool this script may call, and the only names `toolCallRequest`
- * accepts: `ping` and the seven reads. A write tool is never here (DV1).
+ * accepts: `ping`, the seven reads and the three admin-parity reads (callable, though `--reads`
+ * does not call them). A write tool is never here (DV1).
  */
-export const CALLABLE_TOOLS = Object.freeze(["ping", ...READ_TOOL_NAMES]);
+export const CALLABLE_TOOLS = Object.freeze(["ping", ...READ_TOOL_NAMES, ...ADMIN_READ_TOOL_NAMES]);
 
 /**
  * The one spelling of the JSON-RPC method a `tools/call` request carries.
