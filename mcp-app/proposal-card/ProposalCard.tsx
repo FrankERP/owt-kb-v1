@@ -15,12 +15,12 @@ export interface ProposalCardProps {
   note?: string;
 }
 
-function ServiceBlock({ service }: { service: CardService }) {
+function ServiceBlock({ service, fixedTag = "No se creará" }: { service: CardService; fixedTag?: string }) {
   return (
     <details className="service" open={service.planned}>
       <summary>
         <span className="service-label">{service.label}</span>
-        {!service.planned && <span className="tag">No se creará</span>}
+        {!service.planned && <span className="tag">{fixedTag}</span>}
       </summary>
       {service.rows.length === 0 ? (
         <p className="muted">Sin asignaciones.</p>
@@ -43,6 +43,51 @@ export function ProposalCard({ view, canExpand, onExpand, onEdit, note }: Propos
     return (
       <main className="card" aria-busy="true">
         <p className="muted">Esperando la propuesta…</p>
+      </main>
+    );
+  }
+
+  if (view.kind === "storedMonth") {
+    return (
+      <main className="card">
+        <header className="head">
+          <div>
+            <h1>{view.title}</h1>
+            <p className="muted">{view.changed ? `${view.changed} ${view.changed === 1 ? "servicio cambia" : "servicios cambian"} (sin guardar)` : "Así está guardado"}</p>
+          </div>
+          {canExpand && (
+            <button type="button" className="expand" onClick={onExpand}>
+              Ver en grande
+            </button>
+          )}
+        </header>
+        {note && (
+          <p className="hint" role="status">
+            {note}
+          </p>
+        )}
+        {view.lines.length > 0 && (
+          <ul className="notices">
+            {view.lines.map((n, i) => (
+              <li key={i}>{n}</li>
+            ))}
+          </ul>
+        )}
+        <section aria-label="Servicios">
+          {view.services.map((s, i) => (
+            <ServiceBlock key={`${s.label}-${i}`} service={s} fixedTag="Solo en /admin" />
+          ))}
+        </section>
+        {onEdit ? (
+          <div className="actions">
+            <button type="button" className="primary" onClick={onEdit}>
+              Editar
+            </button>
+          </div>
+        ) : null}
+        <p className="foot muted">
+          {onEdit ? "Edita los lugares aquí, o pídeselo a Claude en el chat. Nada se guarda sin que lo confirmes en el chat." : "Para cambiar o guardar algo, díselo a Claude en el chat."}
+        </p>
       </main>
     );
   }

@@ -200,7 +200,9 @@ function move(board: EditorBoard, input: ReplayInput, from: SeatRef, to: { servi
   switch (verdict.kind) {
     case "not-permitted":
       // Every precondition `evaluateMove` checks was checked above; one firing here is a disagreement.
-      return verdict.code === "P3" ? refuse("column_not_created") : refuse("server_error");
+      // P3 (a draft apply will not create) and P2 (a stored service that no longer serializes) are
+      // both «not editable»; anything else is a disagreement.
+      return verdict.code === "P3" || verdict.code === "P2" ? refuse("column_not_created") : refuse("server_error");
     case "refused":
       if (verdict.code === "C1") return refuse("already_in_cell");
       if (verdict.code === "C2") return { ok: false, refusal: { code: "same_category_double", sentence: verdict.reason } };

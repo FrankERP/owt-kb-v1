@@ -528,50 +528,94 @@ export function queueRoleNotices(input: QueueRoleNoticesInput): RoleNoticesDescr
   // same way `attempt` guards the deferred write below, so a throw here is
   // logged and swallowed instead of turning a committed write into a 500.
   attemptSync("queueRoleNotices build", () => {
-    // `published !== false` — missing/true is member-visible (grandfathered).
-    if (input.published === false) return;
-    // Same guard as `setlistUpsert`, and for the same reason: `isPast` at flush
-    // is a lexicographic YYYY-MM-DD comparison with no defined reading for `""`,
-    // so a dateless notice would be minted here and then dropped silently at
-    // flush — losing a "Ya no participas" for a deleted role. Unreachable today
-    // (every call site supplies a validated date); stated here so the reasoning
-    // lives in ONE place rather than only on the setlist path.
-    if (!input.serviceDate) return;
-
-    const before = input.beforeSeats ?? NO_SEATS;
-    // A deleted role has no post-state, whatever the caller passed.
-    const afterState = (input.deleted ? null : input.afterSeats) ?? NO_SEATS;
-
-    const members = [...new Set([...seatAssignees(before), ...seatAssignees(afterState)])];
-    if (!members.length) return;
-
-    // Every value the deferred block writes is computed HERE, synchronously, from
-    // arguments the writer captured pre-commit. The block itself reads nothing.
-    const now = new Date();
-    const upserts = members.map((memberId) => ({
-      id: outboxId("role", `${memberId}__${input.roleId}`),
-      ...buildUpsert(
-        {
-          kind: "role",
-          subjectKey: `${memberId}__${input.roleId}`,
-          memberId,
-          roleId: input.roleId,
-          proposalId: null,
-          serviceDate: input.serviceDate,
-          roleType: input.roleType,
-          before: { beforeRoles: rolesForMember(memberId, before) },
-          // One member per `role` notice, so they are the whole known audience.
-          knownRecipients: [memberId],
-        },
-        now,
-      ),
-    }));
-
+    const built = buildRoleNoticeUpserts(input);
+    if (!built) return;
     // ONE transaction for this role's notices — see `commitUpserts`.
-    after(() => commitUpserts("outbox role upsert", upserts));
-    descriptor = { kind: "role", roleId: input.roleId, memberIds: [...members] };
+    after(() => commitUpserts("outbox role upsert", built.upserts));
+    descriptor = built.descriptor;
   });
   return descriptor;
+}
+
+/**
+ * The same notices as {@link queueRoleNotices}, upserted NOW and awaited, with no
+ * layer-2 sweep: the MCP stored-service save (admin parity phase 1, T2.5 item 4)
+ * writes several services in one call, and Next runs `after()` only once the
+ * response closes, so a call killed at its time limit would lose the notices of
+ * every service it had already written. `queued` says whether they landed: `true`
+ * when there was nothing to queue or the upsert committed, `false` when the build
+ * or the upsert failed (logged with a fixed tag, never the error's text). Never
+ * rejects. The route keeps the deferred path.
+ */
+export async function queueRoleNoticesNow(
+  input: QueueRoleNoticesInput,
+): Promise<{ descriptor: RoleNoticesDescriptor | null; queued: boolean }> {
+  let built: ReturnType<typeof buildRoleNoticeUpserts> = null;
+  try {
+    built = buildRoleNoticeUpserts(input);
+  } catch {
+    console.error("[sideEffects] queueRoleNoticesNow build failed");
+    return { descriptor: null, queued: false };
+  }
+  if (!built) return { descriptor: null, queued: true };
+  try {
+    let tx = writeClient.transaction();
+    for (const upsert of built.upserts) {
+      tx = tx
+        .createIfNotExists(upsert.createIfNotExists as { _id: string; _type: string })
+        .patch(upsert.id, (p) => p.set(upsert.patchSet));
+    }
+    await tx.commit();
+    return { descriptor: built.descriptor, queued: true };
+  } catch {
+    console.error("[sideEffects] outbox role upsert (inline) failed");
+    return { descriptor: built.descriptor, queued: false };
+  }
+}
+
+/** The role notices' upserts and descriptor, or `null` when there is nothing to queue. May throw. */
+function buildRoleNoticeUpserts(
+  input: QueueRoleNoticesInput,
+): { upserts: BuiltUpsert[]; descriptor: RoleNoticesDescriptor } | null {
+  // `published !== false` — missing/true is member-visible (grandfathered).
+  if (input.published === false) return null;
+  // Same guard as `setlistUpsert`, and for the same reason: `isPast` at flush
+  // is a lexicographic YYYY-MM-DD comparison with no defined reading for `""`,
+  // so a dateless notice would be minted here and then dropped silently at
+  // flush — losing a "Ya no participas" for a deleted role. Unreachable today
+  // (every call site supplies a validated date); stated here so the reasoning
+  // lives in ONE place rather than only on the setlist path.
+  if (!input.serviceDate) return null;
+
+  const before = input.beforeSeats ?? NO_SEATS;
+  // A deleted role has no post-state, whatever the caller passed.
+  const afterState = (input.deleted ? null : input.afterSeats) ?? NO_SEATS;
+
+  const members = [...new Set([...seatAssignees(before), ...seatAssignees(afterState)])];
+  if (!members.length) return null;
+
+  // Every value the write carries is computed HERE, synchronously, from
+  // arguments the writer captured pre-commit. The write itself reads nothing.
+  const now = new Date();
+  const upserts = members.map((memberId) => ({
+    id: outboxId("role", `${memberId}__${input.roleId}`),
+    ...buildUpsert(
+      {
+        kind: "role",
+        subjectKey: `${memberId}__${input.roleId}`,
+        memberId,
+        roleId: input.roleId,
+        proposalId: null,
+        serviceDate: input.serviceDate,
+        roleType: input.roleType,
+        before: { beforeRoles: rolesForMember(memberId, before) },
+        // One member per `role` notice, so they are the whole known audience.
+        knownRecipients: [memberId],
+      },
+      now,
+    ),
+  }));
+  return { upserts, descriptor: { kind: "role", roleId: input.roleId, memberIds: [...members] } };
 }
 
 // ── Outbox: the debounced setlist notice (spec §2/§4) ───────────────────────

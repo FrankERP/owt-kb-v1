@@ -309,7 +309,10 @@ several exist precisely to stop a plausible-looking change.
   cache); `calendarFeedRoute.test.ts` asserts zero fetches for every pre-signature refusal.
 - **Notification emails: `before` is captured PRE-COMMIT** and threaded into
   `after()`. Reading live state inside `after()` gives post-write state and the
-  system silently sends nothing. See `docs/NOTIFICATIONS.md`.
+  system silently sends nothing. The MCP saved-service save (`save_service_edits`,
+  `copy_instruments`, ADR-0066) upserts the same notices inline instead
+  (`queueRoleNoticesNow`, awaited, no layer-2 sweep), from the same pre-commit
+  `before`. See `docs/NOTIFICATIONS.md`.
 - **A Server Component may never CALL a value imported from a `"use client"`
   module.** It receives a client reference, not the function, and calling it
   throws at render — that is what took `/` down for 56 minutes on 2026-09-02
@@ -381,8 +384,8 @@ several exist precisely to stop a plausible-looking change.
   on NextAuth's DEFAULT `redirect` callback preserving its query** — never add a custom
   `redirect` callback without keeping that. `authRedirectCallback.test.ts` is the guard. See
   [`docs/MCP.md`](docs/MCP.md).
-- **The six admin write paths (setlists PUT, roles create, swap, publish-ready, unpublish, the
-  fairness PUT) delegate everything after authorization to `app/utils/*Commit.ts`;
+- **The eight admin write paths (setlists PUT, roles create, roles PATCH, copy-instruments, swap,
+  publish-ready, unpublish, the fairness PUT) delegate everything after authorization to `app/utils/*Commit.ts`;
   `serviceCommitCallers.test.ts` pins their callers and `publishVerdict`'s; MCP writes go only
   through them; `/api/mcp` buffers SSE so a tool finishes inside the handler.** The MCP's
   `apply_schedule` (P4 on v3, ADR-0061) calls two of them: `createRole` (`roleCreateCommit.ts`, each
@@ -403,6 +406,20 @@ several exist precisely to stop a plausible-looking change.
   a direct `apply_schedule` call from the frame. The month check (`monthCheck.ts`) judges the rules
   as written and never calls the solver; `fixtures/month-check/parity.json` pins it to
   `gcf_v3/acceptance/checker.py` from both sides. Members cross the wire as tokens, never ids.
+- **The saved-month editor: change sets, judged as diffs, written one service at a time**
+  (ADR-0066). `check_service_edits` (model) and `check_service_edits_app` (card, app-only) replay
+  edits on the stored month (`storedMonthBoard.ts`, gates in STORED mode) and answer per changed
+  service `{service, baseRev, target, diff, mac, lines, waivers?}`; `save_service_edits` reads fresh,
+  sorts every service first (equal to target → «ya estaba»; `_rev` ≠ `baseRev` → «cambió», refusing
+  the whole call before any write; else «por guardar»), re-judges with `judgeTarget`, compares
+  `lines` as an NFC multiset and verifies waiver tokens, then writes through `roleEditCommit`
+  (`notices: "inline"`) one service at a time, groups (derived on the server, ≤ 6) back to back,
+  under a 45 s hard stop and a 30 s start cut-off. Only the app-only check mints waiver tokens; a
+  finding the service already had is a warning (re-forced: a line, no token). «Cuenta para equidad»
+  in a past CDMX month is refused on the server. `copy_instruments` goes through
+  `copyInstrumentsCommit` with lines naming every seat and no waivers (per-seat rules bind voice
+  rows only); `create_service` through `roleCreateCommit`, idempotent by a hash of the call. The
+  card's saved-month mode never writes: «Guardar» goes through the chat. No delete in phase 1.
 - **The admin assistant (`/api/admin/chat`, the `AssistantBubble` on every page) is READ-ONLY** (ADR-0060). Access:
   `super-admin`, or `admin` with the `worship` ministry (`canUseAdminChat`), from the live access
   snapshot, never while impersonating — the spend would land on someone else. Its five tools call

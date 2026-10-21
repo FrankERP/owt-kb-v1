@@ -13,7 +13,7 @@ import { applyScheduleResult } from "@/app/mcp/tools/applySchedule";
 import { checkProposalEditsResult, reviseProposalResult, saveProposalEditsResult } from "@/app/mcp/tools/proposalEditor";
 import { HANDLE, PRINCIPAL } from "@/app/mcp/tools/__tests__/monthToolFixtures";
 import { editorWorld, type EditorWorld } from "@/app/mcp/tools/__tests__/editorToolFixtures";
-import { Editor, type EditorProps } from "@/mcp-app/proposal-card/Editor";
+import { Editor, type ProposalEditorProps } from "@/mcp-app/proposal-card/Editor";
 import { seatOf } from "@/mcp-app/proposal-card/useEditor";
 import {
   afterRefusal,
@@ -182,7 +182,7 @@ describe("the editor model's own rules", () => {
 
 describe("the presentational editor", () => {
   const noop = () => {};
-  const props: EditorProps = {
+  const props: ProposalEditorProps = {
     revision: 2,
     board: [
       { service: "s1", label: "domingo 8 nov", date: "2026-11-08", type: "sunday", editable: true, seats: [
@@ -203,7 +203,7 @@ describe("the presentational editor", () => {
     onOpenSeat: noop, onPick: noop, onCloseSheet: noop, onClear: noop, onExchange: noop,
     onForce: noop, onSave: noop, onDiscard: noop, onLoad: noop, onClose: noop,
   };
-  const html = (over: Partial<EditorProps> = {}) => renderToStaticMarkup(<Editor {...props} {...over} />);
+  const html = (over: Partial<ProposalEditorProps> = {}) => renderToStaticMarkup(<Editor {...props} {...over} />);
 
   it("shows each seat's people with «No disp.», a × and a «+»; a service that will not be created is tagged", () => {
     const out = html();

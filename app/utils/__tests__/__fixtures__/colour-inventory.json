@@ -9,7 +9,7 @@
   ],
   "summary": {
     "literalRows": 319,
-    "filesScanned": 501,
+    "filesScanned": 511,
     "filesWithColour": 59,
     "byCategory": {
       "2": 2,
@@ -2395,7 +2395,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 259,
+      "line": 276,
       "disposition": "B",
       "reason": null
     },
@@ -2563,7 +2563,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 606,
+      "line": 608,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2575,7 +2575,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 758,
+      "line": 760,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2587,7 +2587,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2597,
+      "line": 2607,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2599,7 +2599,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2603,
+      "line": 2613,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2611,7 +2611,7 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 1448,
+      "line": 1450,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2623,7 +2623,7 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 1607,
+      "line": 1609,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2635,7 +2635,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 5406,
+      "line": 5533,
       "disposition": "B",
       "reason": null
     },
@@ -2647,7 +2647,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2543,
+      "line": 2610,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2659,7 +2659,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 3379,
+      "line": 3490,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },

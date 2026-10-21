@@ -64,6 +64,11 @@ export function kindOfType(type: string): V3ServiceKind | null {
   return null;
 }
 
+/** `kindOfType`'s inverse — for MCP code, which never spells a role type (spec I2). */
+export function typeOfKind(kind: V3ServiceKind): "sunday_role" | "saturday_role" | "special_role" {
+  return kind === "sunday" ? "sunday_role" : kind === "saturday" ? "saturday_role" : "special_role";
+}
+
 export function serviceLabel(kind: V3ServiceKind, date: string, name?: string | null): string {
   if (kind === "sunday") return `domingo ${dayLabel(date)}`;
   if (kind === "saturday") return `sábado ${dayLabel(date)}`;

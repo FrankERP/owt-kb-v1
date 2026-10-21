@@ -39,6 +39,12 @@ export interface EditorBoard {
   columnIdOf: ReadonlyMap<string, string>;
   /** The `localId`s apply may create: the drafts `creatable` at solve (R10). Only these are edited or judged. */
   editable: ReadonlySet<string>;
+  /**
+   * How a `move` is judged. Absent = a proposal's drafts (create mode: P3 = the target is editable).
+   * `"stored"` = a saved month (`storedMonthBoard.ts`): P2 = both endpoints still serialize as a
+   * PATCH would, and `editable` (the `approved` services) is checked by the replay on both sides.
+   */
+  moveMode?: "stored";
 }
 
 /** The drafts as a board, or `null` when a draft cannot be represented (`draftsToCells`). */
@@ -174,15 +180,16 @@ export type ServerMoveVerdict =
   | (Extract<MoveGateVerdict, { kind: "prompt" }> & { rules: RuleRefusal[] });
 
 /**
- * `evaluateMove` in create mode, its spine REQUIRED (the grid's is optional, `moveGate.ts`) and
- * its target column's inputs from `columnRuleInputs`. P3 (`canReceive`) = the target is editable.
+ * `evaluateMove`, its spine REQUIRED (the grid's is optional, `moveGate.ts`) and its target
+ * column's inputs from `columnRuleInputs`. Create mode (a proposal): P3 (`canReceive`) = the target
+ * is editable. Stored mode (a saved month): P2 = both endpoints serialize; the replay has already
+ * required both to be editable (`approved`), since stored mode has no `canReceive`.
  */
 export function serverEvaluateMove(input: MoveInput): ServerMoveVerdict | null {
   const { board, members, source, target } = input;
   const inputs = columnRuleInputs(board, target.columnId, input.config);
   if (!inputs) return null;
-  const verdict = evaluateMove({
-    mode: "create",
+  const common = {
     cells: board.cells,
     rows: board.rows,
     columns: board.columns,
@@ -190,10 +197,12 @@ export function serverEvaluateMove(input: MoveInput): ServerMoveVerdict | null {
     source,
     target,
     sundayDates: inputs.sundayDates,
-    sundayDatesForColumn: (c) => (c.columnId === inputs.column.columnId ? inputs.sundayDates : sundaySpineForColumn(c)),
+    sundayDatesForColumn: (c: GridColumn) => (c.columnId === inputs.column.columnId ? inputs.sundayDates : sundaySpineForColumn(c)),
     config: inputs.config,
-    canReceive: (c) => board.editable.has(board.localIdOf.get(c.columnId) ?? ""),
-  });
+  };
+  const verdict = board.moveMode === "stored"
+    ? evaluateMove({ mode: "stored", ...common })
+    : evaluateMove({ mode: "create", ...common, canReceive: (c) => board.editable.has(board.localIdOf.get(c.columnId) ?? "") });
   if (verdict.kind !== "prompt") return verdict;
   const row = board.rows.find((r) => r.id === target.rowId)!;
   const member = members.find((m) => m._id === source.memberId)!;

@@ -28,4 +28,7 @@ export const DELIVERY_CAPABLE_IMPORTS: readonly string[] = [
   // Solver v3 C2 (ADR-0043's rule for every `*Commit`): the eligibility-record writer
   // delivers nothing, but the name puts its route in the run-context scan anyway.
   "fairnessMonthCommit",
+  // Admin parity phase 1 (T2.1): the edit and copy writers, extracted from their routes.
+  "roleEditCommit",
+  "copyInstrumentsCommit",
 ];
