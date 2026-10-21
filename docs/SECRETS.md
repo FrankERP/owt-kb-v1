@@ -440,7 +440,7 @@ vercel env rm MCP_OAUTH_SECRET <env>` first — `vercel env add` refuses an exis
 `printf '%s' "$SECRET" | npx vercel env add MCP_OAUTH_SECRET <env>`), then **redeploy that
 environment**. Env vars bind at build time, same as every other variable in this file.
 
-**A second use: the proposal editor's member tokens** (ADR-0062, on the editor's branch; no new
+**A second use: the proposal editor's member tokens** (ADR-0062, in production since 2026-10-21; no new
 secret or env var). The editor's tools name members by a 22-character token, an HMAC-SHA256 of this
 key over the proposal lineage's root handle and the member id (`app/mcp/monthProposals/memberTokens.ts`),
 so no member id crosses the wire. Without the key the editor's tools refuse (as every MCP route
