@@ -2,6 +2,7 @@
 // screen's own sequence (check, «¿Asignar de todos modos?», save with the keys shown, «Cargar»)
 // run end to end into `apply_schedule` — plus the model's pure rules and the presentational half.
 // Fictitious people only (the repository is public).
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
@@ -220,21 +221,37 @@ describe("the presentational editor", () => {
     expect(html({ loadSent: true })).toContain("Enviado al chat");
   });
 
-  it("asks before forcing, with where and why", () => {
-    const out = html({ ask: { sentence: "Regla: excluido de Sun.Lead", items: [{ where: "domingo 8 nov · Lead", sentence: "Regla: excluido de Sun.Lead" }] } });
+  // The host sizes the frame to the content, so a fixed overlay lands at the bottom of the whole
+  // month, screens away from the seat (Frank, 2026-10-21): both panels open under the seat tapped.
+  const between = (out: string, needle: string, after: string, before: string) => {
+    const at = out.indexOf(needle);
+    return at > out.indexOf(after) && at < out.indexOf(before);
+  };
+
+  it("asks before forcing, with where and why, under the seat the edit touched", () => {
+    const ask = { sentence: "Regla: excluido de Sun.Lead", items: [{ where: "domingo 8 nov · Lead", sentence: "Regla: excluido de Sun.Lead" }] };
+    const out = html({ ask: { at: { service: "s1", row: "lead" }, ...ask } });
     expect(out).toContain('role="alertdialog"');
     expect(out).toContain("¿Asignar de todos modos?");
     expect(out).toContain("<li>domingo 8 nov · Lead: Regla: excluido de Sun.Lead</li>");
+    expect(between(out, 'role="alertdialog"', 'aria-label="Agregar en Lead"', "sábado 14 nov")).toBe(true);
+    // A save's ask has no seat: it opens by the buttons that asked for it.
+    const save = html({ ask: { at: null, ...ask } });
+    expect(between(save, 'role="alertdialog"', "<li>Todo cuadra.</li>", "Revisar y guardar")).toBe(true);
   });
 
-  it("lists a seat's candidates; a blocked one cannot be picked", () => {
+  it("lists a seat's candidates under that seat; a blocked one cannot be picked", () => {
     const out = html({ sheet: { seat: { service: "s1", row: "lead" }, label: "domingo 8 nov · Lead", candidates: [
       { token: "t2", name: "Dani", available: true, blocked: null, rule: null },
       { token: "t3", name: "Bruno", available: false, blocked: "Ya está en este servicio", rule: null },
     ] } });
-    expect(out).toContain('role="dialog"');
+    expect(between(out, 'class="picker"', 'aria-label="Agregar en Lead"', "sábado 14 nov")).toBe(true);
     expect(out).toMatch(/<button type="button"><span>Dani<\/span>/);
     expect(out).toMatch(/<button type="button" disabled=""><span>Bruno<\/span><span class="badge">No disp.<\/span>/);
+  });
+
+  it("the stylesheet fixes nothing to the frame", () => {
+    expect(readFileSync("mcp-app/proposal-card/styles.css", "utf8")).not.toMatch(/position:\s*fixed/);
   });
 
   it("after a save, lists what was assigned anyway", () => {
