@@ -1,5 +1,5 @@
 // `create_service` (admin parity phase 1, S3: docs/superpowers/plans/2026-10-21-owt-mcp-admin-parity-f1.md;
-// ADR-0064): one EMPTY, unpublished service — a weekend service, a special or a «Noche de alabanza» —
+// ADR-0066): one EMPTY, unpublished service — a weekend service, a special or a «Noche de alabanza» —
 // exactly as `/admin`'s «+ Nuevo servicio» in stored mode creates it (`MonthGenerator.handleCreateOne`):
 // the same body (`draftCreateBody`, `published: false`, no seats), the same «Cuenta para equidad» rule
 // (the Tipo's default unless asked otherwise; the default in a past month, `effectiveCreateCounts`) and

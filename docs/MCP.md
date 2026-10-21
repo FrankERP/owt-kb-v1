@@ -758,7 +758,7 @@ Three tools, in production since 2026-10-21 (PR #160, `main` `2e075190`; live pr
 Five tools over the services already in `/admin`, plus three reads, not yet released. Plan:
 [2026-10-21-owt-mcp-admin-parity-f1.md](superpowers/plans/2026-10-21-owt-mcp-admin-parity-f1.md);
 decisions and the rejected alternatives:
-[ADR-0064](adr/0064-saved-services-are-edited-from-the-chat-as-checked-change-sets.md).
+[ADR-0066](adr/0066-saved-services-are-edited-from-the-chat-as-checked-change-sets.md).
 
 | Tool | Who calls it | What it does |
 |---|---|---|

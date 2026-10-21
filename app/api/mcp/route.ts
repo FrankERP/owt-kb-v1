@@ -117,7 +117,7 @@ const mcpHandler = createMcpHandler(
     registerSolveMonth(server);
     registerApplySchedule(server);
     registerProposalEditor(server);
-    // Admin parity phase 1 (ADR-0064): the saved-month editor (its save and its copy write through
+    // Admin parity phase 1 (ADR-0066): the saved-month editor (its save and its copy write through
     // /admin's own writers) and create_service (through the roles POST's).
     registerServiceEditor(server);
     registerCreateService(server);

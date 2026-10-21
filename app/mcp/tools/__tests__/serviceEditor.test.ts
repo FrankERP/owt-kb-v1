@@ -1,4 +1,4 @@
-// Admin parity phase 1, S2 (ADR-0064): the saved-month editor — `check_service_edits`, its card
+// Admin parity phase 1, S2 (ADR-0066): the saved-month editor — `check_service_edits`, its card
 // twin and `save_service_edits` — over November 2026's stored services (`serviceEditorFixtures.ts`).
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

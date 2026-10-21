@@ -48,7 +48,7 @@ const EXPECTED_CALLERS: Record<string, string[]> = {
   // MCP P4: the create writer — the roles POST and `apply_schedule` (D4); `create_service` (S3).
   roleCreateCommit: ["app/api/admin/roles/route.ts", "app/mcp/tools/applySchedule.ts", "app/mcp/tools/createService.ts"],
   roleSwapCommit: ["app/api/admin/roles/swap/route.ts", "app/mcp/tools/swapAssignment.ts"],
-  // Admin parity phase 1: the PATCH route and `save_service_edits` (T2.5, ADR-0064); the copy
+  // Admin parity phase 1: the PATCH route and `save_service_edits` (T2.5, ADR-0066); the copy
   // route and `copy_instruments` (S3).
   roleEditCommit: ["app/api/admin/roles/[id]/route.ts", "app/mcp/tools/serviceEditor.ts"],
   copyInstrumentsCommit: ["app/api/admin/roles/copy-instruments/route.ts", "app/mcp/tools/serviceEditor.ts"],

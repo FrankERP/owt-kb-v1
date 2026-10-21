@@ -1,9 +1,10 @@
-# ADR-0064: Saved services are edited from the chat as checked change sets, written one service at a time
+# ADR-0066: Saved services are edited from the chat as checked change sets, written one service at a time
 
 **Date:** 2026-10-21 · **Status:** Accepted
 
-> **Numbering.** The next free number on `main` when written. ADR numbers follow the order records
-> reach `main`; renumber if another record lands first.
+> **Numbering.** Written as 0064 and renumbered to 0066 on 2026-10-21: two other records (PR #165's
+> 0064 and PR #166's 0065) reached `preview` first. ADR numbers follow the order records reach
+> `main`; renumber again if another record lands first.
 
 ## Context
 

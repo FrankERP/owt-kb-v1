@@ -1,4 +1,4 @@
-// The card's controller over a SAVED month (admin parity phase 1, S4; ADR-0064): the edit list,
+// The card's controller over a SAVED month (admin parity phase 1, S4; ADR-0066): the edit list,
 // every `check_service_edits_app` call and what the screen shows between them. «Guardar» never
 // writes: it sends the checked change sets to the chat (`app.sendMessage`), where Claude calls the
 // destructive `save_service_edits` and the Claude app asks first (F3) — as «Cargar» does for a

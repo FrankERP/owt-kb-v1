@@ -448,7 +448,7 @@ does). Rotating it changes every token: an editor screen open at that moment has
 refused and dropped, and Frank closes and reopens it; stored proposals are unaffected (they hold
 ids, never tokens).
 
-**A third use: the saved-month editor** (ADR-0064, admin parity phase 1; no new secret or env var).
+**A third use: the saved-month editor** (ADR-0066, admin parity phase 1; no new secret or env var).
 Three more HMACs of this key, each under its own label (`app/mcp/monthProposals/changeSetTokens.ts`):
 the month-scoped member token (`mcp-member-token|month|YYYY-MM|<id>`), the waiver token a forced
 rule needs (`mcp-service-waiver|`, bound to the service and its revision) and the change set's MAC

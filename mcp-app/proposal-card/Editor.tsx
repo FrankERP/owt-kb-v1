@@ -47,7 +47,7 @@ export interface ProposalEditorProps extends BoardProps {
   onLoad: () => void;
 }
 
-/** A SAVED month (ADR-0064): the same board; its own heading and actions (`footer`). */
+/** A SAVED month (ADR-0066): the same board; its own heading and actions (`footer`). */
 export interface StoredEditorProps extends BoardProps {
   mode: "stored";
   heading: string;

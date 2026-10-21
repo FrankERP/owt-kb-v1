@@ -1,4 +1,4 @@
-// Admin parity phase 1, S3 (ADR-0064): `create_service` — one empty, unpublished service through the
+// Admin parity phase 1, S3 (ADR-0066): `create_service` — one empty, unpublished service through the
 // roles POST's writer (`roleCreateCommit.ts`), idempotent by a hash of the call.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

@@ -305,7 +305,7 @@ several exist precisely to stop a plausible-looking change.
 - **Notification emails: `before` is captured PRE-COMMIT** and threaded into
   `after()`. Reading live state inside `after()` gives post-write state and the
   system silently sends nothing. The MCP saved-service save (`save_service_edits`,
-  `copy_instruments`, ADR-0064) upserts the same notices inline instead
+  `copy_instruments`, ADR-0066) upserts the same notices inline instead
   (`queueRoleNoticesNow`, awaited, no layer-2 sweep), from the same pre-commit
   `before`. See `docs/NOTIFICATIONS.md`.
 - **A Server Component may never CALL a value imported from a `"use client"`
@@ -402,7 +402,7 @@ several exist precisely to stop a plausible-looking change.
   as written and never calls the solver; `fixtures/month-check/parity.json` pins it to
   `gcf_v3/acceptance/checker.py` from both sides. Members cross the wire as tokens, never ids.
 - **The saved-month editor: change sets, judged as diffs, written one service at a time**
-  (ADR-0064). `check_service_edits` (model) and `check_service_edits_app` (card, app-only) replay
+  (ADR-0066). `check_service_edits` (model) and `check_service_edits_app` (card, app-only) replay
   edits on the stored month (`storedMonthBoard.ts`, gates in STORED mode) and answer per changed
   service `{service, baseRev, target, diff, mac, lines, waivers?}`; `save_service_edits` reads fresh,
   sorts every service first (equal to target → «ya estaba»; `_rev` ≠ `baseRev` → «cambió», refusing

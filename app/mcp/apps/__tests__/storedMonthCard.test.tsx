@@ -1,4 +1,4 @@
-// The card over a SAVED month (admin parity phase 1, S4; ADR-0064): its model read against the REAL
+// The card over a SAVED month (admin parity phase 1, S4; ADR-0066): its model read against the REAL
 // saved-month tools' answers — the chat's check opened in the card, a forced rule, «Guardar»'s chat
 // message passed verbatim to `save_service_edits` — plus the splitting rule and the screen.
 // Fictitious people only (the repository is public).

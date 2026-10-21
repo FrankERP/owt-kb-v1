@@ -1,5 +1,5 @@
 // The card over a SAVED month (admin parity phase 1, S4: docs/superpowers/plans/2026-10-21-owt-mcp-admin-parity-f1.md;
-// ADR-0064): what the screen keeps between `check_service_edits_app` answers, how it reads them,
+// ADR-0066): what the screen keeps between `check_service_edits_app` answers, how it reads them,
 // and the chat message «Guardar» sends. Pure, so it is tested without a browser or a host.
 //
 // The proposal editor's rule holds (E1): the screen keeps a LIST OF EDITS, never a board it trusts;
@@ -132,7 +132,7 @@ export const MAX_CHANGES_PER_SAVE = 31;
 
 /**
  * The change sets split into the calls «Guardar» sends. Normally one. Each change carries the server's
- * signed `unit` (a whole group, or a piece of `maxGroup` services of a larger one, ADR-0064), and the
+ * signed `unit` (a whole group, or a piece of `maxGroup` services of a larger one, ADR-0066), and the
  * save refuses a call that leaves out any service of a unit it names — so units are never cut here,
  * only packed. When a group is larger than `maxGroup` the parts stay that small (two pieces of one
  * group in one call would be that group again), and the card says first that a piece that fails

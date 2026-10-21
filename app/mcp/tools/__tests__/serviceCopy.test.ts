@@ -1,4 +1,4 @@
-// Admin parity phase 1, S3 (ADR-0064): `copy_instruments` — checked as `copy` in either check, then
+// Admin parity phase 1, S3 (ADR-0066): `copy_instruments` — checked as `copy` in either check, then
 // written through `/admin`'s own copy writer (`copyInstrumentsCommit.ts`) — over November 2026's
 // stored services (`serviceEditorFixtures.ts`).
 import { beforeEach, describe, expect, it, vi } from "vitest";

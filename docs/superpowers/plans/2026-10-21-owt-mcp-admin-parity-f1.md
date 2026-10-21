@@ -1,7 +1,7 @@
 # OWT MCP — admin parity, phase 1: stored services from the chat (plan)
 
 **Status:** BUILT 2026-10-21 (Frank: «Sí, constrúyela», 17:20Z): S1–S4 on branch
-`claude/project-thread-j7kvyq`; where the build differs from this plan is listed in ADR-0064
+`claude/project-thread-j7kvyq`; where the build differs from this plan is listed in ADR-0066
 («Where the build differs from the plan»). Not yet released.
 **Approval:** S2 APPROVED by adversarial review 2026-10-21 (rounds 5 and 6 on the same bytes,
 `9892c245…ed2d`; log: `2026-10-21-owt-mcp-admin-parity-f1-review-log.md`). Post-approval

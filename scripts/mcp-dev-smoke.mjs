@@ -334,7 +334,7 @@ export const MONTH_TOOL_NAMES = ["solve_month", "apply_schedule"];
 export const EDITOR_TOOL_NAMES = ["check_proposal_edits", "save_proposal_edits", "revise_proposal"];
 
 /**
- * Admin parity phase 1 (ADR-0064): the saved-month editor, after the proposal editor, then
+ * Admin parity phase 1 (ADR-0066): the saved-month editor, after the proposal editor, then
  * `create_service`. Never called here: the two checks only read but need a month's services, and
  * the other three write production services. `check_service_edits_app` is app-only (the card calls it).
  */

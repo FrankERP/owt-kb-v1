@@ -1,5 +1,5 @@
 // The MCP editor over a SAVED month (admin parity phase 1, S2:
-// docs/superpowers/plans/2026-10-21-owt-mcp-admin-parity-f1.md, T2.4–T2.5 and S3; ADR-0064). Four
+// docs/superpowers/plans/2026-10-21-owt-mcp-admin-parity-f1.md, T2.4–T2.5 and S3; ADR-0066). Four
 // entries over one judge:
 //
 //   check_service_edits      model-visible, read-only: edits asked for in the chat (services by id
@@ -33,7 +33,7 @@
 // timeout threaded through the commit's loaders — was NOT built: those loaders read through the
 // module clients the protected-read audit pins, and a second client parameter would fork them.
 // The race bounds the CALL; a lost request may still finish in the background, which is exactly
-// «sin confirmar» (ADR-0064).
+// «sin confirmar» (ADR-0066).
 //
 // LOGGING: the timing line and fixed tags only — never an id, a name, a token or a rule key.
 
