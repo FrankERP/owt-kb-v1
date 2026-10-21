@@ -9,6 +9,7 @@ import { ROLE_TYPES, SETLIST_TYPES } from "@/app/utils/serviceReadModel";
 import { WORSHIP_AUDIENCE_GROQ_FILTER, WORSHIP_MEMBER_GROQ_FILTER } from "@/app/ministries";
 import { COUNTS_FOR_FAIRNESS_GROQ } from "@/app/utils/countsForFairness";
 import { SOLVER_CONFIG_DOC_ID } from "@/app/utils/solverConfigWriteRequest";
+import { serviceThreadMessagesOf } from "@/app/utils/serviceThread";
 
 export interface BoundQuery {
   query: string;
@@ -592,6 +593,34 @@ export function adminRolesQuery(): BoundQuery {
     }
   `,
     params: {},
+  };
+}
+
+/**
+ * The upcoming services with NO setlist proposal, drafts included, each with its
+ * pre-proposal conversation (ADR-0064) — `GET /api/admin/service-threads`, behind
+ * an admin check. Drafts are deliberate: an admin may write about a service before
+ * its month is published, and the leads read it once it is.
+ *
+ * "No proposal" is a `service_ref` match, the same key the lead's editor uses to
+ * decide whether a shared proposal exists, so a service leaves this list exactly
+ * when its leads see one. Capped at 60 rows — some two months of services.
+ */
+export function servicesWithoutProposalQuery(today: string): BoundQuery {
+  return {
+    query: `
+    *[_type in ["sunday_role", "saturday_role", "special_role"]
+      && coalesce(week, date) >= $today
+      && count(*[_type == "setlistProposal" && service_ref._ref == ^._id]) == 0
+    ] | order(coalesce(week, date) asc, time asc)[0...60] {
+      _id, _type, service_name,
+      "service_date": coalesce(week, date),
+      "published": coalesce(published, true),
+      "leads": Lead[defined(@->)]{ "id": @->_id, "name": coalesce(@->alias, @->member_name) },
+      "messages": ${serviceThreadMessagesOf("^._id")}
+    }
+  `,
+    params: { today },
   };
 }
 

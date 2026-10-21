@@ -493,6 +493,7 @@ describe("A2 handoff allowlist", () => {
         "app/api/me/proposals/route.ts#POST",
         "app/api/me/proposals/[id]/messages/route.ts#POST",
         "app/api/admin/proposals/[id]/messages/route.ts#POST",
+        "app/api/admin/service-threads/[roleId]/messages/route.ts#POST",
       ].sort(),
     );
     // Nothing removes a writer: item 12 must never be "satisfied" by moving reads here.

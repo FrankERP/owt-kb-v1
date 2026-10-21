@@ -39,8 +39,17 @@ interface Props {
   /** Which side of the conversation the viewer is on — drives the heading only. */
   viewerRole: "lead" | "admin";
   serviceDate: string;
-  /** Resolves when the post has committed. Must reject on failure. */
-  onPost: (body: string) => Promise<void>;
+  /**
+   * Resolves when the post has committed. Must reject on failure. ABSENT means
+   * the viewer can read but not post here — the lead's view of what admins wrote
+   * before the proposal existed (ADR-0064), where `readOnlyHint` says where to
+   * answer instead.
+   */
+  onPost?: (body: string) => Promise<void>;
+  /** Overrides the heading — e.g. a service thread that talks to several leads. */
+  title?: string;
+  /** Shown instead of the composer when `onPost` is absent. */
+  readOnlyHint?: string;
 }
 
 const SERVICE_TIME_ZONE = "America/Mexico_City";
@@ -97,6 +106,8 @@ export default function ProposalThread({
   viewerRole,
   serviceDate,
   onPost,
+  title,
+  readOnlyHint,
 }: Props) {
   const [draft, setDraft] = useState("");
   const [posting, setPosting] = useState(false);
@@ -117,7 +128,7 @@ export default function ProposalThread({
 
   async function post() {
     const body = draft.trim();
-    if (!body || posting) return;
+    if (!body || posting || !onPost) return;
     setPosting(true);
     try {
       await onPost(body);
@@ -135,7 +146,7 @@ export default function ProposalThread({
   return (
     <section className="space-y-3">
       <h3 className="font-label text-xs uppercase tracking-widest text-mono-500">
-        {viewerRole === "lead" ? "Conversación con los admins" : "Conversación con el líder"}
+        {title ?? (viewerRole === "lead" ? "Conversación con los admins" : "Conversación con el líder")}
       </h3>
 
       {ordered.length === 0 ? (
@@ -171,7 +182,9 @@ export default function ProposalThread({
         </ol>
       )}
 
-      {open ? (
+      {!onPost ? (
+        readOnlyHint ? <p className="font-body text-xs text-mono-600">{readOnlyHint}</p> : null
+      ) : open ? (
         <div className="space-y-2">
           <textarea
             className="w-full resize-none rounded-lg border border-edge-control bg-transparent px-3 py-2 font-body text-[16px] sm:text-sm transition-colors placeholder:text-placeholder focus:border-accent focus:outline-none"

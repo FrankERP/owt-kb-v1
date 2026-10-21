@@ -50,6 +50,22 @@ function renderThread(over: Partial<React.ComponentProps<typeof ProposalThread>>
   return { onPost, ...utils };
 }
 
+describe("ProposalThread — read-only (ADR-0064)", () => {
+  it("shows the messages and the hint, and no composer, when there is no onPost", () => {
+    renderThread({
+      onPost: undefined,
+      title: "Mensajes de los admins",
+      readOnlyHint: "Responde al guardar.",
+      messages: [msg({ author_role: "admin", author_name: "Frank", body: "Tema: gracia" })],
+    });
+    expect(screen.getByText("Mensajes de los admins")).toBeTruthy();
+    expect(screen.getByText("Tema: gracia")).toBeTruthy();
+    expect(screen.getByText("Responde al guardar.")).toBeTruthy();
+    expect(screen.queryByPlaceholderText("Escribe un mensaje…")).toBeNull();
+    expect(screen.queryByText("Enviar")).toBeNull();
+  });
+});
+
 describe("ProposalThread — rendering", () => {
   it("renders its empty state rather than nothing at all", () => {
     renderThread();
