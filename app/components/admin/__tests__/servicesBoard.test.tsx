@@ -337,35 +337,53 @@ function adminRailTop(): string {
   return top!;
 }
 
-describe("the month editor tells AdminPanel when it is open", () => {
-  // AdminPanel hides «Integridad de datos» while «Editar mes» is open (the panel sat ABOVE the
-  // editor and pushed the grid down; the check itself keeps running, and the editor's own
-  // admission still reads it). This is the half that reports the edge.
+describe("the «Integridad de datos» slot (bloque 4)", () => {
+  // AdminPanel hands the board its integrity panel as a slot; the board shows it under its
+  // heading and NOT over «Editar mes» (the editor's own admission reads the same inventory and
+  // refuses in its own words) nor over «Generar mes» (a composer with nothing to clean up). The
+  // check itself keeps running either way — only where it is written changes.
   beforeEach(() => {
     vi.unstubAllGlobals();
     stubFetch();
   });
   afterEach(() => cleanup());
 
-  it("reports open on «Editar mes» and closed on unmount", async () => {
-    const onMonthEditorOpenChange = vi.fn();
-    const { container, unmount } = render(
+  const renderWithSlot = () =>
+    render(
       <ToastProvider>
         <CueDialogProvider>
-          <ServicesPanel onMonthEditorOpenChange={onMonthEditorOpenChange} />
+          <ServicesPanel integritySlot={<div data-testid="integrity-slot">integridad</div>} />
         </CueDialogProvider>
       </ToastProvider>,
     );
-    await waitFor(() => expect(container.querySelectorAll("[data-card-id]").length).toBe(2));
-    expect(onMonthEditorOpenChange).toHaveBeenLastCalledWith(false);
 
+  it("renders the slot under the board's heading, after the h1", async () => {
+    const { container } = renderWithSlot();
+    await waitFor(() => expect(container.querySelectorAll("[data-card-id]").length).toBe(2));
+    const slot = screen.getByTestId("integrity-slot");
+    const h1 = screen.getByRole("heading", { level: 1, name: "Servicios" });
+    expect(h1.compareDocumentPosition(slot) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const firstCard = container.querySelector("[data-card-id]") as HTMLElement;
+    expect(slot.compareDocumentPosition(firstCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("drops the slot while «Editar mes» is open", async () => {
+    const { container } = renderWithSlot();
+    await waitFor(() => expect(container.querySelectorAll("[data-card-id]").length).toBe(2));
     const open = screen.getAllByRole("button", { name: /Editar mes/ })[0] as HTMLButtonElement;
     expect(open.disabled).toBe(false);
     fireEvent.click(open);
-    await waitFor(() => expect(onMonthEditorOpenChange).toHaveBeenLastCalledWith(true));
+    await waitFor(() => expect(screen.queryByTestId("integrity-slot")).toBeNull());
+  });
 
-    unmount();
-    expect(onMonthEditorOpenChange).toHaveBeenLastCalledWith(false);
+  it("drops the slot while «Generar mes» is open", async () => {
+    const { container } = renderWithSlot();
+    await waitFor(() => expect(container.querySelectorAll("[data-card-id]").length).toBe(2));
+    const open = screen.getAllByRole("button", { name: /Generar mes/ })[0] as HTMLButtonElement;
+    expect(open.disabled).toBe(false);
+    fireEvent.click(open);
+    await waitFor(() => expect(screen.queryByTestId("integrity-slot")).toBeNull());
+    expect(screen.getByRole("heading", { level: 1, name: "Generar mes" })).toBeTruthy();
   });
 });
 
