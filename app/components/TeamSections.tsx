@@ -25,6 +25,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Fragment, useId, useState } from "react";
+import { useMediaQuery } from "@/app/utils/useMediaQuery";
 import Collapse from "./ui/Collapse";
 import { WarningIcon } from "./ui/icons";
 import { findDuplicates } from "@/app/utils/agenda";
@@ -46,6 +47,7 @@ export default function TeamSections({
   photos,
   viewerTypes,
   openAll = false,
+  openAllFrom,
 }: {
   team: TeamInput;
   /** `myNameFromSession`'s lowercased display name; "" seats nobody. */
@@ -58,13 +60,20 @@ export default function TeamSections({
   viewerTypes?: string[] | null;
   /** Every section starts open — an admin's view (see `DayCard`). A tap still closes one. */
   openAll?: boolean;
+  /**
+   * Every section starts open from this breakpoint — the home run sheet's rail
+   * from `lg` (Frank, 2026-10-22: «el equipo expandido» beside the setlist), while
+   * a phone keeps the folding sections. A tap still closes one at any width.
+   */
+  openAllFrom?: "lg";
 }) {
   const sections = teamSections(team);
+  const wideOpen = useMediaQuery(openAllFrom === "lg" ? "(min-width: 1024px)" : "");
   // Overrides, not the open set itself: the default depends on `myName`, which a
   // client-only session fills in AFTER first paint — a set frozen in a useState
   // initializer would keep the member's own section shut once it arrived.
   const [overrides, setOverrides] = useState<Partial<Record<TeamSectionId, boolean>>>({});
-  const defaults = openAll ? new Set(sections.map((s) => s.id)) : defaultOpenSections(sections, myName, viewerTypes);
+  const defaults = openAll || wideOpen ? new Set(sections.map((s) => s.id)) : defaultOpenSections(sections, myName, viewerTypes);
   if (!sections.length) return null;
 
   return (

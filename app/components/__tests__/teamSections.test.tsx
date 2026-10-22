@@ -116,6 +116,29 @@ describe("TeamSections", () => {
     expect(header(/Cabina/).getAttribute("aria-expanded")).toBe("false");
   });
 
+  it("opens every section from `lg` on the run sheet (`openAllFrom`), and leaves a phone folded", () => {
+    const matchMedia = vi.fn((query: string) => ({
+      matches: query === "(min-width: 1024px)",
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+    vi.stubGlobal("matchMedia", matchMedia);
+    try {
+      mount({ myName: "", viewerTypes: null, openAllFrom: "lg" });
+      for (const s of [/Voces/, /Banda/, /Cabina/]) expect(header(s).getAttribute("aria-expanded")).toBe("true");
+      // A tap still closes one, the rail is not locked open.
+      fireEvent.click(header(/Cabina/));
+      expect(header(/Cabina/).getAttribute("aria-expanded")).toBe("false");
+      cleanup();
+      // The phone: the query does not match, so the defaults decide as before.
+      matchMedia.mockImplementation(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+      mount({ myName: "", viewerTypes: null, openAllFrom: "lg" });
+      expect(header(/Voces/).getAttribute("aria-expanded")).toBe("false");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("renders nothing for a service with no one seated", () => {
     const { container } = mount({ team: {} });
     expect(container.textContent).toBe("");

@@ -235,16 +235,21 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
         </div>
 
         <div className="space-y-5 p-5 md:p-6">
-          {/* Keyed by the text: `CalendarView` keys its cards by index, so the
-              same instance can be handed another day's note — which must arrive
-              folded, not inheriting the «Leer todo» the reader opened before. */}
-          {setlist?.team_notes && <TeamNote key={setlist.team_notes} text={setlist.team_notes} />}
+          {/* The run sheet reads left-to-right from `lg`: the message and the
+              songs in the wide column, the seats in a fixed rail (22rem, 24rem
+              from `xl`: two faces with their names to a row). The message sits
+              INSIDE the left column (Frank, 2026-10-22) — spanning both columns
+              it pushed the whole sheet down by its own height on a big screen.
+              `space-y-5` is the stacked gap and has to go once the two are
+              columns, or the rail starts a row lower than the setlist. */}
+          <div className={wide ? "space-y-5 lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-8 lg:space-y-0 xl:grid-cols-[minmax(0,1fr)_24rem]" : "space-y-5"}>
+            {(setlist?.team_notes || hasSetlist) && (
+            <div className="space-y-5" data-run-sheet-main="">
+            {/* Keyed by the text: `CalendarView` keys its cards by index, so the
+                same instance can be handed another day's note — which must arrive
+                folded, not inheriting the «Leer todo» the reader opened before. */}
+            {setlist?.team_notes && <TeamNote key={setlist.team_notes} text={setlist.team_notes} />}
 
-          {/* The run sheet reads left-to-right from `lg`: songs in the wide
-              column, seats in a fixed 20rem rail. `space-y-5` is the stacked
-              gap and has to go once the two are columns, or the rail starts a
-              row lower than the setlist. */}
-          <div className={wide ? "space-y-5 lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-8 lg:space-y-0" : "space-y-5"}>
             {/* Setlist */}
             {hasSetlist && (
               <section>
@@ -308,8 +313,12 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
                 </ol>
               </section>
             )}
+            </div>
+            )}
 
-            {/* Team — Voces, Banda, Cabina as folding sections of faces. */}
+            {/* Team — Voces, Banda, Cabina as folding sections of faces; on the
+                run sheet every section starts open from `lg`, where the rail
+                has the room and the page is one screen anyway. */}
             {hasRole && (
               <section className={hasSetlist ? `border-t border-ink-dim/[0.12] pt-2${wide ? " lg:border-t-0 lg:pt-0" : ""}` : ""}>
                 <TeamSections
@@ -318,6 +327,7 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
                   photos={photos}
                   viewerTypes={viewerTypes}
                   openAll={openAllSections}
+                  openAllFrom={wide ? "lg" : undefined}
                 />
               </section>
             )}
