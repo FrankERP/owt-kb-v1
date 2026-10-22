@@ -13,7 +13,6 @@ import * as sundayCadenceModule from "../sundayCadence";
 import {
   CADENCE_OUTSIDE_HEADING,
   CADENCE_OUTSIDE_SENTENCE,
-  SLACK_V3_NOTE,
   cadenceMembers,
   cadenceOutsideSundayPool,
   resolveRulePersonId,
@@ -182,7 +181,6 @@ describe("the copy (C3 §7 item 5)", () => {
   });
 
   it("has one wording", () => {
-    expect(SLACK_V3_NOTE).toBe("no aplica con el nuevo solver");
     expect(CADENCE_OUTSIDE_HEADING).toBe("Mes por medio fuera de Líderes Domingo");
     expect(CADENCE_OUTSIDE_SENTENCE.not_ticked("Ana")).toBe(
       "Ana no está en Líderes Domingo: este mes no dirige domingo ni sábado de compensación.",

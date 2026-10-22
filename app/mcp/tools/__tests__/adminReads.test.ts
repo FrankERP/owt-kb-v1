@@ -84,15 +84,18 @@ describe("get_solver_rules", () => {
       { lista: "Líder Sábado", nombres: ["Carla"] },
       { lista: "Soporte", nombres: ["Dani"] },
     ]);
-    expect(payload.personas).toEqual(["Ana: Sun.Lead <= 2", "Bruno: Sun.BGV <= 3 · Sat.BGV >= 0 · Sun.Lead <= 1"]);
-    expect(payload.noJuntos).toEqual(["Ana ≠ Bruno en *.*"]);
-    expect(payload.presencia).toEqual(["al menos uno de Carla, Dani en Sun.BGV cada semana"]);
+    expect(payload.personas).toEqual([
+      "Ana: Líder en domingo: como máximo 2 al mes",
+      "Bruno: BGV en domingo: como máximo 3 al mes · BGV en sábado: al menos 0 al mes · Líder en domingo: como máximo 1 al mes",
+    ]);
+    expect(payload.noJuntos).toEqual(["Ana y Bruno no coinciden en ningún servicio"]);
+    expect(payload.presencia).toEqual(["Carla o Dani en BGV de domingo cada semana"]);
     for (const surface of [text(out), JSON.stringify(out.structuredContent)]) {
       for (const key of [...NAME_SHAPED_KEYS, ...MEMBER_IDS, "rules-rev-1"]) expect(surface, key).not.toContain(key);
     }
   });
 
-  it("words every clause kind the rules card shows", () => {
+  it("words every clause kind the rules card shows, in the card's own sentences", () => {
     const config = {
       ...NAME_SHAPED,
       restrictions: [
@@ -106,8 +109,8 @@ describe("get_solver_rules", () => {
       ],
     };
     expect(presentSolverRules(config, MEMBERS).personas).toEqual([
-      "Eva: nunca Sat.Lead · sem.3: nunca Sun.* · Sat.BGV >= sem−2 · holgura 2 · no aplica con el nuevo solver · Mes por medio",
-      "Fer: exenta de carga total",
+      "Eva: No líder en sábado · Semana 3: sin domingo · BGV en sábado: al menos los domingos del mes menos 2 · Holgura 2 (el solver la ignora; solo pesa al llenar especiales) · Mes por medio",
+      "Fer: Fuera del balance total",
     ]);
   });
 
