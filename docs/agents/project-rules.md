@@ -67,7 +67,28 @@ disagree, `CLAUDE.md` wins and this file is the one to fix.
   `githubCommitSha` is the commit you pushed. **`preview` still goes first**: the
   PR gate proves the code compiles and passes, never that it looks right to a
   human on dev. Then verify the production alias the same way after the merge.
-- **Worktrees only when two things must be in flight at once** — parallel agents
+- **Cloud sessions are the default place to work** (2026-10-22: Frank wants nothing to
+  depend on his laptop being open). Each thread runs in its own fresh container with the
+  repository cloned, so worktrees and the `.env.local` symlink are Mac-only rules. Before
+  the gates, install what the branch's lockfiles say: `npm ci`, and for a solver
+  suite a Python 3.12 venv (CI runs 3.12): `python3.12 -m venv .venv &&
+  .venv/bin/pip install -r gcf_v3/requirements.txt` (plus `gcf/requirements.txt` when
+  `gcf/` is touched), then `.venv/bin/python -m unittest discover -s gcf_v3 -t gcf_v3`.
+  The container's system `python` is 3.13 and both interpreters refuse a global
+  `pip install` (PEP 668), so the venv is what lets the suite import ortools; `.venv/` is
+  gitignored. This is per thread on purpose rather than in the
+  environment's setup script: the environment is cached between sessions, so a setup-script
+  install would silently go stale against a branch's lockfile. Credentials reach a session
+  only as **network secrets** the egress proxy injects (Vercel today: `VERCEL_TOKEN=placeholder`
+  in the environment, the real token attached to `api.vercel.com`); a session never holds a
+  readable key (each one is recorded in `docs/SECRETS.md`). **Still Mac-only:** the iOS build (Xcode), rehearsal-mix processing
+  (Ableton), `scripts/dev-verify.ts` and other `.env.local` scripts until their secrets are
+  set up as network secrets, the canonical copy of the adversarial-plan-review skill and the
+  agent definitions under `~/.claude/agents/`. Google-side secret rotations go through Google
+  Cloud Shell in the browser, not a laptop. Open phases (a read-only Sanity token for the
+  scripts, a keyless GitHub Actions workflow to verify and fall back on the solver deploy)
+  land with their own docs and `docs/SECRETS.md` entries.
+- **On the Mac — worktrees only when two things must be in flight at once** — parallel agents
   writing overlapping files (`Agent` with `isolation: "worktree"`) or protecting the
   primary tree while gates/servers run elsewhere (`EnterWorktree`, never a hand-rolled
   `git worktree add`). Code review is read-only — no worktree. Populate
@@ -701,31 +722,31 @@ honesty gate (empty runs over churn).
 
 ## Agent skills
 
-### Agent worklog
+### Agent worklog (retired 2026-10-22)
 
-**Log every subagent dispatch** to `.agents/log/worklog.jsonl` (append-only, one JSON
-object per line; a gitignored symlink into the PRIVATE repo `FrankERP/owt-agent-logs`
-— never commit it here, because this repo is public and the log is agent-written free
-text covering incidents). Agents end their reports with
-a `WORKLOG:` trailer; the **coordinator appends** the lines — **batched at cycle
-close is fine** (amended 2026-08-19; per-dispatch appends remain welcome) — including
-`no_result` for dispatches that crashed and `coordinator-inline` for specialist-shaped
-work done inline rather than dispatched.
-At cycle close, the code-review dispatch also carries the docs-audit and
-worklog-completeness checklists — one agent, one context read, three checklists
-(amended 2026-08-19; separate `docs-auditor` dispatches remain available for
-doc-heavy cycles).
+**Do not append to `.agents/log/worklog.jsonl`, and do not ask agents for a `WORKLOG:`
+trailer.** Frank retired the log on 2026-10-22 when the work moved to cloud sessions.
+Its last consumer, the weekly `hr-officer` review (`/hr-report`), was retired on
+2026-10-07, and from then on nothing read it: the record of what was done lives in the
+PRs, their commits and their review threads. Keeping it in the cloud would have cost
+every thread a second repository, a merge driver for concurrent appends and a push per
+cycle, for a file nobody opens. Its one later use, counting review dispatches for
+§Review policy, is a one-off question the PR history can answer again if it comes up.
+The cycle-close review keeps its docs-audit checklist (one agent, one context read;
+separate `docs-auditor` dispatches remain available for doc-heavy cycles); only the
+worklog-completeness checklist went with the log.
 
-**The worklog is a history of the work done, nothing more** (amended 2026-10-07).
-Until then it fed a weekly `hr-officer` review (`/hr-report`: a staff review, a
-bulletin, roster proposals); Frank retired both in the token-efficiency phase that
-produced §Review policy — the review had become ceremony the work no longer needed,
-while the record of what was dispatched, and with what outcome, is still worth
-keeping. Nothing reviews the log now, so the finish-cycle worklog checklist is what
-keeps it whole: the entries a cycle owes before the batch, a parse of the appended
-lines after it. The usage dashboard script survives outside the repo
-(`~/.agents/scripts/usage_stats.py`); the past bulletins stay in
-`docs/agents/reports/` as history. See `docs/agents/worklog.md`.
+The file stays frozen in the PRIVATE `FrankERP/owt-agent-logs` (2,211 entries,
+2026-08-06 → 2026-10-15), which keeps holding what must stay private and must not
+depend on one laptop: `solverConfig` snapshots and restore scripts (`backups/`) and the
+captured production solver runs (`sdd/…/pairs/`). The `.gitignore` entry for the old
+symlink stays, so an old checkout can never stage it here. The vendored
+adversarial-plan-review skill still mentions worklog entries. The reviewer's `WORKLOG:`
+trailer is simply ignored. Its «make the cap observable» step is not inert, so it is
+overridden here: when the churn cap is reached, record the cap and the defect class the
+rounds keep finding in the plan's committed `<plan>-review-log.md`, then escalate to Frank
+as the skill says. The vendored text changes when its canonical copy is next edited. Past HR bulletins stay in
+`docs/agents/reports/`. See `docs/agents/worklog.md` for the historical schema.
 
 ### Issue tracker
 
