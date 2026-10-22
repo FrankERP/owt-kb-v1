@@ -49,9 +49,9 @@ describe("monthStripDays", () => {
   it("lists every day of the month with weekday letters, lit tones, and today", () => {
     const days = monthStripDays("2026-09", { "2026-09-13": [sun("2026-09-13")], "2026-09-12": [sat("2026-09-12")] }, "2026-09-10");
     expect(days).toHaveLength(30);
-    expect(days[0]).toMatchObject({ date: "2026-09-01", dow: "M", num: 1, tone: null, today: false });
-    expect(days[11]).toMatchObject({ date: "2026-09-12", dow: "S", tone: "sat" });
-    expect(days[12]).toMatchObject({ date: "2026-09-13", dow: "D", tone: "sun" });
+    expect(days[0]).toMatchObject({ date: "2026-09-01", dow: "Mar", num: 1, tone: null, tones: [], today: false });
+    expect(days[11]).toMatchObject({ date: "2026-09-12", dow: "Sáb", tone: "sat", tones: ["sat"] });
+    expect(days[12]).toMatchObject({ date: "2026-09-13", dow: "Dom", tone: "sun", tones: ["sun"] });
     expect(days[9].today).toBe(true);
   });
 });
@@ -72,7 +72,7 @@ describe("weekStripDays", () => {
   it("gives seven days from the Monday of the given date, with weekday letters, lit tones and today", () => {
     const days = weekStripDays("2026-09-09", { "2026-09-13": [sun("2026-09-13")], "2026-09-12": [sat("2026-09-12")] }, "2026-09-10");
     expect(days).toHaveLength(7);
-    expect(days.map((d) => d.dow)).toEqual(["L", "M", "X", "J", "V", "S", "D"]);
+    expect(days.map((d) => d.dow)).toEqual(["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]);
     expect(days[0]).toMatchObject({ date: "2026-09-07", num: 7, tone: null, today: false });
     expect(days[3].today).toBe(true);
     expect(days[5]).toMatchObject({ date: "2026-09-12", tone: "sat" });
@@ -83,9 +83,9 @@ describe("weekStripDays", () => {
     expect(days.map((d) => d.date)).toEqual(["2026-09-28", "2026-09-29", "2026-09-30", "2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04"]);
     expect(days[6]).toMatchObject({ tone: "sun", num: 4 });
   });
-  it("flags a day carrying more than one service", () => {
+  it("lists one tone per service on a day carrying more than one, in `activeDays` order, with the special winning the cell tone", () => {
     const days = weekStripDays("2026-09-14", { "2026-09-20": [sun("2026-09-20"), special("2026-09-20")] }, "2026-09-10");
-    expect(days[6]).toMatchObject({ tone: "special", multiple: true });
+    expect(days[6]).toMatchObject({ tone: "special", tones: ["sun", "special"] });
   });
   it("flags the day a member is seated in, `mine`, only when `myName` is given", () => {
     const active = { "2026-09-13": [sun("2026-09-13", { instruments: [{ label: "Keys", person: "Sofi" }] })] };

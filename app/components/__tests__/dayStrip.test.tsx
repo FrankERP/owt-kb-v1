@@ -12,12 +12,10 @@
 // no pointer capture — see `SwipeStrip.test.tsx`, whose pure `swipeDirection` helper
 // carries the threshold arithmetic), so the mock exposes `onSwipe` through two test
 // buttons instead. They are `data-testid`-tagged so the cell queries can exclude them.
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MotionProvider } from "@/app/components/ui/MotionProvider";
+import { CueDialogProvider } from "@/app/components/ui/CueDialogProvider";
 import { installMotionTestEnv } from "@/app/components/ui/__tests__/motionTestSetup";
 import type { ComponentProps, ReactNode } from "react";
 import type { ActiveDay } from "../CalendarView";
@@ -94,22 +92,39 @@ describe("DayStrip", () => {
   it("renders the seven days of today's week, Monday first", () => {
     mountStrip();
     expect(cells()).toHaveLength(7);
-    expect(cells().map((b) => b.textContent)).toEqual(["L7", "M8", "X9", "J10", "V11", "S12", "D13"]);
+    expect(cells().map((b) => b.textContent)).toEqual(["Lun7", "Mar8", "Mié9", "Jue10", "Vie11", "Sáb12", "Dom13"]);
     expect(screen.getByText(/^7 – 13 sep/)).toBeTruthy();
   });
 
   it("enables only the days that carry a service", () => {
     mountStrip();
     const enabled = cells().filter((b) => !(b as HTMLButtonElement).disabled);
-    expect(enabled.map((b) => b.textContent)).toEqual(["S12", "D13"]);
+    expect(enabled.map((b) => b.textContent)).toEqual(["Sáb12", "Dom13"]);
   });
 
-  it("marks today with aria-current, service or not", () => {
+  it("marks today with aria-current and the inset ring, service or not", () => {
     mountStrip();
     const current = cells().filter((b) => b.getAttribute("aria-current") === "date");
     expect(current).toHaveLength(1);
     expect(current[0].textContent).toContain("10");
+    expect(current[0].className).toContain("ring-accent/50");
     expect((current[0] as HTMLButtonElement).disabled).toBe(true);
+    expect(cells().filter((b) => b.className.includes("ring-accent/50"))).toHaveLength(1);
+  });
+
+  it("ADR-0067 — a lit day is a neutral cell with one tone dot per service; an empty day has none", () => {
+    mountStrip();
+    fireEvent.click(screen.getByTestId("swipe-next"));
+    const sat = cell("19 de septiembre");
+    expect(sat.className).toContain("bg-surface-card");
+    expect(sat.className).not.toMatch(/bg-warning|text-warning|bg-accent-deep|bg-info/);
+    const satDots = within(sat).getByTestId("day-dots").children;
+    expect(satDots).toHaveLength(1);
+    expect(satDots[0].className).toContain("bg-warning-fg");
+    // Sunday + a special on the 20th: two dots, in `activeDays` order, no corner mark.
+    const both = within(cell("20 de septiembre")).getByTestId("day-dots").children;
+    expect(Array.from(both).map((d) => d.className)).toEqual([expect.stringContaining("bg-accent"), expect.stringContaining("bg-info-fg")]);
+    expect(within(cell("16 de septiembre")).queryByTestId("day-dots")).toBeNull();
   });
 
   it("reports the ISO date of a picked service day, with one haptic", () => {
@@ -136,7 +151,7 @@ describe("DayStrip", () => {
     const onWeekChange = vi.fn();
     mountStrip({ onWeekChange });
     fireEvent.click(screen.getByTestId("swipe-next"));
-    expect(cells().map((b) => b.textContent)).toEqual(["L14", "M15", "X16", "J17", "V18", "S19", "D20"]);
+    expect(cells().map((b) => b.textContent)).toEqual(["Lun14", "Mar15", "Mié16", "Jue17", "Vie18", "Sáb19", "Dom20"]);
     expect(onWeekChange).toHaveBeenCalledWith("2026-09-14");
     expect(push).not.toHaveBeenCalled();
     expect(screen.getByText(/^14 – 20 sep/)).toBeTruthy();
@@ -148,7 +163,7 @@ describe("DayStrip", () => {
     mountStrip();
     fireEvent.click(screen.getByTestId("swipe-prev"));
     fireEvent.click(screen.getByTestId("swipe-prev"));
-    expect(cells().map((b) => b.textContent)).toEqual(["L24", "M25", "X26", "J27", "V28", "S29", "D30"]);
+    expect(cells().map((b) => b.textContent)).toEqual(["Lun24", "Mar25", "Mié26", "Jue27", "Vie28", "Sáb29", "Dom30"]);
     expect(screen.getByText(/^24 – 30 ago/)).toBeTruthy();
     expect(cells().every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
   });
@@ -156,18 +171,18 @@ describe("DayStrip", () => {
   it("opens on the week of the first day when the anchor month has no today", () => {
     mountStrip({ anchorMonth: "2026-10" });
     // 1 Oct 2026 is a Thursday, so its week starts Monday 28 September.
-    expect(cells().map((b) => b.textContent)).toEqual(["L28", "M29", "X30", "J1", "V2", "S3", "D4"]);
+    expect(cells().map((b) => b.textContent)).toEqual(["Lun28", "Mar29", "Mié30", "Jue1", "Vie2", "Sáb3", "Dom4"]);
   });
 
-  it("F1 — dots the day the signed-in member is seated in, and only that one", () => {
+  it("F1 — paints the number positive («tú») on the day the signed-in member is seated in, and only that one", () => {
     mountStrip({ myName: "ana" }); // matches leads: ["Ana"] on 2026-09-13
-    expect(cell("13 de septiembre").querySelector(".bg-positive-fg")).not.toBeNull();
-    expect(cell("12 de septiembre").querySelector(".bg-positive-fg")).toBeNull();
+    expect(cell("13 de septiembre").querySelector(".text-positive-fg")!.textContent).toBe("13");
+    expect(cell("12 de septiembre").querySelector(".text-positive-fg")).toBeNull();
   });
 
-  it("dots no day when `myName` is omitted", () => {
+  it("marks no day as mine when `myName` is omitted", () => {
     mountStrip();
-    expect(document.querySelector(".bg-positive-fg")).toBeNull();
+    expect(document.querySelector(".text-positive-fg")).toBeNull();
   });
 
   it("F1 — adds «te toca» to a mine cell's label, and only that cell", () => {
@@ -176,101 +191,108 @@ describe("DayStrip", () => {
     expect(cell("12 de septiembre").getAttribute("aria-label")).not.toMatch(/te toca/);
   });
 
-  it("F1 — one dot slot: today-only pulses in the neutral colour, mine-only is a static positive dot, both together share the slot", () => {
-    // 10 September is `todayStr` and carries no service by default — add one seated
-    // by "ana" so a single cell is both `today` and `mine` at once.
+  it("F1 — a day that is today AND mine keeps both marks: the ring on the cell, the positive number, the tone dot", () => {
     const withTodayMine: Record<string, ActiveDay[]> = { ...ACTIVE, "2026-09-10": [sunday("2026-09-10")] };
     mountStrip({ myName: "ana", activeDays: withTodayMine });
-
     const todayMine = cell("10 de septiembre");
-    const dotsInTodayMine = todayMine.querySelectorAll(".bg-positive-fg, .bg-current");
-    expect(dotsInTodayMine).toHaveLength(1);
-    expect(dotsInTodayMine[0].classList.contains("bg-positive-fg")).toBe(true);
-    expect(dotsInTodayMine[0].classList.contains("brand-today-pulse")).toBe(true);
-
-    const mineOnly = cell("13 de septiembre");
-    const dotsInMineOnly = mineOnly.querySelectorAll(".bg-positive-fg, .bg-current");
-    expect(dotsInMineOnly).toHaveLength(1);
-    expect(dotsInMineOnly[0].classList.contains("bg-positive-fg")).toBe(true);
-    expect(dotsInMineOnly[0].classList.contains("brand-today-pulse")).toBe(false);
+    expect(todayMine.className).toContain("ring-accent/50");
+    expect(todayMine.querySelector(".text-positive-fg")!.textContent).toBe("10");
+    expect(within(todayMine).getByTestId("day-dots").children[0].className).toContain("bg-accent");
+    expect((todayMine as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it("F1 — today-only (not mine) still shows one pulsing, non-positive dot", () => {
-    mountStrip(); // no myName: 10 September is today but nobody's
-    const today = cell("10 de septiembre");
-    const dots = today.querySelectorAll(".bg-positive-fg, .bg-current");
-    expect(dots).toHaveLength(1);
-    expect(dots[0].classList.contains("bg-current")).toBe(true);
-    expect(dots[0].classList.contains("brand-today-pulse")).toBe(true);
-  });
-
-  it("F1 — every cell has at most two flow children (the dow/num spans); dots and the multiple mark are absolutely positioned", () => {
+  it("keeps every cell to its three flow children — weekday, number, dots — with nothing absolutely positioned", () => {
     const withTodayMine: Record<string, ActiveDay[]> = { ...ACTIVE, "2026-09-10": [sunday("2026-09-10")] };
     mountStrip({ myName: "ana", activeDays: withTodayMine });
     for (const b of cells()) {
-      const flowChildren = Array.from(b.children).filter((c) => !c.classList.contains("absolute"));
-      expect(flowChildren.length).toBeLessThanOrEqual(2);
+      expect(b.children.length).toBeLessThanOrEqual(3);
+      expect(b.querySelector(".absolute")).toBeNull();
     }
   });
 });
 
-describe("brand.css — .brand-today-pulse", () => {
-  // The same shape `litCard.test.ts` pins for `brand-lit-pass`: brand.css is outside
-  // tsc and lint, and a keyframe that ends on a non-`none` transform would leave the
-  // dot a containing block for every `position: fixed` descendant forever (rule 5).
-  const css = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../../brand.css"), "utf8");
-
-  it("runs once, 600 ms, eased, with no per-effect reduced-motion override", () => {
-    const rule = css.match(/\.brand-today-pulse\s*\{([^}]*)\}/);
-    expect(rule, ".brand-today-pulse rule not found").not.toBeNull();
-    expect(rule![1].match(/animation:\s*([^;]+);/)![1].trim()).toBe("brand-today-pulse 600ms var(--ease-out) 1 both");
-    const reduced = css.match(/@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{([\s\S]*?)\n\}/);
-    expect(reduced![1]).not.toMatch(/brand-today-pulse/);
-  });
-
-  it("ends its 100% frame on transform: none", () => {
-    const frames = css.match(/@keyframes brand-today-pulse\s*\{([\s\S]*?)\n\}/);
-    expect(frames, "brand-today-pulse keyframes not found").not.toBeNull();
-    expect(frames![1].match(/100%\s*\{([^}]*)\}/)![1]).toMatch(/transform:\s*none/);
-  });
-});
+/** The header opens a `CueDialog`, so it needs the provider its real host has. */
+function mountHeader(props: ComponentProps<typeof ScheduleHeader>) {
+  return render(
+    <MotionProvider>
+      <CueDialogProvider>
+        <ScheduleHeader {...props} />
+      </CueDialogProvider>
+    </MotionProvider>,
+  );
+}
 
 describe("ScheduleHeader", () => {
   it("reads the anchor month in Spanish and links the adjacent months", () => {
-    render(<ScheduleHeader anchorMonth="2026-09" viewMonth={null} />);
+    mountHeader({ anchorMonth: "2026-09", viewMonth: null });
     expect(screen.getByRole("heading", { level: 2 }).textContent).toBe("Septiembre 2026");
     expect(screen.getByRole("link", { name: "Mes anterior" }).getAttribute("href")).toBe("/schedule?m=2026-08");
     expect(screen.getByRole("link", { name: "Mes siguiente" }).getAttribute("href")).toBe("/schedule?m=2026-10");
   });
 
   it("crosses the year boundary one month at a time", () => {
-    render(<ScheduleHeader anchorMonth="2026-12" viewMonth="2026-12" />);
+    mountHeader({ anchorMonth: "2026-12", viewMonth: "2026-12" });
     expect(screen.getByRole("link", { name: "Mes siguiente" }).getAttribute("href")).toBe("/schedule?m=2027-01");
   });
 
   it("offers «Hoy» only in browse mode", () => {
-    render(<ScheduleHeader anchorMonth="2026-12" viewMonth="2026-12" />);
+    mountHeader({ anchorMonth: "2026-12", viewMonth: "2026-12" });
     expect(screen.getByRole("link", { name: "Hoy" }).getAttribute("href")).toBe("/schedule");
     cleanup();
-    render(<ScheduleHeader anchorMonth="2026-09" viewMonth={null} />);
+    mountHeader({ anchorMonth: "2026-09", viewMonth: null });
     expect(screen.queryByRole("link", { name: "Hoy" })).toBeNull();
   });
 
-  it("leaves the month field without steppers — the arrows are the one-month step", () => {
-    // R2 Task 4 ruling: `DateField`'s `onStep` pair would be a SECOND «Mes
-    // anterior»/«Mes siguiente» control with the same accessible names as the
-    // arrows above it. The field jumps to any month; it does not step.
-    render(<ScheduleHeader anchorMonth="2026-09" viewMonth={null} />);
+  it("carries no native month input and no second stepper pair — the arrows are the one-month step", () => {
+    // R2 Task 4 ruling, kept through ADR-0067: a `DateField` `onStep` pair would be a
+    // SECOND «Mes anterior»/«Mes siguiente» control with the same accessible names
+    // as the arrows above it; the native month input itself is gone with the sheet.
+    mountHeader({ anchorMonth: "2026-09", viewMonth: null });
+    expect(document.querySelector('input[type="month"]')).toBeNull();
     expect(screen.queryByRole("button", { name: "Mes siguiente" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Mes anterior" })).toBeNull();
     expect(push).not.toHaveBeenCalled();
   });
 
   it("sublabels the rolling view «Próximos», and never a browsed month", () => {
-    render(<ScheduleHeader anchorMonth="2026-09" viewMonth={null} />);
+    mountHeader({ anchorMonth: "2026-09", viewMonth: null });
     expect(screen.getByText("Próximos")).toBeTruthy();
     cleanup();
-    render(<ScheduleHeader anchorMonth="2026-12" viewMonth="2026-12" />);
+    mountHeader({ anchorMonth: "2026-12", viewMonth: "2026-12" });
     expect(screen.queryByText("Próximos")).toBeNull();
+  });
+
+  it("ADR-0067 — the month name opens a sheet of the anchor year's twelve months as `?m=` links, the anchor pressed", () => {
+    mountHeader({ anchorMonth: "2026-09", viewMonth: null });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    const title = screen.getByRole("button", { name: /Septiembre 2026/ });
+    expect(title.getAttribute("aria-haspopup")).toBe("dialog");
+    fireEvent.click(title);
+    const sheet = screen.getByRole("dialog", { name: "Ir a un mes" });
+    expect(within(sheet).getByText("2026")).toBeTruthy();
+    expect(within(sheet).getByRole("link", { name: "Enero 2026" }).getAttribute("href")).toBe("/schedule?m=2026-01");
+    expect(within(sheet).getByRole("link", { name: "Diciembre 2026" }).getAttribute("href")).toBe("/schedule?m=2026-12");
+    expect(within(sheet).getAllByRole("link")).toHaveLength(11);
+    const current = within(sheet).getByRole("button", { name: "Septiembre 2026" });
+    expect(current.getAttribute("aria-pressed")).toBe("true");
+    expect(current.textContent).toBe("Sep");
+    expect(title.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("the sheet's own arrows change the year, never the month, and a pick closes it", () => {
+    mountHeader({ anchorMonth: "2026-09", viewMonth: null });
+    fireEvent.click(screen.getByRole("button", { name: /Septiembre 2026/ }));
+    const sheet = screen.getByRole("dialog", { name: "Ir a un mes" });
+    fireEvent.click(within(sheet).getByRole("button", { name: "Año anterior" }));
+    expect(within(sheet).getByText("2025")).toBeTruthy();
+    expect(within(sheet).getByRole("link", { name: "Septiembre 2025" }).getAttribute("href")).toBe("/schedule?m=2025-09");
+    expect(within(sheet).getAllByRole("link")).toHaveLength(12); // nothing is the anchor in another year
+    expect(within(sheet).queryByRole("button", { name: "Mes siguiente" })).toBeNull();
+    // jsdom cannot navigate; the pick's own job here is to close the sheet.
+    const swallow = (e: Event) => e.preventDefault();
+    document.addEventListener("click", swallow);
+    fireEvent.click(within(sheet).getByRole("link", { name: "Septiembre 2025" }));
+    document.removeEventListener("click", swallow);
+    expect(screen.getByRole("button", { name: /Septiembre 2026/ }).getAttribute("aria-expanded")).toBe("false");
   });
 });

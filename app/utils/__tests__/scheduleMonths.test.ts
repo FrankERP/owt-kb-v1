@@ -9,7 +9,19 @@ import {
   windowBounds,
   windowMonths,
   WINDOW_MONTHS,
+  yearMonths,
 } from "@/app/utils/scheduleMonths";
+
+describe("yearMonths", () => {
+  it("lists the twelve months of a year, January first, zero-padded", () => {
+    const months = yearMonths(2026);
+    expect(months).toHaveLength(12);
+    expect(months[0]).toBe("2026-01");
+    expect(months[8]).toBe("2026-09");
+    expect(months[11]).toBe("2026-12");
+    expect(months.every((ym) => parseMonthParam(ym) === ym)).toBe(true);
+  });
+});
 
 describe("parseMonthParam", () => {
   it("accepts a well-formed month", () => {

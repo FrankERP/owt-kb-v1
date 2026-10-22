@@ -294,8 +294,8 @@ describe("CalendarView host", () => {
     mountHost();
     expect(screen.getByRole("radio", { name: "Agenda" }).getAttribute("aria-checked")).toBe("true");
     expect(rows()).toHaveLength(3);
-    expect(screen.queryByText("Varios servicios")).toBeNull();
-    expect(screen.queryByText("Mié")).toBeNull();
+    expect(screen.queryByText("Especial")).toBeNull();
+    expect(screen.getAllByText("Jue")).toHaveLength(1); // the week strip's own label; no grid headers
   });
 
   it("renders the first paint at rest — no `appear` above the fold (M0b, ADR-0031)", () => {
@@ -310,8 +310,9 @@ describe("CalendarView host", () => {
     mountHost();
     fireEvent.click(screen.getByRole("radio", { name: "Mes" }));
     expect(screen.getByRole("radio", { name: "Mes" }).getAttribute("aria-checked")).toBe("true");
-    expect(screen.getByText("Varios servicios")).toBeTruthy();
-    expect(screen.getAllByText("Mié")).toHaveLength(3); // one per month of the window
+    expect(screen.getByText("Especial")).toBeTruthy(); // the legend's three dots
+    expect(screen.queryByText("Varios servicios")).toBeNull(); // a second service is a second dot, not a legend entry
+    expect(screen.getAllByText("Jue")).toHaveLength(4); // the strip's label + one column header per month of the window
     expect(rows()).toHaveLength(0);
   });
 

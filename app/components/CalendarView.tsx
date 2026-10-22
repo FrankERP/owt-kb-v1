@@ -35,14 +35,14 @@ import { useSession } from "next-auth/react";
 import { DayCard } from "./DayCard";
 import { Setlist } from "../utils/interface";
 import { MONTH_NAMES_ES, monthRangeLabel, WINDOW_MONTHS, windowMonths } from "../utils/scheduleMonths";
-import { myNameFromSession } from "../utils/agenda";
+import { DOW_SHORT, monthStripDays, myNameFromSession, TONE_RAIL, type StripDay, type Tone } from "../utils/agenda";
 import AgendaView from "./AgendaView";
+import DayDots, { DAY_CELL_BASE, DAY_CELL_EMPTY, DAY_CELL_LIT, DAY_CELL_SELECTED, DAY_CELL_TODAY } from "./DayDots";
 import DayStrip from "./DayStrip";
 import ScheduleHeader from "./ScheduleHeader";
 import CueDialog from "./ui/CueDialog";
 import Presence from "./ui/Presence";
 import SegmentedControl from "./ui/SegmentedControl";
-import { themeColour } from "@/app/utils/themeColour";
 
 export type ActiveDay = {
   day: string; // "Sábado" | "Domingo" | any special service name
@@ -74,14 +74,12 @@ interface Props {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const DAY_HEADERS = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
+/** Monday-first rotation of the strip's own weekday labels — one vocabulary. */
+const DAY_HEADERS = [...DOW_SHORT.slice(1), DOW_SHORT[0]];
 
-function toDateStr(year: number, month: number, day: number) {
-  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-}
-function getDaysInMonth(year: number, month: number) {
-  return new Date(year, month + 1, 0).getDate();
-}
+/** The legend's three dots, in the order the week runs (ADR-0067: a dot, not a swatch). */
+const LEGEND: ReadonlyArray<readonly [Tone, string]> = [["sat", "Sábado"], ["sun", "Domingo"], ["special", "Especial"]];
+
 function firstDayOffset(year: number, month: number) {
   const dow = new Date(year, month, 1).getDay();
   return (dow + 6) % 7; // Monday-first
@@ -175,24 +173,16 @@ export default function CalendarView({ activeDays, viewMonth, todayStr, photos, 
             <p className="py-20 text-center font-label text-sm text-mono-400">{emptyMessage}</p>
           ) : (
             <>
-              {/* Legend — only the grid needs one; the agenda names the day in words. */}
+              {/* Legend — only the grid needs one; the agenda names the day in words.
+                  Three dots, no «varios servicios» entry: a day with two services
+                  shows two dots, which needs no explaining. */}
               <div className="mb-8 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
-                {([
-                  ["--accent-rgb", "Domingo"],
-                  ["--warning-fg-rgb", "Sábado"],
-                  ["--info-fg-rgb", "Especial"],
-                ] as const).map(([color, label]) => (
-                  <span key={label} className="flex items-center gap-1.5">
-                    <span className="w-3 h-3 rounded-[4px] border" style={{ borderColor: themeColour(color, 0.502), background: themeColour(color, 0.2) }} />
+                {LEGEND.map(([tone, label]) => (
+                  <span key={tone} className="flex items-center gap-1.5">
+                    <span className={`h-1.5 w-1.5 rounded-full ${TONE_RAIL[tone]}`} />
                     <span className="font-label text-[11px] uppercase tracking-widest text-mono-500">{label}</span>
                   </span>
                 ))}
-                <span className="flex items-center gap-1.5">
-                  <span className="relative w-3 h-3 rounded-[4px] border border-accent/50 bg-accent-deep/50">
-                    <span className="absolute top-0 right-0 w-1.5 h-1.5 rounded-full bg-accent" />
-                  </span>
-                  <span className="font-label text-[11px] uppercase tracking-widest text-mono-500">Varios servicios</span>
-                </span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
@@ -205,6 +195,7 @@ export default function CalendarView({ activeDays, viewMonth, todayStr, photos, 
                     todayStr={todayStr}
                     selected={selected}
                     onSelect={setSelected}
+                    myName={myName}
                   />
                 ))}
               </div>
@@ -246,8 +237,12 @@ export default function CalendarView({ activeDays, viewMonth, todayStr, photos, 
 
 // ─── Month grid ───────────────────────────────────────────────────────────────
 
+// The cells come from `monthStripDays` — the same derivation the week strip uses
+// (`weekStripDays`), so tone priority, «tú» and today are decided once in
+// `app/utils/agenda.ts` and the grid only lays them out. The selected day is the
+// grid's own state: the accent fill, with the dots turned base (`DayDots onFill`).
 function MonthGrid({
-  year, month, activeDays, todayStr, selected, onSelect,
+  year, month, activeDays, todayStr, selected, onSelect, myName = "",
 }: {
   year: number;
   month: number;
@@ -255,14 +250,12 @@ function MonthGrid({
   todayStr: string;
   selected: string | null;
   onSelect: (d: string) => void;
+  myName?: string;
 }) {
-  const daysInMonth = getDaysInMonth(year, month);
+  const ym = `${year}-${String(month + 1).padStart(2, "0")}`;
+  const days = monthStripDays(ym, activeDays, todayStr, myName);
   const offset = firstDayOffset(year, month);
-
-  const cells: (number | null)[] = [
-    ...Array(offset).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ];
+  const cells: (StripDay | null)[] = [...Array<null>(offset).fill(null), ...days];
   while (cells.length % 7 !== 0) cells.push(null);
 
   return (
@@ -276,61 +269,31 @@ function MonthGrid({
             {h}
           </div>
         ))}
-        {cells.map((day, i) => {
-          if (!day) return <div key={i} className="aspect-square" />;
+        {cells.map((d, i) => {
+          if (!d) return <div key={i} className="aspect-square" />;
+          const entries = activeDays[d.date] ?? [];
+          const isSelected = selected === d.date;
 
-          const dateStr = toDateStr(year, month, day);
-          const entries = activeDays[dateStr];
-          const hasActive = entries && entries.length > 0;
-          const isSelected = selected === dateStr;
-          const isToday = dateStr === todayStr;
-
-          // Determine color priority: special > sat > sun
-          const hasSat = entries?.some(e => !e.roleId && e.day === "Sábado");
-          const hasSpecial = entries?.some(e => e.roleId || (e.day !== "Sábado" && e.day !== "Domingo"));
-          const hasMultiple = entries && entries.length > 1;
-
-          // Pick display color: if mixed, purple takes priority to signal "multiple"
-          const colorKey = hasSpecial ? "special" : hasSat ? "sat" : "sun";
-
-          // §5.2 press: the cell scales under a finger. `transform` joins the
-          // transition list so it eases back out, and stays OFF the disabled cells —
-          // a day with no service is not an affordance.
-          let cls = "aspect-square flex flex-col items-center justify-center rounded-lg text-sm font-label transition-[color,background-color,border-color,transform] duration-fast ease-out-brand relative ";
-
-          if (isSelected) {
-            cls += colorKey === "sat" ? "bg-warning-fg text-surface-base font-bold active:scale-[0.94]"
-                 : colorKey === "sun" ? "bg-accent text-surface-base font-bold active:scale-[0.94]"
-                 : "bg-info-fg text-surface-base font-bold active:scale-[0.94]";
-          } else if (hasActive) {
-            cls += colorKey === "sat"
-              ? "bg-warning-surface/50 border border-warning-fg/50 text-warning-fg cursor-pointer active:scale-[0.94] hover:bg-warning-surface/80 hover:border-warning-fg"
-              : colorKey === "special"
-              ? "bg-info-surface/50 border border-info-fg/50 text-info-fg cursor-pointer active:scale-[0.94] hover:bg-info-surface/80 hover:border-info-fg"
-              : "bg-accent-deep/50 border border-accent/50 text-accent cursor-pointer active:scale-[0.94] hover:bg-accent-deep/80 hover:border-accent";
-          } else {
-            cls += "text-mono-400 dark:text-mono-400 cursor-default";
-          }
+          // §5.2 press: the cell scales under a finger (`DAY_CELL_LIT`), and stays
+          // OFF the disabled cells — a day with no service is not an affordance.
+          const cls = `${DAY_CELL_BASE} aspect-square gap-px text-sm font-label ${
+            isSelected ? DAY_CELL_SELECTED : d.tone ? DAY_CELL_LIT : DAY_CELL_EMPTY
+          } ${d.today ? DAY_CELL_TODAY : ""}`;
 
           return (
             <button
-              key={i}
+              key={d.date}
               type="button"
-              disabled={!hasActive}
-              onClick={() => hasActive && onSelect(dateStr)}
-              aria-current={isToday ? "date" : undefined}
-              aria-label={`${new Date(dateStr + "T12:00:00").toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" })}${
-                hasActive ? `, ${entries.map((e) => e.day).join(", ")}` : ""
-              }`}
+              disabled={!d.tone}
+              onClick={() => d.tone && onSelect(d.date)}
+              aria-current={d.today ? "date" : undefined}
+              aria-label={`${new Date(d.date + "T12:00:00").toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" })}${
+                entries.length ? `, ${entries.map((e) => e.day).join(", ")}` : ""
+              }${d.mine ? ", te toca" : ""}`}
               className={cls}
             >
-              {day}
-              {isToday && (
-                <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-current opacity-60" />
-              )}
-              {hasMultiple && !isSelected && (
-                <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-current opacity-80" />
-              )}
+              <span className={d.mine && !isSelected ? "text-positive-fg font-bold" : ""}>{d.num}</span>
+              <DayDots tones={d.tones} onFill={isSelected} />
             </button>
           );
         })}

@@ -94,8 +94,13 @@ export function agendaRows(activeDays: Record<string, ActiveDay[]>): AgendaRow[]
   });
 }
 
-export type StripDay = { date: string; num: number; dow: string; tone: Tone | null; today: boolean; multiple: boolean; mine: boolean };
-const DOW = ["D", "L", "M", "X", "J", "V", "S"]; // getUTCDay order, Spanish initials
+/** `tone` is the day's one colour (special > sat > sun, the priority both views
+ *  share); `tones` is one per service in `activeDays` order, for the dot row — a
+ *  Sunday that also hosts a special shows two dots, not a "several" mark. */
+export type StripDay = { date: string; num: number; dow: string; tone: Tone | null; tones: Tone[]; today: boolean; mine: boolean };
+/** Weekday abbreviations in `getUTCDay` order — the strip's cell labels and the
+ *  month grid's column headers (`DAY_HEADERS` rotates them Monday-first), one vocabulary. */
+export const DOW_SHORT = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 
 /** Add n days (may be negative) to a "YYYY-MM-DD". UTC arithmetic on a date-only
  *  string, same reason `monthBounds` reads UTC: there is no time to shift. */
@@ -118,7 +123,7 @@ function stripDay(date: string, activeDays: Record<string, ActiveDay[]>, todaySt
   const tones = entries.map(serviceTone);
   const tone: Tone | null = tones.includes("special") ? "special" : tones.includes("sat") ? "sat" : tones.includes("sun") ? "sun" : null;
   const mine = !!myName && entries.some((e) => mySeats(e, myName).length > 0);
-  return { date, num: d, dow: DOW[new Date(Date.UTC(y, m - 1, d)).getUTCDay()], tone, today: date === todayStr, multiple: entries.length > 1, mine };
+  return { date, num: d, dow: DOW_SHORT[new Date(Date.UTC(y, m - 1, d)).getUTCDay()], tone, tones, today: date === todayStr, mine };
 }
 
 export function monthStripDays(ym: string, activeDays: Record<string, ActiveDay[]>, todayStr: string, myName = ""): StripDay[] {

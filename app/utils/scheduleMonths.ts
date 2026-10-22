@@ -47,6 +47,11 @@ export function monthLabel(ym: string): string {
   return `${MONTH_NAMES_ES[m - 1]} ${y}`;
 }
 
+/** The twelve "YYYY-MM" months of `year`, January first — the month sheet's pills. */
+export function yearMonths(year: number): string[] {
+  return Array.from({ length: 12 }, (_, i) => `${String(year).padStart(4, "0")}-${String(i + 1).padStart(2, "0")}`);
+}
+
 /** The `count` consecutive "YYYY-MM" months starting at `ym`. */
 export function windowMonths(ym: string, count: number): string[] {
   return Array.from({ length: count }, (_, i) => addMonths(ym, i));
