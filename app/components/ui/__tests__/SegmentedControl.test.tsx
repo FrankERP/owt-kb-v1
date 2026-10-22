@@ -156,4 +156,36 @@ describe("SegmentedControl", () => {
     expect(pending.getAttribute("aria-busy")).toBe("true");
     expect(pending.textContent).toContain("3");
   });
+
+  // Five Propuestas filters at 390px measured 563px, and the PAGE scrolled
+  // 197px sideways (ADR-0035: /admin has no page-level horizontal scroll). A
+  // joined `filled` bar cannot wrap, so it scrolls inside itself instead, and
+  // its options never shrink to make room.
+  it("filled: scrolls inside itself when wider than its container, never the page", () => {
+    render(
+      <MotionProvider>
+        <SegmentedControl
+          label="Filtro"
+          tone="filled"
+          value="all"
+          onChange={() => {}}
+          options={[
+            { value: "all", label: "Todas" },
+            { value: "pending", label: "Pendientes" },
+            { value: "changes_requested", label: "En revisión" },
+            { value: "approved", label: "Aprobadas" },
+            { value: "draft", label: "Borradores" },
+          ]}
+        />
+      </MotionProvider>,
+    );
+    const group = screen.getByRole("radiogroup", { name: "Filtro" });
+    expect(group.className).toMatch(/\boverflow-x-auto\b/);
+    expect(group.className).toMatch(/\bmax-w-full\b/);
+    expect(group.className).not.toMatch(/\boverflow-hidden\b/);
+    for (const radio of screen.getAllByRole("radio")) {
+      expect(radio.className).toMatch(/\bshrink-0\b/);
+      expect(radio.className).toMatch(/\bwhitespace-nowrap\b/);
+    }
+  });
 });
