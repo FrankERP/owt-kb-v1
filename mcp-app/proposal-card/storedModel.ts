@@ -22,9 +22,16 @@ export type StoredEdit =
 /** One service's change set exactly as the check answered it: passed to the chat untouched. */
 export type StoredChange = Record<string, unknown> & { service: string; lines: string[] };
 
+/** The days a chat check asked the card to show (`focus`); the month is still checked whole. */
+export interface Focus {
+  from: string;
+  to: string;
+}
+
 export interface StoredCheckView {
   ok: boolean;
   month: string;
+  focus: Focus | null;
   board: ServiceView[];
   /** The server's lines: the changes in words, the groups, the warnings, the month check. */
   lines: string[];
@@ -99,6 +106,7 @@ export function storedCheckViewOf(result: { content?: unknown; structuredContent
   return {
     ok: !result?.isError && s.ok === true,
     month: str(s.month),
+    focus: isObj(s.focus) && typeof s.focus.from === "string" && typeof s.focus.to === "string" ? { from: s.focus.from, to: s.focus.to } : null,
     board,
     lines: textLines(result?.content).filter((l) => !isArgsLine(l)),
     edits: objects(s.edits).map(editOf).filter((e): e is StoredEdit => e !== null),
@@ -120,6 +128,17 @@ export function storedCheckViewOf(result: { content?: unknown; structuredContent
         }))
       : null,
   };
+}
+
+/**
+ * The services a focus shows, or null when it narrows nothing (no focus, every service in it, or
+ * none — never an empty card). A service that changes always shows: «Guardar» saves it, so the
+ * board never hides it. String comparison: dates are `YYYY-MM-DD`.
+ */
+export function focusedServices<T extends { date: string; service?: string }>(services: readonly T[], focus: Focus | null, changed: readonly string[] = []): T[] | null {
+  if (!focus) return null;
+  const shown = services.filter((s) => (s.date >= focus.from && s.date <= focus.to) || (s.service !== undefined && changed.includes(s.service)));
+  return shown.length === 0 || shown.length === services.length ? null : shown;
 }
 
 /** The list after the server refused an edit: a forcible rule on the LAST edit is offered; anything else is dropped. */
@@ -174,6 +193,47 @@ export function monthName(month: string): string {
   const name = m ? MONTHS[Number(m[2]) - 1] : undefined;
   return m && name ? `${name} de ${m[1]}` : month;
 }
+
+/** «a», «a y b», «a, b y c». */
+export const joinWords = (items: readonly string[]): string =>
+  items.length <= 1 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} y ${items[items.length - 1]}`;
+
+/**
+ * A short key for one part's arguments (FNV-1a over its JSON, base 36): the message and the context
+ * line both carry it, so the model takes THESE arguments — never an earlier check's line, which is
+ * still in the chat with a valid MAC — and can tell when they did not arrive.
+ */
+export function argsKey(json: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < json.length; i++) h = Math.imul(h ^ json.charCodeAt(i), 0x01000193);
+  return (h >>> 0).toString(36).padStart(7, "0").slice(-6);
+}
+
+/**
+ * «Guardar» on a host that takes model context (Frank, 2026-10-22: the JSON in the chat «no me
+ * encantó»): the chat shows the changes in words and a key; the arguments ride in the model's
+ * context, on the check's own `Argumentos para save_service_edits` line, labelled with that key.
+ * The host keeps only the LAST context update, so the card sends every part handed over so far
+ * (`contextOf`). `saveMessage` below stays the fallback for a host without context updates.
+ */
+export function saveRequest(month: string, part: readonly StoredChange[], index: number, total: number): { key: string; message: string; contextLine: string } {
+  const json = JSON.stringify({ month, changes: part });
+  const key = argsKey(json);
+  const which = total > 1 ? `la parte ${index + 1} de ${total} de ` : "";
+  return {
+    key,
+    message: [
+      `Guarda con save_service_edits ${which}mis cambios de ${monthName(month)} en la tarjeta (clave ${key}):`,
+      ...part.flatMap((c) => c.lines.map((l) => `- ${l}`)),
+      `Los argumentos van en el contexto de la tarjeta con la clave ${key}; no uses los de una revisión anterior. Si no los ves, dímelo y vuelvo a tocar «Guardar».`,
+    ].join("\n"),
+    contextLine: `Tarjeta, clave ${key}${total > 1 ? ` (parte ${index + 1} de ${total})` : ""}. ${ARGS_LINE_PREFIXES[0]} ${json}`,
+  };
+}
+
+/** The context the card sets: every part handed over for the current edit list, in order. */
+export const contextOf = (lines: ReadonlyMap<number, string>): string =>
+  [...lines.entries()].sort(([a], [b]) => a - b).map(([, l]) => l).join("\n");
 
 /**
  * «Guardar»'s chat message for one part: the lines in words (what the permission prompt will show),

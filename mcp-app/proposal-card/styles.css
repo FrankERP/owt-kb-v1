@@ -374,3 +374,15 @@ button.add {
     transition: none;
   }
 }
+
+/* «Ver mes completo»: a text link that still keeps a 44 px tap target. */
+button.link {
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

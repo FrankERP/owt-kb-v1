@@ -13,14 +13,18 @@ import { PRINCIPAL } from "@/app/mcp/tools/__tests__/monthToolFixtures";
 import { MONTH, serviceWorld, type ServiceWorld } from "@/app/mcp/tools/__tests__/serviceEditorFixtures";
 import { Editor, type StoredEditorProps } from "@/mcp-app/proposal-card/Editor";
 import { cardViewOf } from "@/mcp-app/proposal-card/model";
+import { ProposalCard } from "@/mcp-app/proposal-card/ProposalCard";
 import { storedSeatOf } from "@/mcp-app/proposal-card/useStoredEditor";
 import { COPY_ARGS_PREFIX, SAVE_ARGS_PREFIX } from "@/app/components/admin/v3Copy";
 import {
   ARGS_LINE_PREFIXES,
   afterStoredRefusal,
+  focusedServices,
   forceStoredLast,
   saveMessage,
   saveParts,
+  saveRequest,
+  contextOf,
   storedCheckViewOf,
   type StoredChange,
   type StoredEdit,
@@ -82,6 +86,64 @@ describe("the saved-month model against the real tools", () => {
     expect(afterStoredRefusal(edits, view)).toEqual({ edits: [], askForce: false });
     const seat = await appCheck(w, [], { service: "sun15", row: "bgv" });
     expect(seat.candidates?.length).toBeGreaterThan(0);
+  });
+
+  it("«Guardar» on a host with model context: the chat shows only words; the context line saves as is", async () => {
+    const w = serviceWorld();
+    const view = await appCheck(w, [{ op: "place", service: "sun15", row: "bgv", member: w.tok("m-carla") }]);
+    const [part] = saveParts(view.changes, view.maxGroup);
+    const request = saveRequest(MONTH, part!, 0, 1);
+    expect(request.message.split("\n").slice(0, 2)).toEqual([
+      `Guarda con save_service_edits mis cambios de noviembre de 2026 en la tarjeta (clave ${request.key}):`,
+      "- domingo 15 nov · BGV: entra Carla",
+    ]);
+    expect(request.message).not.toContain("{");
+    expect(request.key).toMatch(/^[0-9a-z]{6}$/);
+    expect(request.contextLine.startsWith(`Tarjeta, clave ${request.key}. ${SAVE_ARGS_PREFIX} `)).toBe(true);
+    const args = JSON.parse(request.contextLine.slice(request.contextLine.indexOf(SAVE_ARGS_PREFIX) + SAVE_ARGS_PREFIX.length));
+    const saved = await saveServiceEditsResult(args, PRINCIPAL, w.deps);
+    expect(saved.structuredContent).toMatchObject({ ok: true, services: [{ service: "sun15", status: "saved" }] });
+    // Parts: each has its own key, and the context the card sets carries every part handed over so far.
+    const second = saveRequest(MONTH, [{ ...part![0]!, lines: ["otra"] }], 1, 2);
+    expect(second.message.split("\n")[0]).toBe(`Guarda con save_service_edits la parte 2 de 2 de mis cambios de noviembre de 2026 en la tarjeta (clave ${second.key}):`);
+    expect(second.key).not.toBe(request.key);
+    const first = saveRequest(MONTH, part!, 0, 2);
+    expect(contextOf(new Map([[1, second.contextLine], [0, first.contextLine]]))).toBe(`${first.contextLine}\n${second.contextLine}`);
+  });
+
+  it("a chat check with focus opens the card on those days only, the whole month one tap away", async () => {
+    const w = serviceWorld();
+    const out = await checkServiceEditsResult({ month: MONTH, edits: [], focus: { from: "2026-11-07", to: "2026-11-08" } }, PRINCIPAL, w.deps);
+    const view = cardViewOf(out);
+    expect(view.kind).toBe("storedMonth");
+    if (view.kind !== "storedMonth") return;
+    expect(view.changed).toBe(0);
+    expect(view.focused?.services.map((s) => s.label)).toEqual(["sábado 7 nov", "domingo 8 nov"]);
+    expect(view.focused?.shown).toBe("sábado 7 nov y domingo 8 nov");
+    expect(view.focused?.focus).toEqual({ from: "2026-11-07", to: "2026-11-08" });
+    expect(view.services.length).toBeGreaterThan(2);
+    // The per-service lines of other days stay out; it says so.
+    expect(view.lines.some((l) => l.startsWith("domingo 15 nov:"))).toBe(false);
+    expect(view.lines.some((l) => l.startsWith("domingo 8 nov:"))).toBe(true);
+    expect(view.lines).toContain("Los avisos por servicio son solo de esos días; las reglas y la equidad son las de todo el mes.");
+    const narrow = renderToStaticMarkup(<ProposalCard view={view} canExpand={false} onExpand={() => {}} onWiden={() => {}} />);
+    expect(narrow).toContain("Solo sábado 7 nov y domingo 8 nov.");
+    expect(narrow).toContain("Ver mes completo");
+    expect(narrow).not.toContain("domingo 15 nov");
+    const wide = renderToStaticMarkup(<ProposalCard view={view} canExpand={false} onExpand={() => {}} wide onWiden={() => {}} />);
+    expect(wide).toContain("domingo 15 nov");
+    expect(wide).not.toContain("Ver mes completo");
+  });
+
+  it("a focus narrows nothing when it holds every service or none", () => {
+    const services = [{ date: "2026-11-01" }, { date: "2026-11-08" }];
+    expect(focusedServices(services, null)).toBeNull();
+    expect(focusedServices(services, { from: "2026-11-01", to: "2026-11-30" })).toBeNull();
+    expect(focusedServices(services, { from: "2026-11-20", to: "2026-11-21" })).toBeNull();
+    expect(focusedServices(services, { from: "2026-11-08", to: "2026-11-08" })).toEqual([{ date: "2026-11-08" }]);
+    // A service that changes always shows, whatever the focus.
+    const ids = [{ date: "2026-11-01", service: "a" }, { date: "2026-11-08", service: "b" }, { date: "2026-11-15", service: "c" }];
+    expect(focusedServices(ids, { from: "2026-11-08", to: "2026-11-08" }, ["c"])?.map((s) => s.service)).toEqual(["b", "c"]);
   });
 
   it("a revise_proposal or solve_month answer is never read as a saved month", () => {
@@ -148,5 +210,13 @@ describe("the saved-month screen", () => {
     expect(out).toContain(">Guardar</button>");
     expect(out).not.toContain("Cargar");
     expect(out).not.toContain("Versión");
+    expect(out).not.toContain("Ver mes completo");
+  });
+
+  it("narrowed to some days: says which, and offers the whole month", () => {
+    const out = renderToStaticMarkup(<Editor {...props} board={props.board.slice(0, 1)} narrowed={{ shown: "domingo 8 nov", onWiden: noop }} />);
+    expect(out).toContain("Solo domingo 8 nov.");
+    expect(out).toContain("Ver mes completo");
+    expect(out).not.toContain("sábado 14 nov");
   });
 });
