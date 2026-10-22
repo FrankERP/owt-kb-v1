@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildFeedEvents,
   calendarFeedQuery,
+  feedLinks,
   feedScopeFromSearch,
   feedWindow,
   isCanonicalFeedSearch,
@@ -159,5 +160,20 @@ describe("serviceStartTime — the one rule the feed and both .ics downloads sha
 
   it("decides by kind, never by the label — a special named «Sábado» keeps its time", () => {
     expect(serviceStartTime("special", "Sábado", "20:00")).toBe("20:00");
+  });
+});
+
+describe("feedLinks — one object per scope, never mixed", () => {
+  const urls = {
+    all: "https://o/t",
+    mine: "https://o/t?solo=mios",
+    webcalAll: "webcal://o/t",
+    webcalMine: "webcal://o/t?solo=mios",
+    googleAll: "https://g/?cid=all",
+    googleMine: "https://g/?cid=mine",
+  };
+  it("picks the whole-schedule trio for «all» and the member's trio for «mine»", () => {
+    expect(feedLinks(urls, "all")).toEqual({ google: urls.googleAll, webcal: urls.webcalAll, https: urls.all });
+    expect(feedLinks(urls, "mine")).toEqual({ google: urls.googleMine, webcal: urls.webcalMine, https: urls.mine });
   });
 });

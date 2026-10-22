@@ -277,6 +277,16 @@ export type CalendarFeedState =
   | { kind: "ready"; urls: FeedUrls; preview?: boolean }
   | { kind: "unavailable"; message: string };
 
+/**
+ * The three links of one scope — Google's add-by-URL, the `webcal://` for iPhone/Mac, the https
+ * to copy — so a row renders from ONE object and can never mix scopes (`CalendarFeedPanel`).
+ */
+export function feedLinks(urls: FeedUrls, scope: FeedScope): { google: string; webcal: string; https: string } {
+  return scope === "mine"
+    ? { google: urls.googleMine, webcal: urls.webcalMine, https: urls.mine }
+    : { google: urls.googleAll, webcal: urls.webcalAll, https: urls.all };
+}
+
 /** The calendar's name in the subscribing app. */
 export function feedCalendarName(scope: FeedScope): string {
   return scope === "mine" ? "Oasis Worship · mis servicios" : "Oasis Worship";
