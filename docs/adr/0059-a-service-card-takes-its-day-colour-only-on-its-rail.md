@@ -42,6 +42,17 @@ the bands showed through every card and cut long lists in half.
 ## Consequences
 
 Saturday still reads as orange and Sunday as blue, but only on the rail and in the
-calendar's strip and grid, which colour-code days on purpose. Re-tinting the
+calendar's strip and grid, which colour-code days on purpose.
+
+**2026-10-22 — the admin's service card follows.** `ServiceReadinessCard` (`/admin` →
+Servicios) kept the four-colour treatment for two more days: a tinted header ground,
+a day-coloured border, section labels, keys, medley spine and instrument chips, plus a
+«DOMINGO»/«SÁBADO» chip that repeated what the weekday in the date already said. It now
+takes the same 3 px rail (`CARD_RAIL` in `serviceCardModel.ts`, pinned equal to
+`TONE_RAIL` by `serviceCardModel.test.ts`) on the neutral `--surface-card` ground, and
+everything else on it is `ink`/`ink-dim`/`mono-400`. The retired tables (`CARD_HEADER`,
+`CARD_BORDER`, `CARD_ACCENT`, `CARD_ACCENT_MUTED`, `CARD_DIVIDER`, `CARD_ACCENT_VAR`,
+`SERVICE_BADGE`) are gone rather than unused, so the next card cannot reach for them.
+A live availability conflict still colours a chip red, with the ⚠ and the text. Re-tinting the
 header or the labels brings back the alert-coloured Saturday. Making `--surface-card`
 translucent again brings back the page bands showing through cards.

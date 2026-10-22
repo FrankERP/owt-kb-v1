@@ -4,9 +4,16 @@
 //
 // The label, kind, disabled flag and rule all come from the shipped 15-rule ladder
 // through `servicePrimaryActionProps`; this component never inspects a readiness
-// dimension. It is a full-width, always-visible button with a ≥44px touch target —
-// no hover-only workflow — and it reports WHY it is disabled when a required
-// source is missing.
+// dimension. It is an always-visible button with a ≥44px touch target — no
+// hover-only workflow — and it reports WHY it is disabled when a required source
+// is missing.
+//
+// Since 2026-10-22 it lives in the card's HEADER row, beside the icon cluster,
+// instead of at the foot of the card: twelve full-width buttons under twelve
+// setlists made the board 5 570 px tall, and the foot of a card is wherever its
+// longest list ends. From `sm` it is a normal-width button; below `sm` the header
+// has no room beside three 44px icons, so it wraps to its own full-width line
+// (`basis-full order-last`, with the reason line under it).
 //
 // It is a house `Button` (R5 Task 4). The tone is carried by the VARIANT, not by a
 // colour override on `className`: `Button` documents `className` as additive
@@ -45,7 +52,10 @@ export default function ServicePrimaryAction({
 }) {
   const tone = toneVariant(action);
   return (
-    <div className="min-w-0 space-y-1">
+    <div
+      data-card-primary-action=""
+      className="order-last min-w-0 basis-full space-y-1 sm:order-none sm:ml-auto sm:basis-auto"
+    >
       <Button
         variant={tone}
         size="md"
