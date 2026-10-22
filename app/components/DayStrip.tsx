@@ -27,7 +27,7 @@
 import { useState } from "react";
 import SwipeStrip from "./ui/SwipeStrip";
 import type { ActiveDay } from "./CalendarView";
-import { addDays, mondayOf, weekStripDays } from "../utils/agenda";
+import { addDays, dayCellLabel, mondayOf, weekStripDays } from "../utils/agenda";
 import { haptic } from "../utils/haptics";
 import DayDots, { DAY_CELL_BASE, DAY_CELL_EMPTY, DAY_CELL_LIT, DAY_CELL_TODAY } from "./DayDots";
 
@@ -85,21 +85,20 @@ export default function DayStrip({
       </p>
       <div className="grid grid-cols-7 gap-1">
         {days.map((d) => {
-          const label = fmt(d.date, { weekday: "long", day: "numeric", month: "long" });
           const entries = activeDays[d.date] ?? [];
           return (
             <button
               key={d.date}
               type="button"
-              disabled={!d.tone}
+              disabled={!d.lit}
               aria-current={d.today ? "date" : undefined}
-              aria-label={`${label}${entries.length ? `, ${entries.map((e) => e.day).join(", ")}` : ""}${d.mine ? ", te toca" : ""}`}
+              aria-label={dayCellLabel(d, entries)}
               onClick={() => {
                 // Native only, fire-and-forget (see haptics.ts) — never gates the pick.
                 void haptic("selection");
                 onPick(d.date);
               }}
-              className={`${DAY_CELL_BASE} gap-0.5 py-2 ${d.tone ? DAY_CELL_LIT : DAY_CELL_EMPTY} ${d.today ? DAY_CELL_TODAY : ""}`}
+              className={`${DAY_CELL_BASE} gap-0.5 py-2 ${d.lit ? DAY_CELL_LIT : DAY_CELL_EMPTY} ${d.today ? DAY_CELL_TODAY : ""}`}
             >
               <span className="font-label text-[10px] uppercase tracking-widest opacity-70">{d.dow}</span>
               <span className={`font-display text-sm font-bold ${d.mine ? "text-positive-fg" : ""}`}>{d.num}</span>

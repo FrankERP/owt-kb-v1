@@ -27,10 +27,7 @@ import { useState } from "react";
 import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from "./ui/icons";
 import Button from "./ui/Button";
 import CueDialog from "./ui/CueDialog";
-import { addMonths, MONTH_NAMES_ES, monthLabel, scheduleHref, yearMonths } from "../utils/scheduleMonths";
-
-/** The sheet's pill text: «Ene», «Feb», … — three letters fit three columns at 390 px. */
-const shortMonth = (ym: string) => MONTH_NAMES_ES[Number(ym.slice(5, 7)) - 1].slice(0, 3);
+import { addMonths, MAX_YEAR, MIN_YEAR, monthLabel, scheduleHref, shortMonthLabel, yearMonths } from "../utils/scheduleMonths";
 
 export default function ScheduleHeader({
   anchorMonth,
@@ -61,7 +58,9 @@ export default function ScheduleHeader({
           <ChevronLeftIcon size={16} />
         </Button>
         <div className="min-w-0 flex-1 text-center">
-          <h2 className="truncate font-display text-base font-bold uppercase tracking-wide sm:text-lg">
+          {/* No `truncate` on the `h2` itself: its overflow-hidden would clip the
+              button's focus ring. The inner span clips the long label instead. */}
+          <h2 className="font-display text-base font-bold uppercase tracking-wide sm:text-lg">
             {/* The month name opens the sheet: an inline button so the heading stays
                 the route's heading. The chevron says it can be pressed. */}
             <button
@@ -101,11 +100,13 @@ export default function ScheduleHeader({
       <CueDialog open={open} title="Ir a un mes" label="Ir a un mes" mode="sheet" size="sm" onDismiss={close}>
         <div className="p-4">
           <div className="mb-3 flex items-center justify-between">
-            <Button type="button" variant="icon" aria-label="Año anterior" onClick={() => setYear((y) => y - 1)}>
+            {/* The arrows stop at the years `?m=` accepts (`parseMonthParam`), so no
+                pill can link to a month the route would silently drop. */}
+            <Button type="button" variant="icon" aria-label="Año anterior" disabled={year <= MIN_YEAR} onClick={() => setYear((y) => Math.max(MIN_YEAR, y - 1))}>
               <ChevronLeftIcon size={16} />
             </Button>
             <span className="font-display text-lg font-bold tabular-nums">{year}</span>
-            <Button type="button" variant="icon" aria-label="Año siguiente" onClick={() => setYear((y) => y + 1)}>
+            <Button type="button" variant="icon" aria-label="Año siguiente" disabled={year >= MAX_YEAR} onClick={() => setYear((y) => Math.min(MAX_YEAR, y + 1))}>
               <ChevronRightIcon size={16} />
             </Button>
           </div>
@@ -116,11 +117,11 @@ export default function ScheduleHeader({
             {yearMonths(year).map((ym) =>
               ym === anchorMonth ? (
                 <Button key={ym} type="button" variant="pill" size="sm" active aria-label={monthLabel(ym)} onClick={close}>
-                  {shortMonth(ym)}
+                  {shortMonthLabel(ym)}
                 </Button>
               ) : (
                 <Button key={ym} href={scheduleHref(ym)} variant="pill" size="sm" aria-label={monthLabel(ym)} onClick={close}>
-                  {shortMonth(ym)}
+                  {shortMonthLabel(ym)}
                 </Button>
               ),
             )}

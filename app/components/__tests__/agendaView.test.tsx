@@ -316,6 +316,22 @@ describe("CalendarView host", () => {
     expect(rows()).toHaveLength(0);
   });
 
+  it("ADR-0067 — the grid's selected cell keeps today's ring visible by turning it base on the accent fill", () => {
+    // 2026-09-10 is `todayStr`; give it a service so it can be selected.
+    mountHost({ ...ACTIVE, "2026-09-10": [{ day: "Domingo", date: "2026-09-10", leads: ["Ana"] }] });
+    fireEvent.click(screen.getByRole("radio", { name: "Mes" }));
+    // The grid's today cell (the strip has one too, without `aspect-square`). After the
+    // pick the day sheet opens and the page behind it goes inert, so the cell is read
+    // from the DOM rather than by role.
+    const gridToday = () => document.querySelector<HTMLButtonElement>('button.aspect-square[aria-current="date"]')!;
+    expect(gridToday().className).toContain("ring-accent/50");
+    fireEvent.click(gridToday());
+    expect(screen.getByRole("dialog", { name: "Detalle del día" })).toBeTruthy();
+    expect(gridToday().className).toContain("bg-accent");
+    expect(gridToday().className).toContain("ring-surface-base/70");
+    expect(gridToday().className).not.toContain("ring-accent/50");
+  });
+
   it("retires «Lista» — the mode is Agenda or Mes", () => {
     mountHost();
     expect(screen.queryByRole("radio", { name: "Lista" })).toBeNull();

@@ -35,9 +35,9 @@ import { useSession } from "next-auth/react";
 import { DayCard } from "./DayCard";
 import { Setlist } from "../utils/interface";
 import { MONTH_NAMES_ES, monthRangeLabel, WINDOW_MONTHS, windowMonths } from "../utils/scheduleMonths";
-import { DOW_SHORT, monthStripDays, myNameFromSession, TONE_RAIL, type StripDay, type Tone } from "../utils/agenda";
+import { dayCellLabel, DOW_SHORT, monthStripDays, myNameFromSession, TONE_RAIL, type StripDay, type Tone } from "../utils/agenda";
 import AgendaView from "./AgendaView";
-import DayDots, { DAY_CELL_BASE, DAY_CELL_EMPTY, DAY_CELL_LIT, DAY_CELL_SELECTED, DAY_CELL_TODAY } from "./DayDots";
+import DayDots, { DAY_CELL_BASE, DAY_CELL_EMPTY, DAY_CELL_LIT, DAY_CELL_SELECTED, DAY_CELL_TODAY, DAY_CELL_TODAY_ON_FILL } from "./DayDots";
 import DayStrip from "./DayStrip";
 import ScheduleHeader from "./ScheduleHeader";
 import CueDialog from "./ui/CueDialog";
@@ -79,11 +79,6 @@ const DAY_HEADERS = [...DOW_SHORT.slice(1), DOW_SHORT[0]];
 
 /** The legend's three dots, in the order the week runs (ADR-0067: a dot, not a swatch). */
 const LEGEND: ReadonlyArray<readonly [Tone, string]> = [["sat", "Sábado"], ["sun", "Domingo"], ["special", "Especial"]];
-
-function firstDayOffset(year: number, month: number) {
-  const dow = new Date(year, month, 1).getDay();
-  return (dow + 6) % 7; // Monday-first
-}
 
 // ─── Root component ───────────────────────────────────────────────────────────
 
@@ -254,7 +249,9 @@ function MonthGrid({
 }) {
   const ym = `${year}-${String(month + 1).padStart(2, "0")}`;
   const days = monthStripDays(ym, activeDays, todayStr, myName);
-  const offset = firstDayOffset(year, month);
+  // Leading blanks from the first day's own weekday label — the same UTC derivation
+  // as every other cell fact, not a second local-clock `getDay()`.
+  const offset = (DOW_SHORT.indexOf(days[0].dow) + 6) % 7; // Monday-first
   const cells: (StripDay | null)[] = [...Array<null>(offset).fill(null), ...days];
   while (cells.length % 7 !== 0) cells.push(null);
 
@@ -277,19 +274,17 @@ function MonthGrid({
           // §5.2 press: the cell scales under a finger (`DAY_CELL_LIT`), and stays
           // OFF the disabled cells — a day with no service is not an affordance.
           const cls = `${DAY_CELL_BASE} aspect-square gap-px text-sm font-label ${
-            isSelected ? DAY_CELL_SELECTED : d.tone ? DAY_CELL_LIT : DAY_CELL_EMPTY
-          } ${d.today ? DAY_CELL_TODAY : ""}`;
+            isSelected ? DAY_CELL_SELECTED : d.lit ? DAY_CELL_LIT : DAY_CELL_EMPTY
+          } ${d.today ? (isSelected ? DAY_CELL_TODAY_ON_FILL : DAY_CELL_TODAY) : ""}`;
 
           return (
             <button
               key={d.date}
               type="button"
-              disabled={!d.tone}
-              onClick={() => d.tone && onSelect(d.date)}
+              disabled={!d.lit}
+              onClick={() => d.lit && onSelect(d.date)}
               aria-current={d.today ? "date" : undefined}
-              aria-label={`${new Date(d.date + "T12:00:00").toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" })}${
-                entries.length ? `, ${entries.map((e) => e.day).join(", ")}` : ""
-              }${d.mine ? ", te toca" : ""}`}
+              aria-label={dayCellLabel(d, entries)}
               className={cls}
             >
               <span className={d.mine && !isSelected ? "text-positive-fg font-bold" : ""}>{d.num}</span>

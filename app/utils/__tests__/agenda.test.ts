@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findDuplicates, serviceTone, serviceConflicts, summarizeService, conflictLabel, agendaRows, monthStripDays, weekStripDays, mondayOf, addDays, mySeats, myNameFromSession } from "../agenda";
+import { findDuplicates, serviceTone, serviceConflicts, summarizeService, conflictLabel, agendaRows, monthStripDays, weekStripDays, mondayOf, addDays, mySeats, myNameFromSession, dayCellLabel } from "../agenda";
 import type { ActiveDay } from "../../components/CalendarView";
 
 const sun = (date: string, extra: Partial<ActiveDay> = {}): ActiveDay => ({ day: "Domingo", date, leads: ["Jakey", "Marianne"], instruments: [{ label: "Keys", person: "Sofi" }, { label: "Bass", person: "Mkz" }], setlist: { songs: Array(5).fill({ _id: "s", title: "t" }) as never, week: date }, ...extra });
@@ -49,10 +49,18 @@ describe("monthStripDays", () => {
   it("lists every day of the month with weekday letters, lit tones, and today", () => {
     const days = monthStripDays("2026-09", { "2026-09-13": [sun("2026-09-13")], "2026-09-12": [sat("2026-09-12")] }, "2026-09-10");
     expect(days).toHaveLength(30);
-    expect(days[0]).toMatchObject({ date: "2026-09-01", dow: "Mar", num: 1, tone: null, tones: [], today: false });
-    expect(days[11]).toMatchObject({ date: "2026-09-12", dow: "Sáb", tone: "sat", tones: ["sat"] });
-    expect(days[12]).toMatchObject({ date: "2026-09-13", dow: "Dom", tone: "sun", tones: ["sun"] });
+    expect(days[0]).toMatchObject({ date: "2026-09-01", dow: "Mar", num: 1, lit: false, tones: [], today: false });
+    expect(days[11]).toMatchObject({ date: "2026-09-12", dow: "Sáb", lit: true, tones: ["sat"] });
+    expect(days[12]).toMatchObject({ date: "2026-09-13", dow: "Dom", lit: true, tones: ["sun"] });
     expect(days[9].today).toBe(true);
+  });
+});
+describe("dayCellLabel", () => {
+  it("names the day, its services and «te toca», the one label both calendar views use", () => {
+    const entries = [sun("2026-09-20"), special("2026-09-20")];
+    expect(dayCellLabel({ date: "2026-09-20", mine: false }, entries)).toBe("domingo, 20 de septiembre, Domingo, Noche de alabanza");
+    expect(dayCellLabel({ date: "2026-09-20", mine: true }, entries)).toBe("domingo, 20 de septiembre, Domingo, Noche de alabanza, te toca");
+    expect(dayCellLabel({ date: "2026-09-16", mine: false }, [])).toBe("miércoles, 16 de septiembre");
   });
 });
 describe("mondayOf / addDays", () => {
@@ -73,19 +81,19 @@ describe("weekStripDays", () => {
     const days = weekStripDays("2026-09-09", { "2026-09-13": [sun("2026-09-13")], "2026-09-12": [sat("2026-09-12")] }, "2026-09-10");
     expect(days).toHaveLength(7);
     expect(days.map((d) => d.dow)).toEqual(["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]);
-    expect(days[0]).toMatchObject({ date: "2026-09-07", num: 7, tone: null, today: false });
+    expect(days[0]).toMatchObject({ date: "2026-09-07", num: 7, lit: false, tones: [], today: false });
     expect(days[3].today).toBe(true);
-    expect(days[5]).toMatchObject({ date: "2026-09-12", tone: "sat" });
-    expect(days[6]).toMatchObject({ date: "2026-09-13", tone: "sun" });
+    expect(days[5]).toMatchObject({ date: "2026-09-12", lit: true, tones: ["sat"] });
+    expect(days[6]).toMatchObject({ date: "2026-09-13", lit: true, tones: ["sun"] });
   });
   it("lights a service in the next month when the week crosses the boundary", () => {
     const days = weekStripDays("2026-09-28", { "2026-10-04": [sun("2026-10-04")] }, "2026-09-10");
     expect(days.map((d) => d.date)).toEqual(["2026-09-28", "2026-09-29", "2026-09-30", "2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04"]);
-    expect(days[6]).toMatchObject({ tone: "sun", num: 4 });
+    expect(days[6]).toMatchObject({ lit: true, tones: ["sun"], num: 4 });
   });
-  it("lists one tone per service on a day carrying more than one, in `activeDays` order, with the special winning the cell tone", () => {
+  it("lists one tone per service on a day carrying more than one, in `activeDays` order", () => {
     const days = weekStripDays("2026-09-14", { "2026-09-20": [sun("2026-09-20"), special("2026-09-20")] }, "2026-09-10");
-    expect(days[6]).toMatchObject({ tone: "special", tones: ["sun", "special"] });
+    expect(days[6]).toMatchObject({ lit: true, tones: ["sun", "special"] });
   });
   it("flags the day a member is seated in, `mine`, only when `myName` is given", () => {
     const active = { "2026-09-13": [sun("2026-09-13", { instruments: [{ label: "Keys", person: "Sofi" }] })] };

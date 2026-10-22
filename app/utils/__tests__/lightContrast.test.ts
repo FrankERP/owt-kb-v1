@@ -132,6 +132,23 @@ describe("light theme — WCAG AA contrast", () => {
     }
   });
 
+  it("the calendar cell's numbers clear 4.5:1 on the card ground in BOTH themes (ADR-0067)", () => {
+    // `--surface-card` is composed (white in light, raised-alt navy in dark), so the
+    // on-fill table above — one ground role for both themes — cannot carry it. The
+    // «tú» number is `positive-fg` TEXT a member must read (it was a 4 px dot before
+    // 2026-10-22), and the lit cell's number is `ink`.
+    for (const [theme, selector, roles] of [["light", ".light {", LIGHT], ["dark", ":root {", darkRoles()]] as const) {
+      const start = CSS.indexOf(selector);
+      const block = CSS.slice(start, CSS.indexOf("\n}", start));
+      const ground = block.match(/--surface-card:\s*rgb\(var\(--([a-z0-9-]+)-rgb\)\)/)?.[1];
+      expect(ground, `--surface-card must be a plain rgb(var()) token in ${selector}`).toBeDefined();
+      for (const role of ["positive-fg", "ink"]) {
+        const ratio = contrast(roles.get(role)!, roles.get(ground!)!);
+        expect(ratio, `${role} on surface-card (${ground}) is ${ratio.toFixed(2)}:1 in ${theme}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
   it("keeps the surface hierarchy the right way round", () => {
     // In dark the page is the DARKEST surface; in light it must be the LIGHTEST, or
     // panels disappear into it. This is the invariant the one deviation from the

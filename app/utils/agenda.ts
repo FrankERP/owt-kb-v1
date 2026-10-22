@@ -94,10 +94,11 @@ export function agendaRows(activeDays: Record<string, ActiveDay[]>): AgendaRow[]
   });
 }
 
-/** `tone` is the day's one colour (special > sat > sun, the priority both views
- *  share); `tones` is one per service in `activeDays` order, for the dot row — a
- *  Sunday that also hosts a special shows two dots, not a "several" mark. */
-export type StripDay = { date: string; num: number; dow: string; tone: Tone | null; tones: Tone[]; today: boolean; mine: boolean };
+/** `tones` is one per service in `activeDays` order, for the dot row — a Sunday that
+ *  also hosts a special shows two dots, not a "several" mark; `lit` (any service) is
+ *  what makes the cell pressable. No single "winning" tone: since ADR-0067 nothing
+ *  paints a cell in one colour. */
+export type StripDay = { date: string; num: number; dow: string; lit: boolean; tones: Tone[]; today: boolean; mine: boolean };
 /** Weekday abbreviations in `getUTCDay` order — the strip's cell labels and the
  *  month grid's column headers (`DAY_HEADERS` rotates them Monday-first), one vocabulary. */
 export const DOW_SHORT = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
@@ -121,9 +122,16 @@ function stripDay(date: string, activeDays: Record<string, ActiveDay[]>, todaySt
   const [y, m, d] = date.split("-").map(Number);
   const entries = activeDays[date] ?? [];
   const tones = entries.map(serviceTone);
-  const tone: Tone | null = tones.includes("special") ? "special" : tones.includes("sat") ? "sat" : tones.includes("sun") ? "sun" : null;
   const mine = !!myName && entries.some((e) => mySeats(e, myName).length > 0);
-  return { date, num: d, dow: DOW_SHORT[new Date(Date.UTC(y, m - 1, d)).getUTCDay()], tone, tones, today: date === todayStr, mine };
+  return { date, num: d, dow: DOW_SHORT[new Date(Date.UTC(y, m - 1, d)).getUTCDay()], lit: tones.length > 0, tones, today: date === todayStr, mine };
+}
+
+/** A calendar cell's accessible name — «sábado, 12 de septiembre, Sábado, te toca» —
+ *  shared by the week strip and the month grid so the two can never name a day
+ *  differently. Local-noon render, never a bare `new Date(iso)`. */
+export function dayCellLabel(d: Pick<StripDay, "date" | "mine">, entries: Pick<ActiveDay, "day">[]): string {
+  const date = new Date(`${d.date}T12:00:00`).toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" });
+  return `${date}${entries.length ? `, ${entries.map((e) => e.day).join(", ")}` : ""}${d.mine ? ", te toca" : ""}`;
 }
 
 export function monthStripDays(ym: string, activeDays: Record<string, ActiveDay[]>, todayStr: string, myName = ""): StripDay[] {

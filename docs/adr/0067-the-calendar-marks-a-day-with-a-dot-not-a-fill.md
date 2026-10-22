@@ -26,14 +26,17 @@ not look like the app.
   `MonthGrid` compose, so the two views are one design. A lit day is a raised
   `surface-card` cell; a day with two services shows two dots (the «Varios servicios»
   legend entry is gone); today is an inset accent ring; the selected day is an accent
-  fill with base-coloured dots; the day the signed-in member serves paints its number
-  positive («tú», the app's one green). The legend is three dots.
+  fill with base-coloured dots (and a base-coloured today ring, since an accent ring
+  would vanish on the accent); the day the signed-in member serves paints its number
+  positive («tú», the app's one green). The legend is three dots. Both views name a
+  cell through `dayCellLabel`.
 - **The cells come from one derivation.** `MonthGrid` builds its month from
   `monthStripDays`, the strip's own helper, instead of its private priority logic
   (`StripDay.tones` carries one tone per service).
 - **The month name is the jump-to-month control.** `ScheduleHeader`'s title is a button
   that opens a `CueDialog mode="sheet"` of one year's twelve months as pill links to
-  `?m=` (`yearMonths`), with year arrows. The native month input is gone. The sheet
+  `?m=` (`yearMonths`), with year arrows stopped at the years `parseMonthParam`
+  accepts (`MIN_YEAR`–`MAX_YEAR`). The native month input is gone. The sheet
   carries no one-month steppers (the R2 Task 4 ruling stands: the header's arrows own
   «Mes anterior»/«Mes siguiente»).
 - **Weekday labels are words**: `DOW_SHORT` («Lun», «Mar», «Mié»…) in the strip and as

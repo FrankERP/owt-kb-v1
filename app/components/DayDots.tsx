@@ -35,5 +35,7 @@ export const DAY_CELL_LIT =
 export const DAY_CELL_EMPTY = "text-mono-400 cursor-default";
 /** Today: a thin inset accent ring, whatever the day carries. */
 export const DAY_CELL_TODAY = "ring-1 ring-inset ring-accent/50";
+/** Today while SELECTED: an accent ring would vanish on the accent fill, so it turns base. */
+export const DAY_CELL_TODAY_ON_FILL = "ring-1 ring-inset ring-surface-base/70";
 /** The grid's selected day: the accent fill, with the dots turned base (`onFill`). */
 export const DAY_CELL_SELECTED = "bg-accent text-surface-base font-bold cursor-pointer active:scale-[0.94]";

@@ -279,6 +279,18 @@ describe("ScheduleHeader", () => {
     expect(title.getAttribute("aria-expanded")).toBe("true");
   });
 
+  it("stops the year arrows at the bounds `?m=` accepts, so no pill links to a refused month", () => {
+    mountHeader({ anchorMonth: "2100-06", viewMonth: "2100-06" });
+    fireEvent.click(screen.getByRole("button", { name: /Junio 2100/ }));
+    const sheet = screen.getByRole("dialog", { name: "Ir a un mes" });
+    const next = within(sheet).getByRole("button", { name: "Año siguiente" }) as HTMLButtonElement;
+    expect(next.disabled).toBe(true);
+    fireEvent.click(next);
+    expect(within(sheet).getByText("2100")).toBeTruthy();
+    expect(within(sheet).queryByText("2101")).toBeNull();
+    expect((within(sheet).getByRole("button", { name: "Año anterior" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it("the sheet's own arrows change the year, never the month, and a pick closes it", () => {
     mountHeader({ anchorMonth: "2026-09", viewMonth: null });
     fireEvent.click(screen.getByRole("button", { name: /Septiembre 2026/ }));
