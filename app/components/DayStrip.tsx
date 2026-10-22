@@ -10,10 +10,12 @@
 //
 // Every day of the visible week renders, so the strip reads as a calendar rather than
 // a filtered list; only the days that carry a service are pressable (`disabled`
-// otherwise), and they carry the SAME tone classes as the month grid's cells
-// (accent = Domingo, warning = Sábado, info = especial) so the two views can never
-// disagree about what a colour means. Lit days come from `activeDays` whatever month
-// they fall in — a paged week that crosses into the next month still lights up.
+// otherwise). A lit day is a NEUTRAL raised cell with one tone dot per service under
+// the number (`DayDots`, ADR-0067) — the same cell the month grid draws, so the two
+// views can never disagree about what a colour means. Lit days come from
+// `activeDays` whatever month they fall in — a paged week that crosses into the next
+// month still lights up. Today is an inset accent ring; a day the signed-in member
+// is seated in paints its number positive («tú», the one green in the app).
 //
 // The caption above the cells is what makes a paged week legible: «7 – 13 sep», and
 // it is the only label that moves, since the header's month heading does not.
@@ -25,15 +27,9 @@
 import { useState } from "react";
 import SwipeStrip from "./ui/SwipeStrip";
 import type { ActiveDay } from "./CalendarView";
-import { addDays, mondayOf, weekStripDays, type Tone } from "../utils/agenda";
+import { addDays, dayCellLabel, mondayOf, weekStripDays } from "../utils/agenda";
 import { haptic } from "../utils/haptics";
-
-/** Lit-day classes, copied from `MonthGrid`'s active cells — one vocabulary for both views. */
-const TONE: Record<Tone, string> = {
-  sun: "bg-accent-deep/50 border border-accent/50 text-accent hover:bg-accent-deep/80 hover:border-accent",
-  sat: "bg-warning-surface/50 border border-warning-fg/50 text-warning-fg hover:bg-warning-surface/80 hover:border-warning-fg",
-  special: "bg-info-surface/50 border border-info-fg/50 text-info-fg hover:bg-info-surface/80 hover:border-info-fg",
-};
+import DayDots, { DAY_CELL_BASE, DAY_CELL_EMPTY, DAY_CELL_LIT, DAY_CELL_TODAY } from "./DayDots";
 
 /** Local-noon render, never a bare `new Date(iso)` — the UTC day-flip rule. */
 const fmt = (iso: string, options: Intl.DateTimeFormatOptions) =>
@@ -89,44 +85,24 @@ export default function DayStrip({
       </p>
       <div className="grid grid-cols-7 gap-1">
         {days.map((d) => {
-          const label = fmt(d.date, { weekday: "long", day: "numeric", month: "long" });
           const entries = activeDays[d.date] ?? [];
           return (
             <button
               key={d.date}
               type="button"
-              disabled={!d.tone}
+              disabled={!d.lit}
               aria-current={d.today ? "date" : undefined}
-              aria-label={`${label}${entries.length ? `, ${entries.map((e) => e.day).join(", ")}` : ""}${d.mine ? ", te toca" : ""}`}
+              aria-label={dayCellLabel(d, entries)}
               onClick={() => {
                 // Native only, fire-and-forget (see haptics.ts) — never gates the pick.
                 void haptic("selection");
                 onPick(d.date);
               }}
-              className={`relative flex flex-col items-center justify-center gap-0.5 rounded-lg py-2 transition-[color,background-color,border-color,transform] duration-fast ease-out-brand ${
-                d.tone ? `${TONE[d.tone]} cursor-pointer active:scale-[0.94]` : "text-mono-400 dark:text-mono-400 cursor-default"
-              }`}
+              className={`${DAY_CELL_BASE} gap-0.5 py-2 ${d.lit ? DAY_CELL_LIT : DAY_CELL_EMPTY} ${d.today ? DAY_CELL_TODAY : ""}`}
             >
               <span className="font-label text-[10px] uppercase tracking-widest opacity-70">{d.dow}</span>
-              <span className="font-display text-sm font-bold">{d.num}</span>
-              {/* F1 — one absolutely positioned dot slot shared by «today» and «mine»,
-                  so a today+mine cell never stacks two marks: positive when the member
-                  is seated (the same «you» signal DayCard gives a seat), pulsing when
-                  it's today, both at once when it's both. */}
-              {(d.today || d.mine) && (
-                // Centred with a negative margin, NOT `-translate-x-1/2`: the pulse
-                // animates `transform`, which would override a translate utility for
-                // the whole pass and then drop it at `transform: none`.
-                <span
-                  aria-hidden
-                  className={`absolute bottom-0.5 left-1/2 -ml-0.5 h-1 w-1 rounded-full ${
-                    d.mine ? "bg-positive-fg" : "bg-current opacity-60"
-                  } ${d.today ? "brand-today-pulse" : ""}`}
-                />
-              )}
-              {d.multiple && (
-                <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-current opacity-80" />
-              )}
+              <span className={`font-display text-sm font-bold ${d.mine ? "text-positive-fg" : ""}`}>{d.num}</span>
+              <DayDots tones={d.tones} />
             </button>
           );
         })}
