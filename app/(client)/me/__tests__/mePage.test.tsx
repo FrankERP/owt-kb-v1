@@ -55,7 +55,9 @@ vi.mock("@/sanity/lib/operationalClient", () => ({
 vi.mock("@/app/components/Navbar", () => ({ default: () => null }));
 vi.mock("@/app/components/DayCard", () => ({ DayCard: () => <p>HERO</p> }));
 vi.mock("@/app/components/DayCardDisclosure", () => ({ default: () => <p>DAYCARD</p> }));
-vi.mock("@/app/components/AddToCalendarButton", () => ({ default: () => null }));
+// The download row is the one client piece of «Tu cuenta»; the marker lets the
+// worship-only gate on it be asserted.
+vi.mock("@/app/components/account/DownloadCalendarRow", () => ({ default: () => <li>DESCARGA</li> }));
 // Kept even though F3 moved the settings card to `/me/ajustes`: the marker is
 // what makes the "no settings on this page" assertions below mean something —
 // without it, `not.toContain("PERFIL")` would pass for any reason at all.
@@ -184,6 +186,23 @@ describe("/me worship gating", () => {
     expect(html).toContain("Sin fechas marcadas");
     expect(html).not.toContain("PERFIL");
     expect(html).not.toContain('id="ajustes"');
+  });
+
+  it("lists «Tu cuenta» for everyone — Ajustes — and both calendar rows only for worship", async () => {
+    // Design pass C (2026-10-22): the page ends on one list, not on a lone link.
+    // The subscription panel answers a kids-only member «solo para el equipo de
+    // alabanza» (`calendarFeedState`), so neither calendar row is offered to them.
+    getMemberAccess.mockResolvedValue(access(["kids"]));
+    let html = await renderPage();
+    expect(html).toContain("Tu cuenta");
+    expect(html).toContain('href="/me/ajustes"');
+    expect(html).not.toContain('href="/me/ajustes#calendario"');
+    expect(html).not.toContain("DESCARGA");
+
+    getMemberAccess.mockResolvedValue(access(["worship"]));
+    html = await renderPage();
+    expect(html).toContain('href="/me/ajustes#calendario"');
+    expect(html).toContain("DESCARGA");
   });
 
   it("counts only UPCOMING unavailable dates on the link", async () => {

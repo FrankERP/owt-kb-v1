@@ -90,7 +90,7 @@ signing" → select your Apple Developer team.
 - **Push:** `@capacitor/push-notifications` + FCM/APNs; hook the existing `revalidate*()` calls in
   `app/api/admin/setlists/route.ts` and `app/api/admin/roles/*` to also notify affected members.
 - **Camera:** `@capacitor/camera` → POST to the existing `app/api/me/photo/route.ts` (unchanged).
-- **Calendar:** a calendar plugin fed by `app/utils/ics.ts` / `AddToCalendarButton.tsx`.
+- **Calendar:** a calendar plugin fed by `app/utils/ics.ts` / `icsDownload.ts` (`DownloadCalendarRow`).
 
 ---
 

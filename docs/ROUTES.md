@@ -131,9 +131,11 @@ because their own headers already show the countdown.
 - **`/biblioteca`** — `Navbar`, `LibraryIndex`.
 - **`/me`** — `Navbar`, `MeHeader` (the identity header: name, Tipo chips, and the one
   countdown line), `DayCard` (the next service, `hero`, no `isNext` — the header already
-  carries the countdown), `DayCardDisclosure` (every other service, collapsed),
-  `AddToCalendarButton`, and a `Link` row to `/me/disponibilidad`. `MeHeader` carries no
-  «Editar perfil» since F3 — the avatar menu is the way into settings.
+  carries the countdown), `DayCardDisclosure` (every other service, collapsed), each lead
+  service's proposal CTA (a house `Button`), and «Tu cuenta» (`account/AccountList`, 2026-10-22):
+  Disponibilidad with its count, the one-shot `.ics` download (`account/DownloadCalendarRow`,
+  worship only), Calendario (`/me/ajustes#calendario`) and Ajustes. `MeHeader` carries no
+  «Editar perfil» since F3 — the list and the avatar menu are the ways into settings.
 - **`/me/disponibilidad`** — `Navbar`, `availability/MyAvailabilityPanel` (the month
   `AvailabilityGrid` always open; no weekend pills, no Desde/Hasta fields).
 - **`/me/ajustes`** — `Navbar`, `SettingsCard` (one card holding `ThemeControl`,

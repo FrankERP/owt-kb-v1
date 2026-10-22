@@ -114,29 +114,28 @@ describe("the voices grid reflows instead of overlapping", () => {
 });
 
 describe("rows of unbreakable Spanish words wrap instead of running off the phone", () => {
-  it("the availability month nav floors on its longest word, not on zero and not on the whole heading", () => {
-    // Measured both failures: `flex-1` + `min-w-0` overflowed the page by 56px;
-    // a plain `grow` wrapped «Siguiente» onto a second line at NORMAL size.
+  it("the availability month nav is two icons around a heading that may wrap", () => {
+    // The words «Anterior»/«Siguiente» used to sit beside «SEPTIEMBRE» — three
+    // unbreakable words that floored at ~450px at «Máximo» text size, measured
+    // on a 375pt phone — and the row needed `flex-wrap` to survive. Since
+    // 2026-10-22 the arrows are 44px icon buttons (labels on `aria-label`), so
+    // the only word left is the heading's, and `min-w-0` lets it wrap.
     const src = read("app/components/availability/AvailabilityGrid.tsx");
-    // No slicing: the anchors that used to bound this block lived in comments,
-    // which `read` now blanks. Each class is pinned directly instead.
-    expect(src).toMatch(/flex flex-wrap items-center justify-between gap-y-2/);
-    // `gap-y-2`, not `gap-2`: a gap on BOTH axes raises the row's horizontal floor
-    // by 16px, which is budget spent against the very wrap this is avoiding.
-    expect(src, "the wrap gap must not cost horizontal room").not.toMatch(/justify-between gap-2\b/);
-    expect(src).toMatch(/min-w-min flex-1 text-center/);
-    expect(
-      src.match(/flex shrink-0 items-center gap-1\.5/g) ?? [],
-      "BOTH arrows — an existence check passed with «Siguiente» unshrunk",
-    ).toHaveLength(2);
+    expect(src).toMatch(/min-w-0 flex-1 text-center/);
+    expect(src.match(/variant="icon" size="lg"/g) ?? [], "BOTH arrows").toHaveLength(2);
+    expect(src).toMatch(/aria-label="Anterior"/);
+    expect(src).toMatch(/aria-label="Siguiente"/);
+    expect(src, "the words are gone from the row").not.toMatch(/>\s*Anterior\s*</);
   });
 
-  it("the /me availability row wraps its count", () => {
+  it("the «Tu cuenta» rows stack the status under the title, never beside it", () => {
     // «Disponibilidad» and «marcadas» are both unbreakable; side by side they
-    // floor wider than a 375pt phone.
-    const src = read("app/(client)/me/page.tsx");
-    expect(src).toMatch(/flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl/);
-    expect(src, "the count stays right-aligned when it wraps").toMatch(/className="ml-auto flex min-w-0 items-center/);
+    // floored wider than a 375pt phone. Since 2026-10-22 the row is a list row
+    // whose title and status are two `block`s in a `min-w-0 flex-1` column, so
+    // nothing is ever asked to share a line with the title.
+    const src = read("app/components/account/AccountList.tsx");
+    expect(src).toMatch(/<span className="min-w-0 flex-1">/);
+    expect(src.match(/className="block font-body/g) ?? [], "title and status, each its own line").toHaveLength(2);
   });
 
   it("the library search box can shrink under its own placeholder", () => {

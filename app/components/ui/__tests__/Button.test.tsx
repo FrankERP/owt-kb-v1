@@ -60,7 +60,9 @@ describe("Button", () => {
   });
 
   it("pill tone=\"availability\" carries the availability pressed triplet, text soft not strong", () => {
-    // The tone's one consumer since F3: the grid's «Seleccionar fechas» ⇄ «Listo».
+    // The tone has had no consumer since design pass C (2026-10-22) turned the
+    // grid's «Seleccionar fechas» pill into `MarkDaysButton`, a primary; the
+    // triplet and its contrast rule stay for the next availability toggle.
     render(<Button variant="pill" tone="availability" active>Listo</Button>);
     const cls = screen.getByRole("button").className;
     expect(cls).toContain("aria-pressed:border-availability-strong");

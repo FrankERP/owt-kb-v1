@@ -5,8 +5,10 @@
 // calendario»; F3 retired the weekend pills and made this the only way to mark a
 // date, so it is mounted open and has the page to itself.
 //
-// It owns paging AND the selection gesture (R3 F2): «Seleccionar fechas» turns
-// the months into a drag surface, a drag marks the whole span at once, and the
+// It owns paging AND the selection gesture (R3 F2); the MODE itself is the
+// host's since design pass C (2026-10-22): `selecting` arrives as a prop, armed
+// by the host's `MarkDaysButton` («Marcar días» ⇄ «Listo»), and this file only
+// reacts to it. While it is on, the months are a drag surface, a drag marks the whole span at once, and the
 // next month fades in as a "shadow" OVERLAY — an absolutely positioned tile
 // INSIDE the last visible month's bounds, reading as a card sliding up over its
 // last rows — when the finger nears the bottom of the page. No auto-scroll
@@ -34,7 +36,7 @@
 // express one range was the accretion Frank asked to undo. A range is a drag; a
 // single day is a tap; a pattern is «Repetir…» on the host.
 //
-// Outside «Seleccionar fechas» the grid is READ-ONLY (Frank's look, 2026-09-13):
+// Outside «Marcar días» the grid is READ-ONLY (Frank's look, 2026-09-13):
 // day cells carry no `onClick`, `aria-disabled="true"` and `tabIndex={-1}` — a
 // tap outside the mode used to mark-and-open a single day through
 // `handleDateClick`, which meant every casual look at the calendar was one
@@ -46,6 +48,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Button from "@/app/components/ui/Button";
+import { ChevronLeftIcon, ChevronRightIcon } from "@/app/components/ui/icons";
 import type { Availability } from "@/app/components/availability/useAvailability";
 import { fmtDayLabel, isoFromPoint, isoRange, shadowOpacity } from "@/app/components/availability/dragSelect";
 import { haptic } from "@/app/utils/haptics";
@@ -53,6 +56,8 @@ import { haptic } from "@/app/utils/haptics";
 interface Props {
   /** The one `useAvailability` instance the panel shares between its surfaces. */
   state: Availability;
+  /** The selection mode, held by the host («Marcar días» ⇄ «Listo»). */
+  selecting: boolean;
   serviceDates?: string[];
   /** Open the panel's note popover, anchored to a cell. `isos` = the whole dragged range. */
   openNote: (iso: string, anchor: HTMLElement, isos?: string[]) => void;
@@ -91,14 +96,13 @@ function buildCalendar(year: number, month: number): (string | null)[] {
   return cells;
 }
 
-export default function AvailabilityGrid({ state, serviceDates = [], openNote, closeNote, noteIso = null }: Props) {
+export default function AvailabilityGrid({ state, selecting, serviceDates = [], openNote, closeNote, noteIso = null }: Props) {
   const serviceSet = new Set(serviceDates);
   const [page, setPage] = useState(0);
 
   // The selection gesture. `drag` is the live span (anchor = where the finger
   // went down, current = where it is now, either order); `shadow` is the next
   // month's opacity, 0 when it is not offered at all.
-  const [selecting, setSelecting] = useState(false);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [shadow, setShadow] = useState(0);
   // The SAME span, mirrored synchronously. `pointermove` is a continuous event,
@@ -187,15 +191,19 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
     setPendingNote(null);
   }, [pendingNote, openNote]);
 
-  function toggleSelecting() {
-    // Both directions: the popover is anchored to a cell whose style is about to
-    // change, and a half-finished drag must never survive the mode switch.
-    closeNote();
+  // The mode flipped (either direction): a half-finished drag must never survive
+  // the switch. Only the gesture is reset here — the note popover is the host's,
+  // and the host closes it in the same update that flips the mode, so the cell
+  // it was anchored to never re-renders read-only with the popover still up.
+  // On a CHANGE only: the first render is not a switch.
+  const prevSelecting = useRef(selecting);
+  useEffect(() => {
+    if (prevSelecting.current === selecting) return;
+    prevSelecting.current = selecting;
     setDragNow(null);
     solidRef.current = false;
     setShadow(0);
-    setSelecting(v => !v);
-  }
+  }, [selecting]);
 
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     // One finger owns the gesture. A second touch arrives as a non-primary
@@ -353,7 +361,7 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
               <button
                 key={iso}
                 type="button"
-                // No `onClick` at all, in any mode: inside «Seleccionar fechas» a
+                // No `onClick` at all, in any mode: inside «Marcar días» a
                 // tap is a one-day drag through `onPointerDown`/`onPointerUp`
                 // below, which already marks the day and opens its note; outside
                 // it the cell is read-only, `aria-disabled` and un-tabbable.
@@ -395,58 +403,33 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
 
   return (
     <div className="space-y-4">
-      {/* Selection mode */}
-      <div className="space-y-2">
-        {/* A pill, for the one variant that publishes `aria-pressed` — the mode
-            is a two-state toggle, and the availability tone is this surface's.
-            It is also the ONLY door into an edit: outside it the grid is read-only. */}
-        <Button variant="pill" tone="availability" onClick={toggleSelecting} active={selecting}>
-          {selecting ? "Listo" : "Seleccionar fechas"}
+      {/* One line in both states, so arming the mode never shifts the months
+          under the finger that is about to drag on them. */}
+      <p className="font-body text-sm text-mono-500">
+        {selecting
+          ? "Arrastra sobre los días que no puedes. Suelta para escribir la razón."
+          : "Toca «Marcar días» para marcar o editar los días que no puedes."}
+      </p>
+
+      {/* Navigation: two icon buttons around the range heading (design pass C,
+          2026-10-22). They used to be the words «Anterior»/«Siguiente», which
+          with «SEPTIEMBRE» made three unbreakable words that floored at ~450px
+          on a 375pt phone at «Máximo» text size — a member reported «Siguiente»
+          off the right edge, and the row had to wrap to survive. Two 44px icons
+          leave the heading the width it needs; `min-w-0` lets it wrap, not
+          push. The labels live on `aria-label`. */}
+      <div className="flex items-center justify-between gap-2">
+        <Button variant="icon" size="lg" onClick={() => goTo(page - 1)} disabled={!canPrev} aria-label="Anterior">
+          <ChevronLeftIcon size={16} />
         </Button>
 
-        <p className="font-body text-xs text-mono-500">
-          {selecting
-            ? "Arrastra sobre los días que no puedes. Suelta para escribir la razón."
-            : "Toca «Seleccionar fechas» para marcar o editar días."}
-        </p>
-      </div>
-
-      {/* Navigation.
-          `flex-wrap` plus a `min-w-0` centre, the shape `ScheduleHeader` already
-          uses. «ANTERIOR», «SIGUIENTE» and «SEPTIEMBRE» are three unbreakable
-          words: at «Máximo» text size they floor at ~450px on a 375pt phone, and
-          the member reported «Siguiente» sitting off the right edge. Wrapping
-          stacks them instead of pushing them off. */}
-      <div className="flex flex-wrap items-center justify-between gap-y-2">
-        <button
-          type="button"
-          onClick={() => goTo(page - 1)}
-          disabled={!canPrev}
-          className="flex shrink-0 items-center gap-1.5 px-3 py-1.5 rounded-lg border border-accent-deep/40 font-label text-[11px] uppercase tracking-widest text-mono-500 hover:border-accent/40 hover:text-accent disabled:opacity-20 disabled:cursor-default transition-colors"
-        >
-          <ChevronLeft /> Anterior
-        </button>
-
-        {/* `flex-1 min-w-min` — the floor is this heading's own longest word.
-            Both neighbours were wrong for a measured reason: `flex-1` alone (zero
-            basis, `min-w-0`) let the box shrink to 117px around a 197px «SEPTIEMBRE»
-            and pushed the page 56px sideways at «Máximo» text size, while a plain
-            `grow` (auto basis) reserved the whole heading and wrapped «Siguiente»
-            onto a second line at NORMAL size, which is a regression for everyone.
-            `min-content` shrinks on a normal phone and stops at the word, so the
-            row wraps only when it genuinely cannot fit. */}
-        <span className="min-w-min flex-1 text-center font-label text-[11px] uppercase tracking-widest text-mono-500">
+        <span className="min-w-0 flex-1 text-center font-label text-[11px] uppercase tracking-widest text-mono-500">
           {rangeHeading}
         </span>
 
-        <button
-          type="button"
-          onClick={() => goTo(page + 1)}
-          disabled={!canNext}
-          className="flex shrink-0 items-center gap-1.5 px-3 py-1.5 rounded-lg border border-accent-deep/40 font-label text-[11px] uppercase tracking-widest text-mono-500 hover:border-accent/40 hover:text-accent disabled:opacity-20 disabled:cursor-default transition-colors"
-        >
-          Siguiente <ChevronRight />
-        </button>
+        <Button variant="icon" size="lg" onClick={() => goTo(page + 1)} disabled={!canNext} aria-label="Siguiente">
+          <ChevronRightIcon size={16} />
+        </Button>
       </div>
 
       {/* Calendar grid. While selecting, the container owns the gesture: no page
@@ -493,18 +476,3 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
   );
 }
 
-function ChevronLeft() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="15 18 9 12 15 6" />
-    </svg>
-  );
-}
-
-function ChevronRight() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="9 18 15 12 9 6" />
-    </svg>
-  );
-}
