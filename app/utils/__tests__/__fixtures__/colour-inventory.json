@@ -8,19 +8,19 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 317,
-    "filesScanned": 513,
-    "filesWithColour": 57,
+    "literalRows": 310,
+    "filesScanned": 516,
+    "filesWithColour": 55,
     "byCategory": {
       "2": 2,
       "4": 64,
-      "8": 99,
+      "8": 92,
       "9": 10,
       "11": 8,
       "12": 134
     },
     "byDisposition": {
-      "B": 124,
+      "B": 117,
       "exempt": 53,
       "keep": 238,
       "C": 5,
@@ -211,55 +211,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 401,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/(client)/me/page.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 421,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/(client)/me/page.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 433,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/(client)/me/page.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 450,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/(client)/me/page.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 568,
+      "line": 408,
       "disposition": "B",
       "reason": null
     },
@@ -2268,18 +2220,6 @@
       "reason": "Already theme-agnostic"
     },
     {
-      "file": "app/components/AddToCalendarButton.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 35,
-      "disposition": "B",
-      "reason": null
-    },
-    {
       "file": "app/components/admin/ActivityPanel.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
@@ -2952,30 +2892,6 @@
       "reason": null
     },
     {
-      "file": "app/components/availability/AvailabilityGrid.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 498,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/availability/AvailabilityGrid.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 506,
-      "disposition": "B",
-      "reason": null
-    },
-    {
       "file": "app/components/availability/NotePopover.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
@@ -3235,7 +3151,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 99,
+      "line": 92,
       "disposition": "B",
       "reason": null
     },
@@ -3247,7 +3163,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 143,
+      "line": 136,
       "disposition": "B",
       "reason": null
     },

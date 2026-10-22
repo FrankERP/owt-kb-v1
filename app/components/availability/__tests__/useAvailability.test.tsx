@@ -40,10 +40,10 @@ afterEach(() => {
 
 const onAdopt = vi.fn();
 
-function setup(initialDates: string[] = ["2026-09-20"]) {
+function setup(initialDates: string[] = ["2026-09-20"], initialNotes: { date: string; note: string }[] = []) {
   onAdopt.mockReset();
   return renderHook(() =>
-    useAvailability({ initialRev: "r1", initialDates, initialNotes: [], onAdopt }),
+    useAvailability({ initialRev: "r1", initialDates, initialNotes, onAdopt }),
   );
 }
 
@@ -59,6 +59,22 @@ describe("useAvailability", () => {
     act(() => result.current.toggle("2026-10-04"));
     expect(result.current.dates.has("2026-10-04")).toBe(false);
     expect(result.current.upcomingCount).toBe(0);
+  });
+
+  it("counts the days that differ from the saved state — added, removed, or a changed note", () => {
+    const { result } = setup(["2026-10-04", "2026-10-11"], [{ date: "2026-10-04", note: "viaje" }]);
+    expect(result.current.changeCount).toBe(0);
+    act(() => result.current.toggle("2026-10-18"));          // added
+    expect(result.current.changeCount).toBe(1);
+    act(() => result.current.remove("2026-10-11"));          // removed
+    expect(result.current.changeCount).toBe(2);
+    act(() => result.current.setNote("2026-10-04", "viaje ")); // trimmed: unchanged
+    expect(result.current.changeCount).toBe(2);
+    act(() => result.current.setNote("2026-10-04", "boda"));   // changed note
+    expect(result.current.changeCount).toBe(3);
+    act(() => result.current.toggle("2026-10-18"));          // back to saved
+    expect(result.current.changeCount).toBe(2);
+    expect(result.current.dirty).toBe(true);
   });
 
   it("flips dirty, clears it on a 200, and saves against the revision the reply reported", async () => {

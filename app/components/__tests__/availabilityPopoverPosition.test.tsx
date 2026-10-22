@@ -87,7 +87,7 @@ describe("MyAvailabilityPanel — the popover survives a scroll", () => {
     vi.useRealTimers();
   });
 
-  // The grid is read-only outside «Seleccionar fechas» (Frank's look,
+  // The grid is read-only outside «Marcar días» (Frank's look,
   // 2026-09-13): opening a note is a one-day drag through the mode's pointer
   // flow, not a plain click on the cell.
   function openNoteOn(month: string, day: number) {
@@ -96,7 +96,7 @@ describe("MyAvailabilityPanel — the popover survives a scroll", () => {
         <MyAvailabilityPanel initialRev="rev-1" initialDates={[]} initialNotes={[]} />
       </MotionProvider>,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Seleccionar fechas" }));
+    fireEvent.click(screen.getByRole("button", { name: "Marcar días" }));
     const card = screen.getByText(month).closest("div")!;
     const cell = Array.from(card.querySelectorAll("button")).find(
       (b) => b.textContent?.trim() === String(day),

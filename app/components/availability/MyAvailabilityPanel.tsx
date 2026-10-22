@@ -21,9 +21,24 @@
 // `saved` is no longer rendered anywhere — a successful save is a toast, fired
 // from the hook's `onSaved`, so nothing in the panel has to infer success from a
 // flag that is also false while saving.
+//
+// Design pass C (2026-10-22) moved two things here from where they were:
+//
+// * The selection MODE. `selecting` was the grid's own state behind a `pill`
+//   above its pager; now the host holds it and `MarkDaysButton` («Marcar días» ⇄
+//   «Listo»), the page's primary action, sits first in the top row beside
+//   «Repetir…». The grid takes it as a prop and cleans up on each flip.
+// * «Guardar». It was a disabled button in the top row with an amber «Cambios
+//   sin guardar» eyebrow under it, two screens above the month a member was
+//   editing. Now it is a STICKY bar at the bottom — «N cambios sin guardar ·
+//   Guardar» — present only while there is something to save (or a save in
+//   flight), clearing the phone tab bar through `--bottom-nav-h` like the
+//   other fixed-bottom surfaces (`bottomNavOffsetSync.test.ts`). A save error
+//   reads in the same bar, next to the button that can retry it.
 
 import { useRef, useState } from "react";
 import AvailabilityGrid from "./AvailabilityGrid";
+import MarkDaysButton from "./MarkDaysButton";
 import Button from "@/app/components/ui/Button";
 import Collapse from "@/app/components/ui/Collapse";
 import Select from "@/app/components/ui/Select";
@@ -49,6 +64,7 @@ export default function MyAvailabilityPanel({ initialRev, initialDates, serviceD
   // rather than frozen at click time.
   const anchorRef = useRef<HTMLElement | null>(null);
 
+  const [selecting, setSelecting]         = useState(false);
   const [recurOpen, setRecurOpen]         = useState(false);
   const [recurDow, setRecurDow]           = useState(0); // 0 = Domingo
   const [recurInterval, setRecurInterval] = useState(1);
@@ -60,7 +76,7 @@ export default function MyAvailabilityPanel({ initialRev, initialDates, serviceD
     onAdopt: () => setPopover(null),
     onSaved: () => toast({ message: "Guardado", tone: "ok", duration: 2500 }),
   });
-  const { notes, setNote, remove, applyRecurring, save, saving, dirty, saveError, conflict, upcomingCount } = state;
+  const { notes, setNote, remove, applyRecurring, save, saving, dirty, changeCount, saveError, conflict, upcomingCount } = state;
 
   // `isos` arrives from the grid's drag-select: one popover, one «Razón», every
   // day in the span. `iso` stays the anchor and the positioning key.
@@ -99,22 +115,16 @@ export default function MyAvailabilityPanel({ initialRev, initialDates, serviceD
           wrapper so the panel is not a child of `space-y-4`: a closed Collapse is
           a zero-height child, but the 16px gap around it would still be reserved. */}
       <div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2.5">
+          {/* The primary action first and widest: a member comes here to mark
+              days. «Repetir…» keeps its natural width beside it. */}
+          <MarkDaysButton selecting={selecting} onToggle={() => setSelecting(v => !v)} className="flex-1 sm:flex-none" />
           <Button
             onClick={toggleRecur}
             aria-expanded={recurOpen}
             aria-controls="availability-recur"
           >
             Repetir…
-          </Button>
-          <Button
-            variant="primary"
-            onClick={save}
-            busy={saving}
-            busyLabel="Guardando…"
-            disabled={!dirty}
-          >
-            Guardar
           </Button>
         </div>
 
@@ -141,18 +151,6 @@ export default function MyAvailabilityPanel({ initialRev, initialDates, serviceD
         </Collapse>
       </div>
 
-      {dirty && !saving && (
-        <p className="font-label text-[11px] uppercase tracking-widest text-warning-strong">
-          Cambios sin guardar
-        </p>
-      )}
-
-      {saveError && (
-        <p className="font-label text-[11px] uppercase tracking-widest text-negative-fg">
-          No se pudo guardar — {saveError}
-        </p>
-      )}
-
       {conflict && (
         <p
           role="status"
@@ -167,6 +165,7 @@ export default function MyAvailabilityPanel({ initialRev, initialDates, serviceD
           the notices stay above the three month tiles, where they were. */}
       <AvailabilityGrid
         state={state}
+        selecting={selecting}
         serviceDates={serviceDates}
         openNote={openNote}
         closeNote={closeNote}
@@ -181,6 +180,42 @@ export default function MyAvailabilityPanel({ initialRev, initialDates, serviceD
         setNote={setNote}
         remove={remove}
       />
+
+      {/* The save bar: sticky (not fixed), so it rests in the flow at the end
+          of the page and rises only while the months scroll past it. Present
+          only with something to save — a bar reading «Sin cambios» would be a
+          permanent strip across the bottom of a page most visits only read.
+          `-mx-6 px-6` runs it edge to edge across the page's gutters; the
+          right padding steps aside for the admin assistant's bubble, which
+          would otherwise sit on «Guardar» (`--assistant-fab-w`). */}
+      {(dirty || saving) && (
+        <div
+          data-availability-save-bar=""
+          className="sticky bottom-[var(--bottom-nav-h,0px)] z-20 -mx-6 flex items-center gap-3 border-t border-accent/15 bg-surface-base px-6 py-3 pr-[calc(1.5rem+var(--assistant-fab-w,0px))]"
+        >
+          <p aria-live="polite" className="min-w-0 flex-1 font-body text-sm text-mono-500">
+            {saveError ? (
+              <span className="text-negative-fg">No se pudo guardar — {saveError}</span>
+            ) : changeCount > 0 ? (
+              <>
+                <span className="font-semibold text-ink">{changeCount} cambio{changeCount === 1 ? "" : "s"}</span> sin guardar
+              </>
+            ) : (
+              "Cambios sin guardar"
+            )}
+          </p>
+          <Button
+            variant="primary"
+            size="lg"
+            onClick={save}
+            busy={saving}
+            busyLabel="Guardando…"
+            className="shrink-0"
+          >
+            Guardar
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,7 +1,12 @@
 /** @vitest-environment jsdom */
 //
-// Drag-select in the twelve-month grid (R3 F2): «Seleccionar fechas», drag
+// Drag-select in the twelve-month grid (R3 F2): «Marcar días», drag
 // across the days you will miss, release, write one «Razón».
+//
+// The MODE is the host's since design pass C (2026-10-22): `selecting` is a
+// prop, toggled by `MarkDaysButton`. `Host` below is the smallest host that
+// holds it — the panel itself would bring the real hook, which is exactly what
+// this file keeps out.
 //
 // The grid is rendered DIRECTLY here with a stub `Availability`, unlike
 // `weekendList.test.tsx`: what is under test is the gesture, and the hook's own
@@ -15,11 +20,13 @@
 // pointed at the intended cell before each event — that is the only thing the
 // grid can ask once the pointer is captured by the container.
 
+import { useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { installMotionTestEnv } from "@/app/components/ui/__tests__/motionTestSetup";
 import { MotionProvider } from "@/app/components/ui/MotionProvider";
 import AvailabilityGrid from "../AvailabilityGrid";
+import MarkDaysButton from "../MarkDaysButton";
 import type { Availability } from "../useAvailability";
 
 const hapticMock = vi.fn();
@@ -43,6 +50,7 @@ function stubState(): Availability {
     notes: new Map<string, string>(),
     todayIso: "2026-09-09",
     upcomingCount: 0,
+    changeCount: 0,
     mark: markMock,
     remove: vi.fn(),
     toggle: vi.fn(),
@@ -85,14 +93,26 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function renderGrid() {
-  render(
-    <MotionProvider>
+/** The host's half of the mode: one piece of state, one toggle, handed down. */
+function Host() {
+  const [selecting, setSelecting] = useState(false);
+  return (
+    <>
+      <MarkDaysButton selecting={selecting} onToggle={() => setSelecting(v => !v)} />
       <AvailabilityGrid
         state={stubState()}
+        selecting={selecting}
         openNote={openNoteMock}
         closeNote={closeNoteMock}
       />
+    </>
+  );
+}
+
+function renderGrid() {
+  render(
+    <MotionProvider>
+      <Host />
     </MotionProvider>,
   );
   return document.getElementById("availability-months")!;
@@ -110,13 +130,13 @@ function over(el: Element) {
   document.elementFromPoint = () => el;
 }
 
-const enterMode = () => fireEvent.click(screen.getByRole("button", { name: "Seleccionar fechas" }));
+const enterMode = () => fireEvent.click(screen.getByRole("button", { name: "Marcar días" }));
 
 const DOWN = { pointerId: 1, isPrimary: true, button: 0 } as const;
 const MOVE = { pointerId: 1, buttons: 1 } as const;
 
 describe("AvailabilityGrid — drag-select", () => {
-  it("outside the mode a cell click does nothing — every edit goes through «Seleccionar fechas»", () => {
+  it("outside the mode a cell click does nothing — every edit goes through «Marcar días»", () => {
     renderGrid();
     const target = cell("2026-09-12");
     expect(target.getAttribute("aria-disabled")).toBe("true");
@@ -229,7 +249,7 @@ describe("AvailabilityGrid — drag-select", () => {
     fireEvent.click(done);
     expect(months.style.touchAction).toBe("");
     expect(months.hasAttribute("data-pull-ignore")).toBe(false);
-    expect(screen.getByRole("button", { name: "Seleccionar fechas" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("button", { name: "Marcar días" }).getAttribute("aria-pressed")).toBe("false");
     expect(closeNoteMock).toHaveBeenCalled();
   });
 

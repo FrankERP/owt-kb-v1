@@ -50,11 +50,28 @@ function snapshot(dates: Set<string>, notes: Map<string, string>): string {
   return JSON.stringify([ds, ns]);
 }
 
+/** The days `snapshot(saved)` and the live state disagree on: a date on one side
+ *  only, or on both with a different (trimmed, non-empty) note. */
+function countChanges(savedSnap: string, dates: Set<string>, notes: Map<string, string>): number {
+  const [savedDates, savedNotes] = JSON.parse(savedSnap) as [string[], [string, string][]];
+  const saved = new Set(savedDates);
+  const savedNote = new Map(savedNotes);
+  let n = 0;
+  for (const d of dates) {
+    if (!saved.has(d)) n++;
+    else if ((notes.get(d)?.trim() ?? "") !== (savedNote.get(d) ?? "")) n++;
+  }
+  for (const d of saved) if (!dates.has(d)) n++;
+  return n;
+}
+
 export interface Availability {
   dates: Set<string>;
   notes: Map<string, string>;
   todayIso: string;
   upcomingCount: number;
+  /** Days that differ from the saved state (added, removed, or a note changed); 0 when not dirty. */
+  changeCount: number;
   /** Mark the date if it is not marked yet; a no-op (and no `saved` reset) if it is. */
   mark: (iso: string) => void;
   /** Unmark the date and drop its note with it. */
@@ -98,6 +115,10 @@ export function useAvailability({ initialRev, initialDates, initialNotes = [], o
   // Saved-state snapshot `dirty` compares against; reset after each successful save.
   const [initialSnap, setInitialSnap] = useState(() => snapshot(new Set(initialDates), new Map(initialNotes.map(n => [n.date, n.note]))));
   const dirty = snapshot(dates, notes) !== initialSnap;
+  // How many days differ from the saved state — added, removed, or with a
+  // changed note — for the save bar's «N cambios sin guardar» (2026-10-22).
+  // Derived from the same snapshot `dirty` reads, so the two can never disagree.
+  const changeCount = countChanges(initialSnap, dates, notes);
 
   const todayIso = new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
 
@@ -269,7 +290,7 @@ export function useAvailability({ initialRev, initialDates, initialNotes = [], o
   }
 
   return {
-    dates, notes, todayIso, upcomingCount,
+    dates, notes, todayIso, upcomingCount, changeCount,
     mark, remove, toggle, setNote, applyRecurring, applyRange,
     save, saving, saved, dirty, saveError, conflict,
   };
