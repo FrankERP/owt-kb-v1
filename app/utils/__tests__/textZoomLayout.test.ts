@@ -56,7 +56,10 @@ const read = (rel: string): string =>
   stripComments(readFileSync(path.join(process.cwd(), rel), "utf8"), { syntax: "js" }) as string;
 
 describe("the voices grid reflows instead of overlapping", () => {
-  const src = read("app/components/DayCard.tsx");
+  // The card's team moved into `TeamSections` (the Inicio redesign, 2026-10-21):
+  // one grid of faces per folding section, held to the same two rules.
+  const src = read("app/components/TeamSections.tsx");
+  const card = read("app/components/DayCard.tsx");
 
   it("sizes its columns from the TEXT, not from a fixed count", () => {
     // `grid-cols-3` pinned three tracks at any text size: at 1.6× each column was
@@ -69,18 +72,19 @@ describe("the voices grid reflows instead of overlapping", () => {
   it("lets a name break when that one name cannot fit its column", () => {
     // Every name span carried `whitespace-nowrap`, so a name wider than its column
     // painted into the next one and was then clipped by the card's overflow-hidden.
-    // Bounded at BOTH ends: `Row` below it also has a `min-w-0`, and an
-    // open-ended slice let the min-w-0 assertion pass on a VocalCol that had lost
-    // its own (caught by mutation-testing this file).
-    const vocalCol = src.slice(src.indexOf("function VocalCol"), src.indexOf("function Row"));
-    expect(vocalCol).not.toMatch(/whitespace-nowrap/);
-    expect(vocalCol, "the names paragraph must be able to break a name").toMatch(
-      /className="[^"]*\bbreak-words\b[^"]*"/,
+    // Bounded at BOTH ends: `Avatar` below it has its own classes, and an
+    // open-ended slice let the min-w-0 assertion pass on a person cell that had
+    // lost its own (caught by mutation-testing this file, in its VocalCol form).
+    const person = src.slice(src.indexOf("function Person"), src.indexOf("function Avatar"));
+    expect(person).not.toMatch(/whitespace-nowrap/);
+    expect(person, "the name must be able to break").toMatch(
+      /className=\{`[^`]*\bbreak-words\b[^`]*`\}/,
     );
     // `break-words` does NOT lower min-content, so without `min-w-0` the column's
     // automatic minimum still pushes the track past its `1fr` share — the original
     // overflow, reproduced. The two are one fix.
-    expect(vocalCol, "a grid item needs min-w-0 to honour its track").toMatch(/<div className="min-w-0">/);
+    expect(person, "a grid item needs min-w-0 to honour its track").toMatch(/<li className="flex min-w-0 /);
+    expect(person, "and so does the text beside the face").toMatch(/<div className="min-w-0">/);
   });
 
   it("wraps the hero ROW, with the actions still right-aligned", () => {
@@ -88,10 +92,10 @@ describe("the voices grid reflows instead of overlapping", () => {
     // no wrap at all painted the title over the controls (the shipped bug), and
     // `break-words` without a wrap collapsed the title to one letter per line at
     // «Máximo», where the right-hand block is ~220px that cannot shrink.
-    // Bounded at BOTH ends. `function VocalCol` is 230 lines down, so an
+    // Bounded at BOTH ends. The card runs on for hundreds of lines, so an
     // open-ended slice was the whole card: planting these classes on any other
     // element satisfied the assertions while the header itself had lost them.
-    const header = src.slice(src.indexOf("border-b border-ink/[0.08] px-5 py-4"), src.indexOf("space-y-5 p-5"));
+    const header = card.slice(card.indexOf("border-b border-ink/[0.08] px-5 py-4"), card.indexOf("space-y-5 p-5"));
     expect(header).toMatch(/flex flex-wrap items-center justify-between/);
     expect(header, "a lone item on a wrapped justify-between line goes LEFT").toMatch(
       /className="ml-auto flex flex-wrap items-center justify-end gap-2"/,
