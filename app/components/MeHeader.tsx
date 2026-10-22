@@ -62,6 +62,10 @@ export default function MeHeader({
   // Sunday, else — for a worship member only — the empty state.
   let line: string | null = null;
   let countdownDate: string | null = null;
+  // «En 3 días · 11:00»: the start time rides on the countdown pill (D,
+  // 2026-10-22), computed on the server by the feed's rule and handed over as
+  // data. A Kids Sunday carries none.
+  let countdownTime: string | null = null;
   if (next) {
     // A special service keeps its own name; a weekend one would read "domingo 13
     // · Domingo", so the day word the date already carries is not repeated.
@@ -71,6 +75,7 @@ export default function MeHeader({
       (weekend ? "" : ` · ${next.day}`) +
       (next.seat ? ` · ${next.seat}` : "");
     countdownDate = next.dateKey;
+    countdownTime = next.time ?? null;
   } else if (kidsNext) {
     line = `En Oasis Kids te toca el ${dayAndNumber(kidsNext)}`;
     countdownDate = kidsNext;
@@ -128,6 +133,7 @@ export default function MeHeader({
             // that disagreed on their chrome would read as two different things.
             <span className="shrink-0 rounded-full border border-positive-fg/25 bg-positive-fg/[0.055] px-3 py-1.5 font-label text-[10px] uppercase tracking-widest text-positive-fg">
               <NumberRoll value={formatCountdown(daysUntil(countdownDate))} />
+              {countdownTime && <span className="tabular-nums"> · {countdownTime}</span>}
             </span>
           )}
           {/* The empty state gets a way on: without one, «sin servicios» read as
