@@ -767,7 +767,8 @@ export const V3_STORED_EDITOR_LINES = {
   nothingToCheck: "No hay nada que revisar: manda edits (cambios), copy (una copia de instrumentos) o, para solo abrir la tarjeta, focus (los días que muestra).",
   focusInvalid: "focus debe ser un rango de fechas de este mes, from antes que to (YYYY-MM-DD).",
   focusEmpty: "No hay servicios guardados entre esas fechas; revisa el día con list_services.",
-  focusHidden: "Solo se muestran los avisos de esos días; el resto del mes se revisó igual.",
+  focusHidden: "Los avisos por servicio son solo de esos días; las reglas y la equidad son las de todo el mes.",
+  focusWithCopy: "focus no se usa con copy: la copia se revisa sola.",
   // Copy instruments (S3): the check's lines, then the write's
   copy: {
     head: (from: string, to: string) => `Copiar los instrumentos de ${from} a ${to} (reemplaza los que tiene ${to}):`,

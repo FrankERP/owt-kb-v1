@@ -719,8 +719,12 @@ function storedFairShareAdjust(board: EditorBoard): (stored: { records: LogicalR
   };
 }
 
+/** Whether a focus leaves out any service the month check would speak about (an editable one). */
+const focusNarrows = (board: EditorBoard, focus: { from: string; to: string } | undefined) =>
+  !!focus && board.columns.some((c) => board.editable.has(board.localIdOf.get(c.columnId)!) && (c.date < focus.from || c.date > focus.to));
+
 /** The month check over the edited board (T2.3): the board's services as planned, the rest stored. */
-async function runStoredMonthCheck(ctx: MonthContext, board: EditorBoard, deps: ServiceEditorDeps): Promise<MonthCheck> {
+async function runStoredMonthCheck(ctx: MonthContext, board: EditorBoard, deps: ServiceEditorDeps, days?: { from: string; to: string }): Promise<MonthCheck> {
   const months = [ctx.month];
   const [ledger, fairShare] = await Promise.all([
     deps.readLedger(months).catch(() => null),
@@ -742,15 +746,17 @@ async function runStoredMonthCheck(ctx: MonthContext, board: EditorBoard, deps: 
     savedWindow: savedWindowFor(year, month, adminRoles).filter((r) => !onBoard.has((r as { _id?: string })._id ?? "")),
     ledger,
     fairShare,
+    ...(days ? { days } : {}),
   });
 }
 
 /** A worship night's song leaders must stay in its Lead (ADR-0036); the role writer does not check it. */
-function songLeadLines(ctx: MonthContext, board: EditorBoard): string[] {
+function songLeadLines(ctx: MonthContext, board: EditorBoard, days?: { from: string; to: string }): string[] {
   const lines: string[] = [];
   for (const column of board.columns) {
     const id = board.localIdOf.get(column.columnId)!;
     if (!board.editable.has(id) || kindOfType(column.type) !== "special" || !isWorshipNightFormat(column.format)) continue;
+    if (days && (column.date < days.from || column.date > days.to)) continue;
     const role = ctx.sources.snapshot.roles.find((r) => r._id === id) as { songs?: Array<{ leads?: Array<{ _ref?: string }> }> } | undefined;
     const lead = new Set(board.cells.find((c) => c.columnId === column.columnId && c.rowId === "lead")?.occupants.map((o) => o.memberId) ?? []);
     const leaders = new Set((role?.songs ?? []).flatMap((s) => (s.leads ?? []).map((l) => l._ref).filter((x): x is string => !!x)));
@@ -783,18 +789,6 @@ function focusOf(ctx: MonthContext, focus: { from: string; to: string }): { ok: 
   if (!inMonth(focus.from) || !inMonth(focus.to) || focus.from > focus.to) return { ok: false, line: S.focusInvalid };
   if (!ctx.board.columns.some((c) => c.date >= focus.from && c.date <= focus.to)) return { ok: false, line: S.focusEmpty };
   return { ok: true, value: focus };
-}
-
-/**
- * A focused check (one day, a weekend) keeps the month's rules and fairness — they are the month's —
- * but its per-service lines only for the days asked about; it says when it left some out.
- */
-function focusedCheck(check: MonthCheck, board: EditorBoard, focus: { from: string; to: string }): MonthCheck {
-  const labels = board.columns
-    .filter((c) => c.date >= focus.from && c.date <= focus.to)
-    .map((c) => storedLabel(board, board.localIdOf.get(c.columnId)!));
-  const services = check.services.filter((l) => labels.some((label) => l.startsWith(`${label}:`)));
-  return services.length === check.services.length ? check : { ...check, services, notes: [...check.notes, S.focusHidden] };
 }
 
 async function checkMonth(
@@ -873,7 +867,9 @@ async function checkMonth(
   const linked = groups.filter((g) => g.length > 1);
   const tooBig = groups.filter((g) => g.length > MAX_GROUP);
   const unconfirmed = changes.flatMap((c) => c.unconfirmed);
-  const check = options.seat ? null : await runStoredMonthCheck(ctx, board, deps);
+  // A focus narrows the per-service lines to its days (the month's rules and fairness stay whole).
+  const partial = focusNarrows(board, options.focus);
+  const check = options.seat ? null : await runStoredMonthCheck(ctx, board, deps, partial ? options.focus : undefined);
 
   // What save_service_edits takes, as is (F3) — in the structured answer for the card, and in the
   // text for the model, which never sees `structuredContent`: one line per call, so a group too big
@@ -889,8 +885,8 @@ async function checkMonth(
     ...tooBig.map((g) => S.groupTooBig(g.length, MAX_GROUP)),
     ...(unconfirmed.length ? [S.needsCard, ...unconfirmed] : []),
     ...changes.flatMap((c) => baselineLines(c.judged)),
-    ...songLeadLines(ctx, board),
-    ...(check ? monthCheckLines(options.focus ? focusedCheck(check, board, options.focus) : check) : []),
+    ...songLeadLines(ctx, board, partial ? options.focus : undefined),
+    ...(check ? [...(partial ? [S.focusHidden] : []), ...monthCheckLines(check, { partial })] : []),
   ];
   for (const part of calls) lines.push(S.saveArgs(JSON.stringify({ month: ctx.month, changes: part })));
   return answer(false, lines, {
@@ -923,6 +919,7 @@ export async function checkServiceEditsResult(
       if (!opened.ok) return opened.result;
       if (args.copy) {
         if (args.edits.length) return refusal([S.copy.alone], { code: "invalid_request", detail: "copy_alone" });
+        if (args.focus) return refusal([S.focusWithCopy], { code: "invalid_request", detail: "focus" });
         const from = anyServiceOf(opened.ctx, args.copy.from);
         if (!from.ok) return refusal([from.line], { code: "invalid_request", detail: "copy_from" });
         const to = boardServiceOf(opened.ctx, args.copy.to);
