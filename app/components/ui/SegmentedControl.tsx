@@ -45,14 +45,21 @@ const SIZE = {
   md: "px-4 py-2 text-xs",
 } as const;
 
+// `filled` is a joined bar, so its options cannot wrap the way `outline`'s
+// pills do. When the bar is wider than its container (five Propuestas filters
+// at 390px measured 563px, and the PAGE then scrolled 197px sideways — ADR-0035)
+// the bar itself scrolls, scrollbar hidden, and the page never does. `max-w-full`
+// is what lets a `w-fit` caller shrink to the container instead of overflowing it.
 const GROUP = {
   outline: "flex flex-wrap gap-2",
-  filled: "inline-flex overflow-hidden rounded-lg border border-surface-accent-30",
+  filled:
+    "inline-flex max-w-full overflow-x-auto rounded-lg border border-surface-accent-30 " +
+    "[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]",
 } as const;
 
 const OPTION = {
   outline: "rounded-full border border-surface-accent-l25-d20 text-mono-500 hover:border-accent/50 hover:text-accent aria-checked:border-accent aria-checked:text-accent",
-  filled: "text-mono-500 hover:text-ink-muted aria-checked:text-on-fill border-l border-surface-accent-30 first:border-l-0",
+  filled: "shrink-0 whitespace-nowrap text-mono-500 hover:text-ink-muted aria-checked:text-on-fill border-l border-surface-accent-30 first:border-l-0",
 } as const;
 
 const THUMB = {
