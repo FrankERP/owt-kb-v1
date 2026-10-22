@@ -101,7 +101,11 @@ export default function LibraryFilters({ filters, onChange, tags, authors, keys 
           <section>
             <p className={EYEBROW}>Tipo</p>
             {/* Four tiles must fit a 390 px sheet: small size, full width, equal shares. No count badges — they read as alerts. */}
-            <SegmentedControl label="Tipo de canción" tone="filled" size="sm" className="flex w-full [&>button]:flex-1 [&>button]:px-1" value={tipo ?? ""} onChange={setTipo}
+            {/* Four equal tiles that may WRAP their two-word labels: the filled control's
+                options are `shrink-0 whitespace-nowrap` so an overflowing bar scrolls
+                (Propuestas), which here would floor every tile at its label width and
+                overflow a 320 px sheet instead of sharing it. */}
+            <SegmentedControl label="Tipo de canción" tone="filled" size="sm" className="flex w-full [&>button]:flex-1 [&>button]:shrink [&>button]:whitespace-normal [&>button]:px-1" value={tipo ?? ""} onChange={setTipo}
               options={[{ value: "" as const, label: "Todos" }, ...TIPO_SLUGS.map((s) => ({ value: s, label: TIPO_LABEL[s] }))]} />
           </section>
           <section>

@@ -55,6 +55,12 @@ describe("LibraryFilters", () => {
 
     const tipoGroup = screen.getByRole("radiogroup", { name: "Tipo de canción" });
     expect(within(tipoGroup).getAllByRole("radio")).toHaveLength(4); // Todos + three Tipos
+    // Four equal shares of the sheet: the tiles may shrink and wrap («Down beat»),
+    // overriding the filled control's own nowrap/shrink-0 (which serves a bar
+    // that scrolls, not one that shares its width).
+    expect(tipoGroup.className.split(/\s+/)).toEqual(
+      expect.arrayContaining(["[&>button]:flex-1", "[&>button]:shrink", "[&>button]:whitespace-normal"]),
+    );
 
     expect(screen.getByRole("button", { name: /Alabanza/ })).toBeDefined();
     expect(screen.getByRole("button", { name: /Adoración/ })).toBeDefined();

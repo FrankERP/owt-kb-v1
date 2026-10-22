@@ -427,6 +427,16 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
   const todayIso = useMemo(() => serviceTodayIso(), []);
   const cardRefs = useRef(new Map<string, HTMLDivElement | null>());
   const scrollTargetRef = useRef<string | null>(null);
+  // The ONE path for a manual filter change (the segmented control and «Ver
+  // aprobadas» alike): the user taking over drops the handoff highlight, block
+  // and notice, so nothing stale stays on screen above the new list.
+  const changeFilter = (id: ProposalFilter) => {
+    setFilter(id);
+    setHighlightIds([]);
+    setConflictKey(null);
+    setHandoffNotice(null);
+    scrollTargetRef.current = null;
+  };
 
   const showToast = (msg: string, ok = true) => toast({ message: msg, tone: ok ? "ok" : "error" });
 
@@ -678,15 +688,7 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
         tone="filled"
         className="w-fit"
         value={filter}
-        onChange={(id) => {
-          // A manual filter change is the user taking over: drop the handoff
-          // highlight/notice so nothing stale stays on screen.
-          setFilter(id);
-          setHighlightIds([]);
-          setConflictKey(null);
-          setHandoffNotice(null);
-          scrollTargetRef.current = null;
-        }}
+        onChange={changeFilter}
         options={FILTER_TABS.map(({ id, label }) => ({
           value: id,
           label,
@@ -748,7 +750,7 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
               on a quiet week; a way to the history keeps it from being a dead end. */}
           {filter === "pending" && approvedCount > 0 && (
             <div className="pt-3">
-              <Button variant="secondary" size="sm" onClick={() => setFilter("approved")}>
+              <Button variant="secondary" size="sm" onClick={() => changeFilter("approved")}>
                 Ver aprobadas
               </Button>
             </div>

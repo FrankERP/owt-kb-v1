@@ -224,7 +224,9 @@ describe("the Servicios board", () => {
     fireEvent.click(menuTrigger);
     const items = screen.getAllByRole("menuitem").map((i) => i.textContent?.trim());
     expect(items).toEqual(expect.arrayContaining(["Generar mes", "Editar mes", "Pantalla completa"]));
-    fireEvent.keyDown(document, { key: "Escape" });
+    // `Menu` listens for Escape on its panel and trigger, not on `document`.
+    fireEvent.keyDown(screen.getAllByRole("menuitem")[0], { key: "Escape" });
+    expect(screen.queryAllByRole("menuitem")).toHaveLength(0);
     // «+ Nuevo» stays a real button at every width.
     expect(screen.getByRole("button", { name: /Nuevo/ }).className).not.toMatch(/\bhidden\b/);
 

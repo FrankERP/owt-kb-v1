@@ -270,7 +270,13 @@ export default function ServicesPanel({
   const generatorTriggerRef = useRef<HTMLButtonElement>(null);
   const monthEditorTriggerRef = useRef<HTMLButtonElement>(null);
   const newServiceTriggerRef = useRef<HTMLButtonElement>(null);
-  const monthEditorOpenerRef = useRef<{ kind: "toolbar" | "new" | "card"; roleId?: string }>({ kind: "toolbar" });
+  // The phone's «⋯» trigger. Below `sm` the Generar/Editar mes buttons are
+  // `display:none`, and `.focus()` on one is a no-op: focus would land on
+  // <body> and the next Tab start from the top of /admin. An opener that was
+  // the menu returns focus to the menu.
+  const moreTriggerRef = useRef<HTMLButtonElement>(null);
+  const generatorOpenerRef = useRef<"toolbar" | "menu">("toolbar");
+  const monthEditorOpenerRef = useRef<{ kind: "toolbar" | "menu" | "new" | "card"; roleId?: string }>({ kind: "toolbar" });
   const wasShowingGeneratorRef = useRef(false);
   const wasShowingMonthEditorRef = useRef(false);
   const monthEditorOpen = monthEditor !== null;
@@ -281,7 +287,7 @@ export default function ServicesPanel({
   useEffect(() => () => onMonthEditorOpenChange?.(false), [onMonthEditorOpenChange]);
   useEffect(() => {
     if (wasShowingGeneratorRef.current && !showGenerator) {
-      generatorTriggerRef.current?.focus();
+      (generatorOpenerRef.current === "menu" ? moreTriggerRef : generatorTriggerRef).current?.focus();
     }
     wasShowingGeneratorRef.current = showGenerator;
   }, [showGenerator]);
@@ -290,6 +296,7 @@ export default function ServicesPanel({
       const opener = monthEditorOpenerRef.current;
       requestAnimationFrame(() => {
         if (opener.kind === "new") newServiceTriggerRef.current?.focus();
+        else if (opener.kind === "menu") moreTriggerRef.current?.focus();
         else if (opener.kind === "card" && opener.roleId) {
           const escaped = typeof CSS !== "undefined" && typeof CSS.escape === "function"
             ? CSS.escape(opener.roleId)
@@ -817,9 +824,10 @@ export default function ServicesPanel({
     setSetlistOpen(true);
   }
 
-  function openGenerator() {
+  function openGenerator(opener: "toolbar" | "menu" = "toolbar") {
     const guard = guardControl(sources, "generateMonth");
     if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return; }
+    generatorOpenerRef.current = opener;
     setMonthEditor(null);
     setShowGenerator(true);
   }
@@ -828,7 +836,7 @@ export default function ServicesPanel({
     month: string,
     focusRoleId?: string,
     openComposerInitially = false,
-    opener: { kind: "toolbar" | "new" | "card"; roleId?: string } = { kind: "toolbar" },
+    opener: { kind: "toolbar" | "menu" | "new" | "card"; roleId?: string } = { kind: "toolbar" },
   ) {
     if (openComposerInitially) {
       const guard = guardControl(sources, "createService");
@@ -906,8 +914,8 @@ export default function ServicesPanel({
   const summaryLine = commandSummarySegments(counters).join(" · ");
   const hasDrafts = visibleCards.some(c => c.readiness.publishState === "draft");
   /** The toolbar's «Editar mes»: the one selected month, else the current one. */
-  const openMonthEditor1 = () =>
-    openMonthEditor(selectedMonths.size === 1 ? [...selectedMonths][0] : currentYM, undefined, false, { kind: "toolbar" });
+  const openMonthEditor1 = (opener: "toolbar" | "menu" = "toolbar") =>
+    openMonthEditor(selectedMonths.size === 1 ? [...selectedMonths][0] : currentYM, undefined, false, { kind: opener });
   // Below `lg` the chart stacks AFTER the cards and starts folded: on a phone
   // «who serves» comes first and the counts are consulted after, and the
   // whole chart before the first card was ~500px of the ~1 300px measured.
@@ -1195,7 +1203,7 @@ export default function ServicesPanel({
               ref={generatorTriggerRef}
               variant="secondary"
               size="lg"
-              onClick={openGenerator}
+              onClick={() => openGenerator()}
               disabled={!generateGate.enabled}
               className="hidden sm:inline-flex"
             >
@@ -1205,7 +1213,7 @@ export default function ServicesPanel({
               ref={monthEditorTriggerRef}
               variant="secondary"
               size="lg"
-              onClick={openMonthEditor1}
+              onClick={() => openMonthEditor1()}
               disabled={!editTeamGate.enabled}
               className="hidden sm:inline-flex"
             >
@@ -1227,7 +1235,7 @@ export default function ServicesPanel({
               align="end"
               className="inline-block sm:hidden"
               trigger={
-                <Button variant="secondary" size="lg" aria-label="Más acciones de servicios" className="px-3">
+                <Button ref={moreTriggerRef} variant="secondary" size="lg" aria-label="Más acciones de servicios" className="px-3">
                   <span aria-hidden="true" className="text-base leading-none">⋯</span>
                 </Button>
               }
@@ -1237,10 +1245,10 @@ export default function ServicesPanel({
                   Publicar listos ({counters.readyToPublish})
                 </MenuItem>
               )}
-              <MenuItem disabled={!generateGate.enabled} onSelect={openGenerator}>
+              <MenuItem disabled={!generateGate.enabled} onSelect={() => openGenerator("menu")}>
                 Generar mes
               </MenuItem>
-              <MenuItem disabled={!editTeamGate.enabled} onSelect={openMonthEditor1}>
+              <MenuItem disabled={!editTeamGate.enabled} onSelect={() => openMonthEditor1("menu")}>
                 Editar mes
               </MenuItem>
               <MenuItem disabled={view !== "cards"} onSelect={() => setOverviewOpen(true)}>
@@ -1437,6 +1445,13 @@ export default function ServicesPanel({
             grid's own first column again (its sticky top needs to be a grid
             item, not a child of one). Below `lg` it is a block placed LAST,
             holding the toggle and the folded chart.
+
+            The fold is a plain hidden/shown div, not `Collapse`, on purpose:
+            `Collapse` wraps its content in an animated, overflow-clipped
+            element, and from `lg` THAT element would be the grid item in the
+            aside's place — it can be neither `contents` nor the sticky column.
+            Below `lg` the chart is a whole aside, not a few lines, so the
+            height motion it would buy is not worth a second wrapper.
           */}
           <div data-board-chart="" className={`order-last min-w-0 lg:order-none lg:contents ${CHART_FOLD}`}>
             <Button
