@@ -146,6 +146,17 @@ describe("PlayerContext runs («Ensayar el setlist»)", () => {
     expect(getByTestId("state").textContent).toBe("Song 3|3/3|paused");
   });
 
+  it("moves on when a mix fails to load mid-run, and closing never advances", () => {
+    const { getByRole, getByTestId } = renderRun();
+    fireEvent.click(getByRole("button", { name: "run" }));
+    act(() => { audio!.dispatchEvent(new Event("error")); });
+    expect(getByTestId("state").textContent).toBe("Song 2|2/3|playing");
+
+    fireEvent.click(getByRole("button", { name: "close" }));
+    act(() => { audio!.dispatchEvent(new Event("error")); });
+    expect(getByTestId("state").textContent).toBe("none|single|paused");
+  });
+
   it("skips forward and back; back restarts a track that has played more than 3 s", () => {
     const { getByRole, getByTestId } = renderRun();
     fireEvent.click(getByRole("button", { name: "run" }));

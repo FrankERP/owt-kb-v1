@@ -51,11 +51,12 @@ describe("AudioTransport", () => {
       isPlaying: true, currentTime: 0, duration: 60, progress: 0,
       onToggle: vi.fn(), onSeek: vi.fn(), onClose: vi.fn(),
     };
-    const { getByRole, queryByRole, getByLabelText, rerender } = render(<AudioTransport {...props} />);
+    const { getByRole, queryByRole, getByText, rerender } = render(<AudioTransport {...props} />);
     expect(queryByRole("button", { name: /Siguiente canción/i })).toBeNull();
 
     rerender(<AudioTransport {...props} queue={{ index: 1, total: 3 }} onSkip={onSkip} />);
-    expect(getByLabelText("Canción 2 de 3").textContent).toBe("2/3");
+    expect(getByText("2/3")).toBeTruthy();
+    expect(getByText("Canción 2 de 3").className).toContain("sr-only");
     fireEvent.click(getByRole("button", { name: /Siguiente canción/i }));
     fireEvent.click(getByRole("button", { name: /Canción anterior/i }));
     expect(onSkip.mock.calls).toEqual([[1], [-1]]);

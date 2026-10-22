@@ -129,13 +129,23 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const onEnd = () => {
       if (!advance(1)) setPlayer(p => ({ ...p, isPlaying: false }));
     };
+    // A mix that fails to load mid-run (a 404, a session that expired) moves on to
+    // the next song rather than stalling a locked phone in silence. `closePlayer`
+    // ends the run BEFORE it empties the src, so its own error never advances.
+    const onError = () => {
+      if (queueRef.current) advance(1);
+    };
     el.addEventListener("ended", onEnd);
+    el.addEventListener("error", onError);
     return () => {
       el.removeEventListener("ended", onEnd);
+      el.removeEventListener("error", onError);
       el.pause();
       setAudioReady(false);
       audioRef.current = null;
     };
+    // `advance` is stable (its deps are stable callbacks), so this runs once: an
+    // unstable dep here would tear the shared element down mid-playback.
   }, [advance]);
 
   const getAudio = useCallback(() => audioRef.current, []);
@@ -200,16 +210,20 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       el.pause();
       setPlayer(p => ({ ...p, isPlaying: false }));
     } else {
-      el.play().catch(() => {});
+      const track = player.track;
       setPlayer(p => ({ ...p, isPlaying: true }));
+      startPlayback(el, () => setPlayer(p => (p.track === track ? { ...p, isPlaying: false } : p)));
     }
   }, [player.track, player.isPlaying]);
 
   const closePlayer = useCallback((fallback?: HTMLElement | null) => {
+    setRun(null);
     const el = audioRef.current;
     if (el) { el.pause(); el.src = ""; }
-    setRun(null);
     setPlayer({ track: null, isPlaying: false });
+    if (typeof navigator !== "undefined" && "mediaSession" in navigator) {
+      try { navigator.mediaSession.metadata = null; } catch { /* unsupported */ }
+    }
     const origin = audioOriginRef.current;
     audioOriginRef.current = null;
     const target =

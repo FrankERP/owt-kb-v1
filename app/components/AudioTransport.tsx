@@ -72,8 +72,9 @@ export default function AudioTransport({
             <span className="shrink-0 font-label text-[11px] text-accent/70">{track.tone}</span>
           )}
           {run && (
-            <span className="ml-auto shrink-0 font-label text-[11px] tabular-nums text-mono-500" aria-label={`Canción ${run.index + 1} de ${run.total}`}>
-              {run.index + 1}/{run.total}
+            <span className="ml-auto shrink-0 font-label text-[11px] tabular-nums text-mono-500">
+              <span aria-hidden>{run.index + 1}/{run.total}</span>
+              <span className="sr-only">Canción {run.index + 1} de {run.total}</span>
             </span>
           )}
         </div>

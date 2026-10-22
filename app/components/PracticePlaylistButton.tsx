@@ -182,6 +182,10 @@ export default function PracticePlaylistButton({
 
   function onTriggerKeyDown(event: React.KeyboardEvent<HTMLButtonElement>) {
     if (event.key === "Enter" || event.key === " ") guardPending(event);
+    // ArrowDown/ArrowUp open the menu without a click: start the read there too.
+    if ((event.key === "ArrowDown" || event.key === "ArrowUp") && !pendingRef.current && songIds.length > 0) {
+      loadMixes().catch(() => {});
+    }
   }
 
   const label = state.kind === "loading"

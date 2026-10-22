@@ -15,7 +15,9 @@ import CueDialog from "./ui/CueDialog";
 import { themeColour } from "@/app/utils/themeColour";
 import { paintsDayCard } from "@/app/utils/paintsDayCard";
 import { daysUntil, formatCountdown } from "@/app/utils/daysUntil";
-import { myNameFromSession, serviceTone, TONE_RAIL } from "@/app/utils/agenda";
+import { myNameFromSession, mySeats, serviceTone, TONE_RAIL } from "@/app/utils/agenda";
+import { normalizeSeatName } from "./admin/seatModel";
+import { SEAT_TO_FAMILY } from "@/app/utils/rehearsalMixes";
 import { formatLeadNames } from "@/app/utils/songLeads";
 import NumberRoll from "./ui/NumberRoll";
 import QuickActions, { type QuickAction } from "./ui/QuickActions";
@@ -120,8 +122,11 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
   // The client session wins once it exists; until then, the server's reading.
   const myName = myNameFromSession(session?.user) || viewerName || "";
 
-  // The instrument the viewer plays in THIS service, for «Ensayar»'s «al frente» mix.
-  const mySeat = myName ? instruments?.find((s) => s.person?.toLowerCase().trim() === myName.toLowerCase().trim())?.label ?? null : null;
+  // The instrument the viewer plays in THIS service, for «Ensayar»'s «al frente» mix:
+  // their first seat that HAS a mix family (a Lead who also plays Keys gets Keys).
+  const mySeat = mySeats({ leads, bgvs, chorus, instruments, fohTeam }, myName.toLowerCase().trim())
+    .map(normalizeSeatName)
+    .find((seat) => SEAT_TO_FAMILY[seat]) ?? null;
 
   if (!paintsDayCard({ setlist, leads, instruments, fohTeam, bgvs, chorus })) return null;
 
