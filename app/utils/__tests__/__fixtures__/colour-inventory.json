@@ -8,30 +8,30 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 321,
-    "filesScanned": 511,
-    "filesWithColour": 59,
+    "literalRows": 316,
+    "filesScanned": 513,
+    "filesWithColour": 57,
     "byCategory": {
       "2": 2,
-      "4": 67,
-      "8": 100,
+      "4": 63,
+      "8": 99,
       "9": 10,
       "11": 8,
       "12": 134
     },
     "byDisposition": {
-      "B": 129,
-      "exempt": 60,
-      "keep": 240,
+      "B": 124,
+      "exempt": 58,
+      "keep": 239,
       "C": 5,
       "D": 14
     },
-    "compositingClasses": 24,
-    "compositingSelectorOccurrences": 63,
-    "compositingClassNameOccurrences": 58,
-    "compositingRuleBodies": 55,
+    "compositingClasses": 23,
+    "compositingSelectorOccurrences": 62,
+    "compositingClassNameOccurrences": 57,
+    "compositingRuleBodies": 54,
     "lightCounterpartClasses": 14,
-    "pairs": 9,
+    "pairs": 7,
     "pairsDifferingInAlpha": 0
   },
   "literalRows": [
@@ -211,19 +211,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 389,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/(client)/me/page.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 409,
+      "line": 401,
       "disposition": "B",
       "reason": null
     },
@@ -247,7 +235,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 438,
+      "line": 433,
       "disposition": "B",
       "reason": null
     },
@@ -259,7 +247,19 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 556,
+      "line": 450,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/(client)/me/page.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 568,
       "disposition": "B",
       "reason": null
     },
@@ -403,7 +403,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 267,
+      "line": 268,
       "disposition": "B",
       "reason": null
     },
@@ -415,7 +415,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 304,
+      "line": 305,
       "disposition": "B",
       "reason": null
     },
@@ -427,7 +427,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 378,
+      "line": 379,
       "disposition": "B",
       "reason": null
     },
@@ -439,7 +439,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 391,
+      "line": 392,
       "disposition": "B",
       "reason": null
     },
@@ -2400,30 +2400,6 @@
       "reason": null
     },
     {
-      "file": "app/components/admin/glyphs.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 14,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/glyphs.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 23,
-      "disposition": "B",
-      "reason": null
-    },
-    {
       "file": "app/components/admin/MembersPanel.tsx",
       "category": 4,
       "categoryName": "colour-keyword",
@@ -3132,30 +3108,6 @@
       "reason": null
     },
     {
-      "file": "app/components/CalendarView.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "bg-current",
-      "alpha": null,
-      "utility": null,
-      "carrier": null,
-      "line": 329,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/CalendarView.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "bg-current",
-      "alpha": null,
-      "utility": null,
-      "carrier": null,
-      "line": 332,
-      "disposition": "B",
-      "reason": null
-    },
-    {
       "file": "app/components/ChainLinkIcon.tsx",
       "category": 4,
       "categoryName": "colour-keyword",
@@ -3175,7 +3127,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 257,
+      "line": 258,
       "disposition": "B",
       "reason": null
     },
@@ -3187,7 +3139,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 239,
+      "line": 240,
       "disposition": "B",
       "reason": null
     },
@@ -3199,7 +3151,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 247,
+      "line": 248,
       "disposition": "B",
       "reason": null
     },
@@ -3211,7 +3163,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 255,
+      "line": 256,
       "disposition": "B",
       "reason": null
     },
@@ -3223,7 +3175,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 179,
+      "line": 180,
       "disposition": "B",
       "reason": null
     },
@@ -3235,7 +3187,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 179,
+      "line": 180,
       "disposition": "B",
       "reason": null
     },
@@ -3247,7 +3199,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 421,
+      "line": 422,
       "disposition": "B",
       "reason": null
     },
@@ -3259,7 +3211,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 430,
+      "line": 431,
       "disposition": "B",
       "reason": null
     },
@@ -3271,7 +3223,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 94,
+      "line": 99,
       "disposition": "B",
       "reason": null
     },
@@ -3283,31 +3235,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 138,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/DayStrip.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "bg-current",
-      "alpha": null,
-      "utility": null,
-      "carrier": null,
-      "line": 123,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/DayStrip.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "bg-current",
-      "alpha": null,
-      "utility": null,
-      "carrier": null,
-      "line": 128,
+      "line": 143,
       "disposition": "B",
       "reason": null
     },
@@ -3391,7 +3319,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 47,
+      "line": 48,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3403,7 +3331,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 211,
+      "line": 215,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3415,7 +3343,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 195,
+      "line": 197,
       "disposition": "B",
       "reason": null
     },
@@ -3463,7 +3391,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 127,
+      "line": 128,
       "disposition": "B",
       "reason": null
     },
@@ -3475,7 +3403,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 145,
+      "line": 146,
       "disposition": "B",
       "reason": null
     },
@@ -3487,7 +3415,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 143,
+      "line": 144,
       "disposition": "B",
       "reason": null
     },
@@ -3499,7 +3427,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 148,
+      "line": 149,
       "disposition": "B",
       "reason": null
     },
@@ -3559,7 +3487,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 47,
+      "line": 48,
       "disposition": "B",
       "reason": null
     },
@@ -3571,7 +3499,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 483,
+      "line": 495,
       "disposition": "B",
       "reason": null
     },
@@ -3583,7 +3511,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 491,
+      "line": 503,
       "disposition": "B",
       "reason": null
     },
@@ -3595,7 +3523,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 370,
+      "line": 382,
       "disposition": "B",
       "reason": null
     },
@@ -3607,7 +3535,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 499,
+      "line": 511,
       "disposition": "B",
       "reason": null
     },
@@ -3619,7 +3547,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 507,
+      "line": 519,
       "disposition": "B",
       "reason": null
     },
@@ -3631,7 +3559,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 516,
+      "line": 528,
       "disposition": "B",
       "reason": null
     },
@@ -3643,7 +3571,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 122,
+      "line": 125,
       "disposition": "B",
       "reason": null
     },
@@ -3715,9 +3643,21 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 38,
+      "line": 39,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/ui/icons.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 24,
+      "disposition": "B",
+      "reason": null
     },
     {
       "file": "app/components/ui/PlayPauseGlyph.tsx",
@@ -4074,14 +4014,6 @@
       "reason": null
     },
     {
-      "file": "app/brand.css",
-      "kind": "selector",
-      "class": "today-pulse",
-      "count": 1,
-      "disposition": "exempt",
-      "reason": "No colour in any rule body — needs no light counterpart"
-    },
-    {
       "file": "app/(admin)/layout.tsx",
       "kind": "className",
       "class": "atmosphere",
@@ -4237,14 +4169,6 @@
       "file": "app/components/DayCardDisclosure.tsx",
       "kind": "className",
       "class": "surface",
-      "count": 1,
-      "disposition": "keep",
-      "reason": "Usage site of a compositing class"
-    },
-    {
-      "file": "app/components/DayStrip.tsx",
-      "kind": "className",
-      "class": "today-pulse",
       "count": 1,
       "disposition": "keep",
       "reason": "Usage site of a compositing class"
@@ -4986,7 +4910,7 @@
       "file": "app/brand.css",
       "kind": "rule-body",
       "classes": [
-        "today-pulse"
+        "service-card"
       ],
       "ordinal": 51,
       "disposition": "exempt",
@@ -4996,7 +4920,7 @@
       "file": "app/brand.css",
       "kind": "rule-body",
       "classes": [
-        "service-card"
+        "service-card-body"
       ],
       "ordinal": 52,
       "disposition": "exempt",
@@ -5009,16 +4933,6 @@
         "service-card-body"
       ],
       "ordinal": 53,
-      "disposition": "exempt",
-      "reason": "Rule body declares no colour"
-    },
-    {
-      "file": "app/brand.css",
-      "kind": "rule-body",
-      "classes": [
-        "service-card-body"
-      ],
-      "ordinal": 54,
       "disposition": "exempt",
       "reason": "Rule body declares no colour"
     }
@@ -5034,27 +4948,9 @@
       "alphaDiffers": false
     },
     {
-      "file": "app/components/CalendarView.tsx",
-      "utility": "text",
-      "light": "mono-400",
-      "lightAlpha": null,
-      "dark": "mono-400",
-      "darkAlpha": null,
-      "alphaDiffers": false
-    },
-    {
       "file": "app/components/ChordChart.tsx",
       "utility": "text",
       "light": "mono-500",
-      "lightAlpha": null,
-      "dark": "mono-400",
-      "darkAlpha": null,
-      "alphaDiffers": false
-    },
-    {
-      "file": "app/components/DayStrip.tsx",
-      "utility": "text",
-      "light": "mono-400",
       "lightAlpha": null,
       "dark": "mono-400",
       "darkAlpha": null,

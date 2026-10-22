@@ -58,7 +58,7 @@ export default function MyAvailabilityPanel({ initialRev, initialDates, serviceD
     // A conflict drops the pending edits, so the popover can be pinned to a date
     // that is gone — it closes in the same update the adoption lands in.
     onAdopt: () => setPopover(null),
-    onSaved: () => toast({ message: "Guardado ✓", tone: "ok", duration: 2500 }),
+    onSaved: () => toast({ message: "Guardado", tone: "ok", duration: 2500 }),
   });
   const { notes, setNote, remove, applyRecurring, save, saving, dirty, saveError, conflict, upcomingCount } = state;
 

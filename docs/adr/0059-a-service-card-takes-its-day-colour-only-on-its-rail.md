@@ -1,6 +1,6 @@
 # ADR-0059: A service card takes its day colour only on its rail
 
-**Date:** 2026-10-20 · **Status:** Accepted
+**Date:** 2026-10-20 · **Status:** Accepted, amended by ADR-0067
 
 ## Context
 
@@ -42,7 +42,8 @@ the bands showed through every card and cut long lists in half.
 ## Consequences
 
 Saturday still reads as orange and Sunday as blue, but only on the rail and in the
-calendar's strip and grid, which colour-code days on purpose.
+calendar's strip and grid, which colour-code days on purpose (since ADR-0067 the
+calendar does it with a dot per service on a neutral cell, not a tinted fill).
 
 **2026-10-22 — the admin's service card follows.** `ServiceReadinessCard` (`/admin` →
 Servicios) kept the four-colour treatment for two more days: a tinted header ground,

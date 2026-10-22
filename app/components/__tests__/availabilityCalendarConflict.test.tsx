@@ -220,7 +220,7 @@ describe("MyAvailabilityPanel — saving against a revision", () => {
     expect(screen.queryByText("Cambios sin guardar")).toBeNull();
     // "Guardado ✓" is a toast now, not a label swap on the button.
     await waitFor(() =>
-      expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ message: "Guardado ✓", tone: "ok" })),
+      expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ message: "Guardado", tone: "ok" })),
     );
   });
 

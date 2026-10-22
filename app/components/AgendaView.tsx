@@ -20,6 +20,7 @@
 // (`mySeats`/`myNameFromSession`, `app/utils/agenda.ts`) — the agenda had dropped it
 // when it replaced the stacked `DayCard`s the old «Lista» mode rendered.
 import { useSession } from "next-auth/react";
+import { WarningIcon } from "./ui/icons";
 import { agendaRows, conflictLabel, mySeats, myNameFromSession, TONE_RAIL } from "../utils/agenda";
 import type { ActiveDay } from "./CalendarView";
 import { daysUntil, formatCountdown } from "../utils/daysUntil";
@@ -130,8 +131,9 @@ export default function AgendaView({
                 <span className="mt-0.5 block truncate font-body text-sm text-ink-dim">{row.summary}</span>
               </span>
               {row.conflicts > 0 && (
-                <span className="shrink-0 font-label text-[11px] uppercase tracking-widest text-warning-fg">
-                  ⚠ {conflictLabel(row.conflicts)}
+                <span className="flex shrink-0 items-center gap-1 font-label text-[11px] uppercase tracking-widest text-warning-fg">
+                  <WarningIcon size={12} />
+                  {conflictLabel(row.conflicts)}
                 </span>
               )}
             </button>

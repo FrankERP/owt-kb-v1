@@ -40,7 +40,7 @@
 // cannot add one.
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { CalendarGlyph } from "@/app/components/admin/glyphs";
+import { CalendarIcon } from "@/app/components/ui/icons";
 
 import type { AdminTabId } from "./proposalHandoff";
 import Button from "../ui/Button";
@@ -344,7 +344,7 @@ export const ADMIN_TAB_ICON: Record<AdminTabId, React.ReactNode> = {
     </svg>
   ),
   // The same calendar the Servicios toolbar's «Generar mes» leads with.
-  services: <CalendarGlyph size={20} strokeWidth={1.75} />,
+  services: <CalendarIcon size={20} strokeWidth={1.75} />,
   proposals: (
     <svg {...ICON_PROPS}>
       <path d="M3 13h5l2 3h4l2-3h5" />

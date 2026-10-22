@@ -87,7 +87,7 @@ import type {
   SetlistDomainSummary,
 } from "@/app/utils/serviceReadSummary";
 import { BOARD_STICKY, ParticipationSidebar } from "@/app/components/admin/ParticipationSidebar";
-import { CalendarGlyph, ExpandGlyph } from "@/app/components/admin/glyphs";
+import { CalendarIcon, ExpandIcon } from "@/app/components/ui/icons";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
 import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
@@ -1215,7 +1215,7 @@ export default function ServicesPanel({
               disabled={!generateGate.enabled}
               className="hidden sm:inline-flex"
             >
-              <CalendarGlyph /> Generar mes
+              <CalendarIcon /> Generar mes
             </Button>
             <Button
               ref={monthEditorTriggerRef}
@@ -1345,7 +1345,7 @@ export default function ServicesPanel({
               // way out would fall to <body>. The view says «No hay servicios».
               disabled={view !== "cards"}
             >
-              <ExpandGlyph /> Pantalla completa
+              <ExpandIcon /> Pantalla completa
             </Button>
           </div>
           {pastMonths.length > 0 && (

@@ -1,6 +1,7 @@
 "use client";
 
 import { usePlayer, AudioTrack } from "@/app/context/PlayerContext";
+import { DownloadIcon } from "./ui/icons";
 import Equalizer from "@/app/components/ui/Equalizer";
 import PlayPauseGlyph from "@/app/components/ui/PlayPauseGlyph";
 
@@ -68,7 +69,8 @@ export default function SongAudioSection({ tracks, songTitle, songSlug }: Props)
               aria-label={`Descargar ${trackName}`}
               className="block text-center font-label text-xs uppercase tracking-widest text-mono-500 dark:text-mono-400 hover:text-accent dark:hover:text-accent transition-colors"
             >
-              Descargar ↓
+              <DownloadIcon size={12} className="mr-1 inline-block align-[-2px]" />
+              Descargar
             </a>
           </div>
         );

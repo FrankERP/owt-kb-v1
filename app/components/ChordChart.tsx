@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatKey } from "@/app/utils/formatKey";
 import SegmentedControl from "./ui/SegmentedControl";
 import Switch from "./ui/Switch";
 import NumberRoll from "./ui/NumberRoll";
@@ -115,7 +116,7 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
                 <MinusIcon />
               </Button>
               <span className="brand-key-dial px-3 font-display text-sm" aria-live="polite">
-                <NumberRoll value={soundingChartKey} />
+                <NumberRoll value={formatKey(soundingChartKey)} />
               </span>
               <Button variant="icon" size="lg" aria-label="Subir medio tono" onClick={() => setSemitones(semitones + 1)}>
                 <PlusIcon />
@@ -136,7 +137,7 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
                 title="Posición de capo para tocar con acordes abiertos en la tonalidad seleccionada"
               >
                 <CapoIcon />
-                <NumberRoll value={capo.fret === 0 ? `Acordes abiertos (${capo.shapeKey})` : `Capo ${capo.fret} · formas de ${capo.shapeKey}`} />
+                <NumberRoll value={capo.fret === 0 ? `Acordes abiertos (${formatKey(capo.shapeKey)})` : `Capo ${capo.fret} · formas de ${formatKey(capo.shapeKey)}`} />
               </span>
             </div>
           )}

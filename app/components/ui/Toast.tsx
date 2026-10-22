@@ -19,6 +19,7 @@
 // second look — see Task 5's coordinator ruling.
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { CheckIcon } from "./icons";
 import { createPortal } from "react-dom";
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
@@ -129,6 +130,9 @@ function ToastViewport({ items, onDismiss }: { items: ToastRecord[]; onDismiss: 
               t.tone === "error" ? "border-negative-border/60" : "border-accent/30"
             }`}
           >
+            {/* The drawn check stands where messages used to carry a «✓» character,
+                which iOS set from a fallback font at its own weight. */}
+            {t.tone === "ok" && <CheckIcon size={14} className="shrink-0 text-accent" />}
             <span className="min-w-0">{t.message}</span>
             {t.action && (
               <Button variant="ghost" size="sm" onClick={() => { t.action?.onClick(); onDismiss(t.id); }}>
