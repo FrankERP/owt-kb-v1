@@ -27,7 +27,8 @@ import Collapse from "./ui/Collapse";
 import QuickActions, { type QuickAction } from "./ui/QuickActions";
 import useLongPress from "./ui/useLongPress";
 import { daysUntil, formatCountdown } from "@/app/utils/daysUntil";
-import { buildICS, type ICSEvent } from "@/app/utils/ics";
+import type { ICSEvent } from "@/app/utils/ics";
+import { downloadICS } from "@/app/utils/icsDownload";
 import { serviceStartTime } from "@/app/utils/calendarFeed";
 import { normalizeText } from "@/app/utils/normalizeText";
 import { myNameFromSession, mySeats, serviceTone, TONE_RAIL } from "@/app/utils/agenda";
@@ -55,7 +56,7 @@ export default function DayCardDisclosure(props: DayCardProps) {
     ...(songs ? [`${songs} ${songs === 1 ? "canción" : "canciones"}`] : []),
   ].join(" · ");
 
-  // The same blob-download mechanics as `AddToCalendarButton`, for the ONE service
+  // The same `downloadICS` as `DownloadCalendarRow` on `/me`, for the ONE service
   // this row stands for rather than the member's whole upcoming list. The UID
   // prefers `serviceId` (the service document's own `_id`, set at both call
   // sites) over `roleId` (only ever set for a special) so a weekend service
@@ -77,15 +78,7 @@ export default function DayCardDisclosure(props: DayCardProps) {
       title: `${props.day} · OWT`,
       description: props.setlist?.songs?.map((s) => s.title).filter(Boolean).join(" · ") || undefined,
     };
-    const blob = new Blob([buildICS([event])], { type: "text/calendar;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `servicio-owt-${props.date.slice(0, 10)}.ics`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    downloadICS([event], `servicio-owt-${props.date.slice(0, 10)}.ics`);
   }
 
   const actions: QuickAction[] = [

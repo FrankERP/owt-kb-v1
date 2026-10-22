@@ -38,6 +38,8 @@ describe("bottom nav offset sync", () => {
     ["app/components/assistant/AssistantBubble.tsx"],
     // «Editar mes»'s sticky save bar (Cerrar · N con cambios · Guardar).
     ["app/components/admin/MonthGenerator.tsx"],
+    // `/me/disponibilidad`'s sticky save bar (N cambios sin guardar · Guardar).
+    ["app/components/availability/MyAvailabilityPanel.tsx"],
   ])("%s offsets its fixed bottom by the variable", (rel) => {
     // `,0px` without the space too: a Tailwind arbitrary value cannot hold one.
     expect(read(rel)).toMatch(/var\(--bottom-nav-h(, ?0px)?\)/);

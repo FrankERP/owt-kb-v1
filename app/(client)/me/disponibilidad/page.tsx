@@ -77,8 +77,11 @@ export default async function DisponibilidadPage() {
           <h1 className="font-display text-2xl uppercase tracking-wide mt-2">
             Disponibilidad
           </h1>
-          <p className="font-label text-xs uppercase tracking-widest text-mono-500 mt-0.5">
-            Marca los días en que no puedes · el viernes es ensayo
+          {/* A sentence, not an eyebrow (design pass C, 2026-10-22): the line
+              explains what to do here, and an uppercase tracked label is for
+              naming a section, not for reading. */}
+          <p className="font-body text-sm text-mono-500 mt-1">
+            Marca los días en que no puedes. El viernes es ensayo.
           </p>
         </div>
 
