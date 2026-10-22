@@ -26,7 +26,7 @@ import {
   withoutCountsEdit,
 } from "./fairnessToggleModel";
 import MonthCalendar from "./MonthCalendar";
-import { SERVICE_LABEL, type ServiceRole } from "./serviceCardModel";
+import { capitalizeFirst, SERVICE_LABEL, type ServiceRole } from "./serviceCardModel";
 import {
   selectClearMonthRoles,
   summarizeClearMonth,
@@ -75,10 +75,14 @@ import Checkbox from "@/app/components/ui/Checkbox";
 import DateField from "@/app/components/ui/DateField";
 import Select, { nativeControlClass, useFinePointer } from "@/app/components/ui/Select";
 import SegmentedControl from "@/app/components/ui/SegmentedControl";
+import Switch from "@/app/components/ui/Switch";
+import {
+  CAP_OP_WORD, conflictNotation, conflictSentence, exclusionSentence, patternLabel, patternPill, presenceNotation,
+  presenceSentence, capSentence, restrictionChips, SLACK_STALE_NOTE, type RuleChip, type RuleSentence, type RuleTone,
+} from "./ruleCopy";
 import {
   CADENCE_OUTSIDE_HEADING,
   CADENCE_OUTSIDE_SENTENCE,
-  SLACK_V3_NOTE,
   cadenceOutsideSundayPool,
   resolveRulePersonId,
 } from "@/app/utils/sundayCadence";
@@ -104,7 +108,6 @@ import {
   buildRows,
   buildSolveRequest,
   applySolveResponse,
-  capLabel,
   cellsToDrafts,
   createColumnId,
   draftTargetKey,
@@ -412,34 +415,34 @@ function sameStoredSectionFingerprint(
   return JSON.stringify(expected) === JSON.stringify(observed);
 }
 
+/**
+ * The patterns a rule form offers, in the order the pickers list them. The labels are
+ * `ruleCopy`'s Spanish («Líder en domingo», «Sábado (todo)», «Líder o BGV (ambos)»);
+ * the value is still the solver's pattern, which the conflict and presence pickers
+ * append in parentheses so a notice naming `*.Lead` can be matched to an option.
+ */
+// A literal, one object per line: `patternRolesV3Sync.test.ts` reads the `value:`s off this source.
 const PATTERNS: Array<{ value: string; label: string }> = [
-  { value: "Sun.*",     label: "Domingo (todo)"   },
-  { value: "Sat.*",     label: "Sábado (todo)"    },
-  { value: "*.*",       label: "Ambos servicios"  },
-  { value: "Sun.Lead",  label: "Dom Lead"         },
-  { value: "Sat.Lead",  label: "Sáb Lead"         },
-  { value: "Sun.BGV",   label: "Dom BGV"          },
-  { value: "Sat.BGV",   label: "Sáb BGV"          },
-  { value: "Sun.Choir", label: "Dom Coro"         },
-  { value: "*.Lead",    label: "Lead (ambos)"     },
-  { value: "*.BGV",     label: "BGV (ambos)"      },
-  { value: "*.LeadBGV", label: "Lead+BGV (ambos)" },
+  { value: "Sun.*",     label: patternLabel("Sun.*")     },
+  { value: "Sat.*",     label: patternLabel("Sat.*")     },
+  { value: "*.*",       label: patternLabel("*.*")       },
+  { value: "Sun.Lead",  label: patternLabel("Sun.Lead")  },
+  { value: "Sat.Lead",  label: patternLabel("Sat.Lead")  },
+  { value: "Sun.BGV",   label: patternLabel("Sun.BGV")   },
+  { value: "Sat.BGV",   label: patternLabel("Sat.BGV")   },
+  { value: "Sun.Choir", label: patternLabel("Sun.Choir") },
+  { value: "*.Lead",    label: patternLabel("*.Lead")    },
+  { value: "*.BGV",     label: patternLabel("*.BGV")     },
+  { value: "*.LeadBGV", label: patternLabel("*.LeadBGV") },
 ];
 
-// Ordered list for the exclusion pill grid
+// Ordered list for the exclusion pill grid (pill text: `patternPill`)
 const EXCL_PATTERNS = [
   "Sat.*", "Sun.*", "*.*",
   "Sun.Lead", "Sun.BGV", "Sun.Choir",
   "Sat.Lead", "Sat.BGV",
   "*.Lead", "*.BGV", "*.LeadBGV",
 ];
-
-const PAT_LABEL: Record<string, string> = {
-  "Sat.*": "Sáb.*",    "Sun.*": "Dom.*",       "*.*": "*.*",
-  "Sun.Lead": "Dom Lead", "Sun.BGV": "Dom BGV", "Sun.Choir": "Dom Coro",
-  "Sat.Lead": "Sáb Lead", "Sat.BGV": "Sáb BGV",
-  "*.Lead": "*.Lead",  "*.BGV": "*.BGV",       "*.LeadBGV": "*.LeadBGV",
-};
 
 const HISTORY_KEY   = "owt_solver_history_v2";
 const MAX_HISTORY   = 6;
@@ -657,7 +660,55 @@ function cadenceNameChip(issue: CadenceNameIssue): string {
     : "Nombre no reconocido en Alabanza";
 }
 
-function RestrictionCard({ r, onDelete, onEdit, nameIssue, exactOverlapRole }: {
+/**
+ * The chip tones of the rules mock (`reglas.html`, bloque 2): a refusal reads red, a count
+ * accent, a pair violet, a presence green, a cadence/balance setting quiet, and a clause the
+ * solver no longer reads is dashed and struck through. Base roles with an alpha, never a
+ * composed token (those bake their own alpha, `brand.css`).
+ */
+const CHIP_TONE: Record<RuleTone, string> = {
+  no: "border-negative-strong/40 bg-negative-strong/[0.06] text-negative-fg",
+  num: "border-accent/40 bg-accent/[0.06] text-accent",
+  pair: "border-badge-violet-deep/45 bg-badge-violet-deep/[0.08] text-badge-violet-fg",
+  pres: "border-positive-deep/40 bg-positive-deep/[0.06] text-positive-strong",
+  cad: "border-accent/30 bg-accent/[0.06] text-ink-dim",
+  stale: "border-dashed border-ink-dim/50 text-ink-dim line-through",
+  warn: "border-warning-strong/30 bg-warning-strong/10 text-warning-strong",
+};
+
+/**
+ * One clause of a person restriction, as a sentence. The notation it replaced is always
+ * on `title` and, behind «Mostrar notación del solver», printed after the sentence — a
+ * notice or the v3 rule table still names a rule the old way (`capCardLabel`).
+ */
+function RuleChipView({ chip, notation }: { chip: RuleChip; notation: boolean }) {
+  return (
+    <span
+      data-rule-chip={chip.tone}
+      title={chip.notation || undefined}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-body text-xs ${CHIP_TONE[chip.tone]}`}
+    >
+      {chip.text}
+      {notation && chip.notation && <code className="font-mono text-[10px] opacity-70">{chip.notation}</code>}
+    </span>
+  );
+}
+
+/** A conflict's or presence rule's sentence, its connective words dimmed. */
+function SentenceText({ parts }: { parts: RuleSentence }) {
+  return (
+    <>
+      {parts.map((part, i) => (
+        <span key={i} className={part.dim ? "text-mono-500" : "text-ink"}>
+          {i > 0 ? " " : ""}
+          {part.text}
+        </span>
+      ))}
+    </>
+  );
+}
+
+function RestrictionCard({ r, onDelete, onEdit, onClearSlack, nameIssue, exactOverlapRole, notation }: {
   r: PersonRestriction;
   /**
    * C6 CTL-1 threads the engine here (`engineProp.test.ts` pins the mount). Nothing reads it since
@@ -666,50 +717,42 @@ function RestrictionCard({ r, onDelete, onEdit, nameIssue, exactOverlapRole }: {
   engine?: SolverEngine;
   onDelete: () => void;
   onEdit: () => void;
+  /**
+   * «quitar» beside a struck-through «Holgura N»: sets this card's fairness back to «Normal» ON
+   * SCREEN — the same edit the form would make, and like any edit it reaches the server only
+   * through «Guardar reglas». The writer is untouched (bloque 2 is display only).
+   */
+  onClearSlack: () => void;
   nameIssue?: CadenceNameIssue;
   /** Parent A38: the first role this card fixes twice with another card or itself — a pair saved before C3. */
   exactOverlapRole?: string;
+  /** «Mostrar notación del solver». */
+  notation: boolean;
 }) {
+  const chips = restrictionChips(r);
   return (
     <div className="rounded-lg border border-accent/10 bg-surface-sunken/40 px-3 py-2 flex items-start gap-2">
       <div className="flex-1 min-w-0 space-y-1">
         <span className="font-label text-[11px] uppercase tracking-widest text-accent/80 font-semibold">{r.person}</span>
-        <div className="flex flex-wrap gap-1">
-          {r.excludedPatterns.map(p => (
-            <span key={p} className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-negative-strong/15 text-negative-fg border border-negative-strong/30">
-              !{p}
-            </span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {chips.map(chip => (
+            <Fragment key={chip.key}>
+              <RuleChipView chip={chip} notation={notation} />
+              {chip.tone === "stale" && (
+                <span className="inline-flex items-center gap-1 font-body text-xs text-warning-strong">
+                  <span aria-hidden>⚠</span>
+                  {chip.note}
+                  <span aria-hidden>·</span>
+                  <Button variant="ghost" size="sm" className="underline underline-offset-2" onClick={onClearSlack}>
+                    quitar
+                  </Button>
+                </span>
+              )}
+            </Fragment>
           ))}
-          {r.weekExclusions.map(we => (
-            <span key={we.id} className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-availability-fg/15 text-availability-strong border border-availability-fg/30">
-              sem.{we.week} {we.pattern}
-            </span>
-          ))}
-          {r.caps.map(cap => (
-            <span key={cap.id} className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-badge-azure-deep/15 text-badge-azure-fg border border-badge-azure-deep/30">
-              {cap.pattern} {cap.op} {cap.relative ? `sem−${cap.relOffset}` : cap.value}
-            </span>
-          ))}
-          {r.fairness === "exempt" && (
-            <span className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-recency-fg/15 text-recency-strong border border-recency-fg/30">
-              exenta de carga total
-            </span>
-          )}
-          {r.fairness === "slack" && (
-            <span className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-recency-fg/15 text-recency-strong border border-recency-fg/30">
-              {`holgura ${r.fairnessSlack} · ${SLACK_V3_NOTE}`}
-            </span>
-          )}
-          {/* C3's v2-only note beside this chip went at the cutover (ADR-0056); a flip-back restores it. */}
-          {r.sundayCadence === "alternate" && (
-            <span className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/30">
-              Mes por medio
-            </span>
-          )}
+          {/* C3's v2-only note beside the cadence chip went at the cutover (ADR-0056); a flip-back restores it. */}
           {r.sundayCadence === "alternate" && nameIssue && (
-            <span className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-warning-strong/10 text-warning-strong border border-warning-strong/30">
-              {cadenceNameChip(nameIssue)}
-            </span>
+            <RuleChipView chip={{ key: "name", tone: "warn", text: cadenceNameChip(nameIssue), notation: "" }} notation={false} />
           )}
         </div>
         {exactOverlapRole && (
@@ -722,16 +765,13 @@ function RestrictionCard({ r, onDelete, onEdit, nameIssue, exactOverlapRole }: {
   );
 }
 
-function ConflictCard({ r, onDelete, onEdit }: { r: ConflictRule; onDelete: () => void; onEdit: () => void }) {
+function ConflictCard({ r, onDelete, onEdit, notation }: { r: ConflictRule; onDelete: () => void; onEdit: () => void; notation: boolean }) {
   return (
     <div className="rounded-lg border border-accent/10 bg-surface-sunken/40 px-3 py-2 flex items-center gap-2">
       <span className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-badge-violet-deep/15 text-badge-violet-fg border border-badge-violet-deep/30 shrink-0">≠</span>
-      <span className="font-body text-xs flex-1">
-        <span className="text-mono-200">{r.personA}</span>
-        <span className="text-mono-500 mx-1">≠</span>
-        <span className="text-mono-200">{r.personB}</span>
-        <span className="text-mono-500 mx-1">en</span>
-        <span className="text-accent/70">{r.pattern}</span>
+      <span className="font-body text-sm flex-1 min-w-0" title={conflictNotation(r)}>
+        <SentenceText parts={conflictSentence(r)} />
+        {notation && <code className="ml-2 font-mono text-[10px] text-mono-500">{conflictNotation(r)}</code>}
       </span>
       <button type="button" onClick={onEdit} className="text-mono-600 hover:text-accent transition-colors shrink-0 text-xs leading-none px-0.5" title="Editar">✎</button>
       <button type="button" onClick={onDelete} className="text-mono-600 hover:text-negative-fg transition-colors shrink-0 text-sm leading-none">×</button>
@@ -739,15 +779,13 @@ function ConflictCard({ r, onDelete, onEdit }: { r: ConflictRule; onDelete: () =
   );
 }
 
-function PresenceCard({ r, onDelete, onEdit }: { r: PresenceRule; onDelete: () => void; onEdit: () => void }) {
+function PresenceCard({ r, onDelete, onEdit, notation }: { r: PresenceRule; onDelete: () => void; onEdit: () => void; notation: boolean }) {
   return (
     <div className="rounded-lg border border-accent/10 bg-surface-sunken/40 px-3 py-2 flex items-center gap-2">
       <span className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-positive-deep/15 text-positive-strong border border-positive-deep/30 shrink-0">≥1</span>
-      <span className="font-body text-xs flex-1">
-        <span className="text-mono-200">{r.persons.join(", ")}</span>
-        <span className="text-mono-500 mx-1">en</span>
-        <span className="text-accent/70">{r.pattern}</span>
-        <span className="text-mono-500 ml-1">c/sem</span>
+      <span className="font-body text-sm flex-1 min-w-0" title={presenceNotation(r)}>
+        <SentenceText parts={presenceSentence(r)} />
+        {notation && <code className="ml-2 font-mono text-[10px] text-mono-500">{presenceNotation(r)}</code>}
       </span>
       <button type="button" onClick={onEdit} className="text-mono-600 hover:text-accent transition-colors shrink-0 text-xs leading-none px-0.5" title="Editar">✎</button>
       <button type="button" onClick={onDelete} className="text-mono-600 hover:text-negative-fg transition-colors shrink-0 text-sm leading-none">×</button>
@@ -759,11 +797,13 @@ function PresenceCard({ r, onDelete, onEdit }: { r: PresenceRule; onDelete: () =
 
 const rbIn  = "px-2 py-1 rounded border border-accent/15 bg-transparent font-body text-[16px] sm:text-xs focus:outline-none focus:border-accent";
 
-function PersonRestrictionForm({ members, onAdd, onCancel, initialValues, siblings }: {
+function PersonRestrictionForm({ members, onAdd, onCancel, initialValues, siblings, allowSlack = false }: {
   members: MemberOption[];
   onAdd: (r: PersonRestriction) => void;
   onCancel: () => void;
   initialValues?: PersonRestriction;
+  /** «Holgura» stays on offer while the card carries one ON SCREEN or in the STORED rule set (so an on-screen «quitar» can be undone here). */
+  allowSlack?: boolean;
   /**
    * Every OTHER restriction of the on-screen config, in order — what parent
    * A38's check compares this card's `==` caps against (same `person` text).
@@ -799,7 +839,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues, siblin
     const flagged = caps[o.later.cap];
     const other = o.first.restriction === siblings.length ? caps[o.first.cap] : siblings[o.first.restriction].caps[o.first.cap];
     if (!flagged || !other || capOverlapMessage.has(flagged.id)) continue;
-    capOverlapMessage.set(flagged.id, exactOverlapFormMessage({ role: o.roles[0], person, rule: capLabel(other) }));
+    capOverlapMessage.set(flagged.id, exactOverlapFormMessage({ role: o.roles[0], person, rule: capSentence(other) }));
   }
 
   // A restriction may carry «Mes por medio» alone (C3 §6.6).
@@ -844,20 +884,26 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues, siblin
                   : "text-mono-500 border-accent/15 hover:border-negative-strong/30 hover:text-negative-fg"
               }`}
             >
-              {PAT_LABEL[pat] ?? pat}
+              {patternPill(pat)}
             </button>
           ))}
         </div>
         {excl.length > 0 && (
-          <p className="font-label text-[10px] text-negative-fg/80 mt-1">{excl.join(" · ")}</p>
+          <p className="font-body text-[11px] text-negative-fg/80 mt-1">{excl.map(exclusionSentence).join(" · ")}</p>
         )}
       </div>
 
       {/* Fairness */}
       <div>
         <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Equidad</p>
+        {/*
+          «Holgura» is offered only on a card that already carries it (bloque 2, 2026-10-22):
+          the v3 solver never reads `fairness_slack` (it balances per role and the total,
+          ADR-0058), so a NEW one would be a rule that looks enforced and is not. An existing
+          one stays switchable so it can be kept or turned off; the card strikes it through.
+        */}
         <div className="flex items-center gap-3 flex-wrap">
-          {(["none", "exempt", "slack"] as const).map(f => (
+          {(initialValues?.fairness === "slack" || allowSlack ? (["none", "exempt", "slack"] as const) : (["none", "exempt"] as const)).map(f => (
             <label key={f} className="flex items-center gap-1.5 cursor-pointer">
               <input type="radio" name={`fairness-${person}`} value={f} checked={fairness === f} onChange={() => setFairness(f)} className="accent-accent" />
               <span className="font-body text-xs text-mono-400">
@@ -894,7 +940,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues, siblin
         {fairness === "slack" && (
           <p className="font-body text-[11px] text-mono-500 mt-1">
             {slack >= 1
-              ? `En Auto de fin de semana su carga total del mes puede alejarse hasta ${slack} servicio${slack === 1 ? "" : "s"} de la del resto. No aplica con el nuevo solver. Al llenar especiales cuenta como si llevara ${slack} más.`
+              ? `${capitalizeFirst(SLACK_STALE_NOTE)}, donde cuenta como si llevara ${slack} más.`
               : "Con 0 no tiene efecto: escribe un número del 1 al 5."}
           </p>
         )}
@@ -974,7 +1020,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues, siblin
 
       {/* Caps */}
       <div>
-        <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Caps</p>
+        <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Topes</p>
         <div className="space-y-1">
           {caps.map(cap => (
             // D-defect-1: at full panel width an unconstrained `flex-1` on the
@@ -998,13 +1044,13 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues, siblin
               <Select
                 size="sm"
                 aria-label="Operador"
-                className="w-16 max-w-[64px] flex-none"
+                className="w-40 max-w-[160px] flex-none"
                 value={cap.op}
                 onChange={e => setCaps(cs => cs.map(x => x.id === cap.id ? { ...x, op: e.target.value as any } : x))}
               >
-                <option value="<=">≤</option>
-                <option value=">=">≥</option>
-                <option value="==">= </option>
+                <option value="<=">{CAP_OP_WORD["<="]}</option>
+                <option value=">=">{CAP_OP_WORD[">="]}</option>
+                <option value="==">{CAP_OP_WORD["=="]}</option>
               </Select>
               {/* Both number fields are w-14 (56 px). Safari on the Mac paints the
                   spin arrows inside a number input all the time (Chrome only on
@@ -1015,7 +1061,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues, siblin
                   the row from jumping when «sem» is toggled. */}
               {cap.relative ? (
                 <div className="flex items-center gap-0.5 flex-none">
-                  <span className="font-label text-[10px] text-accent/70">sem−</span>
+                  <span className="font-label text-[10px] text-accent/70">domingos −</span>
                   <input
                     type="number" min={0} max={4}
                     className={`${rbIn} w-14 text-center`}
@@ -1033,14 +1079,14 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues, siblin
               )}
               <button
                 type="button"
-                title={cap.relative ? "Cambiar a número fijo" : "Relativo al nº de semanas"}
+                title={cap.relative ? "Cambiar a número fijo" : "Relativo a los domingos del mes"}
                 onClick={() => setCaps(cs => cs.map(x => x.id === cap.id ? { ...x, relative: !x.relative } : x))}
                 className={`font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded flex-none border transition-colors ${
                   cap.relative
                     ? "border-accent/40 bg-accent/10 text-accent"
                     : "border-accent/15 text-mono-600 hover:text-accent"
                 }`}
-              >sem</button>
+              >según domingos</button>
               <button type="button" onClick={() => setCaps(cs => cs.filter(x => x.id !== cap.id))} className="text-mono-600 hover:text-negative-fg text-sm flex-none">×</button>
             </div>
             {capOverlapMessage.has(cap.id) && (
@@ -1054,7 +1100,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues, siblin
           onClick={() => setCaps(cs => [...cs, { id: uid(), pattern: "Sun.*", op: "<=", value: 2, relative: false, relOffset: 2 }])}
           className="font-label text-[10px] uppercase tracking-widest text-accent/70 hover:text-accent transition-colors mt-1"
         >
-          + Cap
+          + Tope
         </button>
       </div>
 
@@ -1204,10 +1250,17 @@ function RuleBuilder({ config, onChange, members, source, cadenceNameIssues, eng
 }) {
   const [adding,    setAdding]    = useState<"restriction" | "conflict" | "presence" | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // «Mostrar notación del solver» (bloque 2): a view aid for this visit, off by default and
+  // never load-bearing — the notation is on every chip's `title` regardless.
+  const [notation, setNotation] = useState(false);
 
   const rmRestriction = (id: string) => onChange({ ...config, restrictions: config.restrictions.filter(r => r.id !== id) });
   const rmConflict    = (id: string) => onChange({ ...config, conflicts:    config.conflicts.filter(r => r.id !== id) });
   const rmPresence    = (id: string) => onChange({ ...config, presence:     config.presence.filter(r => r.id !== id) });
+  /** The «quitar» beside a struck-through «Holgura N»: back to «Normal», on screen (see `RestrictionCard`). */
+  const clearSlack    = (id: string) => onChange({ ...config, restrictions: config.restrictions.map(r => r.id === id ? { ...r, fairness: "none", fairnessSlack: 1 } : r) });
+  // The stored rule set, for «Holgura»'s offer in the form after an on-screen «quitar» (see `PersonRestrictionForm`).
+  const storedConfig  = editableConfig(source);
 
   const saveRestriction = (r: PersonRestriction) => {
     onChange({ ...config, restrictions: config.restrictions.map(x => x.id === r.id ? r : x) });
@@ -1252,6 +1305,10 @@ function RuleBuilder({ config, onChange, members, source, cadenceNameIssues, eng
         <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">
           Reglas{total > 0 ? ` (${total})` : ""}
         </p>
+        <span className="flex items-center gap-2 font-body text-[11px] text-mono-500">
+          <Switch size="sm" checked={notation} onChange={setNotation} aria-label="Mostrar notación del solver" />
+          Mostrar notación del solver
+        </span>
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="font-label text-[10px] uppercase tracking-widest text-mono-600">
             Añadir regla
@@ -1314,11 +1371,13 @@ function RuleBuilder({ config, onChange, members, source, cadenceNameIssues, eng
         editingId === r.id ? (
           <PersonRestrictionForm key={r.id} members={members} initialValues={r}
             siblings={config.restrictions.filter(x => x.id !== r.id)}
+            allowSlack={storedConfig?.restrictions.find(x => x.id === r.id)?.fairness === "slack"}
             onAdd={saveRestriction} onCancel={cancelEdit} />
         ) : (
-          <RestrictionCard key={r.id} r={r} engine={engine}
+          <RestrictionCard key={r.id} r={r} engine={engine} notation={notation}
             nameIssue={cadenceNameIssues.get(r.id)}
             exactOverlapRole={exactOverlapRole.get(r.id)}
+            onClearSlack={() => clearSlack(r.id)}
             onDelete={() => rmRestriction(r.id)}
             onEdit={() => { setEditingId(r.id); setAdding(null); }} />
         )
@@ -1330,7 +1389,7 @@ function RuleBuilder({ config, onChange, members, source, cadenceNameIssues, eng
           <ConflictForm key={r.id} members={members} initialValues={r}
             onAdd={saveConflict} onCancel={cancelEdit} />
         ) : (
-          <ConflictCard key={r.id} r={r}
+          <ConflictCard key={r.id} r={r} notation={notation}
             onDelete={() => rmConflict(r.id)}
             onEdit={() => { setEditingId(r.id); setAdding(null); }} />
         )
@@ -1342,7 +1401,7 @@ function RuleBuilder({ config, onChange, members, source, cadenceNameIssues, eng
           <PresenceForm key={r.id} members={members} initialValues={r}
             onAdd={savePresence} onCancel={cancelEdit} />
         ) : (
-          <PresenceCard key={r.id} r={r}
+          <PresenceCard key={r.id} r={r} notation={notation}
             onDelete={() => rmPresence(r.id)}
             onEdit={() => { setEditingId(r.id); setAdding(null); }} />
         )

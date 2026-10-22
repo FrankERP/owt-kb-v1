@@ -3,7 +3,7 @@
 // «Cuenta para equidad: aplica con el nuevo solver…», shown only under v2. C3's card-chip note
 // (`CADENCE_V2_NOTE`), which CTL-1 also gated, went at the cutover (C7, ADR-0056): the
 // «CTL-1 card chip» tests below now assert it is absent under both engines. Not gated (C3 owns
-// it, under both engines): the «Holgura» note (`SLACK_V3_NOTE`).
+// it, under both engines): the «Holgura» chip and its note (`ruleCopy`).
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -14,7 +14,7 @@ import { FAIRNESS_ENGINE_NOTE } from "../fairnessToggleModel";
 import type { PersonRestriction, SolverConfig } from "../plannerModel";
 import { AdminProviders } from "./providersHarness";
 import { readyRules } from "./rulesHarness";
-import { SLACK_V3_NOTE } from "@/app/utils/sundayCadence";
+import { SLACK_STALE_NOTE } from "../ruleCopy";
 
 /** C3's v2-only chip note, removed at the cutover (ADR-0056). Only its absence is asserted. */
 const REMOVED_CADENCE_V2_NOTE = "aplica con el nuevo solver";
@@ -90,10 +90,11 @@ describe("CTL-1 card chip: C3's v2-only note is gone under both engines (C7, ADR
     expect(within(card()).queryByText(REMOVED_CADENCE_V2_NOTE)).toBeNull();
   });
 
-  it("the «Holgura» note is C3's under both engines (not gated)", () => {
+  it("the «Holgura» chip and its note are the same under both engines (not gated)", () => {
     for (const engine of ["v2", "v3"] as const) {
       renderGenerator(engine);
-      expect(within(card()).getByText(`holgura 2 · ${SLACK_V3_NOTE}`)).toBeTruthy();
+      expect(within(card()).getByText("Holgura 2")).toBeTruthy();
+      expect(within(card()).getByText(SLACK_STALE_NOTE)).toBeTruthy();
       cleanup();
     }
   });
