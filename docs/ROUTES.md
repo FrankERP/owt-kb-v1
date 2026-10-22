@@ -125,7 +125,7 @@ token) for private/fresh data.
 [API_REFERENCE.md](API_REFERENCE.md)) on every route except `/` and `/me`, which pass `cue={false}`
 because their own headers already show the countdown.
 
-- **`/`** — `Navbar`, `DayCard` (the next service, `layout="wide"` + `hero`), `DayCardDisclosure` (every other service, collapsed to one line).
+- **`/`** — `Navbar`, `DayCard` (the next service, `layout="wide"` + `hero`; its countdown pill carries the start time and «Mensaje para el equipo» folds to three lines since design pass D, 2026-10-22), `DayCardDisclosure` (every other service, collapsed to one line).
 - **`/schedule`** — `Navbar`, `CalendarView` (composition only: `ScheduleHeader`, `DayStrip`, the
   Agenda|Mes `SegmentedControl`, `AgendaView` or the month grid, the day sheet `CueDialog`).
 - **`/biblioteca`** — `Navbar`, `LibraryIndex`.
@@ -139,7 +139,11 @@ because their own headers already show the countdown.
 - **`/me/disponibilidad`** — `Navbar`, `availability/MyAvailabilityPanel` (the month
   `AvailabilityGrid` always open; no weekend pills, no Desde/Hasta fields).
 - **`/me/ajustes`** — `Navbar`, `SettingsCard` (one card holding `ThemeControl`,
-  `TextSizeControl`, `ProfilePanel` `bare` and `CalendarFeedPanel` — no longer separate cards).
+  `TextSizeControl`, `ProfilePanel` `bare` and `CalendarFeedPanel` — no longer separate cards;
+  since design pass D the calendar block is one «Todos / Solo los míos» switch over one row of
+  links, «¿Cómo funciona?» folded, and a link to `/me#tu-cuenta` for the one-shot `.ics`).
+  Both anchors other pages link to (`#calendario` here, `#tu-cuenta` on `/me`) carry the
+  navbar-clearing `scroll-mt` every anchored section uses.
 - **`/me/propose/[roleId]`** — `Navbar`, `ProposalEditor` (co-located client component).
 - **`/posts/[slug]`** — `Navbar`, `TransposeProvider` (the page's one transposition seat),
   `SongHeroPills` (`KeyDial` + the 12-key drawer, `TempoPill`), `SectionNav` (whose

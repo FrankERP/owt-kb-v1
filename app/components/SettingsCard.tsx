@@ -46,8 +46,9 @@ export default function SettingsCard({ member, calendarFeed, className = "", ...
           <ProfilePanel initialMember={member} bare />
         </div>
       )}
+      {/* A link target (`/me`'s «Calendario» row), so it clears the navbar. */}
       {calendarFeed && (
-        <div className="p-5" id="calendario">
+        <div className="scroll-mt-[calc(5rem+env(safe-area-inset-top)+var(--impersonation-offset))] lg:scroll-mt-[calc(6rem+env(safe-area-inset-top)+var(--impersonation-offset))] p-5" id="calendario">
           <h3 className="font-display text-lg font-bold mb-3">Calendario</h3>
           <CalendarFeedPanel initial={calendarFeed} />
         </div>

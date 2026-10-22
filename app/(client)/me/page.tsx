@@ -377,8 +377,15 @@ export default async function MePage() {
   // in it. `nextSeatLine`/`seatLabel` live in the NEUTRAL `app/utils/myWeek.ts`
   // precisely so this Server Component may call them (ADR-0028) — `MeHeader` is a
   // client module and receives the result as data, never a function.
+  // The header's countdown carries the start time (D, 2026-10-22) by the same rule
+  // the `.ics` rows below use, so «En 3 días · 11:00» and the calendar agree.
   const nextSeat = nextSeatLine(
-    visibleAssignments.map(({ dateKey, day, doc }) => ({ dateKey, day, seat: seatLabel(doc) })),
+    visibleAssignments.map(({ dateKey, day, doc, kind }) => ({
+      dateKey,
+      day,
+      seat: seatLabel(doc),
+      time: serviceStartTime(kind, day, doc.time),
+    })),
   );
 
   // Timed by the feed's one rule (`serviceStartTime`): a weekend at the team's
@@ -573,8 +580,10 @@ export default async function MePage() {
             A null member read is not an empty state: every signed-in member has
             a document, so null means the read did not find theirs — it is said
             out loud, and only the row that needs the document is dropped. */}
-        <section aria-labelledby="tu-cuenta" className="space-y-2" {...revealProps(3)}>
-          <h2 id="tu-cuenta" className="ml-1 font-label text-[11px] uppercase tracking-widest text-mono-500">
+        {/* `#tu-cuenta` is a link target (Ajustes › Calendario's «Descargar una sola
+            vez»), so it clears the navbar like every anchored section does. */}
+        <section id="tu-cuenta" aria-labelledby="tu-cuenta-title" className="scroll-mt-[calc(5rem+env(safe-area-inset-top)+var(--impersonation-offset))] lg:scroll-mt-[calc(6rem+env(safe-area-inset-top)+var(--impersonation-offset))] space-y-2" {...revealProps(3)}>
+          <h2 id="tu-cuenta-title" className="ml-1 font-label text-[11px] uppercase tracking-widest text-mono-500">
             Tu cuenta
           </h2>
           {!member && (
@@ -590,7 +599,7 @@ export default async function MePage() {
               </p>
             </div>
           )}
-          <AccountList labelledBy="tu-cuenta">
+          <AccountList labelledBy="tu-cuenta-title">
             {member && (
               <AccountLinkRow
                 href="/me/disponibilidad"

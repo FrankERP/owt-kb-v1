@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useId, useLayoutEffect, useRef, useState } from "react";
 import { Setlist, SetlistSong } from "../utils/interface";
 import { buildRuns } from "../utils/medley";
 import { ChainLinkIcon } from "./ChainLinkIcon";
@@ -15,6 +15,7 @@ import CueDialog from "./ui/CueDialog";
 import { themeColour } from "@/app/utils/themeColour";
 import { paintsDayCard } from "@/app/utils/paintsDayCard";
 import { daysUntil, formatCountdown } from "@/app/utils/daysUntil";
+import { serviceStartTime } from "@/app/utils/calendarFeed";
 import { myNameFromSession, serviceTone, TONE_RAIL } from "@/app/utils/agenda";
 import { formatLeadNames } from "@/app/utils/songLeads";
 import NumberRoll from "./ui/NumberRoll";
@@ -139,6 +140,12 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
     ? new Date(date.slice(0, 10) + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" })
     : "";
   const days = date ? daysUntil(date) : null;
+  // The next service's pill carries the clock too — «En 3 días · 11:00» (design
+  // pass D, 2026-10-22) — by the feed's ONE rule (`serviceStartTime`, the same
+  // call `DayCardDisclosure` makes): a weekend at the team's standing time, a
+  // special at its own `time`. Only when the heading does not already say it: a
+  // special's `time` sits after its date up there, and the pill would repeat it.
+  const startTime = time ? null : serviceStartTime(roleId ? "special" : "weekend", day, time);
   // The two-column rail only earns its keep when both columns have content —
   // a setlist with no team to show beside it should stack like `card`, not
   // reserve a 20rem rail for nothing.
@@ -205,6 +212,7 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
               {isNext && days !== null && (
                 <span className="rounded-full border border-ink-dim/30 px-2.5 py-1 font-label text-[10px] uppercase tracking-widest text-ink-muted">
                   <NumberRoll value={formatCountdown(days)} />
+                  {startTime && <span className="tabular-nums"> · {startTime}</span>}
                 </span>
               )}
               {canMessage && (
@@ -217,20 +225,17 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
           </div>
           {/* The page's one primary action, filled and the card's full width
               (2026-10-21): beside the countdown it read as one more pill. */}
+          {/* Capped from `md`: full width on a phone is the thumb's target, but the
+              same button across a 56rem desktop card read as a banner (D). */}
           {hero && hasSetlist && (
-            <div className="mt-4">
+            <div className="mt-4 md:max-w-md">
               <PracticePlaylistButton variant="hero" songIds={setlist!.songs.map((s) => s._id)} accentVar="--accent-rgb" />
             </div>
           )}
         </div>
 
         <div className="space-y-5 p-5 md:p-6">
-          {setlist?.team_notes && (
-            <section className="rounded-lg border border-ink/[0.08] bg-surface-lift/[0.03] px-4 py-3">
-              <p className="font-label text-[11px] uppercase tracking-widest text-mono-400 mb-1">Mensaje para el equipo</p>
-              <p className="font-body text-sm text-ink-muted/90 whitespace-pre-wrap">{setlist.team_notes}</p>
-            </section>
-          )}
+          {setlist?.team_notes && <TeamNote text={setlist.team_notes} />}
 
           {/* The run sheet reads left-to-right from `lg`: songs in the wide
               column, seats in a fixed 20rem rail. `space-y-5` is the stacked
@@ -365,6 +370,54 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
+
+/**
+ * «Mensaje para el equipo», folded to three lines (design pass D, 2026-10-22).
+ * The pastor's note on the hero ran eight lines on a phone and pushed the
+ * setlist — what the card is for — below the fold. The fold is REAL, not a
+ * guess from the text's length: the paragraph is measured clamped
+ * (`scrollHeight > clientHeight`) and re-measured whenever its box changes (a
+ * text-size change, a rotated phone), so a two-line note never grows a «Leer
+ * todo» that does nothing. Measured only while clamped: once open the paragraph
+ * no longer overflows, and the toggle must stay so the reader can fold it back.
+ */
+function TeamNote({ text }: { text: string }) {
+  const id = useId();
+  const [expanded, setExpanded] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+  const ref = useRef<HTMLParagraphElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || expanded) return;
+    // A 1px tolerance: a clamped box and its content can differ by a subpixel
+    // of line-height rounding without a fourth line existing.
+    const measure = () => setOverflows(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    return () => ro?.disconnect();
+  }, [expanded, text]);
+  return (
+    <section className="rounded-lg border border-ink/[0.08] bg-surface-lift/[0.03] px-4 py-3">
+      <p className="font-label text-[11px] uppercase tracking-widest text-mono-400 mb-1">Mensaje para el equipo</p>
+      <p ref={ref} id={id} className={`font-body text-sm text-ink-muted/90 whitespace-pre-wrap${expanded ? "" : " line-clamp-3"}`}>
+        {text}
+      </p>
+      {(overflows || expanded) && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-ml-3 mt-1"
+          aria-expanded={expanded}
+          aria-controls={id}
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? "Leer menos" : "Leer todo"}
+        </Button>
+      )}
+    </section>
+  );
+}
 
 /**
  * One run-sheet row: order · title · artist · key · BPM (spec §12.1). The single

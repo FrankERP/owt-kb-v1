@@ -74,11 +74,68 @@ describe("DayCard", () => {
     expect(screen.getByText("En 2 días")).toBeTruthy();
   });
 
+  it("D — the next service's pill carries the start time: a weekend at the team's standing hour", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 11, 9, 0, 0));
+    const { container } = mount({ isNext: true });
+    expect(container.textContent).toContain("En 2 días · 11:00");
+    cleanup();
+    expect(mount({ isNext: true, day: "Sábado", date: "2026-09-12" }).container.textContent).toContain("Mañana · 18:00");
+  });
+
+  it("D — a special's own time is in the heading already, so the pill does not repeat it", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 11, 9, 0, 0));
+    const { container } = mount({ isNext: true, day: "Campamento", roleId: "r1", time: "18:45" });
+    expect(screen.getByRole("heading", { level: 3 }).textContent).toMatch(/18:45/);
+    expect(container.textContent).toContain("En 2 días");
+    expect(container.textContent).not.toContain("En 2 días · 18:45");
+    // An untimed special is all-day: no clock anywhere.
+    cleanup();
+    expect(mount({ isNext: true, day: "Campamento", roleId: "r1" }).container.textContent).not.toMatch(/\d\d:\d\d/);
+  });
+
   it("shows no countdown on a card that is not the next service", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(2026, 8, 11, 9, 0, 0));
     mount();
     expect(screen.queryByText("En 2 días")).toBeNull();
+  });
+
+  describe("D — «Mensaje para el equipo» folds to three lines", () => {
+    const note = "Mensaje del Pastor: la plática es de la Justicia.\nSubirían cuando empiezo a narrar la escena.";
+    // jsdom lays nothing out, so the clamped paragraph's overflow is staged on
+    // the prototype: `scrollHeight` beyond `clientHeight` is the fourth line.
+    function stageOverflow(overflowing: boolean) {
+      Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 60 });
+      Object.defineProperty(HTMLElement.prototype, "scrollHeight", { configurable: true, get: () => (overflowing ? 120 : 60) });
+    }
+    afterEach(() => {
+      delete (HTMLElement.prototype as unknown as Record<string, unknown>).clientHeight;
+      delete (HTMLElement.prototype as unknown as Record<string, unknown>).scrollHeight;
+    });
+
+    it("clamps the note and offers «Leer todo» only when a fourth line exists", () => {
+      stageOverflow(true);
+      mount({ setlist: { week: "2026-09-13", songs: [song("s1")], team_notes: note } });
+      const text = screen.getByText(/Mensaje del Pastor/);
+      expect(text.className).toContain("line-clamp-3");
+      const toggle = screen.getByRole("button", { name: "Leer todo" });
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(toggle.getAttribute("aria-controls")).toBe(text.id);
+      fireEvent.click(toggle);
+      expect(text.className).not.toContain("line-clamp-3");
+      expect(screen.getByRole("button", { name: "Leer menos" }).getAttribute("aria-expanded")).toBe("true");
+      fireEvent.click(screen.getByRole("button", { name: "Leer menos" }));
+      expect(text.className).toContain("line-clamp-3");
+    });
+
+    it("grows no toggle for a note that already fits", () => {
+      stageOverflow(false);
+      mount({ setlist: { week: "2026-09-13", songs: [song("s1")], team_notes: note } });
+      expect(screen.getByText(/Mensaje del Pastor/)).toBeTruthy();
+      expect(screen.queryByRole("button", { name: /Leer/ })).toBeNull();
+    });
   });
 
   it("gives a hero card ONE Ensayar and drops the inline practice pill", () => {
