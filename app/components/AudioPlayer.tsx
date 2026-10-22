@@ -10,7 +10,7 @@ import Presence from "./ui/Presence";
 export const AUDIO_H_VAR = "--audio-player-h";
 
 export default function AudioPlayer() {
-  const { player, togglePlay, closePlayer, seek, getAudio, audioReady, sheet, sheetLoading, sheetError } = usePlayer();
+  const { player, queue, skip, togglePlay, closePlayer, seek, getAudio, audioReady, sheet, sheetLoading, sheetError } = usePlayer();
   const [progress, setProgress]     = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration]     = useState(0);
@@ -82,6 +82,8 @@ export default function AudioPlayer() {
           onToggle={togglePlay}
           onSeek={seek}
           onClose={() => closePlayer()}
+          queue={queue ? { index: queue.index, total: queue.tracks.length } : null}
+          onSkip={skip}
         />
       )}
       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useId, useLayoutEffect, useRef, useState } from "react";
 import { Setlist, SetlistSong } from "../utils/interface";
 import { buildRuns } from "../utils/medley";
 import { ChainLinkIcon } from "./ChainLinkIcon";
@@ -15,7 +15,10 @@ import CueDialog from "./ui/CueDialog";
 import { themeColour } from "@/app/utils/themeColour";
 import { paintsDayCard } from "@/app/utils/paintsDayCard";
 import { daysUntil, formatCountdown } from "@/app/utils/daysUntil";
-import { myNameFromSession, serviceTone, TONE_RAIL } from "@/app/utils/agenda";
+import { serviceStartTime } from "@/app/utils/calendarFeed";
+import { myNameFromSession, mySeats, serviceTone, TONE_RAIL } from "@/app/utils/agenda";
+import { normalizeSeatName } from "./admin/seatModel";
+import { SEAT_TO_FAMILY } from "@/app/utils/rehearsalMixes";
 import { formatLeadNames } from "@/app/utils/songLeads";
 import NumberRoll from "./ui/NumberRoll";
 import QuickActions, { type QuickAction } from "./ui/QuickActions";
@@ -120,6 +123,12 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
   // The client session wins once it exists; until then, the server's reading.
   const myName = myNameFromSession(session?.user) || viewerName || "";
 
+  // The instrument the viewer plays in THIS service, for «Ensayar»'s «al frente» mix:
+  // their first seat that HAS a mix family (a Lead who also plays Keys gets Keys).
+  const mySeat = mySeats({ leads, bgvs, chorus, instruments, fohTeam }, myName.toLowerCase().trim())
+    .map(normalizeSeatName)
+    .find((seat) => SEAT_TO_FAMILY[seat]) ?? null;
+
   if (!paintsDayCard({ setlist, leads, instruments, fohTeam, bgvs, chorus })) return null;
 
   const tone = serviceTone({ day, roleId });
@@ -139,6 +148,12 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
     ? new Date(date.slice(0, 10) + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" })
     : "";
   const days = date ? daysUntil(date) : null;
+  // The next service's pill carries the clock too — «En 3 días · 11:00» (design
+  // pass D, 2026-10-22). WEEKENDS ONLY, at the team's standing hour by the feed's
+  // rule (`serviceStartTime`): a special's own `time` already sits after its date
+  // in the heading (or it is all-day and has no clock), so the pill never repeats
+  // it. `roleId` is only ever set for a special — the `DayCardDisclosure` rule.
+  const startTime = roleId || time ? null : serviceStartTime("weekend", day, null);
   // The two-column rail only earns its keep when both columns have content —
   // a setlist with no team to show beside it should stack like `card`, not
   // reserve a 20rem rail for nothing.
@@ -175,6 +190,81 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
       ]
     : [];
 
+  // The message and the songs, rendered ONCE: the run sheet wraps them as its
+  // left column, a stacked card lays them straight into its flow.
+  const runSheetMain = (
+    <>
+      {/* Keyed by the text: `CalendarView` keys its cards by index, so the
+          same instance can be handed another day's note — which must arrive
+          folded, not inheriting the «Leer todo» the reader opened before. */}
+      {setlist?.team_notes && <TeamNote key={setlist.team_notes} text={setlist.team_notes} />}
+
+      {/* Setlist */}
+      {hasSetlist && (
+        <section>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="font-label text-xs md:text-sm lg:text-base uppercase tracking-widest text-surface-ink-l70-d50">
+              Setlist
+            </h4>
+            <div className="flex items-center gap-3">
+              {!hero && <PracticePlaylistButton songs={setlist!.songs} mySeat={mySeat} accentVar="--accent-rgb" />}
+              {canEdit && date && (
+                <button
+                  onClick={() => setEditSetlist(true)}
+                  className="flex items-center gap-1 font-label text-[11px] uppercase tracking-widest text-mono-500 hover:text-accent transition-colors"
+                >
+                  <PencilIcon />
+                  Editar
+                </button>
+              )}
+            </div>
+          </div>
+          <ol className="divide-y divide-ink-dim/[0.06]">
+            {runs.map((run) => {
+              // Single-song medley groups render as plain singles
+              if (run.kind === "single" || (run.kind === "medley" && run.songs.length === 1)) {
+                const { song, n } = run.kind === "single" ? run : run.songs[0];
+                return (
+                  <li key={song._id}>
+                    <SongRow song={song} n={n} onOpen={openSheet} onQuickActions={onQuickActions} />
+                  </li>
+                );
+              }
+              // Multi-song medley group — left-spine bracket, no box
+              return (
+                <li key={run.songs[0].song._id + "_m"} className="relative pl-4 my-0.5">
+                  {/* vertical accent spine */}
+                  <span
+                    aria-hidden
+                    className="absolute left-1 top-6 bottom-2 w-[2px] rounded-full"
+                    style={{ background: `linear-gradient(to bottom, ${themeColour(NEUTRAL, 0)}, ${themeColour(NEUTRAL, 0.3333)} 12%, ${themeColour(NEUTRAL, 0.3333)} 88%, ${themeColour(NEUTRAL, 0)})` }}
+                  />
+                  {/* MEDLEY label */}
+                  {/* `color` on the wrapper, not on the icon: ChainLinkIcon strokes with
+                      `currentColor` by default, and `var()` is NOT substituted inside an SVG
+                      presentation attribute — a token passed as `color` would be dropped
+                      silently. The sibling span sets its own colour, so it is unaffected. */}
+                  <div className="flex items-center gap-1 pl-2 -ml-2 mb-0.5" style={{ color: themeColour(NEUTRAL) }}>
+                    <ChainLinkIcon opacity={0.65} />
+                    <span className="font-label text-[10px] uppercase tracking-[0.18em]" style={{ color: `${themeColour(NEUTRAL, 0.8)}` }}>Medley</span>
+                  </div>
+                  {run.songs.map(({ song, n }, si) => (
+                    <div key={song._id}>
+                      {si > 0 && (
+                        <span className="block w-4 text-center font-label text-[11px] leading-none -my-0.5" style={{ color: `${themeColour(NEUTRAL, 0.6)}` }}>+</span>
+                      )}
+                      <SongRow song={song} n={n} onOpen={openSheet} onQuickActions={onQuickActions} dense />
+                    </div>
+                  ))}
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      )}
+    </>
+  );
+
   return (
     <>
       <div className={nested ? "relative overflow-hidden rounded-[var(--brand-radius-panel)]" : "brand-facet-panel brand-surface overflow-hidden rounded-[var(--brand-radius-panel)]"}>
@@ -205,6 +295,7 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
               {isNext && days !== null && (
                 <span className="rounded-full border border-ink-dim/30 px-2.5 py-1 font-label text-[10px] uppercase tracking-widest text-ink-muted">
                   <NumberRoll value={formatCountdown(days)} />
+                  {startTime && <span className="tabular-nums"> · {startTime}</span>}
                 </span>
               )}
               {canMessage && (
@@ -217,91 +308,32 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
           </div>
           {/* The page's one primary action, filled and the card's full width
               (2026-10-21): beside the countdown it read as one more pill. */}
+          {/* Capped from `md`: full width on a phone is the thumb's target, but the
+              same button across a 56rem desktop card read as a banner (D). */}
           {hero && hasSetlist && (
-            <div className="mt-4">
-              <PracticePlaylistButton variant="hero" songIds={setlist!.songs.map((s) => s._id)} accentVar="--accent-rgb" />
+            <div className="mt-4 md:max-w-md">
+              <PracticePlaylistButton variant="hero" songs={setlist!.songs} mySeat={mySeat} accentVar="--accent-rgb" />
             </div>
           )}
         </div>
 
         <div className="space-y-5 p-5 md:p-6">
-          {setlist?.team_notes && (
-            <section className="rounded-lg border border-ink/[0.08] bg-surface-lift/[0.03] px-4 py-3">
-              <p className="font-label text-[11px] uppercase tracking-widest text-mono-400 mb-1">Mensaje para el equipo</p>
-              <p className="font-body text-sm text-ink-muted/90 whitespace-pre-wrap">{setlist.team_notes}</p>
-            </section>
-          )}
+          {/* The run sheet reads left-to-right from `lg`: the message and the
+              songs in the wide column, the seats in a fixed rail (22rem, 24rem
+              from `xl`: two faces with their names to a row). The message sits
+              INSIDE the left column (Frank, 2026-10-22) — spanning both columns
+              it pushed the whole sheet down by its own height on a big screen.
+              `space-y-5` is the stacked gap and has to go once the two are
+              columns, or the rail starts a row lower than the setlist. */}
+          <div className={wide ? "space-y-5 lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-8 lg:space-y-0 xl:grid-cols-[minmax(0,1fr)_24rem]" : "space-y-5"}>
+            {/* The left column exists only on the run sheet: a stacked card has
+                no column to fill, and `space-y-5` inside `space-y-5` would be
+                a wrapper for nothing. */}
+            {wide ? <div className="space-y-5" data-run-sheet-main="">{runSheetMain}</div> : runSheetMain}
 
-          {/* The run sheet reads left-to-right from `lg`: songs in the wide
-              column, seats in a fixed 20rem rail. `space-y-5` is the stacked
-              gap and has to go once the two are columns, or the rail starts a
-              row lower than the setlist. */}
-          <div className={wide ? "space-y-5 lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-8 lg:space-y-0" : "space-y-5"}>
-            {/* Setlist */}
-            {hasSetlist && (
-              <section>
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-label text-xs md:text-sm lg:text-base uppercase tracking-widest text-surface-ink-l70-d50">
-                    Setlist
-                  </h4>
-                  <div className="flex items-center gap-3">
-                    {!hero && <PracticePlaylistButton songIds={setlist!.songs.map(s => s._id)} accentVar="--accent-rgb" />}
-                    {canEdit && date && (
-                      <button
-                        onClick={() => setEditSetlist(true)}
-                        className="flex items-center gap-1 font-label text-[11px] uppercase tracking-widest text-mono-500 hover:text-accent transition-colors"
-                      >
-                        <PencilIcon />
-                        Editar
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <ol className="divide-y divide-ink-dim/[0.06]">
-                  {runs.map((run) => {
-                    // Single-song medley groups render as plain singles
-                    if (run.kind === "single" || (run.kind === "medley" && run.songs.length === 1)) {
-                      const { song, n } = run.kind === "single" ? run : run.songs[0];
-                      return (
-                        <li key={song._id}>
-                          <SongRow song={song} n={n} onOpen={openSheet} onQuickActions={onQuickActions} />
-                        </li>
-                      );
-                    }
-                    // Multi-song medley group — left-spine bracket, no box
-                    return (
-                      <li key={run.songs[0].song._id + "_m"} className="relative pl-4 my-0.5">
-                        {/* vertical accent spine */}
-                        <span
-                          aria-hidden
-                          className="absolute left-1 top-6 bottom-2 w-[2px] rounded-full"
-                          style={{ background: `linear-gradient(to bottom, ${themeColour(NEUTRAL, 0)}, ${themeColour(NEUTRAL, 0.3333)} 12%, ${themeColour(NEUTRAL, 0.3333)} 88%, ${themeColour(NEUTRAL, 0)})` }}
-                        />
-                        {/* MEDLEY label */}
-                        {/* `color` on the wrapper, not on the icon: ChainLinkIcon strokes with
-                            `currentColor` by default, and `var()` is NOT substituted inside an SVG
-                            presentation attribute — a token passed as `color` would be dropped
-                            silently. The sibling span sets its own colour, so it is unaffected. */}
-                        <div className="flex items-center gap-1 pl-2 -ml-2 mb-0.5" style={{ color: themeColour(NEUTRAL) }}>
-                          <ChainLinkIcon opacity={0.65} />
-                          <span className="font-label text-[10px] uppercase tracking-[0.18em]" style={{ color: `${themeColour(NEUTRAL, 0.8)}` }}>Medley</span>
-                        </div>
-                        {run.songs.map(({ song, n }, si) => (
-                          <div key={song._id}>
-                            {si > 0 && (
-                              <span className="block w-4 text-center font-label text-[11px] leading-none -my-0.5" style={{ color: `${themeColour(NEUTRAL, 0.6)}` }}>+</span>
-                            )}
-                            <SongRow song={song} n={n} onOpen={openSheet} onQuickActions={onQuickActions} dense />
-                          </div>
-                        ))}
-                      </li>
-                    );
-                  })}
-                </ol>
-              </section>
-            )}
-
-            {/* Team — Voces, Banda, Cabina as folding sections of faces. */}
+            {/* Team — Voces, Banda, Cabina as folding sections of faces; on the
+                run sheet every section starts open from `lg`, where the rail
+                has the room and the page is one screen anyway. */}
             {hasRole && (
               <section className={hasSetlist ? `border-t border-ink-dim/[0.12] pt-2${wide ? " lg:border-t-0 lg:pt-0" : ""}` : ""}>
                 <TeamSections
@@ -310,6 +342,7 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
                   photos={photos}
                   viewerTypes={viewerTypes}
                   openAll={openAllSections}
+                  openAllFrom={wide ? "lg" : undefined}
                 />
               </section>
             )}
@@ -365,6 +398,64 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
+
+/**
+ * «Mensaje para el equipo», folded to three lines (design pass D, 2026-10-22).
+ * The pastor's note on the hero ran eight lines on a phone and pushed the
+ * setlist — what the card is for — below the fold. The fold is REAL, not a
+ * guess from the text's length: the paragraph is measured clamped
+ * (`scrollHeight > clientHeight`) and re-measured whenever its box changes (a
+ * text-size change, a rotated phone) and once the web fonts land (a swap
+ * re-wraps the lines without changing the clamped box, so the observer alone
+ * would miss it), so a two-line note never grows a «Leer todo» that does
+ * nothing. Measured only while clamped: once open the paragraph no longer
+ * overflows, and the toggle must stay so the reader can fold it back.
+ */
+function TeamNote({ text }: { text: string }) {
+  const id = useId();
+  const [expanded, setExpanded] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+  const ref = useRef<HTMLParagraphElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || expanded) return;
+    // A 1px tolerance: a clamped box and its content can differ by a subpixel
+    // of line-height rounding without a fourth line existing.
+    let live = true;
+    const measure = () => {
+      if (live) setOverflows(el.scrollHeight > el.clientHeight + 1);
+    };
+    measure();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    // Optional chaining on `fonts`: jsdom has no Font Loading API.
+    document.fonts?.ready.then(measure, () => {});
+    return () => {
+      live = false;
+      ro?.disconnect();
+    };
+  }, [expanded, text]);
+  return (
+    <section className="rounded-lg border border-ink/[0.08] bg-surface-lift/[0.03] px-4 py-3">
+      <p className="font-label text-[11px] uppercase tracking-widest text-mono-400 mb-1">Mensaje para el equipo</p>
+      <p ref={ref} id={id} className={`font-body text-sm text-ink-muted/90 whitespace-pre-wrap${expanded ? "" : " line-clamp-3"}`}>
+        {text}
+      </p>
+      {(overflows || expanded) && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-ml-3 mt-1"
+          aria-expanded={expanded}
+          aria-controls={id}
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? "Leer menos" : "Leer todo"}
+        </Button>
+      )}
+    </section>
+  );
+}
 
 /**
  * One run-sheet row: order · title · artist · key · BPM (spec §12.1). The single

@@ -24,7 +24,7 @@
 // here rather than stubbed: stubbing it would leave the kids-only case asserting
 // nothing.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, describe, it, expect, vi, beforeEach } from "vitest";
 import type { ReactNode } from "react";
 
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
@@ -99,6 +99,34 @@ beforeEach(() => {
   opFetch.mockImplementation(async (q: string) =>
     q.includes('"sundays"') ? { sundays: [], saturdays: [], specials: [] } : [],
   );
+});
+
+describe("/me same-day order (design pass D)", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("names the Sunday 11:00 service as next ahead of a 17:00 special that day, with its clock on the pill", async () => {
+    // 2026-09-10 local — a Thursday, three days before Sunday the 13th.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 10, 9, 0, 0));
+    getMemberAccess.mockResolvedValue(access(["worship"]));
+    opFetch.mockImplementation(async (q: string) =>
+      q.includes('"sundays"')
+        ? {
+            // The weekend doc carries NO `time`; before D the sort read the raw
+            // field, `compareServiceTime` put the untimed set LAST, and the header
+            // announced the special as next while the `.ics` rows said 11:00.
+            sundays: [{ _id: "sun1", week: "2026-09-13", isLead: true, Lead: [{ member_name: "Ana" }] }],
+            saturdays: [],
+            specials: [{ _id: "sp1", date: "2026-09-13", service_name: "Concierto", time: "17:00", isLead: true, Lead: [{ member_name: "Ana" }] }],
+          }
+        : [],
+    );
+    const html = await renderPage();
+    expect(html).toMatch(/Te toca el domingo 13 · Lead/);
+    expect(html).not.toContain("Concierto · Lead");
+    expect(html).toContain("En 3 días");
+    expect(html).toContain("· 11:00");
+  });
 });
 
 describe("/me worship gating", () => {

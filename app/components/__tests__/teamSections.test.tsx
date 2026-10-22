@@ -116,6 +116,27 @@ describe("TeamSections", () => {
     expect(header(/Cabina/).getAttribute("aria-expanded")).toBe("false");
   });
 
+  it("lays the team out open from `lg` on the run sheet (`openAllFrom`) beside the folding sections a phone keeps", () => {
+    const { container } = mount({ myName: "", viewerTypes: null, openAllFrom: "lg" });
+    // The open rendering: no disclosures, every face, hidden below `lg` by CSS.
+    const open = container.querySelector("[data-team-open]") as HTMLElement;
+    expect(open.className).toContain("hidden");
+    expect(open.className).toContain("lg:block");
+    expect(open.querySelector("button[aria-expanded]")).toBeNull();
+    expect(open.textContent).toContain("Voces");
+    expect(open.textContent).toContain("Banda");
+    expect(open.textContent).toContain("Cabina");
+    // The folding rendering is the one a phone shows, and still folds as before.
+    expect(open.previousElementSibling?.className).toContain("lg:hidden");
+    expect(header(/Voces/).getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("renders ONE folding rendering, shown at every width, without `openAllFrom`", () => {
+    const { container } = mount({ myName: "" });
+    expect(container.querySelector("[data-team-open]")).toBeNull();
+    expect(container.querySelector(".lg\\:hidden")).toBeNull();
+  });
+
   it("renders nothing for a service with no one seated", () => {
     const { container } = mount({ team: {} });
     expect(container.textContent).toBe("");

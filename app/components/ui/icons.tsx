@@ -83,7 +83,7 @@ export function DownloadIcon(props: IconProps) {
   );
 }
 
-/** A song's music (the YouTube reference) — the «Ensayar» menu's first choice. */
+/** A song's music — the «Ensayar» menu's «Banda completa» (the multitracks). */
 export function MusicNoteIcon(props: IconProps) {
   return (
     <Icon name="music-note" {...props}>
@@ -92,7 +92,7 @@ export function MusicNoteIcon(props: IconProps) {
   );
 }
 
-/** Lyrics (the sung version) — the «Ensayar» menu's second choice. */
+/** Lyrics (the sung version) — the «Ensayar» menu's «Video con letra». */
 export function MicIcon(props: IconProps) {
   return (
     <Icon name="mic" {...props}>
@@ -180,6 +180,16 @@ export function ExpandIcon(props: IconProps) {
   return (
     <Icon name="expand" {...props}>
       <path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3" />
+    </Icon>
+  );
+}
+
+/** Copy — two stacked sheets («Copiar enlace»). */
+export function CopyIcon(props: IconProps) {
+  return (
+    <Icon name="copy" {...props}>
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
     </Icon>
   );
 }
