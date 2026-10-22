@@ -16,7 +16,9 @@ import { themeColour } from "@/app/utils/themeColour";
 import { paintsDayCard } from "@/app/utils/paintsDayCard";
 import { daysUntil, formatCountdown } from "@/app/utils/daysUntil";
 import { serviceStartTime } from "@/app/utils/calendarFeed";
-import { myNameFromSession, serviceTone, TONE_RAIL } from "@/app/utils/agenda";
+import { myNameFromSession, mySeats, serviceTone, TONE_RAIL } from "@/app/utils/agenda";
+import { normalizeSeatName } from "./admin/seatModel";
+import { SEAT_TO_FAMILY } from "@/app/utils/rehearsalMixes";
 import { formatLeadNames } from "@/app/utils/songLeads";
 import NumberRoll from "./ui/NumberRoll";
 import QuickActions, { type QuickAction } from "./ui/QuickActions";
@@ -121,6 +123,12 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
   // The client session wins once it exists; until then, the server's reading.
   const myName = myNameFromSession(session?.user) || viewerName || "";
 
+  // The instrument the viewer plays in THIS service, for «Ensayar»'s «al frente» mix:
+  // their first seat that HAS a mix family (a Lead who also plays Keys gets Keys).
+  const mySeat = mySeats({ leads, bgvs, chorus, instruments, fohTeam }, myName.toLowerCase().trim())
+    .map(normalizeSeatName)
+    .find((seat) => SEAT_TO_FAMILY[seat]) ?? null;
+
   if (!paintsDayCard({ setlist, leads, instruments, fohTeam, bgvs, chorus })) return null;
 
   const tone = serviceTone({ day, roleId });
@@ -199,7 +207,7 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
               Setlist
             </h4>
             <div className="flex items-center gap-3">
-              {!hero && <PracticePlaylistButton songIds={setlist!.songs.map(s => s._id)} accentVar="--accent-rgb" />}
+              {!hero && <PracticePlaylistButton songs={setlist!.songs} mySeat={mySeat} accentVar="--accent-rgb" />}
               {canEdit && date && (
                 <button
                   onClick={() => setEditSetlist(true)}
@@ -304,7 +312,7 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
               same button across a 56rem desktop card read as a banner (D). */}
           {hero && hasSetlist && (
             <div className="mt-4 md:max-w-md">
-              <PracticePlaylistButton variant="hero" songIds={setlist!.songs.map((s) => s._id)} accentVar="--accent-rgb" />
+              <PracticePlaylistButton variant="hero" songs={setlist!.songs} mySeat={mySeat} accentVar="--accent-rgb" />
             </div>
           )}
         </div>

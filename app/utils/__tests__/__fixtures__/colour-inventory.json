@@ -8,19 +8,19 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 310,
-    "filesScanned": 516,
-    "filesWithColour": 55,
+    "literalRows": 312,
+    "filesScanned": 519,
+    "filesWithColour": 56,
     "byCategory": {
       "2": 2,
       "4": 64,
-      "8": 92,
+      "8": 94,
       "9": 10,
       "11": 8,
       "12": 134
     },
     "byDisposition": {
-      "B": 117,
+      "B": 119,
       "exempt": 53,
       "keep": 238,
       "C": 5,
@@ -367,7 +367,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 305,
+      "line": 312,
       "disposition": "B",
       "reason": null
     },
@@ -379,7 +379,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 379,
+      "line": 386,
       "disposition": "B",
       "reason": null
     },
@@ -391,7 +391,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 392,
+      "line": 399,
       "disposition": "B",
       "reason": null
     },
@@ -2239,31 +2239,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 313,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/admin/AdminRail.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "transparent",
-      "alpha": null,
-      "utility": null,
-      "carrier": null,
-      "line": 80,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/admin/AdminRail.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "transparent",
-      "alpha": null,
-      "utility": null,
-      "carrier": null,
-      "line": 81,
+      "line": 285,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2883,11 +2859,35 @@
       "file": "app/components/AudioTransport.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
+      "value": "fill=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "fill",
+      "line": 151,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/AudioTransport.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
       "value": "stroke=\"currentColor\"",
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 117,
+      "line": 151,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/AudioTransport.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 161,
       "disposition": "B",
       "reason": null
     },
@@ -3103,7 +3103,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 262,
+      "line": 270,
       "disposition": "B",
       "reason": null
     },
@@ -3115,7 +3115,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 262,
+      "line": 270,
       "disposition": "B",
       "reason": null
     },
@@ -3127,7 +3127,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 505,
+      "line": 513,
       "disposition": "B",
       "reason": null
     },
@@ -3139,7 +3139,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 514,
+      "line": 522,
       "disposition": "B",
       "reason": null
     },
@@ -3319,7 +3319,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 128,
+      "line": 233,
       "disposition": "B",
       "reason": null
     },
@@ -3331,7 +3331,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 146,
+      "line": 251,
       "disposition": "B",
       "reason": null
     },
@@ -3343,7 +3343,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 144,
+      "line": 249,
       "disposition": "B",
       "reason": null
     },
@@ -3355,7 +3355,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 149,
+      "line": 254,
       "disposition": "B",
       "reason": null
     },
@@ -3427,7 +3427,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 495,
+      "line": 499,
       "disposition": "B",
       "reason": null
     },
@@ -3439,7 +3439,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 503,
+      "line": 507,
       "disposition": "B",
       "reason": null
     },
@@ -3451,7 +3451,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 382,
+      "line": 386,
       "disposition": "B",
       "reason": null
     },
@@ -3463,7 +3463,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 511,
+      "line": 515,
       "disposition": "B",
       "reason": null
     },
@@ -3475,7 +3475,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 519,
+      "line": 523,
       "disposition": "B",
       "reason": null
     },
@@ -3487,7 +3487,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 528,
+      "line": 532,
       "disposition": "B",
       "reason": null
     },
@@ -3644,6 +3644,30 @@
       "utility": "border",
       "carrier": null,
       "line": 51,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/ui/useScrollableRight.ts",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "transparent",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 23,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/ui/useScrollableRight.ts",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "transparent",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 24,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
