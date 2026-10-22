@@ -37,7 +37,9 @@ import {
 } from "../serviceReadiness";
 import { PUBLISH_HARD_BLOCKERS, PUBLISH_SELECTION_SKIPS, PUBLISH_WORKFLOW_BLOCKERS } from "../publishSelection";
 import { buildIntegrityQueue, type IntegrityQueue } from "../serviceIntegrityQueue";
+import { TONE_RAIL } from "@/app/utils/agenda";
 import {
+  CARD_RAIL,
   CARD_SECTIONS,
   CARD_STYLE,
   PREFLIGHT_COPY,
@@ -48,6 +50,8 @@ import {
   cardPreview,
   commandSummaryCounters,
   commandSummarySegments,
+  formatServiceDateHeadline,
+  formatServiceDateShort,
   integrityTargetForCard,
   monthTargetPreflight,
   primaryActionRoute,
@@ -143,14 +147,16 @@ function card(over: Partial<ServiceCardModel> = {}): ServiceCardModel {
 // ── 1. Card hierarchy ────────────────────────────────────────────────────────
 
 describe("card hierarchy", () => {
-  it("renders the plan's four sections in order", () => {
+  it("renders the three sections in order", () => {
     // `ServiceReadinessCard` maps over this constant, so this IS the DOM order.
-    expect([...CARD_SECTIONS]).toEqual([
-      "identity",
-      "issues",
-      "preview",
-      "primary_action",
-    ]);
+    expect([...CARD_SECTIONS]).toEqual(["identity", "issues", "preview"]);
+  });
+
+  it("no longer renders the primary action as a section of its own", () => {
+    // Since 2026-10-22 the ONE primary action sits in the `identity` header
+    // (`ServiceReadinessCard.test.tsx` pins it inside the header row); a
+    // full-width button at the foot of twelve cards made the board 5 570px tall.
+    expect([...CARD_SECTIONS]).not.toContain("primary_action");
   });
 
   it("no longer renders the four-module readiness strip", () => {
@@ -164,12 +170,26 @@ describe("card hierarchy", () => {
     expect([...CARD_SECTIONS]).not.toContain("secondary_menu");
   });
 
-  it("puts the issues above the primary action, which stays last", () => {
+  it("puts the issues between the identity and the preview", () => {
     const order = CARD_SECTIONS.indexOf.bind(CARD_SECTIONS);
     expect(order("identity")).toBeLessThan(order("issues"));
     expect(order("issues")).toBeLessThan(order("preview"));
-    expect(order("preview")).toBeLessThan(order("primary_action"));
-    expect(order("primary_action")).toBe(CARD_SECTIONS.length - 1);
+    expect(order("preview")).toBe(CARD_SECTIONS.length - 1);
+  });
+});
+
+// ── 1b. The day's one colour ─────────────────────────────────────────────────
+
+describe("the day rail", () => {
+  it("is the agenda's own tone map, one class per service type (ADR-0059)", () => {
+    // The member-facing DayCard and the admin card mark a day with the same
+    // 3px rail; the two maps are pinned equal so a day never has two colours.
+    expect(CARD_RAIL).toEqual({
+      sunday_role: TONE_RAIL.sun,
+      saturday_role: TONE_RAIL.sat,
+      special_role: TONE_RAIL.special,
+    });
+    for (const cls of Object.values(CARD_RAIL)) expect(cls).toMatch(/^bg-[a-z-]+$/);
   });
 });
 
@@ -820,6 +840,35 @@ describe("identity and preview", () => {
     expect(identity.dateText).toContain("2026");
     expect(identity.publication).toEqual({ text: "Borrador", tone: "warn" });
     expect(identity.relative).toBe("En 8 días");
+  });
+
+  it("capitalises only the first letter of the long date, never every word", () => {
+    // The card used CSS `capitalize`, which rendered «Domingo, 9 De Agosto De 2026».
+    const identity = cardIdentity(card(), TODAY);
+    expect(identity.dateText).toMatch(/^Domingo, 9 de agosto de 2026$/);
+  });
+
+  it("leads a weekend with `Dom 9 ago` and keeps no type chip to repeat it", () => {
+    expect(cardIdentity(card(), TODAY).headline).toBe("Dom 9 ago");
+    expect(cardIdentity(card(), TODAY).subline).toBeNull();
+    expect(formatServiceDateHeadline("2026-10-25")).toBe("Dom 25 oct");
+    expect(formatServiceDateHeadline("2026-11-07")).toBe("Sáb 7 nov");
+    expect(formatServiceDateHeadline("nonsense")).toBe("Fecha inválida");
+    // ONE short formatter under it (the toasts' and confirmation lists' spelling).
+    expect(formatServiceDateShort("2026-10-25")).toBe("dom 25 oct");
+  });
+
+  it("leads a special with its name and puts the date and time underneath", () => {
+    const special = card({
+      role: role({ _type: "special_role", service_name: "Noche de alabanza", date: "2026-11-07", time: "19:00" }),
+    });
+    const identity = cardIdentity(special, TODAY);
+    expect(identity.headline).toBe("Noche de alabanza");
+    expect(identity.subline).toBe("Sáb 7 nov · 19:00");
+
+    // No time, or an unusable one: the date alone — the subline never invents one.
+    const untimed = card({ role: role({ _type: "special_role", service_name: "Retiro", date: "2026-11-07", time: "7pm" }) });
+    expect(cardIdentity(untimed, TODAY).subline).toBe("Sáb 7 nov");
   });
 
   it("uses calendar-day labels, not elapsed hours", () => {

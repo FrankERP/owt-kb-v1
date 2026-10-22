@@ -146,7 +146,11 @@ describe("the Servicios board", () => {
     expect(grid.className).not.toMatch(/overflow-x-(auto|scroll)/);
     expect(trackClasses(grid)).toEqual([]);
     expect(classes).toContain("grid");
-    expect(classes).toContain("lg:grid-cols-[repeat(auto-fill,minmax(360px,1fr))]");
+    // ONE column since 2026-10-22: the compact card spends the width on its own
+    // «Equipo» | «Setlist» columns, so the board no longer wraps cards into
+    // `minmax(360px,1fr)` columns (ADR-0044, amended).
+    expect(classes).toContain("grid-cols-1");
+    expect(classes.filter((c) => /grid-cols-/.test(c))).toEqual(["grid-cols-1"]);
     // A grid column must never be sized by its content.
     expect(classes).toContain("min-w-0");
   });
@@ -308,7 +312,8 @@ describe("the Servicios board", () => {
     expect(group.querySelectorAll(".brand-skeleton").length).toBe(7);
     expect(group.className).toContain("lg:grid-cols-[320px_1fr]");
     const cards = group.children[1] as HTMLElement;
-    expect(cards.className).toContain("lg:grid-cols-[repeat(auto-fill,minmax(360px,1fr))]");
+    expect(cards.className).toContain("grid-cols-1");
+    expect(cards.className).not.toContain("auto-fill");
     expect(trackClasses(cards)).toEqual([]);
     expect(cards.querySelectorAll(".brand-skeleton").length).toBe(6);
     expect(container.querySelectorAll(".animate-pulse").length).toBe(0);

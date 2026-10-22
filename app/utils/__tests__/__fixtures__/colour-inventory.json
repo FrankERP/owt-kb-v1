@@ -8,12 +8,12 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 306,
+    "literalRows": 305,
     "filesScanned": 519,
     "filesWithColour": 56,
     "byCategory": {
       "2": 2,
-      "4": 65,
+      "4": 64,
       "8": 87,
       "9": 10,
       "11": 8,
@@ -21,17 +21,17 @@
     },
     "byDisposition": {
       "B": 112,
-      "exempt": 53,
-      "keep": 240,
+      "exempt": 58,
+      "keep": 241,
       "C": 5,
       "D": 14
     },
-    "compositingClasses": 21,
-    "compositingSelectorOccurrences": 59,
-    "compositingClassNameOccurrences": 56,
-    "compositingRuleBodies": 51,
+    "compositingClasses": 23,
+    "compositingSelectorOccurrences": 62,
+    "compositingClassNameOccurrences": 58,
+    "compositingRuleBodies": 54,
     "lightCounterpartClasses": 14,
-    "pairs": 8,
+    "pairs": 7,
     "pairsDifferingInAlpha": 0
   },
   "literalRows": [
@@ -2167,7 +2167,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 285,
+      "line": 286,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2491,7 +2491,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2610,
+      "line": 2611,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2503,7 +2503,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 3490,
+      "line": 3491,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2539,19 +2539,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 697,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/admin/ServiceReadinessCard.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "border-transparent",
-      "alpha": null,
-      "utility": "border",
-      "carrier": null,
-      "line": 194,
+      "line": 710,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2563,7 +2551,7 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 801,
+      "line": 784,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2575,7 +2563,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 820,
+      "line": 803,
       "disposition": "B",
       "reason": null
     },
@@ -2587,7 +2575,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 810,
+      "line": 793,
       "disposition": "B",
       "reason": null
     },
@@ -2599,7 +2587,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 830,
+      "line": 813,
       "disposition": "B",
       "reason": null
     },
@@ -2611,7 +2599,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 840,
+      "line": 823,
       "disposition": "B",
       "reason": null
     },
@@ -2623,7 +2611,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 851,
+      "line": 834,
       "disposition": "B",
       "reason": null
     },
@@ -2635,7 +2623,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 860,
+      "line": 843,
       "disposition": "B",
       "reason": null
     },
@@ -2647,7 +2635,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 869,
+      "line": 852,
       "disposition": "B",
       "reason": null
     },
@@ -3832,6 +3820,22 @@
     {
       "file": "app/brand.css",
       "kind": "selector",
+      "class": "service-card",
+      "count": 1,
+      "disposition": "exempt",
+      "reason": "No colour in any rule body — needs no light counterpart"
+    },
+    {
+      "file": "app/brand.css",
+      "kind": "selector",
+      "class": "service-card-body",
+      "count": 2,
+      "disposition": "exempt",
+      "reason": "No colour in any rule body — needs no light counterpart"
+    },
+    {
+      "file": "app/brand.css",
+      "kind": "selector",
       "class": "skeleton",
       "count": 2,
       "disposition": "exempt",
@@ -4146,6 +4150,22 @@
       "kind": "className",
       "class": "search-console",
       "count": 5,
+      "disposition": "keep",
+      "reason": "Usage site of a compositing class"
+    },
+    {
+      "file": "app/components/admin/ServiceReadinessCard.tsx",
+      "kind": "className",
+      "class": "service-card",
+      "count": 1,
+      "disposition": "keep",
+      "reason": "Usage site of a compositing class"
+    },
+    {
+      "file": "app/components/admin/ServiceReadinessCard.tsx",
+      "kind": "className",
+      "class": "service-card-body",
+      "count": 1,
       "disposition": "keep",
       "reason": "Usage site of a compositing class"
     },
@@ -4761,6 +4781,36 @@
       "ordinal": 50,
       "disposition": "exempt",
       "reason": "Rule body declares no colour"
+    },
+    {
+      "file": "app/brand.css",
+      "kind": "rule-body",
+      "classes": [
+        "service-card"
+      ],
+      "ordinal": 51,
+      "disposition": "exempt",
+      "reason": "Rule body declares no colour"
+    },
+    {
+      "file": "app/brand.css",
+      "kind": "rule-body",
+      "classes": [
+        "service-card-body"
+      ],
+      "ordinal": 52,
+      "disposition": "exempt",
+      "reason": "Rule body declares no colour"
+    },
+    {
+      "file": "app/brand.css",
+      "kind": "rule-body",
+      "classes": [
+        "service-card-body"
+      ],
+      "ordinal": 53,
+      "disposition": "exempt",
+      "reason": "Rule body declares no colour"
     }
   ],
   "pairs": [
@@ -4770,15 +4820,6 @@
       "light": "mono-500",
       "lightAlpha": null,
       "dark": "mono-400",
-      "darkAlpha": null,
-      "alphaDiffers": false
-    },
-    {
-      "file": "app/components/admin/ServiceReadinessCard.tsx",
-      "utility": "border",
-      "light": "mono-200",
-      "lightAlpha": null,
-      "dark": "mono-800",
       "darkAlpha": null,
       "alphaDiffers": false
     },
