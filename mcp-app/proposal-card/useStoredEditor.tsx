@@ -12,7 +12,9 @@ import {
   afterStoredRefusal,
   forceStoredLast,
   monthName,
+  contextOf,
   focusedServices,
+  joinWords,
   saveMessage,
   saveParts,
   saveRequest,
@@ -53,6 +55,8 @@ export function useStoredEditor(app: App | null): StoredEditorState {
   /** The parts already handed to the chat for the CURRENT list. */
   const [sent, setSent] = useState<number[]>([]);
   const seatRequest = useRef(0);
+  /** The context lines of the parts handed over for the CURRENT list (the host keeps only the last update). */
+  const contextLines = useRef(new Map<number, string>());
 
   const call = useCallback(
     async (args: Record<string, unknown>) => {
@@ -66,6 +70,7 @@ export function useStoredEditor(app: App | null): StoredEditorState {
     async (at: string, next: StoredEdit[]) => {
       setBusy(true);
       setSent([]);
+      contextLines.current = new Map();
       try {
         const view = storedCheckViewOf(await call({ month: at, edits: next }));
         if (!view.ok && !view.refusal) {
@@ -129,11 +134,18 @@ export function useStoredEditor(app: App | null): StoredEditorState {
     setBusy(true);
     const say = (text: string) => app.sendMessage({ role: "user", content: [{ type: "text", text }] });
     const full = () => say(saveMessage(month, part, index, parts.length));
-    // The arguments go to the model's context and the chat shows only the words; a host without
-    // context updates (or one that refuses this one) gets the full message instead.
+    // The arguments go to the model's context and the chat shows only the words and a key; a host
+    // without text context updates (or one that refuses this one) gets the full message instead.
     const request = saveRequest(month, part, index, parts.length);
-    const delivery = app.getHostCapabilities()?.updateModelContext
-      ? app.updateModelContext({ content: [{ type: "text", text: request.context }] }).then(() => say(request.message), full)
+    const withPart = new Map(contextLines.current).set(index, request.contextLine);
+    const delivery = app.getHostCapabilities()?.updateModelContext?.text
+      ? app.updateModelContext({ content: [{ type: "text", text: contextOf(withPart) }] }).then(
+          () => {
+            contextLines.current = withPart;
+            return say(request.message);
+          },
+          full,
+        )
       : full();
     delivery
       .then((r) => (r.isError ? setNotice("El chat no aceptó el mensaje; pídele a Claude que guarde los cambios.") : setSent((s) => [...s, index])))
@@ -145,7 +157,7 @@ export function useStoredEditor(app: App | null): StoredEditorState {
   if (month && check) {
     const parts = saveParts(check.changes, check.maxGroup);
     const locked = busy || ask !== null;
-    const shown = focusedServices(check.board, focus);
+    const shown = focusedServices(check.board, focus, check.changes.map((c) => c.service));
     const footer = (
       <>
         {check.maxGroup !== null && parts.length > 1 && (
@@ -160,8 +172,10 @@ export function useStoredEditor(app: App | null): StoredEditorState {
         )}
         <div className="actions">
           {parts.map((_, i) => (
-            <button key={i} type="button" className="primary" onClick={() => send(i)} disabled={locked || check.needsCard || sent.includes(i)}>
-              {sent.includes(i) ? (parts.length > 1 ? `Parte ${i + 1} enviada al chat` : "Enviado al chat") : parts.length > 1 ? `Guardar parte ${i + 1} de ${parts.length}` : "Guardar"}
+            // Sending again is safe (what already saved answers «ya estaba») and is the way back when
+            // the arguments did not reach Claude.
+            <button key={i} type="button" className={sent.includes(i) ? undefined : "primary"} onClick={() => send(i)} disabled={locked || check.needsCard}>
+              {sent.includes(i) ? (parts.length > 1 ? `Parte ${i + 1} enviada · enviar de nuevo` : "Enviado · enviar de nuevo") : parts.length > 1 ? `Guardar parte ${i + 1} de ${parts.length}` : "Guardar"}
             </button>
           ))}
           <button type="button" onClick={() => void runCheck(month, [])} disabled={locked || edits.length === 0}>
@@ -177,7 +191,7 @@ export function useStoredEditor(app: App | null): StoredEditorState {
       subtitle: check.changes.length ? `${check.changes.length} ${check.changes.length === 1 ? "servicio cambia" : "servicios cambian"}` : "Sin cambios",
       footer,
       board: shown ?? check.board,
-      ...(shown ? { narrowed: { shown: shown.map((s) => s.label).join(" y "), onWiden: () => setFocus(null) } } : {}),
+      ...(shown ? { narrowed: { shown: joinWords(shown.map((s) => s.label)), onWiden: () => setFocus(null) } } : {}),
       lines: check.lines,
       pending: edits.length,
       busy,

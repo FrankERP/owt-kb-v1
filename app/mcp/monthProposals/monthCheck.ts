@@ -54,6 +54,8 @@ export interface MonthCheckInput {
   ledger: FairnessLedgerResponse | null;
   /** The ledger for the month after the horizon over the board (`fairShareAdjust`); `null` = failed. */
   fairShare: FairShareLedger | null;
+  /** Only these days' per-service lines (a saved-month card focused on a day, ADR-0066); rules and fairness stay the month's. */
+  days?: { from: string; to: string };
 }
 
 export interface MonthCheck {
@@ -146,6 +148,7 @@ function boardLines(input: MonthCheckInput, person: (id: string) => string): str
   const lines: string[] = [];
   for (const column of board.columns) {
     if (!board.editable.has(board.localIdOf.get(column.columnId)!)) continue;
+    if (input.days && (column.date < input.days.from || column.date > input.days.to)) continue;
     const label = draftLabel({ _type: column.type, date: column.date, service_name: column.serviceName });
     const held = (rowId: string) => board.cells.find((c) => c.columnId === column.columnId && c.rowId === rowId)?.occupants ?? [];
     if (held("lead").length === 0) lines.push(E.noLead(label));
@@ -292,10 +295,11 @@ export function checkWire(
   };
 }
 
-export const monthCheckLines = (c: MonthCheck): string[] => [
+/** `partial`: the per-service lines cover only some days, so nothing may claim the month is clear. */
+export const monthCheckLines = (c: MonthCheck, options: { partial?: boolean } = {}): string[] => [
   ...c.notes,
   ...(c.rules.length ? [E.groupRules, ...c.rules] : []),
   ...(c.services.length ? [E.groupServices, ...c.services] : []),
   ...(c.fairness.length ? [E.groupFairness, ...c.fairness] : []),
-  ...(c.checked && !c.rules.length && !c.services.length ? [E.allClear] : []),
+  ...(c.checked && !c.rules.length && !c.services.length && !options.partial ? [E.allClear] : []),
 ];

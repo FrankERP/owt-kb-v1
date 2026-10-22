@@ -71,8 +71,9 @@ Plan: `docs/superpowers/plans/2026-10-21-owt-mcp-admin-parity-f1.md` (S2 approve
   the text, as `solve_month` does with its handle.
 - **The card never writes.** Its saved-month mode (`useStoredEditor.tsx`) hands the checked change
   sets to the chat; Claude calls `save_service_edits`, so the Claude app asks first. The change sets
-  go through the model's context (`updateModelContext`) and the chat shows only the changes in words,
-  because the JSON in the chat put Frank off (2026-10-22). Rejected: a server-side handle for the
+  go through the model's context (`updateModelContext`) and the chat shows only the changes in words
+  and a short key naming them, because the JSON in the chat put Frank off (2026-10-22). The key is
+  what keeps the model off an earlier check's arguments line, which is still valid. Rejected: a server-side handle for the
   checked change sets (a new stored document, its expiry and its cleanup, for what the host already
   carries); and having the model re-check from the words (it cannot repeat a waiver the card forced).
   A host without context updates still gets the full message, so «Guardar» never stops working.
