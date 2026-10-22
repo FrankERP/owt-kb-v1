@@ -78,3 +78,22 @@ export function DownloadIcon(props: IconProps) {
     </Icon>
   );
 }
+
+/** A song's music (the YouTube reference) — the «Ensayar» menu's first choice. */
+export function MusicNoteIcon(props: IconProps) {
+  return (
+    <Icon name="music-note" {...props}>
+      <path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" />
+    </Icon>
+  );
+}
+
+/** Lyrics (the sung version) — the «Ensayar» menu's second choice. */
+export function MicIcon(props: IconProps) {
+  return (
+    <Icon name="mic" {...props}>
+      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2" /><path d="M12 19v3" />
+    </Icon>
+  );
+}
