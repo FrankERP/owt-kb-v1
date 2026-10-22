@@ -1,7 +1,8 @@
 # Solver v3 verify and deploy from GitHub Actions, keyless (Workload Identity Federation)
 
-Phase 3 of the «Trabajar todo en la nube» plan. Status: **plan, under adversarial review**
-(critical tier: it creates an auth/secret boundary — who may deploy the production solver and
+Phase 3 of the «Trabajar todo en la nube» plan. Status: **APPROVED by adversarial review** (rounds 3 and 4 on digest `a71dd089…`; log
+`2026-10-22-solver-v3-gha-wif-ops-review-log.md`; the «Post-approval» notes in that log list the
+un-reviewed edits made after it) (critical tier: it creates an auth/secret boundary — who may deploy the production solver and
 who may read its API key — and an irreversible remote release action).
 
 ## 1. Requirement
@@ -73,7 +74,8 @@ New file `scripts/gcp/setup-solver-v3-gha-wif.sh`. Bash, `set -euo pipefail`, ne
 created only when absent; every IAM grant is `add-iam-policy-binding` (a no-op when present).
 **An existing provider is compared, not trusted:** its `oidc.issuerUri`, `attributeMapping` and
 `attributeCondition` are read back and compared with the script's expected values (the condition
-byte for byte). On any difference the script stops and prints the difference plus the exact
+byte for byte after collapsing runs of whitespace, in case Google normalizes spacing on store).
+On any difference the script stops and prints the difference plus the exact
 `gcloud iam workload-identity-pools providers update-oidc …` command; it applies that update only
 under a second explicit flag (`--apply --update-provider`), so tightening or correcting the gate
 after creation is a reviewed script change plus one deliberate re-run, never a silent no-op. The
@@ -97,8 +99,10 @@ Resources:
      `attribute.ref=assertion.ref`, and the composite
      `attribute.repo_env=assertion.repository_id + '/' + assertion.environment`, which the
      service-account bindings key on (below): a principalSet on an attribute spans every provider
-     in the pool, so keying on the repository id as well means a provider added to this pool later
-     cannot inherit either identity under a weaker condition.
+     in the pool, so keying on the repository id as well guards against an accidental same-shape
+     GitHub provider. It does not stop a deliberately different provider (mapping is per provider),
+     so the script also lists the pool's providers and **stops if any provider other than
+     `owt-kb-v1` exists**, including in a pre-existing `github-actions` pool.
    - **Attribute condition** (the gate Google evaluates before issuing anything):
      `assertion.repository_id == '837387462' && assertion.repository_owner_id == '68241914' &&
      assertion.ref == 'refs/heads/main' && assertion.environment in ['solver-verify', 'solver-deploy']
@@ -159,7 +163,10 @@ environment means the same workflow step picks the right SA by the environment i
 
 **Agent rule (policy, written into `docs/agents/project-rules.md` and the ADR):** an agent asks
 Frank in the thread before dispatching `deploy`, and **never approves, rejects or bypasses a pending
-deployment** — no `POST …/pending_deployments`, through any tool or `gh api`. The session acts as
+deployment** — no `POST …/pending_deployments`, through any tool or `gh api` — and never changes
+either environment's protection rules, deployment-branch policy or variables, nor the WIF pool,
+provider or grants, without Frank's explicit OK for that change (as `FrankERP` admin a session
+could technically remove the required reviewer). The session acts as
 `FrankERP`, so GitHub would accept such an approval and record it as Frank's (§2); the rule, not a
 setting, is what keeps the approval click Frank's. What the required reviewer still buys: a
 deliberate confirmation step on every deploy, a record in GitHub of who approved which run, and no
@@ -169,7 +176,8 @@ accidental deploy from a mis-chosen dispatch input. `verify` needs no approval (
 
 - **Triggers — exactly two:**
   - `push` to `main` with `paths: ['gcf_v3/**']` (the trigger's own filter) → automatic `verify`.
-  - `workflow_dispatch` with input `action` ∈ {`verify`, `deploy`} (default `verify`).
+  - `workflow_dispatch` with input `action`, `type: choice`, options `[verify, deploy]` (default
+    `verify`), read only in `if:` expressions and never interpolated into a `run:` script.
   - No `pull_request`, `pull_request_target`, `workflow_run`, `schedule` or `issue_comment`.
 - **Coupling to the CI-layout guard:** `scripts/__tests__/ciLayout.test.ts` already reads every
   workflow file through `parseWorkflow` (`scripts/lib/ci-layout.mjs:133`), a fail-closed YAML-subset
@@ -186,7 +194,9 @@ accidental deploy from a mis-chosen dispatch input. `verify` needs no approval (
   credentials file); `create_credentials_file` stays default (a federated config, not a key).
 - **Shell discipline (the logs are public):** `bash` with `set -euo pipefail`, never `set -x`.
   Every secret-bearing value is registered with `::add-mask::` before any command could print it:
-  the API key and the function URL. `CLOUDSDK_CORE_DISABLE_FILE_LOGGING=true` for every gcloud
+  the API key, the function URL and its host (a curl error would print the bare host; curl runs
+  `-s` without `-S`). Ping and smoke run in one `run:` step, so the key has one assignment and is
+  never written to `$GITHUB_ENV`, `$GITHUB_OUTPUT` or a file. `CLOUDSDK_CORE_DISABLE_FILE_LOGGING=true` for every gcloud
   call. Any build value read from `describe` or the ping must match `^[0-9a-f]{40}$` before it
   reaches `git` (else red). `checkout` uses `persist-credentials: false`. Explicit
   `timeout-minutes: 25` on each job (above its 15-minute wait). The only things a run prints: function `state`, `updateTime`, the deployed build SHA,
@@ -244,7 +254,8 @@ provider condition forces `main`).
 
 1. **Tip guard:** `git fetch origin main`; refuse unless `github.sha == origin/main` (a run queued
    behind a newer merge must not deploy an older tree). Same intent as the script's «fetched tip of
-   main» rule.
+   main» rule. It also refuses when an unrelated merge landed while the run waited for approval;
+   the docs say «re-dispatch» for that case (safe, if occasionally a nuisance).
 2. **Run the existing trigger, not a new deploy definition:**
    `gcloud builds triggers run owt-solver-v3-deploy --region=global --sha="$GITHUB_SHA" --format='value(metadata.build.id)'`;
    an empty id fails the job at once, printing that a build may have started and must be checked
@@ -258,7 +269,9 @@ provider condition forces `main`).
 
 If the push trigger and a dispatched deploy race on the same function, Cloud Functions refuses the
 second operation; whichever build fails is reported red and the `verify` criterion (source identity)
-still decides whether production is right.
+still decides whether production is right. Likewise the post-deploy `verify` does not accept
+«superseded»: a `gcf_v3` merge landing mid-deploy turns the run red (errs safe; the push verify of
+that merge covers it), and the docs say so.
 
 ## 6. Guards (vitest, `scripts/__tests__/solverOpsWorkflow.test.ts`)
 
@@ -296,7 +309,8 @@ parser):
   Cloud Shell fallback. «Deploy»: dispatch `deploy` (Frank approves) is the manual fallback; the
   script from Cloud Shell is the last resort if the trigger itself is broken.
 - **`docs/CI.md`:** one line that `solver-v3-ops.yml` exists, is operations not a gate, and is
-  not in `gates`.
+  not in `gates`; and that every run creates a GitHub Deployment record in its environment, which
+  is not a release.
 - **`docs/agents/project-rules.md`** cloud-sessions section: remove solver verification and the
   fallback deploy from the «still needs the Mac» list; how a session dispatches (`actions_run_trigger`)
   and reads the result (`get_job_logs`); the agent rule of §4 (ask before `deploy`; never approve,
@@ -344,7 +358,9 @@ parser):
 3. Frank runs the setup script in Cloud Shell: dry run, then `--apply`, then a second dry run,
    which must report every resource present and the provider's issuer, mapping and condition equal
    to the script's (the full read-back). Claude reads the printed output (no secrets in it).
-4. Frank adds the environment variables printed by the script (§4).
+4. Frank adds the environment variables printed by the script (§4). (A `gcf_v3` merge between
+   step 2 and this step produces a red push `verify` — auth has no provider yet. Expected, not a
+   production problem.)
 5. **Verify rehearsal:** Claude dispatches `verify` on `main`. Expected: green, `ACTIVE`, ping
    `True 3 <build>`, smoke `True True`, and the source-identity verdict. If production is behind
    `main`'s `gcf_v3/` (possible, §5.1 step 4), that is a finding to report, not a failure of the
@@ -371,6 +387,10 @@ parser):
   otherwise, and `workflow_ref` has the form `FrankERP/owt-kb-v1/.github/workflows/solver-v3-ops.yml@refs/heads/main`
   (GitHub docs); the CEL `in` list operator is accepted in the attribute condition.
 - The trigger's `serviceAccount` field is set (§3.5 refuses otherwise).
-- `roles/cloudbuild.builds.editor` lets the deploy SA run the trigger and `describe` the build.
+- `roles/cloudbuild.builds.editor` lets the deploy SA run the trigger and `describe` the build,
+  and `triggers run` returns the build id at `metadata.build.id`.
+- The cloud session's scoped GitHub token may dispatch a workflow (`actions_run_trigger`). If not,
+  Frank dispatches from github.com (phone browser works), the push path still verifies
+  automatically, and a session reads results only.
 Each wrong premise makes the rehearsal fail with a permission error and changes nothing in
 production; the fix is a reviewed change to the script or plan.
