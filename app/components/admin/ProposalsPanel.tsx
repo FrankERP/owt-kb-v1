@@ -299,36 +299,36 @@ function ProposalCard({
                 onChange={e => setAdminNotes(e.target.value)}
               />
               <div className="flex gap-2">
-                <button
-                  onClick={() => setRequestingChanges(false)}
-                  className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors"
-                >
+                <Button variant="secondary" className="flex-1" onClick={() => setRequestingChanges(false)}>
                   Cancelar
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="danger"
+                  className="flex-1"
                   onClick={handleRequestChanges}
-                  disabled={submitting || conflict || !adminNotes.trim()}
-                  className="flex-1 py-2 rounded-lg bg-negative-surface/60 hover:bg-negative-border/60 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+                  disabled={conflict || !adminNotes.trim()}
+                  busy={submitting}
+                  busyLabel="Enviando…"
                 >
-                  {submitting ? "Enviando…" : "Solicitar cambios"}
-                </button>
+                  Solicitar cambios
+                </Button>
               </div>
             </div>
           ) : (
             <div className="flex gap-2">
-              <button
-                onClick={() => setRequestingChanges(true)}
-                className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-negative-fg dark:hover:border-surface-accent-30 hover:text-negative-fg transition-colors"
-              >
+              <Button variant="secondary" className="flex-1" onClick={() => setRequestingChanges(true)}>
                 Solicitar cambios
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
+                className="flex-1"
                 onClick={handleApprove}
-                disabled={submitting || conflict || proposal.songs.length === 0}
-                className="flex-1 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+                disabled={conflict || proposal.songs.length === 0}
+                busy={submitting}
+                busyLabel="Aprobando…"
               >
-                {submitting ? "Aprobando…" : "Aprobar"}
-              </button>
+                Aprobar
+              </Button>
             </div>
           )}
         </div>
@@ -356,28 +356,25 @@ function ProposalCard({
                 onChange={e => setAdminNotes(e.target.value)}
               />
               <div className="flex gap-2">
-                <button
-                  onClick={() => setReopening(false)}
-                  className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent transition-colors"
-                >
+                <Button variant="secondary" className="flex-1" onClick={() => setReopening(false)}>
                   Cancelar
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="primary"
+                  className="flex-1"
                   onClick={handleReopen}
-                  disabled={submitting || conflict}
-                  className="flex-1 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+                  disabled={conflict}
+                  busy={submitting}
+                  busyLabel="Reabriendo…"
                 >
-                  {submitting ? "Reabriendo…" : "Reabrir"}
-                </button>
+                  Reabrir
+                </Button>
               </div>
             </div>
           ) : (
-            <button
-              onClick={() => setReopening(true)}
-              className="w-full py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest text-mono-400 hover:border-accent dark:hover:border-surface-accent-30 hover:text-accent transition-colors"
-            >
+            <Button variant="secondary" className="w-full" onClick={() => setReopening(true)}>
               Reabrir para ajustes
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -796,17 +793,17 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
               ? "1 propuesta anterior oculta"
               : `${hiddenCount} propuestas anteriores ocultas`}
           </p>
-          <button
+          <Button
+            variant="secondary"
             // Jump to the window that shows the NEWEST hidden row, not a blind
             // `+ 1`: a press that changes nothing on screen reads as broken.
             onClick={() => setWindowSteps(stepsToShowMore)}
-            className="px-4 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest text-mono-400 hover:border-accent dark:hover:border-surface-accent-30 hover:text-accent transition-colors"
           >
             {/* The jump is however far the newest hidden row is, so the label
                 has to state THAT, not the nominal step — promising "3 meses"
                 and moving 9 is the same broken-button feeling in reverse. */}
             {`Ver ${(stepsToShowMore - windowSteps) * WIDEN_STEP_MONTHS} meses más`}
-          </button>
+          </Button>
         </div>
       )}
     </div>
