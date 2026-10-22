@@ -101,3 +101,62 @@ export function MicIcon(props: IconProps) {
     </Icon>
   );
 }
+
+export function PlusIcon(props: IconProps) {
+  return <Icon name="plus" {...props}><path d="M12 5v14" /><path d="M5 12h14" /></Icon>;
+}
+
+export function ArrowRightIcon(props: IconProps) {
+  return <Icon name="arrow-right" {...props}><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></Icon>;
+}
+
+/** Something that waits on someone else — a proposal pending an admin's answer. */
+export function ClockIcon(props: IconProps) {
+  return (
+    <Icon name="clock" {...props}>
+      <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />
+    </Icon>
+  );
+}
+
+/** Comments to read — a proposal sent back with changes requested. */
+export function MessageIcon(props: IconProps) {
+  return (
+    <Icon name="message" {...props}>
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </Icon>
+  );
+}
+
+/** A calendar with a plus — adding services to the member's own calendar. */
+export function CalendarAddIcon(props: IconProps) {
+  return (
+    <Icon name="calendar-add" {...props}>
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M16 2v4" /><path d="M8 2v4" /><path d="M3 10h18" />
+      <path d="M12 14v4" /><path d="M10 16h4" />
+    </Icon>
+  );
+}
+
+/** A calendar with a cross — the days a member cannot serve. */
+export function CalendarOffIcon(props: IconProps) {
+  return (
+    <Icon name="calendar-off" {...props}>
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M16 2v4" /><path d="M8 2v4" /><path d="M3 10h18" />
+      <path d="m10 14 4 4" /><path d="m14 14-4 4" />
+    </Icon>
+  );
+}
+
+/** Settings — the three sliders. */
+export function SlidersIcon(props: IconProps) {
+  return (
+    <Icon name="sliders" {...props}>
+      <path d="M4 21v-7" /><path d="M4 10V3" /><path d="M12 21v-9" /><path d="M12 8V3" />
+      <path d="M20 21v-5" /><path d="M20 12V3" />
+      <path d="M1 14h6" /><path d="M9 8h6" /><path d="M17 16h6" />
+    </Icon>
+  );
+}
