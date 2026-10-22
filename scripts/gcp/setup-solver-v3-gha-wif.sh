@@ -17,8 +17,10 @@
 # It NEVER creates a service-account key, and it prints only resource names.
 #
 # An existing provider is compared, not trusted: issuer, attribute mapping and condition must equal
-# the values below. On a difference it stops and prints the update command; only
-# `--apply --update-provider` applies it. So a dry run after --apply is the full read-back.
+# the values below, and it must carry no uploaded JWKS and no custom audiences. On a difference it
+# stops and prints the update command; only `--apply --update-provider` applies it. A dry run after
+# --apply reads back the pool, the provider and the accounts; the IAM grants are trusted to the
+# --apply run's exit status (each is an idempotent add-iam-policy-binding).
 set -euo pipefail
 
 : "${GCP_PROJECT:?Set GCP_PROJECT to the Google Cloud project id}"
@@ -105,8 +107,9 @@ case "$pool_state" in
     echo "  exists"
     # The service-account bindings key on attribute.repo_env, which a deliberately different
     # provider in the same pool could map too: this pool holds owt-kb-v1 and nothing else.
-    others="$(gcloud iam workload-identity-pools providers list --workload-identity-pool="$POOL" \
-      --location=global --project="$GCP_PROJECT" --format='value(name.basename())' | grep -v -x "$PROVIDER" || true)"
+    providers="$(gcloud iam workload-identity-pools providers list --workload-identity-pool="$POOL" \
+      --location=global --project="$GCP_PROJECT" --format='value(name.basename())')"
+    others="$(printf '%s\n' "$providers" | grep -v -x -e "$PROVIDER" -e '' || true)"
     [ -z "$others" ] || die "pool $POOL holds other providers ($others); it must hold only $PROVIDER — decide with Claude, do not delete blindly"
     ;;
   DELETED)
@@ -143,6 +146,11 @@ if (p.get("attributeMapping") or {}) != exp_map:
     diffs.append("mapping: live %r, expected %r" % (p.get("attributeMapping"), exp_map))
 if ws(p.get("attributeCondition")) != ws(os.environ["EXP_CONDITION"]):
     diffs.append("condition: live %r, expected %r" % (p.get("attributeCondition"), os.environ["EXP_CONDITION"]))
+oidc = p.get("oidc") or {}
+if oidc.get("jwksJson"):
+    diffs.append("oidc.jwksJson is set (an uploaded key would let tokens it signs satisfy the condition); expected none")
+if oidc.get("allowedAudiences"):
+    diffs.append("oidc.allowedAudiences: live %r, expected none (the default audience)" % (oidc.get("allowedAudiences"),))
 if p.get("disabled"):
     print("DISABLED"); raise SystemExit
 print("MATCH" if not diffs else "\n".join(diffs))
@@ -172,7 +180,10 @@ fi
 CREATED_SA=0
 ensure_sa() {
   local id="$1" email="$2" display="$3"
-  if [ "$(describe_or_absent gcloud iam service-accounts describe "$email" --project="$GCP_PROJECT" --format='value(email)')" = ABSENT ]; then
+  local sa_state
+  # A separate assignment, so a read error stops the script instead of reading as «exists».
+  sa_state="$(describe_or_absent gcloud iam service-accounts describe "$email" --project="$GCP_PROJECT" --format='value(email)')"
+  if [ "$sa_state" = ABSENT ]; then
     run gcloud iam service-accounts create "$id" --project="$GCP_PROJECT" --display-name="$display"
     CREATED_SA=1
   else

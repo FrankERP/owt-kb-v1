@@ -637,7 +637,7 @@ secret.
 |---|---|
 | Vercel Preview + Production | `app/api/admin/solve/route.ts` sends it as the `X-Api-Key` header — to v2 itself, and to v3 through `app/utils/solverV3Upstream.ts` (solver v3 C6; the path production takes since the 2026-10-15 cutover, ADR-0056 — v2's only after a flip-back). The MCP's `solve_month` (P4, in production since 2026-10-20) calls the same `solveV3`, so it sends the same header from `/api/mcp` |
 | GitHub Actions `solver-v3-ops.yml` → `verify` | Reads `owt-solver-api-key:latest` with `owt-gha-verify` (Secret Accessor on this secret only), masks it, and sends it as `X-Api-Key` for the ping and smoke solve (ADR-0068). Nothing is stored in GitHub |
-| Secret Manager `owt-solver-api-key` | Cloud Build deploys each function with `--set-secrets=OWT_SOLVER_API_KEY=owt-solver-api-key:latest`: v2 from `cloudbuild.yaml` (manual: `scripts/deploy-solver-gcf.sh`), v3 from `gcf_v3/cloudbuild.yaml` (first creation and manual: `scripts/deploy-solver-v3-gcf.sh`) |
+| Secret Manager `owt-solver-api-key` | Cloud Build deploys each function with `--set-secrets=OWT_SOLVER_API_KEY=owt-solver-api-key:latest`: v2 from `cloudbuild.yaml` (manual: `scripts/deploy-solver-gcf.sh`), v3 from `gcf_v3/cloudbuild.yaml` (manual: a dispatched `deploy` of `solver-v3-ops.yml`, which re-runs that trigger; first creation and last resort: `scripts/deploy-solver-v3-gcf.sh`) |
 
 **Purpose.** The only barrier on each publicly invokable function (`allUsers` holds
 `run.invoker`). Without it on a function, its handler (`gcf/main.py`, `gcf_v3/main.py`) answers
@@ -870,7 +870,13 @@ does not use it; it authenticates with its own sign-in.
 ## GitHub Actions → Google (Workload Identity Federation — no secret)
 
 **Needed in: nothing stores a credential.** `.github/workflows/solver-v3-ops.yml` gets a
-short-lived Google token per job by exchanging GitHub's OIDC token (ADR-0068). What exists:
+short-lived Google token per job by exchanging GitHub's OIDC token (ADR-0068).
+
+**Status (2026-10-22): designed and merged, NOT yet set up or rehearsed.** Nothing below exists
+in Google Cloud or GitHub until Frank runs the setup script and creates the environments; until
+then every run of the workflow is red at its auth step. The push path stays unproven until the
+first `gcf_v3/**` merge after setup shows a green automatic `verify`. Update this line at the
+rehearsal. What it sets up:
 
 - **Google Cloud** (project `eloquent-figure-421401`), created by
   `scripts/gcp/setup-solver-v3-gha-wif.sh` (run in Cloud Shell by Frank): Workload Identity pool
@@ -890,12 +896,15 @@ short-lived Google token per job by exchanging GitHub's OIDC token (ADR-0068). W
 **Where the values come from.** The setup script prints the three variables at the end.
 
 **How to rotate.** Nothing to rotate — no long-lived credential exists. A re-run of the setup
-script is idempotent and compares the live provider with the script (a dry run is the read-back).
+script is idempotent and compares the live provider with the script: a dry run reads back the
+pool, the provider and the accounts; the IAM grants are trusted to the `--apply` run's exit status.
 
-**How to revoke (incident switch).** Disable the provider, which cuts both accounts at once:
-`gcloud iam workload-identity-pools providers update-oidc owt-kb-v1 --workload-identity-pool=github-actions --location=global --disabled`
-(re-enable with `--no-disabled`; the setup script refuses to run while it is disabled). Finer:
-remove one account's `roles/iam.workloadIdentityUser` binding.
+**How to revoke (incident switch).** Disable the provider, which stops any new token for both
+accounts at once:
+`gcloud iam workload-identity-pools providers update-oidc owt-kb-v1 --workload-identity-pool=github-actions --location=global --project=eloquent-figure-421401 --disabled`
+(re-enable with `--no-disabled`; the setup script refuses to run while it is disabled). A token
+already issued to a running job stays valid until it expires (up to about an hour); cancel the run
+too. Finer: remove one account's `roles/iam.workloadIdentityUser` binding.
 
 **Blast radius while revoked.** Only the two workflow actions fail (red runs). The Cloud Build
 trigger keeps deploying on merges, the app and Auto are unaffected, and the manual procedures in

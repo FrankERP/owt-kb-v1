@@ -93,11 +93,14 @@ jobs:
 
           deadline=$((SECONDS + 900))
           while :; do
+            # A transient read error retries until the deadline instead of losing the build id.
             status="$(gcloud builds describe "$build_id" --region=global --project="$GCP_PROJECT" \
-              --format='value(status)')"
+              --format='value(status)')" || status="(status unreadable)"
             case "$status" in
               SUCCESS)
-                echo "Build $build_id: SUCCESS"
+                times="$(gcloud builds describe "$build_id" --region=global --project="$GCP_PROJECT" \
+                  --format='value(startTime,finishTime)')" || times="(times unreadable)"
+                echo "Build $build_id: SUCCESS ($times)"
                 break
                 ;;
               FAILURE|INTERNAL_ERROR|TIMEOUT|CANCELLED|EXPIRED)
@@ -106,7 +109,7 @@ jobs:
                 ;;
             esac
             if [ "$SECONDS" -ge "$deadline" ]; then
-              echo "::error::Build $build_id still $status after 15 minutes."
+              echo "::error::Build $build_id still $status after 15 minutes. Check it in Cloud Build before re-dispatching."
               exit 1
             fi
             sleep 20
@@ -151,7 +154,7 @@ jobs:
           read_fn() {
             local out
             out="$(gcloud functions describe "${fn[@]}" \
-              --format='csv[no-heading](state,serviceConfig.environmentVariables.OWT_SOLVER_V3_BUILD)')"
+              --format='csv[no-heading](state,serviceConfig.environmentVariables.OWT_SOLVER_V3_BUILD)')" || return 1
             IFS=, read -r state build <<<"$out"
           }
 
@@ -165,10 +168,11 @@ jobs:
           if [ -n "$expect" ]; then
             deadline=$((SECONDS + 900))
             while :; do
-              read_fn
+              # A transient read error retries until the deadline (fails closed at the deadline).
+              if ! read_fn; then state="(unreadable)"; build=""; fi
               if [ "$state" = ACTIVE ] && [ "$build" = "$expect" ]; then break; fi
               if [ "$MODE" = push ] && [ "$state" = ACTIVE ] && [[ "$build" =~ $sha_re ]]; then
-                git fetch -q origin main
+                git fetch -q origin main || true
                 if git merge-base --is-ancestor "$expect" "$build" 2>/dev/null; then
                   echo "Superseded by a newer deploy ($build); verifying that one."
                   break
@@ -183,7 +187,7 @@ jobs:
           fi
 
           # 3. State, ping and smoke — docs/SOLVER_AND_INFRA.md «Verifying a v3 deploy».
-          read_fn
+          read_fn || { echo "::error::Could not read the function."; exit 1; }
           updated="$(gcloud functions describe "${fn[@]}" --format='value(updateTime)')"
           echo "state=$state updateTime=$updated build=$build"
           if [ "$state" != ACTIVE ]; then echo "::error::The function is $state, not ACTIVE."; exit 1; fi
@@ -198,11 +202,11 @@ jobs:
           echo "::add-mask::$key"
 
           read -r p_ok p_contract p_build <<<"$(printf 'X-Api-Key: %s\n' "$key" \
-            | curl -s -X POST "$url" -H @- -H 'Content-Type: application/json' -d '{"contract":3,"ping":true}' \
-            | python3 -c 'import json,sys; r=json.load(sys.stdin); print(r.get("ok"), r.get("contract"), r.get("build"))')"
+            | curl -s --max-time 150 -X POST "$url" -H @- -H 'Content-Type: application/json' -d '{"contract":3,"ping":true}' \
+            | python3 -I -c 'import json,sys; r=json.load(sys.stdin); print(r.get("ok"), r.get("contract"), r.get("build"))')"
           read -r s_ok s_proven <<<"$(printf 'X-Api-Key: %s\n' "$key" \
-            | curl -s -X POST "$url" -H @- -H 'Content-Type: application/json' -d @gcf_v3/acceptance/smoke.json \
-            | python3 -c 'import json,sys; r=json.load(sys.stdin); s=r.get("stages") or []; print(r.get("ok"), bool(s) and all(x.get("status") == "proven" for x in s))')"
+            | curl -s --max-time 150 -X POST "$url" -H @- -H 'Content-Type: application/json' -d @gcf_v3/acceptance/smoke.json \
+            | python3 -I -c 'import json,sys; r=json.load(sys.stdin); s=r.get("stages") or []; print(r.get("ok"), bool(s) and all(x.get("status") == "proven" for x in s))')"
           unset key
 
           echo "ping: ok=$p_ok contract=$p_contract build=$p_build"
@@ -217,13 +221,14 @@ jobs:
           fi
 
           # 4. Source identity: production serves exactly main's gcf_v3/. The diff also counts
-          #    files .gcloudignore keeps out of the artifact (tests/, acceptance/), so «behind» can
-          #    mean an identical artifact: that errs toward a redundant redeploy, never a false green.
+          #    files gcf_v3/.gcloudignore keeps out of the artifact (tests/, acceptance/, test_*.py),
+          #    so «behind» can mean an identical function: that errs toward a redundant redeploy,
+          #    never a false green.
           git fetch -q origin main
           if git merge-base --is-ancestor "$build" origin/main 2>/dev/null \
             && git diff --quiet "$build" origin/main -- gcf_v3; then
             echo "OK: owt-solver-v3 is ACTIVE at $build, ping and smoke pass, and it serves main's gcf_v3/."
           else
-            echo "::error::Production ($build) is behind main's gcf_v3/ (possibly only tests/ or acceptance/). Dispatch deploy if it should change."
+            echo "::error::Production ($build) is behind main's gcf_v3/ (possibly only files the artifact leaves out, see gcf_v3/.gcloudignore). Dispatch deploy if it should change."
             exit 1
           fi

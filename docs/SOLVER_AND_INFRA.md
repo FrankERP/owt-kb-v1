@@ -603,13 +603,16 @@ and `checker.py` follows, the Python test goes red until the fixture and the Typ
 
 #### Verifying a v3 deploy
 
-**From GitHub Actions (primary, 2026-10-22, ADR-0068):** `.github/workflows/solver-v3-ops.yml`
+**From GitHub Actions (ADR-0068; status 2026-10-22: merged, NOT yet set up or rehearsed — use
+the manual steps until `docs/SECRETS.md` «GitHub Actions → Google» says otherwise, and treat the
+automatic push path as unproven until a `gcf_v3/**` merge after setup shows a green `verify`):** `.github/workflows/solver-v3-ops.yml`
 runs `verify` automatically after every push to `main` that touches `gcf_v3/**` (it waits up to
 15 minutes for the trigger's build to serve that commit), and on demand (Run workflow →
 `verify`). It does steps 1–3 below with keyless Google access, masks the key and the URL, and then
 checks **source identity**: the deployed build is on `main` and `git diff <build> origin/main --
-gcf_v3` is empty. «Behind» may mean only `tests/` or `acceptance/` changed (the artifact leaves
-them out); that asks for a redundant redeploy, never a false green. A red run emails Frank. A
+gcf_v3` is empty. «Behind» may mean only files the deployed artifact leaves out changed
+(`gcf_v3/.gcloudignore`: `tests/`, `acceptance/`, `test_*.py`); that asks for a redundant
+redeploy, never a false green. A red run emails Frank. A
 cloud session dispatches it with the GitHub connector and reads the job log. Until Frank has run
 `scripts/gcp/setup-solver-v3-gha-wif.sh` and set the environment variables, its runs are red at
 the auth step.

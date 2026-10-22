@@ -106,7 +106,36 @@ describe("solver-v3-ops workflow", () => {
     expect(r.indexOf('echo "::add-mask::$url"')).toBeGreaterThan(-1);
     expect(r.indexOf('echo "::add-mask::$host"')).toBeGreaterThan(-1);
     expect(r.indexOf('echo "::add-mask::$host"')).toBeLessThan(r.indexOf("curl "));
-    for (const m of r.matchAll(/curl (-\S+)/g)) expect(m[1]).not.toMatch(/S/);
+    const curlLines = r.split("\n").filter((l) => /\bcurl\b/.test(l));
+    expect(curlLines).toHaveLength(2);
+    for (const l of curlLines) {
+      for (const flag of l.split(/\s+/).filter((t) => t.startsWith("-"))) {
+        expect(flag, `curl flag ${flag} could print the host or the request`).not.toMatch(
+          /^-[a-zA-Z]*[Sv]|^--(show-error|verbose|trace)/,
+        );
+      }
+    }
+  });
+
+  it("prints only named fields of the solver's answers, never a body", () => {
+    const programs = [...runs.join("\n").matchAll(/python3 -I -c '([^']*)'/g)].map((m) => m[1]);
+    expect(programs).toEqual([
+      'import json,sys; r=json.load(sys.stdin); print(r.get("ok"), r.get("contract"), r.get("build"))',
+      'import json,sys; r=json.load(sys.stdin); s=r.get("stages") or []; print(r.get("ok"), bool(s) and all(x.get("status") == "proven" for x in s))',
+    ]);
+    expect(runs.join("\n")).not.toMatch(/python3 (?!-I -c ')/);
+  });
+
+  it("keeps push verifies and on-demand runs in separate concurrency groups", () => {
+    const doc2 = doc as unknown as { concurrency: Record<string, string> };
+    expect(doc2.concurrency).toEqual({
+      group: "${{ github.event_name == 'push' && 'solver-v3-verify-push' || 'solver-v3-ops' }}",
+      "cancel-in-progress": "${{ github.event_name == 'push' }}",
+    });
+    const verifyStep = jobs.verify.steps.find((s) => s.env && "MODE" in s.env);
+    expect(verifyStep?.env?.MODE).toBe(
+      "${{ github.event_name == 'push' && 'push' || (needs.deploy.result == 'success' && 'post-deploy' || 'dispatch') }}",
+    );
   });
 });
 
@@ -115,6 +144,13 @@ describe("solver-v3-ops setup script", () => {
     expect(setupText).not.toMatch(/keys\s+create/);
     expect(setupText).toContain('if [ "$APPLY" = 1 ]; then "$@"; fi');
     expect(setupText).not.toMatch(/^\s*set\s+-x/m);
+    // Every mutating gcloud call goes through run(); the printed update hint is the one exception.
+    const mutating = setupText
+      .split("\n")
+      .filter((l) => /gcloud .*\b(create|create-oidc|add-iam-policy-binding|update-oidc|services enable|undelete)\b/.test(l))
+      .filter((l) => !/^\s*(printf|die|echo) /.test(l));
+    expect(mutating.length).toBeGreaterThan(0);
+    for (const l of mutating) expect(l.trim(), l).toMatch(/^run gcloud /);
   });
 
   it("federates exactly this workflow file, this repository and the two environments", () => {
