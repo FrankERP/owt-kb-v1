@@ -258,7 +258,10 @@ describe("SetlistEditor — «Nueva canción» offers the existing artists", () 
     mount();
     const artist = await openCreate();
 
-    // Unfiltered, every artist is a chip.
+    // Unfiltered, the catalogue is folded behind «Ver todos (N)» (bloque 5);
+    // unfolded, every artist is a chip.
+    expect(screen.queryByRole("button", { name: "Un Corazón" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: `Ver todos (${AUTHORS.length})` }));
     expect(screen.getByRole("button", { name: "Un Corazón" })).not.toBeNull();
     expect(screen.getByRole("button", { name: "Hillsong" })).not.toBeNull();
 
@@ -290,7 +293,7 @@ describe("SetlistEditor — «Nueva canción» offers the existing artists", () 
     );
     // The search clears and the new artist shows as a selected chip.
     await waitFor(() => expect(artist.value).toBe(""));
-    expect(screen.getByRole("button", { name: "Nuevo Artista" }).className).toContain("bg-accent/15");
+    expect(screen.getByRole("button", { name: "Nuevo Artista" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("«+ Crear» on an artist that already exists lists and selects it once", async () => {
@@ -307,6 +310,6 @@ describe("SetlistEditor — «Nueva canción» offers the existing artists", () 
     await waitFor(() => expect(artist.value).toBe(""));
     const chips = screen.getAllByRole("button", { name: "Un Corazón" });
     expect(chips).toHaveLength(1);
-    expect(chips[0].className).toContain("bg-accent/15");
+    expect(chips[0].getAttribute("aria-pressed")).toBe("true");
   });
 });
