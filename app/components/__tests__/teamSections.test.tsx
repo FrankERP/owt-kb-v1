@@ -116,27 +116,25 @@ describe("TeamSections", () => {
     expect(header(/Cabina/).getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("opens every section from `lg` on the run sheet (`openAllFrom`), and leaves a phone folded", () => {
-    const matchMedia = vi.fn((query: string) => ({
-      matches: query === "(min-width: 1024px)",
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    }));
-    vi.stubGlobal("matchMedia", matchMedia);
-    try {
-      mount({ myName: "", viewerTypes: null, openAllFrom: "lg" });
-      for (const s of [/Voces/, /Banda/, /Cabina/]) expect(header(s).getAttribute("aria-expanded")).toBe("true");
-      // A tap still closes one, the rail is not locked open.
-      fireEvent.click(header(/Cabina/));
-      expect(header(/Cabina/).getAttribute("aria-expanded")).toBe("false");
-      cleanup();
-      // The phone: the query does not match, so the defaults decide as before.
-      matchMedia.mockImplementation(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
-      mount({ myName: "", viewerTypes: null, openAllFrom: "lg" });
-      expect(header(/Voces/).getAttribute("aria-expanded")).toBe("false");
-    } finally {
-      vi.unstubAllGlobals();
-    }
+  it("lays the team out open from `lg` on the run sheet (`openAllFrom`) beside the folding sections a phone keeps", () => {
+    const { container } = mount({ myName: "", viewerTypes: null, openAllFrom: "lg" });
+    // The open rendering: no disclosures, every face, hidden below `lg` by CSS.
+    const open = container.querySelector("[data-team-open]") as HTMLElement;
+    expect(open.className).toContain("hidden");
+    expect(open.className).toContain("lg:block");
+    expect(open.querySelector("button[aria-expanded]")).toBeNull();
+    expect(open.textContent).toContain("Voces");
+    expect(open.textContent).toContain("Banda");
+    expect(open.textContent).toContain("Cabina");
+    // The folding rendering is the one a phone shows, and still folds as before.
+    expect(open.previousElementSibling?.className).toContain("lg:hidden");
+    expect(header(/Voces/).getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("renders ONE folding rendering, shown at every width, without `openAllFrom`", () => {
+    const { container } = mount({ myName: "" });
+    expect(container.querySelector("[data-team-open]")).toBeNull();
+    expect(container.querySelector(".lg\\:hidden")).toBeNull();
   });
 
   it("renders nothing for a service with no one seated", () => {

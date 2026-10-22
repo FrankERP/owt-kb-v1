@@ -201,6 +201,14 @@ describe("DayCard", () => {
     expect(main.textContent).toContain("Setlist");
     expect(grid.lastElementChild?.textContent).toContain("Voces");
     expect(grid.lastElementChild?.contains(main)).toBe(false);
+    // The rail's team is laid out open from `lg` (the CSS-switched rendering).
+    expect(grid.lastElementChild?.querySelector("[data-team-open]")).not.toBeNull();
+  });
+
+  it("wraps nothing on a stacked card: the message and the setlist are the card's own children", () => {
+    const { container } = mount({ setlist: { week: "2026-09-13", songs: [song("s1")], team_notes: "Hoy a las 10" } });
+    expect(container.querySelector("[data-run-sheet-main]")).toBeNull();
+    expect(container.querySelector("[data-team-open]")).toBeNull();
   });
 
   it("stacks a `wide` card with a setlist but no team, instead of reserving an empty rail", () => {

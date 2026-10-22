@@ -182,6 +182,81 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
       ]
     : [];
 
+  // The message and the songs, rendered ONCE: the run sheet wraps them as its
+  // left column, a stacked card lays them straight into its flow.
+  const runSheetMain = (
+    <>
+      {/* Keyed by the text: `CalendarView` keys its cards by index, so the
+          same instance can be handed another day's note — which must arrive
+          folded, not inheriting the «Leer todo» the reader opened before. */}
+      {setlist?.team_notes && <TeamNote key={setlist.team_notes} text={setlist.team_notes} />}
+
+      {/* Setlist */}
+      {hasSetlist && (
+        <section>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="font-label text-xs md:text-sm lg:text-base uppercase tracking-widest text-surface-ink-l70-d50">
+              Setlist
+            </h4>
+            <div className="flex items-center gap-3">
+              {!hero && <PracticePlaylistButton songIds={setlist!.songs.map(s => s._id)} accentVar="--accent-rgb" />}
+              {canEdit && date && (
+                <button
+                  onClick={() => setEditSetlist(true)}
+                  className="flex items-center gap-1 font-label text-[11px] uppercase tracking-widest text-mono-500 hover:text-accent transition-colors"
+                >
+                  <PencilIcon />
+                  Editar
+                </button>
+              )}
+            </div>
+          </div>
+          <ol className="divide-y divide-ink-dim/[0.06]">
+            {runs.map((run) => {
+              // Single-song medley groups render as plain singles
+              if (run.kind === "single" || (run.kind === "medley" && run.songs.length === 1)) {
+                const { song, n } = run.kind === "single" ? run : run.songs[0];
+                return (
+                  <li key={song._id}>
+                    <SongRow song={song} n={n} onOpen={openSheet} onQuickActions={onQuickActions} />
+                  </li>
+                );
+              }
+              // Multi-song medley group — left-spine bracket, no box
+              return (
+                <li key={run.songs[0].song._id + "_m"} className="relative pl-4 my-0.5">
+                  {/* vertical accent spine */}
+                  <span
+                    aria-hidden
+                    className="absolute left-1 top-6 bottom-2 w-[2px] rounded-full"
+                    style={{ background: `linear-gradient(to bottom, ${themeColour(NEUTRAL, 0)}, ${themeColour(NEUTRAL, 0.3333)} 12%, ${themeColour(NEUTRAL, 0.3333)} 88%, ${themeColour(NEUTRAL, 0)})` }}
+                  />
+                  {/* MEDLEY label */}
+                  {/* `color` on the wrapper, not on the icon: ChainLinkIcon strokes with
+                      `currentColor` by default, and `var()` is NOT substituted inside an SVG
+                      presentation attribute — a token passed as `color` would be dropped
+                      silently. The sibling span sets its own colour, so it is unaffected. */}
+                  <div className="flex items-center gap-1 pl-2 -ml-2 mb-0.5" style={{ color: themeColour(NEUTRAL) }}>
+                    <ChainLinkIcon opacity={0.65} />
+                    <span className="font-label text-[10px] uppercase tracking-[0.18em]" style={{ color: `${themeColour(NEUTRAL, 0.8)}` }}>Medley</span>
+                  </div>
+                  {run.songs.map(({ song, n }, si) => (
+                    <div key={song._id}>
+                      {si > 0 && (
+                        <span className="block w-4 text-center font-label text-[11px] leading-none -my-0.5" style={{ color: `${themeColour(NEUTRAL, 0.6)}` }}>+</span>
+                      )}
+                      <SongRow song={song} n={n} onOpen={openSheet} onQuickActions={onQuickActions} dense />
+                    </div>
+                  ))}
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      )}
+    </>
+  );
+
   return (
     <>
       <div className={nested ? "relative overflow-hidden rounded-[var(--brand-radius-panel)]" : "brand-facet-panel brand-surface overflow-hidden rounded-[var(--brand-radius-panel)]"}>
@@ -243,78 +318,10 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
               `space-y-5` is the stacked gap and has to go once the two are
               columns, or the rail starts a row lower than the setlist. */}
           <div className={wide ? "space-y-5 lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-8 lg:space-y-0 xl:grid-cols-[minmax(0,1fr)_24rem]" : "space-y-5"}>
-            {(setlist?.team_notes || hasSetlist) && (
-            <div className="space-y-5" data-run-sheet-main="">
-            {/* Keyed by the text: `CalendarView` keys its cards by index, so the
-                same instance can be handed another day's note — which must arrive
-                folded, not inheriting the «Leer todo» the reader opened before. */}
-            {setlist?.team_notes && <TeamNote key={setlist.team_notes} text={setlist.team_notes} />}
-
-            {/* Setlist */}
-            {hasSetlist && (
-              <section>
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-label text-xs md:text-sm lg:text-base uppercase tracking-widest text-surface-ink-l70-d50">
-                    Setlist
-                  </h4>
-                  <div className="flex items-center gap-3">
-                    {!hero && <PracticePlaylistButton songIds={setlist!.songs.map(s => s._id)} accentVar="--accent-rgb" />}
-                    {canEdit && date && (
-                      <button
-                        onClick={() => setEditSetlist(true)}
-                        className="flex items-center gap-1 font-label text-[11px] uppercase tracking-widest text-mono-500 hover:text-accent transition-colors"
-                      >
-                        <PencilIcon />
-                        Editar
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <ol className="divide-y divide-ink-dim/[0.06]">
-                  {runs.map((run) => {
-                    // Single-song medley groups render as plain singles
-                    if (run.kind === "single" || (run.kind === "medley" && run.songs.length === 1)) {
-                      const { song, n } = run.kind === "single" ? run : run.songs[0];
-                      return (
-                        <li key={song._id}>
-                          <SongRow song={song} n={n} onOpen={openSheet} onQuickActions={onQuickActions} />
-                        </li>
-                      );
-                    }
-                    // Multi-song medley group — left-spine bracket, no box
-                    return (
-                      <li key={run.songs[0].song._id + "_m"} className="relative pl-4 my-0.5">
-                        {/* vertical accent spine */}
-                        <span
-                          aria-hidden
-                          className="absolute left-1 top-6 bottom-2 w-[2px] rounded-full"
-                          style={{ background: `linear-gradient(to bottom, ${themeColour(NEUTRAL, 0)}, ${themeColour(NEUTRAL, 0.3333)} 12%, ${themeColour(NEUTRAL, 0.3333)} 88%, ${themeColour(NEUTRAL, 0)})` }}
-                        />
-                        {/* MEDLEY label */}
-                        {/* `color` on the wrapper, not on the icon: ChainLinkIcon strokes with
-                            `currentColor` by default, and `var()` is NOT substituted inside an SVG
-                            presentation attribute — a token passed as `color` would be dropped
-                            silently. The sibling span sets its own colour, so it is unaffected. */}
-                        <div className="flex items-center gap-1 pl-2 -ml-2 mb-0.5" style={{ color: themeColour(NEUTRAL) }}>
-                          <ChainLinkIcon opacity={0.65} />
-                          <span className="font-label text-[10px] uppercase tracking-[0.18em]" style={{ color: `${themeColour(NEUTRAL, 0.8)}` }}>Medley</span>
-                        </div>
-                        {run.songs.map(({ song, n }, si) => (
-                          <div key={song._id}>
-                            {si > 0 && (
-                              <span className="block w-4 text-center font-label text-[11px] leading-none -my-0.5" style={{ color: `${themeColour(NEUTRAL, 0.6)}` }}>+</span>
-                            )}
-                            <SongRow song={song} n={n} onOpen={openSheet} onQuickActions={onQuickActions} dense />
-                          </div>
-                        ))}
-                      </li>
-                    );
-                  })}
-                </ol>
-              </section>
-            )}
-            </div>
-            )}
+            {/* The left column exists only on the run sheet: a stacked card has
+                no column to fill, and `space-y-5` inside `space-y-5` would be
+                a wrapper for nothing. */}
+            {wide ? <div className="space-y-5" data-run-sheet-main="">{runSheetMain}</div> : runSheetMain}
 
             {/* Team — Voces, Banda, Cabina as folding sections of faces; on the
                 run sheet every section starts open from `lg`, where the rail

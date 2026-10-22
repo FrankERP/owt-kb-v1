@@ -25,7 +25,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Fragment, useId, useState } from "react";
-import { useMediaQuery } from "@/app/utils/useMediaQuery";
 import Collapse from "./ui/Collapse";
 import { WarningIcon } from "./ui/icons";
 import { findDuplicates } from "@/app/utils/agenda";
@@ -61,23 +60,28 @@ export default function TeamSections({
   /** Every section starts open — an admin's view (see `DayCard`). A tap still closes one. */
   openAll?: boolean;
   /**
-   * Every section starts open from this breakpoint — the home run sheet's rail
-   * from `lg` (Frank, 2026-10-22: «el equipo expandido» beside the setlist), while
-   * a phone keeps the folding sections. A tap still closes one at any width.
+   * From this breakpoint the team is laid out OPEN, with no disclosures — the
+   * home run sheet's rail from `lg` (Frank, 2026-10-22: «el equipo expandido»
+   * beside the setlist), while a phone keeps the folding sections. Two
+   * renderings, one shown per width by CSS (`lg:hidden` / `hidden lg:block`):
+   * the open one cannot be a JS media query, because a server render does not
+   * know the width, and a desktop that hydrates folded and then tweens three
+   * sections open is a layout shift on every visit — `Collapse` animates on a
+   * tap only (`docs/MOTION.md`). The same `lg:` Tailwind screen as the rail's
+   * grid, so the two cannot drift apart.
    */
   openAllFrom?: "lg";
 }) {
   const sections = teamSections(team);
-  const wideOpen = useMediaQuery(openAllFrom === "lg" ? "(min-width: 1024px)" : "");
   // Overrides, not the open set itself: the default depends on `myName`, which a
   // client-only session fills in AFTER first paint — a set frozen in a useState
   // initializer would keep the member's own section shut once it arrived.
   const [overrides, setOverrides] = useState<Partial<Record<TeamSectionId, boolean>>>({});
-  const defaults = openAll || wideOpen ? new Set(sections.map((s) => s.id)) : defaultOpenSections(sections, myName, viewerTypes);
+  const defaults = openAll ? new Set(sections.map((s) => s.id)) : defaultOpenSections(sections, myName, viewerTypes);
   if (!sections.length) return null;
 
-  return (
-    <div className="divide-y divide-ink/[0.06]">
+  const folding = (
+    <div className={`divide-y divide-ink/[0.06]${openAllFrom ? " lg:hidden" : ""}`}>
       {sections.map((s) => (
         <Section
           key={s.id}
@@ -89,6 +93,67 @@ export default function TeamSections({
         />
       ))}
     </div>
+  );
+  if (!openAllFrom) return folding;
+  return (
+    <>
+      {folding}
+      <div className="hidden divide-y divide-ink/[0.06] lg:block" data-team-open="">
+        {sections.map((s) => (
+          <OpenSection key={s.id} section={s} myName={myName} photos={photos} />
+        ))}
+      </div>
+    </>
+  );
+}
+
+/** A section with no disclosure: its label line, then its faces — the run sheet's rail from `lg`. */
+function OpenSection({ section, myName, photos }: { section: TeamSection; myName: string; photos?: Record<string, string> }) {
+  const dups = findDuplicates(section.people.map((p) => p.name));
+  const people = section.people.filter((p) => p.name);
+  return (
+    <div className="py-3">
+      <p className="mb-2 font-label text-xs uppercase tracking-widest text-mono-400">
+        <SectionLabel section={section} count={people.length} dups={dups} />
+      </p>
+      <SectionBody section={section} people={people} myName={myName} photos={photos} dups={dups} />
+    </div>
+  );
+}
+
+/** «Voces · 8», plus the ⚠ count when someone is seated twice in the section. */
+function SectionLabel({ section, count, dups }: { section: TeamSection; count: number; dups: Set<string> }) {
+  return (
+    <>
+      {section.label} <span className="text-ink-dim">· {count}</span>
+      {dups.size > 0 && (
+        <span className="text-warning-strong"> · <WarningIcon size={11} className="inline-block align-[-1px]" /> {dups.size === 1 ? "repetido" : `${dups.size} repetidos`}</span>
+      )}
+    </>
+  );
+}
+
+/** The faces: Voces as its three seat panels, any other section as one row of faces. */
+function SectionBody({ section, people, myName, photos, dups }: {
+  section: TeamSection;
+  people: TeamPerson[];
+  myName: string;
+  photos?: Record<string, string>;
+  dups: Set<string>;
+}) {
+  return section.id === "voces" ? (
+    <div className="space-y-2">
+      {roleGroups(people).map((g) => (
+        <div key={g.role} className="rounded-xl bg-ink/[0.04] px-3 pb-3 pt-2">
+          <p className="mb-2 font-label text-[10px] uppercase tracking-widest text-ink-dim">
+            {g.role} · {g.people.length}
+          </p>
+          <Faces people={g.people} myName={myName} photos={photos} dups={dups} grouped />
+        </div>
+      ))}
+    </div>
+  ) : (
+    <Faces people={people} myName={myName} photos={photos} dups={dups} />
   );
 }
 
@@ -116,10 +181,7 @@ function Section({ section, open, onToggle, myName, photos }: {
       >
         <span className="min-w-0 flex-1">
           <span className="block font-label text-xs uppercase tracking-widest text-mono-400">
-            {section.label} <span className="text-ink-dim">· {people.length}</span>
-            {dups.size > 0 && (
-              <span className="text-warning-strong"> · <WarningIcon size={11} className="inline-block align-[-1px]" /> {dups.size === 1 ? "repetido" : `${dups.size} repetidos`}</span>
-            )}
+            <SectionLabel section={section} count={people.length} dups={dups} />
           </span>
           {!open && (
             // Two lines, not `truncate`: one line hid the later names (and a ⚠
@@ -139,20 +201,7 @@ function Section({ section, open, onToggle, myName, photos }: {
       {/* The padding rides on Collapse's inner div — a padded animated element
           never closes to zero (see Collapse). */}
       <Collapse open={open} id={id} className="pb-4 pt-1">
-        {section.id === "voces" ? (
-          <div className="space-y-2">
-            {roleGroups(people).map((g) => (
-              <div key={g.role} className="rounded-xl bg-ink/[0.04] px-3 pb-3 pt-2">
-                <p className="mb-2 font-label text-[10px] uppercase tracking-widest text-ink-dim">
-                  {g.role} · {g.people.length}
-                </p>
-                <Faces people={g.people} myName={myName} photos={photos} dups={dups} grouped />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <Faces people={people} myName={myName} photos={photos} dups={dups} />
-        )}
+        <SectionBody section={section} people={people} myName={myName} photos={photos} dups={dups} />
       </Collapse>
     </div>
   );
