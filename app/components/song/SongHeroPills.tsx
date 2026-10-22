@@ -122,7 +122,7 @@ export default function SongHeroPills({
               // hint belongs on the pill that sounds the same, not the one spelled
               // the same.
               ariaLabel: [
-                nativeKey && rootIndex(n) === rootIndex(nativeKey) ? `${n} (original)` : n,
+                nativeKey && rootIndex(n) === rootIndex(nativeKey) ? `${formatKey(n)} (original)` : formatKey(n),
                 mixRoots.has(rootIndex(n)) ? "con mix de ensayo" : null,
               ].filter(Boolean).join(", "),
             }))}

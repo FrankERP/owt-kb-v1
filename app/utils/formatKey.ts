@@ -10,16 +10,21 @@
 // hero badge, the rehearsal mixes and the play history — so the same key can
 // never be spelled two ways on one screen (Frank, 2026-10-22: «Prefiero B♭»).
 //
-// Only the accidental right after the root moves: a suffix ("m", "maj7", "/G")
-// is left as written, and anything that is not a key ("—", "Modal", "") is
-// returned untouched.
+// The root is upper-cased (the chip no longer does it) and the accidental right
+// after it becomes a symbol; a suffix ("m", "maj7") is left as written. A slash
+// key ("Gb/Bb") is two roots and both are spelled the same way. Anything that is
+// not a key ("—", "Modal", "") is returned untouched, apart from trimming.
 
-const KEY_RE = /^([A-Ga-g])([b#])(.*)$/;
+const KEY_RE = /^([A-Ga-g])([b#])?(.*)$/;
+
+function formatRoot(part: string): string {
+  const m = KEY_RE.exec(part);
+  if (!m) return part;
+  const [, root, accidental, rest] = m;
+  return `${root.toUpperCase()}${accidental === "b" ? "♭" : accidental === "#" ? "♯" : ""}${rest}`;
+}
 
 export function formatKey(key: string | null | undefined): string {
   if (!key) return "";
-  const m = KEY_RE.exec(key.trim());
-  if (!m) return key;
-  const [, root, accidental, rest] = m;
-  return `${root.toUpperCase()}${accidental === "b" ? "♭" : "♯"}${rest}`;
+  return key.trim().split("/").map(formatRoot).join("/");
 }

@@ -18,6 +18,18 @@ describe("formatKey", () => {
 
   it("upper-cases a lower-case root, since the chip no longer forces uppercase", () => {
     expect(formatKey("bb")).toBe("B♭");
+    expect(formatKey("e")).toBe("E");
+    expect(formatKey("am")).toBe("Am");
+  });
+
+  it("spells both roots of a slash key the same way", () => {
+    expect(formatKey("Gb/Bb")).toBe("G♭/B♭");
+    expect(formatKey("D/F#")).toBe("D/F♯");
+  });
+
+  it("trims whatever it is given", () => {
+    expect(formatKey(" Bb ")).toBe("B♭");
+    expect(formatKey(" Modal ")).toBe("Modal");
   });
 
   it("leaves anything that is not a key alone", () => {

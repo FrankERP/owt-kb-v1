@@ -110,7 +110,7 @@ describe("SongHeroPills", () => {
     );
 
     fireEvent.click(getByRole("button", { name: /Transponer/ }));
-    const flat = getByRole("radio", { name: "Eb" });
+    const flat = getByRole("radio", { name: "E♭" });
     expect(flat.textContent).toBe("E♭");
     expect(flat.querySelector("span.normal-case")?.textContent).toBe("E♭");
   });
@@ -133,7 +133,7 @@ describe("SongHeroPills", () => {
     );
     fireEvent.click(getByRole("button", { name: /Transponer/ }));
     expect(getByRole("radio", { name: "G (original), con mix de ensayo" })).toBeTruthy();
-    expect(getByRole("radio", { name: "F#, con mix de ensayo" })).toBeTruthy();
+    expect(getByRole("radio", { name: "F♯, con mix de ensayo" })).toBeTruthy();
     expect(getByRole("radio", { name: "A" })).toBeTruthy();
   });
 });

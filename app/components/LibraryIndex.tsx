@@ -248,9 +248,11 @@ export default function LibraryIndex(props: LibraryIndexProps) {
                 {filterCount === 1 ? "con 1 filtro activo" : `con ${filterCount} filtros activos`}
               </p>
             )}
-            <Button variant="secondary" size="sm" onClick={clear}>
-              {filterCount > 0 ? "Quitar filtros" : "Limpiar búsqueda"}
-            </Button>
+            {active && (
+              <Button variant="secondary" size="sm" onClick={clear}>
+                {filterCount > 0 ? "Quitar filtros" : "Limpiar búsqueda"}
+              </Button>
+            )}
           </div>
         ) : (
           <div className={letters.length > 1 ? "pr-7" : ""}>
