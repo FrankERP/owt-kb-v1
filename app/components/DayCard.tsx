@@ -22,6 +22,7 @@ import QuickActions, { type QuickAction } from "./ui/QuickActions";
 import useLongPress from "./ui/useLongPress";
 import { useToast } from "./ui/Toast";
 import TeamSections from "./TeamSections";
+import { formatKey } from "@/app/utils/formatKey";
 
 export interface DayCardProps {
   day: string;
@@ -407,9 +408,9 @@ function SongRow({ song, n, onOpen, onQuickActions, dense = false }: {
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         {song.play_key && song.key && song.play_key !== song.key && (
-          <span className="font-label text-[11px] px-1.5 py-0.5 rounded border border-mono-700 bg-mono-800/50 text-mono-500 leading-tight">orig. {song.key}</span>
+          <span className="font-label text-[11px] px-1.5 py-0.5 rounded border border-mono-700 bg-mono-800/50 text-mono-500 leading-tight">orig. {formatKey(song.key)}</span>
         )}
-        <span className="font-label text-xs font-semibold text-ink">{song.play_key || song.key}</span>
+        <span className="font-label text-xs font-semibold text-ink">{formatKey(song.play_key || song.key)}</span>
         {song.bpm && <span className="hidden w-10 text-right font-label text-[11px] text-mono-500 tabular-nums sm:inline">{song.bpm}</span>}
       </div>
     </button>

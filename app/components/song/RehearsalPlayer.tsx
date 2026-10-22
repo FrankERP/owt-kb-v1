@@ -15,6 +15,7 @@ import type { RehearsalMix } from "@/app/utils/interface";
 import { groupMixes, mixLabel, mixTones, mixesForKey, preselectMix } from "@/app/utils/rehearsalMixes";
 import { useTransposeOptional } from "./TransposeProvider";
 import Waveform from "./Waveform";
+import { formatKey } from "@/app/utils/formatKey";
 
 export default function RehearsalPlayer({
   mixes, songId, songTitle, songSlug, preselect,
@@ -119,8 +120,8 @@ export default function RehearsalPlayer({
       {tones.length > 1 && shared?.soundingKey && selection.tone && (
         <p className="font-label text-[11px] uppercase tracking-widest text-mono-500" aria-live="polite">
           {selection.exact
-            ? <>Tono {selection.tone} · hay mixes en {tones.join(", ")}</>
-            : <>No hay mix en {shared?.soundingKey} — se muestra {selection.tone} · hay mixes en {tones.join(", ")}</>}
+            ? <>Tono {formatKey(selection.tone)} · hay mixes en {tones.map(formatKey).join(", ")}</>
+            : <>No hay mix en {formatKey(shared?.soundingKey)} — se muestra {formatKey(selection.tone)} · hay mixes en {tones.map(formatKey).join(", ")}</>}
         </p>
       )}
       {groups.map((g) => (
@@ -152,7 +153,7 @@ export default function RehearsalPlayer({
                     <div className="min-w-0 flex-1">
                       <p className="font-body text-sm font-semibold truncate">{label}</p>
                       <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">
-                        {m.tone}{m.bpm ? ` · ${m.bpm} BPM` : ""}
+                        {formatKey(m.tone)}{m.bpm ? ` · ${m.bpm} BPM` : ""}
                       </p>
                     </div>
                     <Equalizer playing={playing} />

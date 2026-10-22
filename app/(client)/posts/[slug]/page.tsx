@@ -33,6 +33,7 @@ import { mixTones } from "@/app/utils/rehearsalMixes";
 import { countLyricLines } from "@/app/utils/practice";
 import { requireWorshipPage } from "@/app/utils/worshipPageGate";
 import { revealProps } from "@/app/utils/reveal";
+import { formatKey } from "@/app/utils/formatKey";
 
 interface Params {
   params: Promise<{ slug: string }>;
@@ -447,7 +448,7 @@ const Page = async ({ params }: Params) => {
                     </div>
                     {entry.play_key && (
                       <span className="font-label text-sm px-3 py-1 rounded-full border border-accent/40 text-accent shrink-0">
-                        {entry.play_key}
+                        {formatKey(entry.play_key)}
                       </span>
                     )}
                   </div>
@@ -465,7 +466,7 @@ const Page = async ({ params }: Params) => {
                           </Link>
                           {song.play_key && (
                             <span className="font-label text-xs text-accent/70 shrink-0">
-                              {song.play_key}
+                              {formatKey(song.play_key)}
                             </span>
                           )}
                         </li>

@@ -4,6 +4,7 @@ import { requireActiveSession } from "@/app/utils/authGuards";
 import { serverClient } from "@/sanity/lib/serverClient";
 import Navbar from "@/app/components/Navbar";
 import Button from "@/app/components/ui/Button";
+import { ArrowLeftIcon } from "@/app/components/ui/icons";
 import SettingsCard from "@/app/components/SettingsCard";
 import { revealProps } from "@/app/utils/reveal";
 import { MEMBER_PROFILE_QUERY } from "../queries";
@@ -61,7 +62,8 @@ export default async function AjustesPage() {
         <div {...revealProps(0)}>
           {/* Back to the page this hangs off, not to wherever history points. */}
           <Button variant="ghost" size="sm" href="/me">
-            ← Mi semana
+            <ArrowLeftIcon size={13} />
+            Mi semana
           </Button>
           <h1 className="font-display text-2xl uppercase tracking-wide mt-2">
             Ajustes

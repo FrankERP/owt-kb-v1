@@ -176,17 +176,19 @@ describe("AgendaView", () => {
         }),
       ],
     });
-    expect(within(rows()[0]).getByText("⚠ 2 conflictos")).toBeTruthy();
+    expect(within(rows()[0]).getByText("2 conflictos")).toBeTruthy();
+    expect(rows()[0].querySelector('[data-icon="warning"]')).not.toBeNull();
     expect(rows()[0].getAttribute("aria-label")).toMatch(/, 2 conflictos$/);
   });
 
   it("says «conflicto» in the singular — same wording in the chip and the label — and nothing at all when there is none", () => {
     mountAgenda({ "2026-09-13": [sunday("2026-09-13", { leads: ["Ana", "Ana"] })] });
-    expect(within(rows()[0]).getByText("⚠ 1 conflicto")).toBeTruthy();
+    expect(within(rows()[0]).getByText("1 conflicto")).toBeTruthy();
     expect(rows()[0].getAttribute("aria-label")).toMatch(/, 1 conflicto$/);
     cleanup();
     mountAgenda();
-    expect(screen.queryByText(/⚠/)).toBeNull();
+    expect(screen.queryByText(/conflicto/)).toBeNull();
+    expect(document.querySelector('[data-icon="warning"]')).toBeNull();
     expect(rows()[0].getAttribute("aria-label")).not.toMatch(/conflicto/);
   });
 
