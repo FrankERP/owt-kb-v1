@@ -22,6 +22,7 @@
 // 390 px phone. With one month per arrow the label is short anyway, and a long one
 // («Septiembre 2026») now clips instead of pushing the arrows off-screen.
 import { useRouter } from "next/navigation";
+import { ChevronLeftIcon, ChevronRightIcon } from "./ui/icons";
 import Button from "./ui/Button";
 import DateField from "./ui/DateField";
 import { addMonths, monthLabel, scheduleHref } from "../utils/scheduleMonths";
@@ -46,7 +47,7 @@ export default function ScheduleHeader({
           size="lg"
           className="shrink-0"
         >
-          <span aria-hidden>‹</span>
+          <ChevronLeftIcon size={16} />
         </Button>
         <div className="min-w-0 flex-1 text-center">
           <h2 className="truncate font-display text-base font-bold uppercase tracking-wide sm:text-lg">
@@ -66,7 +67,7 @@ export default function ScheduleHeader({
           size="lg"
           className="shrink-0"
         >
-          <span aria-hidden>›</span>
+          <ChevronRightIcon size={16} />
         </Button>
       </div>
       <div className="mb-6 flex items-center justify-center gap-3">

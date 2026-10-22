@@ -59,7 +59,8 @@ describe("LibraryIndex", () => {
 
   it("carries the ONE count of the surface in the search placeholder", () => {
     mount();
-    expect(screen.getByPlaceholderText("Buscar entre 2 canciones")).toBeDefined();
+    expect(screen.getByPlaceholderText("Buscar canción o artista")).toBeDefined();
+    expect(screen.getByText("2 canciones")).toBeDefined();
   });
 
   it("narrows to the matching row on a query, and offers Limpiar", () => {

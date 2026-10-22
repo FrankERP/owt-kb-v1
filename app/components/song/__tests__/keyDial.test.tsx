@@ -111,8 +111,8 @@ describe("SongHeroPills", () => {
 
     fireEvent.click(getByRole("button", { name: /Transponer/ }));
     const flat = getByRole("radio", { name: "Eb" });
-    expect(flat.textContent).toBe("Eb");
-    expect(flat.querySelector("span.normal-case")?.textContent).toBe("Eb");
+    expect(flat.textContent).toBe("E♭");
+    expect(flat.querySelector("span.normal-case")?.textContent).toBe("E♭");
   });
 
   it("arms the dial over a plain-text chart when mixes exist in more than one key, and marks those keys", () => {

@@ -32,7 +32,7 @@ describe("ChordChart transposition", () => {
     fireEvent.click(getByRole("button", { name: "Subir medio tono" }));
 
     expect(chords(container)).toEqual(["Ab", "Eb"]);
-    expect(readout(container)).toBe("Ab");
+    expect(readout(container)).toBe("A♭");
     // The keyed container remounts, so the old node is detached rather than reused.
     expect(before.isConnected).toBe(false);
     expect(chart(container).className).toContain("animate-fade-in");
@@ -51,7 +51,7 @@ describe("ChordChart transposition", () => {
 
     fireEvent.click(getByRole("button", { name: "Bajar medio tono" }));
     expect(chords(container)).toEqual(["F#", "C#"]);
-    expect(readout(container)).toBe("F#");
+    expect(readout(container)).toBe("F♯");
   });
 
   it("takes its transposition from the provider when one is present", () => {

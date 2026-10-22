@@ -69,6 +69,8 @@ export default function LibraryIndex(props: LibraryIndexProps) {
 
   const filtered = useMemo(() => applyLibraryFilters(posts, filters, fuse), [posts, filters, fuse]);
   const active = !!(filters.q || filters.tags.length || filters.author || filters.key);
+  // Filters other than the query — what «Quitar filtros» in the empty state names.
+  const filterCount = filters.tags.length + (filters.author ? 1 : 0) + (filters.key ? 1 : 0);
   // A query orders by relevance, so the letter sections only exist when idle.
   const groups = useMemo(
     () => (filters.q ? [{ letter: "", posts: filtered }] : groupByLetter(filtered)),
@@ -205,8 +207,10 @@ export default function LibraryIndex(props: LibraryIndexProps) {
             size={1}
             value={filters.q}
             onChange={(e) => set({ ...filters, q: e.target.value })}
-            // The ONE count on this surface (spec §18) lives in the placeholder.
-            placeholder={`Buscar entre ${posts.length} canciones`}
+            // A fixed prompt: «Buscar entre 147 canciones» truncated on every phone and
+            // grew with the catalogue. The ONE count on this surface (spec §18) moved to
+            // the results line below, which is empty while idle anyway.
+            placeholder="Buscar canción o artista"
             aria-label="Buscar canciones por título, artista o tonalidad"
             className="w-full bg-transparent py-3 pl-10 pr-3 font-label text-[16px] sm:text-sm text-ink placeholder:text-placeholder focus:outline-none"
           />
@@ -220,7 +224,9 @@ export default function LibraryIndex(props: LibraryIndexProps) {
           idle; Limpiar stays conditional since it has nothing to do idle. */}
       <div className="mb-4 flex items-center justify-between gap-3">
         <p className="font-label text-[11px] uppercase tracking-widest text-ink-dim" aria-live="polite">
-          {active ? `${filtered.length} ${filtered.length === 1 ? "resultado" : "resultados"}` : ""}
+          {active
+            ? `${filtered.length} ${filtered.length === 1 ? "resultado" : "resultados"}`
+            : `${posts.length} ${posts.length === 1 ? "canción" : "canciones"}`}
         </p>
         {active && (
           <Button variant="ghost" size="sm" onClick={clear}>
@@ -231,8 +237,20 @@ export default function LibraryIndex(props: LibraryIndexProps) {
 
       <div className="relative">
         {filtered.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 py-20 text-mono-400">
-            <p className="font-label text-sm uppercase tracking-widest">No se encontraron canciones</p>
+          // The way out sits under the message, not up by the search box: a reader
+          // who just typed something that found nothing is looking HERE.
+          <div className="flex flex-col items-center gap-3 py-20 text-center text-mono-400">
+            <p className="font-label text-sm uppercase tracking-widest">
+              {filters.q ? `Nada para «${filters.q}»` : "No se encontraron canciones"}
+            </p>
+            {filterCount > 0 && (
+              <p className="font-body text-sm text-ink-dim">
+                {filterCount === 1 ? "con 1 filtro activo" : `con ${filterCount} filtros activos`}
+              </p>
+            )}
+            <Button variant="secondary" size="sm" onClick={clear}>
+              {filterCount > 0 ? "Quitar filtros" : "Limpiar búsqueda"}
+            </Button>
           </div>
         ) : (
           <div className={letters.length > 1 ? "pr-7" : ""}>

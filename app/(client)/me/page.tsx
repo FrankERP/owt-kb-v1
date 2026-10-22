@@ -10,6 +10,9 @@ import { DayCard, type DayCardProps } from "@/app/components/DayCard";
 import DayCardDisclosure from "@/app/components/DayCardDisclosure";
 import MeHeader from "@/app/components/MeHeader";
 import AddToCalendarButton from "@/app/components/AddToCalendarButton";
+import { ChevronRightIcon } from "@/app/components/ui/icons";
+import { WEEKEND_SERVICE_TIME } from "@/app/utils/calendarFeed";
+import { isServiceTime } from "@/app/utils/serviceTime";
 import { Setlist, SetlistSong, ProposalStatus } from "@/app/utils/interface";
 import { describeContributors } from "@/app/utils/proposalContributors";
 import { pickUnique, serviceDayKey } from "@/app/utils/serviceReadSelect";
@@ -370,11 +373,22 @@ export default async function MePage() {
     visibleAssignments.map(({ dateKey, day, doc }) => ({ dateKey, day, seat: seatLabel(doc) })),
   );
 
+  // Timed like the subscription feed (`buildFeedEvents`): a weekend takes the
+  // team's standing start time, a special its own `time` when it has a valid one,
+  // and anything else stays all-day. Until 2026-10-22 this download was all-day
+  // for every service while the feed already said 18:00 / 11:00 — the same
+  // Saturday landed at two different times depending on which button you pressed.
   const calendarServices = visibleAssignments.map(({ dateKey, day, doc }) => {
     const role = seatLabel(doc);
+    const time =
+      day === "Sábado" ? WEEKEND_SERVICE_TIME.saturday
+      : day === "Domingo" ? WEEKEND_SERVICE_TIME.sunday
+      : isServiceTime(doc.time) ? doc.time
+      : undefined;
     return {
       uid: doc._id,
       date: dateKey,
+      time,
       title: role ? `${day} · Oasis Worship (${role})` : `${day} · Oasis Worship`,
       description: role ? `Tu rol: ${role}` : undefined,
     };
@@ -589,7 +603,7 @@ export default async function MePage() {
                   ? "Sin fechas marcadas"
                   : `${upcomingUnavailable} fecha${upcomingUnavailable === 1 ? "" : "s"} marcada${upcomingUnavailable === 1 ? "" : "s"}`}
               </span>
-              <span aria-hidden="true" className="font-body text-mono-500">›</span>
+              <ChevronRightIcon size={16} className="text-mono-500" />
             </span>
           </Link>
         ) : (
