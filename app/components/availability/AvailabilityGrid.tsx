@@ -191,20 +191,18 @@ export default function AvailabilityGrid({ state, selecting, serviceDates = [], 
     setPendingNote(null);
   }, [pendingNote, openNote]);
 
-  // The mode flipped (either direction): the popover is anchored to a cell whose
-  // style is about to change, and a half-finished drag must never survive the
-  // switch. On a CHANGE only — the first render is not a switch, and closing a
-  // popover the host has not opened would be a stray parent update on mount.
+  // The mode flipped (either direction): a half-finished drag must never survive
+  // the switch. Only the gesture is reset here — the note popover is the host's,
+  // and the host closes it in the same update that flips the mode, so the cell
+  // it was anchored to never re-renders read-only with the popover still up.
+  // On a CHANGE only: the first render is not a switch.
   const prevSelecting = useRef(selecting);
   useEffect(() => {
     if (prevSelecting.current === selecting) return;
     prevSelecting.current = selecting;
-    closeNote();
     setDragNow(null);
     solidRef.current = false;
     setShadow(0);
-    // `closeNote` is the host's setter, stable for the panel's life.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selecting]);
 
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
@@ -405,13 +403,13 @@ export default function AvailabilityGrid({ state, selecting, serviceDates = [], 
 
   return (
     <div className="space-y-4">
-      {/* The in-mode hint, and nothing outside it: the host's «Marcar días» is
-          the instruction when the mode is off. */}
-      {selecting && (
-        <p className="font-body text-sm text-mono-500">
-          Arrastra sobre los días que no puedes. Suelta para escribir la razón.
-        </p>
-      )}
+      {/* One line in both states, so arming the mode never shifts the months
+          under the finger that is about to drag on them. */}
+      <p className="font-body text-sm text-mono-500">
+        {selecting
+          ? "Arrastra sobre los días que no puedes. Suelta para escribir la razón."
+          : "Toca «Marcar días» para marcar o editar los días que no puedes."}
+      </p>
 
       {/* Navigation: two icon buttons around the range heading (design pass C,
           2026-10-22). They used to be the words «Anterior»/«Siguiente», which

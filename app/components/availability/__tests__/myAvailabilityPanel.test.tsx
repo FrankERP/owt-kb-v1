@@ -103,7 +103,24 @@ describe("MyAvailabilityPanel — one surface (R3 F3)", () => {
     expect(screen.getByText(/Arrastra sobre los días/)).toBeTruthy();
     fireEvent.click(done);
     expect(screen.getByRole("button", { name: "Marcar días" })).toBeTruthy();
+    // One hint line in both states, so the flip never shifts the months.
     expect(screen.queryByText(/Arrastra sobre los días/)).toBeNull();
+    expect(screen.getByText(/Toca «Marcar días»/)).toBeTruthy();
+  });
+
+  it("«Listo» closes an open note in the same update it leaves the mode", () => {
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: "Marcar días" }));
+    const months = document.getElementById("availability-months")!;
+    const card = screen.getByText("Octubre 2026").closest("div")!;
+    const cell = Array.from(card.querySelectorAll("button")).find((b) => b.textContent?.trim() === "4")!;
+    document.elementFromPoint = () => cell;
+    fireEvent.pointerDown(months, { pointerId: 1, isPrimary: true, button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(months, { pointerId: 1, clientX: 10, clientY: 10 });
+    expect(screen.queryByPlaceholderText(/razón/i)).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Listo" }));
+    expect(screen.queryByPlaceholderText(/razón/i)).toBeNull();
   });
 
   it("an edit raises the save bar with its count, and «Guardar» sits in it", () => {

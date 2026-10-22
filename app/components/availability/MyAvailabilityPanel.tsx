@@ -78,6 +78,14 @@ export default function MyAvailabilityPanel({ initialRev, initialDates, serviceD
   });
   const { notes, setNote, remove, applyRecurring, save, saving, dirty, changeCount, saveError, conflict, upcomingCount } = state;
 
+  // «Marcar días» ⇄ «Listo»: the popover is anchored to a cell whose style the
+  // flip changes, so it closes in the SAME update, not a render later. The grid
+  // resets its own half-finished drag on the prop change.
+  function toggleSelecting() {
+    setPopover(null);
+    setSelecting(v => !v);
+  }
+
   // `isos` arrives from the grid's drag-select: one popover, one «Razón», every
   // day in the span. `iso` stays the anchor and the positioning key.
   function openNote(iso: string, anchor: HTMLElement, isos?: string[]) {
@@ -118,7 +126,7 @@ export default function MyAvailabilityPanel({ initialRev, initialDates, serviceD
         <div className="flex items-center gap-2.5">
           {/* The primary action first and widest: a member comes here to mark
               days. «Repetir…» keeps its natural width beside it. */}
-          <MarkDaysButton selecting={selecting} onToggle={() => setSelecting(v => !v)} className="flex-1 sm:flex-none" />
+          <MarkDaysButton selecting={selecting} onToggle={toggleSelecting} className="flex-1 sm:flex-none" />
           <Button
             onClick={toggleRecur}
             aria-expanded={recurOpen}
@@ -151,15 +159,6 @@ export default function MyAvailabilityPanel({ initialRev, initialDates, serviceD
         </Collapse>
       </div>
 
-      {conflict && (
-        <p
-          role="status"
-          className="rounded-xl border border-negative-strong/25 bg-negative-strong/5 px-4 py-2 font-body text-sm text-negative-fg"
-        >
-          {conflict}
-        </p>
-      )}
-
       {/* The grid: the one surface that marks a date (F3). Mounted, never behind a
           disclosure — this page exists to show it. It goes last so «Guardar» and
           the notices stay above the three month tiles, where they were. */}
@@ -183,37 +182,43 @@ export default function MyAvailabilityPanel({ initialRev, initialDates, serviceD
 
       {/* The save bar: sticky (not fixed), so it rests in the flow at the end
           of the page and rises only while the months scroll past it. Present
-          only with something to save — a bar reading «Sin cambios» would be a
+          only with something to say — a bar reading «Sin cambios» would be a
           permanent strip across the bottom of a page most visits only read.
-          `-mx-6 px-6` runs it edge to edge across the page's gutters; the
-          right padding steps aside for the admin assistant's bubble, which
-          would otherwise sit on «Guardar» (`--assistant-fab-w`). */}
-      {(dirty || saving) && (
+          It also carries the held CONFLICT notice: a 409 adopts the server's
+          dates, so nothing is dirty any more and «Guardar» goes, but the
+          member is still looking at the month they just marked, and the only
+          explanation must be where their eyes are, not two screens up. `-mx-6
+          px-6` runs it edge to edge across the page's gutters; the right
+          padding steps aside for the admin assistant's bubble, which would
+          otherwise sit on «Guardar» (`--assistant-fab-w`). */}
+      {(dirty || saving || conflict) && (
         <div
           data-availability-save-bar=""
           className="sticky bottom-[var(--bottom-nav-h,0px)] z-20 -mx-6 flex items-center gap-3 border-t border-accent/15 bg-surface-base px-6 py-3 pr-[calc(1.5rem+var(--assistant-fab-w,0px))]"
         >
-          <p aria-live="polite" className="min-w-0 flex-1 font-body text-sm text-mono-500">
-            {saveError ? (
+          <p role="status" className="min-w-0 flex-1 font-body text-sm text-mono-500">
+            {conflict ? (
+              <span className="text-negative-fg">{conflict}</span>
+            ) : saveError ? (
               <span className="text-negative-fg">No se pudo guardar — {saveError}</span>
-            ) : changeCount > 0 ? (
+            ) : (
               <>
                 <span className="font-semibold text-ink">{changeCount} cambio{changeCount === 1 ? "" : "s"}</span> sin guardar
               </>
-            ) : (
-              "Cambios sin guardar"
             )}
           </p>
-          <Button
-            variant="primary"
-            size="lg"
-            onClick={save}
-            busy={saving}
-            busyLabel="Guardando…"
-            className="shrink-0"
-          >
-            Guardar
-          </Button>
+          {(dirty || saving) && (
+            <Button
+              variant="primary"
+              size="lg"
+              onClick={save}
+              busy={saving}
+              busyLabel="Guardando…"
+              className="shrink-0"
+            >
+              Guardar
+            </Button>
+          )}
         </div>
       )}
     </div>

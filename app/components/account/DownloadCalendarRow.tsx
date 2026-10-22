@@ -21,6 +21,12 @@ export default function DownloadCalendarRow({ services }: { services: ICSEvent[]
   const n = services.length;
   return (
     <li>
+      {/* A raw `<button>`, deliberately, and the one place a list row is one:
+          this is a LIST ROW that happens to act, not a button — the house
+          `Button` is an inline, uppercase, tracked control, and a list of four
+          rows with one of them styled as a pill would read as a mistake. Its
+          hover and focus physics are the list's, shared byte for byte with the
+          link rows through `ACCOUNT_ROW_CLASS`, so the two cannot drift. */}
       <button
         type="button"
         className={ACCOUNT_ROW_CLASS}

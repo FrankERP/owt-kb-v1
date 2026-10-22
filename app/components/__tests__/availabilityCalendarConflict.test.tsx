@@ -158,8 +158,10 @@ describe("MyAvailabilityPanel — saving against a revision", () => {
     expect(marked("Noviembre 2026", 1)).toBe(true);
     expect(marked("Septiembre 2026", 20)).toBe(true);
     expect(marked("Octubre 2026", 4)).toBe(false);
-    // Adopted state is the new baseline — nothing is left dirty, so no save bar.
-    expect(document.querySelector("[data-availability-save-bar]")).toBeNull();
+    // Adopted state is the new baseline — nothing is left dirty, so no «Guardar»;
+    // the bar itself stays up to carry the notice, where the member is looking.
+    expect(screen.queryByRole("button", { name: /Guarda/ })).toBeNull();
+    expect(document.querySelector("[data-availability-save-bar]")!.textContent).toContain("NO se guardaron");
 
     // And it does NOT auto-dismiss: it reports a write that never landed.
     // MUST be wrapped in act(): without it the re-render that useTransientValue's
@@ -184,7 +186,9 @@ describe("MyAvailabilityPanel — saving against a revision", () => {
       unavailableDates: ["2026-09-20", "2026-11-01", "2026-10-04"],
       unavailabilityNotes: [],
     });
-    expect(screen.queryByRole("status")).toBeNull();
+    // The bar's status line reads «Guardando…»'s state too, so it is null only
+    // once the second save has landed and nothing is dirty or held any more.
+    await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
   });
 
   it("rebases once — and keeps the edits — when only a sibling field changed", async () => {

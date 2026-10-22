@@ -250,7 +250,9 @@ describe("AvailabilityGrid — drag-select", () => {
     expect(months.style.touchAction).toBe("");
     expect(months.hasAttribute("data-pull-ignore")).toBe(false);
     expect(screen.getByRole("button", { name: "Marcar días" }).getAttribute("aria-pressed")).toBe("false");
-    expect(closeNoteMock).toHaveBeenCalled();
+    // Closing the note is the HOST's job on the flip (`myAvailabilityPanel.test.tsx`
+    // pins it); the grid only resets its own gesture.
+    expect(closeNoteMock).not.toHaveBeenCalled();
   });
 
   it("the next month's shadow only exists while the finger nears the page edge, and solidifies there", () => {
@@ -429,6 +431,21 @@ describe("AvailabilityGrid — drag-select", () => {
     const tile = document.querySelector("[data-shadow]");
     expect(tile).not.toBeNull();
     expect(tile!.getAttribute("data-solid")).toBe("false");
+  });
+
+  it("leaving the mode mid-drag drops the drag without committing", () => {
+    const months = renderGrid();
+    enterMode();
+    over(cell("2026-09-12"));
+    fireEvent.pointerDown(months, { ...DOWN, clientX: 10, clientY: 200 });
+    over(cell("2026-09-15"));
+    fireEvent.pointerMove(months, { ...MOVE, clientX: 10, clientY: 200 });
+    expect(cell("2026-09-13").className).toContain("ring-availability-strong/50");
+
+    fireEvent.click(screen.getByRole("button", { name: "Listo" }));
+    expect(cell("2026-09-13").className).not.toContain("ring-availability-strong/50");
+    fireEvent.pointerUp(months, { pointerId: 1 });
+    expect(applyRangeMock).not.toHaveBeenCalled();
   });
 
   it("paging mid-drag ends the drag without committing", () => {

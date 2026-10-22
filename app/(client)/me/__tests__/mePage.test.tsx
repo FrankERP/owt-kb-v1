@@ -188,17 +188,20 @@ describe("/me worship gating", () => {
     expect(html).not.toContain('id="ajustes"');
   });
 
-  it("lists «Tu cuenta» for everyone — Calendario and Ajustes — and the download only for worship", async () => {
+  it("lists «Tu cuenta» for everyone — Ajustes — and both calendar rows only for worship", async () => {
     // Design pass C (2026-10-22): the page ends on one list, not on a lone link.
+    // The subscription panel answers a kids-only member «solo para el equipo de
+    // alabanza» (`calendarFeedState`), so neither calendar row is offered to them.
     getMemberAccess.mockResolvedValue(access(["kids"]));
     let html = await renderPage();
     expect(html).toContain("Tu cuenta");
-    expect(html).toContain('href="/me/ajustes#calendario"');
     expect(html).toContain('href="/me/ajustes"');
+    expect(html).not.toContain('href="/me/ajustes#calendario"');
     expect(html).not.toContain("DESCARGA");
 
     getMemberAccess.mockResolvedValue(access(["worship"]));
     html = await renderPage();
+    expect(html).toContain('href="/me/ajustes#calendario"');
     expect(html).toContain("DESCARGA");
   });
 

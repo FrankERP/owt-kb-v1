@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTransientValue } from "@/app/utils/useTransientValue";
 
 interface Options {
@@ -50,18 +50,23 @@ function snapshot(dates: Set<string>, notes: Map<string, string>): string {
   return JSON.stringify([ds, ns]);
 }
 
-/** The days `snapshot(saved)` and the live state disagree on: a date on one side
- *  only, or on both with a different (trimmed, non-empty) note. */
-function countChanges(savedSnap: string, dates: Set<string>, notes: Map<string, string>): number {
-  const [savedDates, savedNotes] = JSON.parse(savedSnap) as [string[], [string, string][]];
-  const saved = new Set(savedDates);
-  const savedNote = new Map(savedNotes);
+/** The saved state, as `snapshot` wrote it, read back once per save (memoised below). */
+function parseSnapshot(snap: string): { dates: Set<string>; notes: Map<string, string> } {
+  const [ds, ns] = JSON.parse(snap) as [string[], [string, string][]];
+  return { dates: new Set(ds), notes: new Map(ns) };
+}
+
+/** The days the saved state and the live state disagree on: a date on one side
+ *  only, or on both with a different (trimmed, non-empty) note. 0 ⇔ not dirty:
+ *  `snapshot` keeps exactly these facts, so this is the fingerprint comparison
+ *  done as a count, in one pass. */
+function countChanges(saved: { dates: Set<string>; notes: Map<string, string> }, dates: Set<string>, notes: Map<string, string>): number {
   let n = 0;
   for (const d of dates) {
-    if (!saved.has(d)) n++;
-    else if ((notes.get(d)?.trim() ?? "") !== (savedNote.get(d) ?? "")) n++;
+    if (!saved.dates.has(d)) n++;
+    else if ((notes.get(d)?.trim() ?? "") !== (saved.notes.get(d) ?? "")) n++;
   }
-  for (const d of saved) if (!dates.has(d)) n++;
+  for (const d of saved.dates) if (!dates.has(d)) n++;
   return n;
 }
 
@@ -112,13 +117,16 @@ export function useAvailability({ initialRev, initialDates, initialNotes = [], o
   // The revision every save is written against; refreshed from each reply.
   const [rev, setRev] = useState(initialRev);
 
-  // Saved-state snapshot `dirty` compares against; reset after each successful save.
+  // Saved-state snapshot the live state is compared against; reset after each
+  // successful save. Parsed once per save, not per render: a drag re-renders the
+  // host on every pointer move.
   const [initialSnap, setInitialSnap] = useState(() => snapshot(new Set(initialDates), new Map(initialNotes.map(n => [n.date, n.note]))));
-  const dirty = snapshot(dates, notes) !== initialSnap;
+  const savedState = useMemo(() => parseSnapshot(initialSnap), [initialSnap]);
   // How many days differ from the saved state — added, removed, or with a
   // changed note — for the save bar's «N cambios sin guardar» (2026-10-22).
-  // Derived from the same snapshot `dirty` reads, so the two can never disagree.
-  const changeCount = countChanges(initialSnap, dates, notes);
+  // `dirty` IS this count being non-zero: one pass, one definition.
+  const changeCount = countChanges(savedState, dates, notes);
+  const dirty = changeCount > 0;
 
   const todayIso = new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
 
@@ -135,13 +143,13 @@ export function useAvailability({ initialRev, initialDates, initialNotes = [], o
   function mark(iso: string) {
     if (dates.has(iso)) return;
     setDates(prev => { const n = new Set(prev); n.add(iso); return n; });
-    clearSaved();
+    clearStatus();
   }
 
   function remove(iso: string) {
     setDates(prev => { const n = new Set(prev); n.delete(iso); return n; });
     setNotes(prev => { const m = new Map(prev); m.delete(iso); return m; });
-    clearSaved();
+    clearStatus();
   }
 
   function toggle(iso: string) {
@@ -156,7 +164,7 @@ export function useAvailability({ initialRev, initialDates, initialNotes = [], o
       else m.delete(iso);
       return m;
     });
-    clearSaved();
+    clearStatus();
   }
 
   // Expand a recurring weekday pattern into concrete future dates (next 12 months),
@@ -176,7 +184,7 @@ export function useAvailability({ initialRev, initialDates, initialNotes = [], o
     }
     setDates(prev => { const n = new Set(prev); series.forEach(d => (add ? n.add(d) : n.delete(d))); return n; });
     if (!add) setNotes(prev => { const m = new Map(prev); series.forEach(d => m.delete(d)); return m; });
-    clearSaved();
+    clearStatus();
   }
 
   /**
@@ -202,7 +210,15 @@ export function useAvailability({ initialRev, initialDates, initialNotes = [], o
     }
     setDates(prev => { const n = new Set(prev); series.forEach(d => (add ? n.add(d) : n.delete(d))); return n; });
     if (!add) setNotes(prev => { const m = new Map(prev); series.forEach(d => m.delete(d)); return m; });
+    clearStatus();
+  }
+
+  /** An edit is a fresh start for the status line: the last save's error (and
+   *  the «Guardado» flash) belong to the state that was sent, not to this one —
+   *  the bar would otherwise say «No se pudo guardar» over an edit never tried. */
+  function clearStatus() {
     clearSaved();
+    setSaveError(null);
   }
 
   /** Adopt the server's arrays, dropping the pending edits with them. */
@@ -214,7 +230,7 @@ export function useAvailability({ initialRev, initialDates, initialNotes = [], o
     setInitialSnap(snapshot(serverDates, serverNotes));
     if (server._rev) setRev(server._rev);
     onAdopt?.();
-    clearSaved();
+    clearStatus();
   }
 
   /**

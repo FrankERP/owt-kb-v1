@@ -583,7 +583,7 @@ export default async function MePage() {
                and screen readers treat already-present live content
                inconsistently. The heading carries the message. */
             <div className="rounded-xl border border-negative-strong/30 bg-negative-surface-deepest/35 px-5 py-6 text-center">
-              <p className="font-display text-lg uppercase text-negative-fg">No pudimos cargar tu perfil</p>
+              <h3 className="font-display text-lg uppercase text-negative-fg">No pudimos cargar tu perfil</h3>
               <p className="font-body text-sm text-mono-500 mt-1">
                 Tu disponibilidad no está disponible ahora mismo.
                 Recarga la página; si sigue igual, avísale a un administrador.
@@ -603,13 +603,19 @@ export default async function MePage() {
                 }
               />
             )}
+            {/* Both calendar rows are worship's: the download exports the
+                assignments this page read, and the subscription panel answers a
+                kids-only member «solo para el equipo de alabanza»
+                (`calendarFeedState`) — a row promising it would lead nowhere. */}
             {inWorship && <DownloadCalendarRow services={calendarServices} />}
-            <AccountLinkRow
-              href="/me/ajustes#calendario"
-              icon={<CalendarAddIcon size={18} strokeWidth={1.8} />}
-              title="Calendario"
-              status="Suscribirte a tus servicios"
-            />
+            {inWorship && (
+              <AccountLinkRow
+                href="/me/ajustes#calendario"
+                icon={<CalendarAddIcon size={18} strokeWidth={1.8} />}
+                title="Calendario"
+                status="Suscribirte a tus servicios"
+              />
+            )}
             <AccountLinkRow
               href="/me/ajustes"
               icon={<SlidersIcon size={18} strokeWidth={1.8} />}

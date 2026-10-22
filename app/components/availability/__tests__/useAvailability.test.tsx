@@ -239,5 +239,11 @@ describe("useAvailability", () => {
     expect(result.current.dirty).toBe(true);
     expect(result.current.saving).toBe(false);
     expect(result.current.dates.has("2026-10-04")).toBe(true);
+
+    // The error belongs to the state that was sent: the next edit clears it, so
+    // the save bar counts the new change instead of repeating a stale failure.
+    act(() => result.current.mark("2026-10-11"));
+    expect(result.current.saveError).toBeNull();
+    expect(result.current.changeCount).toBe(2);
   });
 });
