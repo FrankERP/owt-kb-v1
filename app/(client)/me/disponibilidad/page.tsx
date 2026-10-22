@@ -5,6 +5,7 @@ import { serverClient } from "@/sanity/lib/serverClient";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import Navbar from "@/app/components/Navbar";
 import Button from "@/app/components/ui/Button";
+import { ArrowLeftIcon } from "@/app/components/ui/icons";
 import MyAvailabilityPanel from "@/app/components/availability/MyAvailabilityPanel";
 import { serviceDayKey } from "@/app/utils/serviceReadSelect";
 import { revealProps } from "@/app/utils/reveal";
@@ -70,7 +71,8 @@ export default async function DisponibilidadPage() {
           {/* Back to the page this came from, not to wherever history points:
               `/me` is the parent of this route and the only place that links here. */}
           <Button variant="ghost" size="sm" href="/me">
-            ← Mi semana
+            <ArrowLeftIcon size={13} />
+            Mi semana
           </Button>
           <h1 className="font-display text-2xl uppercase tracking-wide mt-2">
             Disponibilidad

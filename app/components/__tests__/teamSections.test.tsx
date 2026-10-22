@@ -86,7 +86,7 @@ describe("TeamSections", () => {
   it("flags a person seated twice in one section, never as «tú»", () => {
     mount({ myName: "frank", team: { ...team, instruments: [{ label: "Bajo", person: "Frank" }, { label: "Guitarra", person: "frank " }] } });
     expect(header(/Banda/).getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getAllByText(/⚠/).length).toBeGreaterThan(0);
+    expect(document.querySelectorAll('[data-icon="warning"]').length).toBeGreaterThan(0);
     expect(screen.queryByText(/· tú/)).toBeNull();
   });
 
@@ -96,7 +96,8 @@ describe("TeamSections", () => {
     expect(cabina.getAttribute("aria-expanded")).toBe("true");
     fireEvent.click(cabina);
     expect(header(/Cabina/).getAttribute("aria-expanded")).toBe("false");
-    expect(header(/Cabina/).textContent).toContain("⚠ repetido");
+    expect(header(/Cabina/).textContent).toContain("repetido");
+    expect(header(/Cabina/).querySelector('[data-icon="warning"]')).not.toBeNull();
   });
 
   it("splits an open Voces into Lead, BGV and Coro panels whose label is the seat", () => {

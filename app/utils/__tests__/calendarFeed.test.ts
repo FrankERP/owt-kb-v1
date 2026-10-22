@@ -9,6 +9,7 @@ import {
   feedWindow,
   isCanonicalFeedSearch,
   type FeedRole,
+  serviceStartTime,
 } from "../calendarFeed";
 
 const ORIGIN = "https://owt-backstage.vercel.app";
@@ -141,5 +142,22 @@ describe("URL helpers", () => {
     const { from, to } = feedWindow(Date.UTC(2026, 9, 15, 3));
     expect(from).toBe("2026-08-15");
     expect(to).toBe("2027-10-14");
+  });
+});
+
+describe("serviceStartTime — the one rule the feed and both .ics downloads share", () => {
+  it("gives a weekend the standing time by day, whatever time the document carries", () => {
+    expect(serviceStartTime("weekend", "Sábado", null)).toBe("18:00");
+    expect(serviceStartTime("weekend", "Domingo", "09:00")).toBe("11:00");
+  });
+
+  it("keeps a special's own valid time and makes it all-day otherwise", () => {
+    expect(serviceStartTime("special", "Noche de alabanza", "20:00")).toBe("20:00");
+    expect(serviceStartTime("special", "Noche de alabanza", "8pm")).toBeUndefined();
+    expect(serviceStartTime("special", "Noche de alabanza", null)).toBeUndefined();
+  });
+
+  it("decides by kind, never by the label — a special named «Sábado» keeps its time", () => {
+    expect(serviceStartTime("special", "Sábado", "20:00")).toBe("20:00");
   });
 });

@@ -18,6 +18,7 @@
 
 import Image from "next/image";
 import NumberRoll from "./ui/NumberRoll";
+import Button from "./ui/Button";
 import { daysUntil, formatCountdown } from "@/app/utils/daysUntil";
 import type { SeatAssignment } from "@/app/utils/myWeek";
 import { MEMBER_TYPE_LABEL } from "@/app/utils/memberTypes";
@@ -128,6 +129,11 @@ export default function MeHeader({
             <span className="shrink-0 rounded-full border border-positive-fg/25 bg-positive-fg/[0.055] px-3 py-1.5 font-label text-[10px] uppercase tracking-widest text-positive-fg">
               <NumberRoll value={formatCountdown(daysUntil(countdownDate))} />
             </span>
+          )}
+          {/* The empty state gets a way on: without one, «sin servicios» read as
+              something broken rather than a quiet stretch (2026-10-22). */}
+          {!countdownDate && (
+            <Button variant="secondary" size="sm" href="/schedule">Ver calendario</Button>
           )}
         </p>
       )}

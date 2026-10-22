@@ -28,6 +28,7 @@ import QuickActions, { type QuickAction } from "./ui/QuickActions";
 import useLongPress from "./ui/useLongPress";
 import { daysUntil, formatCountdown } from "@/app/utils/daysUntil";
 import { buildICS, type ICSEvent } from "@/app/utils/ics";
+import { serviceStartTime } from "@/app/utils/calendarFeed";
 import { normalizeText } from "@/app/utils/normalizeText";
 import { myNameFromSession, mySeats, serviceTone, TONE_RAIL } from "@/app/utils/agenda";
 import { joinNames } from "@/app/utils/homeGreeting";
@@ -69,6 +70,10 @@ export default function DayCardDisclosure(props: DayCardProps) {
     const event: ICSEvent = {
       uid: props.serviceId || props.roleId || normalizeText(`${props.date}-${props.day}`),
       date: props.date,
+      // Same start time as `/me`'s whole-list download and the feed: this row and
+      // that list mint the same UID for one service, so they must agree on when
+      // it starts. `roleId` is only ever set for a special (see above).
+      time: serviceStartTime(props.roleId ? "special" : "weekend", props.day, props.time),
       title: `${props.day} · OWT`,
       description: props.setlist?.songs?.map((s) => s.title).filter(Boolean).join(" · ") || undefined,
     };

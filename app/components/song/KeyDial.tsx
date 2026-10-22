@@ -11,6 +11,7 @@
 
 import NumberRoll from "../ui/NumberRoll";
 import { useTransposeOptional } from "./TransposeProvider";
+import { formatKey } from "@/app/utils/formatKey";
 
 export default function KeyDial({
   open,
@@ -38,7 +39,7 @@ export default function KeyDial({
       data-open={open}
       className="brand-key-dial gap-1.5 px-3 font-display text-sm min-h-[44px] select-none transition-[transform,box-shadow] duration-fast ease-out-brand active:translate-y-px active:scale-[0.985] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base data-[open=true]:shadow-[0_0_0_2px_rgb(var(--accent-rgb)/0.35)]"
     >
-      <NumberRoll value={soundingKey} />
+      <NumberRoll value={formatKey(soundingKey)} />
       <svg
         width="12"
         height="12"

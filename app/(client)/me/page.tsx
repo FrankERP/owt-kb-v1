@@ -10,6 +10,8 @@ import { DayCard, type DayCardProps } from "@/app/components/DayCard";
 import DayCardDisclosure from "@/app/components/DayCardDisclosure";
 import MeHeader from "@/app/components/MeHeader";
 import AddToCalendarButton from "@/app/components/AddToCalendarButton";
+import { ChevronRightIcon } from "@/app/components/ui/icons";
+import { serviceStartTime } from "@/app/utils/calendarFeed";
 import { Setlist, SetlistSong, ProposalStatus } from "@/app/utils/interface";
 import { describeContributors } from "@/app/utils/proposalContributors";
 import { pickUnique, serviceDayKey } from "@/app/utils/serviceReadSelect";
@@ -298,19 +300,22 @@ export default async function MePage() {
 
   // A malformed/missing service date can neither be sorted nor rendered, so the
   // record is dropped here instead of throwing on `localeCompare` or date math.
-  const asAssignment = (dateValue: unknown, day: string, doc: RoleDoc) => {
+  // `kind` is the document's, never read back from the label: a special named
+  // «Sábado» is still a special (its own time, its own `roleId`).
+  const asAssignment = (dateValue: unknown, day: string, doc: RoleDoc, kind: "weekend" | "special") => {
     const dateKey = serviceDayKey(dateValue);
-    return dateKey ? { dateKey, day, doc } : null;
+    return dateKey ? { dateKey, day, doc, kind } : null;
   };
 
   const roleDocs = (v: unknown): RoleDoc[] => (Array.isArray(v) ? (v as RoleDoc[]) : []);
 
-  const allAssignments: Array<{ dateKey: string; day: string; doc: RoleDoc }> = [
-    ...roleDocs(data?.sundays).map((d) => asAssignment(d.week, "Domingo", withSetlist(d))),
-    ...roleDocs(data?.saturdays).map((d) => asAssignment(d.week, "Sábado", withSetlist(d))),
-    ...roleDocs(data?.specials).map((d) => asAssignment(d.date, d.service_name || "Servicio Especial", d)),
+  type Assignment = { dateKey: string; day: string; doc: RoleDoc; kind: "weekend" | "special" };
+  const allAssignments: Assignment[] = [
+    ...roleDocs(data?.sundays).map((d) => asAssignment(d.week, "Domingo", withSetlist(d), "weekend")),
+    ...roleDocs(data?.saturdays).map((d) => asAssignment(d.week, "Sábado", withSetlist(d), "weekend")),
+    ...roleDocs(data?.specials).map((d) => asAssignment(d.date, d.service_name || "Servicio Especial", d, "special")),
   ]
-    .filter((a): a is { dateKey: string; day: string; doc: RoleDoc } => a !== null)
+    .filter((a): a is Assignment => a !== null)
     .sort((a, b) => a.dateKey.localeCompare(b.dateKey) || compareServiceTime(a.doc.time, b.doc.time));
 
   // The `DayCardProps` for one assignment, so the hero and the collapsed rows
@@ -370,11 +375,18 @@ export default async function MePage() {
     visibleAssignments.map(({ dateKey, day, doc }) => ({ dateKey, day, seat: seatLabel(doc) })),
   );
 
-  const calendarServices = visibleAssignments.map(({ dateKey, day, doc }) => {
+  // Timed by the feed's one rule (`serviceStartTime`): a weekend at the team's
+  // standing start time, a special at its own valid `time`, else all-day. Until
+  // 2026-10-22 this download was all-day for every service while the feed already
+  // said 18:00 / 11:00 — the same Saturday landed at two different times
+  // depending on which button you pressed.
+  const calendarServices = visibleAssignments.map(({ dateKey, day, doc, kind }) => {
     const role = seatLabel(doc);
+    const time = serviceStartTime(kind, day, doc.time);
     return {
       uid: doc._id,
       date: dateKey,
+      time,
       title: role ? `${day} · Oasis Worship (${role})` : `${day} · Oasis Worship`,
       description: role ? `Tu rol: ${role}` : undefined,
     };
@@ -589,7 +601,7 @@ export default async function MePage() {
                   ? "Sin fechas marcadas"
                   : `${upcomingUnavailable} fecha${upcomingUnavailable === 1 ? "" : "s"} marcada${upcomingUnavailable === 1 ? "" : "s"}`}
               </span>
-              <span aria-hidden="true" className="font-body text-mono-500">›</span>
+              <ChevronRightIcon size={16} className="text-mono-500" />
             </span>
           </Link>
         ) : (
