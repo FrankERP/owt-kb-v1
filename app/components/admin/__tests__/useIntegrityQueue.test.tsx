@@ -198,6 +198,27 @@ describe("a reload holds the last settled tone", () => {
     expect(result.current.tone).toBe("clean");
   });
 
+  it("`firstLoad` is true only until the first reading settles — a reload is never one", async () => {
+    mockRoutes({ setlists: null });
+    const { result } = renderHook(() => useIntegrityQueue());
+    expect(result.current.firstLoad).toBe(true);
+    expect(result.current.loading).toBe(true);
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.firstLoad).toBe(false);
+    expect(result.current.tone).toBe("unknown");
+
+    // An unproven reading reloaded: still not a first load, so the panel keeps
+    // its full section instead of folding into «comprobando».
+    const seen: boolean[] = [];
+    await act(async () => {
+      result.current.reload();
+    });
+    seen.push(result.current.firstLoad);
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    seen.push(result.current.firstLoad);
+    expect(seen).toEqual([false, false]);
+  });
+
   it("still reports `unknown` on a FIRST load, until something settles", async () => {
     mockRoutes();
     const seen: string[] = [];

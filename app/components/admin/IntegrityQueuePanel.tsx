@@ -30,6 +30,7 @@ import { useEffect, useRef, useState } from "react";
 
 import {
   INTEGRITY_ACTION_COPY,
+  INTEGRITY_CLEAN_SUMMARY,
   INTEGRITY_DOMAINS,
   INTEGRITY_DOMAIN_SOURCE,
   INTEGRITY_INCOMPLETE_NOTE,
@@ -65,8 +66,10 @@ export interface IntegrityQueuePanelProps {
   queue: IntegrityQueue;
   /** The queue's display tone; it decides whether the disclosure starts open. */
   tone: IntegrityTone;
-  /** True while any domain is in flight (`useIntegrityQueue`'s): the first load reads «comprobando», never «?». */
+  /** True while any domain is in flight (`useIntegrityQueue`'s): «Recargar» is busy, the held reading stays. */
   loading?: boolean;
+  /** True until the first reading settles (`useIntegrityQueue`'s): that load reads «comprobando», never «?». */
+  firstLoad?: boolean;
   /** The per-domain load states, for explicit-id focus resolution. */
   sources: IntegritySourceStates;
   /** Re-runs the three inventories. */
@@ -81,6 +84,7 @@ export default function IntegrityQueuePanel({
   queue,
   tone,
   loading = false,
+  firstLoad = false,
   sources,
   reload,
   target = null,
@@ -149,29 +153,32 @@ export default function IntegrityQueuePanel({
   }, [focusKeys, open, queue]);
 
   // The quiet shape: proven clean, or the very first load (nothing settled yet).
-  const checking = tone === "unknown" && loading;
+  // `tone` is the hook's HELD reading, so a clean tone mid-reload is still the
+  // proven one: the line keeps its «✓ … sin problemas» (the live `queue` would
+  // say «inventario incompleto» for the length of three requests, on every
+  // visit to the tab) and only «Recargar» goes busy. A reload of an UNPROVEN
+  // reading is not a first load either — the full section stays put instead of
+  // folding into «comprobando» and back on every retry.
+  const checking = firstLoad && loading;
   if (tone === "clean" || checking) {
     return (
       <div data-integrity-compact={checking ? "checking" : "clean"} className="min-w-0">
-        <p
-          role="status"
-          className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-body text-xs text-mono-400"
-        >
+        {/* The live region is the summary span alone: the title and the button
+            are siblings, so a reload never re-announces the whole line. */}
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-body text-xs text-mono-400">
           <span aria-hidden="true" className={checking ? "text-mono-500" : "text-positive-strong"}>
             {checking ? "…" : "✓"}
           </span>
-          <span id="integrity-queue-title" className="font-label uppercase tracking-widest text-mono-500">
-            {INTEGRITY_QUEUE_TITLE}
-          </span>
-          <span data-integrity-summary="">
-            {checking ? "comprobando" : integrityQueueSummary(queue).toLowerCase()}
+          <span className="font-label uppercase tracking-widest text-mono-500">{INTEGRITY_QUEUE_TITLE}</span>
+          <span role="status" data-integrity-summary="">
+            {checking ? "comprobando" : INTEGRITY_CLEAN_SUMMARY.toLowerCase()}
           </span>
           {!checking && (
-            <Button variant="ghost" size="sm" onClick={reload} className="-my-1">
+            <Button variant="ghost" size="sm" onClick={reload} busy={loading} busyLabel="Recargando…" className="-my-1">
               Recargar
             </Button>
           )}
-        </p>
+        </div>
         {notice && (
           <p role="status" className="mt-2 rounded-lg border border-accent/25 bg-accent/5 px-3 py-2 font-body text-xs text-accent">
             {notice}

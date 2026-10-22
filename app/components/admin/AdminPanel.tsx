@@ -237,6 +237,7 @@ export default function AdminPanel({
                     queue={integrity.queue}
                     tone={integrity.tone}
                     loading={integrity.loading}
+                    firstLoad={integrity.firstLoad}
                     sources={integrity.sources}
                     reload={integrity.reload}
                     target={integrityTarget}
