@@ -6,7 +6,8 @@
 // and anything the result does not carry is not invented. Editing (S4) is `editorModel.ts`; a
 // SAVED month's check (`check_service_edits`, admin parity S4) is read by `storedModel.ts`.
 
-import { isStoredMonthResult, monthName, storedCheckViewOf, type StoredEdit } from "./storedModel";
+import type { ServiceView } from "./editorModel";
+import { focusedServices, isStoredMonthResult, monthName, storedCheckViewOf, type Focus, type StoredEdit } from "./storedModel";
 
 export interface CardRow {
   label: string;
@@ -31,7 +32,17 @@ export type CardView =
   | { kind: "refused"; lines: string[] }
   | { kind: "unreadable"; lines: string[] }
   /** A saved month's check: its services as the check left them, its lines, and the edits it judged. */
-  | { kind: "storedMonth"; title: string; month: string; services: CardService[]; lines: string[]; edits: StoredEdit[]; changed: number }
+  | {
+      kind: "storedMonth";
+      title: string;
+      month: string;
+      services: CardService[];
+      /** The chat asked for some days only (`focus`): those services, and the focus «Editar» keeps. */
+      focused: { services: CardService[]; shown: string; focus: Focus } | null;
+      lines: string[];
+      edits: StoredEdit[];
+      changed: number;
+    }
   | {
       kind: "proposal";
       title: string;
@@ -130,15 +141,18 @@ export function cardViewOf(result: { content?: unknown; structuredContent?: unkn
 
   if (isStoredMonthResult(s)) {
     const view = storedCheckViewOf(result);
+    const card = (svc: ServiceView): CardService => ({
+      label: svc.label || "Servicio",
+      planned: svc.editable,
+      rows: svc.seats.map((seat) => ({ label: seat.label, names: seat.members.map((m) => m.name) })).filter((r) => r.names.length > 0),
+    });
+    const focused = focusedServices(view.board, view.focus);
     return {
       kind: "storedMonth",
       title: `Servicios de ${monthName(view.month)}`,
       month: view.month,
-      services: view.board.map((svc) => ({
-        label: svc.label || "Servicio",
-        planned: svc.editable,
-        rows: svc.seats.map((seat) => ({ label: seat.label, names: seat.members.map((m) => m.name) })).filter((r) => r.names.length > 0),
-      })),
+      services: view.board.map(card),
+      focused: focused && view.focus ? { services: focused.map(card), shown: focused.map((s) => s.label).join(" y "), focus: view.focus } : null,
       lines: view.lines,
       edits: view.edits,
       changed: view.changes.length,

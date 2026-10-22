@@ -12,9 +12,12 @@ import {
   afterStoredRefusal,
   forceStoredLast,
   monthName,
+  focusedServices,
   saveMessage,
   saveParts,
+  saveRequest,
   storedCheckViewOf,
+  type Focus,
   type StoredCheckView,
   type StoredEdit,
 } from "./storedModel";
@@ -33,13 +36,15 @@ export interface StoredEditorState {
   open: boolean;
   props: EditorProps | null;
   opening: { notice: string | null; onClose: () => void };
-  start: (month: string, edits: StoredEdit[]) => void;
+  start: (month: string, edits: StoredEdit[], focus: Focus | null) => void;
 }
 
 export function useStoredEditor(app: App | null): StoredEditorState {
   const [month, setMonth] = useState<string | null>(null);
   const [edits, setEdits] = useState<StoredEdit[]>([]);
   const [check, setCheck] = useState<StoredCheckView | null>(null);
+  /** The days the chat asked to show; «Ver mes completo» clears it. */
+  const [focus, setFocus] = useState<Focus | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [sheet, setSheet] = useState<EditorProps["sheet"]>(null);
@@ -91,8 +96,9 @@ export function useStoredEditor(app: App | null): StoredEditorState {
   );
 
   const start = useCallback(
-    (m: string, initial: StoredEdit[]) => {
+    (m: string, initial: StoredEdit[], days: Focus | null) => {
       setMonth(m);
+      setFocus(days);
       setEdits([]);
       setCheck(null);
       setNotice(null);
@@ -121,8 +127,15 @@ export function useStoredEditor(app: App | null): StoredEditorState {
     const part = parts[index];
     if (!part) return;
     setBusy(true);
-    app
-      .sendMessage({ role: "user", content: [{ type: "text", text: saveMessage(month, part, index, parts.length) }] })
+    const say = (text: string) => app.sendMessage({ role: "user", content: [{ type: "text", text }] });
+    const full = () => say(saveMessage(month, part, index, parts.length));
+    // The arguments go to the model's context and the chat shows only the words; a host without
+    // context updates (or one that refuses this one) gets the full message instead.
+    const request = saveRequest(month, part, index, parts.length);
+    const delivery = app.getHostCapabilities()?.updateModelContext
+      ? app.updateModelContext({ content: [{ type: "text", text: request.context }] }).then(() => say(request.message), full)
+      : full();
+    delivery
       .then((r) => (r.isError ? setNotice("El chat no aceptó el mensaje; pídele a Claude que guarde los cambios.") : setSent((s) => [...s, index])))
       .catch(() => setNotice(LOST))
       .finally(() => setBusy(false));
@@ -132,6 +145,7 @@ export function useStoredEditor(app: App | null): StoredEditorState {
   if (month && check) {
     const parts = saveParts(check.changes, check.maxGroup);
     const locked = busy || ask !== null;
+    const shown = focusedServices(check.board, focus);
     const footer = (
       <>
         {check.maxGroup !== null && parts.length > 1 && (
@@ -162,7 +176,8 @@ export function useStoredEditor(app: App | null): StoredEditorState {
       heading: `Servicios de ${monthName(month)}`,
       subtitle: check.changes.length ? `${check.changes.length} ${check.changes.length === 1 ? "servicio cambia" : "servicios cambian"}` : "Sin cambios",
       footer,
-      board: check.board,
+      board: shown ?? check.board,
+      ...(shown ? { narrowed: { shown: shown.map((s) => s.label).join(" y "), onWiden: () => setFocus(null) } } : {}),
       lines: check.lines,
       pending: edits.length,
       busy,

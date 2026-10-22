@@ -27,6 +27,8 @@ function applySafeArea(ctx: McpUiHostContext | undefined) {
 
 function CardApp() {
   const [view, setView] = useState<CardView>({ kind: "waiting" });
+  /** «Ver mes completo» on a saved month the chat narrowed to some days; a new result narrows again. */
+  const [wide, setWide] = useState(false);
   // The host context lives on the App; a change only needs a re-render to be read again.
   const [, setContextVersion] = useState(0);
 
@@ -34,7 +36,10 @@ function CardApp() {
     appInfo: { name: "owt-proposal-card", version: "1.0.0" },
     capabilities: { availableDisplayModes: ["inline", "fullscreen"] },
     onAppCreated: (created) => {
-      created.ontoolresult = (result) => setView(cardViewOf(result));
+      created.ontoolresult = (result) => {
+        setWide(false);
+        setView(cardViewOf(result));
+      };
       // The route runs every call to completion even when the host gives up (`signal: null`),
       // so a cancel says nothing about whether a proposal was stored: claim nothing.
       created.ontoolcancelled = () =>
@@ -60,8 +65,8 @@ function CardApp() {
   const canCall = Boolean(app?.getHostCapabilities()?.serverTools);
   const onEdit = useCallback(() => {
     if (view.kind === "proposal" && view.handle) editor.start(view.handle, view.revision);
-    if (view.kind === "storedMonth") stored.start(view.month, view.edits);
-  }, [editor, stored, view]);
+    if (view.kind === "storedMonth") stored.start(view.month, view.edits, wide ? null : (view.focused?.focus ?? null));
+  }, [editor, stored, view, wide]);
 
   if (stored.open) {
     if (stored.props) return <Editor {...stored.props} />;
@@ -99,7 +104,9 @@ function CardApp() {
     saved && view.kind === "proposal" && saved.revision !== view.revision
       ? `Guardaste la versión ${saved.revision}; «Editar» la abre. Abajo sigue la versión ${view.revision}.`
       : undefined;
-  return <ProposalCard view={view} canExpand={canExpand} onExpand={onExpand} onEdit={canCall ? onEdit : undefined} note={note} />;
+  return (
+    <ProposalCard view={view} canExpand={canExpand} onExpand={onExpand} onEdit={canCall ? onEdit : undefined} note={note} wide={wide} onWiden={() => setWide(true)} />
+  );
 }
 
 createRoot(document.getElementById("root")!).render(

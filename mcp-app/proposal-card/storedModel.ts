@@ -22,9 +22,16 @@ export type StoredEdit =
 /** One service's change set exactly as the check answered it: passed to the chat untouched. */
 export type StoredChange = Record<string, unknown> & { service: string; lines: string[] };
 
+/** The days a chat check asked the card to show (`focus`); the month is still checked whole. */
+export interface Focus {
+  from: string;
+  to: string;
+}
+
 export interface StoredCheckView {
   ok: boolean;
   month: string;
+  focus: Focus | null;
   board: ServiceView[];
   /** The server's lines: the changes in words, the groups, the warnings, the month check. */
   lines: string[];
@@ -99,6 +106,7 @@ export function storedCheckViewOf(result: { content?: unknown; structuredContent
   return {
     ok: !result?.isError && s.ok === true,
     month: str(s.month),
+    focus: isObj(s.focus) && typeof s.focus.from === "string" && typeof s.focus.to === "string" ? { from: s.focus.from, to: s.focus.to } : null,
     board,
     lines: textLines(result?.content).filter((l) => !isArgsLine(l)),
     edits: objects(s.edits).map(editOf).filter((e): e is StoredEdit => e !== null),
@@ -120,6 +128,16 @@ export function storedCheckViewOf(result: { content?: unknown; structuredContent
         }))
       : null,
   };
+}
+
+/**
+ * The services a focus shows, or null when it narrows nothing (no focus, every service in it, or
+ * none — never an empty card). String comparison: dates are `YYYY-MM-DD`.
+ */
+export function focusedServices<T extends { date: string }>(services: readonly T[], focus: Focus | null): T[] | null {
+  if (!focus) return null;
+  const shown = services.filter((s) => s.date >= focus.from && s.date <= focus.to);
+  return shown.length === 0 || shown.length === services.length ? null : shown;
 }
 
 /** The list after the server refused an edit: a forcible rule on the LAST edit is offered; anything else is dropped. */
@@ -173,6 +191,22 @@ export function monthName(month: string): string {
   const m = /^(\d{4})-(\d{2})$/.exec(month);
   const name = m ? MONTHS[Number(m[2]) - 1] : undefined;
   return m && name ? `${name} de ${m[1]}` : month;
+}
+
+/**
+ * «Guardar» on a host that takes model context (Frank, 2026-10-22: the JSON in the chat «no me
+ * encantó»): the chat shows only the changes in words; the arguments ride in the model's context,
+ * on the same line the check's text uses, so the model reads them exactly as it reads a check.
+ * `saveMessage` below stays the fallback for a host without it.
+ */
+export function saveRequest(month: string, part: readonly StoredChange[], index: number, total: number): { message: string; context: string } {
+  const head = total > 1
+    ? `Guarda la parte ${index + 1} de ${total} de mis cambios de ${monthName(month)} en la tarjeta:`
+    : `Guarda mis cambios de ${monthName(month)} en la tarjeta:`;
+  return {
+    message: [head, ...part.flatMap((c) => c.lines.map((l) => `- ${l}`))].join("\n"),
+    context: `${ARGS_LINE_PREFIXES[0]} ${JSON.stringify({ month, changes: part })}`,
+  };
 }
 
 /**
