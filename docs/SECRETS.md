@@ -7,7 +7,7 @@ Where each credential comes from, which platforms need it, and how to rotate it.
 Platforms in play:
 
 - **Vercel** — the deployed Next.js app (`owt-backstage`, team `frank-rochas-projects`). Settings → Environment Variables.
-- **GitHub Actions** — repo secrets for workflows. Settings → Secrets and variables → Actions.
+- **GitHub Actions** — repo secrets for workflows. Settings → Secrets and variables → Actions. Two **environments** (`solver-verify`, `solver-deploy`) hold only non-secret variables for keyless Google access (see «GitHub Actions → Google» below).
 - **Google Cloud Scheduler** — the `flush-notification-outbox` job in GCP project `eloquent-figure-421401` (`us-central1`) presents `CRON_SECRET` as a request header. Written with `gcloud`, never through the console.
 - **`.env.local`** — local development only, gitignored, loaded via `node --env-file=.env.local` for `scripts/*.mjs`.
 - **Claude cloud environment** — network secrets on the default cloud environment (claude.ai/code → environment → gear → Network secrets). The egress proxy attaches the value to requests for the listed hosts; the session only ever sees a placeholder. Set by Frank in that dialog, never through a session.
@@ -626,14 +626,17 @@ functions) and GCP Secret Manager `owt-solver-api-key` (project `eloquent-figure
 BOTH Cloud Functions read: `owt-solver` (v2) and, since solver v3 C5, `owt-solver-v3` (one key for
 both — same trust boundary, same caller, spec C5-14). Not needed in:** `.env.local` (with
 `OWT_SOLVER_URL` unset, local dev spawns `gcf/owt_solver_v2.py` — or, for v3,
-`gcf_v3/owt_solver_v3.py --json-mode` — directly and no key is involved), GitHub Actions (the
-`solver-v3` job calls the handler with a stub key), the iOS build.
+`gcf_v3/owt_solver_v3.py --json-mode` — directly and no key is involved), GitHub Actions *as a stored
+secret* (the CI `solver-v3` job calls the handler with a stub key; the `verify` job of
+`solver-v3-ops.yml` reads the live value from Secret Manager at run time through `owt-gha-verify`,
+masked, never stored in GitHub — see «GitHub Actions → Google» below), the iOS build.
 `OWT_SOLVER_URL`, its companion, is ordinary config (Vercel Preview and Production), not a
 secret.
 
 | Platform | Role |
 |---|---|
 | Vercel Preview + Production | `app/api/admin/solve/route.ts` sends it as the `X-Api-Key` header — to v2 itself, and to v3 through `app/utils/solverV3Upstream.ts` (solver v3 C6; the path production takes since the 2026-10-15 cutover, ADR-0056 — v2's only after a flip-back). The MCP's `solve_month` (P4, in production since 2026-10-20) calls the same `solveV3`, so it sends the same header from `/api/mcp` |
+| GitHub Actions `solver-v3-ops.yml` → `verify` | Reads `owt-solver-api-key:latest` with `owt-gha-verify` (Secret Accessor on this secret only), masks it, and sends it as `X-Api-Key` for the ping and smoke solve (ADR-0068). Nothing is stored in GitHub |
 | Secret Manager `owt-solver-api-key` | Cloud Build deploys each function with `--set-secrets=OWT_SOLVER_API_KEY=owt-solver-api-key:latest`: v2 from `cloudbuild.yaml` (manual: `scripts/deploy-solver-gcf.sh`), v3 from `gcf_v3/cloudbuild.yaml` (first creation and manual: `scripts/deploy-solver-v3-gcf.sh`) |
 
 **Purpose.** The only barrier on each publicly invokable function (`allUsers` holds
@@ -685,7 +688,9 @@ in that gap bakes a key in that the function may not be serving yet.
    current production deployment and on the current `preview` one): env vars bind at build time.
 5. Verify with the smoke requests in `docs/SOLVER_AND_INFRA.md` ("Verifying a Cloud Function
    deploy" for v2, "Verifying a v3 deploy" for v3), which read the new value from Secret
-   Manager — then one «Generar mes» on dev.
+   Manager — for v3 a dispatched `verify` of `solver-v3-ops.yml` does this from any browser — then
+   one «Generar mes» on dev. A `verify` that runs between steps 2 and 3 can go red on a warm
+   instance still holding the old key: expected, re-run it after the redeploys.
 
 **Blast radius of rotation.** From step 2 until both functions and each Vercel environment's
 redeploy (steps 3–4) complete, any request that reaches a freshly started instance of EITHER
@@ -859,6 +864,42 @@ does not use it; it authenticates with its own sign-in.
   Deployments, the app and the Vercel MCP connector are unaffected.
 - **If it stops working:** a secret the dialog marks "Not sent" is not attached; the note under it
   says why.
+
+---
+
+## GitHub Actions → Google (Workload Identity Federation — no secret)
+
+**Needed in: nothing stores a credential.** `.github/workflows/solver-v3-ops.yml` gets a
+short-lived Google token per job by exchanging GitHub's OIDC token (ADR-0068). What exists:
+
+- **Google Cloud** (project `eloquent-figure-421401`), created by
+  `scripts/gcp/setup-solver-v3-gha-wif.sh` (run in Cloud Shell by Frank): Workload Identity pool
+  `github-actions`, OIDC provider `owt-kb-v1` (its condition federates only repository id
+  837387462, owner 68241914, `refs/heads/main`, the two environments, and the workflow file
+  `solver-v3-ops.yml`), and two service accounts with **no keys**: `owt-gha-verify` (Cloud
+  Functions Viewer on `owt-solver-v3`, Secret Accessor on `owt-solver-api-key`) and
+  `owt-gha-deploy` (Cloud Build Editor on the project, Service Account User on the deploy
+  trigger's account — effectively editor-equivalent, which is why deploy runs need Frank's
+  approval; ADR-0068 says what that approval does and does not guard).
+- **GitHub** — environments `solver-verify` (deployment branches: `main`) and `solver-deploy`
+  (`main`; required reviewer FrankERP; admins cannot bypass), each with the plain **variables**
+  `GCP_PROJECT`, `GCP_WIF_PROVIDER` and `GCP_SERVICE_ACCOUNT` (that environment's account). Not
+  secrets: none of them grants anything without a token only this repository's `main` can mint.
+  Not needed in: Vercel, `.env.local`, the cloud environment, the iOS build.
+
+**Where the values come from.** The setup script prints the three variables at the end.
+
+**How to rotate.** Nothing to rotate — no long-lived credential exists. A re-run of the setup
+script is idempotent and compares the live provider with the script (a dry run is the read-back).
+
+**How to revoke (incident switch).** Disable the provider, which cuts both accounts at once:
+`gcloud iam workload-identity-pools providers update-oidc owt-kb-v1 --workload-identity-pool=github-actions --location=global --disabled`
+(re-enable with `--no-disabled`; the setup script refuses to run while it is disabled). Finer:
+remove one account's `roles/iam.workloadIdentityUser` binding.
+
+**Blast radius while revoked.** Only the two workflow actions fail (red runs). The Cloud Build
+trigger keeps deploying on merges, the app and Auto are unaffected, and the manual procedures in
+`docs/SOLVER_AND_INFRA.md` still work from Cloud Shell.
 
 ---
 

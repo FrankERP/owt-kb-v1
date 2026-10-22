@@ -592,10 +592,29 @@ and `checker.py` follows, the Python test goes red until the fixture and the Typ
   `OWT_SOLVER_V3_BUILD=$(git rev-parse HEAD)`); then the runtime account's
   `roles/secretmanager.secretAccessor` on `owt-solver-api-key` is checked
   (`gcloud secrets get-iam-policy owt-solver-api-key`), and the trigger is created. Until then the
-  function does not exist and a merge that touches `gcf_v3/**` deploys nothing. The same script is
-  the manual fallback. A change to `fixtures/fairness/golden.json` alone deploys nothing.
+  function does not exist and a merge that touches `gcf_v3/**` deploys nothing. **Manual fallback
+  (2026-10-22, ADR-0068):** dispatch `deploy` of `.github/workflows/solver-v3-ops.yml` from `main`
+  (Actions → Solver v3 ops → Run workflow; a phone browser works). It re-runs this same trigger at
+  `main`'s tip — the same config, account and `$COMMIT_SHA` — after Frank approves the run, then
+  verifies. It refuses when `main` moved since the dispatch (re-dispatch), and a `gcf_v3` merge
+  landing mid-deploy turns it red (that merge's own verify covers it). The script, from Cloud
+  Shell, is the last resort when the trigger itself is broken. A change to
+  `fixtures/fairness/golden.json` alone deploys nothing.
 
 #### Verifying a v3 deploy
+
+**From GitHub Actions (primary, 2026-10-22, ADR-0068):** `.github/workflows/solver-v3-ops.yml`
+runs `verify` automatically after every push to `main` that touches `gcf_v3/**` (it waits up to
+15 minutes for the trigger's build to serve that commit), and on demand (Run workflow →
+`verify`). It does steps 1–3 below with keyless Google access, masks the key and the URL, and then
+checks **source identity**: the deployed build is on `main` and `git diff <build> origin/main --
+gcf_v3` is empty. «Behind» may mean only `tests/` or `acceptance/` changed (the artifact leaves
+them out); that asks for a redundant redeploy, never a false green. A red run emails Frank. A
+cloud session dispatches it with the GitHub connector and reads the job log. Until Frank has run
+`scripts/gcp/setup-solver-v3-gha-wif.sh` and set the environment variables, its runs are red at
+the auth step.
+
+**By hand (Cloud Shell fallback):**
 
 1. `gcloud functions describe owt-solver-v3 --gen2 --region=us-central1 --format='value(state,updateTime)'`
    — `ACTIVE`, with an `updateTime` after the merge.
