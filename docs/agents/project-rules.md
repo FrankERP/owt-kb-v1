@@ -566,7 +566,10 @@ through `PlayerContext`, URLs are always `/api/audio/[song]/[key]`, never `cdn.s
 canvas paints with `themeColour`; the KEY is the hero dial's — `mixesForKey(mixes, soundingKey)`,
 never a picker of its own), `rehearsalMixes.ts` (`app/utils/` — neutral `groupMixes`/
 `preselectMix`/`waveformBars`/`mixTones`/`mixesForKey`; `SEAT_TO_FAMILY` pins app seats to
-abletonnl families),
+abletonnl families), `rehearsalQueue.ts` (`app/utils/` — «Ensayar el setlist»: the ONE builder of
+a setlist's run, `buildRehearsalQueue`/`pickQueueMix`; set key → nearest rendered key, full band
+or the seat's family, songs with no mixes skipped and named; it plays through `PlayerContext`'s
+`playQueue`, the same one `<audio>`, so a run advances on a locked phone),
 `fillSpecialGroup`/`orderGroup` (`app/components/admin/groupFill.ts` — the ONLY stored-mode
 filler: a ticked group of special services, Lead/BGV via `fillColumn` and instruments via
 `fillInstruments({ fillColumns })`, with `columns = group` and `savedWindow = []` so only

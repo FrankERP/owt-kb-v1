@@ -333,6 +333,7 @@ two-way isolation rule (see `CLAUDE.md` § Auth). All mutating routes call
 | Route | Methods | Purpose |
 |-------|---------|---------|
 | `/api/practice-playlist` | POST | `{ids[], mode?: "musica"\|"letras"}` → builds a `youtube.com/watch_videos` playlist URL (≤50). Uses CDN `client`. |
+| `/api/rehearsal-queue` | POST | `{ids[]}` (1–40) → `{ mixes: { [songId]: [{_key, kind, family, track, tone}] } }` — a setlist's rehearsal mixes for «Ensayar el setlist», read on the press. Worship members only (`requireMinistryMember("worship")`); `serverClient`; no peaks, no asset URL (the client plays through `/api/audio/[songId]/[key]`); `400` on a bad body, `Cache-Control: private, no-store`. |
 | `/api/song/[id]` | GET | Full song detail + last-5 play history (Sun/Sat setlists referencing it, with play key + that week's leaders). 404 if missing. |
 
 ### `GET /api/audio/[songId]/[key]`

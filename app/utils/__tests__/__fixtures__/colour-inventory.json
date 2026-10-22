@@ -8,19 +8,19 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 309,
-    "filesScanned": 517,
+    "literalRows": 311,
+    "filesScanned": 519,
     "filesWithColour": 56,
     "byCategory": {
       "2": 2,
       "4": 63,
-      "8": 92,
+      "8": 94,
       "9": 10,
       "11": 8,
       "12": 134
     },
     "byDisposition": {
-      "B": 117,
+      "B": 119,
       "exempt": 58,
       "keep": 239,
       "C": 5,
@@ -2847,11 +2847,35 @@
       "file": "app/components/AudioTransport.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
+      "value": "fill=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "fill",
+      "line": 151,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/AudioTransport.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
       "value": "stroke=\"currentColor\"",
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 117,
+      "line": 151,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/AudioTransport.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 161,
       "disposition": "B",
       "reason": null
     },
@@ -3067,7 +3091,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 187,
+      "line": 195,
       "disposition": "B",
       "reason": null
     },
@@ -3079,7 +3103,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 187,
+      "line": 195,
       "disposition": "B",
       "reason": null
     },
@@ -3091,7 +3115,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 488,
+      "line": 496,
       "disposition": "B",
       "reason": null
     },
@@ -3103,7 +3127,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 497,
+      "line": 505,
       "disposition": "B",
       "reason": null
     },
@@ -3283,7 +3307,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 128,
+      "line": 233,
       "disposition": "B",
       "reason": null
     },
@@ -3295,7 +3319,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 146,
+      "line": 251,
       "disposition": "B",
       "reason": null
     },
@@ -3307,7 +3331,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 144,
+      "line": 249,
       "disposition": "B",
       "reason": null
     },
@@ -3319,7 +3343,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 149,
+      "line": 254,
       "disposition": "B",
       "reason": null
     },
@@ -3391,7 +3415,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 495,
+      "line": 499,
       "disposition": "B",
       "reason": null
     },
@@ -3403,7 +3427,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 503,
+      "line": 507,
       "disposition": "B",
       "reason": null
     },
@@ -3415,7 +3439,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 382,
+      "line": 386,
       "disposition": "B",
       "reason": null
     },
@@ -3427,7 +3451,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 511,
+      "line": 515,
       "disposition": "B",
       "reason": null
     },
@@ -3439,7 +3463,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 519,
+      "line": 523,
       "disposition": "B",
       "reason": null
     },
@@ -3451,7 +3475,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 528,
+      "line": 532,
       "disposition": "B",
       "reason": null
     },
