@@ -10,6 +10,11 @@ export const MONTH_NAMES_ES = [
 /** How many months the /schedule calendar shows at once (default and browse). */
 export const WINDOW_MONTHS = 3;
 
+/** The years `?m=` accepts — and the only years the month sheet offers, so a pill
+ *  can never link to a month the route would silently discard. */
+export const MIN_YEAR = 2000;
+export const MAX_YEAR = 2100;
+
 /** Validate a raw ?m= value. Returns "YYYY-MM" if well-formed (month 01–12,
  *  year 2000–2100), else null. The year bound keeps absurd values (e.g.
  *  "0000-05") from reaching the query/label paths; the month picker is the
@@ -20,7 +25,7 @@ export function parseMonthParam(raw: string | undefined | null): string | null {
   if (!match) return null;
   const year = Number(match[1]);
   const month = Number(match[2]);
-  if (year < 2000 || year > 2100) return null;
+  if (year < MIN_YEAR || year > MAX_YEAR) return null;
   if (month < 1 || month > 12) return null;
   return raw;
 }
@@ -45,6 +50,16 @@ export function monthBounds(ym: string): { from: string; to: string } {
 export function monthLabel(ym: string): string {
   const [y, m] = ym.split("-").map(Number);
   return `${MONTH_NAMES_ES[m - 1]} ${y}`;
+}
+
+/** Three-letter month, e.g. "Sep" — the month sheet's pill text. */
+export function shortMonthLabel(ym: string): string {
+  return MONTH_NAMES_ES[Number(ym.slice(5, 7)) - 1].slice(0, 3);
+}
+
+/** The twelve "YYYY-MM" months of `year`, January first — the month sheet's pills. */
+export function yearMonths(year: number): string[] {
+  return Array.from({ length: 12 }, (_, i) => `${String(year).padStart(4, "0")}-${String(i + 1).padStart(2, "0")}`);
 }
 
 /** The `count` consecutive "YYYY-MM" months starting at `ym`. */

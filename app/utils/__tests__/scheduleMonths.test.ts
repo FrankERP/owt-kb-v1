@@ -9,7 +9,39 @@ import {
   windowBounds,
   windowMonths,
   WINDOW_MONTHS,
+  yearMonths,
+  shortMonthLabel,
+  MIN_YEAR,
+  MAX_YEAR,
 } from "@/app/utils/scheduleMonths";
+
+describe("shortMonthLabel", () => {
+  it("is the Spanish month's first three letters", () => {
+    expect(shortMonthLabel("2026-01")).toBe("Ene");
+    expect(shortMonthLabel("2026-09")).toBe("Sep");
+    expect(shortMonthLabel("2026-12")).toBe("Dic");
+  });
+});
+
+describe("MIN_YEAR / MAX_YEAR", () => {
+  it("are the same bounds parseMonthParam enforces, so the month sheet never offers a refused year", () => {
+    expect(parseMonthParam(`${MIN_YEAR}-01`)).toBe(`${MIN_YEAR}-01`);
+    expect(parseMonthParam(`${MIN_YEAR - 1}-12`)).toBeNull();
+    expect(parseMonthParam(`${MAX_YEAR}-12`)).toBe(`${MAX_YEAR}-12`);
+    expect(parseMonthParam(`${MAX_YEAR + 1}-01`)).toBeNull();
+  });
+});
+
+describe("yearMonths", () => {
+  it("lists the twelve months of a year, January first, zero-padded", () => {
+    const months = yearMonths(2026);
+    expect(months).toHaveLength(12);
+    expect(months[0]).toBe("2026-01");
+    expect(months[8]).toBe("2026-09");
+    expect(months[11]).toBe("2026-12");
+    expect(months.every((ym) => parseMonthParam(ym) === ym)).toBe(true);
+  });
+});
 
 describe("parseMonthParam", () => {
   it("accepts a well-formed month", () => {

@@ -167,8 +167,13 @@ describe("boxes sized for text at one scale are minimums, not caps", () => {
     expect(src).not.toMatch(/flex items-stretch h-16/);
   });
 
-  it("the schedule's month picker is not capped at 160px", () => {
+  it("the schedule's month title truncates instead of pushing the arrows off a 390px phone", () => {
+    // The title is the jump-to-month control now (ADR-0067); at «Máximo» text size
+    // «Septiembre 2026» must clip inside its `min-w-0 flex-1` cell, never widen it.
     const src = read("app/components/ScheduleHeader.tsx");
-    expect(src).toMatch(/kind="month"\s*\n\s*className="min-w-40 max-w-full"/);
+    expect(src).toMatch(/min-w-0 flex-1/);
+    expect(src).toMatch(/<span className="truncate">\{monthLabel\(anchorMonth\)\}/);
+    expect(src).not.toMatch(/<h2 className="truncate/); // overflow-hidden there would clip the button's focus ring
+    expect(src).not.toMatch(/DateField/);
   });
 });
