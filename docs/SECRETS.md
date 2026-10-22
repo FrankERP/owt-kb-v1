@@ -10,6 +10,7 @@ Platforms in play:
 - **GitHub Actions** — repo secrets for workflows. Settings → Secrets and variables → Actions.
 - **Google Cloud Scheduler** — the `flush-notification-outbox` job in GCP project `eloquent-figure-421401` (`us-central1`) presents `CRON_SECRET` as a request header. Written with `gcloud`, never through the console.
 - **`.env.local`** — local development only, gitignored, loaded via `node --env-file=.env.local` for `scripts/*.mjs`.
+- **Claude cloud environment** — network secrets on the default cloud environment (claude.ai/code → environment → gear → Network secrets). The egress proxy attaches the value to requests for the listed hosts; the session only ever sees a placeholder. Set by Frank in that dialog, never through a session.
 
 ## Retrievability: assume nothing is recoverable
 
@@ -833,6 +834,31 @@ error until it is corrected — no record or draft is ever written by a failed s
 **Status.** Set on Vercel Preview **since 2026-10-08** (C7 W0; Preview-wide, `--type config`, so
 `verify/service-readiness` has it too) and on Vercel Production **since 2026-10-14** (C7 W4, before the flip merged). Not
 set in `.env.local`, CI or the iOS build, which do not need it.
+
+---
+
+## Vercel API token for cloud sessions (network secret `VERCEL_TOKEN`)
+
+**Needed in: the Claude cloud environment only**, as a network secret: type Bearer, host
+`api.vercel.com`, header `Authorization` with prefix `Bearer`. The environment also sets the
+plain variable `VERCEL_TOKEN=placeholder` (not a secret) so the `vercel` CLI starts and sends a
+request the proxy can authenticate; the setup script installs `vercel@latest`. **Not needed in:**
+Vercel (any environment), GitHub Actions, `.env.local`, the iOS build. The Vercel MCP connector
+does not use it; it authenticates with its own sign-in.
+
+- **Set since 2026-10-15** by Frank; verified the same day: `vercel whoami` answered `frankerp`
+  and the real token is absent from `env`.
+- **Where it comes from:** vercel.com → Account Settings → Tokens, scoped to
+  `frank-rochas-projects`, preferably with an expiry. Vercel tokens cannot be read-only, which is
+  why it lives as a network secret rather than a readable variable: an error dump cannot leak it.
+- **Rotate:** create a new token → edit the network secret's value in the environment dialog →
+  start a session and run `VERCEL_TOKEN=placeholder vercel whoami` → delete the old token in
+  Vercel.
+- **Blast radius of rotation:** between deleting the old token and saving the new value, every
+  cloud session's `vercel` CLI and `curl https://api.vercel.com/...` answer 403 "token not valid".
+  Deployments, the app and the Vercel MCP connector are unaffected.
+- **If it stops working:** a secret the dialog marks "Not sent" is not attached; the note under it
+  says why.
 
 ---
 

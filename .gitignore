@@ -42,7 +42,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Agent worklog — local only, never pushed
+# Agent worklog (retired 2026-10-22) — old symlink path, never commit it here
 .agents/log/worklog.jsonl
 
 # Service account creds + UX walkthrough artifacts (local only)
@@ -106,3 +106,6 @@ __pycache__/
 # that was `.git/info/exclude`, which is per-clone and shared with nobody.
 # `.claude/commands/` stays tracked; only the worktrees are ignored.
 .claude/worktrees/
+
+# Python venv for the solver suites in cloud sessions (docs/agents/project-rules.md §Conventions)
+.venv/
