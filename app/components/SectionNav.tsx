@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import SlidingIndicator, { useActiveIntoView } from "./ui/SlidingIndicator";
 import Presence from "./ui/Presence";
 import PracticeCluster, { type PracticeInfo } from "./song/PracticeCluster";
+import { SCROLL_FADE_RIGHT, useScrollableRight } from "./ui/useScrollableRight";
 
 export type { PracticeInfo };
 
@@ -38,23 +39,11 @@ export default function SectionNav({ sections, practice }: { sections: Section[]
   // The strip's right edge fades while there is more to the right (design pass
   // E, 2026-10-22): on a phone «Historial» was cut mid-word with nothing saying
   // the row scrolls. MEASURED, not assumed — a desktop strip that fits would
-  // otherwise dim its last tab for nothing — and re-measured on scroll, resize
-  // and a sections change.
+  // otherwise dim its last tab for nothing — through the hook `AdminRail`'s
+  // phone strip already uses, and as a MASK on the strip (see the hook's
+  // module for why a painted overlay cannot work over `.brand-atmosphere`).
   const stripRef = useRef<HTMLDivElement>(null);
-  const [moreRight, setMoreRight] = useState(false);
-  useEffect(() => {
-    const strip = stripRef.current;
-    if (!strip) return;
-    const measure = () => setMoreRight(strip.scrollWidth - strip.clientWidth - strip.scrollLeft > 1);
-    measure();
-    strip.addEventListener("scroll", measure, { passive: true });
-    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
-    ro?.observe(strip);
-    return () => {
-      strip.removeEventListener("scroll", measure);
-      ro?.disconnect();
-    };
-  }, [sections]);
+  const moreRight = useScrollableRight(stripRef, sections.length);
 
   useEffect(() => {
     const hero = document.getElementById("song-hero");
@@ -99,21 +88,14 @@ export default function SectionNav({ sections, practice }: { sections: Section[]
   return (
     <div ref={barRef} className="sticky top-[calc(5rem+env(safe-area-inset-top)+var(--impersonation-offset))] lg:top-[calc(6rem+env(safe-area-inset-top)+var(--impersonation-offset))] z-40 bg-surface-base/90 backdrop-blur-sm border-b border-edge-accent-subtle">
       <div className="max-w-7xl mx-auto px-6 flex items-center">
-        <div className="relative min-w-0">
-          <div ref={stripRef} className="flex gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-            {sections.map((s) => (
-              <Item key={s.id} id={s.id} label={s.label} active={active === s.id} />
-            ))}
-          </div>
-          {/* Same ground as the bar (`surface-base/90`), so the fade reads as the
-              bar covering the strip, not a stripe painted on it. */}
-          {moreRight && (
-            <span
-              aria-hidden
-              data-section-nav-fade=""
-              className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-surface-base/90 to-transparent"
-            />
-          )}
+        <div
+          ref={stripRef}
+          data-section-nav-fade={moreRight ? "" : undefined}
+          className={`flex gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] ${moreRight ? SCROLL_FADE_RIGHT : ""}`}
+        >
+          {sections.map((s) => (
+            <Item key={s.id} id={s.id} label={s.label} active={active === s.id} />
+          ))}
         </div>
         {/* Always rendered, so the bar's height never changes when the cluster
             fades in — motion must not shift the layout under a reader's thumb. */}

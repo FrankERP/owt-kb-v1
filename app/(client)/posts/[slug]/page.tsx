@@ -249,7 +249,7 @@ const Page = async ({ params }: Params) => {
           </h1>
 
           {post?.authors && post.authors.length > 0 ? (
-            <div {...revealProps(2)} className="mb-9 mt-4 flex flex-wrap justify-center gap-x-2 gap-y-1">
+            <div {...revealProps(1)} className="mb-9 mt-4 flex flex-wrap justify-center gap-x-2 gap-y-1">
               {post.authors.map((a, i) => (
                 <span key={a._id} className="font-body text-lg text-ink-muted/70">
                   <Link href={`/biblioteca?author=${encodeURIComponent(a.slug.current)}`} className="hover:text-accent transition-colors">
@@ -260,7 +260,7 @@ const Page = async ({ params }: Params) => {
               ))}
             </div>
           ) : post?.author ? (
-            <p {...revealProps(2)} className="mb-9 mt-4 font-body text-lg text-ink-dim">{post.author}</p>
+            <p {...revealProps(1)} className="mb-9 mt-4 font-body text-lg text-ink-dim">{post.author}</p>
           ) : null}
 
           <SongHeroPills
@@ -270,7 +270,7 @@ const Page = async ({ params }: Params) => {
             timeSig={post?.timeSig ?? null}
             transposable={transposable}
             mixTones={mixTones(post?.rehearsalMixes ?? [])}
-            revealIndex={3}
+            revealIndex={2}
           />
 
           {/* The tags, BELOW the pills and as quiet text links (design pass E,
@@ -279,7 +279,7 @@ const Page = async ({ params }: Params) => {
               reader opens a song for its title, key and tempo, and reaches the
               tags only to browse sideways. Last in the stagger, after the pills. */}
           {post?.tags && post.tags.length > 0 && (
-            <div {...revealProps(4)} className="mt-6 flex flex-wrap justify-center gap-x-3 gap-y-1">
+            <div {...revealProps(3)} className="mt-6 flex flex-wrap justify-center gap-x-3 gap-y-1">
               {post.tags.map((tag) => (
                 <Link
                   key={tag._id}

@@ -59,26 +59,26 @@ describe("RehearsalPlayer", () => {
     expect(getByRole("link", { name: "Descargar EG 1" }).getAttribute("href")).toBe("/api/audio/post-1/eg1?download=1");
   });
 
-  it("E — draws ONE waveform: the loaded row's, else the member's preselected row's", () => {
-    // Nothing of this song loaded: the preselected row carries the envelope so
-    // «where my part sounds» is on screen before the first press.
+  it("E — draws ONE waveform, the loaded row's, and none while nothing of this song is loaded", () => {
+    // Idle, preselection or not: no canvas — an unloaded row's envelope cannot
+    // place the «where my part sounds» spans (they need the track's duration).
     const idle = render(<RehearsalPlayer {...props} preselect={["Bass"]} />);
-    expect(idle.getAllByRole("img")).toHaveLength(1);
-    expect(idle.getByRole("img").getAttribute("aria-label")).toBe("Onda Bass");
+    expect(idle.queryAllByRole("img")).toHaveLength(0);
+    expect(idle.queryByRole("button", { name: /^Onda/ })).toBeNull();
     cleanup();
     // A row loaded in the player: its playhead is what the canvas is for — and
-    // it seeks, so that one waveform is a button, and the preselected row's
-    // image is gone.
+    // it seeks, so that one waveform is a button; the preselected row gets none.
     player = { track: { url: "/api/audio/post-1/eg1" }, isPlaying: false };
     const loaded = render(<RehearsalPlayer {...props} preselect={["Bass"]} />);
     expect(loaded.getByRole("button", { name: "Onda EG 1" })).toBeTruthy();
     expect(loaded.queryAllByRole("img")).toHaveLength(0);
-    cleanup();
-    // No preselection and nothing loaded: no waveform at all, not eight.
-    player = { track: null, isPlaying: false };
-    const bare = render(<RehearsalPlayer {...props} />);
-    expect(bare.queryAllByRole("img")).toHaveLength(0);
-    expect(bare.queryByRole("button", { name: /^Onda/ })).toBeNull();
+    expect(loaded.queryByRole("button", { name: "Onda Bass" })).toBeNull();
+  });
+
+  it("E — the play control and the download keep a 44px hit box on a compact row", () => {
+    const { getByRole } = render(<RehearsalPlayer {...props} />);
+    expect(getByRole("button", { name: "Reproducir EG 1" }).className).toContain("min-h-[44px]");
+    expect(getByRole("link", { name: "Descargar EG 1" }).className).toContain("min-h-[44px]");
   });
 
   it("E — the download is an icon-only link that still names the mix", () => {

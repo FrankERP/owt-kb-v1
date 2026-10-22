@@ -117,14 +117,21 @@ describe("SectionNav edge fade (design pass E)", () => {
     delete (HTMLElement.prototype as unknown as Record<string, unknown>).clientWidth;
   });
 
-  it("fades the strip's right edge only while there is more to the right", () => {
+  // Two cases, two `it`s: `mount` appends `#song-hero` and the sections to the
+  // body, and only the file's `afterEach` clears it between mounts.
+  it("masks the strip's right edge while there is more to the right", () => {
     stage(560, 390);
     const { container } = mount(<SectionNav sections={sections} practice={practice} />);
-    expect(container.querySelector("[data-section-nav-fade]")).not.toBeNull();
-    cleanup();
+    const strip = container.querySelector("[data-section-nav-fade]");
+    expect(strip).not.toBeNull();
+    expect(strip!.className).toContain("mask-image:linear-gradient(to_left");
+  });
+
+  it("leaves a strip that fits unmasked, so its last tab is never dimmed", () => {
     stage(300, 390);
-    const fits = mount(<SectionNav sections={sections} practice={practice} />);
-    expect(fits.container.querySelector("[data-section-nav-fade]")).toBeNull();
+    const { container } = mount(<SectionNav sections={sections} practice={practice} />);
+    expect(container.querySelector("[data-section-nav-fade]")).toBeNull();
+    expect(container.innerHTML).not.toContain("mask-image:linear-gradient");
   });
 });
 

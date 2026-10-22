@@ -115,13 +115,12 @@ export default function RehearsalPlayer({
   if (mixes.length === 0) return null;
 
   const progress = time.duration > 0 ? Math.min(1, time.current / time.duration) : 0;
-  // ONE waveform on the page (design pass E, 2026-10-22): eight rows each with a
-  // 40px canvas made the list a wall and pushed the second family below the fold.
-  // The row that carries it is the one loaded in the player — its playhead is
-  // what the canvas is for — or, while nothing of this song is loaded, the
-  // member's own preselected row, so «where my part sounds» is still on screen
-  // before the first press.
-  const waveformRow = anyCurrent ? null : highlighted;
+  // ONE waveform on the page, the loaded row's (design pass E, 2026-10-22):
+  // eight rows each with a 40px canvas made the list a wall and pushed the
+  // second family below the fold. The canvas exists for the playhead and the
+  // seek, and the accent «where my part sounds» spans need the track's
+  // duration, which only the loaded file knows — an idle row's envelope would
+  // be a picture with none of that, which is the cost the pass set out to cut.
 
   return (
     <div className="space-y-6">
@@ -145,17 +144,19 @@ export default function RehearsalPlayer({
                   key={m._key}
                   aria-label={label}
                   aria-current={highlighted === m._key ? "true" : undefined}
-                  className={`brand-library-module flex flex-col gap-1.5 px-3 py-2 ${
+                  className={`brand-library-module flex flex-col gap-1.5 px-3 py-1.5 ${
                     current ? "border-accent/50 bg-accent/10" : highlighted === m._key ? "border-accent/30" : "border-accent-deep/30"
                   }`}
                 >
                   {/* A 56px row (E): the play control, the name over its key · BPM, the
                       equalizer while it sounds, and an icon-only download — the word
-                      «Descargar» on every row said the same thing eight times. */}
-                  <div className="flex items-center gap-3">
+                      «Descargar» on every row said the same thing eight times. Both
+                      controls keep the 44px hit box every playback control has
+                      (`size="lg"` on the icon variant); the glyph sets the weight. */}
+                  <div className="flex items-center gap-2">
                     <Button
                       variant="icon"
-                      size="md"
+                      size="lg"
                       onClick={() => play(m)}
                       aria-label={`${playing ? "Pausar" : "Reproducir"} ${label}`}
                     >
@@ -176,12 +177,12 @@ export default function RehearsalPlayer({
                       download
                       aria-label={`Descargar ${label}`}
                       title={`Descargar ${label}`}
-                      className={buttonClass("icon", "md")}
+                      className={buttonClass("icon", "lg")}
                     >
                       <DownloadIcon size={16} />
                     </a>
                   </div>
-                  {m.kind === "up" && m.peaks && (current || waveformRow === m._key) && (
+                  {m.kind === "up" && m.peaks && current && (
                     <Waveform
                       peaks={m.peaks}
                       active={m.active}

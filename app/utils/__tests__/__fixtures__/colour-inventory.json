@@ -8,12 +8,12 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 311,
-    "filesScanned": 516,
+    "literalRows": 310,
+    "filesScanned": 517,
     "filesWithColour": 56,
     "byCategory": {
       "2": 2,
-      "4": 65,
+      "4": 64,
       "8": 92,
       "9": 10,
       "11": 8,
@@ -22,7 +22,7 @@
     "byDisposition": {
       "B": 117,
       "exempt": 53,
-      "keep": 239,
+      "keep": 238,
       "C": 5,
       "D": 14
     },
@@ -2239,31 +2239,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 313,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/admin/AdminRail.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "transparent",
-      "alpha": null,
-      "utility": null,
-      "carrier": null,
-      "line": 80,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/admin/AdminRail.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "transparent",
-      "alpha": null,
-      "utility": null,
-      "carrier": null,
-      "line": 81,
+      "line": 285,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3408,18 +3384,6 @@
       "reason": "Already theme-agnostic"
     },
     {
-      "file": "app/components/SectionNav.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "to-transparent",
-      "alpha": null,
-      "utility": "to",
-      "carrier": null,
-      "line": 114,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
       "file": "app/components/song/KeyDial.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
@@ -3656,6 +3620,30 @@
       "utility": "border",
       "carrier": null,
       "line": 51,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/ui/useScrollableRight.ts",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "transparent",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 23,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/ui/useScrollableRight.ts",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "transparent",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 24,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
