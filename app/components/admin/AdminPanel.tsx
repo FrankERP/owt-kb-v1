@@ -199,6 +199,7 @@ export default function AdminPanel({
   // predicate decides both, and it is the same one that builds the rail.
   const showsServices = useMemo(() => railTabs.some((t) => t.id === "services"), [railTabs]);
   const integrity = useIntegrityQueue({ enabled: showsServices, onResolved: onReviewResolved });
+  const [monthEditorOpen, setMonthEditorOpen] = useState(false);
   // Entering Servicios re-reads the inventory. The queue is loaded once per
   // mount otherwise (`docs/SERVICE_READINESS_UI.md`), and a manager who fixes a
   // document in Studio and comes back to the tab should not have to find
@@ -223,16 +224,22 @@ export default function AdminPanel({
         return (
           <ServiceHandoffProvider value={handoff}>
             <div className="min-w-0 space-y-4">
-              {/* Read-only global integrity queue: issues no validated card owns. */}
-              <IntegrityQueuePanel
-                queue={integrity.queue}
-                tone={integrity.tone}
-                sources={integrity.sources}
-                reload={integrity.reload}
-                target={integrityTarget}
-                onResolved={integrity.resolve}
-              />
-              <ServicesPanel engine={engine} viewerId={viewerId} />
+              {/*
+                Read-only global integrity queue: issues no validated card owns. Not over the
+                stored month editor: it reads the same inventory for its own edit admission and
+                refuses in its own words, so there the panel only repeated «OK» above the grid.
+              */}
+              {!monthEditorOpen && (
+                <IntegrityQueuePanel
+                  queue={integrity.queue}
+                  tone={integrity.tone}
+                  sources={integrity.sources}
+                  reload={integrity.reload}
+                  target={integrityTarget}
+                  onResolved={integrity.resolve}
+                />
+              )}
+              <ServicesPanel engine={engine} viewerId={viewerId} onMonthEditorOpenChange={setMonthEditorOpen} />
             </div>
           </ServiceHandoffProvider>
         );
