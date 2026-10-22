@@ -13,6 +13,9 @@ export interface ProposalCardProps {
   onEdit?: () => void;
   /** A newer version saved from this card: the card below still shows the version it was handed. */
   note?: string;
+  /** A saved month the chat asked to show only some days of: «Ver mes completo» was pressed. */
+  wide?: boolean;
+  onWiden?: () => void;
 }
 
 function ServiceBlock({ service, fixedTag = "No se creará" }: { service: CardService; fixedTag?: string }) {
@@ -38,7 +41,7 @@ function ServiceBlock({ service, fixedTag = "No se creará" }: { service: CardSe
   );
 }
 
-export function ProposalCard({ view, canExpand, onExpand, onEdit, note }: ProposalCardProps) {
+export function ProposalCard({ view, canExpand, onExpand, onEdit, note, wide = false, onWiden }: ProposalCardProps) {
   if (view.kind === "waiting") {
     return (
       <main className="card" aria-busy="true">
@@ -48,6 +51,7 @@ export function ProposalCard({ view, canExpand, onExpand, onEdit, note }: Propos
   }
 
   if (view.kind === "storedMonth") {
+    const focused = view.focused && !wide ? view.focused : null;
     return (
       <main className="card">
         <header className="head">
@@ -73,8 +77,18 @@ export function ProposalCard({ view, canExpand, onExpand, onEdit, note }: Propos
             ))}
           </ul>
         )}
+        {focused && (
+          <p className="hint">
+            Solo {focused.shown}.{" "}
+            {onWiden && (
+              <button type="button" className="link" onClick={onWiden}>
+                Ver mes completo
+              </button>
+            )}
+          </p>
+        )}
         <section aria-label="Servicios">
-          {view.services.map((s, i) => (
+          {(focused?.services ?? view.services).map((s, i) => (
             <ServiceBlock key={`${s.label}-${i}`} service={s} fixedTag="Solo en /admin" />
           ))}
         </section>

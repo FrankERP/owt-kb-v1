@@ -172,6 +172,8 @@ export const CHECK_SERVICE_EDITS_INPUT = z
     edits: z.array(NAME_EDIT).max(200),
     /** A copy of one service's instruments (by id or date) onto another of this month, checked alone. */
     copy: z.object({ from: SERVICE, to: SERVICE }).strict().optional(),
+    /** Card only: the dates it shows (one day, a weekend); what is checked is still the whole month. */
+    focus: z.object({ from: z.string().regex(DAY), to: z.string().regex(DAY) }).strict().optional(),
   })
   .strict();
 
@@ -249,7 +251,9 @@ export const CHECK_SERVICE_EDITS_DESCRIPTION =
   "se cambia desde aquí. Cada cambio pasa por las mismas reglas que /admin: si uno rompe una regla de lugar, se rechaza " +
   "(forzarlo solo se puede desde la tarjeta). La respuesta trae los cambios en palabras, los servicios que se guardan " +
   "juntos y lo que no cuadra con las reglas del mes; al final, una línea con los argumentos listos para save_service_edits " +
-  "(o para copy_instruments, si es una copia), que se pasan tal cual (una por llamada si son varias).";
+  "(o para copy_instruments, si es una copia), que se pasan tal cual (una por llamada si son varias). También abre la " +
+  "tarjeta del mes: con focus {from, to} (YYYY-MM-DD) la tarjeta muestra solo esos días (un día: from = to; un fin de " +
+  "semana: sábado a domingo), y con focus edits puede ir vacía para solo abrirla. focus no cambia lo que se revisa.";
 
 export const COPY_INSTRUMENTS_DESCRIPTION =
   "Copia en producción los instrumentos de un servicio a otro, como «Copiar instrumentos» de /admin: los del destino se " +
@@ -715,8 +719,12 @@ function storedFairShareAdjust(board: EditorBoard): (stored: { records: LogicalR
   };
 }
 
+/** Whether a focus leaves out any service the month check would speak about (an editable one). */
+const focusNarrows = (board: EditorBoard, focus: { from: string; to: string } | undefined) =>
+  !!focus && board.columns.some((c) => board.editable.has(board.localIdOf.get(c.columnId)!) && (c.date < focus.from || c.date > focus.to));
+
 /** The month check over the edited board (T2.3): the board's services as planned, the rest stored. */
-async function runStoredMonthCheck(ctx: MonthContext, board: EditorBoard, deps: ServiceEditorDeps): Promise<MonthCheck> {
+async function runStoredMonthCheck(ctx: MonthContext, board: EditorBoard, deps: ServiceEditorDeps, days?: { from: string; to: string }): Promise<MonthCheck> {
   const months = [ctx.month];
   const [ledger, fairShare] = await Promise.all([
     deps.readLedger(months).catch(() => null),
@@ -738,15 +746,17 @@ async function runStoredMonthCheck(ctx: MonthContext, board: EditorBoard, deps: 
     savedWindow: savedWindowFor(year, month, adminRoles).filter((r) => !onBoard.has((r as { _id?: string })._id ?? "")),
     ledger,
     fairShare,
+    ...(days ? { days } : {}),
   });
 }
 
 /** A worship night's song leaders must stay in its Lead (ADR-0036); the role writer does not check it. */
-function songLeadLines(ctx: MonthContext, board: EditorBoard): string[] {
+function songLeadLines(ctx: MonthContext, board: EditorBoard, days?: { from: string; to: string }): string[] {
   const lines: string[] = [];
   for (const column of board.columns) {
     const id = board.localIdOf.get(column.columnId)!;
     if (!board.editable.has(id) || kindOfType(column.type) !== "special" || !isWorshipNightFormat(column.format)) continue;
+    if (days && (column.date < days.from || column.date > days.to)) continue;
     const role = ctx.sources.snapshot.roles.find((r) => r._id === id) as { songs?: Array<{ leads?: Array<{ _ref?: string }> }> } | undefined;
     const lead = new Set(board.cells.find((c) => c.columnId === column.columnId && c.rowId === "lead")?.occupants.map((o) => o.memberId) ?? []);
     const leaders = new Set((role?.songs ?? []).flatMap((s) => (s.leads ?? []).map((l) => l._ref).filter((x): x is string => !!x)));
@@ -773,13 +783,21 @@ function refusalView(r: ReplayRefusal, ctx: MonthContext) {
   };
 }
 
+/** The card's dates: in order, inside the month, and holding at least one of its services. */
+function focusOf(ctx: MonthContext, focus: { from: string; to: string }): { ok: true; value: { from: string; to: string } } | { ok: false; line: string } {
+  const inMonth = (d: string) => d.slice(0, 7) === ctx.month;
+  if (!inMonth(focus.from) || !inMonth(focus.to) || focus.from > focus.to) return { ok: false, line: S.focusInvalid };
+  if (!ctx.board.columns.some((c) => c.date >= focus.from && c.date <= focus.to)) return { ok: false, line: S.focusEmpty };
+  return { ok: true, value: focus };
+}
+
 async function checkMonth(
   ctx: MonthContext,
   edits: ReadonlyArray<EditorEdit | HeaderEdit>,
   deps: ServiceEditorDeps,
-  options: { app: boolean; seat?: { service: string; row: string } },
+  options: { app: boolean; seat?: { service: string; row: string }; focus?: { from: string; to: string } },
 ): Promise<CallToolResult> {
-  const head = { ok: true, month: ctx.month, edits: tokenEditsOf(edits, ctx.tokens) };
+  const head = { ok: true, month: ctx.month, edits: tokenEditsOf(edits, ctx.tokens), ...(options.focus ? { focus: options.focus } : {}) };
   const notes = [
     ...(ctx.board.coherent ? [] : [S.readOnlyMonth]),
     ...(ctx.board.untranslated ? [S.untranslated(ctx.board.untranslated)] : []),
@@ -849,7 +867,9 @@ async function checkMonth(
   const linked = groups.filter((g) => g.length > 1);
   const tooBig = groups.filter((g) => g.length > MAX_GROUP);
   const unconfirmed = changes.flatMap((c) => c.unconfirmed);
-  const check = options.seat ? null : await runStoredMonthCheck(ctx, board, deps);
+  // A focus narrows the per-service lines to its days (the month's rules and fairness stay whole).
+  const partial = focusNarrows(board, options.focus);
+  const check = options.seat ? null : await runStoredMonthCheck(ctx, board, deps, partial ? options.focus : undefined);
 
   // What save_service_edits takes, as is (F3) — in the structured answer for the card, and in the
   // text for the model, which never sees `structuredContent`: one line per call, so a group too big
@@ -865,8 +885,8 @@ async function checkMonth(
     ...tooBig.map((g) => S.groupTooBig(g.length, MAX_GROUP)),
     ...(unconfirmed.length ? [S.needsCard, ...unconfirmed] : []),
     ...changes.flatMap((c) => baselineLines(c.judged)),
-    ...songLeadLines(ctx, board),
-    ...(check ? monthCheckLines(check) : []),
+    ...songLeadLines(ctx, board, partial ? options.focus : undefined),
+    ...(check ? [...(partial ? [S.focusHidden] : []), ...monthCheckLines(check, { partial })] : []),
   ];
   for (const part of calls) lines.push(S.saveArgs(JSON.stringify({ month: ctx.month, changes: part })));
   return answer(false, lines, {
@@ -899,17 +919,21 @@ export async function checkServiceEditsResult(
       if (!opened.ok) return opened.result;
       if (args.copy) {
         if (args.edits.length) return refusal([S.copy.alone], { code: "invalid_request", detail: "copy_alone" });
+        if (args.focus) return refusal([S.focusWithCopy], { code: "invalid_request", detail: "focus" });
         const from = anyServiceOf(opened.ctx, args.copy.from);
         if (!from.ok) return refusal([from.line], { code: "invalid_request", detail: "copy_from" });
         const to = boardServiceOf(opened.ctx, args.copy.to);
         if (!to.ok) return refusal([to.line], { code: "invalid_request", detail: "copy_to" });
         return checkCopy(opened.ctx, { from: from.id, to: to.id }, deps);
       }
-      if (!args.edits.length) return refusal([S.nothingToCheck], { code: "invalid_request", detail: "empty" });
+      const focus = args.focus ? focusOf(opened.ctx, args.focus) : null;
+      if (focus && !focus.ok) return refusal([focus.line], { code: "invalid_request", detail: "focus" });
+      // No edits only to open the card (with `focus`, on those dates); otherwise there is nothing to check.
+      if (!args.edits.length && !focus) return refusal([S.nothingToCheck], { code: "invalid_request", detail: "empty" });
       const resolved = resolveNameEdits(args.edits, opened.ctx);
       if (!resolved.ok) return refusal(resolved.lines, { code: "invalid_request", detail: "edit" });
       // From the chat nothing is forced: a rule block refuses its edit in the replay.
-      return checkMonth(opened.ctx, resolved.edits, deps, { app: false });
+      return checkMonth(opened.ctx, resolved.edits, deps, { app: false, ...(focus ? { focus: focus.value } : {}) });
     },
     SERVICE_EDITOR_COPY,
   );

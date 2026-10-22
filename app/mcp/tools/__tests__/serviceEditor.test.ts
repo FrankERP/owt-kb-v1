@@ -64,6 +64,38 @@ describe("check_service_edits (the chat)", () => {
     expect(textOf(app)).not.toContain("última línea");
   });
 
+  it("focus only tells the card which days to show: echoed, checked against the month, and it may open the card without edits", async () => {
+    const w = serviceWorld();
+    const day = await checkServiceEditsResult({ month: MONTH, edits: [], focus: { from: "2026-11-08", to: "2026-11-08" } }, PRINCIPAL, w.deps);
+    expect(day.isError).toBeFalsy();
+    expect(sc(day)).toMatchObject({ ok: true, focus: { from: "2026-11-08", to: "2026-11-08" }, changes: [] });
+    expect(textOf(day)).not.toContain(SAVE_ARGS_PREFIX);
+    const edited = await checkServiceEditsResult({ month: MONTH, edits: [{ op: "place", service: "2026-11-15", seat: "BGV", member: "Carla" }], focus: { from: "2026-11-14", to: "2026-11-15" } }, PRINCIPAL, w.deps);
+    expect(sc(edited)).toMatchObject({ focus: { from: "2026-11-14", to: "2026-11-15" } });
+    expect(changesOf(edited).map((c) => c.service)).toEqual(["sun15"]);
+    const outside = await checkServiceEditsResult({ month: MONTH, edits: [], focus: { from: "2026-12-05", to: "2026-12-06" } }, PRINCIPAL, w.deps);
+    expect(sc(outside)).toMatchObject({ detail: "focus" });
+    const backwards = await checkServiceEditsResult({ month: MONTH, edits: [], focus: { from: "2026-11-08", to: "2026-11-07" } }, PRINCIPAL, w.deps);
+    expect(sc(backwards)).toMatchObject({ detail: "focus" });
+    const empty = await checkServiceEditsResult({ month: MONTH, edits: [], focus: { from: "2026-11-02", to: "2026-11-03" } }, PRINCIPAL, w.deps);
+    expect(textOf(empty)).toContain("No hay servicios guardados entre esas fechas");
+    const copyFocus = await checkServiceEditsResult({ month: MONTH, edits: [], copy: { from: "sun1", to: "sun8" }, focus: { from: "2026-11-08", to: "2026-11-08" } }, PRINCIPAL, w.deps);
+    expect(sc(copyFocus)).toMatchObject({ detail: "focus" });
+    expect(w.deps.editRole).not.toHaveBeenCalled();
+  });
+
+  it("a focus keeps the focused day's own warnings (no Lead) and never claims the month is clear", async () => {
+    const w = serviceWorld();
+    const whole = textOf(await checkServiceEditsResult({ month: MONTH, edits: [], focus: { from: "2026-11-01", to: "2026-11-30" } }, PRINCIPAL, w.deps));
+    expect(whole).toContain("Noche de alabanza 18 nov quedó sin Lead");
+    expect(whole).not.toContain("Los avisos por servicio son solo de esos días");
+    const day = textOf(await checkServiceEditsResult({ month: MONTH, edits: [], focus: { from: "2026-11-18", to: "2026-11-18" } }, PRINCIPAL, w.deps));
+    expect(day).toContain("Noche de alabanza 18 nov quedó sin Lead");
+    expect(day).toContain("Los avisos por servicio son solo de esos días");
+    expect(day).not.toContain("domingo 1 nov:");
+    expect(day).not.toContain("Todo cuadra");
+  });
+
   it("a move between two services is one group, saved back to back", async () => {
     const w = serviceWorld();
     const out = await check(w, [{ op: "move", from: { service: "sun8", seat: "BGV", member: "Ana" }, to: { service: "sun15", seat: "BGV" } }]);
