@@ -120,6 +120,9 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
   // The client session wins once it exists; until then, the server's reading.
   const myName = myNameFromSession(session?.user) || viewerName || "";
 
+  // The instrument the viewer plays in THIS service, for «Ensayar»'s «al frente» mix.
+  const mySeat = myName ? instruments?.find((s) => s.person?.toLowerCase().trim() === myName.toLowerCase().trim())?.label ?? null : null;
+
   if (!paintsDayCard({ setlist, leads, instruments, fohTeam, bgvs, chorus })) return null;
 
   const tone = serviceTone({ day, roleId });
@@ -219,7 +222,7 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
               (2026-10-21): beside the countdown it read as one more pill. */}
           {hero && hasSetlist && (
             <div className="mt-4">
-              <PracticePlaylistButton variant="hero" songIds={setlist!.songs.map((s) => s._id)} accentVar="--accent-rgb" />
+              <PracticePlaylistButton variant="hero" songs={setlist!.songs} mySeat={mySeat} accentVar="--accent-rgb" />
             </div>
           )}
         </div>
@@ -245,7 +248,7 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
                     Setlist
                   </h4>
                   <div className="flex items-center gap-3">
-                    {!hero && <PracticePlaylistButton songIds={setlist!.songs.map(s => s._id)} accentVar="--accent-rgb" />}
+                    {!hero && <PracticePlaylistButton songs={setlist!.songs} mySeat={mySeat} accentVar="--accent-rgb" />}
                     {canEdit && date && (
                       <button
                         onClick={() => setEditSetlist(true)}

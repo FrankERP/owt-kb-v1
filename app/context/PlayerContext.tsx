@@ -44,9 +44,22 @@ interface PlayerState {
   isPlaying: boolean;
 }
 
+/** A run of tracks played one after another («Ensayar el setlist»). `null` = one track. */
+export interface PlayerQueue {
+  tracks: AudioTrack[];
+  index: number;
+}
+
 interface PlayerContextValue {
   player: PlayerState;
   playTrack: (track: AudioTrack) => void;
+  queue: PlayerQueue | null;
+  /** Start a run at `index`; it advances by itself when each track ends. */
+  playQueue: (tracks: AudioTrack[], index?: number) => void;
+  /** Next (+1) or previous (-1) track of the run. Previous restarts the current
+   *  track when more than 3 s of it have played — the convention every player
+   *  keeps, so one press goes back to the top of the song. */
+  skip: (delta: 1 | -1) => void;
   togglePlay: () => void;
   closePlayer: (fallback?: HTMLElement | null) => void;
   seek: (fraction: number) => void;
@@ -73,17 +86,49 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const audioOriginRef = useRef<HTMLElement | null>(null);
   const sheetRequestRef = useRef<{ id: number; controller: AbortController | null }>({ id: 0, controller: null });
   const [player, setPlayer] = useState<PlayerState>({ track: null, isPlaying: false });
+  const [queue, setQueue] = useState<PlayerQueue | null>(null);
+  // The `ended` listener is registered once, so it reads the run through a ref.
+  const queueRef = useRef<PlayerQueue | null>(null);
   const [audioReady, setAudioReady] = useState(false);
   const [sheet, setSheet] = useState<SongSheetData | null>(null);
   const [sheetLoading, setSheetLoading] = useState(false);
   const [sheetError, setSheetError] = useState(false);
   const [sheetPlayKey, setSheetPlayKey] = useState<string | null>(null);
 
+  // Load and start one track. A refused `play()` (iOS outside a user gesture, a
+  // failed load) leaves the transport showing ▶, never a ‖ over silence.
+  const load = useCallback((track: AudioTrack) => {
+    const el = audioRef.current;
+    if (!el) return;
+    el.src = track.url;
+    setPlayer({ track, isPlaying: true });
+    startPlayback(el, () => setPlayer(p => (p.track === track ? { ...p, isPlaying: false } : p)));
+  }, []);
+
+  const setRun = useCallback((next: PlayerQueue | null) => {
+    queueRef.current = next;
+    setQueue(next);
+  }, []);
+
+  // Advancing reuses the SAME <audio> element: a locked phone keeps playing the
+  // run, where a fresh element would need a new tap.
+  const advance = useCallback((delta: 1 | -1) => {
+    const run = queueRef.current;
+    if (!run) return false;
+    const index = run.index + delta;
+    if (index < 0 || index >= run.tracks.length) return false;
+    setRun({ tracks: run.tracks, index });
+    load(run.tracks[index]);
+    return true;
+  }, [load, setRun]);
+
   useEffect(() => {
     const el = new Audio();
     audioRef.current = el;
     setAudioReady(true);
-    const onEnd = () => setPlayer(p => ({ ...p, isPlaying: false }));
+    const onEnd = () => {
+      if (!advance(1)) setPlayer(p => ({ ...p, isPlaying: false }));
+    };
     el.addEventListener("ended", onEnd);
     return () => {
       el.removeEventListener("ended", onEnd);
@@ -91,18 +136,62 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setAudioReady(false);
       audioRef.current = null;
     };
-  }, []);
+  }, [advance]);
 
   const getAudio = useCallback(() => audioRef.current, []);
 
+  // One track from a song's own list: whatever run was playing ends here.
   const playTrack = useCallback((track: AudioTrack) => {
-    const el = audioRef.current;
-    if (!el) return;
+    if (!audioRef.current) return;
     audioOriginRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    el.src = track.url;
-    el.play().catch(() => {});
-    setPlayer({ track, isPlaying: true });
-  }, []);
+    setRun(null);
+    load(track);
+  }, [load, setRun]);
+
+  const playQueue = useCallback((tracks: AudioTrack[], index = 0) => {
+    if (!audioRef.current || tracks.length === 0) return;
+    const start = Math.min(Math.max(0, index), tracks.length - 1);
+    audioOriginRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setRun({ tracks, index: start });
+    load(tracks[start]);
+  }, [load, setRun]);
+
+  const skip = useCallback((delta: 1 | -1) => {
+    const el = audioRef.current;
+    if (delta === -1 && el && el.currentTime > 3) {
+      el.currentTime = 0;
+      return;
+    }
+    advance(delta);
+  }, [advance]);
+
+  // Lock-screen and headphone controls for a run: ⏭/⏮ move through the set while
+  // the phone is in a pocket. Absent APIs (older WebViews, jsdom) are a no-op.
+  const hasRun = queue !== null;
+  useEffect(() => {
+    if (!hasRun || typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+    const session = navigator.mediaSession;
+    const set = (action: MediaSessionAction, handler: MediaSessionActionHandler | null) => {
+      try { session.setActionHandler(action, handler); } catch { /* unsupported action */ }
+    };
+    set("nexttrack", () => skip(1));
+    set("previoustrack", () => skip(-1));
+    return () => {
+      set("nexttrack", null);
+      set("previoustrack", null);
+    };
+  }, [hasRun, skip]);
+
+  useEffect(() => {
+    if (!player.track || typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+    if (typeof MediaMetadata === "undefined") return;
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: player.track.songTitle,
+        artist: [player.track.title, player.track.tone].filter(Boolean).join(" · "),
+      });
+    } catch { /* unsupported */ }
+  }, [player.track]);
 
   const togglePlay = useCallback(() => {
     const el = audioRef.current;
@@ -119,6 +208,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const closePlayer = useCallback((fallback?: HTMLElement | null) => {
     const el = audioRef.current;
     if (el) { el.pause(); el.src = ""; }
+    setRun(null);
     setPlayer({ track: null, isPlaying: false });
     const origin = audioOriginRef.current;
     audioOriginRef.current = null;
@@ -127,7 +217,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       focusableTarget(fallback) ??
       focusableTarget(document.querySelector<HTMLElement>("main[data-route-main]"));
     target?.focus?.({ preventScroll: true });
-  }, []);
+  }, [setRun]);
 
   const seek = useCallback((fraction: number) => {
     const el = audioRef.current;
@@ -174,8 +264,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // every consumer (all ~140 song cards) re-renders on any parent render. The
   // callbacks are already stable (useCallback), so only the state values matter.
   const value = useMemo(
-    () => ({ player, playTrack, togglePlay, closePlayer, seek, getAudio, audioReady, sheet, sheetLoading, sheetError, sheetPlayKey, openSheet, closeSheet }),
-    [player, playTrack, togglePlay, closePlayer, seek, getAudio, audioReady, sheet, sheetLoading, sheetError, sheetPlayKey, openSheet, closeSheet],
+    () => ({ player, playTrack, queue, playQueue, skip, togglePlay, closePlayer, seek, getAudio, audioReady, sheet, sheetLoading, sheetError, sheetPlayKey, openSheet, closeSheet }),
+    [player, playTrack, queue, playQueue, skip, togglePlay, closePlayer, seek, getAudio, audioReady, sheet, sheetLoading, sheetError, sheetPlayKey, openSheet, closeSheet],
   );
 
   return (
@@ -183,6 +273,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       {children}
     </PlayerContext.Provider>
   );
+}
+
+function startPlayback(el: HTMLAudioElement, onRefused: () => void) {
+  try {
+    const started = el.play();
+    if (started && typeof started.catch === "function") started.catch(onRefused);
+  } catch {
+    onRefused();
+  }
 }
 
 function focusableTarget(target: HTMLElement | null | undefined) {

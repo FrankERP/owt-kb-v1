@@ -94,3 +94,92 @@ describe("PlayerContext sheet requests", () => {
     expect(getByTestId("state").textContent).toBe("none");
   });
 });
+
+describe("PlayerContext runs («Ensayar el setlist»)", () => {
+  const track = (n: number) => ({ url: `/api/audio/s${n}/k${n}`, title: "Banda completa", songTitle: `Song ${n}`, songSlug: `s${n}` });
+  let audio: MockAudio | null = null;
+
+  beforeEach(() => {
+    vi.stubGlobal("Audio", class extends MockAudio {
+      constructor() {
+        super();
+        // eslint-disable-next-line @typescript-eslint/no-this-alias -- the test holds the provider's one element
+        audio = this;
+      }
+    });
+  });
+
+  function RunHarness() {
+    const { playQueue, playTrack, skip, closePlayer, queue, player } = usePlayer();
+    return (
+      <div>
+        <button onClick={() => playQueue([track(1), track(2), track(3)])}>run</button>
+        <button onClick={() => playTrack(track(9))}>single</button>
+        <button onClick={() => skip(1)}>next</button>
+        <button onClick={() => skip(-1)}>prev</button>
+        <button onClick={() => closePlayer()}>close</button>
+        <span data-testid="state">
+          {player.track?.songTitle ?? "none"}|{queue ? `${queue.index + 1}/${queue.tracks.length}` : "single"}|{player.isPlaying ? "playing" : "paused"}
+        </span>
+      </div>
+    );
+  }
+
+  function renderRun() {
+    return render(<PlayerProvider><RunHarness /></PlayerProvider>);
+  }
+
+  it("advances by itself on `ended` through the SAME audio element, and stops after the last", async () => {
+    const { getByRole, getByTestId } = renderRun();
+    fireEvent.click(getByRole("button", { name: "run" }));
+    const el = audio!;
+    expect(getByTestId("state").textContent).toBe("Song 1|1/3|playing");
+    expect(el.src).toBe("/api/audio/s1/k1");
+
+    act(() => { el.dispatchEvent(new Event("ended")); });
+    expect(getByTestId("state").textContent).toBe("Song 2|2/3|playing");
+    expect(audio).toBe(el);
+    expect(el.src).toBe("/api/audio/s2/k2");
+
+    act(() => { el.dispatchEvent(new Event("ended")); });
+    act(() => { el.dispatchEvent(new Event("ended")); });
+    expect(getByTestId("state").textContent).toBe("Song 3|3/3|paused");
+  });
+
+  it("skips forward and back; back restarts a track that has played more than 3 s", () => {
+    const { getByRole, getByTestId } = renderRun();
+    fireEvent.click(getByRole("button", { name: "run" }));
+    fireEvent.click(getByRole("button", { name: "next" }));
+    expect(getByTestId("state").textContent).toBe("Song 2|2/3|playing");
+
+    audio!.currentTime = 42;
+    fireEvent.click(getByRole("button", { name: "prev" }));
+    expect(audio!.currentTime).toBe(0);
+    expect(getByTestId("state").textContent).toBe("Song 2|2/3|playing");
+
+    fireEvent.click(getByRole("button", { name: "prev" }));
+    expect(getByTestId("state").textContent).toBe("Song 1|1/3|playing");
+    fireEvent.click(getByRole("button", { name: "prev" }));
+    expect(getByTestId("state").textContent).toBe("Song 1|1/3|playing");
+  });
+
+  it("a single track from a song's own list ends the run, and so does closing", () => {
+    const { getByRole, getByTestId } = renderRun();
+    fireEvent.click(getByRole("button", { name: "run" }));
+    fireEvent.click(getByRole("button", { name: "single" }));
+    expect(getByTestId("state").textContent).toBe("Song 9|single|playing");
+    act(() => { audio!.dispatchEvent(new Event("ended")); });
+    expect(getByTestId("state").textContent).toBe("Song 9|single|paused");
+
+    fireEvent.click(getByRole("button", { name: "run" }));
+    fireEvent.click(getByRole("button", { name: "close" }));
+    expect(getByTestId("state").textContent).toBe("none|single|paused");
+  });
+
+  it("shows ▶, not ‖, when the browser refuses to start the audio", async () => {
+    const { getByRole, getByTestId } = renderRun();
+    audio!.play.mockImplementationOnce(() => Promise.reject(new Error("NotAllowedError")));
+    await act(async () => { fireEvent.click(getByRole("button", { name: "run" })); });
+    expect(getByTestId("state").textContent).toBe("Song 1|1/3|paused");
+  });
+});
