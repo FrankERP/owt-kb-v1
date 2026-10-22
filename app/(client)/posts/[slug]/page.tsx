@@ -244,24 +244,12 @@ const Page = async ({ params }: Params) => {
         </div>
         <div className="relative mx-auto flex max-w-7xl flex-col items-center px-6 pb-14 pt-12 text-center sm:pb-16 sm:pt-16">
 
-          {post?.tags && post.tags.length > 0 && (
-            <div {...revealProps(0)} className="mb-6 flex flex-wrap justify-center gap-2">
-              {post.tags.map((tag) => (
-                <Link key={tag._id} href={`/biblioteca?tag=${encodeURIComponent(tag.slug.current)}`}>
-                  <span className="rounded-md border border-accent/15 bg-accent/[0.055] px-2.5 py-1.5 font-label text-[10px] lowercase tracking-wider text-accent/70 transition-[color,border-color,transform] duration-fast ease-out-brand hover:border-accent/35 hover:text-accent active:scale-[0.985]">
-                    #{tag.name}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          )}
-
-          <h1 {...revealProps(1)} className="max-w-4xl text-balance break-words font-display text-3xl font-semibold leading-[0.98] text-ink sm:text-5xl lg:text-6xl">
+          <h1 {...revealProps(0)} className="max-w-4xl text-balance break-words font-display text-3xl font-semibold leading-[0.98] text-ink sm:text-5xl lg:text-6xl">
             {post?.title}
           </h1>
 
           {post?.authors && post.authors.length > 0 ? (
-            <div {...revealProps(2)} className="mb-9 mt-4 flex flex-wrap justify-center gap-x-2 gap-y-1">
+            <div {...revealProps(1)} className="mb-9 mt-4 flex flex-wrap justify-center gap-x-2 gap-y-1">
               {post.authors.map((a, i) => (
                 <span key={a._id} className="font-body text-lg text-ink-muted/70">
                   <Link href={`/biblioteca?author=${encodeURIComponent(a.slug.current)}`} className="hover:text-accent transition-colors">
@@ -272,7 +260,7 @@ const Page = async ({ params }: Params) => {
               ))}
             </div>
           ) : post?.author ? (
-            <p {...revealProps(2)} className="mb-9 mt-4 font-body text-lg text-ink-dim">{post.author}</p>
+            <p {...revealProps(1)} className="mb-9 mt-4 font-body text-lg text-ink-dim">{post.author}</p>
           ) : null}
 
           <SongHeroPills
@@ -282,8 +270,27 @@ const Page = async ({ params }: Params) => {
             timeSig={post?.timeSig ?? null}
             transposable={transposable}
             mixTones={mixTones(post?.rehearsalMixes ?? [])}
-            revealIndex={3}
+            revealIndex={2}
           />
+
+          {/* The tags, BELOW the pills and as quiet text links (design pass E,
+              2026-10-22). They led the hero as a row of boxed chips above the
+              title — the first thing on the page was its least important: a
+              reader opens a song for its title, key and tempo, and reaches the
+              tags only to browse sideways. Last in the stagger, after the pills. */}
+          {post?.tags && post.tags.length > 0 && (
+            <div {...revealProps(3)} className="mt-6 flex flex-wrap justify-center gap-x-3 gap-y-1">
+              {post.tags.map((tag) => (
+                <Link
+                  key={tag._id}
+                  href={`/biblioteca?tag=${encodeURIComponent(tag.slug.current)}`}
+                  className="py-1.5 font-label text-[11px] lowercase tracking-wider text-accent/70 transition-colors duration-fast ease-out-brand hover:text-accent"
+                >
+                  #{tag.name}
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

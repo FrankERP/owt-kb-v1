@@ -9,8 +9,8 @@
   ],
   "summary": {
     "literalRows": 312,
-    "filesScanned": 518,
-    "filesWithColour": 55,
+    "filesScanned": 519,
+    "filesWithColour": 56,
     "byCategory": {
       "2": 2,
       "4": 64,
@@ -367,7 +367,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 305,
+      "line": 312,
       "disposition": "B",
       "reason": null
     },
@@ -379,7 +379,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 379,
+      "line": 386,
       "disposition": "B",
       "reason": null
     },
@@ -391,7 +391,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 392,
+      "line": 399,
       "disposition": "B",
       "reason": null
     },
@@ -2239,31 +2239,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 313,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/admin/AdminRail.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "transparent",
-      "alpha": null,
-      "utility": null,
-      "carrier": null,
-      "line": 80,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/admin/AdminRail.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "transparent",
-      "alpha": null,
-      "utility": null,
-      "carrier": null,
-      "line": 81,
+      "line": 285,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3668,6 +3644,30 @@
       "utility": "border",
       "carrier": null,
       "line": 51,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/ui/useScrollableRight.ts",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "transparent",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 23,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/ui/useScrollableRight.ts",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "transparent",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 24,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
