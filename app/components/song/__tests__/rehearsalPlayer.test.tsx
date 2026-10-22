@@ -59,6 +59,35 @@ describe("RehearsalPlayer", () => {
     expect(getByRole("link", { name: "Descargar EG 1" }).getAttribute("href")).toBe("/api/audio/post-1/eg1?download=1");
   });
 
+  it("E — draws ONE waveform: the loaded row's, else the member's preselected row's", () => {
+    // Nothing of this song loaded: the preselected row carries the envelope so
+    // «where my part sounds» is on screen before the first press.
+    const idle = render(<RehearsalPlayer {...props} preselect={["Bass"]} />);
+    expect(idle.getAllByRole("img")).toHaveLength(1);
+    expect(idle.getByRole("img").getAttribute("aria-label")).toBe("Onda Bass");
+    cleanup();
+    // A row loaded in the player: its playhead is what the canvas is for — and
+    // it seeks, so that one waveform is a button, and the preselected row's
+    // image is gone.
+    player = { track: { url: "/api/audio/post-1/eg1" }, isPlaying: false };
+    const loaded = render(<RehearsalPlayer {...props} preselect={["Bass"]} />);
+    expect(loaded.getByRole("button", { name: "Onda EG 1" })).toBeTruthy();
+    expect(loaded.queryAllByRole("img")).toHaveLength(0);
+    cleanup();
+    // No preselection and nothing loaded: no waveform at all, not eight.
+    player = { track: null, isPlaying: false };
+    const bare = render(<RehearsalPlayer {...props} />);
+    expect(bare.queryAllByRole("img")).toHaveLength(0);
+    expect(bare.queryByRole("button", { name: /^Onda/ })).toBeNull();
+  });
+
+  it("E — the download is an icon-only link that still names the mix", () => {
+    const { getByRole } = render(<RehearsalPlayer {...props} />);
+    const link = getByRole("link", { name: "Descargar EG 1" });
+    expect(link.querySelector('[data-icon="download"]')).not.toBeNull();
+    expect(link.textContent).toBe("");
+  });
+
   it("switching tracks keeps the position", () => {
     player = { track: { url: "/api/audio/post-1/eg1" }, isPlaying: true };
     audio.currentTime = 42;

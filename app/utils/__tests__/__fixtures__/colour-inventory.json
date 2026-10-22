@@ -8,12 +8,12 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 310,
+    "literalRows": 311,
     "filesScanned": 516,
-    "filesWithColour": 55,
+    "filesWithColour": 56,
     "byCategory": {
       "2": 2,
-      "4": 64,
+      "4": 65,
       "8": 92,
       "9": 10,
       "11": 8,
@@ -22,7 +22,7 @@
     "byDisposition": {
       "B": 117,
       "exempt": 53,
-      "keep": 238,
+      "keep": 239,
       "C": 5,
       "D": 14
     },
@@ -367,7 +367,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 305,
+      "line": 312,
       "disposition": "B",
       "reason": null
     },
@@ -379,7 +379,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 379,
+      "line": 386,
       "disposition": "B",
       "reason": null
     },
@@ -391,7 +391,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 392,
+      "line": 399,
       "disposition": "B",
       "reason": null
     },
@@ -3404,6 +3404,18 @@
       "utility": "bg",
       "carrier": null,
       "line": 207,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/SectionNav.tsx",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "to-transparent",
+      "alpha": null,
+      "utility": "to",
+      "carrier": null,
+      "line": 114,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },

@@ -105,6 +105,29 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe("SectionNav edge fade (design pass E)", () => {
+  // jsdom lays nothing out: `scrollWidth`/`clientWidth` are staged on the
+  // prototype, so the fade can be shown to follow the MEASURED overflow.
+  function stage(scrollWidth: number, clientWidth: number) {
+    Object.defineProperty(HTMLElement.prototype, "scrollWidth", { configurable: true, get: () => scrollWidth });
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => clientWidth });
+  }
+  afterEach(() => {
+    delete (HTMLElement.prototype as unknown as Record<string, unknown>).scrollWidth;
+    delete (HTMLElement.prototype as unknown as Record<string, unknown>).clientWidth;
+  });
+
+  it("fades the strip's right edge only while there is more to the right", () => {
+    stage(560, 390);
+    const { container } = mount(<SectionNav sections={sections} practice={practice} />);
+    expect(container.querySelector("[data-section-nav-fade]")).not.toBeNull();
+    cleanup();
+    stage(300, 390);
+    const fits = mount(<SectionNav sections={sections} practice={practice} />);
+    expect(fits.container.querySelector("[data-section-nav-fade]")).toBeNull();
+  });
+});
+
 describe("SectionNav practice cluster", () => {
   it("stays out of the bar while the hero is on screen", () => {
     const { hero, queryByRole, queryByText } = mount(<SectionNav sections={sections} practice={practice} />);
