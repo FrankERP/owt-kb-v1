@@ -1,4 +1,5 @@
-// The proposal card's editing screen (S4), presentational: the server's board in, gestures out.
+// The proposal card's editing screen (S4), presentational: the server's board in, gestures out. The
+// same screen edits a SAVED month (`mode: "stored"`, admin parity S4) with its own heading and actions.
 // `main.tsx` owns the host, the edit list and every server call; nothing here judges a rule or
 // keeps a board of its own (E1).
 //
@@ -6,6 +7,7 @@
 // never as a fixed overlay. The host sizes the card's frame to its content, so a `position: fixed`
 // panel sits at the bottom of the WHOLE month, screens away from the seat (Frank, 2026-10-21).
 
+import type { ReactNode } from "react";
 import type { Candidate, PersonView, ServiceView, WaiverItem } from "./editorModel";
 
 export interface SeatRef {
@@ -13,8 +15,7 @@ export interface SeatRef {
   row: string;
 }
 
-export interface EditorProps {
-  revision: number;
+interface BoardProps {
   board: ServiceView[];
   /** The server's lines for the current edit list (rules, the month check). */
   lines: string[];
@@ -26,19 +27,35 @@ export interface EditorProps {
   /** `at`: the seat the asked edit touches (shown under it); null = under the actions (a save). */
   ask: { at: SeatRef | null; sentence: string; items: Array<{ where: string; sentence: string }> } | null;
   exchanging: (SeatRef & { member: string; name: string }) | null;
-  saved: { revision: number; waivers: WaiverItem[] } | null;
-  loadSent: boolean;
   onOpenSeat: (seat: SeatRef, label: string) => void;
   onPick: (token: string) => void;
   onCloseSheet: () => void;
   onClear: (seat: SeatRef, member: string) => void;
   onExchange: (seat: SeatRef, member: PersonView) => void;
   onForce: (yes: boolean) => void;
-  onSave: () => void;
   onDiscard: () => void;
-  onLoad: () => void;
   onClose: () => void;
 }
+
+/** The proposal editor (ADR-0062): saves versions, «Cargar» hands one to the chat. */
+export interface ProposalEditorProps extends BoardProps {
+  mode?: "proposal";
+  revision: number;
+  saved: { revision: number; waivers: WaiverItem[] } | null;
+  loadSent: boolean;
+  onSave: () => void;
+  onLoad: () => void;
+}
+
+/** A SAVED month (ADR-0066): the same board; its own heading and actions (`footer`). */
+export interface StoredEditorProps extends BoardProps {
+  mode: "stored";
+  heading: string;
+  subtitle: string;
+  footer: ReactNode;
+}
+
+export type EditorProps = ProposalEditorProps | StoredEditorProps;
 
 function Chip({ person, selected, onClear, onExchange, disabled }: {
   person: PersonView;
@@ -68,7 +85,7 @@ const sameSeat = (a: SeatRef | null | undefined, service: string, row: string) =
  * the answer drop or force a different edit than the one asked about. Only the question's own
  * buttons (and «Cerrar») stay live.
  */
-const locked = (p: EditorProps) => p.busy || p.ask !== null;
+const locked = (p: BoardProps) => p.busy || p.ask !== null;
 
 function Picker({ p }: { p: EditorProps }) {
   if (!p.sheet) return null;
@@ -135,9 +152,9 @@ export function Editor(p: EditorProps) {
     <main className="card editor" aria-busy={p.busy}>
       <header className="head">
         <div>
-          <h1>Editar la propuesta</h1>
+          <h1>{p.mode === "stored" ? p.heading : "Editar la propuesta"}</h1>
           <p className="muted">
-            Versión {p.revision}
+            {p.mode === "stored" ? p.subtitle : `Versión ${p.revision}`}
             {p.pending > 0 ? ` · ${p.pending} ${p.pending === 1 ? "cambio sin guardar" : "cambios sin guardar"}` : ""}
           </p>
         </div>
@@ -196,7 +213,7 @@ export function Editor(p: EditorProps) {
           <details className="service" key={s.service}>
             <summary>
               <span className="service-label">{s.label}</span>
-              <span className="tag">No se creará</span>
+              <span className="tag">{p.mode === "stored" ? "Solo en /admin" : "No se creará"}</span>
             </summary>
           </details>
         ))}
@@ -213,7 +230,7 @@ export function Editor(p: EditorProps) {
         </section>
       )}
 
-      {p.saved && (
+      {p.mode !== "stored" && p.saved && (
         <section className="saved" aria-label="Guardada">
           <p>Versión {p.saved.revision} guardada.</p>
           {p.saved.waivers.length > 0 && (
@@ -233,17 +250,21 @@ export function Editor(p: EditorProps) {
 
       {p.ask && !p.board.some((s) => s.editable && s.seats.some((seat) => sameSeat(p.ask?.at, s.service, seat.row))) && <Ask p={p} />}
 
-      <div className="actions">
-        <button type="button" className="primary" onClick={p.onSave} disabled={locked(p) || p.pending === 0}>
-          Revisar y guardar
-        </button>
-        <button type="button" onClick={p.onDiscard} disabled={locked(p) || p.pending === 0}>
-          Descartar cambios
-        </button>
-        <button type="button" onClick={p.onLoad} disabled={locked(p) || p.pending > 0 || p.loadSent}>
-          {p.loadSent ? "Enviado al chat" : "Cargar"}
-        </button>
-      </div>
+      {p.mode === "stored" ? (
+        p.footer
+      ) : (
+        <div className="actions">
+          <button type="button" className="primary" onClick={p.onSave} disabled={locked(p) || p.pending === 0}>
+            Revisar y guardar
+          </button>
+          <button type="button" onClick={p.onDiscard} disabled={locked(p) || p.pending === 0}>
+            Descartar cambios
+          </button>
+          <button type="button" onClick={p.onLoad} disabled={locked(p) || p.pending > 0 || p.loadSent}>
+            {p.loadSent ? "Enviado al chat" : "Cargar"}
+          </button>
+        </div>
+      )}
     </main>
   );
 }

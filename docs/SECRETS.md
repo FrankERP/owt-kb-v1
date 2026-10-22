@@ -448,6 +448,14 @@ does). Rotating it changes every token: an editor screen open at that moment has
 refused and dropped, and Frank closes and reopens it; stored proposals are unaffected (they hold
 ids, never tokens).
 
+**A third use: the saved-month editor** (ADR-0066, admin parity phase 1; no new secret or env var).
+Three more HMACs of this key, each under its own label (`app/mcp/monthProposals/changeSetTokens.ts`):
+the month-scoped member token (`mcp-member-token|month|YYYY-MM|<id>`), the waiver token a forced
+rule needs (`mcp-service-waiver|`, bound to the service and its revision) and the change set's MAC
+(`mcp-service-change|`, over the target the check answered). Rotating the key mid-edit invalidates
+every pending change set, waiver and token: `save_service_edits` answers «revisa de nuevo» and
+writes nothing, and the next check mints fresh ones. Nothing stored holds them.
+
 **Blast radius.** Every access and refresh token that environment's routes ever signed stops
 verifying the instant the new key is live — a rotated secret cannot check a token signed under
 the old one, by construction. That is **that one environment's grants only**: on production, every

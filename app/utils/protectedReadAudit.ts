@@ -225,10 +225,10 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
     removalOwner: "permanent runtime writer (never removed — the create surface itself)",
   },
   {
-    file: "app/api/admin/roles/[id]/route.ts",
-    operation: "PATCH",
+    file: "app/utils/roleEditCommit.ts",
+    operation: "module",
     reason:
-      "guarded role edit: revision-asserted assignment/date patch that also vacates the old and claims the new weekend roleTargetLock on a permitted date move (A2 §2); sets countsForFairness only when the body carries it and never unsets it, and a PATCH that carries it and changes nothing a notice could report queues no notice (solver v3 C1)",
+      "guarded role edit: revision-asserted assignment/date patch that also vacates the old and claims the new weekend roleTargetLock on a permitted date move (A2 §2); sets countsForFairness only when the body carries it and never unsets it, and a PATCH that carries it and changes nothing a notice could report queues no notice (solver v3 C1). The domain body of `PATCH /api/admin/roles/[id]`, moved here so the MCP stored-service save calls the same writer (admin parity phase 1); the route keeps only authorization and its parse, and `serviceCommitCallers.test.ts` pins who may import this module",
     removalOwner: "permanent runtime writer (never removed — the edit surface itself)",
   },
   {
@@ -274,10 +274,10 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
     removalOwner: "permanent runtime writer (never removed — the swap surface itself)",
   },
   {
-    file: "app/api/admin/roles/copy-instruments/route.ts",
-    operation: "POST",
+    file: "app/utils/copyInstrumentsCommit.ts",
+    operation: "module",
     reason:
-      "guarded copy-instruments: one transaction patches only the target role's instruments, read from the stored source under both observed revisions (A2 §4)",
+      "guarded copy-instruments: one transaction patches only the target role's instruments, read from the stored source under both observed revisions (A2 §4). The domain body of `POST /api/admin/roles/copy-instruments`, moved here so the MCP `copy_instruments` tool calls the same writer (admin parity phase 1); the route keeps only authorization, and `serviceCommitCallers.test.ts` pins who may import this module",
     removalOwner: "permanent runtime writer (never removed — the copy surface itself)",
   },
   {

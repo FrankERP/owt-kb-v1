@@ -195,8 +195,9 @@ looks wrong** — several exist to stop a plausible-looking change.
   (`routeMatcher.test.ts`). So is **`/api/calendar/*`**, the member calendar feed: its handler
   verifies the HMAC with ZERO I/O before any Sanity read, and nothing in it may move a read ahead
   of that check (ADR-0057).
-- **Notification emails: `before` is captured PRE-COMMIT** and threaded into `after()` —
-  reading live state there sends nothing (`docs/NOTIFICATIONS.md`).
+- **Notification emails: `before` is captured PRE-COMMIT** and threaded into `after()` (or
+  awaited inline by the MCP saved-service save, `queueRoleNoticesNow`) — reading live state there
+  sends nothing (`docs/NOTIFICATIONS.md`).
 - **A Server Component may never CALL a value imported from a `"use client"` module**
   (rendering it as JSX or forwarding it as a prop is fine). It took `/` down for 56 minutes
   (ADR-0028); no gate sees it except `clientBoundary.test.ts`.
@@ -233,15 +234,20 @@ looks wrong** — several exist to stop a plausible-looking change.
   `MCP_OAUTH_SECRET`, and are excluded from `proxy.ts`; `/oauth/authorize` is not, and depends
   on NextAuth's DEFAULT `redirect` callback keeping its query — never add a custom `redirect`
   callback that drops it (`authRedirectCallback.test.ts`; `docs/MCP.md`).
-- **The six admin write paths** (setlists PUT, roles create, swap, publish-ready, unpublish, the
-  fairness PUT) delegate everything after authorization to `app/utils/*Commit.ts`; MCP writes go
-  only through them (`apply_schedule`: roles create + fairness PUT, ADR-0061;
+- **The eight admin write paths** (setlists PUT, roles create, roles PATCH, copy-instruments, swap,
+  publish-ready, unpublish, the fairness PUT) delegate everything after authorization to
+  `app/utils/*Commit.ts`; MCP writes go only through them (`apply_schedule`: roles create + fairness
+  PUT, ADR-0061; the saved-month editor: PATCH, copy, create, ADR-0066;
   `serviceCommitCallers.test.ts`); `/api/mcp` buffers SSE so a tool finishes in the handler.
 - **The MCP proposal editor: the server judges, the card only shows** (ADR-0062). Every check and
   save replays the whole edit list through the planner's gate in `editorBoard.ts` only; a saved edit
   is a NEW `mcpProposal` (base `supersededBy` in the same transaction), never a mutated payload;
   `force` only on the app-only save, every force a waiver `apply_schedule` makes the call repeat;
-  «Cargar» goes through the chat. Members on the wire are tokens, never ids.
+  «Cargar» goes through the chat. Members on the wire are tokens, never ids. A SAVED month's edits
+  (ADR-0066) are change sets judged as diffs by `storedJudge.ts`, written one service at a time
+  through `roleEditCommit`; the save sorts first («ya estaba»/«cambió»/«por guardar»), derives move
+  groups on the server, compares the prompt's `lines`, and only `check_service_edits_app` (app-only)
+  mints waiver tokens; the card hands «Guardar» to the chat.
 - **The admin assistant (`/api/admin/chat`, a bubble on every page) is READ-ONLY**: super-admin or
   worship admin, never impersonating; its tools call the MCP read handlers in process, never a write
   tool or the connector; spend is capped per admin per CDMX month in `adminChatUsage.*` (fail

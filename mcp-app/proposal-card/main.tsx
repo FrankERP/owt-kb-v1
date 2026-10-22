@@ -1,6 +1,7 @@
 // The proposal card's entry (S1, S4): connects to the host (claude.ai or the Claude app) through
-// MCP Apps, turns each `solve_month` or `revise_proposal` result into a `CardView`, opens the
-// editor on it (`useEditor`, only when the host lets the card call tools), and follows the host's
+// MCP Apps, turns each `solve_month`, `revise_proposal` or `check_service_edits` result into a
+// `CardView`, opens the editor on it (`useEditor` for a proposal, `useStoredEditor` for a saved
+// month; only when the host lets the card call tools), and follows the host's
 // theme, fonts and safe area. Bundled by `mcp-app/build.mjs` into one inline HTML document,
 // because the host's CSP allows no other origin.
 
@@ -11,6 +12,7 @@ import { cardViewOf, type CardView } from "./model";
 import { ProposalCard } from "./ProposalCard";
 import { Editor } from "./Editor";
 import { useEditor } from "./useEditor";
+import { useStoredEditor } from "./useStoredEditor";
 import "./styles.css";
 
 function applySafeArea(ctx: McpUiHostContext | undefined) {
@@ -54,10 +56,28 @@ function CardApp() {
   }, [app]);
 
   const editor = useEditor(app ?? null);
+  const stored = useStoredEditor(app ?? null);
   const canCall = Boolean(app?.getHostCapabilities()?.serverTools);
   const onEdit = useCallback(() => {
     if (view.kind === "proposal" && view.handle) editor.start(view.handle, view.revision);
-  }, [editor, view]);
+    if (view.kind === "storedMonth") stored.start(view.month, view.edits);
+  }, [editor, stored, view]);
+
+  if (stored.open) {
+    if (stored.props) return <Editor {...stored.props} />;
+    return (
+      <main className="card" aria-busy={stored.opening.notice === null}>
+        <p className={stored.opening.notice ? "unfilled" : "muted"} role="status">
+          {stored.opening.notice ?? "Abriendo el mes…"}
+        </p>
+        <div className="actions">
+          <button type="button" onClick={stored.opening.onClose}>
+            Cerrar
+          </button>
+        </div>
+      </main>
+    );
+  }
 
   if (editor.open) {
     if (editor.props) return <Editor {...editor.props} />;

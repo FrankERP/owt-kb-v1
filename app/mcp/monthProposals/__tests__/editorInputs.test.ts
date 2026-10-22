@@ -13,12 +13,14 @@ import { stripComments } from "@/scripts/lib/strip-comments.mjs";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DIR = path.resolve(HERE, "..");
 const TOOL = path.resolve(HERE, "../../tools/proposalEditor.ts");
+const STORED_TOOL = path.resolve(HERE, "../../tools/serviceEditor.ts");
 const GATES = ["judgePick", "pickCandidates", "evaluateMove", "ruleFindings", "ruleRefusals", "rankCandidates", "evaluate", "sundaySpineForColumn"];
 const callOf = (name: string) => new RegExp(`(?<![\\w.])${name}\\s*\\(`, "g");
 
 const files = [
   ...readdirSync(DIR).filter((f) => f.endsWith(".ts")).map((f) => path.join(DIR, f)),
   TOOL,
+  STORED_TOOL,
 ];
 
 describe("the editor's rule judgments go through columnRuleInputs", () => {

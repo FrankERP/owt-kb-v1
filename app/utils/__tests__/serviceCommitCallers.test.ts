@@ -45,9 +45,13 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 const EXPECTED_CALLERS: Record<string, string[]> = {
   publishReadyCommit: ["app/api/admin/roles/publish-ready/route.ts", "app/mcp/tools/publishService.ts"],
   publishVerdict: ["app/mcp/reads/publishRefusal.ts", "app/utils/publishReadyCommit.ts"],
-  // MCP P4: the create writer — the roles POST and `apply_schedule` (D4).
-  roleCreateCommit: ["app/api/admin/roles/route.ts", "app/mcp/tools/applySchedule.ts"],
+  // MCP P4: the create writer — the roles POST and `apply_schedule` (D4); `create_service` (S3).
+  roleCreateCommit: ["app/api/admin/roles/route.ts", "app/mcp/tools/applySchedule.ts", "app/mcp/tools/createService.ts"],
   roleSwapCommit: ["app/api/admin/roles/swap/route.ts", "app/mcp/tools/swapAssignment.ts"],
+  // Admin parity phase 1: the PATCH route and `save_service_edits` (T2.5, ADR-0066); the copy
+  // route and `copy_instruments` (S3).
+  roleEditCommit: ["app/api/admin/roles/[id]/route.ts", "app/mcp/tools/serviceEditor.ts"],
+  copyInstrumentsCommit: ["app/api/admin/roles/copy-instruments/route.ts", "app/mcp/tools/serviceEditor.ts"],
   roleUnpublishCommit: ["app/api/admin/roles/unpublish/route.ts", "app/mcp/tools/unpublishService.ts"],
   setlistSaveCommit: ["app/api/admin/setlists/route.ts", "app/mcp/tools/editSetlist.ts"],
   // Solver v3 C2 WR-16 / IF2-23: the ONE mutation path of `fairnessMonth`. Its importer
