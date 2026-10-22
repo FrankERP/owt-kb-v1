@@ -2,9 +2,8 @@
 
 **Date:** 2026-10-21 · **Status:** Accepted
 
-> **Numbering.** Written as 0064 and renumbered to 0066 on 2026-10-21: two other records (PR #165's
-> 0064 and PR #166's 0065) reached `preview` first. ADR numbers follow the order records reach
-> `main`; renumber again if another record lands first.
+> **Numbering.** Written as 0064 and renumbered to 0066 on 2026-10-21: PR #166 (now ADR-0064) and
+> PR #165 (now ADR-0065) reached `main` first. ADR numbers follow the order records reach `main`.
 
 ## Context
 
