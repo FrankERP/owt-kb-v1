@@ -78,6 +78,13 @@ export interface IntegrityQueueState {
   sources: IntegritySourceStates;
   /** True while any domain is still in flight. */
   loading: boolean;
+  /**
+   * True until the first reading settles: `tone`/`count` are then the LIVE ones
+   * (nothing earlier to hold), so a loading first visit is «comprobando», not an
+   * unproven inventory. A reload — of a clean OR an unproven reading — is never
+   * a first load, so the panel keeps the shape it had.
+   */
+  firstLoad: boolean;
   /** Re-runs all three inventories. */
   reload: () => void;
   /** Forwards a focus outcome to the caller's handler, with a stable identity. */
@@ -208,5 +215,5 @@ export function useIntegrityQueue({
   const tone: IntegrityTone = held ? held.tone : settling;
   const count = held ? held.count : liveCount;
 
-  return { queue, tone, count, sources, loading, reload, resolve };
+  return { queue, tone, count, sources, loading, firstLoad: settled === null, reload, resolve };
 }

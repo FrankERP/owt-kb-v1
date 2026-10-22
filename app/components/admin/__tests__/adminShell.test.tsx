@@ -23,12 +23,17 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import type { ReactNode } from "react";
 import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next-auth/react", () => ({ useSession: () => ({ update: vi.fn() }) }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }), usePathname: () => "/admin" }));
-vi.mock("../ServicesPanel", () => ({ default: () => <div data-panel="services" /> }));
+// The board renders AdminPanel's integrity panel as its `integritySlot` (bloque 4):
+// the mock keeps the slot, so the test below can prove AdminPanel still hands it over.
+vi.mock("../ServicesPanel", () => ({
+  default: ({ integritySlot }: { integritySlot?: ReactNode }) => <div data-panel="services">{integritySlot}</div>,
+}));
 vi.mock("../ActivityPanel", () => ({ default: () => <div data-panel="activity" /> }));
 vi.mock("../ContentPanel", () => ({ default: () => <div data-panel="content" /> }));
 vi.mock("../AvailabilityPanel", () => ({ default: () => <div data-panel="availability" /> }));
@@ -96,6 +101,11 @@ describe("the admin page is the workspace", () => {
     expect(body.parentElement).toBe(bar.parentElement);
     expect(body.contains(bar)).toBe(false);
     expect(body.contains(nav)).toBe(false);
+  });
+
+  it("hands «Integridad de datos» to the Servicios board as its slot (bloque 4)", () => {
+    const { container } = mount("services");
+    expect(container.querySelector('[data-panel="services"] [data-panel="integrity"]')).not.toBeNull();
   });
 
   it("fades the incoming body in by remounting it on a tab change", async () => {

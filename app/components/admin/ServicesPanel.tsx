@@ -3,7 +3,7 @@
 import { useToast } from "@/app/components/ui/Toast";
 import Collapse from "@/app/components/ui/Collapse";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import PanelSkeleton from "./PanelSkeleton";
 import PanelBoundary from "./PanelBoundary";
@@ -203,18 +203,19 @@ function Modal({
 export default function ServicesPanel({
   engine = "v2",
   viewerId = null,
-  onMonthEditorOpenChange,
+  integritySlot = null,
 }: {
   engine?: SolverEngine;
   /** The signed-in admin's Sanity id — right-aligns their own bubbles in «Mensajes». */
   viewerId?: string | null;
   /**
-   * Told when the stored month editor («Editar mes» / «Editar servicio») opens and closes, so
-   * `AdminPanel` can drop the «Integridad de datos» panel above it. The editor runs the SAME
-   * integrity read for its own edit admission and says so itself when it refuses, so the panel
-   * only repeats an «OK» there. The queue, its routes and the rail's dot are untouched.
+   * `AdminPanel`'s «Integridad de datos» (`IntegrityQueuePanel`, fed by the page's ONE
+   * `useIntegrityQueue`), placed under this board's heading — on the BOARD only (bloque 4,
+   * 2026-10-22). «Editar mes» / «Editar servicio» run the same integrity read for their own edit
+   * admission and refuse in their own words, and «Generar mes» is a composer with nothing to
+   * clean up, so neither view shows it. The queue, its routes and the rail's dot are untouched.
    */
-  onMonthEditorOpenChange?: (open: boolean) => void;
+  integritySlot?: ReactNode;
 } = {}) {
   const [roles, setRoles]       = useState<ServiceRole[]>([]);
   const [members, setMembers]   = useState<MemberOption[]>([]);
@@ -283,12 +284,6 @@ export default function ServicesPanel({
   const monthEditorOpenerRef = useRef<{ kind: "toolbar" | "menu" | "new" | "card"; roleId?: string }>({ kind: "toolbar" });
   const wasShowingGeneratorRef = useRef(false);
   const wasShowingMonthEditorRef = useRef(false);
-  const monthEditorOpen = monthEditor !== null;
-  useEffect(() => {
-    onMonthEditorOpenChange?.(monthEditorOpen);
-  }, [monthEditorOpen, onMonthEditorOpenChange]);
-  // The panel comes back if this one unmounts mid-edit (a tab change keeps nothing open).
-  useEffect(() => () => onMonthEditorOpenChange?.(false), [onMonthEditorOpenChange]);
   useEffect(() => {
     if (wasShowingGeneratorRef.current && !showGenerator) {
       (generatorOpenerRef.current === "menu" ? moreTriggerRef : generatorTriggerRef).current?.focus();
@@ -1165,10 +1160,10 @@ export default function ServicesPanel({
                 {summaryLine}
               </p>
               {/*
-                The global integrity state is NOT repeated here. `IntegrityQueuePanel`
-                states it above this panel and the rail's Servicios dot carries its
-                tone (R5 ruling 4) — a third copy under the heading said
-                "sin problemas de integridad" twice on one screen.
+                The global integrity state is NOT written here. `IntegrityQueuePanel`
+                (the `integritySlot` below this header) is the ONE place it is rendered
+                and the rail's Servicios dot carries its tone (R5 ruling 4) — a third
+                copy under the heading said "sin problemas de integridad" twice.
               */}
             </>
           )}
@@ -1271,6 +1266,9 @@ export default function ServicesPanel({
           )}
         </div>
       </div>
+
+      {/* «Integridad de datos»: one quiet line when clean, the full panel when it has something to say. */}
+      {integritySlot}
 
       {/* Source state — names the missing source and offers its retry */}
       {view !== "loading" && unreadySummary && (

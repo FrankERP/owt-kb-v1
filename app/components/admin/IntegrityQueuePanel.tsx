@@ -15,11 +15,22 @@
 //    may be incomplete and offers a per-domain retry;
 //  - is keyed by explicit document/draft ids, so an `IntegrityIssueTarget` can
 //    focus an entry by id (load failure and not-found are distinct outcomes).
+//
+// Since 2026-10-22 (diseño para admins, bloque 4) it has TWO shapes. A clean
+// inventory is one quiet line under the board's heading — the full section with
+// its disclosure, badge and «Recargar» button said «OK» in a box on every visit,
+// above the thing the admin came for. The section renders only when the queue has
+// something to say (issues, or an inventory that could not be proven clean). The
+// first load is not «unknown» either: while every domain is still in flight the
+// line says «comprobando», so a page never opens on a flash of the full panel
+// that then folds away. An explicit-id target arriving on the clean line still
+// resolves (not found, or a failed load) and says so under the line.
 
 import { useEffect, useRef, useState } from "react";
 
 import {
   INTEGRITY_ACTION_COPY,
+  INTEGRITY_CLEAN_SUMMARY,
   INTEGRITY_DOMAINS,
   INTEGRITY_DOMAIN_SOURCE,
   INTEGRITY_INCOMPLETE_NOTE,
@@ -55,6 +66,10 @@ export interface IntegrityQueuePanelProps {
   queue: IntegrityQueue;
   /** The queue's display tone; it decides whether the disclosure starts open. */
   tone: IntegrityTone;
+  /** True while any domain is in flight (`useIntegrityQueue`'s): «Recargar» is busy, the held reading stays. */
+  loading?: boolean;
+  /** True until the first reading settles (`useIntegrityQueue`'s): that load reads «comprobando», never «?». */
+  firstLoad?: boolean;
   /** The per-domain load states, for explicit-id focus resolution. */
   sources: IntegritySourceStates;
   /** Re-runs the three inventories. */
@@ -68,6 +83,8 @@ export interface IntegrityQueuePanelProps {
 export default function IntegrityQueuePanel({
   queue,
   tone,
+  loading = false,
+  firstLoad = false,
   sources,
   reload,
   target = null,
@@ -135,12 +152,47 @@ export default function IntegrityQueuePanel({
     el.focus({ preventScroll: true });
   }, [focusKeys, open, queue]);
 
+  // The quiet shape: proven clean, or the very first load (nothing settled yet).
+  // `tone` is the hook's HELD reading, so a clean tone mid-reload is still the
+  // proven one: the line keeps its «✓ … sin problemas» (the live `queue` would
+  // say «inventario incompleto» for the length of three requests, on every
+  // visit to the tab) and only «Recargar» goes busy. A reload of an UNPROVEN
+  // reading is not a first load either — the full section stays put instead of
+  // folding into «comprobando» and back on every retry.
+  const checking = firstLoad && loading;
+  if (tone === "clean" || checking) {
+    return (
+      <div data-integrity-compact={checking ? "checking" : "clean"} className="min-w-0">
+        {/* The live region is the summary span alone: the title and the button
+            are siblings, so a reload never re-announces the whole line. */}
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-body text-xs text-mono-400">
+          <span aria-hidden="true" className={checking ? "text-mono-500" : "text-positive-strong"}>
+            {checking ? "…" : "✓"}
+          </span>
+          <span className="font-label uppercase tracking-widest text-mono-500">{INTEGRITY_QUEUE_TITLE}</span>
+          <span role="status" data-integrity-summary="">
+            {checking ? "comprobando" : INTEGRITY_CLEAN_SUMMARY.toLowerCase()}
+          </span>
+          {!checking && (
+            <Button variant="ghost" size="sm" onClick={reload} busy={loading} busyLabel="Recargando…" className="-my-1">
+              Recargar
+            </Button>
+          )}
+        </div>
+        {notice && (
+          <p role="status" className="mt-2 rounded-lg border border-accent/25 bg-accent/5 px-3 py-2 font-body text-xs text-accent">
+            {notice}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  // `clean` returned above: what is left is a queue with something to say.
   const toneStyle =
-    tone === "clean"
-      ? "border-positive-deep/25 text-positive-strong"
-      : tone === "unknown"
-        ? "border-recency-fg/30 text-recency-strong"
-        : "border-negative-strong/30 text-negative-fg";
+    tone === "unknown"
+      ? "border-recency-fg/30 text-recency-strong"
+      : "border-negative-strong/30 text-negative-fg";
 
   return (
     <section
@@ -185,7 +237,7 @@ export default function IntegrityQueuePanel({
         <span
           className={`shrink-0 rounded-full border px-2 py-0.5 font-label text-[11px] uppercase tracking-widest ${toneStyle}`}
         >
-          {tone === "clean" ? "OK" : tone === "unknown" ? "?" : queue.count}
+          {tone === "unknown" ? "?" : queue.count}
         </span>
         <Button variant="secondary" size="lg" onClick={reload} className="shrink-0">
           Recargar
