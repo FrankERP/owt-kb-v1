@@ -15,6 +15,7 @@ import {
   ArrowRightIcon, CalendarAddIcon, CalendarOffIcon, CheckIcon, ClockIcon, MessageIcon, PlusIcon, SlidersIcon,
 } from "@/app/components/ui/icons";
 import { serviceStartTime } from "@/app/utils/calendarFeed";
+import { UNDER_NAVBAR_SCROLL_MT } from "@/app/utils/navbarHeight";
 import { Setlist, SetlistSong, ProposalStatus } from "@/app/utils/interface";
 import { describeContributors } from "@/app/utils/proposalContributors";
 import { pickUnique, serviceDayKey } from "@/app/utils/serviceReadSelect";
@@ -308,21 +309,29 @@ export default async function MePage() {
   // record is dropped here instead of throwing on `localeCompare` or date math.
   // `kind` is the document's, never read back from the label: a special named
   // «Sábado» is still a special (its own time, its own `roleId`).
+  // `start` is the service's clock by the feed's ONE rule (`serviceStartTime`): a
+  // weekend at the team's standing hour, a special at its own valid `time`, else
+  // all-day. Computed once here because three readers below must agree on it —
+  // the sort, the header's pill and the `.ics` rows (design pass D, 2026-10-22).
   const asAssignment = (dateValue: unknown, day: string, doc: RoleDoc, kind: "weekend" | "special") => {
     const dateKey = serviceDayKey(dateValue);
-    return dateKey ? { dateKey, day, doc, kind } : null;
+    return dateKey ? { dateKey, day, doc, kind, start: serviceStartTime(kind, day, doc.time) } : null;
   };
 
   const roleDocs = (v: unknown): RoleDoc[] => (Array.isArray(v) ? (v as RoleDoc[]) : []);
 
-  type Assignment = { dateKey: string; day: string; doc: RoleDoc; kind: "weekend" | "special" };
+  type Assignment = { dateKey: string; day: string; doc: RoleDoc; kind: "weekend" | "special"; start: string | undefined };
   const allAssignments: Assignment[] = [
     ...roleDocs(data?.sundays).map((d) => asAssignment(d.week, "Domingo", withSetlist(d), "weekend")),
     ...roleDocs(data?.saturdays).map((d) => asAssignment(d.week, "Sábado", withSetlist(d), "weekend")),
     ...roleDocs(data?.specials).map((d) => asAssignment(d.date, d.service_name || "Servicio Especial", d, "special")),
   ]
     .filter((a): a is Assignment => a !== null)
-    .sort((a, b) => a.dateKey.localeCompare(b.dateKey) || compareServiceTime(a.doc.time, b.doc.time));
+    // Same-day order by `start`, not by the raw `doc.time`: a weekend doc carries
+    // no `time`, and `compareServiceTime` sorts an untimed set LAST — so a Sunday
+    // 11:00 service fell behind a 17:00 special that day, the header named the
+    // special as next and its pill said 17:00 while the `.ics` rows said 11:00.
+    .sort((a, b) => a.dateKey.localeCompare(b.dateKey) || compareServiceTime(a.start, b.start));
 
   // The `DayCardProps` for one assignment, so the hero and the collapsed rows
   // below it are fed from ONE place — they were two copies of the same nine
@@ -377,8 +386,10 @@ export default async function MePage() {
   // in it. `nextSeatLine`/`seatLabel` live in the NEUTRAL `app/utils/myWeek.ts`
   // precisely so this Server Component may call them (ADR-0028) — `MeHeader` is a
   // client module and receives the result as data, never a function.
+  // The header's countdown carries the start time (D, 2026-10-22) by the same rule
+  // the `.ics` rows below use, so «En 3 días · 11:00» and the calendar agree.
   const nextSeat = nextSeatLine(
-    visibleAssignments.map(({ dateKey, day, doc }) => ({ dateKey, day, seat: seatLabel(doc) })),
+    visibleAssignments.map(({ dateKey, day, doc, start }) => ({ dateKey, day, seat: seatLabel(doc), time: start })),
   );
 
   // Timed by the feed's one rule (`serviceStartTime`): a weekend at the team's
@@ -386,13 +397,12 @@ export default async function MePage() {
   // 2026-10-22 this download was all-day for every service while the feed already
   // said 18:00 / 11:00 — the same Saturday landed at two different times
   // depending on which button you pressed.
-  const calendarServices = visibleAssignments.map(({ dateKey, day, doc, kind }) => {
+  const calendarServices = visibleAssignments.map(({ dateKey, day, doc, start }) => {
     const role = seatLabel(doc);
-    const time = serviceStartTime(kind, day, doc.time);
     return {
       uid: doc._id,
       date: dateKey,
-      time,
+      time: start,
       title: role ? `${day} · Oasis Worship (${role})` : `${day} · Oasis Worship`,
       description: role ? `Tu rol: ${role}` : undefined,
     };
@@ -573,8 +583,10 @@ export default async function MePage() {
             A null member read is not an empty state: every signed-in member has
             a document, so null means the read did not find theirs — it is said
             out loud, and only the row that needs the document is dropped. */}
-        <section aria-labelledby="tu-cuenta" className="space-y-2" {...revealProps(3)}>
-          <h2 id="tu-cuenta" className="ml-1 font-label text-[11px] uppercase tracking-widest text-mono-500">
+        {/* `#tu-cuenta` is a link target (Ajustes › Calendario's «Descargar una sola
+            vez»), so it clears the navbar like every anchored section does. */}
+        <section id="tu-cuenta" aria-labelledby="tu-cuenta-title" className={`${UNDER_NAVBAR_SCROLL_MT} space-y-2`} {...revealProps(3)}>
+          <h2 id="tu-cuenta-title" className="ml-1 font-label text-[11px] uppercase tracking-widest text-mono-500">
             Tu cuenta
           </h2>
           {!member && (
@@ -590,7 +602,7 @@ export default async function MePage() {
               </p>
             </div>
           )}
-          <AccountList labelledBy="tu-cuenta">
+          <AccountList labelledBy="tu-cuenta-title">
             {member && (
               <AccountLinkRow
                 href="/me/disponibilidad"

@@ -67,6 +67,17 @@ describe("MeHeader", () => {
     expect(container.textContent).toContain("En 3 días");
   });
 
+  it("D — the countdown pill carries the start time the page computed, and none without one", () => {
+    freezeToday();
+    const { container } = mount(
+      <MeHeader name="Ana" inWorship next={{ dateKey: "2026-09-13", day: "Domingo", seat: "Lead", time: "11:00" }} />,
+    );
+    expect(container.textContent).toContain("En 3 días · 11:00");
+    cleanup();
+    // A Kids Sunday has no clock.
+    expect(mount(<MeHeader name="Ana" kidsNext="2026-09-13" />).container.textContent).not.toMatch(/\d\d:\d\d/);
+  });
+
   it("keeps a special service's own name, and drops the seat when there is none", () => {
     freezeToday();
     const { container } = mount(

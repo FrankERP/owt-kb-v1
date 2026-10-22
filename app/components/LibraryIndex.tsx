@@ -4,6 +4,7 @@
 // rows, and the letter rail. All filtering is client-side over one fetched
 // catalogue — the URL only mirrors the state so a view is shareable.
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
+import { UNDER_NAVBAR_SCROLL_MT } from "@/app/utils/navbarHeight";
 import { usePathname } from "next/navigation";
 import type { Post, Tag, Author } from "@/app/utils/interface";
 import { usePlayer } from "@/app/context/PlayerContext";
@@ -30,7 +31,7 @@ export type LibraryIndexProps = { posts: Post[]; tags: Tag[]; authors: Author[];
 // plus `--impersonation-offset` (0 unless the banner pushes the navbar down).
 const UNDER_NAVBAR =
   "top-[calc(5rem+env(safe-area-inset-top)+var(--impersonation-offset))] lg:top-[calc(6rem+env(safe-area-inset-top)+var(--impersonation-offset))] " +
-  "scroll-mt-[calc(5rem+env(safe-area-inset-top)+var(--impersonation-offset))] lg:scroll-mt-[calc(6rem+env(safe-area-inset-top)+var(--impersonation-offset))]";
+  UNDER_NAVBAR_SCROLL_MT;
 
 // Where the "which letter is in view" band starts, in px from the top of the
 // viewport. Deliberately ABOVE the sticky offset above (80 px on a phone, 96 on

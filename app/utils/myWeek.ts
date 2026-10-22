@@ -21,6 +21,8 @@ export type SeatAssignment = {
   day: string;
   /** `seatLabel(doc)`. Empty when the projection carries no seat flag at all. */
   seat: string;
+  /** `"HH:mm"` start by the feed's rule (`serviceStartTime`); absent = all-day. */
+  time?: string;
 };
 
 /**
