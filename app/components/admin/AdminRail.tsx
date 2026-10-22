@@ -39,8 +39,9 @@
 // way a pointer user can still read the label; the planner's CSS-only collapse
 // cannot add one.
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 import { CalendarIcon } from "@/app/components/ui/icons";
+import { SCROLL_FADE_RIGHT, useScrollableRight } from "../ui/useScrollableRight";
 
 import type { AdminTabId } from "./proposalHandoff";
 import Button from "../ui/Button";
@@ -63,24 +64,11 @@ const ITEM =
   "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base";
 
 /**
- * The phone strip's scroll-fade hint. It MASKS the scroller instead of painting
- * a colour over it, and that is the fix for what shipped: the page is
- * `.brand-atmosphere` — `surface-base` PLUS accent radials — so an opaque
- * `from-surface-base` overlay could never match what is behind it and read on a
- * 390px light-theme phone as a flat grey block with hard edges rather than as a
- * fade. A mask fades the CONTENT and leaves the page painting whatever it
- * paints, in both themes, with no token to keep in sync. Unprefixed and
- * `-webkit-` both, because this repo's PostCSS runs Tailwind alone — there is no
- * autoprefixer to add the second one.
- *
- * Only below `md`, where the tabs actually overflow, and only while the strip
- * can still scroll further right (`more`) — otherwise the mask would eat the
- * last tab, which is exactly where the active one lands when it is last.
+ * The phone strip's scroll-fade hint: the shared mask (`SCROLL_FADE_RIGHT`,
+ * `ui/useScrollableRight.ts` — which also records why it is a mask and never a
+ * painted overlay), lifted again from `md` where the tabs no longer overflow.
  */
-const FADE =
-  "[-webkit-mask-image:linear-gradient(to_left,transparent,black_2rem)] " +
-  "[mask-image:linear-gradient(to_left,transparent,black_2rem)] " +
-  "md:[-webkit-mask-image:none] md:[mask-image:none]";
+const FADE = `${SCROLL_FADE_RIGHT} md:[-webkit-mask-image:none] md:[mask-image:none]`;
 
 const ITEM_TONE = (active: boolean) =>
   active ? "text-accent" : "text-ink-dim hover:bg-accent/[0.04] hover:text-ink";
@@ -233,22 +221,6 @@ function useRailCollapsed(): [boolean, () => void] {
  * the active item's own mount scroll fires a scroll event, so the first honest
  * answer arrives without a second observer.
  */
-function useScrollableRight(ref: React.RefObject<HTMLDivElement | null>, count: number): boolean {
-  const [more, setMore] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const read = () => setMore(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
-    read();
-    el.addEventListener("scroll", read, { passive: true });
-    window.addEventListener("resize", read);
-    return () => {
-      el.removeEventListener("scroll", read);
-      window.removeEventListener("resize", read);
-    };
-  }, [ref, count]);
-  return more;
-}
 
 function StripItem({
   active,
