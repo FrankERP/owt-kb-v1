@@ -137,7 +137,9 @@ export default function CalendarFeedPanel({ initial }: { initial: CalendarFeedSt
         </Collapse>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      {/* `-ml-3` = the ghost's own padding, so these two start where the text
+          column (and «¿Cómo funciona?» above) starts rather than a pad inside it. */}
+      <div className="-ml-3 flex flex-wrap gap-2">
         <Button variant="ghost" size="sm" href="/me#tu-cuenta">
           Descargar una sola vez (.ics)
           <ArrowRightIcon size={12} />
