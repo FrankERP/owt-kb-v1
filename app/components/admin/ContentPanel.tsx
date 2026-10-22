@@ -272,10 +272,11 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
                     <span className="font-body text-xs text-mono-500 truncate">{song.author}</span>
                   )}
                   {/* A phone shows the first two tags and «+N»; from `sm` all of
-                      them. Pure CSS (the extra chips are `hidden sm:inline`), so
-                      147 rows cost no state and the desktop list is unchanged. */}
+                      them. Pure CSS (the extra chips fold to `sr-only`, so a
+                      reader still hears every tag), 147 rows cost no state and
+                      the desktop list is unchanged. */}
                   {(song.tags ?? []).map((tag, i) => (
-                    <span key={tag._id} className={`${TAG_CHIP} ${i >= PHONE_TAGS ? "hidden sm:inline" : ""}`}>
+                    <span key={tag._id} className={`${TAG_CHIP} ${i >= PHONE_TAGS ? "sr-only sm:not-sr-only" : ""}`}>
                       #{tag.name}
                     </span>
                   ))}

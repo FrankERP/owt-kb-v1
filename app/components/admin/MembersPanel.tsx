@@ -952,7 +952,7 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
             // Below `sm` the dropdown is its own full line under the two segmented
             // controls (bloque 5): the row wrapped wherever it ran out, with the
             // dropdown squeezed between them.
-            className="order-last min-w-[120px] basis-full sm:order-none sm:flex-1 sm:basis-auto"
+            className="order-last min-w-[120px] basis-full sm:order-none sm:flex-1"
             value={filterValue}
             onChange={(e) => setFilterValue(e.target.value)}
           >

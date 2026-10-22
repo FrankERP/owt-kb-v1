@@ -490,8 +490,10 @@ export function SongForm({
 /**
  * The catalogue row under «Artista» and «Tags» with nothing typed: the entries
  * this song has (house pills, pressed), then «Ver todos (N)» / «Ver menos» for
- * the rest. Selected entries stay visible while unfolded, so a press never
- * makes a chip vanish from under the finger.
+ * the rest. A chip the admin has touched stays in the folded row for the life
+ * of the form (`touched`), so deselecting one never makes it vanish from under
+ * the finger — the next tap puts it back, as the full row always allowed.
+ * `EditSongButton` (the song page's editor) keeps its own full chip row for now.
  */
 function ChipFold({
   items,
@@ -508,12 +510,19 @@ function ChipFold({
   onToggle: (id: string) => void;
   label: (item: SongTag) => string;
 }) {
-  const shown = showAll ? items : items.filter((item) => selected.includes(item._id));
+  const [touched, setTouched] = useState<ReadonlySet<string>>(() => new Set());
+  const shown = showAll
+    ? items
+    : items.filter((item) => selected.includes(item._id) || touched.has(item._id));
   const folded = items.length - shown.length;
+  const toggle = (id: string) => {
+    setTouched((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
+    onToggle(id);
+  };
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {shown.map((item) => (
-        <Button key={item._id} variant="pill" size="sm" active={selected.includes(item._id)} onClick={() => onToggle(item._id)}>
+        <Button key={item._id} variant="pill" size="sm" active={selected.includes(item._id)} onClick={() => toggle(item._id)}>
           {label(item)}
         </Button>
       ))}

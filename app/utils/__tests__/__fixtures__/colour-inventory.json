@@ -2227,7 +2227,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 219,
+      "line": 223,
       "disposition": "B",
       "reason": null
     },
@@ -2311,7 +2311,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 382,
+      "line": 383,
       "disposition": "B",
       "reason": null
     },
@@ -2323,7 +2323,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 391,
+      "line": 392,
       "disposition": "B",
       "reason": null
     },
@@ -2491,7 +2491,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 332,
+      "line": 336,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },

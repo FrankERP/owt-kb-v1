@@ -67,6 +67,15 @@ describe("SongForm catalogue", () => {
     expect(screen.getByRole("button", { name: "Hillsong" })).not.toBeNull();
   });
 
+  it("a folded chip stays in the row after it is deselected, so the next tap puts it back", () => {
+    render(form({ allAuthors: [entry("a1", "Un Corazón"), entry("a2", "Hillsong")], initial: { authorIds: ["a2"] } }));
+    const chip = () => screen.getByRole("button", { name: "Hillsong" });
+    fireEvent.click(chip());
+    expect(chip().getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(chip());
+    expect(chip().getAttribute("aria-pressed")).toBe("true");
+  });
+
   // A parent appends whatever the idempotent create POST returns, so after a
   // «+ Crear» on an existing name it holds that `_id` twice — and a REOPENED
   // form has created nothing yet, so only de-duping the catalogue itself helps.

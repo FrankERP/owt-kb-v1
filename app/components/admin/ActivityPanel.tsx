@@ -153,10 +153,11 @@ export default function ActivityPanel() {
       <div className="grid grid-cols-3 gap-3">
         {[
           // Short on purpose: «Activos esta semana» wrapped to three lines in a
-          // third of a 390 px phone (bloque 5). The dot says «activos».
-          { label: "Esta semana",   value: activeThisWeek,  dot: "bg-positive-deep"  },
-          { label: "Este mes",      value: activeThisMonth, dot: "bg-recency-fg" },
-          { label: "Sin actividad", value: neverActive,     dot: "bg-mono-600"   },
+          // third of a 390 px phone (bloque 5). The dot says «activos» to the
+          // eye; `sr` keeps the word for a reader.
+          { label: "Esta semana",   sr: "Activos ", value: activeThisWeek,  dot: "bg-positive-deep"  },
+          { label: "Este mes",      sr: "Activos ", value: activeThisMonth, dot: "bg-recency-fg" },
+          { label: "Sin actividad", sr: "",         value: neverActive,     dot: "bg-mono-600"   },
         ].map((stat) => (
           <div key={stat.label} className="rounded-xl border border-edge-accent-subtle bg-accent/5 px-4 py-3 text-center">
             <div className="flex items-center justify-center gap-1.5 mb-1">
@@ -165,7 +166,10 @@ export default function ActivityPanel() {
                 <NumberRoll value={stat.value} />
               </p>
             </div>
-            <p className="font-label text-[10px] uppercase tracking-widest text-mono-500">{stat.label}</p>
+            <p className="font-label text-[10px] uppercase tracking-widest text-mono-500">
+              {stat.sr && <span className="sr-only">{stat.sr}</span>}
+              {stat.label}
+            </p>
           </div>
         ))}
       </div>

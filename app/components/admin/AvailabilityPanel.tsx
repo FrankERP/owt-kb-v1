@@ -292,7 +292,8 @@ export default function AvailabilityPanel() {
                         <span className="font-body text-sm font-semibold min-w-[100px]">{dn(m)}</span>
                         <div className="flex flex-wrap gap-1.5">
                           {futureDates.map(d => {
-                            const note = noteMap.get(d);
+                            // Trimmed, like `datesWithNotes` below: a blank note draws no marker.
+                            const note = noteMap.get(d)?.trim();
                             const isConflict = conflicts.some(c => c.member._id === m._id && c.role.date === d);
                             return (
                               <span

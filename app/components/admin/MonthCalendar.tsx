@@ -265,7 +265,7 @@ export default function MonthCalendar({
               // Named for screen readers: the visible cell is a bare number.
               // Deliberately NOT containing the phrase "servicio especial" —
               // that is the composer button's accessible name.
-              aria-label={special ? `${optionLabel(date)} — ${special.name}` : optionLabel(date)}
+              aria-label={`${optionLabel(date)}${special ? ` — ${special.name}` : ""}${existing ? " — ya existe un servicio" : ""}`}
               title={
                 existing
                   ? `Ya existe un servicio (${EXISTING_LABEL[existing._type] ?? existing._type}${
@@ -282,18 +282,22 @@ export default function MonthCalendar({
                   the accessible name carries the words) and the «Servicios
                   especiales» list below the grid names it (bloque 5). */}
               {special && <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-info-fg" />}
-              {existing && (
-                <span
-                  className="text-warning-strong leading-none"
-                  aria-label={`Ya existe un servicio el ${longDate(date)}`}
-                >
-                  <WarningIcon size={10} />
-                </span>
-              )}
+              {/* The words are in the cell's accessible name (a button's own
+                  aria-label is what a reader gets, never a span's) and in the
+                  legend under the grid, which a phone can read — `title` only
+                  shows on hover. */}
+              {existing && <WarningIcon size={10} className="text-warning-strong" />}
             </button>
           );
         })}
       </div>
+
+      {existingByDate.size > 0 && (
+        <p className="flex items-center gap-1.5 font-body text-[11px] text-warning-strong">
+          <WarningIcon size={10} />
+          ya existe un servicio ese día
+        </p>
+      )}
 
       <button
         type="button"
