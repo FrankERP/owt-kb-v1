@@ -5,6 +5,8 @@ import { operationalClient } from "@/sanity/lib/operationalClient";
 import Navbar from "@/app/components/Navbar";
 import ProposalEditor from "./ProposalEditor";
 import { pickUnique, serviceDayKey } from "@/app/utils/serviceReadSelect";
+import { SERVICE_THREAD_BY_ID_QUERY, serviceThreadId } from "@/app/utils/serviceThread";
+import type { ThreadMessageRow } from "@/app/utils/proposalMessageRead";
 
 export const revalidate = 0;
 
@@ -57,6 +59,20 @@ async function getSharedProposal(roleId: string) {
   );
 }
 
+// What admins wrote to this service's leads from its card (ADR-0065) — typically
+// what the pastor shared. Read for every visit, proposal or not: the lead needs
+// it most BEFORE choosing songs, and once the proposal exists it is part of the
+// same conversation.
+async function getServiceThreadMessages(roleId: string): Promise<ThreadMessageRow[]> {
+  const threadId = serviceThreadId(roleId);
+  if (!threadId) return [];
+  const thread = await operationalClient.fetch<{ messages?: ThreadMessageRow[] | null } | null>(
+    SERVICE_THREAD_BY_ID_QUERY,
+    { threadId },
+  );
+  return thread?.messages ?? [];
+}
+
 export default async function ProposePage({
   params,
 }: {
@@ -74,7 +90,10 @@ export default async function ProposePage({
   const roleDoc = await getRoleDoc(roleId, leadId);
   if (!roleDoc) notFound();
 
-  const shared = await getSharedProposal(roleId);
+  const [shared, earlierMessages] = await Promise.all([
+    getSharedProposal(roleId),
+    getServiceThreadMessages(roleId),
+  ]);
 
   const serviceType: ServiceType =
     roleDoc._type === "sunday_role" ? "sunday" :
@@ -101,6 +120,7 @@ export default async function ProposePage({
             service_date: serviceDate,
           }}
           proposal={shared ?? null}
+          earlierMessages={earlierMessages}
           currentUserId={leadId}
         />
       </div>

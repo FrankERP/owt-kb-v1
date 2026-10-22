@@ -8,19 +8,19 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 318,
-    "filesScanned": 496,
+    "literalRows": 320,
+    "filesScanned": 500,
     "filesWithColour": 58,
     "byCategory": {
       "2": 2,
       "4": 68,
-      "8": 96,
+      "8": 98,
       "9": 10,
       "11": 8,
       "12": 134
     },
     "byDisposition": {
-      "B": 125,
+      "B": 127,
       "exempt": 55,
       "keep": 239,
       "C": 5,
@@ -211,7 +211,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 388,
+      "line": 389,
       "disposition": "B",
       "reason": null
     },
@@ -223,7 +223,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 408,
+      "line": 409,
       "disposition": "B",
       "reason": null
     },
@@ -235,7 +235,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 420,
+      "line": 421,
       "disposition": "B",
       "reason": null
     },
@@ -247,7 +247,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 437,
+      "line": 438,
       "disposition": "B",
       "reason": null
     },
@@ -259,7 +259,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 555,
+      "line": 556,
       "disposition": "B",
       "reason": null
     },
@@ -271,7 +271,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 509,
+      "line": 514,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -283,7 +283,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 521,
+      "line": 526,
       "disposition": "B",
       "reason": null
     },
@@ -295,7 +295,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 641,
+      "line": 664,
       "disposition": "B",
       "reason": null
     },
@@ -307,7 +307,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 652,
+      "line": 675,
       "disposition": "B",
       "reason": null
     },
@@ -319,7 +319,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 772,
+      "line": 795,
       "disposition": "B",
       "reason": null
     },
@@ -331,7 +331,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 880,
+      "line": 903,
       "disposition": "B",
       "reason": null
     },
@@ -343,7 +343,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 948,
+      "line": 971,
       "disposition": "B",
       "reason": null
     },
@@ -355,7 +355,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 957,
+      "line": 980,
       "disposition": "B",
       "reason": null
     },
@@ -367,7 +367,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 965,
+      "line": 988,
       "disposition": "B",
       "reason": null
     },
@@ -379,7 +379,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 974,
+      "line": 997,
       "disposition": "B",
       "reason": null
     },
@@ -403,7 +403,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 266,
+      "line": 267,
       "disposition": "B",
       "reason": null
     },
@@ -2395,7 +2395,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 259,
+      "line": 276,
       "disposition": "B",
       "reason": null
     },
@@ -2563,7 +2563,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 587,
+      "line": 608,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2575,7 +2575,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 739,
+      "line": 760,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2587,7 +2587,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2577,
+      "line": 2607,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2599,7 +2599,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2583,
+      "line": 2613,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2611,7 +2611,7 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 1429,
+      "line": 1450,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2623,7 +2623,7 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 1588,
+      "line": 1609,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2635,7 +2635,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 5354,
+      "line": 5533,
       "disposition": "B",
       "reason": null
     },
@@ -2647,7 +2647,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2511,
+      "line": 2610,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2659,7 +2659,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 3347,
+      "line": 3490,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2671,7 +2671,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 182,
+      "line": 184,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2683,7 +2683,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 335,
+      "line": 339,
       "disposition": "B",
       "reason": null
     },
@@ -2707,7 +2707,7 @@
       "alpha": null,
       "utility": "border",
       "carrier": null,
-      "line": 192,
+      "line": 194,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2719,7 +2719,7 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 794,
+      "line": 801,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2731,7 +2731,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 813,
+      "line": 820,
       "disposition": "B",
       "reason": null
     },
@@ -2743,7 +2743,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 803,
+      "line": 810,
       "disposition": "B",
       "reason": null
     },
@@ -2755,7 +2755,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 823,
+      "line": 830,
       "disposition": "B",
       "reason": null
     },
@@ -2767,7 +2767,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 833,
+      "line": 840,
       "disposition": "B",
       "reason": null
     },
@@ -2779,7 +2779,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 844,
+      "line": 851,
       "disposition": "B",
       "reason": null
     },
@@ -2791,7 +2791,19 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 853,
+      "line": 860,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/admin/ServiceReadinessCard.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 869,
       "disposition": "B",
       "reason": null
     },
@@ -3115,7 +3127,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 324,
+      "line": 329,
       "disposition": "B",
       "reason": null
     },
@@ -3127,7 +3139,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 327,
+      "line": 332,
       "disposition": "B",
       "reason": null
     },
@@ -3199,7 +3211,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 163,
+      "line": 179,
       "disposition": "B",
       "reason": null
     },
@@ -3211,7 +3223,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 163,
+      "line": 179,
       "disposition": "B",
       "reason": null
     },
@@ -3223,7 +3235,19 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 388,
+      "line": 421,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/DayCard.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 430,
       "disposition": "B",
       "reason": null
     },
@@ -3511,7 +3535,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 177,
+      "line": 207,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3607,7 +3631,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 119,
+      "line": 122,
       "disposition": "B",
       "reason": null
     },

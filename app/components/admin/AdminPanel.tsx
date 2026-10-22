@@ -239,7 +239,7 @@ export default function AdminPanel({
                   onResolved={integrity.resolve}
                 />
               )}
-              <ServicesPanel engine={engine} onMonthEditorOpenChange={setMonthEditorOpen} />
+              <ServicesPanel engine={engine} viewerId={viewerId} onMonthEditorOpenChange={setMonthEditorOpen} />
             </div>
           </ServiceHandoffProvider>
         );

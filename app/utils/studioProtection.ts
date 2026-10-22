@@ -1,4 +1,4 @@
-// Studio protection policy for the eighteen protected stored types
+// Studio protection policy for the twenty protected stored types
 // (Service Readiness A2 §8 / A3 §4) — pure, exported, and unit-testable.
 //
 // WHY a code-owned policy instead of UI configuration alone: the Studio is an
@@ -24,7 +24,7 @@
 // look at a lock, a receipt, or a malformed role while diagnosing.
 
 /**
- * The eighteen protected stored types. `saturdarSongs` is a deliberate stored typo —
+ * The twenty protected stored types. `saturdarSongs` is a deliberate stored typo —
  * never rename.
  *
  * Membership here is what earns a type a pane in `sanity/structure.ts`'s
@@ -88,6 +88,10 @@ export const PROTECTED_STUDIO_TYPES = [
   // The MCP month proposal (P4 on solver v3, D6): machine state written only by
   // `app/mcp/monthProposals/proposalStore.ts`. Internal, like the MCP OAuth state above.
   "mcpProposal",
+  // What admins write to a service's leads from its card (ADR-0065): written only by
+  // `POST /api/admin/service-threads/[roleId]/messages`. Human-meaningful like
+  // `setlistProposal`, so protected but deliberately NOT internal — it keeps a read-only pane.
+  "serviceThread",
 ] as const;
 
 export type ProtectedStudioType = (typeof PROTECTED_STUDIO_TYPES)[number];
@@ -558,4 +562,5 @@ export const PROTECTED_STUDIO_TITLES: Readonly<Record<ProtectedStudioType, strin
   calendarFeed: "Enlaces de calendario (solo lectura)",
   adminChatUsage: "Asistente — Gasto por admin (solo lectura)",
   mcpProposal: "MCP — Propuestas de mes (solo lectura)",
+  serviceThread: "Mensajes del servicio (solo lectura)",
 });

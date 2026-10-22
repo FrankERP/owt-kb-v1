@@ -102,7 +102,9 @@ const MAY_SEE_DRAFTS: Record<string, string> = {
     "`api/admin/setlists`, by `roleWriteOps` — the write path, which must " +
     "see a draft in order to publish it — and by `adminRolesQuery`, the `/admin` " +
     "panel's rows (behind `requireActiveManager`; showing an admin their own " +
-    "drafts is the draft/publish feature) shared with the MCP month planner. " +
+    "drafts is the draft/publish feature) shared with the MCP month planner, and " +
+    "`serviceConversationQuery`, the admin's «Mensajes del servicio» dialog " +
+    "(an admin may write before the month is published; ADR-0065). " +
     "Do NOT add a member-facing query here.",
 };
 

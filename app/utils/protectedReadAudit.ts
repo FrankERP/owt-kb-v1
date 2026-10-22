@@ -309,6 +309,13 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
     removalOwner: "permanent runtime writer (never removed — the admin side of the thread)",
   },
   {
+    file: "app/api/admin/service-threads/[roleId]/messages/route.ts",
+    operation: "POST",
+    reason:
+      "guarded pre-proposal thread writer (ADR-0065): resolves the role through `loadCanonicalRole` only to read its date and Lead seat, then appends one message to `serviceThread.<roleId>` — never to the role itself, and never to a proposal. `createIfNotExists` + `setIfMissing` + `append` carry no `ifRevisionId` ON PURPOSE — two admins posting at once must both land — and the entry exists to say so out loud",
+    removalOwner: "permanent runtime writer (never removed — the conversation before a proposal exists)",
+  },
+  {
     file: "app/api/admin/proposals/[id]/route.ts",
     operation: "PATCH",
     reason:
