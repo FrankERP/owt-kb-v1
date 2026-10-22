@@ -106,3 +106,6 @@ __pycache__/
 # that was `.git/info/exclude`, which is per-clone and shared with nobody.
 # `.claude/commands/` stays tracked; only the worktrees are ignored.
 .claude/worktrees/
+
+# Python venv for the solver suites in cloud sessions (docs/agents/project-rules.md §Conventions)
+.venv/

@@ -38,10 +38,11 @@ rule changes, change both; if they disagree, this file wins.
   `gh pr merge <n> --disable-auto` BEFORE pushing anything else to that branch. No merge
   queue: a PR left out of date by `strict` waits until someone updates it.
 - **Cloud sessions are the default place to work** (2026-10-22): each thread is its own
-  container — no worktrees, no `.env.local`. Before the gates run `npm ci` and
-  `python3.12 -m pip install -r gcf_v3/requirements.txt` (plus `gcf/` when touched). Keys reach
-  a session only as network secrets injected by the proxy, never as readable variables.
-  The long form lists what still needs the Mac.
+  container — no worktrees, no `.env.local`. Before the gates: `npm ci`; for a solver suite
+  `python3.12 -m venv .venv && .venv/bin/pip install -r gcf_v3/requirements.txt` (and/or `gcf/`),
+  then run the suite with `.venv/bin/python` (the system `python` is 3.13 and refuses global
+  installs). Keys reach a session only as network secrets the proxy injects (`docs/SECRETS.md`),
+  never as readable variables. The long form lists what still needs the Mac.
 - **On the Mac — worktrees only when two things must be in flight at once** (`Agent` with
   `isolation: "worktree"`, or `EnterWorktree` — never a hand-rolled `git worktree add`; code
   review needs none). `node_modules` via APFS clone (`cp -Rc`) from the primary checkout — never a fresh install.
@@ -346,7 +347,8 @@ honesty gate (empty runs over churn).
 - **Worklog: retired 2026-10-22** — nothing read it after `hr-officer` went (2026-10-07), and
   the PR and commit history already record the work. Do not append to it or ask agents for a
   `WORKLOG:` trailer; the file stays frozen in the private `FrankERP/owt-agent-logs`, which
-  still holds private backups and solver runs. `docs/agents/worklog.md`.
+  still holds private backups and solver runs. A churn cap hit in an adversarial plan review is
+  recorded in the plan's committed review log instead. `docs/agents/worklog.md`.
 - **Issues:** GitHub Issues (`FrankERP/owt-kb-v1`) via `gh` — `docs/agents/issue-tracker.md`.
   Labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`
   (`docs/agents/triage-labels.md`).

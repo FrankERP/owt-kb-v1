@@ -70,19 +70,24 @@ disagree, `CLAUDE.md` wins and this file is the one to fix.
 - **Cloud sessions are the default place to work** (2026-10-22: Frank wants nothing to
   depend on his laptop being open). Each thread runs in its own fresh container with the
   repository cloned, so worktrees and the `.env.local` symlink are Mac-only rules. Before
-  the gates, install what the branch's lockfiles say: `npm ci`, and
-  `python3.12 -m pip install -r gcf_v3/requirements.txt` (plus `gcf/requirements.txt` when
-  `gcf/` is touched; CI runs Python 3.12). This is per thread on purpose rather than in the
+  the gates, install what the branch's lockfiles say: `npm ci`, and for a solver
+  suite a Python 3.12 venv (CI runs 3.12): `python3.12 -m venv .venv &&
+  .venv/bin/pip install -r gcf_v3/requirements.txt` (plus `gcf/requirements.txt` when
+  `gcf/` is touched), then `.venv/bin/python -m unittest discover -s gcf_v3 -t gcf_v3`.
+  The container's system `python` is 3.13 and both interpreters refuse a global
+  `pip install` (PEP 668), so the venv is what lets the suite import ortools; `.venv/` is
+  gitignored. This is per thread on purpose rather than in the
   environment's setup script: the environment is cached between sessions, so a setup-script
   install would silently go stale against a branch's lockfile. Credentials reach a session
   only as **network secrets** the egress proxy injects (Vercel today: `VERCEL_TOKEN=placeholder`
   in the environment, the real token attached to `api.vercel.com`); a session never holds a
-  readable key. **Still Mac-only:** the iOS build (Xcode), rehearsal-mix processing
+  readable key (each one is recorded in `docs/SECRETS.md`). **Still Mac-only:** the iOS build (Xcode), rehearsal-mix processing
   (Ableton), `scripts/dev-verify.ts` and other `.env.local` scripts until their secrets are
   set up as network secrets, the canonical copy of the adversarial-plan-review skill and the
   agent definitions under `~/.claude/agents/`. Google-side secret rotations go through Google
-  Cloud Shell in the browser, not a laptop. The plan and its open phases:
-  https://claude.ai/artifact/SBngK1tiRn3dnEdPCT9geP.
+  Cloud Shell in the browser, not a laptop. Open phases (a read-only Sanity token for the
+  scripts, a keyless GitHub Actions workflow to verify and fall back on the solver deploy)
+  land with their own docs and `docs/SECRETS.md` entries.
 - **On the Mac — worktrees only when two things must be in flight at once** — parallel agents
   writing overlapping files (`Agent` with `isolation: "worktree"`) or protecting the
   primary tree while gates/servers run elsewhere (`EnterWorktree`, never a hand-rolled
@@ -727,14 +732,20 @@ PRs, their commits and their review threads. Keeping it in the cloud would have 
 every thread a second repository, a merge driver for concurrent appends and a push per
 cycle, for a file nobody opens. Its one later use, counting review dispatches for
 §Review policy, is a one-off question the PR history can answer again if it comes up.
+The cycle-close review keeps its docs-audit checklist (one agent, one context read;
+separate `docs-auditor` dispatches remain available for doc-heavy cycles); only the
+worklog-completeness checklist went with the log.
 
 The file stays frozen in the PRIVATE `FrankERP/owt-agent-logs` (2,211 entries,
 2026-08-06 → 2026-10-15), which keeps holding what must stay private and must not
 depend on one laptop: `solverConfig` snapshots and restore scripts (`backups/`) and the
 captured production solver runs (`sdd/…/pairs/`). The `.gitignore` entry for the old
 symlink stays, so an old checkout can never stage it here. The vendored
-adversarial-plan-review skill still mentions worklog entries; those lines are inert
-until its canonical copy is next edited. Past HR bulletins stay in
+adversarial-plan-review skill still mentions worklog entries. The reviewer's `WORKLOG:`
+trailer is simply ignored. Its «make the cap observable» step is not inert, so it is
+overridden here: when the churn cap is reached, record the cap and the defect class the
+rounds keep finding in the plan's committed `<plan>-review-log.md`, then escalate to Frank
+as the skill says. The vendored text changes when its canonical copy is next edited. Past HR bulletins stay in
 `docs/agents/reports/`. See `docs/agents/worklog.md` for the historical schema.
 
 ### Issue tracker
