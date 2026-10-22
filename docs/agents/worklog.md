@@ -1,5 +1,10 @@
 # Agent worklog
 
+> **Retired 2026-10-22.** Do not append to it or ask agents for a `WORKLOG:` trailer. The
+> file is frozen in `FrankERP/owt-agent-logs` (2,211 entries, 2026-08-06 → 2026-10-15). Why:
+> `docs/agents/project-rules.md` §Agent worklog. What follows is kept as the historical
+> description of the schema.
+
 Every subagent dispatch in this repository is recorded in `.agents/log/worklog.jsonl`.
 The log is a **history of the work done** — what was dispatched, to which agent, and
 what came back — and nothing more (amended 2026-10-07). It used to be the evidence base
