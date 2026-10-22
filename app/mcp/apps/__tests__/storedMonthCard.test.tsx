@@ -14,7 +14,9 @@ import { MONTH, serviceWorld, type ServiceWorld } from "@/app/mcp/tools/__tests_
 import { Editor, type StoredEditorProps } from "@/mcp-app/proposal-card/Editor";
 import { cardViewOf } from "@/mcp-app/proposal-card/model";
 import { storedSeatOf } from "@/mcp-app/proposal-card/useStoredEditor";
+import { COPY_ARGS_PREFIX, SAVE_ARGS_PREFIX } from "@/app/components/admin/v3Copy";
 import {
+  ARGS_LINE_PREFIXES,
   afterStoredRefusal,
   forceStoredLast,
   saveMessage,
@@ -85,6 +87,17 @@ describe("the saved-month model against the real tools", () => {
   it("a revise_proposal or solve_month answer is never read as a saved month", () => {
     const proposal = cardViewOf({ structuredContent: { ok: true, proposal: "h1", revision: 2, board: [], changes: [], month: MONTH }, content: [] });
     expect(proposal.kind).toBe("proposal");
+  });
+});
+
+describe("the argument lines the model reads", () => {
+  it("the card hides them, and its prefixes mirror the server's", () => {
+    expect(ARGS_LINE_PREFIXES).toEqual([SAVE_ARGS_PREFIX, COPY_ARGS_PREFIX]);
+    const view = storedCheckViewOf({
+      structuredContent: { ok: true, month: MONTH, board: [], changes: [] },
+      content: [{ type: "text", text: ["Un servicio cambia.", `${SAVE_ARGS_PREFIX} {"month":"${MONTH}","changes":[]}`].join("\n") }],
+    });
+    expect(view.lines).toEqual(["Un servicio cambia."]);
   });
 });
 

@@ -247,19 +247,19 @@ export const CHECK_SERVICE_EDITS_DESCRIPTION =
   "list_services) o por su fecha (YYYY-MM-DD) cuando ese día tiene uno solo; cada lugar por su nombre en el " +
   "planificador (Lead, BGV, Coro, un instrumento o la consola) y cada persona por su nombre. La fecha de un servicio no " +
   "se cambia desde aquí. Cada cambio pasa por las mismas reglas que /admin: si uno rompe una regla de lugar, se rechaza " +
-  "(forzarlo solo se puede desde la tarjeta). La respuesta trae, por servicio, el cambio listo para save_service_edits " +
-  "(changes) o la copia lista para copy_instruments (copy), sus líneas en palabras, los servicios que se guardan juntos " +
-  "y lo que no cuadra con las reglas del mes.";
+  "(forzarlo solo se puede desde la tarjeta). La respuesta trae los cambios en palabras, los servicios que se guardan " +
+  "juntos y lo que no cuadra con las reglas del mes; al final, una línea con los argumentos listos para save_service_edits " +
+  "(o para copy_instruments, si es una copia), que se pasan tal cual (una por llamada si son varias).";
 
 export const COPY_INSTRUMENTS_DESCRIPTION =
   "Copia en producción los instrumentos de un servicio a otro, como «Copiar instrumentos» de /admin: los del destino se " +
   "reemplazan por los que el origen tiene guardados ahora. Antes revisa la copia con check_service_edits (copy {from, " +
-  "to}) y manda aquí month, from, to y lines tal cual los devolvió. Si algo cambió desde la revisión no " +
+  "to}) y manda aquí los argumentos de su última línea (month, from, to y lines) tal cual. Si algo cambió desde la revisión no " +
   "copia nada y pide revisar de nuevo. Si dice «sin confirmar», repite exactamente la misma llamada.";
 
 export const SAVE_SERVICE_EDITS_DESCRIPTION =
   "Guarda en producción cambios a servicios guardados que check_service_edits ya revisó. month es YYYY-MM; changes es " +
-  "la lista changes que devolvió la revisión, tal cual (cada uno con su service, baseRev, target, diff, mac, unit, lines y, si " +
+  "la lista que trae la última línea de la revisión, tal cual (cada uno con su service, baseRev, target, diff, mac, unit, lines y, si " +
   "hay, waivers). Escribe un servicio a la vez con las mismas reglas y avisos por correo que /admin. Si algo cambió " +
   "desde la revisión no guarda nada y pide revisar de nuevo. Si la respuesta dice «sin confirmar» o «pendiente», repite " +
   "exactamente la misma llamada: lo que ya quedó se reconoce como «ya estaba» y se guarda el resto.";
@@ -851,9 +851,16 @@ async function checkMonth(
   const unconfirmed = changes.flatMap((c) => c.unconfirmed);
   const check = options.seat ? null : await runStoredMonthCheck(ctx, board, deps);
 
+  // What save_service_edits takes, as is (F3) — in the structured answer for the card, and in the
+  // text for the model, which never sees `structuredContent`: one line per call, so a group too big
+  // for one save comes as one line per signed unit. None when the save would refuse anyway.
+  const wire = changes.map((c) => ({ service: c.service, baseRev: c.baseRev, target: c.target, diff: c.diff, mac: c.mac, unit: c.unit, lines: c.lines, ...(c.waivers.length ? { waivers: c.waivers } : {}) }));
+  const calls = options.app || !wire.length || unconfirmed.length ? []
+    : tooBig.length ? [...Map.groupBy(wire, (c) => c.unit.join(",")).values()]
+      : [wire];
   const lines = [
     ...notes,
-    ...(changes.length ? [S.checkHead(changes.length), ...changes.flatMap((c) => c.lines)] : [S.noChanges]),
+    ...(changes.length ? [S.checkHead(changes.length, calls.length), ...changes.flatMap((c) => c.lines)] : [S.noChanges]),
     ...linked.map((g) => S.groupNote(g.map((id) => labelOf.get(id)!))),
     ...tooBig.map((g) => S.groupTooBig(g.length, MAX_GROUP)),
     ...(unconfirmed.length ? [S.needsCard, ...unconfirmed] : []),
@@ -861,6 +868,7 @@ async function checkMonth(
     ...songLeadLines(ctx, board),
     ...(check ? monthCheckLines(check) : []),
   ];
+  for (const part of calls) lines.push(S.saveArgs(JSON.stringify({ month: ctx.month, changes: part })));
   return answer(false, lines, {
     ...head,
     board: boardView(board, ctx.namer),
@@ -870,8 +878,7 @@ async function checkMonth(
       placed: v.placed.map((p) => ({ service: p.service, row: p.row, member: ctx.namer.tokenOf(p.member), unavailable: p.unavailable })),
       forced: v.forced.length > 0,
     })),
-    // What save_service_edits takes, as is (F3).
-    changes: changes.map((c) => ({ service: c.service, baseRev: c.baseRev, target: c.target, diff: c.diff, mac: c.mac, unit: c.unit, lines: c.lines, ...(c.waivers.length ? { waivers: c.waivers } : {}) })),
+    changes: wire,
     groups,
     ...(tooBig.length ? { maxGroup: MAX_GROUP } : {}),
     ...(unconfirmed.length ? { needsCard: true } : {}),
@@ -986,17 +993,19 @@ async function checkCopy(ctx: MonthContext, copy: { from: string; to: string }, 
   const unconfirmed = judged.added.map((f) => E.needsConfirm(f.sentence, findingView(judged.board, f, ctx.namer).where));
   const lines = copyLines({ board: ctx.board, roleId: plan.to, fromLabel: plan.fromLabel, target: plan.target, judged, nameOf: ctx.namer.nameOf });
   const check = await runStoredMonthCheck(ctx, judged.board, deps);
+  const args = unconfirmed.length ? null : { month: ctx.month, from: plan.from._id, to: plan.to, lines };
   return answer(false, [
     ...(unconfirmed.length ? [] : [S.copy.checkHead]),
     ...lines,
     ...(unconfirmed.length ? [S.copy.needsCard, ...unconfirmed] : []),
     ...baselineLines(judged),
     ...monthCheckLines(check),
+    ...(args ? [S.copy.args(JSON.stringify(args))] : []),
   ], {
     ...head,
     board: boardView(judged.board, ctx.namer),
-    // What copy_instruments takes, as is. None when the chat would be refused anyway.
-    copy: unconfirmed.length ? null : { month: ctx.month, from: plan.from._id, to: plan.to, lines },
+    // What copy_instruments takes, as is (also the text's last line). None when the chat would be refused anyway.
+    copy: args,
     ...(unconfirmed.length ? { needsCard: true } : {}),
     monthCheck: check,
   });
