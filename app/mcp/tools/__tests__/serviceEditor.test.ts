@@ -61,6 +61,7 @@ describe("check_service_edits (the chat)", () => {
     const app = await checkServiceEditsAppResult({ month: MONTH, edits: appEdits }, PRINCIPAL, w.deps);
     expect(changesOf(app)).toHaveLength(1);
     expect(textOf(app)).not.toContain(SAVE_ARGS_PREFIX);
+    expect(textOf(app)).not.toContain("última línea");
   });
 
   it("a move between two services is one group, saved back to back", async () => {
@@ -389,15 +390,19 @@ describe("save_service_edits", () => {
     const edits = ids.slice(0, -1).map((from, i) => ({ op: "move" as const, from: { service: from, seat: "BGV", member: `Persona p${i}` }, to: { service: ids[i + 1]!, seat: "BGV" } }));
     const out = await check(w, edits);
     expect(sc(out).groups, textOf(out)).toEqual([["s0", "t0", "s1", "t1", "s2", "s3", "s4"]]);
-    expect(textOf(out)).toContain("Guarda esos cambios en partes");
+    expect(textOf(out)).toContain("se guardan en partes");
     const saved = await save(w, changesOf(out));
     expect(sc(saved)).toMatchObject({ detail: "group_too_big" });
     expect(w.deps.editRole).not.toHaveBeenCalled();
-    // In parts, by the signed units the check answered (6 + 1), it saves.
-    const units = [...new Set(changesOf(out).map((c) => c.unit.join(",")))];
-    expect(units.map((u) => u.split(",").length)).toEqual([6, 1]);
-    for (const u of units) {
-      const part = await save(w, changesOf(out).filter((c) => c.unit.join(",") === u));
+    // The text closes with one argument line per signed unit (6 + 1), and saving from those lines alone works.
+    expect(textOf(out)).toContain("una vez por cada una de las últimas 2 líneas");
+    const argLines = textOf(out).split("\n").slice(-2);
+    expect(argLines.every((l) => l.startsWith(SAVE_ARGS_PREFIX)), textOf(out)).toBe(true);
+    const parts = argLines.map((l) => JSON.parse(l.slice(SAVE_ARGS_PREFIX.length)) as SaveServiceEditsArgs);
+    expect(parts.map((p) => p.changes.length)).toEqual([6, 1]);
+    expect(parts.flatMap((p) => p.changes)).toEqual(changesOf(out));
+    for (const args of parts) {
+      const part = await saveServiceEditsResult(args, PRINCIPAL, w.deps);
       expect(Object.values(statuses(part)).every((x) => x === "saved"), textOf(part)).toBe(true);
     }
   });

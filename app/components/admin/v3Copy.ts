@@ -710,12 +710,18 @@ export const V3_STORED_EDITOR_LINES = {
   noChanges: "No hay cambios: así está guardado.",
   readOnlyMonth: "Este mes no se puede editar desde el chat ahora: el inventario de servicios no cuadra. Revisa la cola de integridad (get_integrity_queue) o edítalo en /admin.",
   untranslated: (n: number) => `${n === 1 ? "Un servicio" : `${n} servicios`} de este mes no se pueden leer como el planificador los lee; no aparecen aquí.`,
-  checkHead: (n: number) => `${n === 1 ? "Un servicio cambia" : `${n} servicios cambian`}. Para guardar, llama save_service_edits con los argumentos de la última línea, tal cual:`,
+  /** `calls`: how many argument lines close the answer (none for the card, or when the save would refuse). */
+  checkHead: (n: number, calls: number) => {
+    const head = n === 1 ? "Un servicio cambia" : `${n} servicios cambian`;
+    if (calls === 0) return `${head}:`;
+    if (calls === 1) return `${head}. Para guardar, llama save_service_edits con los argumentos de la última línea, tal cual:`;
+    return `${head}. Para guardar, llama save_service_edits una vez por cada una de las últimas ${calls} líneas, con sus argumentos tal cual:`;
+  },
   /** The model sees only the text of a tool answer, never `structuredContent`: the save's arguments travel here. */
   saveArgs: (json: string) => `${SAVE_ARGS_PREFIX} ${json}`,
   groupNote: (labels: readonly string[]) => `${joinEs(labels)} se guardan juntos, uno tras otro (alguien sale de uno y entra a otro).`,
   groupTooBig: (n: number, max: number) =>
-    `Estos cambios ligan ${n} servicios (gente que sale de uno y entra a otro); se pueden guardar como máximo ${max} ligados por llamada. Guarda esos cambios en partes: en cada llamada, los cambios que comparten el mismo unit.`,
+    `Estos cambios ligan ${n} servicios (gente que sale de uno y entra a otro); se guardan en partes, de máximo ${max} ligados por llamada.`,
   unitIncomplete: (missing: readonly string[]) =>
     `Estos cambios se revisaron junto con ${joinEs(missing)} (alguien sale de uno y entra a otro) y se guardan juntos. ${NO_WRITE_THIS_CALL} Manda también esos cambios, tal cual los devolvió la revisión.`,
   // The save

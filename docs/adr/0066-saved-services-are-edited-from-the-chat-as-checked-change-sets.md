@@ -64,7 +64,10 @@ Plan: `docs/superpowers/plans/2026-10-21-owt-mcp-admin-parity-f1.md` (S2 approve
   put the change sets only in `structuredContent`, so the model could check but never save. The
   model-visible check now ends its text with one line, `Argumentos para save_service_edits (pásalos
   tal cual): {month, changes}` (or `copy_instruments`'s `{month, from, to, lines}`); the card's twin
-  leaves it out and the card hides it. Any future tool whose output the model must pass on puts it in
+  leaves it out and the card hides it. A group over the six-service limit gets one such line per
+  signed unit (one save call each), because one line with every change would be refused as
+  `group_too_big`; no line at all when the check needs the card, since that save would refuse too.
+  Any future tool whose output the model must pass on puts it in
   the text, as `solve_month` does with its handle.
 - **The card never writes.** Its saved-month mode (`useStoredEditor.tsx`) hands the checked change
   sets to the chat; Claude calls `save_service_edits`, so the Claude app asks first.
