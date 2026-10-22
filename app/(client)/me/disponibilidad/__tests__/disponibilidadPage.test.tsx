@@ -43,7 +43,7 @@ vi.mock("@/app/components/Navbar", () => ({ default: () => null }));
 // surface, so it is marked rather than rendered. Its own behaviour is pinned in
 // `myAvailabilityPanel.test.tsx` and `availabilityCalendarConflict.test.tsx`.
 vi.mock("@/app/components/availability/MyAvailabilityPanel", () => ({
-  default: () => <p>Seleccionar fechas</p>,
+  default: () => <p>Marcar días</p>,
 }));
 
 import DisponibilidadPage from "../page";
@@ -76,7 +76,7 @@ describe("/me/disponibilidad", () => {
 
   it("gives a KIDS-ONLY member the calendar, with no worship copy", async () => {
     const html = await renderPage();
-    expect(html).toContain("Seleccionar fechas");
+    expect(html).toContain("Marcar días");
     expect(html).toContain("Disponibilidad");
     expect(html).not.toContain("Mis próximos servicios");
     expect(html).not.toContain("Sin servicios asignados próximamente");
@@ -91,7 +91,7 @@ describe("/me/disponibilidad", () => {
     serverFetch.mockResolvedValue(null);
     const html = await renderPage();
     expect(html).toContain("No pudimos cargar tu perfil");
-    expect(html).not.toContain("Seleccionar fechas");
+    expect(html).not.toContain("Marcar días");
   });
 
   it("reads the service dates over the CDMX horizon it computed", async () => {

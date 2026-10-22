@@ -54,14 +54,14 @@ function cell(month: string, day: number): HTMLButtonElement {
 
 const marked = (month: string, day: number) => cell(month, day).className.includes(MARKED);
 
-// The grid is read-only outside «Seleccionar fechas» (Frank's look, 2026-09-13):
+// The grid is read-only outside «Marcar días» (Frank's look, 2026-09-13):
 // marking a day is a one-day drag through the mode, not a plain click. Enter the
 // mode only if it is not already on — the mode persists across a single test's
 // several marks, and re-clicking the pill while it reads «Listo» would turn it
 // back off instead of doing nothing.
 function markDate(month: string, day: number) {
   if (!screen.queryByRole("button", { name: "Listo" })) {
-    fireEvent.click(screen.getByRole("button", { name: "Seleccionar fechas" }));
+    fireEvent.click(screen.getByRole("button", { name: "Marcar días" }));
   }
   const months = document.getElementById("availability-months")!;
   const target = cell(month, day);
@@ -71,6 +71,7 @@ function markDate(month: string, day: number) {
 }
 
 // One button, two labels: «Guardar» and «Guardando…» while the PATCH is in flight.
+// It lives in the save bar, which exists only while something is dirty (2026-10-22).
 const saveButton = () => screen.getByRole("button", { name: /Guarda/ });
 
 const fetchMock = vi.fn();
@@ -157,8 +158,10 @@ describe("MyAvailabilityPanel — saving against a revision", () => {
     expect(marked("Noviembre 2026", 1)).toBe(true);
     expect(marked("Septiembre 2026", 20)).toBe(true);
     expect(marked("Octubre 2026", 4)).toBe(false);
-    // Adopted state is the new baseline — nothing is left dirty.
-    expect(screen.queryByText("Cambios sin guardar")).toBeNull();
+    // Adopted state is the new baseline — nothing is left dirty, so no «Guardar»;
+    // the bar itself stays up to carry the notice, where the member is looking.
+    expect(screen.queryByRole("button", { name: /Guarda/ })).toBeNull();
+    expect(document.querySelector("[data-availability-save-bar]")!.textContent).toContain("NO se guardaron");
 
     // And it does NOT auto-dismiss: it reports a write that never landed.
     // MUST be wrapped in act(): without it the re-render that useTransientValue's
@@ -183,7 +186,9 @@ describe("MyAvailabilityPanel — saving against a revision", () => {
       unavailableDates: ["2026-09-20", "2026-11-01", "2026-10-04"],
       unavailabilityNotes: [],
     });
-    expect(screen.queryByRole("status")).toBeNull();
+    // The bar's status line reads «Guardando…»'s state too, so it is null only
+    // once the second save has landed and nothing is dirty or held any more.
+    await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
   });
 
   it("rebases once — and keeps the edits — when only a sibling field changed", async () => {
@@ -250,7 +255,8 @@ describe("MyAvailabilityPanel — saving against a revision", () => {
     fireEvent.click(saveButton());
 
     await waitFor(() => expect(screen.getByText(/No se pudo guardar/)).toBeTruthy());
-    expect(screen.getByText("Cambios sin guardar")).toBeTruthy();
+    // The error reads in the save bar, which stays up because the edit is still dirty.
+    expect(document.querySelector("[data-availability-save-bar]")).not.toBeNull();
     expect(marked("Octubre 2026", 4)).toBe(true);
     expect(saveButton().hasAttribute("disabled")).toBe(false);
   });
