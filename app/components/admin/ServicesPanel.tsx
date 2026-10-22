@@ -92,6 +92,7 @@ import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
 import ServiceMessagesDialog from "./ServiceMessagesDialog";
 import Button from "../ui/Button";
+import Menu, { MenuItem } from "../ui/Menu";
 import Skeleton, { SkeletonGroup } from "../ui/Skeleton";
 import { revealProps } from "@/app/utils/reveal";
 import { upcomingMonthPills } from "./monthPills";
@@ -125,6 +126,8 @@ const formatDate = (iso: string) => formatServiceDate(iso, "es-MX");
 // `items-start` lets each card be its own height instead of the row's tallest.
 const BOARD_LAYOUT = "grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start";
 const BOARD_CARDS = "grid min-w-0 grid-cols-1 gap-4 items-start lg:grid-cols-[repeat(auto-fill,minmax(360px,1fr))]";
+// The phone's fold around the chart: a gap between the toggle and the open chart.
+const CHART_FOLD = "space-y-2 lg:space-y-0";
 
 // Spanish message for a rejected mutation. A 409 always means "your view is
 // stale": the modal/mode stays open and the operator is told to reload.
@@ -901,6 +904,14 @@ export default function ServicesPanel({
 
   const counters = commandSummaryCounters({ all: cards, visible: visibleCards });
   const summaryLine = commandSummarySegments(counters).join(" · ");
+  const hasDrafts = visibleCards.some(c => c.readiness.publishState === "draft");
+  /** The toolbar's «Editar mes»: the one selected month, else the current one. */
+  const openMonthEditor1 = () =>
+    openMonthEditor(selectedMonths.size === 1 ? [...selectedMonths][0] : currentYM, undefined, false, { kind: "toolbar" });
+  // Below `lg` the chart stacks AFTER the cards and starts folded: on a phone
+  // «who serves» comes first and the counts are consulted after, and the
+  // whole chart before the first card was ~500px of the ~1 300px measured.
+  const [chartOpenOnPhone, setChartOpenOnPhone] = useState(false);
 
   // Availability conflicts across the visible, still-upcoming cards.
   const conflictNotices = visibleCards
@@ -1158,13 +1169,24 @@ export default function ServicesPanel({
           toolbar's own column.
         */}
         <div className="flex min-w-0 flex-col items-end gap-1">
+          {/*
+            Below `sm` the three once-a-month actions fold into ONE menu beside
+            «+ Nuevo», the only action an admin takes from a phone between
+            weeks: measured at 390px, the four buttons took three rows and,
+            with the month pills and the chart, pushed the first service card
+            ~1 300px down. The desktop buttons stay mounted (hidden) so the
+            focus-return refs the editors use keep pointing at a real control;
+            on a phone that return lands on a hidden button and is a no-op,
+            which is the accepted trade for one toolbar rather than two.
+          */}
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            {visibleCards.some(c => c.readiness.publishState === "draft") && (
+            {hasDrafts && (
               <Button
                 variant="secondary"
                 size="lg"
                 disabled={!publishGate.enabled}
                 onClick={() => openPublishPlan(visibleCards)}
+                className="hidden sm:inline-flex"
               >
                 Publicar listos ({counters.readyToPublish})
               </Button>
@@ -1175,6 +1197,7 @@ export default function ServicesPanel({
               size="lg"
               onClick={openGenerator}
               disabled={!generateGate.enabled}
+              className="hidden sm:inline-flex"
             >
               📅 Generar mes
             </Button>
@@ -1182,8 +1205,9 @@ export default function ServicesPanel({
               ref={monthEditorTriggerRef}
               variant="secondary"
               size="lg"
-              onClick={() => openMonthEditor(selectedMonths.size === 1 ? [...selectedMonths][0] : currentYM, undefined, false, { kind: "toolbar" })}
+              onClick={openMonthEditor1}
               disabled={!editTeamGate.enabled}
+              className="hidden sm:inline-flex"
             >
               Editar mes
             </Button>
@@ -1198,6 +1222,31 @@ export default function ServicesPanel({
                 <span className="text-base leading-none">+</span> Nuevo
               </Button>
             )}
+            <Menu
+              label="Más acciones de servicios"
+              align="end"
+              className="inline-block sm:hidden"
+              trigger={
+                <Button variant="secondary" size="lg" aria-label="Más acciones de servicios" className="px-3">
+                  <span aria-hidden="true" className="text-base leading-none">⋯</span>
+                </Button>
+              }
+            >
+              {hasDrafts && (
+                <MenuItem disabled={!publishGate.enabled} onSelect={() => openPublishPlan(visibleCards)}>
+                  Publicar listos ({counters.readyToPublish})
+                </MenuItem>
+              )}
+              <MenuItem disabled={!generateGate.enabled} onSelect={openGenerator}>
+                Generar mes
+              </MenuItem>
+              <MenuItem disabled={!editTeamGate.enabled} onSelect={openMonthEditor1}>
+                Editar mes
+              </MenuItem>
+              <MenuItem disabled={view !== "cards"} onSelect={() => setOverviewOpen(true)}>
+                Pantalla completa
+              </MenuItem>
+            </Menu>
           </div>
           {toolbarGateReason && (
             <p className={`font-label text-[11px] text-ink-dim text-right ${CARD_STYLE.longText}`}>
@@ -1272,7 +1321,7 @@ export default function ServicesPanel({
             <Button
               variant="secondary"
               size="sm"
-              className="ml-auto"
+              className="ml-auto hidden sm:inline-flex"
               data-services-overview-opener=""
               onClick={() => setOverviewOpen(true)}
               // Not disabled by an EMPTY filter: a reload that empties it while
@@ -1362,7 +1411,7 @@ export default function ServicesPanel({
       {/* Loading */}
       {view === "loading" && (
         <SkeletonGroup label="Cargando servicios" className={BOARD_LAYOUT}>
-          <Skeleton className="h-96 w-full" rounded="lg" />
+          <Skeleton className="h-96 w-full order-last lg:order-none" rounded="lg" />
           <div className={BOARD_CARDS}>
             {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-40 w-full" rounded="lg" />)}
           </div>
@@ -1383,21 +1432,42 @@ export default function ServicesPanel({
       {/* Board */}
       {view === "cards" && (
         <div className={BOARD_LAYOUT}>
-          {participationGate.enabled ? (
-            <ParticipationSidebar
-              roles={visibleCards.map(c => c.role) as ParticipantRole[]}
-              monthLabel={monthLabel}
-              placement="board"
-            />
-          ) : (
-            // Never compute participation from partial membership. Pinned where
-            // the chart would be, so its «Reintentar carga» stays in reach too.
-            <aside className={`rounded-xl border border-accent/20 bg-surface-ink-l40-d100-base p-3 space-y-2 self-start ${BOARD_STICKY}`}>
-              <p className="font-label text-xs uppercase tracking-widest text-accent">Participaciones</p>
-              <p className="font-body text-xs text-mono-400">{participationGate.reason}</p>
-              <Button variant="secondary" size="sm" onClick={retryLoad}>Reintentar carga</Button>
-            </aside>
-          )}
+          {/*
+            `lg:contents`: from `lg` this wrapper vanishes and the aside is the
+            grid's own first column again (its sticky top needs to be a grid
+            item, not a child of one). Below `lg` it is a block placed LAST,
+            holding the toggle and the folded chart.
+          */}
+          <div data-board-chart="" className={`order-last min-w-0 lg:order-none lg:contents ${CHART_FOLD}`}>
+            <Button
+              variant="ghost"
+              size="lg"
+              className="lg:hidden w-full !justify-between"
+              aria-expanded={chartOpenOnPhone}
+              aria-controls="services-board-chart"
+              onClick={() => setChartOpenOnPhone(v => !v)}
+            >
+              Participaciones
+              <span aria-hidden="true" className={`transition-transform duration-base ${chartOpenOnPhone ? "rotate-180" : ""}`}>▾</span>
+            </Button>
+            <div id="services-board-chart" className={`${chartOpenOnPhone ? "" : "max-lg:hidden"} lg:contents`}>
+              {participationGate.enabled ? (
+                <ParticipationSidebar
+                  roles={visibleCards.map(c => c.role) as ParticipantRole[]}
+                  monthLabel={monthLabel}
+                  placement="board"
+                />
+              ) : (
+                // Never compute participation from partial membership. Pinned where
+                // the chart would be, so its «Reintentar carga» stays in reach too.
+                <aside className={`rounded-xl border border-accent/20 bg-surface-ink-l40-d100-base p-3 space-y-2 self-start ${BOARD_STICKY}`}>
+                  <p className="font-label text-xs uppercase tracking-widest text-accent">Participaciones</p>
+                  <p className="font-body text-xs text-mono-400">{participationGate.reason}</p>
+                  <Button variant="secondary" size="sm" onClick={retryLoad}>Reintentar carga</Button>
+                </aside>
+              )}
+            </div>
+          </div>
           {/*
             The board scrolls VERTICALLY (ADR-0044, reversing R5 ruling 5's
             horizontal snap track). The cards wrap into as many 360px-minimum

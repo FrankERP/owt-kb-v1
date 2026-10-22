@@ -205,6 +205,45 @@ describe("the Servicios board", () => {
     }
   });
 
+  it("on a phone: one toolbar menu beside «+ Nuevo», and the chart folded after the cards", async () => {
+    // Measured at 390px before this: four toolbar buttons in three rows, two
+    // rows of month pills and the whole chart before the first card — ~1 300px
+    // of scroll to reach a service. jsdom applies no CSS, so this pins the
+    // classes that make the phone layout and the controls that drive it.
+    const { container } = mount();
+    await waitFor(() => expect(container.querySelectorAll("[data-card-id]").length).toBe(2));
+
+    // The once-a-month actions are desktop buttons, hidden below `sm`…
+    for (const name of [/Generar mes/, "Editar mes"]) {
+      const btn = screen.getByRole("button", { name });
+      expect(btn.className.split(/\s+/)).toEqual(expect.arrayContaining(["hidden", "sm:inline-flex"]));
+    }
+    // …and ONE menu, shown only below `sm`, carries them (plus full screen).
+    const menuTrigger = screen.getByRole("button", { name: "Más acciones de servicios" });
+    expect(menuTrigger.parentElement?.className.split(/\s+/)).toContain("sm:hidden");
+    fireEvent.click(menuTrigger);
+    const items = screen.getAllByRole("menuitem").map((i) => i.textContent?.trim());
+    expect(items).toEqual(expect.arrayContaining(["Generar mes", "Editar mes", "Pantalla completa"]));
+    fireEvent.keyDown(document, { key: "Escape" });
+    // «+ Nuevo» stays a real button at every width.
+    expect(screen.getByRole("button", { name: /Nuevo/ }).className).not.toMatch(/\bhidden\b/);
+
+    // The chart: last below `lg`, the grid's own column from `lg` (`lg:contents`
+    // dissolves the wrapper so the aside's sticky still applies to a grid item).
+    const wrap = container.querySelector("[data-board-chart]") as HTMLElement;
+    expect(wrap.className.split(/\s+/)).toEqual(expect.arrayContaining(["order-last", "lg:order-none", "lg:contents"]));
+    expect(wrap.querySelector("aside:has([data-rail-header])")).not.toBeNull();
+    // Folded by default on a phone, opened by its own toggle, never on desktop.
+    const toggle = screen.getByRole("button", { name: /Participaciones/ });
+    expect(toggle.className.split(/\s+/)).toContain("lg:hidden");
+    const fold = document.getElementById(toggle.getAttribute("aria-controls")!) as HTMLElement;
+    expect(fold.className.split(/\s+/)).toContain("max-lg:hidden");
+    expect(fold.className.split(/\s+/)).toContain("lg:contents");
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(fold.className.split(/\s+/)).not.toContain("max-lg:hidden");
+  });
+
   it("keeps the month filter multi-select, and says so with aria-pressed", async () => {
     const { container } = mount();
     await waitFor(() => expect(container.querySelectorAll("[data-card-id]").length).toBe(2));
