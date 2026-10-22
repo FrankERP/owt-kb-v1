@@ -468,7 +468,7 @@ describe("a pending pick takes over the target cell's activation", () => {
     // of the mode they were working in.
     const cells = [cell("bgv", "col-1", ["gaby"]), cell("lead", "col-2", [])];
     renderGrid(baseProps({ cells }));
-    fireEvent.click(screen.getByText("⛶ Pantalla completa"));
+    fireEvent.click(screen.getByRole("button", { name: "Pantalla completa" }));
 
     pickChipWithKeyboard(chipIn(document.body, "bgv", "col-1", "gaby"));
     fireEvent.keyDown(document, { key: "Escape" });

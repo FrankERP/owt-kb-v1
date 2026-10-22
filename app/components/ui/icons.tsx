@@ -101,3 +101,26 @@ export function MicIcon(props: IconProps) {
     </Icon>
   );
 }
+
+/**
+ * The admin's calendar (2026-10-22): `AdminRail`'s Servicios item and the
+ * Servicios toolbar's «Generar mes», which used to lead with 📅 — Apple's is a
+ * red-and-white picture, not the button's colour. Drawn once here so the toolbar
+ * cannot drift from the rail item it sits under.
+ */
+export function CalendarIcon(props: IconProps) {
+  return (
+    <Icon name="calendar" {...props}>
+      <rect x="3" y="4" width="18" height="17" rx="2" /><path d="M3 10h18M8 2v4M16 2v4" />
+    </Icon>
+  );
+}
+
+/** «Pantalla completa» — the Servicios board's and the planner's toggle (was ⛶). */
+export function ExpandIcon(props: IconProps) {
+  return (
+    <Icon name="expand" {...props}>
+      <path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3" />
+    </Icon>
+  );
+}

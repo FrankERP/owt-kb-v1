@@ -8,12 +8,12 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 317,
+    "literalRows": 316,
     "filesScanned": 513,
     "filesWithColour": 57,
     "byCategory": {
       "2": 2,
-      "4": 64,
+      "4": 63,
       "8": 99,
       "9": 10,
       "11": 8,
@@ -21,17 +21,17 @@
     },
     "byDisposition": {
       "B": 124,
-      "exempt": 53,
-      "keep": 238,
+      "exempt": 58,
+      "keep": 239,
       "C": 5,
       "D": 14
     },
-    "compositingClasses": 21,
-    "compositingSelectorOccurrences": 59,
-    "compositingClassNameOccurrences": 55,
-    "compositingRuleBodies": 51,
+    "compositingClasses": 23,
+    "compositingSelectorOccurrences": 62,
+    "compositingClassNameOccurrences": 57,
+    "compositingRuleBodies": 54,
     "lightCounterpartClasses": 14,
-    "pairs": 8,
+    "pairs": 7,
     "pairsDifferingInAlpha": 0
   },
   "literalRows": [
@@ -2299,19 +2299,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 313,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/admin/AdminRail.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "transparent",
-      "alpha": null,
-      "utility": null,
-      "carrier": null,
-      "line": 80,
+      "line": 314,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2324,6 +2312,18 @@
       "utility": null,
       "carrier": null,
       "line": 81,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/admin/AdminRail.tsx",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "transparent",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 82,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2647,7 +2647,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2610,
+      "line": 2611,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2659,7 +2659,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 3490,
+      "line": 3491,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2671,7 +2671,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 184,
+      "line": 185,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2683,7 +2683,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 339,
+      "line": 340,
       "disposition": "B",
       "reason": null
     },
@@ -2695,19 +2695,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 697,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/admin/ServiceReadinessCard.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "border-transparent",
-      "alpha": null,
-      "utility": "border",
-      "carrier": null,
-      "line": 194,
+      "line": 710,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2719,7 +2707,7 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 801,
+      "line": 784,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2731,7 +2719,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 820,
+      "line": 803,
       "disposition": "B",
       "reason": null
     },
@@ -2743,7 +2731,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 810,
+      "line": 793,
       "disposition": "B",
       "reason": null
     },
@@ -2755,7 +2743,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 830,
+      "line": 813,
       "disposition": "B",
       "reason": null
     },
@@ -2767,7 +2755,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 840,
+      "line": 823,
       "disposition": "B",
       "reason": null
     },
@@ -2779,7 +2767,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 851,
+      "line": 834,
       "disposition": "B",
       "reason": null
     },
@@ -2791,7 +2779,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 860,
+      "line": 843,
       "disposition": "B",
       "reason": null
     },
@@ -2803,7 +2791,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 869,
+      "line": 852,
       "disposition": "B",
       "reason": null
     },
@@ -3964,6 +3952,22 @@
     {
       "file": "app/brand.css",
       "kind": "selector",
+      "class": "service-card",
+      "count": 1,
+      "disposition": "exempt",
+      "reason": "No colour in any rule body — needs no light counterpart"
+    },
+    {
+      "file": "app/brand.css",
+      "kind": "selector",
+      "class": "service-card-body",
+      "count": 2,
+      "disposition": "exempt",
+      "reason": "No colour in any rule body — needs no light counterpart"
+    },
+    {
+      "file": "app/brand.css",
+      "kind": "selector",
       "class": "skeleton",
       "count": 2,
       "disposition": "exempt",
@@ -4270,6 +4274,22 @@
       "kind": "className",
       "class": "search-console",
       "count": 5,
+      "disposition": "keep",
+      "reason": "Usage site of a compositing class"
+    },
+    {
+      "file": "app/components/admin/ServiceReadinessCard.tsx",
+      "kind": "className",
+      "class": "service-card",
+      "count": 1,
+      "disposition": "keep",
+      "reason": "Usage site of a compositing class"
+    },
+    {
+      "file": "app/components/admin/ServiceReadinessCard.tsx",
+      "kind": "className",
+      "class": "service-card-body",
+      "count": 1,
       "disposition": "keep",
       "reason": "Usage site of a compositing class"
     },
@@ -4885,6 +4905,36 @@
       "ordinal": 50,
       "disposition": "exempt",
       "reason": "Rule body declares no colour"
+    },
+    {
+      "file": "app/brand.css",
+      "kind": "rule-body",
+      "classes": [
+        "service-card"
+      ],
+      "ordinal": 51,
+      "disposition": "exempt",
+      "reason": "Rule body declares no colour"
+    },
+    {
+      "file": "app/brand.css",
+      "kind": "rule-body",
+      "classes": [
+        "service-card-body"
+      ],
+      "ordinal": 52,
+      "disposition": "exempt",
+      "reason": "Rule body declares no colour"
+    },
+    {
+      "file": "app/brand.css",
+      "kind": "rule-body",
+      "classes": [
+        "service-card-body"
+      ],
+      "ordinal": 53,
+      "disposition": "exempt",
+      "reason": "Rule body declares no colour"
     }
   ],
   "pairs": [
@@ -4894,15 +4944,6 @@
       "light": "mono-500",
       "lightAlpha": null,
       "dark": "mono-400",
-      "darkAlpha": null,
-      "alphaDiffers": false
-    },
-    {
-      "file": "app/components/admin/ServiceReadinessCard.tsx",
-      "utility": "border",
-      "light": "mono-200",
-      "lightAlpha": null,
-      "dark": "mono-800",
       "darkAlpha": null,
       "alphaDiffers": false
     },

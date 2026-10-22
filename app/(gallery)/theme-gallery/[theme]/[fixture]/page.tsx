@@ -12,7 +12,7 @@
 //   - `CueDialog.tsx:235` is `fixed inset-0 z-[90]` behind `bg-scrim/[0.68]
 //     backdrop-blur-md` — ABOVE the planner's z-50, painting a blurred sheet over it.
 //   - `CueDialogProvider.tsx:86–89` sets `inert` on the wrapper holding `children`,
-//     which contains the "⛶ Pantalla completa" button — so with a dialog already open,
+//     which contains the «Pantalla completa» button — so with a dialog already open,
 //     a harness cannot click it (actionability fails on an inert element).
 //
 // Separate routes give each subject an unobstructed surface.
