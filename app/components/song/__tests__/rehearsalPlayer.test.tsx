@@ -137,7 +137,7 @@ describe("RehearsalPlayer", () => {
       const { getByRole, queryByRole, getByText } = inKey(1);
       expect(getByRole("listitem", { name: "EG 1" }).getAttribute("aria-current")).toBe("true");
       expect(queryByRole("listitem", { name: "Bass" })).toBeTruthy();
-      expect(getByText(/Tono G · hay mixes en G, Ab/)).toBeTruthy();
+      expect(getByText(/Tono G · hay mixes en G, A♭/)).toBeTruthy();
       fireEvent.click(getByRole("button", { name: "dial 1" }));
       expect(queryByRole("listitem", { name: "Bass" })).toBeNull();
       expect(getByRole("listitem", { name: "EG 1" }).getAttribute("aria-current")).toBe("true");
@@ -148,7 +148,7 @@ describe("RehearsalPlayer", () => {
     it("falls back to the nearest key and says so", () => {
       const { getByRole, getByText } = inKey(4);
       fireEvent.click(getByRole("button", { name: "dial 4" }));
-      expect(getByText(/No hay mix en B — se muestra Ab/)).toBeTruthy();
+      expect(getByText(/No hay mix en B — se muestra A♭/)).toBeTruthy();
       expect(getByRole("listitem", { name: "EG 1" })).toBeTruthy();
     });
 

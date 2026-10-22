@@ -176,17 +176,19 @@ describe("AgendaView", () => {
         }),
       ],
     });
-    expect(within(rows()[0]).getByText("⚠ 2 conflictos")).toBeTruthy();
+    expect(within(rows()[0]).getByText("2 conflictos")).toBeTruthy();
+    expect(rows()[0].querySelector('[data-icon="warning"]')).not.toBeNull();
     expect(rows()[0].getAttribute("aria-label")).toMatch(/, 2 conflictos$/);
   });
 
   it("says «conflicto» in the singular — same wording in the chip and the label — and nothing at all when there is none", () => {
     mountAgenda({ "2026-09-13": [sunday("2026-09-13", { leads: ["Ana", "Ana"] })] });
-    expect(within(rows()[0]).getByText("⚠ 1 conflicto")).toBeTruthy();
+    expect(within(rows()[0]).getByText("1 conflicto")).toBeTruthy();
     expect(rows()[0].getAttribute("aria-label")).toMatch(/, 1 conflicto$/);
     cleanup();
     mountAgenda();
-    expect(screen.queryByText(/⚠/)).toBeNull();
+    expect(screen.queryByText(/conflicto/)).toBeNull();
+    expect(document.querySelector('[data-icon="warning"]')).toBeNull();
     expect(rows()[0].getAttribute("aria-label")).not.toMatch(/conflicto/);
   });
 
@@ -292,8 +294,8 @@ describe("CalendarView host", () => {
     mountHost();
     expect(screen.getByRole("radio", { name: "Agenda" }).getAttribute("aria-checked")).toBe("true");
     expect(rows()).toHaveLength(3);
-    expect(screen.queryByText("Varios servicios")).toBeNull();
-    expect(screen.queryByText("Mié")).toBeNull();
+    expect(screen.queryByText("Especial")).toBeNull();
+    expect(screen.getAllByText("Jue")).toHaveLength(1); // the week strip's own label; no grid headers
   });
 
   it("renders the first paint at rest — no `appear` above the fold (M0b, ADR-0031)", () => {
@@ -308,9 +310,26 @@ describe("CalendarView host", () => {
     mountHost();
     fireEvent.click(screen.getByRole("radio", { name: "Mes" }));
     expect(screen.getByRole("radio", { name: "Mes" }).getAttribute("aria-checked")).toBe("true");
-    expect(screen.getByText("Varios servicios")).toBeTruthy();
-    expect(screen.getAllByText("Mié")).toHaveLength(3); // one per month of the window
+    expect(screen.getByText("Especial")).toBeTruthy(); // the legend's three dots
+    expect(screen.queryByText("Varios servicios")).toBeNull(); // a second service is a second dot, not a legend entry
+    expect(screen.getAllByText("Jue")).toHaveLength(4); // the strip's label + one column header per month of the window
     expect(rows()).toHaveLength(0);
+  });
+
+  it("ADR-0067 — the grid's selected cell keeps today's ring visible by turning it base on the accent fill", () => {
+    // 2026-09-10 is `todayStr`; give it a service so it can be selected.
+    mountHost({ ...ACTIVE, "2026-09-10": [{ day: "Domingo", date: "2026-09-10", leads: ["Ana"] }] });
+    fireEvent.click(screen.getByRole("radio", { name: "Mes" }));
+    // The grid's today cell (the strip has one too, without `aspect-square`). After the
+    // pick the day sheet opens and the page behind it goes inert, so the cell is read
+    // from the DOM rather than by role.
+    const gridToday = () => document.querySelector<HTMLButtonElement>('button.aspect-square[aria-current="date"]')!;
+    expect(gridToday().className).toContain("ring-accent/50");
+    fireEvent.click(gridToday());
+    expect(screen.getByRole("dialog", { name: "Detalle del día" })).toBeTruthy();
+    expect(gridToday().className).toContain("bg-accent");
+    expect(gridToday().className).toContain("ring-surface-base/70");
+    expect(gridToday().className).not.toContain("ring-accent/50");
   });
 
   it("retires «Lista» — the mode is Agenda or Mes", () => {

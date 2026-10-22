@@ -26,6 +26,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Fragment, useId, useState } from "react";
 import Collapse from "./ui/Collapse";
+import { WarningIcon } from "./ui/icons";
 import { findDuplicates } from "@/app/utils/agenda";
 import {
   avatarSrc,
@@ -107,7 +108,9 @@ function Section({ section, open, onToggle, myName, photos }: {
         <span className="min-w-0 flex-1">
           <span className="block font-label text-xs uppercase tracking-widest text-mono-400">
             {section.label} <span className="text-ink-dim">· {people.length}</span>
-            {dups.size > 0 && <span className="text-warning-strong"> · ⚠ {dups.size === 1 ? "repetido" : `${dups.size} repetidos`}</span>}
+            {dups.size > 0 && (
+              <span className="text-warning-strong"> · <WarningIcon size={11} className="inline-block align-[-1px]" /> {dups.size === 1 ? "repetido" : `${dups.size} repetidos`}</span>
+            )}
           </span>
           {!open && (
             // Two lines, not `truncate`: one line hid the later names (and a ⚠
@@ -185,7 +188,7 @@ function NamesLine({ section, people, myName, dups }: { section: TeamSection; pe
           <Fragment key={i}>
             {sep}
             <span className={dup ? "font-semibold text-warning-strong" : key === myName ? "font-semibold text-positive-fg" : undefined}>
-              {dup && "⚠ "}
+              {dup && <WarningIcon size={12} className="mr-1 inline-block align-[-1px]" />}
               {p.name}
             </span>
           </Fragment>
@@ -213,7 +216,7 @@ function Person({ person, myName, photos, duplicate, grouped }: { person: TeamPe
             own column instead of being cut, and `min-w-0` lets the grid item
             honour its track. */}
         <p className={`break-words font-body text-sm font-semibold leading-tight ${duplicate ? "text-warning-strong" : "text-ink"}`}>
-          {duplicate && "⚠ "}
+          {duplicate && <WarningIcon size={12} className="mr-1 inline-block align-[-1px]" />}
           {person.name}
         </p>
         {showSeat && (

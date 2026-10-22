@@ -16,6 +16,7 @@ import type { Post } from "@/app/utils/interface";
 import { usePlayer } from "@/app/context/PlayerContext";
 import { haptic } from "@/app/utils/haptics";
 import useLongPress from "./ui/useLongPress";
+import { formatKey } from "@/app/utils/formatKey";
 
 const LibraryRow = memo(function LibraryRow({
   post,
@@ -38,10 +39,12 @@ const LibraryRow = memo(function LibraryRow({
         void haptic("selection");
         openSheet(post._id);
       }}
-      aria-label={`${post.title}${post.author ? `, ${post.author}` : ""}${post.key ? `, tonalidad ${post.key}` : ""}`}
+      aria-label={`${post.title}${post.author ? `, ${post.author}` : ""}${post.key ? `, tonalidad ${formatKey(post.key)}` : ""}`}
       className="group flex min-h-[56px] w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors duration-fast ease-out-brand hover:bg-accent/[0.055] active:bg-accent/[0.08] active:scale-[0.995] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
     >
-      <span className="brand-key-dial shrink-0 font-display text-sm uppercase">{post.key || "—"}</span>
+      {/* No `uppercase`: it turned «Bb» into «BB», a different note. `formatKey` spells the
+          accidental as a symbol instead («B♭»), the one spelling every surface uses. */}
+      <span className="brand-key-dial shrink-0 font-display text-sm">{formatKey(post.key) || "—"}</span>
       <span className="min-w-0 flex-1">
         <span className="block truncate font-body text-base font-semibold text-ink transition-colors group-hover:text-accent">
           {post.title}

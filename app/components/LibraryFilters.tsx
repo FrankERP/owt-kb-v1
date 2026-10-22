@@ -8,6 +8,7 @@
 // 43 themes and 80-odd artists are not a list anyone scans. Tonalidad keeps its
 // `Select` — 15 options is a list.
 import { useMemo, useState } from "react";
+import { formatKey } from "@/app/utils/formatKey";
 import type { Tag, Author } from "@/app/utils/interface";
 import { TIPO_SLUGS, isTipoSlug, type LibraryFilters as F } from "@/app/utils/libraryIndex";
 import { normalizeText } from "@/app/utils/normalizeText";
@@ -137,7 +138,7 @@ export default function LibraryFilters({ filters, onChange, tags, authors, keys 
           <div className="grid gap-4 sm:grid-cols-2">
             <Select id="filtro-tonalidad" label="Tonalidad" value={filters.key} onChange={(e) => onChange({ ...filters, key: e.target.value })}>
               <option value="">Todas</option>
-              {keys.map((k) => <option key={k} value={k}>{k}</option>)}
+              {keys.map((k) => <option key={k} value={k}>{formatKey(k)}</option>)}
             </Select>
           </div>
           <div className="flex justify-between">

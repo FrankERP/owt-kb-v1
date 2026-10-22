@@ -1,6 +1,8 @@
 "use client";
 
 import type React from "react";
+import { formatKey } from "@/app/utils/formatKey";
+import { ExternalLinkIcon } from "./ui/icons";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { PortableText } from "next-sanity";
@@ -136,9 +138,18 @@ export default function SongSheet() {
             {sheet.author && (
               <span className="font-body text-sm text-mono-400">{sheet.author}</span>
             )}
-            {sheet.key && (
+            {/* The key the member will PLAY: opened from a setlist the chart below is
+                already transposed to `sheetPlayKey`, so the chip says that key and the
+                written one beside it as «orig.», the setlist row's own wording. Opened
+                from the library there is no service key and the written key stands. */}
+            {(sheetPlayKey || sheet.key) && (
               <span className="brand-key-dial px-3 font-display text-sm">
-                {sheet.key}
+                {formatKey(sheetPlayKey || sheet.key)}
+              </span>
+            )}
+            {sheetPlayKey && sheet.key && sheetPlayKey !== sheet.key && (
+              <span className="font-label text-[11px] px-1.5 py-0.5 rounded border border-mono-700 bg-mono-800/50 text-mono-500 leading-tight">
+                orig. {formatKey(sheet.key)}
               </span>
             )}
             {/* The sheet's tempo clicks too (F2, ruling 14) — the same pill as the
@@ -275,9 +286,9 @@ export default function SongSheet() {
                         <PDFIcon />
                       </span>
                       <span className="font-body text-sm flex-1">
-                        {pdf.title}{pdf.key ? ` — ${pdf.key}` : ""}
+                        {pdf.title}{pdf.key ? ` — ${formatKey(pdf.key)}` : ""}
                       </span>
-                      <span className="font-label text-[11px] text-mono-500 shrink-0">↗</span>
+                      <ExternalLinkIcon size={13} className="shrink-0 text-mono-500" />
                     </a>
                   ))}
                 </div>
@@ -343,7 +354,7 @@ export default function SongSheet() {
 
                             {/* Key played */}
                             <span className="font-label text-xs px-2.5 py-1 rounded-full border border-accent/40 text-accent shrink-0">
-                              {entry.play_key || sheet!.key || "—"}
+                              {formatKey(entry.play_key || sheet!.key) || "—"}
                             </span>
 
                             {/* Affordance */}
@@ -362,7 +373,8 @@ export default function SongSheet() {
                 onClick={closeSheet}
                 className="brand-search-console flex w-full items-center justify-center gap-2 py-3 font-label text-xs uppercase tracking-widest text-ink-dim transition-colors hover:border-accent/35 hover:text-accent"
               >
-                Ver página completa ↗
+                Ver página completa
+                <ExternalLinkIcon size={13} />
               </Link>
             </>
           ) : sheetError ? (
@@ -456,7 +468,7 @@ function SetlistPopover({
                   </span>
                   {song.play_key && (
                     <span className="font-label text-xs px-2 py-0.5 rounded-full border border-accent/30 text-accent/80 shrink-0">
-                      {song.play_key}
+                      {formatKey(song.play_key)}
                     </span>
                   )}
                 </button>

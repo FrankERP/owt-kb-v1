@@ -22,6 +22,7 @@ import { DISPLAY_NOTES, noteAt, rootIndex, semitonesBetween } from "@/app/utils/
 import KeyDial from "./KeyDial";
 import TempoPill from "./TempoPill";
 import { useTransposeOptional } from "./TransposeProvider";
+import { formatKey } from "@/app/utils/formatKey";
 
 // The two pills that are never controls. `min-h-[44px]` matches the dial and the
 // tempo pill so the row is flush — 2.4rem alone is 38.4px and left them short.
@@ -82,7 +83,7 @@ export default function SongHeroPills({
               keyLabel={keyLabel}
             />
           ) : (
-            <span className="brand-key-dial min-h-[44px] px-3 font-display text-sm">{keyLabel}</span>
+            <span className="brand-key-dial min-h-[44px] px-3 font-display text-sm">{formatKey(keyLabel)}</span>
           ))}
         {bpm ? (
           <TempoPill bpm={bpm} timeSig={timeSig} />
@@ -109,7 +110,7 @@ export default function SongHeroPills({
               // wrapping the visible text costs nothing.
               label: (
                 <span className="normal-case">
-                  {n}
+                  {formatKey(n)}
                   {mixRoots.has(rootIndex(n)) && (
                     // The mark for "there is a mix in this key" — a dot under the
                     // note, sized to read on a phone and not to widen the pill.
@@ -121,7 +122,7 @@ export default function SongHeroPills({
               // hint belongs on the pill that sounds the same, not the one spelled
               // the same.
               ariaLabel: [
-                nativeKey && rootIndex(n) === rootIndex(nativeKey) ? `${n} (original)` : n,
+                nativeKey && rootIndex(n) === rootIndex(nativeKey) ? `${formatKey(n)} (original)` : formatKey(n),
                 mixRoots.has(rootIndex(n)) ? "con mix de ensayo" : null,
               ].filter(Boolean).join(", "),
             }))}

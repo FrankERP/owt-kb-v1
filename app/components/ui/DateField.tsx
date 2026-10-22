@@ -7,6 +7,7 @@
 // one live consumer is the theme gallery's `ControlsFixture`.
 
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
+import { ChevronLeftIcon, ChevronRightIcon } from "./icons";
 import Button from "./Button";
 
 // 16 px on a phone, the design's size from `sm` up — see `ui/Select`'s SIZE map and
@@ -52,11 +53,11 @@ export default function DateField({
         // leave two live buttons that page the month out from under the request.
         <div className="inline-flex items-center gap-1">
           <Button variant="icon" aria-label="Mes anterior" disabled={input.disabled} onClick={() => onStep(-1)}>
-            <span aria-hidden>‹</span>
+            <ChevronLeftIcon size={16} />
           </Button>
           {field}
           <Button variant="icon" aria-label="Mes siguiente" disabled={input.disabled} onClick={() => onStep(1)}>
-            <span aria-hidden>›</span>
+            <ChevronRightIcon size={16} />
           </Button>
         </div>
       ) : (

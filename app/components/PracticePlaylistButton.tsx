@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { MicIcon, MusicNoteIcon } from "./ui/icons";
 import { themeColour } from "@/app/utils/themeColour";
 import Menu, { MenuItem } from "@/app/components/ui/Menu";
 import Button from "@/app/components/ui/Button";
@@ -153,11 +154,11 @@ export default function PracticePlaylistButton({
         }
       >
         <MenuItem onSelect={() => void go("musica")}>
-          <span className="font-label text-sm text-ink">🎵 Música</span>
+          <span className="flex items-center gap-2 font-label text-sm text-ink"><MusicNoteIcon size={14} className="text-accent" />Música</span>
           <span className="font-body text-xs text-ink-muted/70">referencia musical</span>
         </MenuItem>
         <MenuItem onSelect={() => void go("letras")}>
-          <span className="font-label text-sm text-ink">🎤 Letras</span>
+          <span className="flex items-center gap-2 font-label text-sm text-ink"><MicIcon size={14} className="text-accent" />Letras</span>
           <span className="font-body text-xs text-ink-muted/70">letra en español</span>
         </MenuItem>
       </Menu>

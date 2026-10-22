@@ -181,24 +181,31 @@ function serviceSongs(role: FeedRole, kind: "weekend" | "special"): FeedSong[] {
 export const WEEKEND_SERVICE_TIME = { saturday: "18:00", sunday: "11:00" } as const;
 
 /**
+ * The ONE rule for when a service starts on a calendar, shared by the feed and both `.ics`
+ * downloads (`/me`'s list and a `DayCardDisclosure` row) so the same service never lands at
+ * two different times depending on which button exported it (2026-10-22). A weekend role
+ * takes the standing time by `day`; a special keeps its own `time` when it is a valid
+ * `"HH:mm"`, and is all-day (`undefined`) otherwise. `kind` decides, never the label: a
+ * special whose name happens to be «Sábado» still keeps its own time.
+ */
+export function serviceStartTime(
+  kind: "weekend" | "special",
+  day: "Domingo" | "Sábado" | string,
+  time: unknown,
+): string | undefined {
+  if (kind === "special") return isServiceTime(time) ? time : undefined;
+  return day === "Sábado" ? WEEKEND_SERVICE_TIME.saturday : WEEKEND_SERVICE_TIME.sunday;
+}
+
+/**
  * One `ICSEvent` per role document that paints something (a seat filled or a song), in date
  * order. A seated member's title leads with ⭐ and their seat (`seatLabel`, `/me`'s wording); the
  * seat is decided by member ID in the query (`seated`), never by comparing names.
  */
 export function buildFeedEvents(data: FeedData, origin: string): ICSEvent[] {
-  const rows: Array<{ role: FeedRole; label: string; kind: "weekend" | "special"; weekendTime?: string }> = [
-    ...(data?.sundays ?? []).map((role) => ({
-      role,
-      label: "Domingo",
-      kind: "weekend" as const,
-      weekendTime: WEEKEND_SERVICE_TIME.sunday,
-    })),
-    ...(data?.saturdays ?? []).map((role) => ({
-      role,
-      label: "Sábado",
-      kind: "weekend" as const,
-      weekendTime: WEEKEND_SERVICE_TIME.saturday,
-    })),
+  const rows: Array<{ role: FeedRole; label: string; kind: "weekend" | "special" }> = [
+    ...(data?.sundays ?? []).map((role) => ({ role, label: "Domingo", kind: "weekend" as const })),
+    ...(data?.saturdays ?? []).map((role) => ({ role, label: "Sábado", kind: "weekend" as const })),
     ...(data?.specials ?? []).map((role) => ({
       role,
       label: role?.service_name?.replace(/\s+/g, " ").trim() || SPECIAL_SERVICE_FALLBACK,
@@ -207,7 +214,7 @@ export function buildFeedEvents(data: FeedData, origin: string): ICSEvent[] {
   ];
 
   const events: Array<ICSEvent & { sortTime: string }> = [];
-  for (const { role, label, kind, weekendTime } of rows) {
+  for (const { role, label, kind } of rows) {
     if (!role?._id) continue;
     const date = serviceDayKey(role.date);
     if (!date) continue;
@@ -236,7 +243,7 @@ export function buildFeedEvents(data: FeedData, origin: string): ICSEvent[] {
 
     // A special carries its own time (all-day when it has none or a malformed one); a weekend
     // role stores none, so it takes the team's standing start time.
-    const time = kind === "special" ? (isServiceTime(role.time) ? role.time : undefined) : weekendTime;
+    const time = serviceStartTime(kind, label, role.time);
     events.push({
       uid: role._id,
       date,
