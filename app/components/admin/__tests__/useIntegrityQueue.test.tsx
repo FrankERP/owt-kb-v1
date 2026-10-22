@@ -325,11 +325,14 @@ describe("IntegrityQueuePanel renders the queue it is handed", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("starts collapsed when the queue is proven clean", () => {
-    panel("clean");
-    expect(screen.getByRole("button", { name: /Integridad de datos/ }).getAttribute("aria-expanded")).toBe(
-      "false",
-    );
+  it("is one status line, not a section, when the queue is proven clean (bloque 4)", () => {
+    // A clean queue used to be a collapsed section the admin had to open to
+    // learn nothing was wrong. Now the panel says so in one line under the
+    // board heading, with nothing to expand.
+    const { container } = panel("clean");
+    expect(container.querySelector('[data-integrity-compact="clean"]')).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Integridad de datos/ })).toBeNull();
+    expect(screen.getByRole("status").textContent).toContain("sin problemas de integridad");
   });
 
   it("starts open when there is something to say, and stays togglable", () => {
@@ -352,7 +355,7 @@ describe("IntegrityQueuePanel renders the queue it is handed", () => {
     // `Button`'s BASE is `justify-center` + `uppercase tracking-widest`: without
     // the `!` and the two spans' own case/tracking, adopting the house control
     // centred the title and shouted the summary sentence.
-    const { container } = panel("clean");
+    const { container } = panel("issues", ISSUES);
     const summary = container.querySelector("[data-integrity-summary]");
     expect(summary?.className).toContain("normal-case");
     expect(summary?.className).toContain("tracking-normal");

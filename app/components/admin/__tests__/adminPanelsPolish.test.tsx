@@ -252,6 +252,53 @@ describe("Integridad de datos", () => {
       proposals: EMPTY_PROPOSALS,
     });
 
+  it("a clean inventory is ONE line (bloque 4): the title, the summary and «Recargar», no section", () => {
+    const reload = vi.fn();
+    const { container } = render(
+      <MotionProvider>
+        <IntegrityQueuePanel queue={queueFor([])} tone="clean" sources={SOURCES} reload={reload} />
+      </MotionProvider>,
+    );
+    const line = container.querySelector('[data-integrity-compact="clean"]') as HTMLElement;
+    expect(line).not.toBeNull();
+    expect(line.textContent).toContain("Integridad de datos");
+    expect(line.textContent).toContain("sin problemas de integridad");
+    expect(container.querySelector("section")).toBeNull();
+    expect(screen.queryByRole("button", { name: /expanded|▸/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Recargar" }));
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it("the first load is «comprobando», never a flash of the full panel with «?»", () => {
+    const loadingSources = { roleTargets: "loading", setlistTargets: "loading", proposals: "loading" } as const;
+    const queue = buildIntegrityQueue({ sources: loadingSources, cards: [], roles: null, setlists: null, proposals: null });
+    const { container } = render(
+      <MotionProvider>
+        <IntegrityQueuePanel queue={queue} tone="unknown" loading sources={loadingSources} reload={vi.fn()} />
+      </MotionProvider>,
+    );
+    const line = container.querySelector('[data-integrity-compact="checking"]') as HTMLElement;
+    expect(line).not.toBeNull();
+    expect(line.textContent).toContain("comprobando");
+    expect(container.querySelector("section")).toBeNull();
+    expect(screen.queryByText("?")).toBeNull();
+    // Nothing to reload while everything is already in flight.
+    expect(screen.queryByRole("button", { name: "Recargar" })).toBeNull();
+  });
+
+  it("an inventory that settled unproven keeps the full section", () => {
+    const failed = { roleTargets: "error", setlistTargets: "ready", proposals: "ready" } as const;
+    const queue = buildIntegrityQueue({ sources: failed, cards: [], roles: null, setlists: EMPTY_SETLISTS, proposals: EMPTY_PROPOSALS });
+    const { container } = render(
+      <MotionProvider>
+        <IntegrityQueuePanel queue={queue} tone="unknown" loading={false} sources={failed} reload={vi.fn()} />
+      </MotionProvider>,
+    );
+    expect(container.querySelector("section")).not.toBeNull();
+    expect(container.querySelector("[data-integrity-compact]")).toBeNull();
+    expect(screen.getByText("?")).toBeTruthy();
+  });
+
   it("lets a resolved entry EXIT instead of blinking out of the list", async () => {
     const both = queueFor(["drafts.role-y", "drafts.role-z"]);
     const one = queueFor(["drafts.role-y"]);

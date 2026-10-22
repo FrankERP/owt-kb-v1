@@ -15,6 +15,16 @@
 //    may be incomplete and offers a per-domain retry;
 //  - is keyed by explicit document/draft ids, so an `IntegrityIssueTarget` can
 //    focus an entry by id (load failure and not-found are distinct outcomes).
+//
+// Since 2026-10-22 (diseño para admins, bloque 4) it has TWO shapes. A clean
+// inventory is one quiet line under the board's heading — the full section with
+// its disclosure, badge and «Recargar» button said «OK» in a box on every visit,
+// above the thing the admin came for. The section renders only when the queue has
+// something to say (issues, or an inventory that could not be proven clean). The
+// first load is not «unknown» either: while every domain is still in flight the
+// line says «comprobando», so a page never opens on a flash of the full panel
+// that then folds away. An explicit-id target arriving on the clean line still
+// resolves (not found, or a failed load) and says so under the line.
 
 import { useEffect, useRef, useState } from "react";
 
@@ -55,6 +65,8 @@ export interface IntegrityQueuePanelProps {
   queue: IntegrityQueue;
   /** The queue's display tone; it decides whether the disclosure starts open. */
   tone: IntegrityTone;
+  /** True while any domain is in flight (`useIntegrityQueue`'s): the first load reads «comprobando», never «?». */
+  loading?: boolean;
   /** The per-domain load states, for explicit-id focus resolution. */
   sources: IntegritySourceStates;
   /** Re-runs the three inventories. */
@@ -68,6 +80,7 @@ export interface IntegrityQueuePanelProps {
 export default function IntegrityQueuePanel({
   queue,
   tone,
+  loading = false,
   sources,
   reload,
   target = null,
@@ -135,12 +148,44 @@ export default function IntegrityQueuePanel({
     el.focus({ preventScroll: true });
   }, [focusKeys, open, queue]);
 
+  // The quiet shape: proven clean, or the very first load (nothing settled yet).
+  const checking = tone === "unknown" && loading;
+  if (tone === "clean" || checking) {
+    return (
+      <div data-integrity-compact={checking ? "checking" : "clean"} className="min-w-0">
+        <p
+          role="status"
+          className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-body text-xs text-mono-400"
+        >
+          <span aria-hidden="true" className={checking ? "text-mono-500" : "text-positive-strong"}>
+            {checking ? "…" : "✓"}
+          </span>
+          <span id="integrity-queue-title" className="font-label uppercase tracking-widest text-mono-500">
+            {INTEGRITY_QUEUE_TITLE}
+          </span>
+          <span data-integrity-summary="">
+            {checking ? "comprobando" : integrityQueueSummary(queue).toLowerCase()}
+          </span>
+          {!checking && (
+            <Button variant="ghost" size="sm" onClick={reload} className="-my-1">
+              Recargar
+            </Button>
+          )}
+        </p>
+        {notice && (
+          <p role="status" className="mt-2 rounded-lg border border-accent/25 bg-accent/5 px-3 py-2 font-body text-xs text-accent">
+            {notice}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  // `clean` returned above: what is left is a queue with something to say.
   const toneStyle =
-    tone === "clean"
-      ? "border-positive-deep/25 text-positive-strong"
-      : tone === "unknown"
-        ? "border-recency-fg/30 text-recency-strong"
-        : "border-negative-strong/30 text-negative-fg";
+    tone === "unknown"
+      ? "border-recency-fg/30 text-recency-strong"
+      : "border-negative-strong/30 text-negative-fg";
 
   return (
     <section
@@ -185,7 +230,7 @@ export default function IntegrityQueuePanel({
         <span
           className={`shrink-0 rounded-full border px-2 py-0.5 font-label text-[11px] uppercase tracking-widest ${toneStyle}`}
         >
-          {tone === "clean" ? "OK" : tone === "unknown" ? "?" : queue.count}
+          {tone === "unknown" ? "?" : queue.count}
         </span>
         <Button variant="secondary" size="lg" onClick={reload} className="shrink-0">
           Recargar
