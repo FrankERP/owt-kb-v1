@@ -273,7 +273,7 @@ each one owns, and its rules) and `docs/UTILITIES_AND_COMPONENTS.md`. Most are "
   `serviceLabel`/`serviceIdentity`, `findDuplicates`/`serviceConflicts`,
   `daysUntil`/`formatCountdown`, `MEMBER_TYPE_LABEL`, `isWorshipNight`, `songLeads.ts`
   (`sortedLeadIds` must agree byte for byte on the queue and flush sides), `transpose.ts`,
-  `practice.ts`, `rehearsalMixes.ts`, `themeColour`.
+  `practice.ts`, `rehearsalMixes.ts`, `rehearsalQueue.ts` (the setlist run), `themeColour`.
 - **Planner/solver:** `fillSpecialGroup`/`orderGroup`, `collectPins`/`pinRefusal`/
   `pinHandshakeHolds`, `planClear`, `upcomingMonthPills`/`addMonths`, `trailingSaturday`
   (ADR-0048), `rolesOfPattern`/`rolesOfPatternV3` (`patternRolesSync`/`patternRolesV3Sync`

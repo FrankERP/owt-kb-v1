@@ -19,6 +19,8 @@ export default function AudioTransport({
   onToggle,
   onSeek,
   onClose,
+  queue,
+  onSkip,
 }: {
   track: AudioTrack;
   isPlaying: boolean;
@@ -28,9 +30,22 @@ export default function AudioTransport({
   onToggle: () => void;
   onSeek: (fraction: number) => void;
   onClose: () => void;
+  /** Position in a run («Ensayar el setlist»); absent = a single track. */
+  queue?: { index: number; total: number } | null;
+  onSkip?: (delta: 1 | -1) => void;
 }) {
+  const run = queue && queue.total > 1 && onSkip ? queue : null;
   return (
     <div className="max-w-7xl mx-auto flex items-center gap-3 px-4 py-3">
+      {run && (
+        <button
+          onClick={() => onSkip!(-1)}
+          className={SKIP_CLASS}
+          aria-label="Canción anterior"
+        >
+          <SkipIcon direction="back" />
+        </button>
+      )}
       <button
         onClick={onToggle}
         className="w-11 h-11 rounded-full bg-accent/15 border border-accent/40 flex items-center justify-center text-accent shrink-0 hover:bg-accent/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised-alt active:scale-95 transition-[background-color,transform] duration-fast ease-out-brand"
@@ -38,6 +53,16 @@ export default function AudioTransport({
       >
         <PlayPauseGlyph playing={isPlaying} size={18} />
       </button>
+      {run && (
+        <button
+          onClick={() => onSkip!(1)}
+          disabled={run.index >= run.total - 1}
+          className={SKIP_CLASS}
+          aria-label="Siguiente canción"
+        >
+          <SkipIcon direction="forward" />
+        </button>
+      )}
 
       <div className="min-w-0 flex-1">
         <div className="mb-2 flex items-baseline gap-2">
@@ -45,6 +70,12 @@ export default function AudioTransport({
           <span className="max-w-[8rem] shrink-0 truncate font-label text-[11px] uppercase tracking-widest text-mono-500">{track.title}</span>
           {track.tone && (
             <span className="shrink-0 font-label text-[11px] text-accent/70">{track.tone}</span>
+          )}
+          {run && (
+            <span className="ml-auto shrink-0 font-label text-[11px] tabular-nums text-mono-500">
+              <span aria-hidden>{run.index + 1}/{run.total}</span>
+              <span className="sr-only">Canción {run.index + 1} de {run.total}</span>
+            </span>
           )}
         </div>
 
@@ -109,6 +140,19 @@ export default function AudioTransport({
         <CloseIcon />
       </button>
     </div>
+  );
+}
+
+const SKIP_CLASS =
+  "-mx-1 shrink-0 rounded-lg p-2 text-mono-500 transition-colors hover:bg-surface-lift/5 hover:text-accent disabled:opacity-30 disabled:pointer-events-none focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60";
+
+function SkipIcon({ direction }: { direction: "back" | "forward" }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      {direction === "back"
+        ? <><polygon points="19 20 9 12 19 4 19 20" /><line x1="5" y1="19" x2="5" y2="5" /></>
+        : <><polygon points="5 4 15 12 5 20 5 4" /><line x1="19" y1="5" x2="19" y2="19" /></>}
+    </svg>
   );
 }
 

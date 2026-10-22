@@ -61,6 +61,8 @@ export default function SongSheet() {
     getAudio,
     audioReady,
     player,
+    queue,
+    skip,
   } = usePlayer();
   const isOpen = !!(sheet || sheetLoading || sheetError);
   // No control in the meta row is a natural focus anchor (it's text and pills,
@@ -266,6 +268,8 @@ export default function SongSheet() {
                     onToggle={togglePlay}
                     onSeek={seek}
                     onClose={() => closePlayer(focusAnchorRef.current)}
+                    queue={queue ? { index: queue.index, total: queue.tracks.length } : null}
+                    onSkip={skip}
                   />
                 </div>
               )}

@@ -83,7 +83,7 @@ export function DownloadIcon(props: IconProps) {
   );
 }
 
-/** A song's music (the YouTube reference) — the «Ensayar» menu's first choice. */
+/** A song's music — the «Ensayar» menu's «Banda completa» (the multitracks). */
 export function MusicNoteIcon(props: IconProps) {
   return (
     <Icon name="music-note" {...props}>
@@ -92,7 +92,7 @@ export function MusicNoteIcon(props: IconProps) {
   );
 }
 
-/** Lyrics (the sung version) — the «Ensayar» menu's second choice. */
+/** Lyrics (the sung version) — the «Ensayar» menu's «Video con letra». */
 export function MicIcon(props: IconProps) {
   return (
     <Icon name="mic" {...props}>
