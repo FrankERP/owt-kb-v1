@@ -211,7 +211,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 407,
+      "line": 417,
       "disposition": "B",
       "reason": null
     },
@@ -3103,7 +3103,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 180,
+      "line": 187,
       "disposition": "B",
       "reason": null
     },
@@ -3115,7 +3115,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 180,
+      "line": 187,
       "disposition": "B",
       "reason": null
     },
@@ -3127,7 +3127,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 422,
+      "line": 488,
       "disposition": "B",
       "reason": null
     },
@@ -3139,7 +3139,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 431,
+      "line": 497,
       "disposition": "B",
       "reason": null
     },
@@ -3259,7 +3259,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 215,
+      "line": 216,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3271,7 +3271,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 197,
+      "line": 198,
       "disposition": "B",
       "reason": null
     },
