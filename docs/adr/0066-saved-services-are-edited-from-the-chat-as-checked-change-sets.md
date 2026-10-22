@@ -59,6 +59,13 @@ Plan: `docs/superpowers/plans/2026-10-21-owt-mcp-admin-parity-f1.md` (S2 approve
   MAC is `mcp-service-change|` over the canonical JSON of `{service, baseRev, target, diff}`.
 - **«Cuenta para equidad» in a past CDMX month is refused on the server (F7)**; the planner's Switch
   is client-only. **No delete (F8).**
+- **The arguments travel in the text (found in the live proof, 2026-10-22).** The Claude app hands
+  the model only the TEXT of a tool answer; `structuredContent` goes to the card. The first release
+  put the change sets only in `structuredContent`, so the model could check but never save. The
+  model-visible check now ends its text with one line, `Argumentos para save_service_edits (pásalos
+  tal cual): {month, changes}` (or `copy_instruments`'s `{month, from, to, lines}`); the card's twin
+  leaves it out and the card hides it. Any future tool whose output the model must pass on puts it in
+  the text, as `solve_month` does with its handle.
 - **The card never writes.** Its saved-month mode (`useStoredEditor.tsx`) hands the checked change
   sets to the chat; Claude calls `save_service_edits`, so the Claude app asks first.
 - **`create_service`** is idempotent by construction: `creationRequestId` = a hash of the payload

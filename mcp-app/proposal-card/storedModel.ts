@@ -43,6 +43,17 @@ export interface StoredCheckView {
   candidates: Candidate[] | null;
 }
 
+/**
+ * The argument lines a saved-month check adds to its TEXT for the model (which never sees
+ * `structuredContent`): the card reads the same data structured, so it hides them. Mirrors
+ * `SAVE_ARGS_PREFIX`/`COPY_ARGS_PREFIX` in `app/components/admin/v3Copy.ts`.
+ */
+export const ARGS_LINE_PREFIXES = [
+  "Argumentos para save_service_edits (pásalos tal cual):",
+  "Argumentos para copy_instruments (pásalos tal cual):",
+] as const;
+const isArgsLine = (l: string) => ARGS_LINE_PREFIXES.some((p) => l.startsWith(p));
+
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
@@ -89,7 +100,7 @@ export function storedCheckViewOf(result: { content?: unknown; structuredContent
     ok: !result?.isError && s.ok === true,
     month: str(s.month),
     board,
-    lines: textLines(result?.content),
+    lines: textLines(result?.content).filter((l) => !isArgsLine(l)),
     edits: objects(s.edits).map(editOf).filter((e): e is StoredEdit => e !== null),
     changes: objects(s.changes)
       .filter((c) => typeof c.service === "string")

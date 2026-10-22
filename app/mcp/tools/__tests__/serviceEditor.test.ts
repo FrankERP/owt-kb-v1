@@ -7,6 +7,7 @@ vi.mock("@/sanity/env", () => ({ apiVersion: "2024-07-23", dataset: "test", proj
 
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import { PRINCIPAL, textOf } from "./monthToolFixtures";
+import { SAVE_ARGS_PREFIX } from "@/app/components/admin/v3Copy";
 import { MONTH, NOVEMBER, serviceWorld, storedRow, type ServiceWorld } from "./serviceEditorFixtures";
 import {
   SAVE_SERVICE_EDITS_INPUT,
@@ -18,6 +19,7 @@ import {
 } from "../serviceEditor";
 
 type Changes = SaveServiceEditsArgs["changes"];
+const MOVE_ANA_CHECK = [{ op: "move" as const, from: { service: "sun8", seat: "BGV", member: "Ana" }, to: { service: "sun15", seat: "BGV" } }];
 const sc = (out: CallToolResult) => out.structuredContent as Record<string, unknown>;
 const changesOf = (out: CallToolResult) => sc(out).changes as Changes;
 const statuses = (out: CallToolResult) => Object.fromEntries((sc(out).services as Array<{ service: string; status: string }>).map((s) => [s.service, s.status]));
@@ -43,6 +45,22 @@ describe("check_service_edits (the chat)", () => {
     expect(changes[0].baseRev).toBe("sun15-r1");
     expect(w.deps.editRole).not.toHaveBeenCalled();
     expect(textOf(out)).toContain("save_service_edits");
+  });
+
+  it("the save's arguments ride in the TEXT (the model never sees structuredContent), and saving from the text alone works", async () => {
+    const w = serviceWorld();
+    const out = await check(w, MOVE_ANA_CHECK);
+    const last = textOf(out).split("\n").at(-1)!;
+    expect(last.startsWith(SAVE_ARGS_PREFIX)).toBe(true);
+    const args = JSON.parse(last.slice(SAVE_ARGS_PREFIX.length)) as SaveServiceEditsArgs;
+    expect(args).toEqual({ month: MONTH, changes: changesOf(out) });
+    const saved = await saveServiceEditsResult(args, PRINCIPAL, w.deps);
+    expect(statuses(saved)).toEqual({ sun8: "saved", sun15: "saved" });
+    // The card's twin keeps its text free of them: the card reads the structured answer.
+    const appEdits = [{ op: "place" as const, service: "sun15", row: "bgv", member: w.tok("m-carla") }];
+    const app = await checkServiceEditsAppResult({ month: MONTH, edits: appEdits }, PRINCIPAL, w.deps);
+    expect(changesOf(app)).toHaveLength(1);
+    expect(textOf(app)).not.toContain(SAVE_ARGS_PREFIX);
   });
 
   it("a move between two services is one group, saved back to back", async () => {

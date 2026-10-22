@@ -1,6 +1,7 @@
 // Admin parity phase 1, S3 (ADR-0066): `copy_instruments` — checked as `copy` in either check, then
 // written through `/admin`'s own copy writer (`copyInstrumentsCommit.ts`) — over November 2026's
 // stored services (`serviceEditorFixtures.ts`).
+import { COPY_ARGS_PREFIX } from "@/app/components/admin/v3Copy";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
@@ -42,7 +43,10 @@ describe("check_service_edits with copy", () => {
       to: "sun8",
       lines: ["Copiar los instrumentos de domingo 1 nov a domingo 8 nov (reemplaza los que tiene domingo 8 nov):", "domingo 8 nov · Bass: Tomás"],
     });
-    expect(textOf(out)).toContain("copy_instruments");
+    // The model sees only the text: the copy's arguments are its last line, the same as `copy`.
+    const last = textOf(out).split("\n").at(-1)!;
+    expect(last.startsWith(COPY_ARGS_PREFIX)).toBe(true);
+    expect(JSON.parse(last.slice(COPY_ARGS_PREFIX.length))).toEqual(copyOf(out));
     expect(w.deps.copyInstruments).not.toHaveBeenCalled();
     expect(w.deps.editRole).not.toHaveBeenCalled();
   });

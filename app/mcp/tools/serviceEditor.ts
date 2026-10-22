@@ -861,6 +861,10 @@ async function checkMonth(
     ...songLeadLines(ctx, board),
     ...(check ? monthCheckLines(check) : []),
   ];
+  // What save_service_edits takes, as is (F3) — in the structured answer for the card, and in the
+  // text for the model, which never sees `structuredContent`. None when the save would refuse anyway.
+  const wire = changes.map((c) => ({ service: c.service, baseRev: c.baseRev, target: c.target, diff: c.diff, mac: c.mac, unit: c.unit, lines: c.lines, ...(c.waivers.length ? { waivers: c.waivers } : {}) }));
+  if (!options.app && wire.length && !unconfirmed.length) lines.push(S.saveArgs(JSON.stringify({ month: ctx.month, changes: wire })));
   return answer(false, lines, {
     ...head,
     board: boardView(board, ctx.namer),
@@ -870,8 +874,7 @@ async function checkMonth(
       placed: v.placed.map((p) => ({ service: p.service, row: p.row, member: ctx.namer.tokenOf(p.member), unavailable: p.unavailable })),
       forced: v.forced.length > 0,
     })),
-    // What save_service_edits takes, as is (F3).
-    changes: changes.map((c) => ({ service: c.service, baseRev: c.baseRev, target: c.target, diff: c.diff, mac: c.mac, unit: c.unit, lines: c.lines, ...(c.waivers.length ? { waivers: c.waivers } : {}) })),
+    changes: wire,
     groups,
     ...(tooBig.length ? { maxGroup: MAX_GROUP } : {}),
     ...(unconfirmed.length ? { needsCard: true } : {}),
@@ -986,17 +989,19 @@ async function checkCopy(ctx: MonthContext, copy: { from: string; to: string }, 
   const unconfirmed = judged.added.map((f) => E.needsConfirm(f.sentence, findingView(judged.board, f, ctx.namer).where));
   const lines = copyLines({ board: ctx.board, roleId: plan.to, fromLabel: plan.fromLabel, target: plan.target, judged, nameOf: ctx.namer.nameOf });
   const check = await runStoredMonthCheck(ctx, judged.board, deps);
+  const args = unconfirmed.length ? null : { month: ctx.month, from: plan.from._id, to: plan.to, lines };
   return answer(false, [
     ...(unconfirmed.length ? [] : [S.copy.checkHead]),
     ...lines,
     ...(unconfirmed.length ? [S.copy.needsCard, ...unconfirmed] : []),
     ...baselineLines(judged),
     ...monthCheckLines(check),
+    ...(args ? [S.copy.args(JSON.stringify(args))] : []),
   ], {
     ...head,
     board: boardView(judged.board, ctx.namer),
-    // What copy_instruments takes, as is. None when the chat would be refused anyway.
-    copy: unconfirmed.length ? null : { month: ctx.month, from: plan.from._id, to: plan.to, lines },
+    // What copy_instruments takes, as is (also the text's last line). None when the chat would be refused anyway.
+    copy: args,
     ...(unconfirmed.length ? { needsCard: true } : {}),
     monthCheck: check,
   });

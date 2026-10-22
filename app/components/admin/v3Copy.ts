@@ -673,6 +673,14 @@ export const V3_EDITOR_LINES = {
  * `check_service_edits_app` and `save_service_edits`. The change lines are what the Claude app's
  * permission prompt shows before anything is written (F4), so they name people and seats in words.
  */
+/**
+ * The argument lines of a saved-month check (ADR-0066): the Claude app hands the model only a tool
+ * answer's TEXT, so the change sets ride in the text too. The card hides lines with these prefixes
+ * (`mcp-app/proposal-card/storedModel.ts` mirrors them; `storedMonthCard.test.tsx` pins the pair).
+ */
+export const SAVE_ARGS_PREFIX = "Argumentos para save_service_edits (pásalos tal cual):";
+export const COPY_ARGS_PREFIX = "Argumentos para copy_instruments (pásalos tal cual):";
+
 export const V3_STORED_EDITOR_LINES = {
   // The change lines (F4)
   seatChange: (service: string, seat: string, enters: readonly string[], leaves: readonly string[]) => {
@@ -702,7 +710,9 @@ export const V3_STORED_EDITOR_LINES = {
   noChanges: "No hay cambios: así está guardado.",
   readOnlyMonth: "Este mes no se puede editar desde el chat ahora: el inventario de servicios no cuadra. Revisa la cola de integridad (get_integrity_queue) o edítalo en /admin.",
   untranslated: (n: number) => `${n === 1 ? "Un servicio" : `${n} servicios`} de este mes no se pueden leer como el planificador los lee; no aparecen aquí.`,
-  checkHead: (n: number) => `${n === 1 ? "Un servicio cambia" : `${n} servicios cambian`}. Para guardar, llama save_service_edits con estos cambios tal cual (changes):`,
+  checkHead: (n: number) => `${n === 1 ? "Un servicio cambia" : `${n} servicios cambian`}. Para guardar, llama save_service_edits con los argumentos de la última línea, tal cual:`,
+  /** The model sees only the text of a tool answer, never `structuredContent`: the save's arguments travel here. */
+  saveArgs: (json: string) => `${SAVE_ARGS_PREFIX} ${json}`,
   groupNote: (labels: readonly string[]) => `${joinEs(labels)} se guardan juntos, uno tras otro (alguien sale de uno y entra a otro).`,
   groupTooBig: (n: number, max: number) =>
     `Estos cambios ligan ${n} servicios (gente que sale de uno y entra a otro); se pueden guardar como máximo ${max} ligados por llamada. Guarda esos cambios en partes: en cada llamada, los cambios que comparten el mismo unit.`,
@@ -760,7 +770,8 @@ export const V3_STORED_EDITOR_LINES = {
     noSource: "No encuentro el servicio de origen.",
     sameService: "El origen y el destino son el mismo servicio.",
     sourceUnreadable: "El servicio de origen no se puede leer como lo lee el planificador; copia desde /admin.",
-    checkHead: "Para copiarlos, llama copy_instruments con copy tal cual (from, to y lines):",
+    checkHead: "Para copiarlos, llama copy_instruments con los argumentos de la última línea, tal cual:",
+    args: (json: string) => `${COPY_ARGS_PREFIX} ${json}`,
     needsCard: `Esta copia rompería una regla por lugar, y una copia no se fuerza desde el chat: hazla en /admin («Copiar instrumentos») o cambia antes esos lugares. ${NO_WRITE_THIS_CALL}`,
     notTheChecked: (service: string) =>
       `La copia a ${service} no es la que se revisó (o cambiaron los instrumentos, los nombres o las reglas). ${NO_WRITE_THIS_CALL} Revisa de nuevo con check_service_edits.`,
