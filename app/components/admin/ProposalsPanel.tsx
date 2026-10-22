@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/app/components/ui/Toast";
+import Button from "@/app/components/ui/Button";
 import SegmentedControl from "@/app/components/ui/SegmentedControl";
 import Skeleton, { SkeletonGroup } from "@/app/components/ui/Skeleton";
 import ProposalThread, { type ThreadMessage } from "@/app/components/ProposalThread";
@@ -657,9 +658,21 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
   );
 
   const pendingCount = proposals.filter(p => p.status === "pending").length;
+  const reviewCount = proposals.filter(p => p.status === "changes_requested").length;
+  const approvedCount = proposals.filter(p => p.status === "approved").length;
 
   return (
     <div className="space-y-6">
+      {/* The heading every other tab has (Servicios, Disponibilidad, Canciones,
+          Miembros): the title, then the counts that explain the filter below. */}
+      <div>
+        <h1 className="font-display text-2xl uppercase tracking-wide">Propuestas</h1>
+        {!loading && !error && (
+          <p className="mt-0.5 font-label text-xs uppercase tracking-widest text-mono-500">
+            {`${pendingCount} ${pendingCount === 1 ? "pendiente" : "pendientes"} · ${reviewCount} en revisión · ${approvedCount} ${approvedCount === 1 ? "aprobada" : "aprobadas"}`}
+          </p>
+        )}
+      </div>
       <SegmentedControl
         label="Filtrar propuestas"
         tone="filled"
@@ -731,6 +744,15 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
           <p className="font-body text-xs text-mono-500">
             Los líderes proponen setlists desde su perfil; aparecerán aquí para revisión.
           </p>
+          {/* An empty «Pendientes» (the tab's landing filter) is the common case
+              on a quiet week; a way to the history keeps it from being a dead end. */}
+          {filter === "pending" && approvedCount > 0 && (
+            <div className="pt-3">
+              <Button variant="secondary" size="sm" onClick={() => setFilter("approved")}>
+                Ver aprobadas
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
