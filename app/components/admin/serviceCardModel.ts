@@ -84,6 +84,7 @@ import {
 } from "./serviceIntegrityQueue";
 import type { IntegrityIssueTarget, ProposalHandoffInput } from "./proposalHandoff";
 import { unreadyMessage } from "./serviceSourceState";
+import { isServiceTime } from "@/app/utils/serviceTime";
 
 function nonEmptyString(v: unknown): v is string {
   return typeof v === "string" && v.length > 0;
@@ -193,59 +194,22 @@ export const SERVICE_LABEL: Record<ServiceType, string> = {
   special_role: "Especial",
 };
 
-export const SERVICE_BADGE: Record<ServiceType, string> = {
-  sunday_role: "bg-availability-fg/15 text-availability-strong border border-availability-fg/30",
-  saturday_role: "bg-recency-fg/15 text-recency-strong border border-recency-strong/30",
-  special_role: "bg-info-fg/15 text-info-fg border border-info-fg/30",
-};
-
-export const CARD_HEADER: Record<ServiceType, string> = {
-  sunday_role: "bg-surface-sunken border-accent",
-  saturday_role: "bg-warning-surface-deep border-warning-fg",
-  special_role: "bg-info-surface-deep border-info-fg",
-};
-
-export const CARD_BORDER: Record<ServiceType, string> = {
-  sunday_role: "border-accent",
-  saturday_role: "border-warning-fg",
-  special_role: "border-info-fg",
-};
-
-export const CARD_ACCENT: Record<ServiceType, string> = {
-  sunday_role: "text-accent",
-  saturday_role: "text-warning-fg",
-  special_role: "text-info-fg",
-};
-
-export const CARD_ACCENT_MUTED: Record<ServiceType, string> = {
-  sunday_role: "text-accent/70",
-  saturday_role: "text-warning-fg/80",
-  special_role: "text-info-fg/80",
-};
-
-export const CARD_DIVIDER: Record<ServiceType, string> = {
-  sunday_role: "bg-accent/20",
-  saturday_role: "bg-warning-fg/20",
-  special_role: "bg-info-fg/20",
-};
-
 /**
- * The accent as a TOKEN NAME, not a colour.
+ * The ONE place a service card takes its day colour: a 3 px rail down its left
+ * edge, in the agenda's tone vocabulary (ADR-0059 — `TONE_RAIL` in
+ * `app/utils/agenda.ts` is the member-facing twin, and `serviceCardModel.test.ts`
+ * pins the two maps equal so a day never has two colours).
  *
- * This was `CARD_ACCENT_HEX`, three bare hex strings that consumers turned into
- * colours by concatenating a two-digit alpha: `` `${hex}55` ``. A token cannot be
- * appended to — `rgb(var(--accent-rgb) / 0.2)55` is not a valid <color> and the
- * browser drops the whole declaration — so consumers now pass these to
- * `themeColour()`, which always returns a finished colour.
- *
- * Exported from here and consumed in `ServiceReadinessCard`, so the two files
- * migrate together: whichever moved second would have been handing the other a
- * value it could no longer use.
+ * Until 2026-10-22 the admin card also tinted its header ground, its border, every
+ * section label, the song keys, the medley spine and the instrument chips
+ * (`CARD_HEADER`, `CARD_BORDER`, `CARD_ACCENT*`, `CARD_DIVIDER`, `SERVICE_BADGE`).
+ * Saturday then wore the same amber the alerts use and read as a warning. Those
+ * tables are gone on purpose; the rest of the card is neutral.
  */
-export const CARD_ACCENT_VAR: Record<ServiceType, string> = {
-  sunday_role: "--accent-rgb",
-  saturday_role: "--warning-fg-rgb",
-  special_role: "--info-fg-rgb",
+export const CARD_RAIL: Record<ServiceType, string> = {
+  sunday_role: "bg-accent",
+  saturday_role: "bg-warning-fg",
+  special_role: "bg-info-fg",
 };
 
 export const SECTION_LABEL: Record<string, string> = {
@@ -283,8 +247,13 @@ export const CARD_STYLE = {
   longText: "min-w-0 [overflow-wrap:anywhere]",
   /** The kebab menu: never wider than the viewport. */
   menu: "w-[min(13rem,calc(100vw-2.5rem))] min-w-0",
-  /** A ≥44px touch target for the one primary action. */
-  primaryAction: "min-h-[44px] w-full min-w-0",
+  /**
+   * A ≥44px touch target for the one primary action. It sits in the card's
+   * header row from `sm` (a normal-width button beside the icon cluster) and
+   * wraps to its own full-width line below it, where a phone's header has no
+   * room beside three 44px icons.
+   */
+  primaryAction: "min-h-[44px] w-full min-w-0 sm:w-auto",
   /** Secondary/destructive menu trigger. */
   menuTrigger: "min-h-[44px] min-w-[44px]",
   /** Dialog body. */
@@ -298,21 +267,26 @@ export const CARD_STYLE = {
  * over this list, so the constant IS the rendered order — a reordering here (or
  * there) breaks the test rather than silently drifting.
  *
- * Two sections were removed for the same reason — a card in a three-column month
- * view has to stay scannable:
+ * Three sections were removed for the same reason — a card has to stay scannable
+ * on a board of twelve:
  *  - the four-module readiness strip (Equipo · Setlist · Propuesta ·
  *    Disponibilidad), which sat between `identity` and `issues` and repeated what
  *    the issue lines and the preview already say;
  *  - `secondary_menu`, a full-width `Más acciones` bar at the foot of every card.
  *    Its two most-used items (`Editar equipo`, `Editar setlist`) are now icon
  *    buttons in the `identity` header, and the rest moved into a kebab beside
- *    them. Nothing was dropped — the actions moved, they did not shrink.
+ *    them;
+ *  - `primary_action`, a full-width button at the foot of every card (2026-10-22).
+ *    It is still the ONE primary action and still a ≥44px target, but it now sits
+ *    in the `identity` header beside the icon cluster — the foot of a card is
+ *    where a long setlist pushes it, and twelve full-width buttons made the board
+ *    5 570 px tall. Below `sm` it wraps to its own line under the header.
+ * Nothing was dropped — the actions moved, they did not shrink.
  */
 export const CARD_SECTIONS = [
   "identity",
   "issues",
   "preview",
-  "primary_action",
 ] as const;
 
 export type CardSection = (typeof CARD_SECTIONS)[number];
@@ -633,11 +607,22 @@ export function formatServiceDate(iso: unknown, locale = "es-ES"): string {
   });
 }
 
-/** Short Spanish date for confirmation lists and toasts. */
+/**
+ * `dom 25 oct` — the ONE short Spanish date: confirmation lists, toasts and, with
+ * its first letter up (`formatServiceDateHeadline`), the card's headline.
+ *
+ * Derived from the es-ES short form (`dom, 25 oct`) rather than es-MX's
+ * (`dom 25 de oct`, which it used until 2026-10-22): the comma goes and so does
+ * the «de», so the headline reads as a date stamp. Two formatters in two locales
+ * spelled the same service two ways on the same tab.
+ */
 export function formatServiceDateShort(iso: unknown): string {
   const parsed = parseServiceDateAtNoon(iso);
   if (!parsed) return "fecha inválida";
-  return parsed.toLocaleDateString("es-MX", { weekday: "short", day: "numeric", month: "short" });
+  return parsed
+    .toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" })
+    .replace(",", "")
+    .replace(/\.$/, "");
 }
 
 /** `Domingo · 9 ago` — the label a confirmation list and a handoff notice use. */
@@ -646,10 +631,34 @@ export function serviceCardLabel(role: ServiceRole): string {
   return `${name} · ${formatServiceDateShort(role.date)}`;
 }
 
+/**
+ * `Dom 25 oct` — `formatServiceDateShort` with its first letter up, for the card's
+ * headline and a special's subline. The weekend headline itself renders
+ * `uppercase` (the house display style), so the capital is seen on the special's
+ * subline («Sáb 7 nov · 19:00», body case) and in the heading's text content; it
+ * is never done with CSS `capitalize`, which capitalised every word of the long
+ * date («25 De Octubre De 2026»). Spanish capitalises only the first.
+ */
+export function formatServiceDateHeadline(iso: unknown): string {
+  return capitalizeFirst(formatServiceDateShort(iso));
+}
+
+/** First letter up, the rest untouched — `domingo, 25 de octubre` → `Domingo, …`. */
+export function capitalizeFirst(text: string): string {
+  return text ? text.charAt(0).toLocaleUpperCase("es") + text.slice(1) : text;
+}
+
 export interface CardIdentity {
-  title: string;
+  /** Long Spanish date, first letter capitalised — the headline's tooltip. */
   dateText: string;
-  typeLabel: string;
+  /**
+   * The one line a card leads with: `Dom 25 oct` for a weekend (the type is in
+   * the weekday, so no «DOMINGO» chip repeats it), the service's own name for a
+   * special, whose date then goes in `subline`.
+   */
+  headline: string;
+  /** A special's `Sáb 7 nov · 19:00` (time only when stored and valid); null for a weekend. */
+  subline: string | null;
   /** Draft/published badge — text + tone, never colour alone. */
   publication: { text: string; tone: ReadinessTone };
   /** Calendar-day countdown label, at local noon (never elapsed hours). */
@@ -659,6 +668,8 @@ export interface CardIdentity {
 export function cardIdentity(card: ServiceCardModel, todayIso: string): CardIdentity {
   const role = card.role;
   const offset = serviceDayOffset(role.date, todayIso);
+  const isSpecial = role._type === "special_role";
+  const time = isSpecial && isServiceTime(role.time) ? ` · ${role.time}` : "";
   const relative =
     offset === null
       ? null
@@ -672,9 +683,11 @@ export function cardIdentity(card: ServiceCardModel, todayIso: string): CardIden
               ? `En ${offset} días`
               : `Hace ${Math.abs(offset)} días`;
   return {
-    title: role.service_name?.trim() || SERVICE_LABEL[role._type],
-    dateText: formatServiceDate(role.date),
-    typeLabel: SERVICE_LABEL[role._type],
+    dateText: capitalizeFirst(formatServiceDate(role.date)),
+    headline: isSpecial
+      ? role.service_name?.trim() || SERVICE_LABEL[role._type]
+      : formatServiceDateHeadline(role.date),
+    subline: isSpecial ? `${formatServiceDateHeadline(role.date)}${time}` : null,
     publication:
       card.readiness.publishState === "draft"
         ? { text: "Borrador", tone: "warn" }

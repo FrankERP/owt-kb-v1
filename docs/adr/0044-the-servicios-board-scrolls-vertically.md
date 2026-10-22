@@ -1,6 +1,6 @@
 # ADR-0044: The Servicios board scrolls vertically, beside a sticky Participaciones and a stowable rail
 
-**Date:** 2026-09-28 · **Status:** Accepted — amends [ADR-0035](0035-the-admin-shell-is-gone.md)
+**Date:** 2026-09-28 · **Status:** Accepted — amends [ADR-0035](0035-the-admin-shell-is-gone.md) · **Amended 2026-10-22:** the cards are ONE column (see Consequences)
 
 ## Context
 
@@ -64,3 +64,12 @@ Participaciones always in view while the services scroll.
   `adminRail.test.tsx` does, by failing when the two `--admin-rail-w` values differ.
 - The preference is a per-browser convenience, not shared state: another device, or a
   cleared storage, starts expanded.
+- **2026-10-22 — one column, not an auto-fill grid.** The compact service card (the
+  «Diseño para admins» thread; [ADR-0059](0059-a-service-card-takes-its-day-colour-only-on-its-rail.md)
+  for its colour) lays «Equipo» beside «Setlist» inside the card once the CARD is ≥36 rem
+  wide (a container query in `brand.css`, `.brand-service-card-body`). Two 400 px cards
+  side by side under the 1280 cap would each have stacked those columns again, so
+  `BOARD_CARDS` is `grid-cols-1` at every width and a card is 656 px wide beside the
+  expanded rail, 800 px beside the stowed one. Decisions 1–4 otherwise stand: the page
+  scrolls, Participaciones is sticky, the rail collapses, the cap stays.
+  `servicesBoard.test.tsx` now pins `grid-cols-1` and the absence of `auto-fill`.

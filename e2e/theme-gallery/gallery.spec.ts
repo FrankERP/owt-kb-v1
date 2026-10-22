@@ -93,7 +93,7 @@ test("dialog: the dialog layer is the topmost painted body child", async ({ page
 });
 
 // The planner's full-screen host is NOT `[data-planner-fullscreen]` — that attribute is
-// on the "⛶ Pantalla completa" TOGGLE (`PlannerGrid.tsx:~2022`), and the toggle's whole
+// on the «Pantalla completa» TOGGLE (`PlannerGrid.tsx:~2022`), and the toggle's whole
 // subtree unmounts once full screen is on. The overlay portalled to `document.body`
 // (`PlannerGrid.tsx:~1969`) identifies itself as a modal dialog with this label, so that
 // is the honest selector. The fixture's own `data-planner-fullscreen-activated` proves

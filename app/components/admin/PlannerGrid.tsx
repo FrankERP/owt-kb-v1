@@ -147,6 +147,7 @@ import {
 } from "./serviceCardModel";
 import CueDialog from "../ui/CueDialog";
 import Button from "@/app/components/ui/Button";
+import { ExpandIcon } from "@/app/components/ui/icons";
 import Collapse from "@/app/components/ui/Collapse";
 import Checkbox from "@/app/components/ui/Checkbox";
 import DateField from "@/app/components/ui/DateField";
@@ -2175,9 +2176,9 @@ export default function PlannerGrid(props: PlannerGridProps) {
           // this is a different DOM node by then — see the effect above.
           data-planner-fullscreen
           onClick={() => setFullScreen(true)}
-          className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest text-ink-muted/70 transition-colors hover:border-accent"
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest text-ink-muted/70 transition-colors hover:border-accent"
         >
-          ⛶ Pantalla completa
+          <ExpandIcon /> Pantalla completa
         </button>
         )}
         {mode === "create" && autoState.disabledReason && (
