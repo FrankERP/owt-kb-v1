@@ -24,7 +24,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import MonthGenerator from "../MonthGenerator";
 import { readyRules, type RulesHarness } from "./rulesHarness";
 import { AdminProviders } from "./providersHarness";
-import { SLACK_V3_NOTE } from "@/app/utils/sundayCadence";
+import { SLACK_STALE_NOTE } from "../ruleCopy";
 import type { PersonRestriction, SolverConfig } from "../plannerModel";
 
 afterEach(cleanup);
@@ -181,16 +181,33 @@ describe("the card and the «Holgura» notes (C3 §6.6, §6.8, T11)", () => {
     expect(within(card(/Bruno/)).queryByText("Mes por medio")).toBeNull();
   });
 
-  it("the Holgura chip says it does not apply to the new solver", () => {
-    renderGen(configWith(EVERY_FIELD));
-    expect(within(card(/Ana/)).getByText(`holgura 2 · ${SLACK_V3_NOTE}`)).toBeTruthy();
+  it("the Holgura chip is struck through, says the solver ignores it, and «quitar» sets the card back to Normal on screen", async () => {
+    const { rules } = renderGen(configWith(EVERY_FIELD));
+    const chip = within(card(/Ana/)).getByText("Holgura 2");
+    expect(chip.className).toContain("line-through");
+    expect(chip.getAttribute("title")).toBe("fairness_slack 2");
+    expect(within(card(/Ana/)).getByText(SLACK_STALE_NOTE)).toBeTruthy();
+
+    fireEvent.click(within(card(/Ana/)).getByRole("button", { name: "quitar" }));
+    expect(within(card(/Ana/)).queryByText("Holgura 2")).toBeNull();
+    // On screen only: the server sees it with «Guardar reglas», like any edit.
+    expect(rules.save).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Guardar reglas" }));
+    const saved = await postAfterPoolTick(rules);
+    expect(saved.restrictions[0].fairness).toBe("none");
   });
 
-  it("the Holgura help gains «No aplica con el nuevo solver.» and keeps its specials sentence", () => {
+  it("the Holgura help is the card's note (one wording) and keeps its specials sentence", () => {
     renderGen(configWith(EVERY_FIELD));
     openEditor(/Ana/);
-    const help = screen.getByText(/puede alejarse hasta 2 servicios de la del resto/);
-    expect(help.textContent).toContain("No aplica con el nuevo solver.");
-    expect(help.textContent).toContain("Al llenar especiales cuenta como si llevara 2 más.");
+    const help = screen.getByText(/El solver la ignora; solo pesa al llenar especiales/);
+    expect(help.textContent).toBe("El solver la ignora; solo pesa al llenar especiales, donde cuenta como si llevara 2 más.");
+  });
+
+  it("after an on-screen «quitar», the form still offers «Holgura» while the STORED rule carries one", () => {
+    renderGen(configWith(EVERY_FIELD));
+    fireEvent.click(within(card(/Ana/)).getByRole("button", { name: "quitar" }));
+    openEditor(/Ana/);
+    expect(screen.getByText("Holgura")).toBeTruthy();
   });
 });

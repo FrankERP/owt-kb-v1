@@ -235,11 +235,23 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   most one `==` count per role key, run by the parser, the rule form, the panel and the client's
   refusal mapping. `parseSolverConfigWrite`/`solverConfigFields`/`solverConfigFromDocument` are the
   only way any writer sets or restores a rule value.
+- **`ruleCopy.ts`** ([app/components/admin/ruleCopy.ts](../app/components/admin/ruleCopy.ts), pure;
+  diseño para admins bloque 2, 2026-10-22) — the ONE Spanish wording of a rule: `restrictionChips`
+  (one chip per clause of a person restriction, with its tone and the notation it replaced),
+  `exclusionSentence`/`weekSentence`/`capSentence`/`capSubject`/`CAP_OP_WORD`, `conflictSentence`/
+  `presenceSentence` (sentences in parts, connectives dimmed) and `patternLabel`/`patternPill` (the
+  forms' pickers). The rules card, its forms, `EXACT_ROLE_LABEL` and the MCP's `get_solver_rules`
+  all read it, so a rule reads the same on `/admin` and in the chat. The notation stays on every
+  chip's `title` and behind «Mostrar notación del solver», because the solver's notices and the v3
+  rule table still name a rule by `capCardLabel` (`v3RuleIds.ts`, unchanged). Display only: the
+  writer (`solverConfigWriteRequest.ts`) and the v3 request (`v3Rules.ts`) never read it. A
+  «Holgura N» renders struck through with «quitar» (an on-screen edit, saved only by «Guardar
+  reglas»), and the form offers «Holgura» only on a card that already carries one.
 - **`resolveRulePersonId`, `cadenceMembers`, `cadenceOutsideSundayPool`, `RosterMember`**
   ([sundayCadence.ts](../app/utils/sundayCadence.ts), neutral) — exactly one worship member per
   rule name or a named refusal (`unresolved`/`ambiguous`), over the unfiltered roster minus
   non-worship members (the functions apply `normalizeMinistries` themselves). v2 keeps its
-  first-match `resolveToMemberName`. Copy: `SLACK_V3_NOTE`, `CADENCE_OUTSIDE_HEADING`,
+  first-match `resolveToMemberName`. Copy: `CADENCE_OUTSIDE_HEADING`,
   `CADENCE_OUTSIDE_SENTENCE` (C3's v2-only `CADENCE_V2_NOTE` went at the cutover, ADR-0056; a
   flip-back restores it).
 - **`v2View(config)`** ([plannerModel.ts](../app/components/admin/plannerModel.ts)) — the config

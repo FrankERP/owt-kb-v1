@@ -31,7 +31,8 @@
 // Pure — no React, no `fetch`. `useSolverConfig.ts` is the hook that drives it.
 
 import { DEFAULT_SOLVER_CONFIG } from "./solverConfigDefaults";
-import { capLabel, type SolverConfig } from "./plannerModel";
+import type { SolverConfig } from "./plannerModel";
+import { capSentence, capSubject } from "./ruleCopy";
 import {
   SOLVER_CONFIG_VERSION,
   exactCapOverlaps,
@@ -91,17 +92,13 @@ export const PLANNER_UPDATED_MESSAGE =
 // ─── One exact count per person per role (parent A38), in Spanish ─────────────
 //
 // `{rol}` names a role key the way the rule form's pattern list names the
-// single-role patterns (`MonthGenerator`'s `PATTERNS`); `{regla}` is the other
-// cap's `capLabel`, the text its chip shows.
+// single-role patterns (`ruleCopy`'s `capSubject`, bloque 2); `{regla}` is the
+// other cap's `capSentence`, the text its chip shows.
 
 /** The five role keys `rolesOfPattern` answers with, as the admin reads them. */
-export const EXACT_ROLE_LABEL: Readonly<Record<string, string>> = {
-  "Sun.Lead": "Dom Lead",
-  "Sat.Lead": "Sáb Lead",
-  "Sun.BGV": "Dom BGV",
-  "Sat.BGV": "Sáb BGV",
-  "Sun.Choir": "Dom Coro",
-};
+export const EXACT_ROLE_LABEL: Readonly<Record<string, string>> = Object.fromEntries(
+  ["Sun.Lead", "Sat.Lead", "Sun.BGV", "Sat.BGV", "Sun.Choir"].map((role) => [role, capSubject(role)]),
+);
 const roleLabel = (role: string) => EXACT_ROLE_LABEL[role] ?? role;
 
 /** Under a cap row of the rule form that would make a second exact count. */
@@ -167,7 +164,7 @@ function exactOverlapRefusal(sent: SolverConfig | undefined, restriction: number
   const pair = pairs.find((p) => p.later.restriction === restriction && p.later.cap === cap) ?? pairs[0];
   const firstCap = pair && sent?.restrictions[pair.first.restriction]?.caps[pair.first.cap];
   if (!pair || !firstCap) return EXACT_OVERLAP_UNPAIRED_MESSAGE;
-  return exactOverlapRefusalMessage({ role: pair.roles[0], person: pair.person, rule: capLabel(firstCap) });
+  return exactOverlapRefusalMessage({ role: pair.roles[0], person: pair.person, rule: capSentence(firstCap) });
 }
 
 /**

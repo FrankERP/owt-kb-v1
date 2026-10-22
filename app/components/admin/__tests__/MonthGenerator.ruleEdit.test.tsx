@@ -76,42 +76,43 @@ describe("RuleBuilder — editing a rule keeps its id, so the edit survives", ()
     const { container } = renderGen(CONFIG);
 
     openEditor(/Mkz/);
-    fireEvent.click(screen.getByRole("button", { name: "+ Cap" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Tope" }));
     saveForm();
 
-    // The form closed AND the card carries the new cap chip. Only the second
-    // half is load-bearing — the form closes under the bug too.
+    // The form closed AND the card carries the new cap chip (as a sentence, bloque 2).
+    // Only the second half is load-bearing — the form closes under the bug too.
     expect(screen.queryByRole("button", { name: "Guardar cambios" })).toBeNull();
-    expect(container.textContent).toContain("Sun.* <= 2");
+    expect(container.textContent).toContain("Domingos: como máximo 2 al mes");
   });
 
   it("keeps an edited person restriction's other fields", () => {
     const { container } = renderGen(CONFIG);
 
     openEditor(/Mkz/);
-    fireEvent.click(screen.getByRole("button", { name: "Dom BGV" }));
+    fireEvent.click(screen.getByRole("button", { name: "BGV dom" }));
     saveForm();
 
-    expect(container.textContent).toContain("!Sat.*");
-    expect(container.textContent).toContain("!Sun.BGV");
-    expect(container.textContent).toContain("exenta de carga total");
+    expect(container.textContent).toContain("Nunca en sábado");
+    expect(container.textContent).toContain("No BGV en domingo");
+    expect(container.textContent).toContain("Fuera del balance total");
   });
 
-  it("names the fairness modes in Spanish and says what «Exenta» does", () => {
+  it("names the fairness modes in Spanish and says what «Exenta» does — «Holgura» is not offered to a card without one", () => {
     renderGen(CONFIG);
 
     openEditor(/Mkz/);
     expect(screen.getByText("Equidad")).toBeTruthy();
     expect(screen.getByText("Exenta")).toBeTruthy();
-    expect(screen.getByText("Holgura")).toBeTruthy();
+    // Bloque 2: the v3 solver never reads a slack, so a NEW one cannot be made here.
+    expect(screen.queryByText("Holgura")).toBeNull();
     // Mkz is exempt in CONFIG, so the explanation is already on screen — and it
     // must say he still counts for each role's fairness, which is what the
     // solver does with a bare `fairness_exempt`.
     expect(screen.getByText(/sigue contando para la equidad de cada rol/i)).toBeTruthy();
   });
 
-  it("«Holgura» states its allowance, and a cleared allowance says it does nothing", () => {
-    renderGen(CONFIG);
+  it("«Holgura» (on a card that already has one) states its allowance, and a cleared allowance says it does nothing", () => {
+    renderGen({ ...CONFIG, restrictions: CONFIG.restrictions.map(r => r.person === "Mkz" ? { ...r, fairness: "slack" as const, fairnessSlack: 1 } : r) });
 
     openEditor(/Mkz/);
     fireEvent.click(screen.getByText("Holgura"));
@@ -119,17 +120,17 @@ describe("RuleBuilder — editing a rule keeps its id, so the edit survives", ()
     const allowance = row.querySelector('input[type="number"]') as HTMLInputElement;
 
     fireEvent.change(allowance, { target: { value: "2" } });
-    expect(screen.getByText(/puede alejarse hasta 2 servicios de la del resto/)).toBeTruthy();
+    expect(screen.getByText(/como si llevara 2 más/)).toBeTruthy();
 
     // `restrictionToDs` emits nothing for a slack of 0, so the sentence must not
-    // promise a band of 0 — the person is simply «Normal» once saved.
+    // promise anything for 0 — the person is simply «Normal» once saved.
     fireEvent.change(allowance, { target: { value: "" } });
     expect(screen.getByText(/con 0 no tiene efecto/i)).toBeTruthy();
-    expect(screen.queryByText(/puede alejarse hasta 0/)).toBeNull();
+    expect(screen.queryByText(/como si llevara 0/)).toBeNull();
 
     // Whole services only — the solver's DSL reads `fairness_slack \d+`.
     fireEvent.change(allowance, { target: { value: "2.5" } });
-    expect(screen.getByText(/puede alejarse hasta 2 servicios de la del resto/)).toBeTruthy();
+    expect(screen.getByText(/como si llevara 2 más/)).toBeTruthy();
     fireEvent.change(allowance, { target: { value: "0.5" } });
     expect(allowance.value).toBe("0");
     expect(screen.getByText(/con 0 no tiene efecto/i)).toBeTruthy();
@@ -139,13 +140,13 @@ describe("RuleBuilder — editing a rule keeps its id, so the edit survives", ()
     const { container } = renderGen(CONFIG);
 
     openEditor(/≠/);
-    fireEvent.change(screen.getByDisplayValue("Lead (ambos) (*.Lead)"), { target: { value: "*.BGV" } });
+    fireEvent.change(screen.getByDisplayValue("Líder (ambos) (*.Lead)"), { target: { value: "*.BGV" } });
     saveForm();
 
-    // `*.BGV` appears ONLY on the conflict card — the presence rule is on
-    // `Sun.BGV`, the restriction on `Sat.*` — so this cannot pass on the wrong
-    // card.
-    expect(container.textContent).toContain("*.BGV");
+    // «no coinciden como BGV» appears ONLY on the conflict card — the presence
+    // rule reads «BGV de domingo», the restriction «Nunca en sábado» — so this
+    // cannot pass on the wrong card.
+    expect(container.textContent).toContain("no coinciden como BGV");
   });
 
   it("edits a presence rule in place", () => {
@@ -161,7 +162,7 @@ describe("RuleBuilder — editing a rule keeps its id, so the edit survives", ()
     fireEvent.click(within(form).getByRole("checkbox", { name: "Beto" }));
     saveForm();
 
-    expect(container.textContent).toContain("Mkz, Ana, Beto");
+    expect(container.textContent).toContain("Mkz, Ana o Beto");
   });
 });
 
@@ -174,7 +175,7 @@ describe("RuleBuilder — adding a rule mints a NEW id, independent of the rest"
   const addAnaRule = () => {
     fireEvent.click(screen.getByRole("button", { name: "+ Persona" }));
     fireEvent.change(screen.getByDisplayValue("Mkz"), { target: { value: "Ana" } });
-    fireEvent.click(screen.getByRole("button", { name: "Sáb Lead" }));
+    fireEvent.click(screen.getByRole("button", { name: "Líder sáb" }));
     fireEvent.click(screen.getByRole("button", { name: "Agregar restricción" }));
   };
 
@@ -188,7 +189,7 @@ describe("RuleBuilder — adding a rule mints a NEW id, independent of the rest"
     addAnaRule();
 
     expect(container.textContent).toMatch(/Reglas \(4\)/);
-    expect(container.textContent).toContain("!Sat.Lead");
+    expect(container.textContent).toContain("No líder en sábado");
 
     fireEvent.click(screen.getByRole("button", { name: "Guardar reglas" }));
 
@@ -196,7 +197,7 @@ describe("RuleBuilder — adding a rule mints a NEW id, independent of the rest"
     const saved = rules.save.mock.calls[0][0] as SolverConfig;
     expect(saved.restrictions).toHaveLength(2);
     // The person too: a silently no-op'd select change would still render
-    // `!Sat.Lead`, just on a second Mkz row.
+    // «No líder en sábado», just on a second Mkz row.
     expect(saved.restrictions[1].person).toBe("Ana");
     expect(saved.restrictions[1].id).toBeTruthy();
     expect(saved.restrictions[1].id).not.toBe("r-mkz");
@@ -208,11 +209,11 @@ describe("RuleBuilder — adding a rule mints a NEW id, independent of the rest"
 
     // Now edit the ORIGINAL. A shared id would rewrite both rows.
     openEditor(/Mkz/);
-    fireEvent.click(screen.getByRole("button", { name: "+ Cap" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Tope" }));
     saveForm();
 
-    expect(container.textContent).toContain("Sun.* <= 2");
-    expect(container.textContent).toContain("!Sat.Lead");   // Ana's, untouched
+    expect(container.textContent).toContain("Domingos: como máximo 2 al mes");
+    expect(container.textContent).toContain("No líder en sábado");   // Ana's, untouched
     expect(container.textContent).toMatch(/Reglas \(4\)/);
   });
 });
@@ -227,7 +228,7 @@ describe("RuleBuilder — the preserved id is what reaches Sanity", () => {
     renderGen(CONFIG, rules);
 
     openEditor(/Mkz/);
-    fireEvent.click(screen.getByRole("button", { name: "+ Cap" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Tope" }));
     saveForm();
 
     fireEvent.click(screen.getByRole("button", { name: "Guardar reglas" }));

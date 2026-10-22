@@ -9,11 +9,11 @@ import "server-only";
 import type { CallToolResult, McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
-import { capLabel, type SolverConfig } from "@/app/components/admin/plannerModel";
+import type { SolverConfig } from "@/app/components/admin/plannerModel";
+import { conflictSentence, presenceSentence, restrictionChips, sentenceText } from "@/app/components/admin/ruleCopy";
 import type { MemberOption } from "@/app/components/admin/serviceCardModel";
 import { displayMemberName } from "@/app/utils/memberRuleNames";
 import { adminMembersQuery } from "@/app/utils/serviceReadQueries";
-import { SLACK_V3_NOTE } from "@/app/utils/sundayCadence";
 import { readRules } from "@/app/utils/v3MonthPlanReads";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import { runReadTool, successResult } from "../reads/errors";
@@ -57,18 +57,13 @@ export function presentSolverRules(config: SolverConfig, members: readonly Membe
     return { lista: label, nombres: names.sort((a, b) => a.localeCompare(b, "es")), ...(missing ? { sinMiembro: missing } : {}) };
   });
   const personas = config.restrictions.map((r) => {
-    const clauses = [
-      ...r.excludedPatterns.map((p) => `nunca ${p}`),
-      ...r.weekExclusions.map((w) => `sem.${w.week}: nunca ${w.pattern}`),
-      ...r.caps.map(capLabel),
-      ...(r.fairness === "exempt" ? ["exenta de carga total"] : []),
-      ...(r.fairness === "slack" ? [`holgura ${r.fairnessSlack} · ${SLACK_V3_NOTE}`] : []),
-      ...(r.sundayCadence === "alternate" ? ["Mes por medio"] : []),
-    ];
+    // The rules card's own sentences (`ruleCopy.ts`, bloque 2), so a rule reads the same in the
+    // chat as on /admin; a struck-through «Holgura» carries its note.
+    const clauses = restrictionChips(r).map((chip) => (chip.note ? `${chip.text} (${chip.note})` : chip.text));
     return `${r.person}: ${clauses.length ? clauses.join(" · ") : "sin cláusulas"}`;
   });
-  const noJuntos = config.conflicts.map((c) => `${c.personA} ≠ ${c.personB} en ${c.pattern}`);
-  const presencia = config.presence.map((p) => `al menos uno de ${p.persons.join(", ")} en ${p.pattern} cada semana`);
+  const noJuntos = config.conflicts.map((c) => sentenceText(conflictSentence(c)));
+  const presencia = config.presence.map((p) => sentenceText(presenceSentence(p)));
   return { listas: pools, personas, noJuntos, presencia };
 }
 
