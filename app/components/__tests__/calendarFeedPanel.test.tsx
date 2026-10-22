@@ -13,12 +13,19 @@ import type { CalendarFeedState } from "@/app/utils/calendarFeed";
 
 installMotionTestEnv();
 
-import CalendarFeedPanel, { feedLinks } from "../CalendarFeedPanel";
+import CalendarFeedPanel from "../CalendarFeedPanel";
 
 beforeAll(async () => {
   await import("@/app/components/ui/motionFeatures");
 });
-afterEach(cleanup);
+// The clipboard stub goes on the shared `navigator`, so it is restored after
+// each case rather than leaking a resolving `writeText` into later ones.
+const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+afterEach(() => {
+  cleanup();
+  if (clipboardDescriptor) Object.defineProperty(navigator, "clipboard", clipboardDescriptor);
+  else delete (navigator as unknown as Record<string, unknown>).clipboard;
+});
 
 const urls = {
   all: "https://owt.test/api/calendar/t",
@@ -82,9 +89,12 @@ describe("CalendarFeedPanel", () => {
     expect(screen.getByText(/Estás en dev/)).toBeTruthy();
   });
 
-  it("sends the one-shot download to «Tu cuenta» on /me instead of exporting here", () => {
+  it("sends the one-shot download to «Tu cuenta» on /me instead of exporting here — as a way on, no download glyph", () => {
     mount();
-    expect(href(/Descargar una sola vez/)).toBe("/me#tu-cuenta");
+    const link = screen.getByRole("link", { name: /Descargar una sola vez/ });
+    expect(link.getAttribute("href")).toBe("/me#tu-cuenta");
+    expect(link.querySelector('[data-icon="arrow-right"]')).not.toBeNull();
+    expect(link.querySelector('[data-icon="download"]')).toBeNull();
   });
 
   it("renders only the message when the feed is unavailable", () => {
@@ -92,12 +102,5 @@ describe("CalendarFeedPanel", () => {
     expect(screen.getByText("Solo para el equipo de alabanza.")).toBeTruthy();
     expect(screen.queryByRole("radio")).toBeNull();
     expect(screen.queryByRole("link")).toBeNull();
-  });
-});
-
-describe("feedLinks", () => {
-  it("never mixes the two scopes", () => {
-    expect(feedLinks(urls, "all")).toEqual({ google: urls.googleAll, webcal: urls.webcalAll, https: urls.all });
-    expect(feedLinks(urls, "mine")).toEqual({ google: urls.googleMine, webcal: urls.webcalMine, https: urls.mine });
   });
 });

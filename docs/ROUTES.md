@@ -143,7 +143,8 @@ because their own headers already show the countdown.
   since design pass D the calendar block is one «Todos / Solo los míos» switch over one row of
   links, «¿Cómo funciona?» folded, and a link to `/me#tu-cuenta` for the one-shot `.ics`).
   Both anchors other pages link to (`#calendario` here, `#tu-cuenta` on `/me`) carry the
-  navbar-clearing `scroll-mt` every anchored section uses.
+  navbar-clearing `UNDER_NAVBAR_SCROLL_MT` (`app/utils/navbarHeight.ts`, beside `NAVBAR_H_CLASS`;
+  `LibraryIndex` composes its sticky offset from it too).
 - **`/me/propose/[roleId]`** — `Navbar`, `ProposalEditor` (co-located client component).
 - **`/posts/[slug]`** — `Navbar`, `TransposeProvider` (the page's one transposition seat),
   `SongHeroPills` (`KeyDial` + the 12-key drawer, `TempoPill`), `SectionNav` (whose

@@ -130,6 +130,27 @@ describe("DayCard", () => {
       expect(text.className).toContain("line-clamp-3");
     });
 
+    it("arrives folded again when the same card is handed another day's note", () => {
+      stageOverflow(true);
+      const card = (team_notes: string) => (
+        <MotionProvider>
+          <ToastProvider>
+            <CueDialogProvider>
+              <DayCard day="Domingo" date="2026-09-13" setlist={{ week: "2026-09-13", songs: [song("s1")], team_notes }} leads={["Ana"]} />
+            </CueDialogProvider>
+          </ToastProvider>
+        </MotionProvider>
+      );
+      // `CalendarView` keys its cards by index: the Saturday card's instance is
+      // reused for Sunday, and Sunday's note must not inherit Saturday's «Leer todo».
+      const { rerender } = render(card(note));
+      fireEvent.click(screen.getByRole("button", { name: "Leer todo" }));
+      expect(screen.getByText(/Mensaje del Pastor/).className).not.toContain("line-clamp-3");
+      rerender(card("Otro domingo, otra nota del pastor, igual de larga."));
+      expect(screen.getByText(/Otro domingo/).className).toContain("line-clamp-3");
+      expect(screen.getByRole("button", { name: "Leer todo" })).toBeTruthy();
+    });
+
     it("grows no toggle for a note that already fits", () => {
       stageOverflow(false);
       mount({ setlist: { week: "2026-09-13", songs: [song("s1")], team_notes: note } });

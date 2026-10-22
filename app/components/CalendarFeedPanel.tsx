@@ -6,8 +6,8 @@ import Collapse from "./ui/Collapse";
 import CueDialog from "./ui/CueDialog";
 import SegmentedControl from "./ui/SegmentedControl";
 import { useToast } from "./ui/Toast";
-import { ChevronDownIcon, CopyIcon, DownloadIcon } from "./ui/icons";
-import type { CalendarFeedState, FeedScope, FeedUrls } from "@/app/utils/calendarFeed";
+import { ArrowRightIcon, ChevronDownIcon, CopyIcon } from "./ui/icons";
+import { feedLinks, type CalendarFeedState, type FeedScope, type FeedUrls } from "@/app/utils/calendarFeed";
 
 /**
  * «Calendario» in `/me/ajustes`: the member's private calendar subscription (spec D7, ADR-0057).
@@ -22,20 +22,14 @@ import type { CalendarFeedState, FeedScope, FeedUrls } from "@/app/utils/calenda
  * paragraph folds behind «¿Cómo funciona?» so the three actions are what the block leads with;
  * only the dev warning stays in the open, because it says a button will NOT work here. The
  * one-shot `.ics` download is a row on `/me` («Tu cuenta»): this page reads no assignments
- * (it is ministry-neutral), so the link sends the member there instead of exporting here.
+ * (it is ministry-neutral), so the link SENDS the member there — drawn as a way on (the
+ * trailing arrow «Ver Oasis Kids» uses), never with a download glyph that promises a file.
  */
 
 const SCOPE_OPTIONS = [
   { value: "all", label: "Todos" },
   { value: "mine", label: "Solo los míos" },
 ] as const satisfies ReadonlyArray<{ value: FeedScope; label: string }>;
-
-/** The three links of one scope, so the row renders from ONE object and never mixes scopes. */
-export function feedLinks(urls: FeedUrls, scope: FeedScope): { google: string; webcal: string; https: string } {
-  return scope === "mine"
-    ? { google: urls.googleMine, webcal: urls.webcalMine, https: urls.mine }
-    : { google: urls.googleAll, webcal: urls.webcalAll, https: urls.all };
-}
 
 export default function CalendarFeedPanel({ initial }: { initial: CalendarFeedState }) {
   const [state, setState] = useState<CalendarFeedState>(initial);
@@ -145,8 +139,8 @@ export default function CalendarFeedPanel({ initial }: { initial: CalendarFeedSt
 
       <div className="flex flex-wrap gap-2">
         <Button variant="ghost" size="sm" href="/me#tu-cuenta">
-          <DownloadIcon size={13} />
           Descargar una sola vez (.ics)
+          <ArrowRightIcon size={12} />
         </Button>
         <Button ref={rotateRef} variant="ghost" size="sm" onClick={() => setConfirmOpen(true)}>
           Generar un enlace nuevo

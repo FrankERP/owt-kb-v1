@@ -141,11 +141,11 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
     : "";
   const days = date ? daysUntil(date) : null;
   // The next service's pill carries the clock too — «En 3 días · 11:00» (design
-  // pass D, 2026-10-22) — by the feed's ONE rule (`serviceStartTime`, the same
-  // call `DayCardDisclosure` makes): a weekend at the team's standing time, a
-  // special at its own `time`. Only when the heading does not already say it: a
-  // special's `time` sits after its date up there, and the pill would repeat it.
-  const startTime = time ? null : serviceStartTime(roleId ? "special" : "weekend", day, time);
+  // pass D, 2026-10-22). WEEKENDS ONLY, at the team's standing hour by the feed's
+  // rule (`serviceStartTime`): a special's own `time` already sits after its date
+  // in the heading (or it is all-day and has no clock), so the pill never repeats
+  // it. `roleId` is only ever set for a special — the `DayCardDisclosure` rule.
+  const startTime = roleId || time ? null : serviceStartTime("weekend", day, null);
   // The two-column rail only earns its keep when both columns have content —
   // a setlist with no team to show beside it should stack like `card`, not
   // reserve a 20rem rail for nothing.
@@ -235,7 +235,10 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
         </div>
 
         <div className="space-y-5 p-5 md:p-6">
-          {setlist?.team_notes && <TeamNote text={setlist.team_notes} />}
+          {/* Keyed by the text: `CalendarView` keys its cards by index, so the
+              same instance can be handed another day's note — which must arrive
+              folded, not inheriting the «Leer todo» the reader opened before. */}
+          {setlist?.team_notes && <TeamNote key={setlist.team_notes} text={setlist.team_notes} />}
 
           {/* The run sheet reads left-to-right from `lg`: songs in the wide
               column, seats in a fixed 20rem rail. `space-y-5` is the stacked
@@ -377,9 +380,11 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
  * setlist — what the card is for — below the fold. The fold is REAL, not a
  * guess from the text's length: the paragraph is measured clamped
  * (`scrollHeight > clientHeight`) and re-measured whenever its box changes (a
- * text-size change, a rotated phone), so a two-line note never grows a «Leer
- * todo» that does nothing. Measured only while clamped: once open the paragraph
- * no longer overflows, and the toggle must stay so the reader can fold it back.
+ * text-size change, a rotated phone) and once the web fonts land (a swap
+ * re-wraps the lines without changing the clamped box, so the observer alone
+ * would miss it), so a two-line note never grows a «Leer todo» that does
+ * nothing. Measured only while clamped: once open the paragraph no longer
+ * overflows, and the toggle must stay so the reader can fold it back.
  */
 function TeamNote({ text }: { text: string }) {
   const id = useId();
@@ -391,11 +396,19 @@ function TeamNote({ text }: { text: string }) {
     if (!el || expanded) return;
     // A 1px tolerance: a clamped box and its content can differ by a subpixel
     // of line-height rounding without a fourth line existing.
-    const measure = () => setOverflows(el.scrollHeight > el.clientHeight + 1);
+    let live = true;
+    const measure = () => {
+      if (live) setOverflows(el.scrollHeight > el.clientHeight + 1);
+    };
     measure();
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
     ro?.observe(el);
-    return () => ro?.disconnect();
+    // Optional chaining on `fonts`: jsdom has no Font Loading API.
+    document.fonts?.ready.then(measure, () => {});
+    return () => {
+      live = false;
+      ro?.disconnect();
+    };
   }, [expanded, text]);
   return (
     <section className="rounded-lg border border-ink/[0.08] bg-surface-lift/[0.03] px-4 py-3">

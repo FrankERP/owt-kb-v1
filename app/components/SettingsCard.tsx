@@ -15,6 +15,7 @@
 // nothing to edit without a profile. Tamaño de texto is device-local; Tema is
 // not — it PATCHes /api/me/theme and reports its own write failure.
 import type { ComponentPropsWithoutRef } from "react";
+import { UNDER_NAVBAR_SCROLL_MT } from "@/app/utils/navbarHeight";
 import ProfilePanel, { type MemberProfile } from "@/app/components/ProfilePanel";
 import TextSizeControl from "@/app/components/TextSizeControl";
 import ThemeControl from "@/app/components/ui/ThemeControl";
@@ -48,7 +49,7 @@ export default function SettingsCard({ member, calendarFeed, className = "", ...
       )}
       {/* A link target (`/me`'s «Calendario» row), so it clears the navbar. */}
       {calendarFeed && (
-        <div className="scroll-mt-[calc(5rem+env(safe-area-inset-top)+var(--impersonation-offset))] lg:scroll-mt-[calc(6rem+env(safe-area-inset-top)+var(--impersonation-offset))] p-5" id="calendario">
+        <div className={`${UNDER_NAVBAR_SCROLL_MT} p-5`} id="calendario">
           <h3 className="font-display text-lg font-bold mb-3">Calendario</h3>
           <CalendarFeedPanel initial={calendarFeed} />
         </div>
