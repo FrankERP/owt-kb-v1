@@ -47,6 +47,8 @@ interface Proposal {
   team_notes?: string;
   admin_notes?: string;
   messages?: ThreadMessage[] | null;
+  /** What admins wrote to the service's leads from its card (ADR-0065). */
+  earlier_messages?: ThreadMessage[] | null;
   submitted_at?: string;
   contributors?: Array<{ id: string; name: string }>;
   songs: ProposalSong[];
@@ -260,7 +262,9 @@ function ProposalCard({
           conversation happens. */}
       <div className="px-4 pb-3">
         <ProposalThread
-          messages={proposal.messages}
+          // The pre-proposal messages open the thread (ADR-0065); it orders the
+          // whole list by `at`. `postMessage` replaces only `messages`.
+          messages={[...(proposal.earlier_messages ?? []), ...(proposal.messages ?? [])]}
           viewerId={viewerId}
           viewerRole="admin"
           serviceDate={proposal.service_date}

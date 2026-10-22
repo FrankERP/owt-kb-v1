@@ -63,7 +63,18 @@ function stored(column: Pick<GridColumn, "columnId" | "date" | "type" | "countsF
   };
 }
 
-const sw = (name: string) => screen.getByRole("switch", { name }) as HTMLButtonElement;
+/**
+ * A stored header folds its fields (date, name, time, this switch) behind ✎, so the switch is
+ * read after opening that column's ✎ — once; a second read finds it already open.
+ */
+const sw = (name: string) => {
+  const date = name.match(/\d{4}-\d{2}-\d{2}/)?.[0];
+  const edit = date
+    ? screen.queryAllByRole("button", { name: `Editar datos del servicio ${date}` }).find((b) => b.getAttribute("aria-expanded") !== "true")
+    : undefined;
+  if (edit && !screen.queryByRole("switch", { name })) fireEvent.click(edit);
+  return screen.getByRole("switch", { name }) as HTMLButtonElement;
+};
 const describedText = (el: HTMLElement) => {
   const id = el.getAttribute("aria-describedby");
   return id ? (document.getElementById(id)?.textContent ?? null) : null;
@@ -124,6 +135,20 @@ describe("stored-mode headers (§6.4)", () => {
     render(<PlannerGrid {...props({ mode: "stored", columns: [SUN, SP] })} />);
     expect(sw("Cuenta para equidad 2026-08-09").getAttribute("aria-checked")).toBe("true");
     expect(sw("Cuenta para equidad 2026-08-12 · Vigilia").getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("folds the switch behind ✎, and says «No cuenta para equidad» on the header while folded", () => {
+    const { container } = render(<PlannerGrid {...props({ mode: "stored", columns: [SUN, SP] })} />);
+    // Folded: the fields are not offered to anyone, and only the column that does NOT count says so.
+    expect(screen.queryByRole("switch", { name: "Cuenta para equidad 2026-08-09" })).toBeNull();
+    const chips = [...container.querySelectorAll("[data-counts-off]")];
+    expect(chips).toHaveLength(1);
+    expect(chips[0].textContent).toBe("No cuenta para equidad");
+    const edit = screen.getByRole("button", { name: "Editar datos del servicio 2026-08-09" });
+    expect(edit.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(edit);
+    expect(edit.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("switch", { name: "Cuenta para equidad 2026-08-09" })).toBeTruthy();
   });
 
   it("is disabled by readOnly and by the mutation lock, never by the date-move block", () => {

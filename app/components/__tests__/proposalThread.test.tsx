@@ -50,6 +50,22 @@ function renderThread(over: Partial<React.ComponentProps<typeof ProposalThread>>
   return { onPost, ...utils };
 }
 
+describe("ProposalThread — read-only (ADR-0065)", () => {
+  it("shows the messages and the hint, and no composer, when there is no onPost", () => {
+    renderThread({
+      onPost: undefined,
+      title: "Mensajes de los admins",
+      readOnlyHint: "Responde al guardar.",
+      messages: [msg({ author_role: "admin", author_name: "Frank", body: "Tema: gracia" })],
+    });
+    expect(screen.getByText("Mensajes de los admins")).toBeTruthy();
+    expect(screen.getByText("Tema: gracia")).toBeTruthy();
+    expect(screen.getByText("Responde al guardar.")).toBeTruthy();
+    expect(screen.queryByPlaceholderText("Escribe un mensaje…")).toBeNull();
+    expect(screen.queryByText("Enviar")).toBeNull();
+  });
+});
+
 describe("ProposalThread — rendering", () => {
   it("renders its empty state rather than nothing at all", () => {
     renderThread();
@@ -119,7 +135,7 @@ describe("ProposalThread — the composer", () => {
     const box = screen.getByPlaceholderText("Escribe un mensaje…") as HTMLTextAreaElement;
     fireEvent.change(box, { target: { value: "  hola  " } });
     fireEvent.click(screen.getByText("Enviar"));
-    await waitFor(() => expect(onPost).toHaveBeenCalledWith("hola"));
+    await waitFor(() => expect(onPost).toHaveBeenCalledWith("hola", { pastor: false }));
     await waitFor(() => expect(box.value).toBe(""));
   });
 
@@ -160,5 +176,36 @@ describe("ProposalThread — the composer", () => {
     unmount();
     renderThread({ viewerRole: "admin" });
     expect(screen.getByText("Conversación con el líder")).toBeTruthy();
+  });
+});
+
+describe("ProposalThread — the pastor's message (ADR-0065)", () => {
+  it("offers the box only where asked, and posts with `pastor: true` when ticked", async () => {
+    const { unmount } = renderThread();
+    expect(screen.queryByLabelText("Es el mensaje del pastor")).toBeNull();
+    unmount();
+
+    const { onPost } = renderThread({ viewerRole: "admin", pastorOption: true });
+    const tick = screen.getByLabelText("Es el mensaje del pastor") as HTMLInputElement;
+    fireEvent.click(tick);
+    // A pasted message is long: the composer grows and says what goes in it.
+    const box = screen.getByPlaceholderText("Pega aquí el mensaje del pastor…") as HTMLTextAreaElement;
+    expect(box.rows).toBe(6);
+    fireEvent.change(box, { target: { value: "Hermanos, este domingo: Efesios 2." } });
+    fireEvent.click(screen.getByText("Enviar"));
+    await waitFor(() => expect(onPost).toHaveBeenCalledWith("Hermanos, este domingo: Efesios 2.", { pastor: true }));
+    // Reset with the text, so the next message is not marked by accident.
+    await waitFor(() => expect(tick.checked).toBe(false));
+  });
+
+  it("labels a pastor's note as the pastor's, naming who relayed it", () => {
+    renderThread({
+      messages: [
+        msg({ _key: "p", author: "adm-1", author_role: "admin", author_name: "Frank", kind: "pastor_note", body: "Efesios 2" }),
+        msg({ _key: "q", author: null, author_role: "admin", author_name: null, kind: "pastor_note", body: "Gracia", at: "2026-08-21T15:00:00.000Z" }),
+      ],
+    });
+    expect(screen.getByText("Mensaje del pastor · vía Frank")).toBeTruthy();
+    expect(screen.getByText("Mensaje del pastor")).toBeTruthy();
   });
 });

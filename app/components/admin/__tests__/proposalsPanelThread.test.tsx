@@ -34,6 +34,7 @@ interface Row {
   lead_name: string;
   lead_id: string;
   messages?: unknown[];
+  earlier_messages?: unknown[] | null;
   admin_notes?: string;
   songs: Array<{ _key: string; play_key: string; song_id: string; title: string; author: string; key: string }>;
 }
@@ -153,5 +154,26 @@ describe("ProposalsPanel — posting into a card's thread", () => {
     expect(boxes.length).toBeGreaterThan(0);
     for (const box of boxes) expect(box.value).not.toBe(LEGACY);
     for (const box of boxes) expect(box.value).toBe("");
+  });
+  it("opens the card's thread with what admins wrote before the proposal existed (ADR-0065)", async () => {
+    stubApi(
+      [
+        row({
+          earlier_messages: [
+            { _key: "e1", author_role: "admin", author_name: "Frank", body: "Tema del pastor: gracia", at: "2026-08-30T15:00:00.000Z" },
+          ],
+          messages: [
+            { _key: "m1", author_role: "lead", author_name: "Ana", body: "Escogí canciones de gracia", at: "2026-09-01T15:00:00.000Z" },
+          ],
+        }),
+      ],
+      {},
+    );
+    render(<ToastProvider><ProposalsPanel viewerId="admin-1" /></ToastProvider>);
+    await waitFor(() => expect(screen.queryByText("Ana Líder")).not.toBeNull());
+    const earlier = screen.getByText("Tema del pastor: gracia");
+    const reply = screen.getByText("Escogí canciones de gracia");
+    // One thread, oldest first.
+    expect(earlier.compareDocumentPosition(reply) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

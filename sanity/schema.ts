@@ -44,7 +44,9 @@ import { adminChatUsage } from './schemas/adminChatUsage';
 // The MCP month proposal (P4 on solver v3): hidden/read-only, written only by
 // app/mcp/monthProposals/proposalStore.ts. See sanity/schemas/mcpProposal.ts.
 import { mcpProposal } from './schemas/mcpProposal';
+// The conversation about a service before its setlist proposal exists (ADR-0065).
+import { serviceThread } from './schemas/serviceThread';
 
 export const schema: { types: SchemaTypeDefinition[] } = {
-  types: [post, tag, author, featuredSongs, saturdaySongs, saturdayRole, sundayRole, teamMembers, specialRole, loginEvent, setlistProposal, roleTargetLock, roleCreationReceipt, notificationOutbox, specialIdentityCoordinator, solverConfig, fairnessMonth, kidsPair, kidsSchedule, mcpOauthGrant, mcpOauthCodeRedemption, calendarFeed, adminChatUsage, mcpProposal],
+  types: [post, tag, author, featuredSongs, saturdaySongs, saturdayRole, sundayRole, teamMembers, specialRole, loginEvent, setlistProposal, roleTargetLock, roleCreationReceipt, notificationOutbox, specialIdentityCoordinator, solverConfig, fairnessMonth, kidsPair, kidsSchedule, mcpOauthGrant, mcpOauthCodeRedemption, calendarFeed, adminChatUsage, mcpProposal, serviceThread],
 }

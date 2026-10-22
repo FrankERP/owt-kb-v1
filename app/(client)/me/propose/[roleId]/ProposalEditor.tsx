@@ -65,6 +65,11 @@ interface Props {
   roleDoc: RoleDoc;
   proposal: SharedProposal | null;
   currentUserId: string;
+  /**
+   * What admins wrote to this service's leads from its card (ADR-0065) —
+   * typically what the pastor shared. Read-only here; merged into the thread by `at`.
+   */
+  earlierMessages?: ThreadMessage[] | null;
 }
 
 // ─── Key options ─────────────────────────────────────────────────────────────
@@ -144,7 +149,7 @@ export function proposalSnapshot(
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Props) {
+export default function ProposalEditor({ roleDoc, proposal, currentUserId, earlierMessages }: Props) {
   const router = useRouter();
 
   const [songs, setSongs] = useState<ProposalSong[]>(() => songsFromProposal(proposal));
@@ -576,11 +581,29 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
           textarea below stands in, and nothing is buffered client-side. */}
       {proposalId && (
         <ProposalThread
-          messages={messages}
+          // The admins' pre-proposal messages first (ADR-0065); the thread orders
+          // the whole list by `at`. Kept out of `messages` state on purpose: every
+          // post's read-back replaces that state with the PROPOSAL's thread only.
+          messages={[...(earlierMessages ?? []), ...messages]}
           viewerId={currentUserId}
           viewerRole="lead"
           serviceDate={roleDoc.service_date}
           onPost={postMessage}
+        />
+      )}
+
+      {/* Before the proposal exists there is no document to post into, but the
+          admins may already have written here — what the pastor shared, say.
+          The lead reads it now, while choosing songs, and answers through the
+          "Notas privadas" field below, which opens the proposal's thread. */}
+      {!proposalId && (earlierMessages?.length ?? 0) > 0 && (
+        <ProposalThread
+          messages={earlierMessages}
+          viewerId={currentUserId}
+          viewerRole="lead"
+          title="Mensajes de los admins"
+          serviceDate={roleDoc.service_date}
+          readOnlyHint="Para responder, escribe en «Notas privadas para revisión» al guardar tu propuesta."
         />
       )}
 

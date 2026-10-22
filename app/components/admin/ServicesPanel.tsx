@@ -90,6 +90,7 @@ import { BOARD_STICKY, ParticipationSidebar } from "@/app/components/admin/Parti
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
 import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
+import ServiceMessagesDialog from "./ServiceMessagesDialog";
 import Button from "../ui/Button";
 import Skeleton, { SkeletonGroup } from "../ui/Skeleton";
 import { revealProps } from "@/app/utils/reveal";
@@ -192,7 +193,22 @@ function Modal({
 
 // ─── Main panel ───────────────────────────────────────────────────────────────
 
-export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine } = {}) {
+export default function ServicesPanel({
+  engine = "v2",
+  viewerId = null,
+  onMonthEditorOpenChange,
+}: {
+  engine?: SolverEngine;
+  /** The signed-in admin's Sanity id — right-aligns their own bubbles in «Mensajes». */
+  viewerId?: string | null;
+  /**
+   * Told when the stored month editor («Editar mes» / «Editar servicio») opens and closes, so
+   * `AdminPanel` can drop the «Integridad de datos» panel above it. The editor runs the SAME
+   * integrity read for its own edit admission and says so itself when it refuses, so the panel
+   * only repeats an «OK» there. The queue, its routes and the rail's dot are untouched.
+   */
+  onMonthEditorOpenChange?: (open: boolean) => void;
+} = {}) {
   const [roles, setRoles]       = useState<ServiceRole[]>([]);
   const [members, setMembers]   = useState<MemberOption[]>([]);
   // The five read domains are tracked INDEPENDENTLY: a failure in one never
@@ -254,6 +270,12 @@ export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine
   const monthEditorOpenerRef = useRef<{ kind: "toolbar" | "new" | "card"; roleId?: string }>({ kind: "toolbar" });
   const wasShowingGeneratorRef = useRef(false);
   const wasShowingMonthEditorRef = useRef(false);
+  const monthEditorOpen = monthEditor !== null;
+  useEffect(() => {
+    onMonthEditorOpenChange?.(monthEditorOpen);
+  }, [monthEditorOpen, onMonthEditorOpenChange]);
+  // The panel comes back if this one unmounts mid-edit (a tab change keeps nothing open).
+  useEffect(() => () => onMonthEditorOpenChange?.(false), [onMonthEditorOpenChange]);
   useEffect(() => {
     if (wasShowingGeneratorRef.current && !showGenerator) {
       generatorTriggerRef.current?.focus();
@@ -279,6 +301,10 @@ export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine
 
   // Setlist
   const [setlistRole, setSetlistRole] = useState<ServiceRole | null>(null);
+  // «Mensajes del servicio» (ADR-0065). The role is kept after closing so the
+  // dialog keeps drawing its title while it animates away.
+  const [messagesRole, setMessagesRole] = useState<ServiceRole | null>(null);
+  const [messagesOpen, setMessagesOpen] = useState(false);
   const [setlistOpen, setSetlistOpen] = useState(false);
 
   // Copy-instruments mode: pick a source card, then a target day to repeat its lineup.
@@ -1401,6 +1427,7 @@ export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine
               onEdit={() => openServiceEditor(card.role)}
               onDelete={() => openEditModal({ type: "delete", role: card.role })}
               onSetlist={() => openSetlist(card.role)}
+              onMessages={() => { setMessagesRole(card.role); setMessagesOpen(true); }}
               // The menu's `Publicar` is the explicit override path when workflow
               // blockers remain; a clean draft goes through the ready confirmation.
               onPublish={() =>
@@ -1420,6 +1447,18 @@ export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine
           </div>
         </div>
       )}
+
+      <ServiceMessagesDialog
+        open={messagesOpen}
+        roleId={messagesRole?._id ?? null}
+        title={[
+          "Mensajes",
+          messagesRole ? formatDate(messagesRole.date) : null,
+          messagesRole?._type === "special_role" ? messagesRole.service_name : null,
+        ].filter(Boolean).join(" · ")}
+        viewerId={viewerId}
+        onClose={() => setMessagesOpen(false)}
+      />
 
       {/* ── Modals: mounted always, opened by the prop, bodies keyed on the open
              so a close keeps drawing what it is animating away. ── */}

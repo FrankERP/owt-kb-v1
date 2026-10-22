@@ -55,6 +55,8 @@ export type ActiveDay = {
   bgvs?: Array<{ member_name: string; alias?: string }>;
   chorus?: Array<{ member_name: string; alias?: string }>;
   roleId?: string;
+  /** The service document's `_id` (weekend role or special) — the DayCard's «Mensajes». */
+  serviceId?: string;
 };
 
 interface Props {
@@ -228,6 +230,7 @@ export default function CalendarView({ activeDays, viewMonth, todayStr, photos, 
                 bgvs={d.bgvs}
                 chorus={d.chorus}
                 roleId={d.roleId}
+                serviceId={d.serviceId}
                 photos={photos}
                 viewerTypes={viewerTypes}
                 viewerName={viewerName}
