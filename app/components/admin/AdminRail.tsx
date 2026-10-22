@@ -40,8 +40,8 @@
 // cannot add one.
 
 import { useRef, useState, useSyncExternalStore } from "react";
-import { CalendarIcon } from "@/app/components/ui/icons";
 import { SCROLL_FADE_RIGHT, useScrollableRight } from "../ui/useScrollableRight";
+import { CalendarIcon } from "@/app/components/ui/icons";
 
 import type { AdminTabId } from "./proposalHandoff";
 import Button from "../ui/Button";
