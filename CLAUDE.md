@@ -42,7 +42,10 @@ rule changes, change both; if they disagree, this file wins.
   `python3.12 -m venv .venv && .venv/bin/pip install -r gcf_v3/requirements.txt` (and/or `gcf/`),
   then run the suite with `.venv/bin/python` (the system `python` is 3.13 and refuses global
   installs). Keys reach a session only as network secrets the proxy injects (`docs/SECRETS.md`),
-  never as readable variables. The long form lists what still needs the Mac.
+  never as readable variables. The long form lists what still needs the Mac. The solver is
+  verified/re-deployed via `solver-v3-ops.yml` (ADR-0068): ask Frank before dispatching `deploy`;
+  **never approve, reject or bypass a pending deployment**, nor change its environments or the WIF
+  setup without his OK — the session acts as `FrankERP`, so this rule is the only gate.
 - **On the Mac — worktrees only when two things must be in flight at once** (`Agent` with
   `isolation: "worktree"`, or `EnterWorktree` — never a hand-rolled `git worktree add`; code
   review needs none). `node_modules` via APFS clone (`cp -Rc`) from the primary checkout — never a fresh install.

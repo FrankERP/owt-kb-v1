@@ -1,0 +1,234 @@
+# Operations for the production solver function `owt-solver-v3`, from GitHub Actions instead of
+# a laptop (ADR-0068; plan docs/superpowers/plans/2026-10-22-solver-v3-gha-wif-ops.md).
+#
+#   verify — after every push to main that touches gcf_v3/ (the Cloud Build trigger deploys those),
+#            or on demand: the function is ACTIVE, the ping answers ok/contract 3/the expected build,
+#            the smoke solve proves every stage, and production serves exactly main's gcf_v3/.
+#   deploy — on demand only, Frank approves the run (environment `solver-deploy`): re-runs the
+#            EXISTING trigger `owt-solver-v3-deploy` at main's tip, then verify runs on that build.
+#
+# Google access is keyless (Workload Identity Federation): the provider only federates THIS file,
+# on refs/heads/main, in one of the two environments, for repository id 837387462. The setup lives
+# in scripts/gcp/setup-solver-v3-gha-wif.sh. Nothing here is a CI gate — `gates` does not and must
+# not depend on this workflow (docs/CI.md).
+#
+# The repository is public, so are these logs. The API key, the function URL and its host are
+# masked before anything could print them, no step runs `set -x`, and a run prints only state,
+# times, build SHAs, ok/contract and the verdict — never a response body. Guard:
+# scripts/__tests__/solverOpsWorkflow.test.ts.
+name: Solver v3 ops
+
+on:
+  push:
+    branches: [main]
+    paths: ['gcf_v3/**']
+  workflow_dispatch:
+    inputs:
+      action:
+        description: verify (read-only) or deploy (re-runs the production trigger; Frank approves)
+        type: choice
+        options: [verify, deploy]
+        default: verify
+
+# A newer gcf_v3 merge's verify covers the older one; on-demand runs queue and never cancel each
+# other. A deploy waiting for approval holds `solver-v3-ops`, and GitHub keeps only ONE further
+# pending run in a group (a newer one replaces it silently): approve, reject or cancel the waiting
+# run first.
+concurrency:
+  group: ${{ github.event_name == 'push' && 'solver-v3-verify-push' || 'solver-v3-ops' }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: deploy
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'deploy' }}
+    runs-on: ubuntu-latest
+    environment: solver-deploy
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2.2.1
+
+      # Run the trigger, not a deploy of our own: the build is then exactly the normal production
+      # path (gcf_v3/cloudbuild.yaml, the trigger's account, $COMMIT_SHA = this commit), and its
+      # logs, which print the function URL, stay in Cloud Logging.
+      - name: Run the production trigger at main's tip
+        env:
+          GCP_PROJECT: ${{ vars.GCP_PROJECT }}
+        run: |
+          set -euo pipefail
+          export CLOUDSDK_CORE_DISABLE_FILE_LOGGING=true
+
+          # A run queued behind a newer merge must not deploy an older tree. It also refuses
+          # after an unrelated merge landed while this run waited for approval: re-dispatch.
+          git fetch -q origin main
+          tip="$(git rev-parse origin/main)"
+          if [ "$GITHUB_SHA" != "$tip" ]; then
+            echo "::error::This run is at $GITHUB_SHA but main is now at $tip. Re-dispatch deploy from main."
+            exit 1
+          fi
+
+          build_id="$(gcloud builds triggers run owt-solver-v3-deploy --region=global \
+            --project="$GCP_PROJECT" --sha="$GITHUB_SHA" --format='value(metadata.build.id)')"
+          if [ -z "$build_id" ]; then
+            echo "::error::The trigger returned no build id. A build may have started anyway: check Cloud Build in the console before re-dispatching."
+            exit 1
+          fi
+          echo "Cloud Build build $build_id started for $GITHUB_SHA"
+
+          deadline=$((SECONDS + 900))
+          while :; do
+            # A transient read error retries until the deadline instead of losing the build id.
+            status="$(gcloud builds describe "$build_id" --region=global --project="$GCP_PROJECT" \
+              --format='value(status)')" || status="(status unreadable)"
+            case "$status" in
+              SUCCESS)
+                times="$(gcloud builds describe "$build_id" --region=global --project="$GCP_PROJECT" \
+                  --format='value(startTime,finishTime)')" || times="(times unreadable)"
+                echo "Build $build_id: SUCCESS ($times)"
+                break
+                ;;
+              FAILURE|INTERNAL_ERROR|TIMEOUT|CANCELLED|EXPIRED)
+                echo "::error::Build $build_id ended $status (logs: Cloud Build, Cloud Logging)."
+                exit 1
+                ;;
+            esac
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "::error::Build $build_id still $status after 15 minutes. Check it in Cloud Build before re-dispatching."
+              exit 1
+            fi
+            sleep 20
+          done
+
+  verify:
+    name: verify
+    needs: deploy
+    # A job whose `needs` was skipped is skipped too, and a run of only skipped jobs concludes
+    # success (scripts/lib/ci-layout.mjs, top). So: after a deploy only when it succeeded; on its
+    # own only on push or a `verify` dispatch. A failed or rejected deploy never ends green.
+    if: ${{ !cancelled() && (needs.deploy.result == 'success' || (needs.deploy.result == 'skipped' && (github.event_name == 'push' || inputs.action == 'verify'))) }}
+    runs-on: ubuntu-latest
+    environment: solver-verify
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2.2.1
+
+      - name: Verify the deployed function
+        env:
+          GCP_PROJECT: ${{ vars.GCP_PROJECT }}
+          MODE: ${{ github.event_name == 'push' && 'push' || (needs.deploy.result == 'success' && 'post-deploy' || 'dispatch') }}
+        run: |
+          set -euo pipefail
+          export CLOUDSDK_CORE_DISABLE_FILE_LOGGING=true
+          fn=(owt-solver-v3 --gen2 --region=us-central1 --project="$GCP_PROJECT")
+          sha_re='^[0-9a-f]{40}$'
+
+          read_fn() {
+            local out
+            out="$(gcloud functions describe "${fn[@]}" \
+              --format='csv[no-heading](state,serviceConfig.environmentVariables.OWT_SOLVER_V3_BUILD)')" || return 1
+            IFS=, read -r state build <<<"$out"
+          }
+
+          # 1. Expected build: this commit after a deploy or on push; none fixed on a plain dispatch
+          #    (source identity, step 4, decides).
+          expect=""
+          if [ "$MODE" != dispatch ]; then expect="$GITHUB_SHA"; fi
+
+          # 2. Wait for the trigger's (or our) build to be the serving one. On push only, a build
+          #    that DESCENDS from this commit means a newer gcf_v3 merge already superseded it.
+          if [ -n "$expect" ]; then
+            deadline=$((SECONDS + 900))
+            while :; do
+              # A transient read error retries until the deadline (fails closed at the deadline).
+              if ! read_fn; then state="(unreadable)"; build=""; fi
+              if [ "$state" = ACTIVE ] && [ "$build" = "$expect" ]; then break; fi
+              if [ "$MODE" = push ] && [ "$state" = ACTIVE ] && [[ "$build" =~ $sha_re ]]; then
+                git fetch -q origin main || true
+                if git merge-base --is-ancestor "$expect" "$build" 2>/dev/null; then
+                  echo "Superseded by a newer deploy ($build); verifying that one."
+                  break
+                fi
+              fi
+              if [ "$SECONDS" -ge "$deadline" ]; then
+                echo "::error::After 15 minutes the function is $state at build $build, not $expect."
+                exit 1
+              fi
+              sleep 30
+            done
+          fi
+
+          # 3. State, ping and smoke — docs/SOLVER_AND_INFRA.md «Verifying a v3 deploy».
+          read_fn || { echo "::error::Could not read the function."; exit 1; }
+          updated="$(gcloud functions describe "${fn[@]}" --format='value(updateTime)')"
+          echo "state=$state updateTime=$updated build=$build"
+          if [ "$state" != ACTIVE ]; then echo "::error::The function is $state, not ACTIVE."; exit 1; fi
+          if ! [[ "$build" =~ $sha_re ]]; then echo "::error::The deployed build is not a commit SHA."; exit 1; fi
+
+          url="$(gcloud functions describe "${fn[@]}" --format='value(serviceConfig.uri)')"
+          host="${url#https://}"
+          host="${host%%/*}"
+          echo "::add-mask::$url"
+          echo "::add-mask::$host"
+          key="$(gcloud secrets versions access latest --secret=owt-solver-api-key --project="$GCP_PROJECT")"
+          echo "::add-mask::$key"
+
+          read -r p_ok p_contract p_build <<<"$(printf 'X-Api-Key: %s\n' "$key" \
+            | curl -s --max-time 150 -X POST "$url" -H @- -H 'Content-Type: application/json' -d '{"contract":3,"ping":true}' \
+            | python3 -I -c 'import json,sys; r=json.load(sys.stdin); print(r.get("ok"), r.get("contract"), r.get("build"))')"
+          read -r s_ok s_proven <<<"$(printf 'X-Api-Key: %s\n' "$key" \
+            | curl -s --max-time 150 -X POST "$url" -H @- -H 'Content-Type: application/json' -d @gcf_v3/acceptance/smoke.json \
+            | python3 -I -c 'import json,sys; r=json.load(sys.stdin); s=r.get("stages") or []; print(r.get("ok"), bool(s) and all(x.get("status") == "proven" for x in s))')"
+          unset key
+
+          echo "ping: ok=$p_ok contract=$p_contract build=$p_build"
+          echo "smoke: ok=$s_ok all_proven=$s_proven"
+          if [ "$p_ok" != True ] || [ "$p_contract" != 3 ] || [ "$p_build" != "$build" ]; then
+            echo "::error::The ping did not answer True 3 $build."
+            exit 1
+          fi
+          if [ "$s_ok" != True ] || [ "$s_proven" != True ]; then
+            echo "::error::The smoke solve did not answer True True."
+            exit 1
+          fi
+
+          # 4. Source identity: production serves exactly main's gcf_v3/. The diff also counts
+          #    files gcf_v3/.gcloudignore keeps out of the artifact (tests/, acceptance/, test_*.py),
+          #    so «behind» can mean an identical function: that errs toward a redundant redeploy,
+          #    never a false green.
+          git fetch -q origin main
+          if git merge-base --is-ancestor "$build" origin/main 2>/dev/null \
+            && git diff --quiet "$build" origin/main -- gcf_v3; then
+            echo "OK: owt-solver-v3 is ACTIVE at $build, ping and smoke pass, and it serves main's gcf_v3/."
+          else
+            echo "::error::Production ($build) is behind main's gcf_v3/ (possibly only files the artifact leaves out, see gcf_v3/.gcloudignore). Dispatch deploy if it should change."
+            exit 1
+          fi

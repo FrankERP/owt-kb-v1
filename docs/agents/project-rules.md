@@ -85,9 +85,19 @@ disagree, `CLAUDE.md` wins and this file is the one to fix.
   (Ableton), `scripts/dev-verify.ts` and other `.env.local` scripts until their secrets are
   set up as network secrets, the canonical copy of the adversarial-plan-review skill and the
   agent definitions under `~/.claude/agents/`. Google-side secret rotations go through Google
-  Cloud Shell in the browser, not a laptop. Open phases (a read-only Sanity token for the
-  scripts, a keyless GitHub Actions workflow to verify and fall back on the solver deploy)
-  land with their own docs and `docs/SECRETS.md` entries.
+  Cloud Shell in the browser, not a laptop. **The production solver is verified and re-deployed
+  from GitHub Actions** (`.github/workflows/solver-v3-ops.yml`, keyless, ADR-0068): `verify` runs
+  by itself after every `gcf_v3/**` merge; a session dispatches `verify` (or, after Frank says
+  yes in the thread, `deploy`) with the GitHub connector's `actions_run_trigger` and reads the
+  result with `get_job_logs`. If the session's token cannot dispatch, Frank runs it from
+  github.com (a phone browser works). **Agent rule — deploy approval is Frank's, by policy:** the
+  session acts on GitHub as `FrankERP` with admin, so GitHub would accept an approval it sent and
+  record it as Frank's; no setting can stop that, so the rule does. An agent never approves,
+  rejects or bypasses a pending deployment (no `POST …/pending_deployments`, by any tool or
+  `gh api`), and never changes either environment's protection rules, branch policy or variables,
+  nor the Workload Identity pool, provider or grants, without Frank's explicit OK for that change.
+  Open phase: a read-only Sanity token for the scripts lands with its own docs and
+  `docs/SECRETS.md` entry.
 - **On the Mac — worktrees only when two things must be in flight at once** — parallel agents
   writing overlapping files (`Agent` with `isolation: "worktree"`) or protecting the
   primary tree while gates/servers run elsewhere (`EnterWorktree`, never a hand-rolled
