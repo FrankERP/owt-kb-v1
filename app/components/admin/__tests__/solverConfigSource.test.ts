@@ -455,7 +455,7 @@ describe("saveFailure — the version refusal and the exact-count refusal (C3 T6
 
   it("names the pair of an `:exact_overlap` refusal from the config it SENT", () => {
     expect(saveFailure(400, refusal(["restrictions[1].caps[0]:exact_overlap"]), anaCaps("ana "))).toEqual({
-      message: "Hay dos números fijos para Dom Lead de Ana («Sun.* == 2»). Quita uno y guarda de nuevo; no se guardó nada.",
+      message: "Hay dos números fijos para Líder en domingo de Ana («Domingos: exactamente 2 al mes»). Quita uno y guarda de nuevo; no se guardó nada.",
       stale: false,
     });
   });
@@ -476,16 +476,16 @@ describe("saveFailure — the version refusal and the exact-count refusal (C3 T6
 });
 
 describe("the A38 copy (C3 §6.2)", () => {
-  it("names a role the way the form's pattern list names it", () => {
+  it("names a role the way the form's pattern list names it (bloque 2: in Spanish)", () => {
     expect(EXACT_ROLE_LABEL).toEqual({
-      "Sun.Lead": "Dom Lead", "Sat.Lead": "Sáb Lead", "Sun.BGV": "Dom BGV", "Sat.BGV": "Sáb BGV", "Sun.Choir": "Dom Coro",
+      "Sun.Lead": "Líder en domingo", "Sat.Lead": "Líder en sábado", "Sun.BGV": "BGV en domingo", "Sat.BGV": "BGV en sábado", "Sun.Choir": "Coro en domingo",
     });
   });
 
   it("has one wording per surface", () => {
-    expect(exactOverlapFormMessage({ role: "Sat.Lead", person: "Ana", rule: "Sat.* == 1" })).toBe(
-      "Ya hay un número fijo para Sáb Lead de Ana («Sat.* == 1»). Quita uno de los dos.",
+    expect(exactOverlapFormMessage({ role: "Sat.Lead", person: "Ana", rule: "Sábados: exactamente 1 al mes" })).toBe(
+      "Ya hay un número fijo para Líder en sábado de Ana («Sábados: exactamente 1 al mes»). Quita uno de los dos.",
     );
-    expect(exactOverlapCardMessage("Sun.Choir")).toBe("Dos números fijos para Dom Coro: quita uno para poder guardar.");
+    expect(exactOverlapCardMessage("Sun.Choir")).toBe("Dos números fijos para Coro en domingo: quita uno para poder guardar.");
   });
 });
