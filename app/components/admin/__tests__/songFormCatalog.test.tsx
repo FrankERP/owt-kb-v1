@@ -15,9 +15,15 @@ afterEach(cleanup);
 
 const entry = (_id: string, name: string): SongTag => ({ _id, name, slug: { current: _id } });
 
-function form(props: { allAuthors: SongTag[]; allTags?: SongTag[]; canCreateAuthor?: (n: string) => Promise<SongTag | null> }) {
+function form(props: {
+  allAuthors: SongTag[];
+  allTags?: SongTag[];
+  canCreateAuthor?: (n: string) => Promise<SongTag | null>;
+  initial?: { authorIds?: string[]; tagIds?: string[] };
+}) {
   return (
     <SongForm
+      initial={props.initial}
       allTags={props.allTags ?? []}
       allAuthors={props.allAuthors}
       onSubmit={vi.fn()}
@@ -33,10 +39,32 @@ describe("SongForm catalogue", () => {
   it("shows artists and tags that arrive after the form mounted", () => {
     const { rerender } = render(form({ allAuthors: [] }));
     expect(screen.queryByRole("button", { name: "Un Corazón" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Ver todos/ })).toBeNull();
 
     rerender(form({ allAuthors: [entry("a1", "Un Corazón")], allTags: [entry("t1", "Adoración")] }));
+    // With nothing typed the catalogue is folded (bloque 5): «Ver todos (N)» unfolds it.
+    const [authors, tags] = screen.getAllByRole("button", { name: "Ver todos (1)" });
+    fireEvent.click(authors);
     expect(screen.getByRole("button", { name: "Un Corazón" })).not.toBeNull();
+    fireEvent.click(tags);
     expect(screen.getByRole("button", { name: "#Adoración" })).not.toBeNull();
+    fireEvent.click(screen.getAllByRole("button", { name: "Ver menos" })[0]);
+    expect(screen.queryByRole("button", { name: "Un Corazón" })).toBeNull();
+  });
+
+  it("with nothing typed, shows only the song's own chips and folds the rest", () => {
+    render(
+      form({
+        allAuthors: [entry("a1", "Un Corazón"), entry("a2", "Hillsong")],
+        initial: { authorIds: ["a2"] },
+      }),
+    );
+    expect(screen.getByRole("button", { name: "Hillsong" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByRole("button", { name: "Un Corazón" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Ver todos (2)" }));
+    expect(screen.getByRole("button", { name: "Un Corazón" }).getAttribute("aria-pressed")).toBe("false");
+    // The song's own chip stays while unfolded.
+    expect(screen.getByRole("button", { name: "Hillsong" })).not.toBeNull();
   });
 
   // A parent appends whatever the idempotent create POST returns, so after a
@@ -44,6 +72,7 @@ describe("SongForm catalogue", () => {
   // form has created nothing yet, so only de-duping the catalogue itself helps.
   it("lists a catalogue entry once even when the parent holds it twice", () => {
     render(form({ allAuthors: [entry("a1", "Un Corazón"), entry("a1", "Un Corazón"), entry("a2", "Hillsong")] }));
+    fireEvent.click(screen.getByRole("button", { name: "Ver todos (2)" }));
     expect(screen.getAllByRole("button", { name: "Un Corazón" })).toHaveLength(1);
   });
 
@@ -60,7 +89,7 @@ describe("SongForm catalogue", () => {
     await waitFor(() => expect(artist.value).toBe(""));
     const chips = screen.getAllByRole("button", { name: "Un Corazón" });
     expect(chips).toHaveLength(1);
-    expect(chips[0].className).toContain("bg-accent/15");
+    expect(chips[0].getAttribute("aria-pressed")).toBe("true");
   });
 
   // Members type Spanish without accents: «un corazon» must find «Un Corazón»,

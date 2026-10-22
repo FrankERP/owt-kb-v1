@@ -7,6 +7,7 @@ import { normalizeText } from "@/app/utils/normalizeText";
 import { chartsFromSong, chartsToPayload, type ChartDraft } from "@/app/utils/songFormCharts";
 import { addRow, newRowId, removeRow, rowsFromStored, rowsToPayload, updateRow, type RowDraft } from "@/app/utils/songFormRows";
 import { ChordChartsFields } from "@/app/components/admin/ChordChartsFields";
+import Button from "@/app/components/ui/Button";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -136,6 +137,11 @@ export function SongForm({
   const [tagSearch, setTagSearch]         = useState("");
   const [createdAuthors, setCreatedAuthors] = useState<SongTag[]>([]);
   const [authorSearch, setAuthorSearch]   = useState("");
+  // The catalogue is 44 artists and growing: with nothing typed the form shows
+  // only the song's own chips and a «Ver todos (N)» that unfolds the rest
+  // (bloque 5). Typing filters as before; «+ Crear» is in that list.
+  const [showAllAuthors, setShowAllAuthors] = useState(false);
+  const [showAllTags, setShowAllTags]       = useState(false);
   const [creatingAuthor, setCreatingAuthor] = useState(false);
   const lyricsRef                         = useRef<HTMLTextAreaElement>(null);
   const ids = useId();
@@ -279,25 +285,14 @@ export function SongForm({
             </div>
           </div>
         ) : (
-          <div className="flex flex-wrap gap-1.5">
-            {localAuthors.map((author) => {
-              const active = form.authorIds.includes(author._id);
-              return (
-                <button
-                  key={author._id}
-                  type="button"
-                  onClick={() => toggleAuthor(author._id)}
-                  className={`font-label text-[11px] uppercase tracking-widest px-2.5 py-1 rounded-full border transition-colors ${
-                    active
-                      ? "border-accent bg-accent/15 text-accent"
-                      : "border-accent/20 text-mono-500 hover:border-accent/50"
-                  }`}
-                >
-                  {author.name}
-                </button>
-              );
-            })}
-          </div>
+          <ChipFold
+            items={localAuthors}
+            selected={form.authorIds}
+            showAll={showAllAuthors}
+            onToggleAll={() => setShowAllAuthors((v) => !v)}
+            onToggle={toggleAuthor}
+            label={(a) => a.name}
+          />
         )}
       </div>
 
@@ -460,25 +455,14 @@ export function SongForm({
             </div>
           </div>
         ) : (
-          <div className="flex flex-wrap gap-1.5">
-            {localTags.map((tag) => {
-              const active = form.tagIds.includes(tag._id);
-              return (
-                <button
-                  key={tag._id}
-                  type="button"
-                  onClick={() => toggleTag(tag._id)}
-                  className={`font-label text-[11px] uppercase tracking-widest px-2.5 py-1 rounded-full border transition-colors ${
-                    active
-                      ? "border-accent bg-accent/15 text-accent"
-                      : "border-accent/20 text-mono-500 hover:border-accent/50"
-                  }`}
-                >
-                  #{tag.name}
-                </button>
-              );
-            })}
-          </div>
+          <ChipFold
+            items={localTags}
+            selected={form.tagIds}
+            showAll={showAllTags}
+            onToggleAll={() => setShowAllTags((v) => !v)}
+            onToggle={toggleTag}
+            label={(t) => `#${t.name}`}
+          />
         )}
       </div>
 
@@ -500,5 +484,44 @@ export function SongForm({
         </button>
       </div>
     </form>
+  );
+}
+
+/**
+ * The catalogue row under «Artista» and «Tags» with nothing typed: the entries
+ * this song has (house pills, pressed), then «Ver todos (N)» / «Ver menos» for
+ * the rest. Selected entries stay visible while unfolded, so a press never
+ * makes a chip vanish from under the finger.
+ */
+function ChipFold({
+  items,
+  selected,
+  showAll,
+  onToggleAll,
+  onToggle,
+  label,
+}: {
+  items: SongTag[];
+  selected: string[];
+  showAll: boolean;
+  onToggleAll: () => void;
+  onToggle: (id: string) => void;
+  label: (item: SongTag) => string;
+}) {
+  const shown = showAll ? items : items.filter((item) => selected.includes(item._id));
+  const folded = items.length - shown.length;
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {shown.map((item) => (
+        <Button key={item._id} variant="pill" size="sm" active={selected.includes(item._id)} onClick={() => onToggle(item._id)}>
+          {label(item)}
+        </Button>
+      ))}
+      {(folded > 0 || showAll) && (
+        <Button variant="ghost" size="sm" onClick={onToggleAll}>
+          {showAll ? "Ver menos" : `Ver todos (${items.length})`}
+        </Button>
+      )}
+    </div>
   );
 }

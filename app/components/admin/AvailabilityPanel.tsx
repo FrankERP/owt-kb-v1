@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
 import Button from "@/app/components/ui/Button";
+import SegmentedControl from "@/app/components/ui/SegmentedControl";
+import { NoteIcon } from "@/app/components/ui/icons";
 import Skeleton, { SkeletonGroup } from "@/app/components/ui/Skeleton";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -208,21 +210,17 @@ export default function AvailabilityPanel() {
               : "Sin conflictos en próximos servicios"}
           </p>
         </div>
-        <div className="flex rounded-lg border border-accent/20 overflow-hidden shrink-0">
-          {(["conflicts", "matrix"] as const).map(v => (
-            <button
-              key={v}
-              onClick={() => setViewMode(v)}
-              className={`px-3 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
-                viewMode === v
-                  ? "bg-surface-accent-solid text-on-fill"
-                  : "text-mono-500 hover:text-accent"
-              }`}
-            >
-              {v === "conflicts" ? "Conflictos" : "Matriz"}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          label="Vista"
+          tone="filled"
+          className="shrink-0"
+          value={viewMode}
+          onChange={setViewMode}
+          options={[
+            { value: "conflicts", label: "Conflictos" },
+            { value: "matrix", label: "Matriz" },
+          ]}
+        />
       </div>
 
       {/* ── Conflicts view ── */}
@@ -305,7 +303,8 @@ export default function AvailabilityPanel() {
                                     : "bg-warning-fg/15 text-warning-strong border border-warning-fg/25"
                                 }`}
                               >
-                                {fmtDate(d)}{note ? " ✎" : ""}
+                                {fmtDate(d)}
+                                {note && <NoteIcon size={10} className="ml-1 inline-block align-[-1px]" />}
                               </span>
                             );
                           })}

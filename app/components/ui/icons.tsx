@@ -175,6 +175,16 @@ export function CalendarIcon(props: IconProps) {
   );
 }
 
+/** A member's availability note — the Disponibilidad matrix's mark on a date (was the ✎ emoji). */
+export function NoteIcon(props: IconProps) {
+  return (
+    <Icon name="note" {...props}>
+      <path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9Z" />
+      <path d="M15 3v4a2 2 0 0 0 2 2h4" />
+    </Icon>
+  );
+}
+
 /** «Pantalla completa» — the Servicios board's and the planner's toggle (was ⛶). */
 export function ExpandIcon(props: IconProps) {
   return (

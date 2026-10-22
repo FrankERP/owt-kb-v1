@@ -152,9 +152,11 @@ export default function ActivityPanel() {
       {/* Summary stats */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "Activos esta semana",  value: activeThisWeek,  dot: "bg-positive-deep"  },
-          { label: "Activos este mes",     value: activeThisMonth, dot: "bg-recency-fg" },
-          { label: "Sin actividad",        value: neverActive,     dot: "bg-mono-600"   },
+          // Short on purpose: «Activos esta semana» wrapped to three lines in a
+          // third of a 390 px phone (bloque 5). The dot says «activos».
+          { label: "Esta semana",   value: activeThisWeek,  dot: "bg-positive-deep"  },
+          { label: "Este mes",      value: activeThisMonth, dot: "bg-recency-fg" },
+          { label: "Sin actividad", value: neverActive,     dot: "bg-mono-600"   },
         ].map((stat) => (
           <div key={stat.label} className="rounded-xl border border-edge-accent-subtle bg-accent/5 px-4 py-3 text-center">
             <div className="flex items-center justify-center gap-1.5 mb-1">

@@ -24,6 +24,7 @@ import Select from "@/app/components/ui/Select";
 import EmailPrefToggles, { resolveEmailPrefs, type EmailPrefValues } from "../ui/EmailPrefToggles";
 import { useToast } from "../ui/Toast";
 import SegmentedControl from "../ui/SegmentedControl";
+import { PlusIcon } from "../ui/icons";
 import {
   ALL_MINISTRY_IDS,
   MANAGEABLE_MINISTRY_IDS,
@@ -452,23 +453,13 @@ export function MemberForm({
       </div>
       <div className="space-y-2">
         <label className="font-label text-xs uppercase tracking-widest text-mono-500">Tipo</label>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {MEMBER_TYPES.map(({ value, label }) => {
             const active = memberType.includes(value);
             return (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={active}
-                onClick={() => toggleType(value)}
-                className={`flex-1 py-2 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors ${
-                  active
-                    ? "border-accent bg-accent/15 text-accent"
-                    : "border-accent/20 text-mono-500 hover:border-accent/50"
-                }`}
-              >
+              <Button key={value} variant="pill" active={active} onClick={() => toggleType(value)}>
                 {label}
-              </button>
+              </Button>
             );
           })}
         </div>
@@ -476,23 +467,13 @@ export function MemberForm({
       {memberType.includes("instrumento") && (
         <div className="space-y-2">
           <label className="font-label text-xs uppercase tracking-widest text-mono-500">Instrumentos</label>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {DEFAULT_INSTRUMENT_SEATS.map((value) => {
               const active = instruments.includes(value);
               return (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => toggleInstrument(value)}
-                  className={`flex-1 py-2 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors ${
-                    active
-                      ? "border-accent bg-accent/15 text-accent"
-                      : "border-accent/20 text-mono-500 hover:border-accent/50"
-                  }`}
-                >
+                <Button key={value} variant="pill" active={active} onClick={() => toggleInstrument(value)}>
                   {value}
-                </button>
+                </Button>
               );
             })}
           </div>
@@ -503,23 +484,13 @@ export function MemberForm({
       )}
       <div className="space-y-2">
         <label className="font-label text-xs uppercase tracking-widest text-mono-500">Ministerios</label>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {ALL_MINISTRY_IDS.map((id) => {
             const active = ministries.includes(id);
             return (
-              <button
-                key={id}
-                type="button"
-                aria-pressed={active}
-                onClick={() => toggleMinistry(id)}
-                className={`flex-1 py-2 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors ${
-                  active
-                    ? "border-accent bg-accent/15 text-accent"
-                    : "border-accent/20 text-mono-500 hover:border-accent/50"
-                }`}
-              >
+              <Button key={id} variant="pill" active={active} onClick={() => toggleMinistry(id)}>
                 {MINISTRIES[id].name}
-              </button>
+              </Button>
             );
           })}
         </div>
@@ -529,23 +500,13 @@ export function MemberForm({
       </div>
       <div className="space-y-2">
         <label className="font-label text-xs uppercase tracking-widest text-mono-500">Administra ministerios</label>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {MANAGEABLE_MINISTRY_IDS.map((id) => {
             const active = managesMinistries.includes(id);
             return (
-              <button
-                key={id}
-                type="button"
-                aria-pressed={active}
-                onClick={() => toggleManagedMinistry(id)}
-                className={`flex-1 py-2 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors ${
-                  active
-                    ? "border-accent bg-accent/15 text-accent"
-                    : "border-accent/20 text-mono-500 hover:border-accent/50"
-                }`}
-              >
+              <Button key={id} variant="pill" active={active} onClick={() => toggleManagedMinistry(id)}>
                 {MINISTRIES[id].name}
-              </button>
+              </Button>
             );
           })}
         </div>
@@ -568,12 +529,12 @@ export function MemberForm({
         </div>
       )}
       <div className="flex gap-3 pt-1">
-        <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors">
+        <Button variant="secondary" className="flex-1" onClick={onClose}>
           Cancelar
-        </button>
-        <button type="submit" disabled={loading} className="flex-1 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
-          {loading ? "Guardando..." : "Guardar"}
-        </button>
+        </Button>
+        <Button type="submit" variant="primary" className="flex-1" busy={loading} busyLabel="Guardando...">
+          Guardar
+        </Button>
       </div>
     </form>
   );
@@ -618,12 +579,12 @@ function PasswordForm({
         <input className={inputCls} type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required placeholder="Repetir contraseña" />
       </div>
       <div className="flex gap-3 pt-1">
-        <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors">
+        <Button variant="secondary" className="flex-1" onClick={onClose}>
           Cancelar
-        </button>
-        <button type="submit" disabled={loading} className="flex-1 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
-          {loading ? "Guardando..." : "Establecer"}
-        </button>
+        </Button>
+        <Button type="submit" variant="primary" className="flex-1" busy={loading} busyLabel="Guardando...">
+          Establecer
+        </Button>
       </div>
     </form>
   );
@@ -952,13 +913,10 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
             </p>
           )}
         </div>
-        <button
-          onClick={() => openModal("add")}
-          className="flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/15 px-4 py-2.5 font-label text-xs uppercase tracking-widest text-accent transition-colors hover:bg-accent/25"
-        >
-          <span className="text-base leading-none">+</span>
+        <Button variant="primary" onClick={() => openModal("add")}>
+          <PlusIcon size={14} />
           Agregar
-        </button>
+        </Button>
       </div>
 
       {/* Filter + sort controls */}
@@ -991,7 +949,10 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
           {/* Filter value dropdown */}
           <Select
             aria-label={filterKey === "type" ? "Tipo" : "Rol"}
-            className="min-w-[120px] flex-1"
+            // Below `sm` the dropdown is its own full line under the two segmented
+            // controls (bloque 5): the row wrapped wherever it ran out, with the
+            // dropdown squeezed between them.
+            className="order-last min-w-[120px] basis-full sm:order-none sm:flex-1 sm:basis-auto"
             value={filterValue}
             onChange={(e) => setFilterValue(e.target.value)}
           >
