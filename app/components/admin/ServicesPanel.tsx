@@ -87,6 +87,7 @@ import type {
   SetlistDomainSummary,
 } from "@/app/utils/serviceReadSummary";
 import { BOARD_STICKY, ParticipationSidebar } from "@/app/components/admin/ParticipationSidebar";
+import { CalendarIcon, ExpandIcon } from "@/app/components/ui/icons";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
 import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
@@ -117,15 +118,18 @@ const formatDate = (iso: string) => formatServiceDate(iso, "es-MX");
 // Declared once so the loading skeleton and the loaded board are the SAME shape:
 // a skeleton laid out differently from what replaces it is a layout jump.
 //
-// The chart column is 320px; the cards take the rest in `minmax(360px,1fr)`
-// columns and the PAGE scrolls vertically. `min-w-0` keeps that column from ever
-// being sized by its content. Inside the admin frame's 1232px (`max-w-7xl` less
-// `px-6`) that comes to ONE column beside an expanded rail (1232 − 232 − 344 =
-// 656) and TWO beside a collapsed one (1232 − 88 − 344 = 800), never three — the
-// 1280 cap stays; lifting it is the planner's `:has(.planner-wide)` arithmetic.
-// `items-start` lets each card be its own height instead of the row's tallest.
+// The chart column is 320px; the cards take the rest in ONE column and the PAGE
+// scrolls vertically. `min-w-0` keeps that column from ever being sized by its
+// content. Inside the admin frame's 1232px (`max-w-7xl` less `px-6`) a card is
+// 656px wide beside an expanded rail (1232 − 232 − 344) and 800px beside a
+// collapsed one (1232 − 88 − 344) — the 1280 cap stays; lifting it is the
+// planner's `:has(.planner-wide)` arithmetic. Until 2026-10-22 the cards wrapped
+// into `minmax(360px,1fr)` columns (ADR-0044); the compact card spends that width
+// on its own two columns, «Equipo» beside «Setlist» (a container query in
+// `brand.css`), and two 400px cards side by side would each have stacked them
+// again. `items-start` lets each card be its own height instead of the row's tallest.
 const BOARD_LAYOUT = "grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start";
-const BOARD_CARDS = "grid min-w-0 grid-cols-1 gap-4 items-start lg:grid-cols-[repeat(auto-fill,minmax(360px,1fr))]";
+const BOARD_CARDS = "grid min-w-0 grid-cols-1 gap-3 items-start";
 // The phone's fold around the chart: a gap between the toggle and the open chart.
 const CHART_FOLD = "space-y-2 lg:space-y-0";
 
@@ -912,7 +916,6 @@ export default function ServicesPanel({
 
   const counters = commandSummaryCounters({ all: cards, visible: visibleCards });
   const summaryLine = commandSummarySegments(counters).join(" · ");
-  const hasDrafts = visibleCards.some(c => c.readiness.publishState === "draft");
   /** The toolbar's «Editar mes»: the one selected month, else the current one. */
   const openMonthEditor1 = (opener: "toolbar" | "menu" = "toolbar") =>
     openMonthEditor(selectedMonths.size === 1 ? [...selectedMonths][0] : currentYM, undefined, false, { kind: opener });
@@ -1001,7 +1004,9 @@ export default function ServicesPanel({
   // the closed gate has to say why in the layout rather than on hover.
   const toolbarGateReason =
     [
-      visibleCards.some(c => c.readiness.publishState === "draft") ? publishGate : null,
+      // The same condition that renders «Publicar listos»: a reason for a
+      // button that is not on the toolbar would pre-empt the reason of one that is.
+      counters.readyToPublish > 0 ? publishGate : null,
       generateGate,
       editTeamGate,
       copyMode ? null : createGate,
@@ -1188,7 +1193,10 @@ export default function ServicesPanel({
             which is the accepted trade for one toolbar rather than two.
           */}
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            {hasDrafts && (
+            {/* Only when there is something to publish: «Publicar listos (0)» was a
+                button whose press opened an empty plan. Every ready draft still
+                has the card's own rule-13 «Publicar». */}
+            {counters.readyToPublish > 0 && (
               <Button
                 variant="secondary"
                 size="lg"
@@ -1207,7 +1215,7 @@ export default function ServicesPanel({
               disabled={!generateGate.enabled}
               className="hidden sm:inline-flex"
             >
-              📅 Generar mes
+              <CalendarIcon /> Generar mes
             </Button>
             <Button
               ref={monthEditorTriggerRef}
@@ -1240,7 +1248,7 @@ export default function ServicesPanel({
                 </Button>
               }
             >
-              {hasDrafts && (
+              {counters.readyToPublish > 0 && (
                 <MenuItem disabled={!publishGate.enabled} onSelect={() => openPublishPlan(visibleCards)}>
                   Publicar listos ({counters.readyToPublish})
                 </MenuItem>
@@ -1337,7 +1345,7 @@ export default function ServicesPanel({
               // way out would fall to <body>. The view says «No hay servicios».
               disabled={view !== "cards"}
             >
-              ⛶ Pantalla completa
+              <ExpandIcon /> Pantalla completa
             </Button>
           </div>
           {pastMonths.length > 0 && (
@@ -1904,3 +1912,4 @@ function MonthPill({ label, selected, onClick, past }: { label: string; selected
     </Button>
   );
 }
+

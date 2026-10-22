@@ -312,7 +312,7 @@ describe("a move blocked by a rule conflict (acceptance 5)", () => {
 
   it("Escape dismisses ONLY the prompt — full screen survives it", () => {
     const { onCellsChange } = conflictSetup();
-    fireEvent.click(screen.getByText("⛶ Pantalla completa"));
+    fireEvent.click(screen.getByRole("button", { name: "Pantalla completa" }));
     // The dialog's portal target is a body child, and full screen inerts body
     // children: a prompt raised from inside full screen would be unusable.
     expect(document.querySelector("[data-cue-dialog-root]")?.hasAttribute("inert")).toBe(false);
@@ -345,7 +345,7 @@ describe("full screen leaves the toast stack live («Borrar» → «Deshacer»)"
     document.body.append(toastRoot, sibling);
     try {
       renderGrid(baseProps());
-      fireEvent.click(screen.getByText("⛶ Pantalla completa"));
+      fireEvent.click(screen.getByRole("button", { name: "Pantalla completa" }));
       expect(sibling.hasAttribute("inert")).toBe(true);
       expect(toastRoot.hasAttribute("inert")).toBe(false);
     } finally {
