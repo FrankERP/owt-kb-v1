@@ -105,6 +105,36 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe("SectionNav edge fade (design pass E)", () => {
+  // jsdom lays nothing out: `scrollWidth`/`clientWidth` are staged on the
+  // prototype, so the fade can be shown to follow the MEASURED overflow.
+  function stage(scrollWidth: number, clientWidth: number) {
+    Object.defineProperty(HTMLElement.prototype, "scrollWidth", { configurable: true, get: () => scrollWidth });
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => clientWidth });
+  }
+  afterEach(() => {
+    delete (HTMLElement.prototype as unknown as Record<string, unknown>).scrollWidth;
+    delete (HTMLElement.prototype as unknown as Record<string, unknown>).clientWidth;
+  });
+
+  // Two cases, two `it`s: `mount` appends `#song-hero` and the sections to the
+  // body, and only the file's `afterEach` clears it between mounts.
+  it("masks the strip's right edge while there is more to the right", () => {
+    stage(560, 390);
+    const { container } = mount(<SectionNav sections={sections} practice={practice} />);
+    const strip = container.querySelector("[data-section-nav-fade]");
+    expect(strip).not.toBeNull();
+    expect(strip!.className).toContain("mask-image:linear-gradient(to_left");
+  });
+
+  it("leaves a strip that fits unmasked, so its last tab is never dimmed", () => {
+    stage(300, 390);
+    const { container } = mount(<SectionNav sections={sections} practice={practice} />);
+    expect(container.querySelector("[data-section-nav-fade]")).toBeNull();
+    expect(container.innerHTML).not.toContain("mask-image:linear-gradient");
+  });
+});
+
 describe("SectionNav practice cluster", () => {
   it("stays out of the bar while the hero is on screen", () => {
     const { hero, queryByRole, queryByText } = mount(<SectionNav sections={sections} practice={practice} />);

@@ -38,7 +38,7 @@
 //   • One finger. A pinch is not a pull.
 //   • The touch did not start inside `[data-pull-ignore]` — the surfaces that
 //     own their own gesture (`SwipeStrip`'s drag host, `AvailabilityGrid`'s
-//     months while «Seleccionar fechas» is on) opt out by marking their host.
+//     months while «Marcar días» is on) opt out by marking their host.
 //   • No refresh is already in flight (`refreshing` is mirrored into a ref so
 //     the check is synchronous — a second pull landing in the same task must
 //     not queue a second `router.refresh()`).

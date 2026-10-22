@@ -842,7 +842,8 @@ the full ledger; the motion-relevant pieces:
   across the days, a "shadow" of the next month fading in underneath as the finger
   nears the bottom of the page and solidifying into selectable as it arrives, one
   «Razón» once the drag is released.
-  - **A `Button` («Seleccionar fechas» ⇄ «Listo»), never a long-press**, arms the mode —
+  - **A `Button` («Seleccionar fechas» ⇄ «Listo»; «Marcar días», a primary on the host, since
+    design pass C 2026-10-22), never a long-press**, arms the mode —
     the long-press gesture is already spoken for on a phone browser (text selection, the
     iOS callout menu), so reusing it for the drag would race the browser's own gesture
     recognizer for the same touch. A mode button removes the race outright: entering it
@@ -1097,8 +1098,8 @@ motion-relevant pieces:
     refused through `useToast`) — «Practicar» is deliberately absent, since the
     player exposes exactly one song entry point and a second button calling it
     would be two names for one action. `DayCardDisclosure`: «Ver en calendario»
-    and «Añadir a mi calendario» (this one service as an `.ics`, the same blob
-    download `AddToCalendarButton` uses for the whole list). Neither sheet
+    and «Añadir a mi calendario» (this one service as an `.ics`, the same
+    `downloadICS` the «Tu cuenta» row uses for the whole list). Neither sheet
     carries a destructive action — a quick-actions sheet is for a second
     convenience, not for something that needs its own confirmation step.
 

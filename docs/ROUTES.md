@@ -45,7 +45,7 @@ Legend: **S** = server component (async unless noted; e.g. the Studio page is sy
 | `/` | `(client)/page.tsx` | S | Worship | **Dynamic, per member** (`requireWorshipPage`, ADR-0020) | Home. Opens on the member's own line («Hola, Frank / Te toca el sábado …», `homeGreeting`), then this weekend's Sat/Sun/special services: the next one in full, the rest as summary rows. Never make it static: the greeting, the open team sections and the «tú» marks are per viewer. |
 | `/schedule` | `(client)/schedule/page.tsx` | S | Worship | ISR 60s | Upcoming services. Agenda (one row per service) is the default view, `Mes` the month grid; `?m=YYYY-MM` browses one month per header-arrow press, still fetching a `WINDOW_MONTHS`-wide window (default: rolling today → +95 days). |
 | `/biblioteca` | `(client)/biblioteca/page.tsx` | S | Worship | ISR 60s fetch, dynamic by `searchParams` | The song library (R1): one fetch (catalogue + tags + authors), A–Z index with a search console, letter rail and a filter drawer (Tipo, tema, artista, tonalidad). `?q=`/`?tag=`/`?author=` seed initial state; the index mirrors its own state back into the URL without a round-trip. |
-| `/posts/[slug]` | `(client)/posts/[slug]/page.tsx` | S | Worship | **SSG** 3600s + `generateStaticParams` | Song practice surface: lyrics/chords with a transposer, tap tempo, lyrics autoscroll, audio, tutorials, references, play history. `notFound()` for unknown slugs. |
+| `/posts/[slug]` | `(client)/posts/[slug]/page.tsx` | S | Worship | **SSG** 3600s + `generateStaticParams` | Song practice surface: lyrics/chords with a transposer, tap tempo, lyrics autoscroll, audio, tutorials, references, play history. `notFound()` for unknown slugs. Hero order since design pass E (2026-10-22): title, author, the pills, then the tags as quiet text links (they led the hero as boxed chips above the title). |
 | `/me` | `(client)/me/page.tsx` | S | Member | ISR 60s | "Mi semana" (R3 F3): the identity header (next service + seat + countdown, or the next Kids Sunday), upcoming assignments and proposal CTAs, the Kids block, and ONE link line to `/me/disponibilidad` carrying the count of upcoming marked dates. No calendar and no settings — both are their own pages now. |
 | `/me/disponibilidad` | `(client)/me/disponibilidad/page.tsx` | S | Member (**ministry-neutral**) | ISR 60s | The availability calendar, alone (R3 F3): `MyAvailabilityPanel` with the month grid always open, «Seleccionar fechas», «Repetir…» and the per-day note. A kids-only volunteer reaches it. |
 | `/me/ajustes` | `(client)/me/ajustes/page.tsx` | S | Member (**ministry-neutral**) | dynamic (session read; `revalidate = 60` is inert) — per-member signed calendar URLs depend on it | Ajustes, alone (R3 F3): the one `SettingsCard` — Tema, Tamaño de texto, Perfil, Calendario (the member's signed calendar-feed links, ADR-0057; worship members only). Reached from the avatar menu («Ajustes») and from `ThemeAnnouncement` on `/me` (`#tema`). |
@@ -125,19 +125,26 @@ token) for private/fresh data.
 [API_REFERENCE.md](API_REFERENCE.md)) on every route except `/` and `/me`, which pass `cue={false}`
 because their own headers already show the countdown.
 
-- **`/`** — `Navbar`, `DayCard` (the next service, `layout="wide"` + `hero`), `DayCardDisclosure` (every other service, collapsed to one line).
+- **`/`** — `Navbar`, `DayCard` (the next service, `layout="wide"` + `hero`; its countdown pill carries the start time and «Mensaje para el equipo» folds to three lines since design pass D, 2026-10-22), `DayCardDisclosure` (every other service, collapsed to one line).
 - **`/schedule`** — `Navbar`, `CalendarView` (composition only: `ScheduleHeader`, `DayStrip`, the
   Agenda|Mes `SegmentedControl`, `AgendaView` or the month grid, the day sheet `CueDialog`).
 - **`/biblioteca`** — `Navbar`, `LibraryIndex`.
 - **`/me`** — `Navbar`, `MeHeader` (the identity header: name, Tipo chips, and the one
   countdown line), `DayCard` (the next service, `hero`, no `isNext` — the header already
-  carries the countdown), `DayCardDisclosure` (every other service, collapsed),
-  `AddToCalendarButton`, and a `Link` row to `/me/disponibilidad`. `MeHeader` carries no
-  «Editar perfil» since F3 — the avatar menu is the way into settings.
+  carries the countdown), `DayCardDisclosure` (every other service, collapsed), each lead
+  service's proposal CTA (a house `Button`), and «Tu cuenta» (`account/AccountList`, 2026-10-22):
+  Disponibilidad with its count, the one-shot `.ics` download (`account/DownloadCalendarRow`,
+  worship only), Calendario (`/me/ajustes#calendario`) and Ajustes. `MeHeader` carries no
+  «Editar perfil» since F3 — the list and the avatar menu are the ways into settings.
 - **`/me/disponibilidad`** — `Navbar`, `availability/MyAvailabilityPanel` (the month
   `AvailabilityGrid` always open; no weekend pills, no Desde/Hasta fields).
 - **`/me/ajustes`** — `Navbar`, `SettingsCard` (one card holding `ThemeControl`,
-  `TextSizeControl`, `ProfilePanel` `bare` and `CalendarFeedPanel` — no longer separate cards).
+  `TextSizeControl`, `ProfilePanel` `bare` and `CalendarFeedPanel` — no longer separate cards;
+  since design pass D the calendar block is one «Todos / Solo los míos» switch over one row of
+  links, «¿Cómo funciona?» folded, and a link to `/me#tu-cuenta` for the one-shot `.ics`).
+  Both anchors other pages link to (`#calendario` here, `#tu-cuenta` on `/me`) carry the
+  navbar-clearing `UNDER_NAVBAR_SCROLL_MT` (`app/utils/navbarHeight.ts`, beside `NAVBAR_H_CLASS`;
+  `LibraryIndex` composes its sticky offset from it too).
 - **`/me/propose/[roleId]`** — `Navbar`, `ProposalEditor` (co-located client component).
 - **`/posts/[slug]`** — `Navbar`, `TransposeProvider` (the page's one transposition seat),
   `SongHeroPills` (`KeyDial` + the 12-key drawer, `TempoPill`), `SectionNav` (whose

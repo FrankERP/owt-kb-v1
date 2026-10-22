@@ -32,16 +32,19 @@ export const SEAT_TO_FAMILY: Record<string, string> = {
   AG: "acoustic",
 };
 
-export function mixLabel(mix: RehearsalMix): string {
+/** The fields grouping and labelling read — the queue route's slim mixes satisfy it too. */
+type MixShape = Pick<RehearsalMix, "kind" | "family" | "track" | "tone">;
+
+export function mixLabel(mix: Pick<RehearsalMix, "kind" | "track">): string {
   return mix.kind === "full" ? FAMILY_LABEL.full : (mix.track ?? "Pista");
 }
 
 const collator = new Intl.Collator("es", { numeric: true, sensitivity: "base" });
 
-export function groupMixes(mixes: RehearsalMix[]): { family: string; label: string; mixes: RehearsalMix[] }[] {
+export function groupMixes<M extends MixShape>(mixes: M[]): { family: string; label: string; mixes: M[] }[] {
   if (mixes.length === 0) return [];
   const fulls = mixes.filter((m) => m.kind === "full");
-  const byFamily = new Map<string, RehearsalMix[]>();
+  const byFamily = new Map<string, M[]>();
   for (const m of mixes) {
     if (m.kind === "full") continue;
     const fam = m.family ?? "other";
@@ -80,7 +83,7 @@ export function preselectMix(mixes: RehearsalMix[], instruments?: string[] | nul
  * The keys a song has mixes in, one spelling per pitch (the first seen), in
  * pitch order. Rows with a tone the maths cannot parse are left out.
  */
-export function mixTones(mixes: RehearsalMix[]): string[] {
+export function mixTones(mixes: Pick<RehearsalMix, "tone">[]): string[] {
   const byRoot = new Map<number, string>();
   for (const m of mixes) {
     const r = m.tone ? rootIndex(m.tone) : -1;
@@ -97,10 +100,10 @@ export function mixTones(mixes: RehearsalMix[]): string[] {
  * A null key, or no parseable tone anywhere, shows everything with `tone: null`
  * — there is nothing to pick, so nothing to caption.
  */
-export function mixesForKey(
-  mixes: RehearsalMix[],
+export function mixesForKey<M extends Pick<RehearsalMix, "tone">>(
+  mixes: M[],
   key: string | null | undefined,
-): { tone: string | null; exact: boolean; mixes: RehearsalMix[] } {
+): { tone: string | null; exact: boolean; mixes: M[] } {
   const tones = mixTones(mixes);
   const want = key ? rootIndex(key) : -1;
   if (want < 0 || tones.length === 0) return { tone: null, exact: true, mixes };

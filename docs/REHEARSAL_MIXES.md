@@ -30,6 +30,12 @@ The «Ensayo» section is the first thing on the song page — before the chord 
 the song sheet's section nav. A song with no `rehearsalMixes` shows no «Ensayo» heading and
 no player at all: the section only renders once a batch has ingested that song.
 
+«Ensayar el setlist» (Inicio's run sheet and every service card, 2026-10-22) plays the whole
+set's mixes in setlist order as one run in the app's player — full band, or the member's own
+instrument «al frente» when they serve on one that day — each in the set's key or the nearest
+rendered one. A song with no mixes is skipped with a toast naming it; the YouTube playlist stays
+below a separator in the same menu (lyrics video for the voices).
+
 Re-running is safe: keys are `sha1(set.sha1 + file name)`, an asset whose sha1 already
 matches is reused, items from another render of the same song (a second key) are kept.
 A **transposed** render of the same set (`manifest.transpose.semitones ≠ 0`) is another

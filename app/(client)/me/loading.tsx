@@ -1,8 +1,8 @@
 import Skeleton, { SkeletonGroup, NavbarSkeleton } from "../../components/ui/Skeleton";
 
-// The shape `/me` actually lands in (R3, F3): the identity header, the next
-// service as a full card, the rest as collapsed lines, and the one link line to
-// `/me/disponibilidad`. No Ajustes block — the settings card is `/me/ajustes`,
+// The shape `/me` actually lands in (R3, F3; «Tu cuenta» 2026-10-22): the
+// identity header, the next service as a full card, the rest as collapsed lines,
+// and the «Tu cuenta» list (eyebrow, then a card of icon rows). No Ajustes block — the settings card is `/me/ajustes`,
 // which has its own skeleton.
 // A skeleton that still drew the old two-column tail would move everything on
 // hydration, which is the one thing it exists to prevent.
@@ -49,10 +49,24 @@ export default function MeLoading() {
           ))}
         </div>
 
-        {/* The availability link: one row, its label and its count. */}
-        <div className="rounded-xl border border-accent/15 px-4 py-3 flex items-center justify-between gap-3">
-          <Skeleton className="h-5 w-36" />
-          <Skeleton className="h-3 w-28 shrink-0" />
+        {/* «Tu cuenta»: the eyebrow, then a card of rows — icon square, title
+            over a status line, chevron. Three rows: what every member gets
+            (Disponibilidad, Ajustes) plus one calendar row; the real list has
+            up to four, and a row short beats a card the member never gets. */}
+        <div className="space-y-2">
+          <Skeleton className="h-3 w-16 ml-1" />
+          <div className="rounded-2xl border border-edge-accent-subtle divide-y divide-ink/[0.06]">
+            {[1, 2, 3].map((j) => (
+              <div key={j} className="flex items-center gap-3.5 px-4 py-3.5">
+                <Skeleton className="h-9 w-9 shrink-0 rounded-[10px]" />
+                <div className="flex-1 space-y-1.5">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-3 w-44" />
+                </div>
+                <Skeleton className="h-4 w-4 shrink-0" />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </SkeletonGroup>

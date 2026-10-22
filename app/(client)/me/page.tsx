@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { requireActiveSession } from "@/app/utils/authGuards";
 import { getMemberAccess } from "@/app/utils/memberAccess";
 import { redirect } from "next/navigation";
@@ -9,9 +8,14 @@ import Navbar from "@/app/components/Navbar";
 import { DayCard, type DayCardProps } from "@/app/components/DayCard";
 import DayCardDisclosure from "@/app/components/DayCardDisclosure";
 import MeHeader from "@/app/components/MeHeader";
-import AddToCalendarButton from "@/app/components/AddToCalendarButton";
-import { ChevronRightIcon } from "@/app/components/ui/icons";
+import Button from "@/app/components/ui/Button";
+import AccountList, { AccountLinkRow } from "@/app/components/account/AccountList";
+import DownloadCalendarRow from "@/app/components/account/DownloadCalendarRow";
+import {
+  ArrowRightIcon, CalendarAddIcon, CalendarOffIcon, CheckIcon, ClockIcon, MessageIcon, PlusIcon, SlidersIcon,
+} from "@/app/components/ui/icons";
 import { serviceStartTime } from "@/app/utils/calendarFeed";
+import { UNDER_NAVBAR_SCROLL_MT } from "@/app/utils/navbarHeight";
 import { Setlist, SetlistSong, ProposalStatus } from "@/app/utils/interface";
 import { describeContributors } from "@/app/utils/proposalContributors";
 import { pickUnique, serviceDayKey } from "@/app/utils/serviceReadSelect";
@@ -39,11 +43,14 @@ const STATUS_LABEL: Record<ProposalStatus, string> = {
   changes_requested: "Ver comentarios",
 };
 
-const STATUS_STYLE: Record<ProposalStatus, string> = {
-  draft: "border-surface-accent-30 text-mono-400 hover:border-accent dark:hover:border-surface-accent-30 hover:text-accent",
-  pending: "border-recency-fg/40 text-recency-strong hover:border-recency-strong",
-  approved: "border-positive-deep/40 text-positive-strong cursor-default",
-  changes_requested: "border-negative-strong/40 text-negative-fg hover:border-negative-muted",
+// One glyph per state, after the label (design pass C, 2026-10-22): the CTA is
+// the house `Button` now, so the state is said by its icon and its words, not by
+// a border colour of its own — the four hand-coloured borders this replaced were
+// the only buttons on the member pages that did not look like the rest.
+const STATUS_ICON: Record<Exclude<ProposalStatus, "approved">, React.ReactNode> = {
+  draft: <ArrowRightIcon size={12} />,
+  pending: <ClockIcon size={12} />,
+  changes_requested: <MessageIcon size={12} />,
 };
 
 /**
@@ -302,21 +309,29 @@ export default async function MePage() {
   // record is dropped here instead of throwing on `localeCompare` or date math.
   // `kind` is the document's, never read back from the label: a special named
   // «Sábado» is still a special (its own time, its own `roleId`).
+  // `start` is the service's clock by the feed's ONE rule (`serviceStartTime`): a
+  // weekend at the team's standing hour, a special at its own valid `time`, else
+  // all-day. Computed once here because three readers below must agree on it —
+  // the sort, the header's pill and the `.ics` rows (design pass D, 2026-10-22).
   const asAssignment = (dateValue: unknown, day: string, doc: RoleDoc, kind: "weekend" | "special") => {
     const dateKey = serviceDayKey(dateValue);
-    return dateKey ? { dateKey, day, doc, kind } : null;
+    return dateKey ? { dateKey, day, doc, kind, start: serviceStartTime(kind, day, doc.time) } : null;
   };
 
   const roleDocs = (v: unknown): RoleDoc[] => (Array.isArray(v) ? (v as RoleDoc[]) : []);
 
-  type Assignment = { dateKey: string; day: string; doc: RoleDoc; kind: "weekend" | "special" };
+  type Assignment = { dateKey: string; day: string; doc: RoleDoc; kind: "weekend" | "special"; start: string | undefined };
   const allAssignments: Assignment[] = [
     ...roleDocs(data?.sundays).map((d) => asAssignment(d.week, "Domingo", withSetlist(d), "weekend")),
     ...roleDocs(data?.saturdays).map((d) => asAssignment(d.week, "Sábado", withSetlist(d), "weekend")),
     ...roleDocs(data?.specials).map((d) => asAssignment(d.date, d.service_name || "Servicio Especial", d, "special")),
   ]
     .filter((a): a is Assignment => a !== null)
-    .sort((a, b) => a.dateKey.localeCompare(b.dateKey) || compareServiceTime(a.doc.time, b.doc.time));
+    // Same-day order by `start`, not by the raw `doc.time`: a weekend doc carries
+    // no `time`, and `compareServiceTime` sorts an untimed set LAST — so a Sunday
+    // 11:00 service fell behind a 17:00 special that day, the header named the
+    // special as next and its pill said 17:00 while the `.ics` rows said 11:00.
+    .sort((a, b) => a.dateKey.localeCompare(b.dateKey) || compareServiceTime(a.start, b.start));
 
   // The `DayCardProps` for one assignment, so the hero and the collapsed rows
   // below it are fed from ONE place — they were two copies of the same nine
@@ -371,8 +386,10 @@ export default async function MePage() {
   // in it. `nextSeatLine`/`seatLabel` live in the NEUTRAL `app/utils/myWeek.ts`
   // precisely so this Server Component may call them (ADR-0028) — `MeHeader` is a
   // client module and receives the result as data, never a function.
+  // The header's countdown carries the start time (D, 2026-10-22) by the same rule
+  // the `.ics` rows below use, so «En 3 días · 11:00» and the calendar agree.
   const nextSeat = nextSeatLine(
-    visibleAssignments.map(({ dateKey, day, doc }) => ({ dateKey, day, seat: seatLabel(doc) })),
+    visibleAssignments.map(({ dateKey, day, doc, start }) => ({ dateKey, day, seat: seatLabel(doc), time: start })),
   );
 
   // Timed by the feed's one rule (`serviceStartTime`): a weekend at the team's
@@ -380,13 +397,12 @@ export default async function MePage() {
   // 2026-10-22 this download was all-day for every service while the feed already
   // said 18:00 / 11:00 — the same Saturday landed at two different times
   // depending on which button you pressed.
-  const calendarServices = visibleAssignments.map(({ dateKey, day, doc, kind }) => {
+  const calendarServices = visibleAssignments.map(({ dateKey, day, doc, start }) => {
     const role = seatLabel(doc);
-    const time = serviceStartTime(kind, day, doc.time);
     return {
       uid: doc._id,
       date: dateKey,
-      time,
+      time: start,
       title: role ? `${day} · Oasis Worship (${role})` : `${day} · Oasis Worship`,
       description: role ? `Tu rol: ${role}` : undefined,
     };
@@ -414,27 +430,21 @@ export default async function MePage() {
 
     if (!proposal) {
       return (
-        <Link
-          href={`/me/propose/${doc._id}`}
-          className="mt-3 flex items-center justify-center gap-1.5 py-2 rounded-lg border border-dashed border-surface-accent-30 font-label text-xs uppercase tracking-widest text-mono-500 hover:border-accent dark:hover:border-dashed hover:text-accent transition-colors"
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
+        <Button href={`/me/propose/${doc._id}`} variant="secondary" size="sm" className="mt-3 w-full">
+          <PlusIcon size={12} />
           Proponer setlist
-        </Link>
+        </Button>
       );
     }
 
+    // Approved is not an action — nothing to open — so it is a line, not a button.
     if (proposal.status === "approved") {
       return (
         <>
-          <div className={`mt-3 flex items-center justify-center gap-1.5 py-2 rounded-lg border font-label text-xs uppercase tracking-widest ${STATUS_STYLE[proposal.status]}`}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
-            </svg>
+          <p className="mt-3 flex items-center justify-center gap-1.5 py-1 font-label text-xs uppercase tracking-widest text-positive-strong">
+            <CheckIcon size={12} />
             {STATUS_LABEL[proposal.status]}
-          </div>
+          </p>
           {contributorHint(proposal.hint)}
         </>
       );
@@ -442,15 +452,10 @@ export default async function MePage() {
 
     return (
       <>
-        <Link
-          href={`/me/propose/${doc._id}`}
-          className={`mt-3 flex items-center justify-center gap-1.5 py-2 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors ${STATUS_STYLE[proposal.status]}`}
-        >
+        <Button href={`/me/propose/${doc._id}`} variant="secondary" size="sm" className="mt-3 w-full">
           {STATUS_LABEL[proposal.status]}
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M5 12h14M12 5l7 7-7 7" />
-          </svg>
-        </Link>
+          {STATUS_ICON[proposal.status]}
+        </Button>
         {contributorHint(proposal.hint)}
       </>
     );
@@ -505,9 +510,6 @@ export default async function MePage() {
             "Ensayar" action. */}
         {inWorship && heroAssignment && (
           <div className="space-y-4" {...revealProps(1)}>
-            <div className="flex justify-end">
-              <AddToCalendarButton services={calendarServices} />
-            </div>
             <div key={heroAssignment.doc._id}>
               <DayCard {...cardProps(heroAssignment)} hero />
               {renderProposalCta(heroAssignment.doc)}
@@ -560,63 +562,80 @@ export default async function MePage() {
                   ))}
                 </ul>
               )}
-              <Link
-                href="/kids"
-                className="mt-4 flex items-center justify-center gap-1.5 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest text-mono-500 hover:border-accent hover:text-accent transition-colors"
-              >
+              <Button href="/kids" variant="secondary" size="sm" className="mt-4 w-full">
                 Ver Oasis Kids
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M5 12h14M12 5l7 7-7 7" />
-                </svg>
-              </Link>
+                <ArrowRightIcon size={12} />
+              </Button>
             </div>
           </section>
         )}
 
-        {/* The availability link.
-            A null read is not an empty state: every signed-in member has a
-            document, so null means the read did not find theirs — and it is said
-            out loud rather than silently dropping the line, which would read as a
-            feature this member does not have.
+        {/* «Tu cuenta» — where a member goes about themselves (design pass C,
+            2026-10-22): Disponibilidad with its count as the answer to "did I
+            already tell them?", the one-shot `.ics` download (worship only — it
+            exports the assignments this page read), Calendario (the subscription,
+            which lives under Ajustes because it is ministry-neutral), Ajustes.
+            Before this the page ended on one bordered «Disponibilidad» link and
+            the rest was only in the avatar menu. Rendered by a Server Component,
+            which is legal: `AccountList` is neutral and `DownloadCalendarRow` is
+            rendered as JSX, never called (ADR-0028).
 
-            F3: the calendar moved to `/me/disponibilidad` and the settings card to
-            `/me/ajustes` (the avatar menu points there) — this is the one line
-            left, with the count as the answer to "did I already tell them?". A
-            `Link`, rendered by a Server Component, which is legal: what ADR-0028
-            forbids is CALLING a client value. */}
-        {member ? (
-          <Link
-            href="/me/disponibilidad"
-            /* `flex-wrap`: «Disponibilidad» is one unbreakable word and the count
-               beside it is another, so at «Máximo» text size the row floors wider
-               than the phone and runs off the screen. Wrapping puts the count on
-               its own line instead. */
-            className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-accent/15 px-4 py-3 hover:border-accent/40 transition-colors"
-            {...revealProps(3)}
-          >
-            <span className="font-display text-base uppercase tracking-wide">Disponibilidad</span>
-            <span className="ml-auto flex min-w-0 items-center gap-2">
-              <span className="font-label text-[11px] uppercase tracking-widest text-mono-500">
-                {upcomingUnavailable === 0
-                  ? "Sin fechas marcadas"
-                  : `${upcomingUnavailable} fecha${upcomingUnavailable === 1 ? "" : "s"} marcada${upcomingUnavailable === 1 ? "" : "s"}`}
-              </span>
-              <ChevronRightIcon size={16} className="text-mono-500" />
-            </span>
-          </Link>
-        ) : (
-          /* No live-region role: this is server-rendered and present at first
-             paint, so nothing is being INSERTED for a live region to announce,
-             and screen readers treat already-present live content
-             inconsistently. The heading carries the message. */
-          <section className="rounded-xl border border-negative-strong/30 bg-negative-surface-deepest/35 px-5 py-8 text-center" {...revealProps(3)}>
-            <h2 className="font-display text-lg uppercase text-negative-fg">No pudimos cargar tu perfil</h2>
-            <p className="font-body text-sm text-mono-500 mt-1">
-              Tu disponibilidad no está disponible ahora mismo.
-              Recarga la página; si sigue igual, avísale a un administrador.
-            </p>
-          </section>
-        )}
+            A null member read is not an empty state: every signed-in member has
+            a document, so null means the read did not find theirs — it is said
+            out loud, and only the row that needs the document is dropped. */}
+        {/* `#tu-cuenta` is a link target (Ajustes › Calendario's «Descargar una sola
+            vez»), so it clears the navbar like every anchored section does. */}
+        <section id="tu-cuenta" aria-labelledby="tu-cuenta-title" className={`${UNDER_NAVBAR_SCROLL_MT} space-y-2`} {...revealProps(3)}>
+          <h2 id="tu-cuenta-title" className="ml-1 font-label text-[11px] uppercase tracking-widest text-mono-500">
+            Tu cuenta
+          </h2>
+          {!member && (
+            /* No live-region role: this is server-rendered and present at first
+               paint, so nothing is being INSERTED for a live region to announce,
+               and screen readers treat already-present live content
+               inconsistently. The heading carries the message. */
+            <div className="rounded-xl border border-negative-strong/30 bg-negative-surface-deepest/35 px-5 py-6 text-center">
+              <h3 className="font-display text-lg uppercase text-negative-fg">No pudimos cargar tu perfil</h3>
+              <p className="font-body text-sm text-mono-500 mt-1">
+                Tu disponibilidad no está disponible ahora mismo.
+                Recarga la página; si sigue igual, avísale a un administrador.
+              </p>
+            </div>
+          )}
+          <AccountList labelledBy="tu-cuenta-title">
+            {member && (
+              <AccountLinkRow
+                href="/me/disponibilidad"
+                icon={<CalendarOffIcon size={18} strokeWidth={1.8} />}
+                title="Disponibilidad"
+                status={
+                  upcomingUnavailable === 0
+                    ? "Sin fechas marcadas"
+                    : `${upcomingUnavailable} fecha${upcomingUnavailable === 1 ? "" : "s"} marcada${upcomingUnavailable === 1 ? "" : "s"}`
+                }
+              />
+            )}
+            {/* Both calendar rows are worship's: the download exports the
+                assignments this page read, and the subscription panel answers a
+                kids-only member «solo para el equipo de alabanza»
+                (`calendarFeedState`) — a row promising it would lead nowhere. */}
+            {inWorship && <DownloadCalendarRow services={calendarServices} />}
+            {inWorship && (
+              <AccountLinkRow
+                href="/me/ajustes#calendario"
+                icon={<CalendarAddIcon size={18} strokeWidth={1.8} />}
+                title="Calendario"
+                status="Suscribirte a tus servicios"
+              />
+            )}
+            <AccountLinkRow
+              href="/me/ajustes"
+              icon={<SlidersIcon size={18} strokeWidth={1.8} />}
+              title="Ajustes"
+              status="Tema, tamaño de texto, perfil"
+            />
+          </AccountList>
+        </section>
       </div>
     </div>
   );

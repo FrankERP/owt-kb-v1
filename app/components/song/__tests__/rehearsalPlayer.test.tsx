@@ -59,6 +59,35 @@ describe("RehearsalPlayer", () => {
     expect(getByRole("link", { name: "Descargar EG 1" }).getAttribute("href")).toBe("/api/audio/post-1/eg1?download=1");
   });
 
+  it("E — draws ONE waveform, the loaded row's, and none while nothing of this song is loaded", () => {
+    // Idle, preselection or not: no canvas — an unloaded row's envelope cannot
+    // place the «where my part sounds» spans (they need the track's duration).
+    const idle = render(<RehearsalPlayer {...props} preselect={["Bass"]} />);
+    expect(idle.queryAllByRole("img")).toHaveLength(0);
+    expect(idle.queryByRole("button", { name: /^Onda/ })).toBeNull();
+    cleanup();
+    // A row loaded in the player: its playhead is what the canvas is for — and
+    // it seeks, so that one waveform is a button; the preselected row gets none.
+    player = { track: { url: "/api/audio/post-1/eg1" }, isPlaying: false };
+    const loaded = render(<RehearsalPlayer {...props} preselect={["Bass"]} />);
+    expect(loaded.getByRole("button", { name: "Onda EG 1" })).toBeTruthy();
+    expect(loaded.queryAllByRole("img")).toHaveLength(0);
+    expect(loaded.queryByRole("button", { name: "Onda Bass" })).toBeNull();
+  });
+
+  it("E — the play control and the download keep a 44px hit box on a compact row", () => {
+    const { getByRole } = render(<RehearsalPlayer {...props} />);
+    expect(getByRole("button", { name: "Reproducir EG 1" }).className).toContain("min-h-[44px]");
+    expect(getByRole("link", { name: "Descargar EG 1" }).className).toContain("min-h-[44px]");
+  });
+
+  it("E — the download is an icon-only link that still names the mix", () => {
+    const { getByRole } = render(<RehearsalPlayer {...props} />);
+    const link = getByRole("link", { name: "Descargar EG 1" });
+    expect(link.querySelector('[data-icon="download"]')).not.toBeNull();
+    expect(link.textContent).toBe("");
+  });
+
   it("switching tracks keeps the position", () => {
     player = { track: { url: "/api/audio/post-1/eg1" }, isPlaying: true };
     audio.currentTime = 42;

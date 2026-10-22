@@ -24,7 +24,7 @@
 // here rather than stubbed: stubbing it would leave the kids-only case asserting
 // nothing.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, describe, it, expect, vi, beforeEach } from "vitest";
 import type { ReactNode } from "react";
 
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
@@ -55,7 +55,9 @@ vi.mock("@/sanity/lib/operationalClient", () => ({
 vi.mock("@/app/components/Navbar", () => ({ default: () => null }));
 vi.mock("@/app/components/DayCard", () => ({ DayCard: () => <p>HERO</p> }));
 vi.mock("@/app/components/DayCardDisclosure", () => ({ default: () => <p>DAYCARD</p> }));
-vi.mock("@/app/components/AddToCalendarButton", () => ({ default: () => null }));
+// The download row is the one client piece of «Tu cuenta»; the marker lets the
+// worship-only gate on it be asserted.
+vi.mock("@/app/components/account/DownloadCalendarRow", () => ({ default: () => <li>DESCARGA</li> }));
 // Kept even though F3 moved the settings card to `/me/ajustes`: the marker is
 // what makes the "no settings on this page" assertions below mean something —
 // without it, `not.toContain("PERFIL")` would pass for any reason at all.
@@ -97,6 +99,34 @@ beforeEach(() => {
   opFetch.mockImplementation(async (q: string) =>
     q.includes('"sundays"') ? { sundays: [], saturdays: [], specials: [] } : [],
   );
+});
+
+describe("/me same-day order (design pass D)", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("names the Sunday 11:00 service as next ahead of a 17:00 special that day, with its clock on the pill", async () => {
+    // 2026-09-10 local — a Thursday, three days before Sunday the 13th.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 10, 9, 0, 0));
+    getMemberAccess.mockResolvedValue(access(["worship"]));
+    opFetch.mockImplementation(async (q: string) =>
+      q.includes('"sundays"')
+        ? {
+            // The weekend doc carries NO `time`; before D the sort read the raw
+            // field, `compareServiceTime` put the untimed set LAST, and the header
+            // announced the special as next while the `.ics` rows said 11:00.
+            sundays: [{ _id: "sun1", week: "2026-09-13", isLead: true, Lead: [{ member_name: "Ana" }] }],
+            saturdays: [],
+            specials: [{ _id: "sp1", date: "2026-09-13", service_name: "Concierto", time: "17:00", isLead: true, Lead: [{ member_name: "Ana" }] }],
+          }
+        : [],
+    );
+    const html = await renderPage();
+    expect(html).toMatch(/Te toca el domingo 13 · Lead/);
+    expect(html).not.toContain("Concierto · Lead");
+    expect(html).toContain("En 3 días");
+    expect(html).toContain("· 11:00");
+  });
 });
 
 describe("/me worship gating", () => {
@@ -184,6 +214,23 @@ describe("/me worship gating", () => {
     expect(html).toContain("Sin fechas marcadas");
     expect(html).not.toContain("PERFIL");
     expect(html).not.toContain('id="ajustes"');
+  });
+
+  it("lists «Tu cuenta» for everyone — Ajustes — and both calendar rows only for worship", async () => {
+    // Design pass C (2026-10-22): the page ends on one list, not on a lone link.
+    // The subscription panel answers a kids-only member «solo para el equipo de
+    // alabanza» (`calendarFeedState`), so neither calendar row is offered to them.
+    getMemberAccess.mockResolvedValue(access(["kids"]));
+    let html = await renderPage();
+    expect(html).toContain("Tu cuenta");
+    expect(html).toContain('href="/me/ajustes"');
+    expect(html).not.toContain('href="/me/ajustes#calendario"');
+    expect(html).not.toContain("DESCARGA");
+
+    getMemberAccess.mockResolvedValue(access(["worship"]));
+    html = await renderPage();
+    expect(html).toContain('href="/me/ajustes#calendario"');
+    expect(html).toContain("DESCARGA");
   });
 
   it("counts only UPCOMING unavailable dates on the link", async () => {
