@@ -62,11 +62,13 @@ import {
 } from "./clearCells";
 import { sundaySpineForColumn } from "./serviceRuleContext";
 import { unresolvedRuleNames } from "./ruleEnforcement";
-import { ParticipationSidebar } from "./ParticipationSidebar";
+import { ParticipationSidebar, type ParticipationPoolMember } from "./ParticipationSidebar";
+import { normalizeMinistries } from "@/app/ministries";
 import LeadPoolHistoryPanel from "./LeadPoolHistoryPanel";
 import FairnessPreviewPanel from "./FairnessPreviewPanel";
 import Button from "@/app/components/ui/Button";
 import Collapse from "@/app/components/ui/Collapse";
+import Menu, { MenuItem, MenuSeparator } from "@/app/components/ui/Menu";
 import CueDialog from "@/app/components/ui/CueDialog";
 import Skeleton, { SkeletonGroup } from "@/app/components/ui/Skeleton";
 import Checkbox from "@/app/components/ui/Checkbox";
@@ -2402,7 +2404,11 @@ export default function MonthGenerator({
   // otherwise land on «Eliminar»), back to the trigger on Cancelar or Escape.
   // The trigger stays enabled (and idempotent) while the prompt is open so it
   // can receive focus again; disabling it would drop keyboard focus to <body>.
-  const clearTriggerRef = useRef<HTMLButtonElement>(null);
+  // The «⋯» menu's trigger: «Limpiar mes…» and «Llenar especiales…» live in that menu, so it is
+  // where focus goes back to when either panel closes (the menu itself returns focus there too).
+  const moreTriggerRef = useRef<HTMLButtonElement>(null);
+  // «⇄ Intercambiar ▾»: where focus returns when a swap panel's «Cerrar» unmounts it.
+  const swapTriggerRef = useRef<HTMLButtonElement>(null);
   const clearRegionRef = useRef<HTMLDivElement>(null);
   const clearCancelRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -2416,7 +2422,6 @@ export default function MonthGenerator({
   // rest and an id that disappears cannot linger as a phantom tick.
   const [groupFillOpen, setGroupFillOpen] = useState(false);
   const [groupFillSkipped, setGroupFillSkipped] = useState<Set<string>>(new Set());
-  const groupFillTriggerRef = useRef<HTMLButtonElement>(null);
   const groupFillRegionRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!groupFillOpen) return;
@@ -2431,6 +2436,11 @@ export default function MonthGenerator({
   const [touchedStoredRoleIds, setTouchedStoredRoleIds] = useState<Set<string>>(new Set());
   const monthPrefix = `${year}-${String(month).padStart(2, "0")}`;
   const [composerOpen, setComposerOpen] = useState(storedMode && openComposerInitially);
+  // Stored mode: «⇄ Intercambiar ▾ → Una sección…» and «⋯ → Equidad» open these on request.
+  const [sectionSwapOpen, setSectionSwapOpen] = useState(false);
+  const [equidadShown, setEquidadShown] = useState(false);
+  // Participaciones → grid: the member whose chips are outlined (a tap on a name). Display only.
+  const [highlightMemberId, setHighlightMemberId] = useState<string | null>(null);
   const onlyRoleId = storedMode && singleService && !openComposerInitially && focusRoleId ? focusRoleId : null;
   const [createType, setCreateType] = useState<ServiceType>("sunday_role");
   const [createDate, setCreateDate] = useState(`${monthPrefix}-01`);
@@ -2800,11 +2810,20 @@ export default function MonthGenerator({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      // An open `Menu` («⇄ Intercambiar ▾», «⋯», a desktop `Select`) owns Escape: it closes
+      // itself and calls `preventDefault()`. Its `stopPropagation()` does NOT keep this
+      // listener from running in production — Next hydrates on `document`, the same node
+      // this listens on — so without this the key that dismissed the menu also closed the
+      // editor. The `closest` half mirrors `CueDialog`'s yield, for a key that reaches here
+      // before the menu's own handler.
+      if (event.defaultPrevented) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('[role="menu"], [aria-haspopup="menu"][aria-expanded="true"]')) return;
       if (storedTransportActive) return;
       // An open «Limpiar mes» confirmation is the nearest thing to dismiss —
       // Escape must not leap past a destructive prompt to close the editor.
-      if (clearPending) { setClearPending(false); clearTriggerRef.current?.focus(); return; }
-      if (groupFillOpen) { setGroupFillOpen(false); groupFillTriggerRef.current?.focus(); return; }
+      if (clearPending) { setClearPending(false); moreTriggerRef.current?.focus(); return; }
+      if (groupFillOpen) { setGroupFillOpen(false); moreTriggerRef.current?.focus(); return; }
       // C6 CF-10: leaving with gaps after a partial v3 confirm asks first.
       if (v3HasGaps) {
         setIncompleteOpen(true);
@@ -3414,7 +3433,7 @@ export default function MonthGenerator({
 
   function closeGroupFill() {
     setGroupFillOpen(false);
-    groupFillTriggerRef.current?.focus();
+    moreTriggerRef.current?.focus();
   }
 
   /**
@@ -4850,6 +4869,27 @@ export default function MonthGenerator({
     cells,
     members,
   });
+  // «Sin participar este mes»: worship members whose Tipo could seat them, and whether the
+  // month's every service date is in their unavailability (the usual reason they are idle).
+  // Same dates the chart counts: the whole grid in stored mode, the counted months otherwise.
+  const participationDates = [...new Set(
+    columns
+      .filter((c) => storedMode || participationMonths.includes(c.date.slice(0, 7)))
+      .map((c) => c.date.slice(0, 10)),
+  )];
+  const participationPool: ParticipationPoolMember[] = members
+    .filter((m) => normalizeMinistries(m.ministries).includes("worship"))
+    .map((m) => {
+      const types = m.memberType ?? [];
+      const off = new Set(m.unavailableDates ?? []);
+      return {
+        id: m._id,
+        name: dn(m),
+        voces: types.some((t) => t === "voz" || t === "sunday_lead" || t === "saturday_lead"),
+        instrumentos: types.some((t) => t === "instrumento" || t === "foh"),
+        unavailable: participationDates.length > 0 && participationDates.every((d) => off.has(d)),
+      };
+    });
 
   /**
    * E17's missing channel. `PlannerGrid` gets `skipped: Set<string>` (the
@@ -5107,15 +5147,116 @@ export default function MonthGenerator({
             </p>
           )}
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           {singleView && onScopeChange && (
             <Button variant="secondary" size="md" onClick={() => onScopeChange("month")} disabled={storedTransportActive}>
               Ver mes completo
             </Button>
           )}
-          <button type="button" onClick={requestBack} disabled={storedTransportActive} className="font-label text-xs uppercase tracking-widest text-mono-500 hover:text-accent transition-colors disabled:opacity-50">
-            {storedMode ? "Cerrar" : "← Volver"}
-          </button>
+          {/*
+            The stored editor's month tools, one row. They used to be four stacked boxes above the
+            grid (the create box, the whole-team swap, the always-open section swap, «Equidad»)
+            plus «Limpiar mes» in the footer; the rare ones now sit behind «⋯». Each still opens
+            the same inline panel below, with the same gates — only the trigger moved.
+          */}
+          {storedMode && storedInventory.coherent && !singleView && (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setGroupFillOpen(false);
+                  setComposerOpen(true);
+                }}
+                disabled={composerOpen || storedMutationLocked || storedHasUnresolvedWork || !!storedCreateBlocked}
+                title={storedCreateBlocked ?? undefined}
+                className="min-h-[44px] rounded-lg border border-accent/25 px-4 font-label text-xs uppercase tracking-widest text-accent disabled:opacity-50"
+              >
+                + Nuevo servicio
+              </button>
+              <Menu
+                label="Intercambiar"
+                // Never disabled: each panel it opens disables its OWN controls while a write is
+                // in flight or the grid holds unsaved work (the same gate the panels always
+                // had), so the admin can still see what the swap would be.
+                trigger={(
+                  <Button ref={swapTriggerRef} variant="secondary" size="lg">
+                    ⇄ Intercambiar ▾
+                  </Button>
+                )}
+              >
+                <MenuItem
+                  onSelect={() => {
+                    setSectionSwapOpen(false);
+                    setSwapSel(null);
+                    setSwapOpen(true);
+                  }}
+                >
+                  Equipo completo entre dos fechas
+                </MenuItem>
+                <MenuItem
+                  onSelect={() => {
+                    setSwapOpen(false);
+                    setSwapSel(null);
+                    setSectionSwapOpen(true);
+                  }}
+                >
+                  Una sección entre dos servicios
+                </MenuItem>
+              </Menu>
+              <Menu
+                label="Más acciones del mes"
+                trigger={(
+                  <Button
+                    ref={moreTriggerRef}
+                    variant="secondary"
+                    size="lg"
+                    aria-label="Más acciones del mes"
+                    data-month-more=""
+                  >
+                    ⋯
+                  </Button>
+                )}
+              >
+                {/*
+                  Disabled items keep their reason as a second line: a `title` never shows on a
+                  menu row, and a disabled row with no words reads as broken. «Llenar especiales»
+                  is offered only to a month that has specials — its blocker said exactly that
+                  on every other month.
+                */}
+                {storedSpecialColumns.length > 0 && (
+                  <MenuItem onSelect={openGroupFill} disabled={!!groupFillBlocked}>
+                    <MenuItemLabel label="Llenar especiales…" reason={groupFillBlocked} />
+                  </MenuItem>
+                )}
+                {solverConfig && (
+                  <MenuItem onSelect={() => setEquidadShown((shown) => !shown)}>
+                    {equidadShown ? "Ocultar equidad" : "Equidad · saldo acumulado"}
+                  </MenuItem>
+                )}
+                {storedCapabilities?.clear && (
+                  <>
+                    <MenuSeparator />
+                    <MenuItem
+                      danger
+                      onSelect={() => {
+                        if (clearPending) { clearCancelRef.current?.focus(); return; }
+                        setClearIncludePublished(false);
+                        setClearPending(true);
+                      }}
+                      disabled={storedTransportActive || pendingDiscard !== null || !!storedClearBlocked || !!clearUnresolvedWrite}
+                    >
+                      <MenuItemLabel label="Limpiar mes…" reason={storedClearBlocked ?? clearUnresolvedWrite} />
+                    </MenuItem>
+                  </>
+                )}
+              </Menu>
+            </>
+          )}
+          {!storedMode && (
+            <button type="button" onClick={requestBack} disabled={storedTransportActive} className="font-label text-xs uppercase tracking-widest text-mono-500 hover:text-accent transition-colors disabled:opacity-50">
+              ← Volver
+            </button>
+          )}
         </div>
       </div>
 
@@ -5135,43 +5276,9 @@ export default function MonthGenerator({
         </div>
       )}
 
-      {storedMode && storedInventory.coherent && !singleView && (
+      {storedMode && storedInventory.coherent && !singleView && composerOpen && (
         <div className="rounded-lg border border-accent/15 bg-accent/5 px-3 py-3">
-          {!composerOpen ? (
-            <div className="flex flex-col gap-1">
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => { setGroupFillOpen(false); setComposerOpen(true); }}
-                  disabled={storedMutationLocked || storedHasUnresolvedWork || !!storedCreateBlocked}
-                  title={storedCreateBlocked ?? undefined}
-                  className="min-h-[44px] rounded-lg border border-accent/25 px-4 font-label text-xs uppercase tracking-widest text-accent disabled:opacity-50"
-                >
-                  + Nuevo servicio
-                </button>
-                <Button
-                  ref={groupFillTriggerRef}
-                  variant="secondary"
-                  size="lg"
-                  onClick={openGroupFill}
-                  disabled={!!groupFillBlocked}
-                  title={groupFillBlocked ?? undefined}
-                >
-                  Llenar especiales…
-                </Button>
-              </div>
-              {/*
-                The reason is a LINE, not only a `title`: the house `Button`
-                carries `disabled:pointer-events-none`, so a disabled one never
-                shows its tooltip (the same trap `ServicesPanel`'s toolbar
-                documents). `storedEditBlocked` is skipped here because the page
-                already prints it just below this box.
-              */}
-              {groupFillBlocked && groupFillBlocked !== storedEditBlocked && (
-                <p className="font-label text-[11px] text-ink-dim">{groupFillBlocked}</p>
-              )}
-            </div>
-          ) : (
+          {(
             <div className="grid gap-3 md:grid-cols-[1fr_1fr_1.4fr_auto] md:items-end">
               <Select
                 id="mg-create-type"
@@ -5374,10 +5481,15 @@ export default function MonthGenerator({
         />
       ))}
 
-      {/* Solver v3 C2 UI-1: the read-only «Equidad» preview, beside the lead history. */}
-      {solverConfig && !singleView && (
+      {/*
+        Solver v3 C2 UI-1: the read-only «Equidad» preview, beside the lead history. In the stored
+        editor it is mounted only on request («⋯» → «Equidad · saldo acumulado») and arrives open:
+        it is the ledger's running balance, read when planning, not while moving seats.
+      */}
+      {solverConfig && !singleView && (!storedMode || equidadShown) && (
         <FairnessPreviewPanel
           key={monthKeyOf(year, month)}
+          initialOpen={storedMode}
           month={monthKeyOf(year, month)}
           config={solverConfig}
           members={members}
@@ -5388,8 +5500,23 @@ export default function MonthGenerator({
         />
       )}
 
-      {viewMode === "edit" && !singleView && (
+      {viewMode === "edit" && !singleView && (!storedMode || swapOpen) && (
         <div>
+          {storedMode ? (
+            // Opened from «⇄ Intercambiar ▾»; this is its way back out.
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-label text-xs uppercase tracking-widest text-mono-500">⇄ Equipo completo</span>
+              <Button
+                data-swap-toggle=""
+                variant="ghost"
+                size="sm"
+                aria-label="Cerrar intercambio de equipos"
+                onClick={() => { setSwapSel(null); setSwapOpen(false); swapTriggerRef.current?.focus(); }}
+              >
+                Cerrar
+              </Button>
+            </div>
+          ) : (
           <Button
             data-swap-toggle=""
             variant="ghost"
@@ -5406,6 +5533,7 @@ export default function MonthGenerator({
               <path d="M6 8l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </Button>
+          )}
           <Collapse id={swapRegionId} open={swapOpen} className="flex flex-wrap items-center gap-2 pt-2">
             <span className="w-full font-body text-xs text-mono-500">Toca dos fechas para intercambiar todo su equipo.</span>
             {columns.map(col => (
@@ -5431,8 +5559,8 @@ export default function MonthGenerator({
         </div>
       )}
 
-      {storedMode && !singleView && (
-        <div className="grid gap-2 rounded-lg border border-accent/15 p-3 md:grid-cols-[0.8fr_1fr_1fr_auto] md:items-end">
+      {storedMode && !singleView && sectionSwapOpen && (
+        <div className="grid gap-2 rounded-lg border border-accent/15 p-3 md:grid-cols-[0.8fr_1fr_1fr_auto_auto] md:items-end">
           <Select id="mg-section-swap-path" label="Sección" size="md" value={sectionSwapPath} disabled={storedSwapInteractionBlocked} onChange={(event) => setSectionSwapPath(event.target.value as StoredSectionPath)}>
             {STORED_SECTION_OPTIONS.map((option) => <option key={option.path} value={option.path}>{option.label}</option>)}
           </Select>
@@ -5453,6 +5581,9 @@ export default function MonthGenerator({
           >
             Intercambiar sección
           </button>
+          <Button variant="ghost" size="lg" aria-label="Cerrar intercambio de sección" onClick={() => { setSectionSwapOpen(false); swapTriggerRef.current?.focus(); }}>
+            Cerrar
+          </Button>
         </div>
       )}
 
@@ -5564,14 +5695,15 @@ export default function MonthGenerator({
             1700px and stacked it under the grid below that. It never reached
             the 1512px laptop this is planned on — the admin page caps content
             at 1280px, leaving ~116px of gutter for a 216px chart. It now costs
-            the grid 216px at every width, on purpose — the same 216, because it
-            is the chart's own content floor either way.
+            the grid its column at every width, on purpose — 300px since the
+            «Editar mes» redesign (2026-10-21), above the chart's own content
+            floor (`CHART_COLUMN_WIDTH`).
           */
           participation={
             <div className="space-y-2">
             {isV3 && !storedMode && horizon.length === 2 && (
               // One row, in the sidebar's own segmented look (as «Voces | Instrumentos» under it): three
-              // full month names in pills overflowed the 216 px column and «Ambos» wrapped alone.
+              // full month names in pills overflowed the (then 216 px) column and «Ambos» wrapped alone.
               // The short name is only what shows; the accessible name stays the full month.
               <SegmentedControl
                 label="Cuenta"
@@ -5584,6 +5716,9 @@ export default function MonthGenerator({
             )}
             <ParticipationSidebar
               roles={participationRoles}
+              selectedId={highlightMemberId}
+              onSelect={setHighlightMemberId}
+              pool={participationPool}
               // The month IS the scope now (`participationSaved`), so the month
               // names itself honestly and the subtitle only has to say that the
               // drafts on screen are already in the count alongside what is
@@ -5606,6 +5741,7 @@ export default function MonthGenerator({
             }),
           }}
           pinConflicts={isV3 ? undefined : pinBoard}
+          highlightMemberId={highlightMemberId}
           clear={storedMode ? undefined : {
             countFor: (scope, what) => planClear({ cells, rows, columns, scope, what }).seats,
             onClear: handleClear,
@@ -5671,6 +5807,7 @@ export default function MonthGenerator({
           <ParticipationSidebar
             roles={participationRoles}
             monthLabel={`${MONTHS[month - 1]} ${year} · guardados + borradores`}
+            pool={participationPool}
           />
         </div>
       )}
@@ -5737,7 +5874,7 @@ export default function MonthGenerator({
                 ? `Eliminando ${clearProgress.done} de ${clearProgress.total}…`
                 : `Eliminar ${clearSelection.selected.length}`}
             </button>
-            <button ref={clearCancelRef} type="button" onClick={() => { setClearPending(false); clearTriggerRef.current?.focus(); }} disabled={clearing} className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest disabled:opacity-50">
+            <button ref={clearCancelRef} type="button" onClick={() => { setClearPending(false); moreTriggerRef.current?.focus(); }} disabled={clearing} className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest disabled:opacity-50">
               Cancelar
             </button>
           </div>
@@ -5745,28 +5882,41 @@ export default function MonthGenerator({
       )}
 
       {storedMode ? (
-        <div className="flex gap-3">
-          <button type="button" onClick={requestBack} disabled={storedTransportActive} className="flex-1 min-h-[44px] rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors disabled:opacity-50">
+        /*
+          The one exit and the one save, held on screen while the month scrolls: a long month put
+          «Guardar» a full page below the edit that needed it. Sticky (not fixed), so it rests in
+          the flow at the end of the editor. It clears the phone tab bar (`--bottom-nav-h`) and,
+          on the right, the assistant bubble's footprint (`--assistant-fab-w`), which would
+          otherwise sit on top of «Guardar».
+        */
+        <div
+          data-stored-save-bar=""
+          className="sticky bottom-[var(--bottom-nav-h,0px)] z-20 -mx-1 flex items-center gap-3 border-t border-accent/15 bg-surface-base px-1 py-3 pr-[calc(var(--assistant-fab-w,0px)+0.25rem)]"
+        >
+          {/*
+            On a phone (measured on dev at 390px) the three did not fit beside the assistant
+            bubble's reserve: the count wrapped onto two lines and «Guardar 0 servicios» broke
+            under it. Below `sm` the count steps aside — the Guardar label already carries it —
+            and the buttons keep one line each.
+          */}
+          <button type="button" onClick={requestBack} disabled={storedTransportActive} className="min-h-[44px] shrink-0 whitespace-nowrap rounded-lg border border-surface-accent-30 px-4 sm:px-6 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors disabled:opacity-50">
             Cerrar
           </button>
-          {storedCapabilities?.clear && !singleView && (
-            <button
-              ref={clearTriggerRef}
-              type="button"
-              onClick={() => { if (clearPending) return; setClearIncludePublished(false); setClearPending(true); }}
-              disabled={storedTransportActive || pendingDiscard !== null || !!storedClearBlocked || !!clearUnresolvedWrite}
-              title={storedClearBlocked ?? clearUnresolvedWrite ?? "Elimina los borradores del mes para volver a generarlo"}
-              className="flex-1 min-h-[44px] rounded-lg border border-negative-border/50 font-label text-xs uppercase tracking-widest text-negative-fg hover:bg-negative-surface/30 transition-colors disabled:opacity-50"
-            >
-              Limpiar mes
-            </button>
-          )}
+          <p aria-live="polite" className="hidden min-w-0 flex-1 text-center font-body text-sm text-mono-500 sm:block">
+            {(() => {
+              const changed = dirtyStoredColumns.length + invalidStoredColumns.length;
+              // A rows-only change (an added, still-empty row) touches no service, yet «Cerrar»
+              // asks to discard it — so it must not read «Sin cambios».
+              if (changed > 0) return `${changed} servicio${changed !== 1 ? "s" : ""} con cambios`;
+              return storedHasUnresolvedWork ? "Cambios sin guardar" : "Sin cambios";
+            })()}
+          </p>
           <button
             type="button"
             onClick={() => void handleStoredSave()}
             disabled={storedMutationLocked || dirtyStoredColumns.length === 0 || invalidStoredColumns.length > 0 || !storedInventory.coherent || !!storedSaveBlocked}
             title={storedSaveBlocked ?? undefined}
-            className="flex-1 min-h-[44px] rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+            className="ml-auto min-h-[44px] shrink-0 whitespace-nowrap rounded-lg px-4 sm:px-6 bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
           >
             {savingStored ? "Guardando…" : singleView && dirtyStoredColumns.length <= 1 ? "Guardar" : `Guardar ${dirtyStoredColumns.length} servicio${dirtyStoredColumns.length !== 1 ? "s" : ""}`}
           </button>
@@ -5814,5 +5964,18 @@ export default function MonthGenerator({
       )}
       {incompleteDialog}
     </div>
+  );
+}
+
+/**
+ * A «⋯» menu row's text: the action, and — while it is disabled — why, on a second line. A menu row
+ * cannot show a `title`, and a greyed row with no words reads as a broken menu.
+ */
+function MenuItemLabel({ label, reason }: { label: string; reason?: string | null }) {
+  return (
+    <span className="flex flex-col items-start gap-0.5">
+      <span>{label}</span>
+      {reason && <span className="font-body text-[11px] normal-case tracking-normal text-ink-dim">{reason}</span>}
+    </span>
   );
 }

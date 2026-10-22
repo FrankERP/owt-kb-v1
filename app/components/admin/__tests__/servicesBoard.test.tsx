@@ -291,6 +291,38 @@ function adminRailTop(): string {
   return top!;
 }
 
+describe("the month editor tells AdminPanel when it is open", () => {
+  // AdminPanel hides «Integridad de datos» while «Editar mes» is open (the panel sat ABOVE the
+  // editor and pushed the grid down; the check itself keeps running, and the editor's own
+  // admission still reads it). This is the half that reports the edge.
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+    stubFetch();
+  });
+  afterEach(() => cleanup());
+
+  it("reports open on «Editar mes» and closed on unmount", async () => {
+    const onMonthEditorOpenChange = vi.fn();
+    const { container, unmount } = render(
+      <ToastProvider>
+        <CueDialogProvider>
+          <ServicesPanel onMonthEditorOpenChange={onMonthEditorOpenChange} />
+        </CueDialogProvider>
+      </ToastProvider>,
+    );
+    await waitFor(() => expect(container.querySelectorAll("[data-card-id]").length).toBe(2));
+    expect(onMonthEditorOpenChange).toHaveBeenLastCalledWith(false);
+
+    const open = screen.getAllByRole("button", { name: /Editar mes/ })[0] as HTMLButtonElement;
+    expect(open.disabled).toBe(false);
+    fireEvent.click(open);
+    await waitFor(() => expect(onMonthEditorOpenChange).toHaveBeenLastCalledWith(true));
+
+    unmount();
+    expect(onMonthEditorOpenChange).toHaveBeenLastCalledWith(false);
+  });
+});
+
 describe("the Participaciones chart's placement", () => {
   it("shares the admin rail's sticky top, byte for byte", () => {
     // Non-vacuity: an arbitrary-value top was found, whatever it says.
@@ -302,17 +334,25 @@ describe("the Participaciones chart's placement", () => {
     const { container } = render(<ParticipationSidebar roles={[]} monthLabel="Marzo" />);
     const aside = container.querySelector("aside") as HTMLElement;
     const classes = aside.className.split(/\s+/);
-    expect(classes).toContain("lg:sticky");
-    expect(classes).toContain("lg:top-4");
     expect(classes).toContain("self-start");
-    expect(classes).not.toContain(`lg:${adminRailTop()}`);
-    expect(classes).not.toContain("lg:overflow-y-auto");
-    expect(classes).not.toContain("lg:flex");
-    expect(classes).not.toContain("lg:flex-col");
-    expect(classes.some((c) => c.startsWith("lg:max-h-"))).toBe(false);
-    // The planner's rows list, byte for byte: `participationAlongside.test.tsx`
-    // derives the planner column's width floor from its `pr-0.5`.
-    expect((aside.lastElementChild as HTMLElement).className).toBe("space-y-0 max-h-[60vh] overflow-y-auto pr-0.5");
+    // The planner's COLUMN sticks (`PlannerGrid`), never the aside inside it: an aside
+    // sticky in a column exactly its own height has nowhere to travel.
+    expect(classes.some((c) => c.endsWith("sticky"))).toBe(false);
+    expect(classes.some((c) => c.startsWith("lg:"))).toBe(false);
+    // From `xl` (where the column sits beside the grid) the aside is a capped flex column…
+    for (const cls of ["xl:flex", "xl:flex-col", "xl:overflow-y-auto"]) expect(classes).toContain(cls);
+    const cap = classes.find((c) => c.startsWith("xl:max-h-["));
+    expect(cap, "the chart's viewport cap").toBeTruthy();
+    // …capped against the same offset the column's sticky top adds, which is the rail's.
+    const offset = adminRailTop().match(/^top-\[calc\((.+)\)\]$/)![1].split("+").map((t) => t.trim());
+    expect(cap).toContain(`[calc(100dvh-${offset.join("-")}-`);
+    const gridSrc = readFileSync(join(process.cwd(), "app/components/admin/PlannerGrid.tsx"), "utf8");
+    expect(gridSrc).toContain(`xl:sticky xl:${adminRailTop()}`);
+    // …whose rows list is the one scroller; below `xl` it has no cap, so a phone scrolls the
+    // PAGE instead of a box inside it. `participationAlongside.test.tsx` derives the planner
+    // column's width floor from its `pr-0.5`.
+    const list = (aside.lastElementChild as HTMLElement).className;
+    expect(list).toBe("space-y-0 pr-0.5 xl:min-h-0 xl:flex-1 xl:overflow-y-auto");
   });
 
   it("is asked for by ServicesPanel alone: the planner's charts pass no placement", () => {

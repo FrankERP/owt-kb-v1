@@ -39,7 +39,18 @@ afterEach(() => {
 
 // ─── Shared helpers ──────────────────────────────────────────────────────────
 
-const sw = (name: string) => screen.getByRole("switch", { name }) as HTMLButtonElement;
+/**
+ * A stored header folds its fields (date, name, time, this switch) behind ✎, so the switch is
+ * read after opening that column's ✎ — once; a second read finds it already open.
+ */
+const sw = (name: string) => {
+  const date = name.match(/\d{4}-\d{2}-\d{2}/)?.[0];
+  const edit = date
+    ? screen.queryAllByRole("button", { name: `Editar datos del servicio ${date}` }).find((b) => b.getAttribute("aria-expanded") !== "true")
+    : undefined;
+  if (edit && !screen.queryByRole("switch", { name })) fireEvent.click(edit);
+  return screen.getByRole("switch", { name }) as HTMLButtonElement;
+};
 const describedText = (el: HTMLElement) => {
   const id = el.getAttribute("aria-describedby");
   return id ? (document.getElementById(id)?.textContent ?? null) : null;

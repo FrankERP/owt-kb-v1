@@ -19,7 +19,7 @@
 // revision together — before a retry is possible, and the dialog stays open on every
 // refusal.
 
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import Button from "@/app/components/ui/Button";
 import Collapse from "@/app/components/ui/Collapse";
@@ -79,6 +79,12 @@ export interface FairnessPreviewPanelProps {
   engine?: SolverEngine;
   /** C6 EQ-3/EQ-4: the last v3 run of this horizon; `null` before any run (the plan columns read «—»). */
   plan?: EquidadPlan | null;
+  /**
+   * Mount already open, and read on mount. The stored month editor mounts this panel only when the
+   * admin asks for it from its «⋯» menu, so a closed disclosure there would be a second click for the
+   * same request. Everywhere else it starts closed and reads on first open, as before.
+   */
+  initialOpen?: boolean;
 }
 
 function FiguresTable({ rows, total, sinceLabel, plan, tab }: {
@@ -151,7 +157,7 @@ export default function FairnessPreviewPanel(props: FairnessPreviewPanelProps) {
   const { month } = props;
   const bodyId = useId();
   const outId = useId();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(props.initialOpen ?? false);
   const [outOpen, setOutOpen] = useState(false);
   const [tab, setTab] = useState<TabKey>("DL");
   const [load, setLoad] = useState<Load>({ status: "idle" });
@@ -182,6 +188,17 @@ export default function FairnessPreviewPanel(props: FairnessPreviewPanelProps) {
     setOpen(next);
     if (next && load.status === "idle") void read();
   };
+
+  // `initialOpen`: the one read a first open would have started, started by the mount instead.
+  // A ref, not the prop, so a re-render can never start a second one.
+  const readOnMount = useRef(props.initialOpen ?? false);
+  useEffect(() => {
+    if (!readOnMount.current) return;
+    readOnMount.current = false;
+    void read();
+    // Mount-only by design; `read` is re-created every render and must not re-trigger this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // The resolver over the on-screen state: X1's eligibility when the month's record does
   // not bind (CAD-2).

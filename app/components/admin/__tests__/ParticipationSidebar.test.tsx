@@ -93,7 +93,7 @@ describe("by default the panel leaves special services out", () => {
     mount();
     // Frank's Sunday lead only; his special lead is not counted.
     expect(total("Frank")).toBe(1);
-    expect(caption("Frank")).toBe("Líder 1·0 · BGV 0·0 · Coro 0");
+    expect(caption("Frank")).toBe("1 Líder");
     // Gaby serves only the special, so she is not on the panel at all.
     expect(row("Gaby")).toBeNull();
   });
@@ -113,10 +113,10 @@ describe("turning the switch on counts them", () => {
     fireEvent.click(switchEl());
     expect(switchEl().getAttribute("aria-checked")).toBe("true");
     await waitFor(() => expect(total("Frank")).toBe(2));
-    expect(caption("Frank")).toBe("Líder 1·0 · BGV 0·0 · Coro 0 · Especial 1");
+    expect(caption("Frank")).toBe("1 Líder · 1 Especial");
     expect(total("Gaby")).toBe(1);
     expect(screen.getByText("Especial")).toBeTruthy(); // the legend entry
-    expect(container.textContent).toMatch(/Especial 1/);
+    expect(container.textContent).toMatch(/1 Especial/);
   });
 
   it("goes back to leaving them out", async () => {
@@ -315,7 +315,7 @@ describe("the server render and the hydrating one agree", () => {
 
       const hydrated = within(host).getByRole("switch", { name: "Incluir especiales" });
       expect(hydrated.getAttribute("aria-checked")).toBe("true");
-      expect(host.textContent).toMatch(/Especial 1/);
+      expect(host.textContent).toMatch(/1 Especial/);
       expect(within(host).getByText("Gaby")).toBeTruthy();
     } finally {
       act(() => root?.unmount());
@@ -329,7 +329,7 @@ describe("the instrument and FOH week counts follow the switch", () => {
     mount();
     showInstruments();
     // Frank plays on Sunday 03-01 AND on the special (week of 03-08): one week counted.
-    expect(caption("Frank")).toBe("Instrumentos 1 sem · FOH 0 sem");
+    expect(caption("Frank")).toBe("1 sem instrumento");
     // Samo and Ana appear only on the special.
     expect(row("Samo")).toBeNull();
     expect(row("Ana")).toBeNull();
@@ -340,9 +340,9 @@ describe("the instrument and FOH week counts follow the switch", () => {
     mount();
     showInstruments();
     fireEvent.click(switchEl());
-    await waitFor(() => expect(caption("Frank")).toBe("Instrumentos 2 sem · FOH 0 sem"));
-    expect(caption("Samo")).toBe("Instrumentos 1 sem · FOH 0 sem");
-    expect(caption("Ana")).toBe("Instrumentos 0 sem · FOH 1 sem");
+    await waitFor(() => expect(caption("Frank")).toBe("2 sem instrumento"));
+    expect(caption("Samo")).toBe("1 sem instrumento");
+    expect(caption("Ana")).toBe("1 sem FOH");
   });
 
   it("keeps the switch, and its state, across the Voces/Instrumentos view", () => {
@@ -383,5 +383,109 @@ describe("it works in both placements, inside the stacked header", () => {
     const labelId = sw.getAttribute("aria-labelledby");
     expect(labelId).toBeTruthy();
     expect(document.getElementById(labelId!)!.textContent).toBe("Incluir especiales");
+  });
+});
+
+// ─── The «Editar mes» redesign (2026-10-21) ──────────────────────────────────
+//
+// The caption says what the bar is made of in words (zeros left out, Saturday
+// services counted), an average marker answers "above or below the others",
+// a name can be picked so the grid outlines that member's chips, and the people
+// who could serve but have no seat are listed under the chart.
+
+describe("what each row says, and the panel's planner-only extras", () => {
+  const liu = { _id: "m5", member_name: "Liu" };
+  const month: ParticipantRole[] = [
+    { _type: "sunday_role", date: "2026-03-01", leads: [frank], bgvs: [gaby], chorus: [liu], instruments: [], foh: [] },
+    { _type: "saturday_role", date: "2026-03-07", leads: [frank], bgvs: [frank], chorus: [], instruments: [], foh: [] },
+    { _type: "sunday_role", date: "2026-03-08", leads: [gaby], bgvs: [frank], chorus: [], instruments: [], foh: [] },
+    // Ana sings only at a vigil, so the switch (off) leaves her out of the chart.
+    { _type: "special_role", date: "2026-03-11", leads: [], bgvs: [], chorus: [ana], instruments: [], foh: [] },
+  ];
+  const pool = [
+    { id: "m1", name: "Frank", voces: true, instrumentos: false, unavailable: false },
+    { id: "m4", name: "Ana", voces: true, instrumentos: false, unavailable: false },
+    { id: "m6", name: "Raúl", voces: true, instrumentos: false, unavailable: true },
+    { id: "m7", name: "Beto", voces: true, instrumentos: false, unavailable: false },
+    { id: "m3", name: "Samo", voces: false, instrumentos: true, unavailable: false },
+  ];
+  const mountMonth = (props: Partial<React.ComponentProps<typeof ParticipationSidebar>> = {}) =>
+    render(
+      <MotionProvider>
+        <ParticipationSidebar roles={month} monthLabel="Marzo 2026" {...props} />
+      </MotionProvider>,
+    );
+
+  it("words the bar with its zeros left out, and counts the Saturday SERVICES served", () => {
+    mountMonth();
+    // Frank: Lead Sun + Lead Sat, BGV Sat + BGV Sun = 4 seats; one Saturday service (two seats on it).
+    expect(caption("Frank")).toBe("2 Líder · 2 BGV · 1 en sábado");
+    expect(caption("Gaby")).toBe("1 Líder · 1 BGV");
+    expect(caption("Liu")).toBe("1 Coro");
+  });
+
+  it("marks the average of the people serving, on the legend and on every bar", () => {
+    const { container } = mountMonth();
+    // Frank 4, Gaby 2, Liu 1 → 7 / 3.
+    expect(container.querySelector("[data-average]")!.textContent).toBe("Promedio 2.3");
+    expect(container.querySelectorAll("[data-average-marker]")).toHaveLength(3);
+  });
+
+  it("draws no average for a single row, where it would only restate that bar", () => {
+    const { container } = render(
+      <MotionProvider>
+        <ParticipationSidebar roles={[month[0]].map((r) => ({ ...r, bgvs: [], chorus: [] }))} monthLabel="Marzo 2026" />
+      </MotionProvider>,
+    );
+    expect(container.querySelector("[data-average]")).toBeNull();
+    expect(container.querySelector("[data-average-marker]")).toBeNull();
+  });
+
+  it("makes each name a toggle only when the planner asks, and reports the pick", () => {
+    const onSelect = vi.fn();
+    const { rerender } = mountMonth({ onSelect });
+    const name = screen.getByRole("button", { name: "Gaby" });
+    expect(name.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(name);
+    expect(onSelect).toHaveBeenLastCalledWith("m2");
+
+    rerender(
+      <MotionProvider>
+        <ParticipationSidebar roles={month} monthLabel="Marzo 2026" onSelect={onSelect} selectedId="m2" />
+      </MotionProvider>,
+    );
+    expect(screen.getByRole("button", { name: "Gaby" }).getAttribute("aria-pressed")).toBe("true");
+    expect(row("Gaby")!.getAttribute("data-selected")).toBe("true");
+    // A second tap drops the pick.
+    fireEvent.click(screen.getByRole("button", { name: "Gaby" }));
+    expect(onSelect).toHaveBeenLastCalledWith(null);
+  });
+
+  it("leaves names as plain text on the board, which has no grid to highlight", () => {
+    mountMonth({ placement: "board" });
+    expect(screen.queryByRole("button", { name: "Gaby" })).toBeNull();
+    expect(row("Gaby")).not.toBeNull();
+  });
+
+  it("lists who could serve and has no seat — never someone who served only a special", () => {
+    const { container } = mountMonth({ pool });
+    const idle = container.querySelector("[data-idle-pool]") as HTMLElement;
+    // Frank served; Ana sang at the vigil (out of the chart with the switch off, but she DID
+    // participate); Samo's Tipo is instruments only. Beto and Raúl remain, by name.
+    expect([...idle.querySelectorAll("[data-idle-member]")].map((el) => el.getAttribute("data-idle-member"))).toEqual(["m7", "m6"]);
+    expect(idle.textContent).toBe("Sin participar este mes · 2Beto, Raúl (no disponible)");
+  });
+
+  it("asks the instruments question on the Instrumentos view", () => {
+    const { container } = mountMonth({ pool });
+    showInstruments();
+    const idle = container.querySelector("[data-idle-pool]") as HTMLElement;
+    expect(idle.textContent).toContain("Samo");
+    expect(idle.textContent).not.toContain("Beto");
+  });
+
+  it("renders no idle list without a pool", () => {
+    const { container } = mountMonth();
+    expect(container.querySelector("[data-idle-pool]")).toBeNull();
   });
 });

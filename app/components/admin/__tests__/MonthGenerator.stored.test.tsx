@@ -238,6 +238,31 @@ function response(status = 200, body: unknown = {}) {
   return { ok: status >= 200 && status < 300, status, json: async () => body };
 }
 
+// The stored editor's month tools live behind two header menus («⇄ Intercambiar ▾» and «⋯»),
+// so every test that used one of them opens it the way an admin would.
+function openIntercambiar(item: "Equipo completo entre dos fechas" | "Una sección entre dos servicios") {
+  fireEvent.click(screen.getByRole("button", { name: /Intercambiar ▾/ }));
+  fireEvent.click(screen.getByRole("menuitem", { name: item }));
+}
+const openSectionSwap = () => openIntercambiar("Una sección entre dos servicios");
+const openTeamSwap = () => openIntercambiar("Equipo completo entre dos fechas");
+
+/** «⋯ Más acciones del mes», opened if it is not. */
+function openMonthMenu(): HTMLElement {
+  const more = screen.getByRole("button", { name: "Más acciones del mes" });
+  if (more.getAttribute("aria-expanded") !== "true") fireEvent.click(more);
+  return more;
+}
+/** The «⋯» item labelled `label` — matched on its first line, since a disabled one adds its reason. */
+function monthAction(label: string): HTMLElement {
+  openMonthMenu();
+  const item = queryMenuItem(label);
+  if (!item) throw new Error(`no «${label}» in «⋯»`);
+  return item;
+}
+const queryMenuItem = (label: string) =>
+  screen.queryAllByRole("menuitem").find((el) => (el.querySelector("span > span")?.textContent ?? el.textContent) === label) ?? null;
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -495,6 +520,26 @@ describe("MonthGenerator — stored mode", () => {
     });
   });
 
+  it("keeps Cerrar, the count of changed services and Guardar on one sticky bar", () => {
+    const { container } = renderStored([role()]);
+    const bar = container.querySelector("[data-stored-save-bar]") as HTMLElement;
+    expect(bar.className.split(/\s+/)).toContain("sticky");
+    // Clears the phone tab bar, like every bottom-pinned element (`bottomNavOffsetSync.test.ts`).
+    expect(bar.className).toContain("bottom-[var(--bottom-nav-h,0px)]");
+    expect(within(bar).getByText("Sin cambios")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cambiar una celda" }));
+    expect(within(bar).getByText("1 servicio con cambios")).toBeTruthy();
+    expect(within(bar).getByRole("button", { name: "Guardar 1 servicio" })).toBeTruthy();
+    expect(within(bar).getByRole("button", { name: "Cerrar" })).toBeTruthy();
+  });
+
+  it("never says «Sin cambios» over a rows-only change that «Cerrar» would discard", () => {
+    const { container } = renderStored([role()]);
+    fireEvent.click(screen.getByRole("button", { name: "Añadir fila simulada" }));
+    const bar = container.querySelector("[data-stored-save-bar]") as HTMLElement;
+    expect(within(bar).getByText("Cambios sin guardar")).toBeTruthy();
+  });
+
   it("treats an invalid special-name edit as unsaved work and refuses Save", () => {
     renderStored([role({ _type: "special_role", service_name: "Bodas" })]);
 
@@ -518,6 +563,7 @@ describe("MonthGenerator — stored mode", () => {
     stubFetchWithHistory(fetchMock);
     renderStored([first, second], { initialMonth: "2026-08" });
 
+    openSectionSwap();
     fireEvent.change(screen.getByLabelText("Sección"), { target: { value: "BGVs" } });
     fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
     fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-b" } });
@@ -559,6 +605,7 @@ describe("MonthGenerator — stored mode", () => {
       <MonthGenerator {...common} existingRoles={[first, second]} allRoles={[first, second]} storedSource={firstSource} />,
       { wrapper: AdminProviders },
     );
+    openSectionSwap();
     fireEvent.change(screen.getByLabelText("Sección"), { target: { value: "BGVs" } });
     fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
     fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-b" } });
@@ -603,6 +650,7 @@ describe("MonthGenerator — stored mode", () => {
     ];
     renderStored(roles);
 
+    openSectionSwap();
     fireEvent.change(screen.getByLabelText("Sección"), { target: { value: "instruments" } });
     const first = screen.getByLabelText("Primer servicio") as HTMLSelectElement;
     expect([...first.options].map((option) => option.value)).toEqual(["", "special-a", "special-b"]);
@@ -662,6 +710,7 @@ describe("MonthGenerator — stored mode", () => {
       { wrapper: AdminProviders },
     );
 
+    openSectionSwap();
     fireEvent.change(screen.getByLabelText("Sección"), { target: { value: path } });
     fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
     fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-b" } });
@@ -706,6 +755,7 @@ describe("MonthGenerator — stored mode", () => {
       <MonthGenerator {...common} existingRoles={[first, second]} allRoles={[first, second]} storedSource={firstSource} />,
       { wrapper: AdminProviders },
     );
+    openSectionSwap();
     fireEvent.change(screen.getByLabelText("Sección"), { target: { value: "BGVs" } });
     fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
     fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-b" } });
@@ -779,6 +829,7 @@ describe("MonthGenerator — stored mode", () => {
       <MonthGenerator {...common} existingRoles={[first, second]} allRoles={[first, second]} storedSource={firstSource} />,
       { wrapper: AdminProviders },
     );
+    openSectionSwap();
     fireEvent.change(screen.getByLabelText("Sección"), { target: { value: "instruments" } });
     fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
     fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-b" } });
@@ -807,6 +858,7 @@ describe("MonthGenerator — stored mode", () => {
     const second = role({ _id: "role-b", _rev: "rev-b", date: "2026-02-08" });
     stubFetchWithHistory(vi.fn(async () => response(400, { error: "invalid_request" })));
     renderStored([role(), second]);
+    openSectionSwap();
     fireEvent.change(screen.getByLabelText("Sección"), { target: { value: "BGVs" } });
     fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
     fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-b" } });
@@ -822,6 +874,7 @@ describe("MonthGenerator — stored mode", () => {
     const fetchMock = vi.fn(async () => response(500, { error: "invalid_request" }));
     stubFetchWithHistory(fetchMock);
     const { storedSource } = renderStored([role(), second]);
+    openSectionSwap();
     fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
     fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-b" } });
     fireEvent.click(screen.getByRole("button", { name: "Intercambiar sección" }));
@@ -837,6 +890,7 @@ describe("MonthGenerator — stored mode", () => {
     const fetchMock = vi.fn(async () => { throw new Error("connection lost"); });
     stubFetchWithHistory(fetchMock);
     renderStored([role(), second]);
+    openSectionSwap();
     fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
     fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-b" } });
     fireEvent.click(screen.getByRole("button", { name: "Intercambiar sección" }));
@@ -851,6 +905,7 @@ describe("MonthGenerator — stored mode", () => {
     const fetchMock = vi.fn();
     stubFetchWithHistory(fetchMock);
     renderStored([role()]);
+    openSectionSwap();
     fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
     fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-a" } });
 
@@ -867,6 +922,7 @@ describe("MonthGenerator — stored mode", () => {
     stubFetchWithHistory(fetchMock);
     const { container, storedSource, onClose } = renderStored([role(), second]);
     const initialRowCount = screen.getByTestId("stored-row-count").textContent;
+    openSectionSwap();
     fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
     fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-b" } });
     fireEvent.click(screen.getByRole("button", { name: "Intercambiar sección" }));
@@ -876,12 +932,13 @@ describe("MonthGenerator — stored mode", () => {
       expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
       fireEvent.click(screen.getByRole("button", { name }));
     }
-    fireEvent.click(container.querySelector("[data-swap-toggle]")!);
+    expect((screen.getByLabelText("Sección") as HTMLSelectElement).disabled).toBe(true);
+    expect((screen.getByLabelText("Primer servicio") as HTMLSelectElement).disabled).toBe(true);
+    // The whole-team panel replaces the section one (one swap panel at a time).
+    openTeamSwap();
     const teamButtons = container.querySelectorAll<HTMLButtonElement>("[data-swap-date]");
     expect([...teamButtons].every((button) => button.disabled)).toBe(true);
     teamButtons.forEach((button) => fireEvent.click(button));
-    expect((screen.getByLabelText("Sección") as HTMLSelectElement).disabled).toBe(true);
-    expect((screen.getByLabelText("Primer servicio") as HTMLSelectElement).disabled).toBe(true);
     expect(screen.getByTestId("stored-row-count").textContent).toBe(initialRowCount);
     expect((screen.getByRole("button", { name: "Guardando…" }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getAllByRole("button", { name: "Cerrar" }).every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
@@ -891,6 +948,7 @@ describe("MonthGenerator — stored mode", () => {
 
     finishRequest?.(response());
     await waitFor(() => expect(storedSource.reload).toHaveBeenCalledTimes(1));
+    openSectionSwap();
     expect((screen.getByLabelText("Primer servicio") as HTMLSelectElement).value).toBe("");
     expect((screen.getByLabelText("Segundo servicio") as HTMLSelectElement).value).toBe("");
   });
@@ -900,6 +958,7 @@ describe("MonthGenerator — stored mode", () => {
     stubFetchWithHistory(fetchMock);
     renderStored([role(), role({ _id: "role-b", _rev: "rev-b", date: "2026-02-08" })]);
 
+    openSectionSwap();
     fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
     fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-b" } });
     fireEvent.click(screen.getByRole("button", { name: "Cambiar una celda" }));
@@ -928,6 +987,7 @@ describe("MonthGenerator — stored mode", () => {
     stubFetchWithHistory(fetchMock);
     const { container } = renderStored([role(), role({ _id: "role-b", _rev: "rev-b", date: "2026-02-08" })]);
 
+    openSectionSwap();
     fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
     fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-b" } });
     fireEvent.click(screen.getByRole("button", { name: "Añadir fila simulada" }));
@@ -983,6 +1043,7 @@ describe("MonthGenerator — stored mode", () => {
     const fetchMock = vi.fn();
     stubFetchWithHistory(fetchMock);
     renderStored([role(), saturday]);
+    openSectionSwap();
     fireEvent.change(screen.getByLabelText("Sección"), { target: { value: "Chorus" } });
     fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
     fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-sat" } });
@@ -992,6 +1053,18 @@ describe("MonthGenerator — stored mode", () => {
     expect(action.title).toBe("Coro no está disponible en servicios de sábado.");
     fireEvent.click(action);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("returns focus to «⇄ Intercambiar ▾» when a swap panel's «Cerrar» closes it", () => {
+    renderStored([role(), role({ _id: "role-b", _rev: "rev-b", date: "2026-02-08" })]);
+    const trigger = screen.getByRole("button", { name: /Intercambiar ▾/ });
+    openSectionSwap();
+    fireEvent.click(screen.getByRole("button", { name: "Cerrar intercambio de sección" }));
+    expect(screen.queryByLabelText("Sección")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    openTeamSwap();
+    fireEvent.click(screen.getByRole("button", { name: "Cerrar intercambio de equipos" }));
+    expect(document.activeElement).toBe(trigger);
   });
 
   it("refuses a whole-team swap between Saturday and non-Saturday topology", () => {
@@ -1005,7 +1078,7 @@ describe("MonthGenerator — stored mode", () => {
     const fetchMock = vi.fn();
     stubFetchWithHistory(fetchMock);
     const { container } = renderStored([role(), saturday]);
-    fireEvent.click(container.querySelector("[data-swap-toggle]")!);
+    openTeamSwap();
     const swapButtons = container.querySelectorAll<HTMLButtonElement>("[data-swap-date]");
 
     fireEvent.click(swapButtons[0]!);
@@ -1063,7 +1136,8 @@ describe("MonthGenerator — «Limpiar mes»", () => {
 
   it("does not offer the button at all without a clear gate", () => {
     renderStored([role()]);
-    expect(screen.queryByRole("button", { name: "Limpiar mes" })).toBeNull();
+    openMonthMenu();
+    expect(queryMenuItem("Limpiar mes…")).toBeNull();
   });
 
   it("deletes the month's DRAFTS one by one with their observed revisions, then reports and closes", async () => {
@@ -1078,7 +1152,7 @@ describe("MonthGenerator — «Limpiar mes»", () => {
     ];
     const { onClose } = renderStored(roles, { storedCapabilities: clearGate, onCleared });
 
-    fireEvent.click(screen.getByRole("button", { name: "Limpiar mes" }));
+    fireEvent.click(monthAction("Limpiar mes…"));
     expect(screen.getByText(/Eliminar 2 servicios de Febrero 2026 \(2 borradores\)/)).toBeTruthy();
     expect(screen.getByLabelText(/Incluir 1 servicio publicado/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Eliminar 2" }));
@@ -1110,7 +1184,7 @@ describe("MonthGenerator — «Limpiar mes»", () => {
     ];
     const { onClose } = renderStored(roles, { storedCapabilities: clearGate, onCleared });
 
-    fireEvent.click(screen.getByRole("button", { name: "Limpiar mes" }));
+    fireEvent.click(monthAction("Limpiar mes…"));
     fireEvent.click(screen.getByLabelText(/Incluir 1 servicio publicado/));
     fireEvent.click(screen.getByRole("button", { name: "Eliminar 2" }));
 
@@ -1132,7 +1206,7 @@ describe("MonthGenerator — «Limpiar mes»", () => {
     stubFetchWithHistory(fetchMock);
     renderStored([role({ published: true })], { storedCapabilities: clearGate });
 
-    fireEvent.click(screen.getByRole("button", { name: "Limpiar mes" }));
+    fireEvent.click(monthAction("Limpiar mes…"));
     expect((screen.getByRole("button", { name: "Eliminar 0" }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText(/No hay borradores en este mes/)).toBeTruthy();
     fireEvent.click(screen.getByLabelText(/Incluir 1 servicio publicado/));
@@ -1145,15 +1219,19 @@ describe("MonthGenerator — «Limpiar mes»", () => {
 
   it("disables the button with the gate's reason and for an empty month", () => {
     renderStored([role()], { storedCapabilities: { ...clearGate, clear: { enabled: false, reason: "Faltan datos." } } });
-    const gated = screen.getByRole("button", { name: "Limpiar mes" }) as HTMLButtonElement;
-    expect(gated.disabled).toBe(true);
-    expect(gated.title).toBe("Faltan datos.");
+    // A menu row: disabled is `aria-disabled`, and the reason is its visible second line
+    // (a `title` never shows on a menu row).
+    const gated = monthAction("Limpiar mes…");
+    expect(gated.getAttribute("aria-disabled")).toBe("true");
+    expect(gated.textContent).toContain("Faltan datos.");
+    fireEvent.click(gated);
+    expect(screen.queryByRole("region", { name: "Confirmar limpiar mes" })).toBeNull();
     cleanup();
 
     renderStored([], { storedCapabilities: clearGate });
-    const empty = screen.getByRole("button", { name: "Limpiar mes" }) as HTMLButtonElement;
-    expect(empty.disabled).toBe(true);
-    expect(empty.title).toBe("No hay servicios guardados en este mes.");
+    const empty = monthAction("Limpiar mes…");
+    expect(empty.getAttribute("aria-disabled")).toBe("true");
+    expect(empty.textContent).toContain("No hay servicios guardados en este mes.");
   });
 });
 
@@ -1181,7 +1259,7 @@ describe("MonthGenerator — «Limpiar mes» edge paths", () => {
     ];
     const { onClose } = renderStored(roles, { storedCapabilities: clearGate, onCleared });
 
-    fireEvent.click(screen.getByRole("button", { name: "Limpiar mes" }));
+    fireEvent.click(monthAction("Limpiar mes…"));
     fireEvent.click(screen.getByRole("button", { name: "Eliminar 3" }));
 
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
@@ -1199,28 +1277,47 @@ describe("MonthGenerator — «Limpiar mes» edge paths", () => {
 
   it("Escape dismisses the confirmation instead of closing the editor", () => {
     const { onClose } = renderStored([role()], { storedCapabilities: clearGate });
-    fireEvent.click(screen.getByRole("button", { name: "Limpiar mes" }));
+    fireEvent.click(monthAction("Limpiar mes…"));
     expect(screen.getByRole("region", { name: "Confirmar limpiar mes" })).toBeTruthy();
 
     fireEvent.keyDown(document, { key: "Escape" });
 
     expect(screen.queryByRole("region", { name: "Confirmar limpiar mes" })).toBeNull();
     expect(onClose).not.toHaveBeenCalled();
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Limpiar mes" }));
+    // Back on «⋯», the trigger the confirmation was opened from (its menu row is gone).
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Más acciones del mes" }));
+  });
+
+  it("leaves an Escape a menu already handled to the menu, never closing the editor with it", () => {
+    // In production Next hydrates on `document`, so `Menu`'s `stopPropagation()` cannot keep
+    // the editor's own `document` listener from seeing the same key. What it CAN see is the
+    // menu's `preventDefault()`: an Escape arriving already handled is not the editor's.
+    const { onClose } = renderStored([role()], { storedCapabilities: clearGate });
+    openMonthMenu();
+    const handled = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    handled.preventDefault();
+    document.dispatchEvent(handled);
+    expect(onClose).not.toHaveBeenCalled();
+    // And a key pressed with focus on an open menu's trigger is the menu's too.
+    const more = screen.getByRole("button", { name: "Más acciones del mes" });
+    expect(more.getAttribute("aria-expanded")).toBe("true");
+    more.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    expect(onClose).not.toHaveBeenCalled();
+    // An unhandled Escape with no menu open still closes the (clean) editor.
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it("moves focus onto Cancelar (never the destructive confirm) and back to the trigger on Cancelar", () => {
     renderStored([role()], { storedCapabilities: clearGate });
-    const trigger = screen.getByRole("button", { name: "Limpiar mes" });
-    trigger.focus();
-    fireEvent.click(trigger);
+    fireEvent.click(monthAction("Limpiar mes…"));
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Cancelar" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
-    expect(document.activeElement).toBe(trigger);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Más acciones del mes" }));
   });
 
-  it("is disabled while the roles list is not fully loaded", () => {
+  it("is out of reach while the roles list is not fully loaded", () => {
     const roles = [role()];
     const storedSource = { ...source(roles), rolesStatus: "loading" as const };
     render(
@@ -1238,9 +1335,9 @@ describe("MonthGenerator — «Limpiar mes» edge paths", () => {
       />,
       { wrapper: AdminProviders },
     );
-    const trigger = screen.getByRole("button", { name: "Limpiar mes" }) as HTMLButtonElement;
-    expect(trigger.disabled).toBe(true);
-    expect(trigger.title).toBe("La lista de servicios no está completa. Reintenta la carga.");
+    // The month tools («⋯» with it) wait for a verified inventory; the warning says why.
+    expect(screen.queryByRole("button", { name: "Más acciones del mes" })).toBeNull();
+    expect(screen.getByText("No se puede editar este mes hasta verificar todos los servicios.")).toBeTruthy();
   });
 
   it("still sends the observed _rev while a grid edit is unsaved, and warns that the edit is discarded", async () => {
@@ -1249,7 +1346,7 @@ describe("MonthGenerator — «Limpiar mes» edge paths", () => {
     const { onClose } = renderStored([role()], { storedCapabilities: clearGate });
 
     fireEvent.click(screen.getByRole("button", { name: "Cambiar una celda" }));
-    fireEvent.click(screen.getByRole("button", { name: "Limpiar mes" }));
+    fireEvent.click(monthAction("Limpiar mes…"));
     expect(screen.getByText(/Los cambios sin guardar en la cuadrícula se descartan/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Eliminar 1" }));
 
@@ -1270,14 +1367,13 @@ describe("MonthGenerator — «Llenar especiales…»", () => {
     leads: [], bgvs: [], chorus: [], instruments: [], foh: [],
   });
 
-  it("is disabled with its reason when the month has no special", () => {
+  it("is not offered at all when the month has no special", () => {
+    // It used to sit there disabled on every month without one, saying so; in «⋯» it simply
+    // is not an option.
     renderStored([role()], { members: voz });
-    const trigger = screen.getByRole("button", { name: "Llenar especiales…" }) as HTMLButtonElement;
-    expect(trigger.disabled).toBe(true);
-    expect(trigger.title).toBe("Este mes no tiene servicios especiales.");
-    // A disabled house Button has `pointer-events: none`, so the title is never
-    // shown — the reason must also be a visible line.
-    expect(screen.getByText("Este mes no tiene servicios especiales.").tagName).toBe("P");
+    openMonthMenu();
+    expect(queryMenuItem("Llenar especiales…")).toBeNull();
+    expect(screen.queryByText("Este mes no tiene servicios especiales.")).toBeNull();
   });
 
   it("does not list a special whose admission is read-only", () => {
@@ -1315,7 +1411,7 @@ describe("MonthGenerator — «Llenar especiales…»", () => {
     expect(screen.getAllByTestId("stored-column").map((node) => node.getAttribute("data-column-id")))
       .toContain("set-ro");
 
-    fireEvent.click(screen.getByRole("button", { name: "Llenar especiales…" }));
+    fireEvent.click(monthAction("Llenar especiales…"));
     const panel = screen.getByRole("region", { name: "Llenar especiales" });
     const boxes = within(panel).getAllByRole("checkbox");
     expect(boxes).toHaveLength(1);
@@ -1327,7 +1423,7 @@ describe("MonthGenerator — «Llenar especiales…»", () => {
     // Id order (set-a, set-b) and arrival order both disagree with time order,
     // so only the clock can put 09:00 first.
     renderStored([emptySet("set-a", "12:30"), emptySet("set-b", "09:00")], { members: voz });
-    fireEvent.click(screen.getByRole("button", { name: "Llenar especiales…" }));
+    fireEvent.click(monthAction("Llenar especiales…"));
     const panel = screen.getByRole("region", { name: "Llenar especiales" });
     const labels = within(panel).getAllByRole("checkbox").map((box) => box.closest("label")!.textContent);
     expect(labels).toHaveLength(2);
@@ -1345,7 +1441,7 @@ describe("MonthGenerator — «Llenar especiales…»", () => {
       }),
     ];
     renderStored(roles, { members: voz });
-    fireEvent.click(screen.getByRole("button", { name: "Llenar especiales…" }));
+    fireEvent.click(monthAction("Llenar especiales…"));
     const panel = screen.getByRole("region", { name: "Llenar especiales" });
     const labels = within(panel).getAllByRole("checkbox").map((box) => box.closest("label")!.textContent);
     expect(labels).toHaveLength(2);
@@ -1355,7 +1451,7 @@ describe("MonthGenerator — «Llenar especiales…»", () => {
 
   it("closes the picker when «+ Nuevo servicio» opens the composer, so it never outlives its trigger", () => {
     renderStored([emptySet("set-a", "09:00")], { members: voz });
-    fireEvent.click(screen.getByRole("button", { name: "Llenar especiales…" }));
+    fireEvent.click(monthAction("Llenar especiales…"));
     expect(screen.getByRole("region", { name: "Llenar especiales" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "+ Nuevo servicio" }));
@@ -1364,21 +1460,21 @@ describe("MonthGenerator — «Llenar especiales…»", () => {
 
   it("moves focus into the panel on open and back to the trigger on Cancelar and on Escape", () => {
     renderStored([emptySet("set-a", "09:00")], { members: voz });
-    const trigger = screen.getByRole("button", { name: "Llenar especiales…" });
-    trigger.focus();
+    const more = () => screen.getByRole("button", { name: "Más acciones del mes" });
 
-    fireEvent.click(trigger);
+    fireEvent.click(monthAction("Llenar especiales…"));
     const panel = screen.getByRole("region", { name: "Llenar especiales" });
     expect(panel.contains(document.activeElement)).toBe(true);
     fireEvent.click(within(panel).getByRole("button", { name: "Cancelar" }));
     expect(screen.queryByRole("region", { name: "Llenar especiales" })).toBeNull();
-    expect(document.activeElement).toBe(trigger);
+    // Back on «⋯», the trigger it was opened from.
+    expect(document.activeElement).toBe(more());
 
-    fireEvent.click(trigger);
+    fireEvent.click(monthAction("Llenar especiales…"));
     expect(screen.getByRole("region", { name: "Llenar especiales" }).contains(document.activeElement)).toBe(true);
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("region", { name: "Llenar especiales" })).toBeNull();
-    expect(document.activeElement).toBe(trigger);
+    expect(document.activeElement).toBe(more());
   });
 
   it("lists the month's specials all ticked, fills their empty seats locally, and writes nothing until Guardar", () => {
@@ -1386,7 +1482,7 @@ describe("MonthGenerator — «Llenar especiales…»", () => {
     stubFetchWithHistory(fetchMock);
     renderStored([role(), emptySet("set-a", "09:00"), emptySet("set-b", "12:30")], { members: voz });
 
-    fireEvent.click(screen.getByRole("button", { name: "Llenar especiales…" }));
+    fireEvent.click(monthAction("Llenar especiales…"));
     const panel = screen.getByRole("region", { name: "Llenar especiales" });
     const boxes = within(panel).getAllByRole("checkbox") as HTMLInputElement[];
     expect(boxes.map((b) => b.checked)).toEqual([true, true]);
@@ -1405,7 +1501,7 @@ describe("MonthGenerator — «Llenar especiales…»", () => {
     [3, "Quedaron 2 lugares sin cubrir en los especiales. Revisa y guarda."],
   ])("with %i voices, reports what stayed empty: %s", (count, notice) => {
     renderStored([emptySet("set-a", "09:00")], { members: voz.slice(0, count) });
-    fireEvent.click(screen.getByRole("button", { name: "Llenar especiales…" }));
+    fireEvent.click(monthAction("Llenar especiales…"));
     fireEvent.click(within(screen.getByRole("region", { name: "Llenar especiales" })).getByRole("button", { name: "Llenar vacíos" }));
     expect(screen.getByText(notice)).toBeTruthy();
   });
@@ -1422,14 +1518,14 @@ describe("MonthGenerator — «Llenar especiales…»", () => {
       chorus: [], instruments: [], foh: [],
     });
     renderStored([fullSet], { members: voz });
-    fireEvent.click(screen.getByRole("button", { name: "Llenar especiales…" }));
+    fireEvent.click(monthAction("Llenar especiales…"));
     fireEvent.click(within(screen.getByRole("region", { name: "Llenar especiales" })).getByRole("button", { name: "Llenar vacíos" }));
     expect(screen.getByText("No había lugares vacíos en los especiales marcados.")).toBeTruthy();
   });
 
   it("leaves an unticked special untouched", () => {
     renderStored([emptySet("set-a", "09:00"), emptySet("set-b", "12:30")], { members: voz });
-    fireEvent.click(screen.getByRole("button", { name: "Llenar especiales…" }));
+    fireEvent.click(monthAction("Llenar especiales…"));
     const panel = screen.getByRole("region", { name: "Llenar especiales" });
     fireEvent.click(within(panel).getAllByRole("checkbox")[1]!);
     fireEvent.click(within(panel).getByRole("button", { name: "Llenar vacíos" }));
@@ -1438,7 +1534,7 @@ describe("MonthGenerator — «Llenar especiales…»", () => {
 
   it("Escape closes the panel before it could close the editor", () => {
     const { onClose } = renderStored([emptySet("set-a", "09:00")], { members: voz });
-    fireEvent.click(screen.getByRole("button", { name: "Llenar especiales…" }));
+    fireEvent.click(monthAction("Llenar especiales…"));
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("region", { name: "Llenar especiales" })).toBeNull();
     expect(onClose).not.toHaveBeenCalled();
@@ -1478,7 +1574,7 @@ describe("MonthGenerator — «Editar servicio» (one service of the stored mont
     expect(screen.getByTestId("stored-grid").getAttribute("data-only-column")).toBe("role-a");
     // The month is still loaded underneath: the grid gets BOTH columns to judge with.
     expect(screen.getAllByTestId("stored-column")).toHaveLength(2);
-    for (const name of ["+ Nuevo servicio", "Llenar especiales…", "Limpiar mes", "Intercambiar sección"]) {
+    for (const name of ["+ Nuevo servicio", "Más acciones del mes", /Intercambiar ▾/, "Intercambiar sección"]) {
       expect(screen.queryByRole("button", { name })).toBeNull();
     }
     expect(screen.queryByRole("button", { name: /Intercambiar equipos/ })).toBeNull();

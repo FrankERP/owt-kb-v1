@@ -95,9 +95,11 @@ function findRail(container: HTMLElement, selector = "[data-participation-rail]"
 function railTotal(container: HTMLElement, name: string): number | null {
   const rail = findRail(container);
   if (!rail) throw new Error("no participation rail rendered");
-  const nameEl = within(rail as HTMLElement).queryByText(name);
+  // A member ROW only: «Sin participar este mes» names people too, and an idle
+  // name is exactly the "absent" answer this helper must return as `null`.
+  const nameEl = within(rail as HTMLElement).queryAllByText(name).find((el) => el.closest("[data-member-row]"));
   if (!nameEl) return null;
-  // Row shape (`ParticipationSidebar.tsx:73-88`): the name sits two levels
+  // Row shape (`ParticipationSidebar.tsx`'s `Row`): the name sits two levels
   // inside the row, and the row's last child is the total.
   const row = nameEl.parentElement!.parentElement!;
   return Number(row.lastElementChild!.textContent);
@@ -334,6 +336,31 @@ function seatLead(container: HTMLElement, date: string, name: string) {
   if (!li) throw new Error(`no candidate row for ${name}`);
   fireEvent.click(li);
 }
+
+describe("a name tapped in the rail is outlined in the grid", () => {
+  it("outlines every chip of that member, and only theirs, until tapped again", () => {
+    const { container } = goToGrid([]);
+    seatLead(container, "2026-02-01", "Frank");
+    const rail = findRail(container)!;
+    const chip = () => container.querySelector('[data-row-id="lead"] [data-occupant="m1"]') as HTMLElement;
+    expect(chip().getAttribute("data-highlighted")).toBeNull();
+
+    fireEvent.click(within(rail).getByRole("button", { name: "Frank" }));
+    expect(chip().getAttribute("data-highlighted")).toBe("true");
+    expect(container.querySelectorAll('[data-highlighted="true"]')).toHaveLength(1);
+
+    fireEvent.click(within(rail).getByRole("button", { name: "Frank" }));
+    expect(chip().getAttribute("data-highlighted")).toBeNull();
+  });
+
+  it("names, under the chart, who could sing this month and has no seat yet", () => {
+    const { container } = goToGrid([]);
+    seatLead(container, "2026-02-01", "Frank");
+    const idle = container.querySelector("[data-idle-pool]") as HTMLElement;
+    // Gaby and Liu carry a voice Tipo and are seated nowhere; Samo is instruments only.
+    expect([...idle.querySelectorAll("[data-idle-member]")].map((el) => el.getAttribute("data-idle-member"))).toEqual(["m2", "m3"]);
+  });
+});
 
 describe("the planner grid's rail counts the drafts being built", () => {
   it("raises a member's total the moment they are seated in the grid", () => {
@@ -839,10 +866,14 @@ describe("the grid's chart placement — an in-flow column, at every width", () 
     // `aria-haspopup="menu"` disclosure and always carries `aria-expanded`, as ARIA wants.
     // So is the «Equidad · vista previa» toggle (solver v3 C2 UI-3), a real disclosure
     // mounted beside the lead history, outside the grid this test is about, and so is the folded
-    // «⇄ Intercambiar equipos» toggle above the grid (`data-swap-toggle`).
+    // «⇄ Intercambiar equipos» toggle above the grid (`data-swap-toggle`), and the folded
+    // «+ Agregar fila» toggle under it (`data-add-row-toggle`).
     const disclosures = (root: ParentNode) =>
       [...root.querySelectorAll('[aria-expanded]:not([aria-haspopup="menu"])')].filter(
-        (el) => !el.closest("[data-fairness-preview]") && !el.hasAttribute("data-swap-toggle"),
+        (el) =>
+          !el.closest("[data-fairness-preview]") &&
+          !el.hasAttribute("data-swap-toggle") &&
+          !el.hasAttribute("data-add-row-toggle"),
       );
     stubWideViewport();
     const { container } = goToGrid([]);
@@ -1151,8 +1182,9 @@ describe("the planner's chart column is at least the chart's content floor", () 
    * anything overflowing the box, which is why nothing looked wrong.
    */
   function memberRowFloor(): number {
-    const bar = px(/style=\{\{ width: (\d+), background:/, "the bar's inline width");
-    const gap = px(/className="flex items-center gap-([\d.]+)/, "the row gap", 4);
+    const bar = px(/const BAR_W = (\d+);/, "the bar's inline width");
+    expect(sidebarSrc, "the bar is drawn at BAR_W").toMatch(/style=\{\{ width: BAR_W, background:/);
+    const gap = px(/className=\{?[`"]flex items-center gap-([\d.]+)/, "the row gap", 4);
     const count = px(/min-w-\[(\d+)px\]/, "the count column");
     // The aside's box lives in `ASIDE_BASE` since the Servicios board gave it a
     // second placement (ADR-0044); the aside must still be built from it, or the
@@ -1165,7 +1197,8 @@ describe("the planner's chart column is at least the chart's content floor", () 
     // 210 while a real browser measures 212 — found by measuring, not by
     // reading, which is the whole argument for deriving this from the source
     // instead of restating a number.
-    const scrollerPad = px(/max-h-\[60vh\] overflow-y-auto pr-([\d.]+)/, "the scroller's right padding", 4);
+    const scrollerPad = px(/const PLANNER_LIST = "[^"]*\bpr-([\d.]+)/, "the planner scroller's right padding", 4);
+    expect(sidebarSrc, "the planner's rows sit in PLANNER_LIST").toMatch(/placement === "board" \? BOARD_LIST : PLANNER_LIST/);
     const asideClasses = sidebarSrc.match(/const ASIDE_BASE = "([^"]*)"/)![1].split(/\s+/);
     // The 1px border either side is part of the box too, and was left out of the
     // 208 the rail's header used to state.
@@ -1177,12 +1210,14 @@ describe("the planner's chart column is at least the chart's content floor", () 
     expect(CHART_COLUMN_WIDTH).toBeGreaterThanOrEqual(memberRowFloor());
   });
 
-  it("derives the floor a real browser measured, to the pixel", () => {
-    // Chromium at 1512, inside the real admin chain: at a 212px
-    // aside the count column's left edge lands exactly on the bar's right edge.
-    // If this number ever stops being 212, the two browser measurements quoted
-    // in `PlannerGrid.tsx`'s header have stopped describing the code.
-    expect(memberRowFloor()).toBe(212);
+  it("derives the floor by the arithmetic a real browser confirmed, to the pixel", () => {
+    // Chromium at 1512, inside the real admin chain, with the bar at 150: at a
+    // 212px aside the count column's left edge landed exactly on the bar's right
+    // edge, which is what this arithmetic said. The «Editar mes» redesign widened
+    // the bar to 220 (the column to 300), so the same sum is 282. If this number
+    // moves, `PlannerGrid.tsx`'s header and `CHART_COLUMN_WIDTH`'s doc have
+    // stopped describing the code.
+    expect(memberRowFloor()).toBe(282);
   });
 
   it("and would have refused the 190px this shipped at", () => {
