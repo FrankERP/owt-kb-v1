@@ -11,7 +11,7 @@
 // - the save bar's two buttons were hand-drawn <button>s with no busy state.
 
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
-import { render, cleanup, fireEvent, screen, within, waitFor } from "@testing-library/react";
+import { render, cleanup, fireEvent, screen, within, waitFor, act } from "@testing-library/react";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }),
@@ -35,6 +35,7 @@ afterAll(() => {
 });
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -153,6 +154,62 @@ describe("proposal editor — design pass (item 12)", () => {
 
     release?.();
     await screen.findByRole("button", { name: /guardar borrador/i });
+  });
+
+  it("offers the song's own stored spelling in the picker when the list lacks it", () => {
+    mockSongs();
+    renderEditor({
+      ...proposal,
+      songs: [{ song_id: "song-9", title: "Vine a adorarte", author: "Hughes", key: "Db", play_key: "Db" }],
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Tono de Vine a adorarte: D♭" }));
+    const group = screen.getByRole("group", { name: /elegir tono de vine a adorarte/i });
+    const pressed = within(group).getAllByRole("button").filter(b => b.getAttribute("aria-pressed") === "true");
+    expect(pressed.map(b => b.textContent)).toEqual(["D♭"]);
+  });
+
+  it("keeps the list the lead is looking at when an earlier, slower search answers late", async () => {
+    // Fake timers drive the debounce; every query below is a `getBy`, since
+    // `findBy` polls on the real clock and would hang here.
+    vi.useFakeTimers();
+    {
+      const pending: Array<{ q: string; resolve: (body: unknown) => void }> = [];
+      vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
+        const q = new URL(String(input), "http://x").searchParams.get("q") ?? "";
+        return new Promise<Response>(resolve => {
+          pending.push({ q, resolve: body => resolve(new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } })) });
+        });
+      });
+      renderEditor();
+      await act(async () => { vi.advanceTimersByTime(300); });
+      fireEvent.click(screen.getByRole("button", { name: /agregar canción/i }));
+      const input = screen.getByRole("searchbox", { name: /buscar canción/i });
+
+      fireEvent.change(input, { target: { value: "Su" } });
+      await act(async () => { vi.advanceTimersByTime(300); });
+      fireEvent.change(input, { target: { value: "Sub" } });
+      await act(async () => { vi.advanceTimersByTime(300); });
+      const a = pending.find(p => p.q === "Su")!;
+      const b = pending.find(p => p.q === "Sub")!;
+
+      // The newer answer lands first, then the stale one.
+      await act(async () => { b.resolve([catalogue[0]]); });
+      await act(async () => { a.resolve([catalogue[0], catalogue[1], catalogue[2]]); });
+      const list = screen.getByRole("list", { name: /resultados/i });
+      expect(within(list).getAllByRole("listitem")).toHaveLength(1);
+      expect(list.getAttribute("aria-busy")).toBeNull();
+    }
+  });
+
+  it("says when the catalogue could not be read instead of showing an empty one", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { "Content-Type": "application/json" } }),
+    );
+    renderEditor();
+    fireEvent.click(screen.getByRole("button", { name: /agregar canción/i }));
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByRole("alert");
+    expect(within(dialog).queryByText("Sin resultados")).toBeNull();
   });
 
   it("names the row actions after the song, so a screen reader hears which one moves or goes", () => {

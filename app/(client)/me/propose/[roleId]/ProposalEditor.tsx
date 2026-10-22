@@ -10,7 +10,7 @@ import ProposalThread, { type ThreadMessage } from "@/app/components/ProposalThr
 import CueDialog from "@/app/components/ui/CueDialog";
 import Button from "@/app/components/ui/Button";
 import { ArrowLeftIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, CloseIcon, MusicNoteIcon, PlusIcon } from "@/app/components/ui/icons";
-import { formatKey } from "@/app/utils/formatKey";
+import { formatKey, formatKeys } from "@/app/utils/formatKey";
 
 // Design pass (2026-10-22, item 12 of «Diseño para miembros»): the oldest screen
 // in the app, and every one of its controls was drawn by hand — «Volver»,
@@ -91,6 +91,17 @@ const KEY_OPTIONS = [
   "C#", "C#m", "D", "Dm", "Eb", "Ebm", "E", "Em",
   "F", "Fm", "F#", "F#m", "G", "Gm", "Ab", "Abm",
 ];
+
+/**
+ * The picker's options for one row: the list above, plus the song's own
+ * spellings when the catalogue stores one the list lacks («Db», «G#»). Without
+ * them the row's key would press no pill, and a lead who changed it by mistake
+ * could not get back to the song's own key short of removing and re-adding it.
+ */
+function keyOptionsFor(song: Pick<ProposalSong, "key" | "play_key">): string[] {
+  const own = [song.play_key, song.key].filter(k => k && !KEY_OPTIONS.includes(k));
+  return own.length ? [...new Set(own), ...KEY_OPTIONS] : KEY_OPTIONS;
+}
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
@@ -308,26 +319,42 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
   const [searchQuery, setSearchQuery]   = useState("");
   const [searchResults, setSearchResults] = useState<SongResult[]>([]);
   const [searching, setSearching]       = useState(false);
+  const [searchFailed, setSearchFailed] = useState(false);
   const [sheetOpen, setSheetOpen]       = useState(false);
   const debounceRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The newest request wins: a slower, earlier answer must not replace the
+  // list the lead is looking at, nor flip `searching` off while the newer
+  // request is still out.
+  const searchSeq    = useRef(0);
 
   const showToast = (msg: string, ok = true) => toast({ message: msg, tone: ok ? "ok" : "error" });
 
   const search = useCallback((q: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
+      const seq = ++searchSeq.current;
       setSearching(true);
       try {
         const res = await fetch(`/api/me/songs?q=${encodeURIComponent(q)}`);
         // Guard against a non-array body (e.g. a 401/500 { error } object): storing
         // it and calling .map() on render would white-screen the editor and lose
-        // the in-progress setlist. Fall back to an empty result set instead.
+        // the in-progress setlist. A failed read is SAID, not shown as an empty
+        // catalogue — «Sin resultados» and «your session expired» must not look alike.
         const data: unknown = res.ok ? await res.json() : null;
-        setSearchResults(Array.isArray(data) ? (data as SongResult[]) : []);
+        if (seq !== searchSeq.current) return;
+        if (Array.isArray(data)) {
+          setSearchResults(data as SongResult[]);
+          setSearchFailed(false);
+        } else {
+          setSearchResults([]);
+          setSearchFailed(true);
+        }
       } catch {
+        if (seq !== searchSeq.current) return;
         setSearchResults([]);
+        setSearchFailed(true);
       } finally {
-        setSearching(false);
+        if (seq === searchSeq.current) setSearching(false);
       }
     }, 300);
   }, []);
@@ -340,24 +367,11 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
     if (debounceRef.current) clearTimeout(debounceRef.current);
   }, []);
 
-  // The catalogue is fetched while the sheet is CLOSED (on mount, and again after
-  // a close that left nothing), so opening it shows songs at once, not «Buscando…».
-  useEffect(() => {
-    if (!sheetOpen && searchResults.length === 0) search("");
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sheetOpen]);
-
+  // The catalogue is fetched on mount by the effect above (an empty query), so
+  // the sheet opens on songs, not on «Buscando…». Closing resets the query,
+  // which fetches the full list again for the next opening.
   const openSheet = () => { setKeyPickerIdx(null); setSheetOpen(true); };
   const closeSheet = () => { setSheetOpen(false); setSearchQuery(""); };
-
-  // The sheet opens on its search box, not on the dialog's own close button
-  // (`CueDialog` lands entry focus on its first focusable, which is that
-  // button). A focus-moving effect depends on the presence edge only
-  // (ADR-0034); it runs after the dialog's, so the box is where focus ends.
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    if (sheetOpen) searchInputRef.current?.focus({ preventScroll: true });
-  }, [sheetOpen]);
 
   const addSong = (song: SongResult) => {
     if (songs.some(s => s.songId === song._id)) return;
@@ -690,7 +704,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
               <p className="font-body text-xs text-mono-400 truncate">{song.author}</p>
               {!!song.previous_keys?.length && (
                 <p className="font-body text-xs text-mono-500 mt-0.5">
-                  Tonos anteriores: <span className="text-accent/80">{song.previous_keys.map(formatKey).join(" · ")}</span>
+                  Tonos anteriores: <span className="text-accent/80">{formatKeys(song.previous_keys)}</span>
                 </p>
               )}
             </div>
@@ -704,26 +718,27 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
                 <Button
                   variant="secondary"
                   size="sm"
-                  aria-haspopup="true"
                   aria-expanded={keyPickerIdx === idx}
                   aria-label={`Tono de ${song.title}: ${shownKey}`}
                   onClick={(e) => { e.stopPropagation(); setKeyPickerIdx(keyPickerIdx === idx ? null : idx); }}
                   onMouseDown={e => e.stopPropagation()}
-                  className="min-w-[2.75rem] normal-case tracking-normal"
+                  className="min-w-[2.75rem] normal-case"
                 >
                   {shownKey}
                 </Button>
                 {keyPickerIdx === idx && (
-                  <div className="absolute right-0 top-full mt-1.5 z-30 bg-surface-overlay-deepest border border-accent/20 rounded-xl shadow-2xl p-2.5 w-[13.5rem]">
+                  // 15.5rem: four `sm` pills of «C♯m» width (padding, border, 0.1em
+                  // tracking) plus gaps and padding — the pill keeps its own padding.
+                  <div className="absolute right-0 top-full mt-1.5 z-30 bg-surface-overlay-deepest border border-accent/20 rounded-xl shadow-2xl p-2.5 w-[15.5rem]">
                     <div className="grid grid-cols-4 gap-1" role="group" aria-label={`Elegir tono de ${song.title}`}>
-                      {KEY_OPTIONS.map(k => (
+                      {keyOptionsFor(song).map(k => (
                         <Button
                           key={k}
                           variant="pill"
                           size="sm"
                           active={k === song.play_key}
                           onClick={() => setPlayKey(idx, k)}
-                          className="normal-case tracking-normal px-1"
+                          className="normal-case"
                         >
                           {formatKey(k)}
                         </Button>
@@ -906,8 +921,10 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="px-5 pt-5 pb-3">
             <div className="brand-search-console">
+              {/* `autoFocus`: focus lands on the box rather than on the dialog's own
+                  close button (its entry focus yields to a focus already inside). */}
               <input
-                ref={searchInputRef}
+                autoFocus
                 type="search"
                 aria-label="Buscar canción"
                 placeholder="Buscar por título o artista…"
@@ -918,15 +935,20 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
               />
             </div>
           </div>
+          {/* The rows stay mounted while a newer search is out (the list is only
+              marked busy), so a keystroke never blanks a full screen of results
+              and loses its scroll position. */}
           <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
-            {searching && (
-              <p className="font-body text-sm text-mono-500 text-center py-6">Buscando…</p>
+            {searchFailed && (
+              <p role="alert" className="font-body text-sm text-negative-fg text-center py-6">
+                No se pudieron cargar las canciones. Revisa tu conexión o vuelve a entrar.
+              </p>
             )}
-            {!searching && searchResults.length === 0 && (
-              <p className="font-body text-sm text-mono-500 text-center py-6">Sin resultados</p>
+            {!searchFailed && searchResults.length === 0 && (
+              <p className="font-body text-sm text-mono-500 text-center py-6">{searching ? "Buscando…" : "Sin resultados"}</p>
             )}
-            {!searching && searchResults.length > 0 && (
-              <ul className="divide-y divide-ink-dim/10" aria-label="Resultados">
+            {!searchFailed && searchResults.length > 0 && (
+              <ul className={`divide-y divide-ink-dim/10 transition-opacity duration-fast ${searching ? "opacity-60" : ""}`} aria-label="Resultados" aria-busy={searching || undefined}>
                 {searchResults.map(song => {
                   const already = songs.some(s => s.songId === song._id);
                   return (
@@ -945,7 +967,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
                           <p className="font-body text-xs text-mono-400 truncate">{song.author}</p>
                           <p className="font-body text-xs text-mono-500 mt-0.5">
                             {song.previous_keys.length > 0
-                              ? <>Tonos anteriores: <span className="text-accent/80">{song.previous_keys.map(formatKey).join(" · ")}</span></>
+                              ? <>Tonos anteriores: <span className="text-accent/80">{formatKeys(song.previous_keys)}</span></>
                               : "Sin historial previo"}
                           </p>
                         </div>
