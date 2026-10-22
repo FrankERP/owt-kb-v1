@@ -47,15 +47,15 @@ describe("the form does not produce a second exact count (C3 T14)", () => {
   it("flags a cap row that repeats an exact count on the same card, and blocks «Agregar»", () => {
     renderGen(configWith());
     fireEvent.click(screen.getByRole("button", { name: "+ Persona" }));
-    fireEvent.click(screen.getByRole("button", { name: "+ Cap" }));
-    fireEvent.click(screen.getByRole("button", { name: "+ Cap" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Tope" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Tope" }));
     fireEvent.change(operators()[0], { target: { value: "==" } });
     fireEvent.change(patterns()[0], { target: { value: "Sun.Lead" } });
     const add = screen.getByRole("button", { name: "Agregar restricción" }) as HTMLButtonElement;
     expect(add.disabled).toBe(false); // `Sun.Lead == 2` beside `Sun.* <= 2`: fine
 
     fireEvent.change(operators()[1], { target: { value: "==" } }); // `Sun.* == 2` now fixes Sun.Lead too
-    expect(screen.getByText(exactOverlapFormMessage({ role: "Sun.Lead", person: "Ana", rule: "Sun.Lead == 2" }))).toBeTruthy();
+    expect(screen.getByText(exactOverlapFormMessage({ role: "Sun.Lead", person: "Ana", rule: "Líder en domingo: exactamente 2 al mes" }))).toBeTruthy();
     expect(add.disabled).toBe(true);
 
     fireEvent.change(operators()[1], { target: { value: ">=" } });
@@ -66,16 +66,16 @@ describe("the form does not produce a second exact count (C3 T14)", () => {
   it("looks across cards with the same person text", () => {
     renderGen(configWith(rule("r-1", "ana", [cap("c-1", "*.Lead", "==")])));
     fireEvent.click(screen.getByRole("button", { name: "+ Persona" }));
-    fireEvent.click(screen.getByRole("button", { name: "+ Cap" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Tope" }));
     fireEvent.change(operators()[0], { target: { value: "==" } }); // `Sun.* == 2` vs the other card's `*.Lead == 1`
-    expect(screen.getByText(exactOverlapFormMessage({ role: "Sun.Lead", person: "Ana", rule: "*.Lead == 1" }))).toBeTruthy();
+    expect(screen.getByText(exactOverlapFormMessage({ role: "Sun.Lead", person: "Ana", rule: "Líder (sábado o domingo): exactamente 1 al mes" }))).toBeTruthy();
     expect((screen.getByRole("button", { name: "Agregar restricción" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("does not look at another person's card", () => {
     renderGen(configWith(rule("r-1", "Bruno", [cap("c-1", "*.Lead", "==")])));
     fireEvent.click(screen.getByRole("button", { name: "+ Persona" }));
-    fireEvent.click(screen.getByRole("button", { name: "+ Cap" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Tope" }));
     fireEvent.change(operators()[0], { target: { value: "==" } });
     expect(screen.queryByText(/Ya hay un número fijo/)).toBeNull();
   });
@@ -101,7 +101,7 @@ describe("a pair stored before C3 is not a dead end (C3 T14)", () => {
     const rules = renderGen(STORED_PAIR);
     openEditor(2);
     // The open form flags its own cap row too, and cannot be saved while it does.
-    expect(screen.getByText(exactOverlapFormMessage({ role: "Sun.Lead", person: "Ana", rule: "Sun.* == 2" }))).toBeTruthy();
+    expect(screen.getByText(exactOverlapFormMessage({ role: "Sun.Lead", person: "Ana", rule: "Domingos: exactamente 2 al mes" }))).toBeTruthy();
     expect((screen.getByRole("button", { name: "Guardar cambios" }) as HTMLButtonElement).disabled).toBe(true);
     const form = screen.getByRole("button", { name: "Guardar cambios" }).closest("div.rounded-lg") as HTMLElement;
     const capRow = (within(form).getByLabelText("Operador") as HTMLElement).closest("div.flex") as HTMLElement;

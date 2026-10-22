@@ -131,8 +131,8 @@ export function cadenceOutsideSundayPool(
 // (`CADENCE_V2_NOTE`, «aplica con el nuevo solver») went at the cutover (ADR-0056); a flip-back
 // restores it.
 
-/** Beside «holgura N» — true under both engines (parent A10, Q2). */
-export const SLACK_V3_NOTE = "no aplica con el nuevo solver";
+// `SLACK_V3_NOTE` («no aplica con el nuevo solver», beside «holgura N») retired 2026-10-22: the rules
+// card, its form and the MCP read `ruleCopy.ts`'s `SLACK_STALE_NOTE` instead (diseño para admins, bloque 2).
 
 /** The warning's heading. */
 export const CADENCE_OUTSIDE_HEADING = "Mes por medio fuera de Líderes Domingo";
