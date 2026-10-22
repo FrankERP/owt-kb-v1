@@ -53,6 +53,8 @@ export interface StoredEditorProps extends BoardProps {
   heading: string;
   subtitle: string;
   footer: ReactNode;
+  /** The chat asked for some days only (`focus`): which, and the way back to the whole month. */
+  narrowed?: { shown: string; onWiden: () => void };
 }
 
 export type EditorProps = ProposalEditorProps | StoredEditorProps;
@@ -167,6 +169,15 @@ export function Editor(p: EditorProps) {
       {p.exchanging && (
         <p className="hint" role="status">
           Toca a la persona con quien intercambiar a {p.exchanging.name}, o tócala otra vez para cancelar.
+        </p>
+      )}
+
+      {p.mode === "stored" && p.narrowed && (
+        <p className="hint">
+          Solo {p.narrowed.shown}.{" "}
+          <button type="button" className="link" onClick={p.narrowed.onWiden} disabled={p.busy}>
+            Ver mes completo
+          </button>
         </p>
       )}
 

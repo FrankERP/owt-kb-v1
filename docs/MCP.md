@@ -793,7 +793,15 @@ decisions and the rejected alternatives:
 - **Time.** Every write races a 45 s hard stop; no group starts after 30 s («pendiente»).
 - **The card** (`mcp-app/proposal-card/useStoredEditor.tsx`) opens on a `check_service_edits`
   answer with its edits, edits seats like the proposal editor, and «Guardar» sends the change sets
-  to the chat (in parts when a group is too large); it never writes.
+  to the chat (in parts when a group is too large); it never writes. On a host that takes model
+  context (`updateModelContext`), the chat message carries only the changes in words and the change
+  sets ride in the model's context on the `Argumentos para save_service_edits` line; a host without
+  it, or one that refuses the update, gets the full message with the JSON (Frank, 2026-10-22: the JSON
+  in the chat «no me encantó»).
+- **`focus {from, to}`** (chat check only) narrows the CARD to some days, one day or a weekend: the
+  card shows those services with «Ver mes completo», and the month check keeps its rules and
+  fairness but only those days' per-service lines (it says so). With `focus`, `edits` may be empty:
+  the call only opens the card. What is checked and saved is always the whole month.
 - **Not in phase 1:** moving a service to another date, legacy services `/admin` bootstraps on save,
   adding a new instrument or FOH row, header edits from the card, deleting services.
 - **Proof.** `serviceEditor.test.ts`, `serviceCopy.test.ts` and `createService.test.ts` run the tools

@@ -172,6 +172,8 @@ export const CHECK_SERVICE_EDITS_INPUT = z
     edits: z.array(NAME_EDIT).max(200),
     /** A copy of one service's instruments (by id or date) onto another of this month, checked alone. */
     copy: z.object({ from: SERVICE, to: SERVICE }).strict().optional(),
+    /** Card only: the dates it shows (one day, a weekend); what is checked is still the whole month. */
+    focus: z.object({ from: z.string().regex(DAY), to: z.string().regex(DAY) }).strict().optional(),
   })
   .strict();
 
@@ -249,7 +251,9 @@ export const CHECK_SERVICE_EDITS_DESCRIPTION =
   "se cambia desde aquí. Cada cambio pasa por las mismas reglas que /admin: si uno rompe una regla de lugar, se rechaza " +
   "(forzarlo solo se puede desde la tarjeta). La respuesta trae los cambios en palabras, los servicios que se guardan " +
   "juntos y lo que no cuadra con las reglas del mes; al final, una línea con los argumentos listos para save_service_edits " +
-  "(o para copy_instruments, si es una copia), que se pasan tal cual (una por llamada si son varias).";
+  "(o para copy_instruments, si es una copia), que se pasan tal cual (una por llamada si son varias). También abre la " +
+  "tarjeta del mes: con focus {from, to} (YYYY-MM-DD) la tarjeta muestra solo esos días (un día: from = to; un fin de " +
+  "semana: sábado a domingo), y con focus edits puede ir vacía para solo abrirla. focus no cambia lo que se revisa.";
 
 export const COPY_INSTRUMENTS_DESCRIPTION =
   "Copia en producción los instrumentos de un servicio a otro, como «Copiar instrumentos» de /admin: los del destino se " +
@@ -773,13 +777,33 @@ function refusalView(r: ReplayRefusal, ctx: MonthContext) {
   };
 }
 
+/** The card's dates: in order, inside the month, and holding at least one of its services. */
+function focusOf(ctx: MonthContext, focus: { from: string; to: string }): { ok: true; value: { from: string; to: string } } | { ok: false; line: string } {
+  const inMonth = (d: string) => d.slice(0, 7) === ctx.month;
+  if (!inMonth(focus.from) || !inMonth(focus.to) || focus.from > focus.to) return { ok: false, line: S.focusInvalid };
+  if (!ctx.board.columns.some((c) => c.date >= focus.from && c.date <= focus.to)) return { ok: false, line: S.focusEmpty };
+  return { ok: true, value: focus };
+}
+
+/**
+ * A focused check (one day, a weekend) keeps the month's rules and fairness — they are the month's —
+ * but its per-service lines only for the days asked about; it says when it left some out.
+ */
+function focusedCheck(check: MonthCheck, board: EditorBoard, focus: { from: string; to: string }): MonthCheck {
+  const labels = board.columns
+    .filter((c) => c.date >= focus.from && c.date <= focus.to)
+    .map((c) => storedLabel(board, board.localIdOf.get(c.columnId)!));
+  const services = check.services.filter((l) => labels.some((label) => l.startsWith(`${label}:`)));
+  return services.length === check.services.length ? check : { ...check, services, notes: [...check.notes, S.focusHidden] };
+}
+
 async function checkMonth(
   ctx: MonthContext,
   edits: ReadonlyArray<EditorEdit | HeaderEdit>,
   deps: ServiceEditorDeps,
-  options: { app: boolean; seat?: { service: string; row: string } },
+  options: { app: boolean; seat?: { service: string; row: string }; focus?: { from: string; to: string } },
 ): Promise<CallToolResult> {
-  const head = { ok: true, month: ctx.month, edits: tokenEditsOf(edits, ctx.tokens) };
+  const head = { ok: true, month: ctx.month, edits: tokenEditsOf(edits, ctx.tokens), ...(options.focus ? { focus: options.focus } : {}) };
   const notes = [
     ...(ctx.board.coherent ? [] : [S.readOnlyMonth]),
     ...(ctx.board.untranslated ? [S.untranslated(ctx.board.untranslated)] : []),
@@ -866,7 +890,7 @@ async function checkMonth(
     ...(unconfirmed.length ? [S.needsCard, ...unconfirmed] : []),
     ...changes.flatMap((c) => baselineLines(c.judged)),
     ...songLeadLines(ctx, board),
-    ...(check ? monthCheckLines(check) : []),
+    ...(check ? monthCheckLines(options.focus ? focusedCheck(check, board, options.focus) : check) : []),
   ];
   for (const part of calls) lines.push(S.saveArgs(JSON.stringify({ month: ctx.month, changes: part })));
   return answer(false, lines, {
@@ -905,11 +929,14 @@ export async function checkServiceEditsResult(
         if (!to.ok) return refusal([to.line], { code: "invalid_request", detail: "copy_to" });
         return checkCopy(opened.ctx, { from: from.id, to: to.id }, deps);
       }
-      if (!args.edits.length) return refusal([S.nothingToCheck], { code: "invalid_request", detail: "empty" });
+      const focus = args.focus ? focusOf(opened.ctx, args.focus) : null;
+      if (focus && !focus.ok) return refusal([focus.line], { code: "invalid_request", detail: "focus" });
+      // No edits only to open the card (with `focus`, on those dates); otherwise there is nothing to check.
+      if (!args.edits.length && !focus) return refusal([S.nothingToCheck], { code: "invalid_request", detail: "empty" });
       const resolved = resolveNameEdits(args.edits, opened.ctx);
       if (!resolved.ok) return refusal(resolved.lines, { code: "invalid_request", detail: "edit" });
       // From the chat nothing is forced: a rule block refuses its edit in the replay.
-      return checkMonth(opened.ctx, resolved.edits, deps, { app: false });
+      return checkMonth(opened.ctx, resolved.edits, deps, { app: false, ...(focus ? { focus: focus.value } : {}) });
     },
     SERVICE_EDITOR_COPY,
   );
