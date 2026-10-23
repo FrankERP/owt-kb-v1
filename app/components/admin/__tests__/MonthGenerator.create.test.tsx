@@ -1403,7 +1403,8 @@ describe("MonthGenerator — create path", () => {
     fireEvent.click(toggle);
     fireEvent.click(toggle);
     expect(hint()).toBeNull();
-    expect(chip().className).not.toContain("bg-accent/20");
+    // The chip is a house pill (bloque 7): picked = `aria-pressed`, never a class.
+    expect(chip().getAttribute("aria-pressed")).toBe("false");
   });
 
   it("refuses to swap a Sunday column with a Saturday column, so a Coro assignment is never silently dropped", () => {
