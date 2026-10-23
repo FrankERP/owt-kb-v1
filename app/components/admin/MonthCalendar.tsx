@@ -13,6 +13,7 @@ import {
   type CalendarSpecial,
 } from "./plannerCalendar";
 import { horizonTitle } from "./v3Copy";
+import Button from "@/app/components/ui/Button";
 import Select from "@/app/components/ui/Select";
 import { WarningIcon } from "@/app/components/ui/icons";
 import { FairnessEngineNote, FairnessSwitch } from "./FairnessSwitch";
@@ -299,13 +300,12 @@ export default function MonthCalendar({
         </p>
       )}
 
-      <button
-        type="button"
+      <Button variant="secondary" size="lg"
         onClick={() => openComposer(openDate ?? firstFreeDate)}
-        className="min-h-[44px] w-full rounded-lg border border-info-fg/30 px-3 font-label text-[11px] uppercase tracking-widest text-info-fg hover:bg-info-fg/10 transition-colors"
+        className="w-full"
       >
         + Servicio especial
-      </button>
+      </Button>
 
       {openDate && (
         <div className="space-y-2 rounded-lg border border-info-fg/30 bg-info-fg/5 px-3 py-2.5">
@@ -344,25 +344,23 @@ export default function MonthCalendar({
           />
           <FairnessEngineNote engine={engine} />
           <div className="flex gap-2">
-            <button
-              type="button"
+            <Button variant="primary" size="lg"
               onClick={submitSpecial}
-              className="min-h-[44px] flex-1 rounded-lg bg-info-fg/20 px-3 font-label text-[11px] uppercase tracking-widest text-info-fg"
+              className="flex-1"
             >
               Agregar
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button variant="secondary" size="lg"
               onClick={() => {
                 setComposerDate(null);
                 setDraftName("");
                 setDraftCounts(false);
                 setNotice(null);
               }}
-              className="min-h-[44px] flex-1 rounded-lg border border-accent/20 px-3 font-label text-[11px] uppercase tracking-widest"
+              className="flex-1"
             >
               Cancelar
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -379,17 +377,15 @@ export default function MonthCalendar({
                 <span className="font-body text-xs text-ink-muted">
                   <span className="text-info-fg">{s.name}</span> — {longDate(s.date)}
                 </span>
-                <button
-                  type="button"
+                <Button variant="danger" size="lg"
                   onClick={() => {
                     setNotice(null);
                     onRemoveSpecial(s.date);
                   }}
                   aria-label={`Quitar servicio especial del ${longDate(s.date)}`}
-                  className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-[10px] uppercase tracking-widest text-mono-400 hover:border-negative-fg/50 hover:text-negative-fg transition-colors"
                 >
                   Quitar
-                </button>
+                </Button>
               </li>
             ))}
         </ul>
