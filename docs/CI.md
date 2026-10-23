@@ -500,7 +500,7 @@ integration's comment, and — the reason it exists — **no slot of the Hobby
 plan's 100 deployments per day**. Before this, every push still created a
 `CANCELED` deployment that counted: on 2026-10-22 four threads pushed 44 of
 them beside 24 `preview` and 18 `main` builds, the cap was hit at 19:50 UTC
-and neither dev nor production could build until the next day (ADR-0069).
+and neither dev nor production could build until the next day (ADR-0068).
 "Feature branches are free now" is finally the right summary. Vercel reads the
 file from the commit being pushed, so EVERY push of a branch that does not yet
 carry it still creates a counted deployment; merging `main` into such a branch

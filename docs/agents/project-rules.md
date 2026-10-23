@@ -147,7 +147,7 @@ disagree, `CLAUDE.md` wins and this file is the one to fix.
   100% on 2026-09-17 with 136 of them), and the Hobby plan allows 100 deployments
   per day INCLUDING canceled ones — on 2026-10-22 four threads pushed 44 canceled
   `claude/*` deployments beside 42 real builds, and from 19:50 UTC neither dev nor
-  production could build until the next day (ADR-0069). Vercel reads `vercel.json`
+  production could build until the next day (ADR-0068). Vercel reads `vercel.json`
   from the commit being pushed, so every push of a branch that does not yet carry
   the map still creates a counted deployment, and merging `main` into it helps
   only once the map is on `main`. To build a skipped ref ON PURPOSE the only hatch
