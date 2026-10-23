@@ -301,6 +301,14 @@ run local commands only; `gates` reads nothing but the other jobs' results. Noth
 to rotate, nothing to configure in GitHub → Settings → Secrets. If a future step
 needs one, it gets an entry in `docs/SECRETS.md` in the same change.
 
+**Not CI: `solver-v3-ops.yml`.** A separate workflow verifies and re-deploys the production
+solver function with keyless Google access (ADR-0071; `docs/SOLVER_AND_INFRA.md` «Verifying a v3
+deploy»). It is operations, not a gate: `gates` does not and must not depend on it, and branch
+protection does not require it. Each of its runs creates a GitHub Deployment record in the
+`solver-verify` or `solver-deploy` environment; that is not an app release. Its shape is pinned by
+`scripts/__tests__/solverOpsWorkflow.test.ts`, and like every workflow it must fit the subset
+`parseWorkflow` reads.
+
 ## Branch protection
 
 Applied to **`main` only**, via the GitHub API:
