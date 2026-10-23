@@ -258,12 +258,12 @@ export const CHECK_SERVICE_EDITS_DESCRIPTION =
 export const COPY_INSTRUMENTS_DESCRIPTION =
   "Copia en producción los instrumentos de un servicio a otro, como «Copiar instrumentos» de /admin: los del destino se " +
   "reemplazan por los que el origen tiene guardados ahora. Antes revisa la copia con check_service_edits (copy {from, " +
-  "to}) y manda aquí los argumentos de su última línea (month, from, to y lines) tal cual. Si algo cambió desde la revisión no " +
+  "to}) y manda aquí los argumentos de su línea «Argumentos para copy_instruments» (month, from, to y lines) tal cual. Si algo cambió desde la revisión no " +
   "copia nada y pide revisar de nuevo; la respuesta dice siempre qué sigue.";
 
 export const SAVE_SERVICE_EDITS_DESCRIPTION =
   "Guarda en producción cambios a servicios guardados que check_service_edits ya revisó. month es YYYY-MM; changes es " +
-  "la lista que trae la última línea de la revisión, tal cual (cada uno con su service, baseRev, target, diff, mac, unit, lines y, si " +
+  "la lista que trae la línea «Argumentos para save_service_edits» de la revisión, tal cual (cada uno con su service, baseRev, target, diff, mac, unit, lines y, si " +
   "hay, waivers). Escribe un servicio a la vez con las mismas reglas y avisos por correo que /admin. Si algo cambió " +
   "desde la revisión no guarda nada y pide revisar de nuevo; la respuesta dice siempre qué sigue. Si te piden guardar " +
   "«los cambios de la tarjeta» con una clave entre paréntesis, usa solo la línea del contexto con esa clave; si no la ves, " +

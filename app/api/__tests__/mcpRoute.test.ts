@@ -850,9 +850,28 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
         expect(JSON.parse(answer!)).toMatchObject({ ok: true });
         expect(note).toBe(STALE_TOOL_LIST_NOTE);
         expect(rest).toEqual([]);
-        // The note is text for the model only; the card reads structuredContent, which is untouched.
+        // The note is a block for the model only (the card also drops it by prefix); structuredContent is untouched.
+        expect((result.content as { annotations?: unknown }[])[1]!.annotations).toEqual({ audience: ["assistant"] });
         expect(result.structuredContent).toEqual(JSON.parse(answer!));
       }
+    });
+
+    it("an old copy's arguments the schema refuses: the refusal carries the note; a current caller's does not", async () => {
+      const stale = await callPing({ extra: "x" });
+      expect(stale.isError).toBe(true);
+      expect(texts(stale).join("\n")).toContain(STALE_TOOL_LIST_NOTE);
+      const current = await callPing({ extra: "x", toolsVersion: TOOL_LIST_VERSION });
+      expect(current.isError).toBe(true);
+      expect(texts(current).join("\n")).not.toContain(STALE_TOOL_LIST_NOTE);
+    });
+
+    it("the digest is taken over exactly the tools the route serves", async () => {
+      const { recordToolList } = await import("@/app/mcp/toolListVersion");
+      const { registerAllTools } = await import("@/app/mcp/toolList");
+      const token = await accessToken(await liveGrant());
+      const result = await rpcResult(await POST(mcpRequest(rpc("tools/list"), { token })));
+      const served = (result.tools as { name: string }[]).map((t) => t.name);
+      expect(recordToolList((server) => registerAllTools(server, { version: "" })).map((t) => t.name)).toEqual(served);
     });
 
     it("the digest covers what a client caches, and ignores the deployment's commit", async () => {
@@ -1396,7 +1415,7 @@ describe("/api/mcp — a valid write plus one unrecognized key is refused by .st
   for (const name of WRITE_TOOL_NAMES) {
     it(`${name}: a valid call plus an unrecognized key is refused for THAT reason, zero domain calls`, async () => {
       const token = await accessToken(await liveGrant());
-      const args = { ...VALID_ARGS[name], extraProp: "nope" };
+      const args = { ...VALID_ARGS[name], extraProp: "nope", toolsVersion: TOOL_LIST_VERSION };
       const result = await rpcResult(await POST(mcpRequest(rpc("tools/call", { name, arguments: args }), { token })));
 
       expect(result.isError, name).toBe(true);

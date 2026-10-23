@@ -991,8 +991,11 @@ list, Claude goes on using its old copy until the connector is refreshed. That h
   description asks Claude to always send that value. App-only tools (the card's twins) don't
   carry it. The handler never sees it.
 - **What a stale call gets.** A call that sends another value, or none, still gets its full
-  answer. The answer's text then ends with `STALE_TOOL_LIST_NOTE`, which asks Claude to tell the
-  user once to refresh and continue in a new chat. `structuredContent` is unchanged.
+  answer, plus one more text block, `STALE_TOOL_LIST_NOTE`. It asks Claude to tell the user once
+  to refresh and continue in a new chat. The block is marked `audience: ["assistant"]`, the card
+  never shows it (`textLines` drops it by its prefix), and `structuredContent` is unchanged.
+- **A refusal carries it too.** When the SDK refuses a stale call's arguments, its error text gets
+  the same note. `versionToolList` wraps `validateToolInput` to add it.
 - **How Frank refreshes.** Settings → Connectors → OWT Backstage → «⋯» → «Refresh tools list».
   If that item isn't there, use Disconnect and then Connect.
 - **Writing descriptions.** Keep them to what Claude needs before it calls. Anything that depends

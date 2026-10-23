@@ -420,7 +420,8 @@ several exist precisely to stop a plausible-looking change.
   `list_changed`. `TOOL_LIST_VERSION` is a digest of what a client caches (names, descriptions,
   schemas, annotations, `_meta`), and every model-visible tool takes it back as the optional
   `toolsVersion`. A call with another value, or none, still runs, and its text ends with
-  `STALE_TOOL_LIST_NOTE` («refresh the connector»). A tool registered outside `registerAllTools`
+  `STALE_TOOL_LIST_NOTE` («refresh the connector», for the model only: the card drops it), as does the
+  SDK's refusal of a stale call's arguments. A tool registered outside `registerAllTools`
   would stay out of the digest. Keep `toolsVersion` optional: making it required would turn the
   note into a refused call. Put guidance that depends on an answer (repeat, check again) in the
   answer, which is never stale, not in the description. ADR-0069; tests in `mcpRoute.test.ts`

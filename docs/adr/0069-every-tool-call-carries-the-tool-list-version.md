@@ -39,11 +39,21 @@ same version.
 model-visible tool one more optional argument, `toolsVersion`, whose description asks Claude to
 always pass that exact value. The handler never sees the argument.
 
-When a call sends no value or a different one, the tool still runs and answers. Its text gains one
-last line, `STALE_TOOL_LIST_NOTE`, which asks Claude to tell the user once to refresh the
+When a call sends no value or a different one, the tool still runs and answers. Its answer gains
+one more text block, `STALE_TOOL_LIST_NOTE`, which asks Claude to tell the user once to refresh the
 connector («⋯» → «Refresh tools list», or disconnect and connect) and to continue in a new chat.
-`structuredContent` is untouched, so the card sees the same answer. The card's app-only twins
-don't get the argument, because the card calls them, not the model.
+The block is marked `audience: ["assistant"]`, and the card's `textLines` drops it and any line
+that starts with its prefix (`STALE_NOTE_PREFIX`, kept in step by `storedMonthCard.test.tsx`).
+`structuredContent` is untouched.
+
+The note also reaches the cases an old copy most often runs into. The SDK validates arguments
+before the handler runs, and a refused argument (renamed, removed, an old enum value) is answered
+with the SDK's error text alone. `versionToolList` therefore also wraps the instance's
+`validateToolInput`, so a stale call's refusal carries the note too.
+
+The card's app-only twins don't get the argument, because the card calls them, not the model. The
+check answers name their argument lines by prefix («la línea "Argumentos para …"»), not as «la
+última línea», since the note now follows them.
 
 Guidance that depends on an answer belongs in that answer, which is always current, not in a
 description that a stale client keeps. Example: the save and copy descriptions no longer say «si
@@ -68,11 +78,15 @@ again, and the two had drifted apart.
 ## Consequences
 
 - Any release that changes a tool's name, title, description, schema, annotations or `_meta`
-  changes the version. From then on every answer to an old copy carries the note until Frank
-  refreshes. This is intended: it is the only signal he gets.
+  changes the version. From then on every answer to an old copy, a refusal of its arguments
+  included, carries the note until Frank refreshes. This is intended: it is the only signal he gets.
 - The argument is optional, so a current client that leaves it out also gets the note. The
   wording («sin repetirlo si ya se lo dijiste») keeps that to one sentence in the chat.
+- A handler that throws gets no note, but by the tool rules (`ping.ts`) no handler throws.
+- Rolling back past this change breaks a client that has refreshed: it sends `toolsVersion`, the
+  older `.strict()` schemas refuse it, and every call fails (nothing is written) until the next
+  refresh.
 - Don't make `toolsVersion` required, and don't compute the hash over the served list (which
   contains the version itself).
 - A new tool file goes in `registerAllTools`, never directly in the route, or it stays out of the
-  digest.
+  digest (`mcpRoute.test.ts` asserts the recorded names equal `tools/list`).
