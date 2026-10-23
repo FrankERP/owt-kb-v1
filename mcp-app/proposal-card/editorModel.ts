@@ -102,11 +102,24 @@ const str = (v: unknown): string => (typeof v === "string" ? v : "");
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 const objects = (v: unknown): Obj[] => (Array.isArray(v) ? v.filter(isObj) : []);
 
+/**
+ * How the server's «refresh the connector» note starts (`STALE_TOOL_LIST_NOTE`, app/mcp/toolListVersion.ts;
+ * ADR-0069): it is for the model, never the screen. Copied, not imported, like the args prefixes: the card
+ * bundle takes nothing from the server. `storedMonthCard.test.tsx` keeps the two in step.
+ */
+export const STALE_NOTE_PREFIX = "Aviso del servidor OWT Backstage:";
+
+/** A text block only the model should read (MCP `annotations.audience`). */
+const forAssistantOnly = (c: Record<string, unknown>) => {
+  const audience = (c.annotations as { audience?: unknown } | undefined)?.audience;
+  return Array.isArray(audience) && audience.length > 0 && !audience.includes("user");
+};
+
 export function textLines(content: unknown): string[] {
   return objects(content)
-    .filter((c) => c.type === "text")
+    .filter((c) => c.type === "text" && !forAssistantOnly(c))
     .flatMap((c) => str(c.text).split("\n"))
-    .filter((l) => l.trim() !== "");
+    .filter((l) => l.trim() !== "" && !l.startsWith(STALE_NOTE_PREFIX));
 }
 
 export function boardOf(v: unknown): ServiceView[] {
