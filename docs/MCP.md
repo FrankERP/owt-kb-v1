@@ -141,8 +141,10 @@ parity phase 1 adds eight, twenty-five in all: three reads registered after the 
 five registered last (see [Editing saved services](#editing-saved-services-admin-parity-phase-1);
 in production since 2026-10-22, PR #167). Every tool is
 registered the same way — one file per tool in `app/mcp/tools/`, exporting a
-`register<Tool>(server, deps?)` function that `app/api/mcp/route.ts` calls inside its handler
-init, the writes after the reads. `ping` and every read declare
+`register<Tool>(server, deps?)` function that `registerAllTools` (`app/mcp/toolList.ts`) calls,
+the writes after the reads; `app/api/mcp/route.ts` runs it inside its handler init. Every
+model-visible tool also takes the optional `toolsVersion` (see
+[Keeping Claude's tool list current](#keeping-claudes-tool-list-current)). `ping` and every read declare
 `annotations: { readOnlyHint: true, openWorldHint: false }`; every write declares
 `{ readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false }`
 (spec I14). Every tool has a **strict** input schema (`.strict()` on the zod object): an
@@ -710,8 +712,8 @@ MCP Apps ignores both keys and shows the text answer as before.
   which tools carry the link; claude.ai cannot reach dev (Deployment Protection),
   so the card itself can only be seen in production.
 - **«La tarjeta no aparece».** The host reads the tool list when the connector connects; after a
-  release that adds the card or its tools, disconnect and reconnect the connector in Claude
-  (Settings → Connectors) so it reads the new list.
+  release that adds the card or its tools, refresh the connector in Claude so it reads the new
+  list ([Keeping Claude's tool list current](#keeping-claudes-tool-list-current)).
 
 ### Editing a proposal
 
@@ -973,6 +975,29 @@ instead was considered and declined: dev writes the production dataset.
 
 Only a live, non-impersonating **super-admin** can reach step 4 successfully — everyone else sees
 a refusal screen (no session, wrong role, or impersonation active) and no code is issued.
+
+### Keeping Claude's tool list current
+
+claude.ai reads `tools/list` when the connector connects and keeps that copy: names,
+descriptions, input schemas. It does not act on `notifications/tools/list_changed`, and this
+server sends none (`listChanged: false`; no held streams). So after a release that changes the
+list, Claude goes on using its old copy until the connector is refreshed. That happened with
+`focus` (PR #171), when Claude kept opening the whole month (ADR-0069).
+
+- **How the server notices.** `TOOL_LIST_VERSION` (`app/mcp/toolList.ts`) is an 8-character
+  digest of what a client caches about each tool: name, title, description, schemas, annotations
+  and `_meta`. It does not include the commit, so a release that only changes code keeps it.
+- **What a tool carries.** Every model-visible tool takes the optional `toolsVersion`, and its
+  description asks Claude to always send that value. App-only tools (the card's twins) don't
+  carry it. The handler never sees it.
+- **What a stale call gets.** A call that sends another value, or none, still gets its full
+  answer. The answer's text then ends with `STALE_TOOL_LIST_NOTE`, which asks Claude to tell the
+  user once to refresh and continue in a new chat. `structuredContent` is unchanged.
+- **How Frank refreshes.** Settings → Connectors → OWT Backstage → «⋯» → «Refresh tools list».
+  If that item isn't there, use Disconnect and then Connect.
+- **Writing descriptions.** Keep them to what Claude needs before it calls. Anything that depends
+  on the answer (repeat, check again, what to tell the user) goes in the answer, which is never
+  stale. Every description edit changes the version and triggers the note.
 
 ---
 

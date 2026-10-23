@@ -132,6 +132,8 @@ import { WRITE_REREAD_RULE } from "@/app/mcp/writes/runWriteTool";
 import { NOTHING_WRITTEN, STALE_COPY } from "@/app/mcp/writes/refusals";
 import { serviceError } from "@/app/utils/serviceMutation";
 import * as mcpRoute from "@/app/api/mcp/route";
+import { TOOL_LIST_VERSION } from "@/app/mcp/toolList";
+import { STALE_TOOL_LIST_NOTE, TOOLS_VERSION_ARG } from "@/app/mcp/toolListVersion";
 import { buildGrantDocument, newGrantId } from "@/app/mcp/oauth/grantDocument";
 import { __clearGrantCache, createGrant, revokeGrant } from "@/app/mcp/oauth/grantStore";
 import { PREVIEW_ORIGIN, PRODUCTION_ORIGIN, resourceFor } from "@/app/mcp/oauth/origin";
@@ -671,28 +673,31 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     for (const tool of [ping!, getService!, listServices!, getSong!, getMemberAvailability!, getParticipation!, listProposals!]) {
       expect(tool.description, String(tool.name)).toMatch(/America\/Mexico_City/);
     }
-    expect(ping!.inputSchema).toMatchObject({ properties: {} });
+    // `toolsVersion` (ADR-0069) rides on every model-visible tool; `argsOf` lists a tool's own arguments.
+    const argsOf = (tool: Record<string, unknown>) =>
+      Object.keys((tool.inputSchema as { properties: object }).properties).filter((key) => key !== TOOLS_VERSION_ARG);
+    expect(argsOf(ping!)).toEqual([]);
     expect(ping!.title).toMatch(/conexión/i);
-    expect(Object.keys((getService!.inputSchema as { properties: object }).properties).sort()).toEqual([
+    expect(argsOf(getService!).sort()).toEqual([
       "date",
       "kind",
       "name",
       "serviceId",
     ]);
-    expect(Object.keys((listServices!.inputSchema as { properties: object }).properties)).toEqual(["month"]);
-    expect(Object.keys((searchSongs!.inputSchema as { properties: object }).properties).sort()).toEqual([
+    expect(argsOf(listServices!)).toEqual(["month"]);
+    expect(argsOf(searchSongs!).sort()).toEqual([
       "limit",
       "query",
       "tags",
     ]);
-    expect(Object.keys((getSong!.inputSchema as { properties: object }).properties).sort()).toEqual(["slug", "songId"]);
-    expect(Object.keys((getMemberAvailability!.inputSchema as { properties: object }).properties).sort()).toEqual([
+    expect(argsOf(getSong!).sort()).toEqual(["slug", "songId"]);
+    expect(argsOf(getMemberAvailability!).sort()).toEqual([
       "memberId",
       "month",
       "name",
     ]);
-    expect(Object.keys((getParticipation!.inputSchema as { properties: object }).properties)).toEqual(["month"]);
-    expect(Object.keys((listProposals!.inputSchema as { properties: object }).properties).sort()).toEqual([
+    expect(argsOf(getParticipation!)).toEqual(["month"]);
+    expect(argsOf(listProposals!).sort()).toEqual([
       "month",
       "serviceId",
     ]);
@@ -752,7 +757,7 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     expect(schemaOf("swap_assignment").properties.services).toMatchObject({ type: "array", minItems: 2, maxItems: 2 });
     expect(schemaOf("swap_assignment").properties.kind).toMatchObject({ enum: ["section", "team"] });
     for (const name of ["publish_service", "unpublish_service"]) {
-      expect(Object.keys(schemaOf(name).properties).sort(), name).toEqual(["rev", "serviceId"]);
+      expect(Object.keys(schemaOf(name).properties).sort(), name).toEqual(["rev", "serviceId", TOOLS_VERSION_ARG]);
     }
   });
 
@@ -775,7 +780,9 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
   it("tools/call ping returns { ok, server, version, now } with now in Mexico City time", async () => {
     const token = await accessToken(await liveGrant());
     const before = Date.now();
-    const result = await rpcResult(await POST(mcpRequest(rpc("tools/call", { name: "ping", arguments: {} }), { token })));
+    const result = await rpcResult(
+      await POST(mcpRequest(rpc("tools/call", { name: "ping", arguments: { toolsVersion: TOOL_LIST_VERSION } }), { token })),
+    );
     const after = Date.now();
 
     expect(result.isError).toBeFalsy();
@@ -802,6 +809,64 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     expect(now.slice(0, 19).replace("T", " ")).toBe(
       new Date(instant).toLocaleString("sv", { timeZone: "America/Mexico_City" }),
     );
+  });
+
+  describe("the tool list's version (ADR-0069)", () => {
+    const callPing = async (args?: Record<string, unknown>) => {
+      const token = await accessToken(await liveGrant());
+      const params = args === undefined ? { name: "ping" } : { name: "ping", arguments: args };
+      return rpcResult(await POST(mcpRequest(rpc("tools/call", params), { token })));
+    };
+    const texts = (result: Record<string, unknown>) => (result.content as { text: string }[]).map((c) => c.text);
+
+    it("every model-visible tool asks for the current digest; the card's twins do not carry it", async () => {
+      const token = await accessToken(await liveGrant());
+      const result = await rpcResult(await POST(mcpRequest(rpc("tools/list"), { token })));
+      const tools = result.tools as { name: string; inputSchema: { properties: Record<string, { description?: string }> }; _meta?: { ui?: { visibility?: string[] } } }[];
+      expect(TOOL_LIST_VERSION).toMatch(/^[0-9a-f]{8}$/);
+      for (const tool of tools) {
+        const arg = tool.inputSchema.properties[TOOLS_VERSION_ARG];
+        if (tool._meta?.ui?.visibility?.includes("app") && !tool._meta.ui.visibility.includes("model")) {
+          expect(arg, tool.name).toBeUndefined();
+        } else {
+          expect(arg?.description, tool.name).toContain(`"${TOOL_LIST_VERSION}"`);
+          expect((tool.inputSchema as { required?: string[] }).required ?? [], tool.name).not.toContain(TOOLS_VERSION_ARG);
+        }
+      }
+      expect(tools.some((t) => t.inputSchema.properties[TOOLS_VERSION_ARG] === undefined)).toBe(true);
+    });
+
+    it("a current caller gets the tool's answer alone", async () => {
+      const result = await callPing({ toolsVersion: TOOL_LIST_VERSION });
+      expect(result.isError).toBeFalsy();
+      expect(texts(result)).toHaveLength(1);
+    });
+
+    it("a caller with no version, or another one, still gets the answer, plus the refresh note last", async () => {
+      for (const args of [undefined, {}, { toolsVersion: "00000000" }]) {
+        const result = await callPing(args);
+        expect(result.isError, JSON.stringify(args)).toBeFalsy();
+        const [answer, note, ...rest] = texts(result);
+        expect(JSON.parse(answer!)).toMatchObject({ ok: true });
+        expect(note).toBe(STALE_TOOL_LIST_NOTE);
+        expect(rest).toEqual([]);
+        // The note is text for the model only; the card reads structuredContent, which is untouched.
+        expect(result.structuredContent).toEqual(JSON.parse(answer!));
+      }
+    });
+
+    it("the digest covers what a client caches, and ignores the deployment's commit", async () => {
+      const { toolListDigest } = await import("@/app/mcp/toolListVersion");
+      const { registerAllTools } = await import("@/app/mcp/toolList");
+      expect(toolListDigest((server) => registerAllTools(server, { version: "abc1234" }))).toBe(TOOL_LIST_VERSION);
+      const renamed = toolListDigest((server) => {
+        const register = server.registerTool.bind(server) as (name: string, config: { description?: string }, cb: unknown) => unknown;
+        (server as unknown as { registerTool: typeof register }).registerTool = (name, config, cb) =>
+          register(name, name === "ping" ? { ...config, description: `${config.description} ` } : config, cb);
+        registerAllTools(server, { version: "" });
+      });
+      expect(renamed).not.toBe(TOOL_LIST_VERSION);
+    });
   });
 
   it("tools/call ping without an arguments member is the same call", async () => {
@@ -1002,7 +1067,7 @@ describe("/api/mcp — get_service and list_services, end to end", () => {
   it("tools/call get_service {} answers the next service in Mexico City, drafts included, with its observations", async () => {
     const token = await accessToken(await liveGrant());
     const result = await rpcResult(
-      await POST(mcpRequest(rpc("tools/call", { name: "get_service", arguments: {} }), { token })),
+      await POST(mcpRequest(rpc("tools/call", { name: "get_service", arguments: { toolsVersion: TOOL_LIST_VERSION } }), { token })),
     );
     const { text, payload } = payloadOf(result);
     expect(payload).toMatchObject({
@@ -1028,7 +1093,7 @@ describe("/api/mcp — get_service and list_services, end to end", () => {
   it("tools/call list_services {} lists the Mexico City month, not UTC's", async () => {
     const token = await accessToken(await liveGrant());
     const result = await rpcResult(
-      await POST(mcpRequest(rpc("tools/call", { name: "list_services", arguments: {} }), { token })),
+      await POST(mcpRequest(rpc("tools/call", { name: "list_services", arguments: { toolsVersion: TOOL_LIST_VERSION } }), { token })),
     );
     const { payload } = payloadOf(result);
     expect(payload.month).toBe("2026-09");
