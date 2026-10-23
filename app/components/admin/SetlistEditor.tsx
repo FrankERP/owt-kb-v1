@@ -4,15 +4,22 @@ import { useState, useEffect, useRef, Fragment } from "react";
 import { SongForm, SongTag, FormState, buildPayload } from "./SongFormModal";
 import { normalizeMedleyTags } from "../../utils/medley";
 import { ChainLinkIcon } from "../ChainLinkIcon";
+import Button from "../ui/Button";
 import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
-import Select from "../ui/Select";
+import Select, { useAnyCoarsePointer, useFinePointer } from "../ui/Select";
+import { ChevronDownIcon, ChevronUpIcon, CloseIcon, PlusIcon } from "../ui/icons";
 import { canEditSetlistResponse, SETLIST_READ_ISSUE_COPY } from "../../utils/setlistReadContract";
 import { serviceDayOffset, serviceTodayIso } from "./serviceReadiness";
 import { MUTATION_TIMEOUT_MS } from "./serviceMutationErrors";
 import { writeErrorMessage } from "@/app/utils/writeError";
 import { WORSHIP_NIGHT_FORMAT } from "@/app/utils/serviceFormat";
 import { unassignedLeads } from "@/app/utils/songLeads";
+
+// The row's icon buttons: a 44 px target on a phone, the 36 px icon default from `sm`
+// (no `size` is responsive, so the desktop half is an additive utility), dimmed and
+// inert while `aria-disabled` (see the row for why not `disabled`).
+const ROW_ICON = "sm:min-h-9 sm:min-w-9 aria-disabled:opacity-50 aria-disabled:pointer-events-none";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -159,6 +166,15 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
   const [roster, setRoster]             = useState<{ id: string; name: string }[]>([]);
   const dragSrc     = useRef<number | null>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // HTML5 drag is a mouse/trackpad affordance: a touch screen never starts it,
+  // and on iOS a long press on a `draggable` row hijacks the scroll instead. So a
+  // row is draggable only on a fine pointer with NO touch screen attached (an iPad
+  // with a trackpad is fine-pointer AND any-pointer coarse); elsewhere the grip is
+  // not drawn and the 44 px «Subir / Bajar / Quitar» buttons are the only reorder
+  // (bloque 6).
+  const finePointer = useFinePointer();
+  const anyCoarse = useAnyCoarsePointer();
+  const dragPointer = finePointer && !anyCoarse;
 
   useEffect(() => {
     let alive = true;
@@ -263,7 +279,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
     });
   }
 
-  // Keyboard-accessible reorder (drag is mouse/touch only). Moves the row at
+  // The reorder every pointer can use (drag is mouse-only). Moves the row at
   // idx by one position; re-derives medley tags like handleDrop.
   function move(idx: number, dir: -1 | 1) {
     setEntries(prev => {
@@ -466,9 +482,9 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
     return (
       <div className="space-y-4">
         <CueDialogStatus tone="error">{loadError}</CueDialogStatus>
-        <button type="button" onClick={onClose} className="w-full rounded-lg border border-accent/20 py-2 font-label text-xs uppercase tracking-widest text-mono-400 transition-colors hover:border-accent hover:text-accent">
+        <Button variant="secondary" size="lg" className="w-full" onClick={onClose}>
           Cerrar
-        </button>
+        </Button>
       </div>
     );
   }
@@ -492,13 +508,13 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
             return (
               <Fragment key={e.localId}>
                 <div
-                  draggable
+                  draggable={dragPointer}
                   onDragStart={ev => { ev.dataTransfer.effectAllowed = "move"; dragSrc.current = idx; setDraggingIdx(idx); }}
                   onDragOver={ev => { ev.preventDefault(); ev.dataTransfer.dropEffect = "move"; setDragOverIdx(idx); }}
                   onDragLeave={() => setDragOverIdx(null)}
                   onDrop={ev => { ev.preventDefault(); handleDrop(idx); setDragOverIdx(null); }}
                   onDragEnd={() => { dragSrc.current = null; setDraggingIdx(null); setDragOverIdx(null); }}
-                  className={`flex items-center gap-2 rounded-lg border px-3 py-2 select-none transition-all ${idx > 0 ? "mt-1.5" : ""} ${
+                  className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border px-3 py-2 select-none transition-all ${idx > 0 ? "mt-1.5" : ""} ${
                     isDragging
                       ? "opacity-30 border-accent/10 bg-surface-sunken/30"
                       : dragOverIdx === idx
@@ -508,32 +524,17 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
                       : "border-accent/10 bg-surface-sunken/30"
                   }`}
                 >
-                  <div className="cursor-grab active:cursor-grabbing text-mono-600 hover:text-mono-400 shrink-0 transition-colors" aria-hidden="true">
-                    <GripIcon />
-                  </div>
-                  {/* Keyboard-accessible reorder alternative to drag-and-drop */}
-                  <div className="flex flex-col shrink-0 -my-1">
-                    <button
-                      type="button"
-                      onClick={() => move(idx, -1)}
-                      disabled={idx === 0}
-                      aria-label={`Subir ${e.song.title}`}
-                      className="text-mono-600 hover:text-accent disabled:opacity-25 disabled:hover:text-mono-600 leading-none text-[11px] transition-colors"
-                    >▲</button>
-                    <button
-                      type="button"
-                      onClick={() => move(idx, 1)}
-                      disabled={idx === entries.length - 1}
-                      aria-label={`Bajar ${e.song.title}`}
-                      className="text-mono-600 hover:text-accent disabled:opacity-25 disabled:hover:text-mono-600 leading-none text-[11px] transition-colors"
-                    >▼</button>
-                  </div>
+                  {dragPointer && (
+                    <div className="cursor-grab active:cursor-grabbing text-mono-600 hover:text-mono-400 shrink-0 transition-colors" aria-hidden="true">
+                      <GripIcon />
+                    </div>
+                  )}
                   <span className="font-label text-[11px] text-mono-600 shrink-0 w-4 text-center tabular-nums">{idx + 1}</span>
                   <div className="flex-1 min-w-0">
-                    <p className="font-body text-xs truncate">{e.song.title}</p>
+                    <p className="font-body text-sm truncate">{e.song.title}</p>
                     <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                      <span className="font-label text-[10px] text-mono-600">{e.song.author}</span>
-                      {e.song.key && <span className="font-label text-[10px] text-mono-600">· {e.song.key}</span>}
+                      <span className="font-label text-xs text-mono-600">{e.song.author}</span>
+                      {e.song.key && <span className="font-label text-xs text-mono-600">· {e.song.key}</span>}
                       {lastUsed && <RepeatBadge lastUsed={lastUsed} />}
                     </div>
                     {worshipNight && (
@@ -542,7 +543,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
                           id={`dirige-${e.localId}`}
                           label="Dirige"
                           aria-label={`Dirige ${e.song.title}`}
-                          size="sm"
+                          size="md"
                           className="min-w-0 flex-1"
                           value={e.leadIds[0] ?? ""}
                           onChange={ev => setLead(e.localId, 0, ev.target.value)}
@@ -555,7 +556,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
                           id={`dirige-y-${e.localId}`}
                           label="y"
                           aria-label={`Y también dirige ${e.song.title}`}
-                          size="sm"
+                          size="md"
                           className="min-w-0 flex-1"
                           disabled={!e.leadIds[0]}
                           value={e.leadIds[1] ?? ""}
@@ -568,32 +569,59 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
                       </div>
                     )}
                     {worshipNight && staleRows.includes(e) && (
-                      <p className="font-body text-[11px] text-warning-strong">Dirige alguien que ya no está en Lead</p>
+                      <p className="font-body text-xs text-warning-strong">Dirige alguien que ya no está en Lead</p>
                     )}
                   </div>
-                  <input
-                    className="w-14 px-1.5 py-1 rounded border border-edge-control bg-transparent font-body text-xs text-center focus:outline-none focus:border-accent"
-                    placeholder="Tono"
-                    value={e.play_key}
-                    onChange={ev => setEntries(prev => prev.map(x => x.localId === e.localId ? { ...x, play_key: ev.target.value } : x))}
-                  />
-                  <button type="button" onClick={() => remove(e.localId)} aria-label={`Quitar ${e.song.title}`} className="text-mono-600 hover:text-negative-fg transition-colors shrink-0 text-sm leading-none">×</button>
+                  {/* On a phone the controls take a line of their own under the
+                      title (basis-full); from `sm` they sit inline at the right.
+                      Three 44 px targets: a thumb cannot hit an 11 px glyph. */}
+                  <div className="flex basis-full items-center gap-1 sm:basis-auto">
+                    <input
+                      className="w-16 min-h-[44px] select-text rounded-lg border border-edge-control bg-transparent px-1.5 text-center font-body text-[16px] focus:outline-none focus:border-accent sm:min-h-9 sm:text-xs"
+                      placeholder="Tono"
+                      aria-label={`Tono de ${e.song.title}`}
+                      value={e.play_key}
+                      onChange={ev => setEntries(prev => prev.map(x => x.localId === e.localId ? { ...x, play_key: ev.target.value } : x))}
+                    />
+                    {/* 44 px on a phone, the 36 px icon default from `sm` so a desktop row keeps
+                        its height (the key field matches with `sm:min-h-9`). The end buttons are
+                        `aria-disabled`, not `disabled`: a `disabled` button drops focus to <body>
+                        the moment the row it just moved reaches the end, and `move()` already
+                        refuses a step past either end. */}
+                    <div className="ml-auto flex items-center">
+                      <Button variant="icon" size="lg" className={ROW_ICON} onClick={() => move(idx, -1)} aria-disabled={idx === 0 || undefined} aria-label={`Subir ${e.song.title}`}>
+                        <ChevronUpIcon size={16} />
+                      </Button>
+                      <Button variant="icon" size="lg" className={ROW_ICON} onClick={() => move(idx, 1)} aria-disabled={idx === entries.length - 1 || undefined} aria-label={`Bajar ${e.song.title}`}>
+                        <ChevronDownIcon size={16} />
+                      </Button>
+                      <Button variant="icon" size="lg" className={ROW_ICON} tone="danger" onClick={() => remove(e.localId)} aria-label={`Quitar ${e.song.title}`}>
+                        <CloseIcon size={16} />
+                      </Button>
+                    </div>
+                  </div>
                 </div>
                 {idx < entries.length - 1 && (
                   <div className="-my-0.5 flex items-center justify-center relative z-10">
-                    <button
-                      type="button"
-                      onClick={() => toggleMedleyLink(idx, idx + 1)}
-                      title={linked ? "Desagrupar medley" : "Agrupar en medley"}
-                      className={`flex items-center gap-1 px-2 py-0.5 rounded-full border transition-all ${
-                        linked
-                          ? "border-accent/30 bg-surface-base text-accent/70"
-                          : "border-dashed border-mono-700/30 bg-surface-base text-mono-700/40 hover:border-accent/30 hover:text-accent/40"
-                      }`}
-                    >
-                      <ChainLinkIcon strokeWidth={linked ? 2.5 : 1.5} />
-                      {linked && <span className="font-label text-[10px] uppercase tracking-widest ml-0.5">medley</span>}
-                    </button>
+                    {/* The wrapper paints the page surface so the pill masks the gap between rows
+                        (`inline-flex`, so its box is the pill's, not a line box with a descender).
+                        On a phone an invisible `before:` pseudo-element stretches the pill's hit
+                        area to ~44 px without moving the rows apart; from `sm` the pointer is a
+                        mouse and the pill's own box is the target. */}
+                    <span className="inline-flex rounded-full bg-surface-base">
+                      <Button
+                        variant="pill"
+                        size="sm"
+                        className="relative before:absolute before:inset-x-0 before:-inset-y-3 before:content-[''] sm:before:content-none"
+                        active={linked}
+                        onClick={() => toggleMedleyLink(idx, idx + 1)}
+                        title={linked ? "Desagrupar medley" : "Agrupar en medley"}
+                        aria-label={linked ? `Desagrupar medley: ${e.song.title} y ${nextEntry.song.title}` : `Agrupar en medley: ${e.song.title} y ${nextEntry.song.title}`}
+                      >
+                        <ChainLinkIcon strokeWidth={linked ? 2.5 : 1.5} />
+                        {linked && <span className="text-[10px]">medley</span>}
+                      </Button>
+                    </span>
                   </div>
                 )}
               </Fragment>
@@ -615,14 +643,16 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
         <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">Agregar canción</p>
         <div className="flex gap-2">
           <input
-            className="flex-1 px-3 py-1.5 rounded-lg border border-edge-control bg-transparent font-body text-sm focus:outline-none focus:border-accent transition-colors placeholder-mono-600"
+            className="flex-1 px-3 py-1.5 rounded-lg border border-edge-control bg-transparent font-body text-[16px] sm:text-sm focus:outline-none focus:border-accent transition-colors placeholder-mono-600"
             placeholder="Buscar por título..."
+            aria-label="Buscar canción por título"
             value={searchQ}
             onChange={e => setSearchQ(e.target.value)}
           />
           <input
-            className="w-16 px-2 py-1.5 rounded-lg border border-edge-control bg-transparent font-body text-sm text-center focus:outline-none focus:border-accent transition-colors placeholder-mono-600"
+            className="w-16 px-2 py-1.5 rounded-lg border border-edge-control bg-transparent font-body text-[16px] sm:text-sm text-center focus:outline-none focus:border-accent transition-colors placeholder-mono-600"
             placeholder="Tono"
+            aria-label="Tono de la canción que agregas"
             value={addKey}
             onChange={e => setAddKey(e.target.value)}
           />
@@ -635,38 +665,27 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
               return (
                 <div key={song._id} className="flex items-center gap-3 px-3 py-2 hover:bg-accent/5 transition-colors">
                   <div className="flex-1 min-w-0">
-                    <p className="font-body text-xs truncate">{song.title}</p>
+                    <p className="font-body text-sm truncate">{song.title}</p>
                     <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                      <span className="font-label text-[10px] text-mono-600">{song.author}</span>
-                      {song.key && <span className="font-label text-[10px] text-mono-600">· {song.key}</span>}
+                      <span className="font-label text-xs text-mono-600">{song.author}</span>
+                      {song.key && <span className="font-label text-xs text-mono-600">· {song.key}</span>}
                       {lastUsed && <RepeatBadge lastUsed={lastUsed} />}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    disabled={alreadyAdded}
-                    onClick={() => addSong(song)}
-                    className="font-label text-[10px] uppercase tracking-widest px-2 py-1 rounded-full border border-accent/30 text-accent/70 hover:text-accent hover:border-accent disabled:opacity-30 disabled:cursor-default transition-colors shrink-0"
-                  >
-                    {alreadyAdded ? "Ya está" : "+ Añadir"}
-                  </button>
+                  <Button variant="pill" size="sm" className="shrink-0" disabled={alreadyAdded} onClick={() => addSong(song)} aria-label={alreadyAdded ? `${song.title} ya está en el setlist` : `Añadir ${song.title}`}>
+                    {alreadyAdded ? "Ya está" : <><PlusIcon size={12} /> Añadir</>}
+                  </Button>
                 </div>
               );
             })}
           </div>
         )}
-        <div className="rounded-lg border border-accent/20">
-          <button
-            type="button"
-            onClick={() => setCreateOpen(true)}
-            className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-accent/5 transition-colors text-left"
-          >
-            <span className="font-label text-[11px] uppercase tracking-widest text-accent">+ Crear</span>
-            {searchQ.trim()
-              ? <span className="font-body text-xs text-mono-400 truncate">&quot;{searchQ}&quot;</span>
-              : <span className="font-body text-xs text-mono-400">nueva canción</span>}
-          </button>
-        </div>
+        <Button variant="secondary" size="lg" className="w-full justify-start" onClick={() => setCreateOpen(true)}>
+          <PlusIcon size={14} /> Crear{" "}
+          {searchQ.trim()
+            ? <span className="min-w-0 truncate font-body text-xs normal-case tracking-normal text-mono-400">&quot;{searchQ}&quot;</span>
+            : <span className="font-body text-xs normal-case tracking-normal text-mono-400">nueva canción</span>}
+        </Button>
       </div>
 
       {/* Footer */}
@@ -679,21 +698,25 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
       {/* A 409 keeps the editor (and the admin's edits) open and requires a
           reload: the observed state is only replaced by a fresh read. */}
       {saveConflict && (
-        <button
-          type="button"
-          onClick={() => setReloadToken(t => t + 1)}
-          className="w-full py-2 rounded-lg border border-recency-fg/40 font-label text-xs uppercase tracking-widest text-recency-soft hover:bg-recency-fg/10 transition-colors"
-        >
+        <Button variant="secondary" size="lg" className="w-full" onClick={() => setReloadToken(t => t + 1)}>
           Recargar setlist
-        </button>
+        </Button>
       )}
       <div className="flex gap-3 sticky bottom-0 bg-surface-raised-alt py-2">
-        <button type="button" onClick={onClose} disabled={saving} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors disabled:opacity-50">
+        <Button variant="secondary" size="lg" className="flex-1" onClick={onClose} disabled={saving}>
           Cancelar
-        </button>
-        <button type="button" onClick={save} disabled={saving || saveConflict || !observed || staleRows.length > 0} className="flex-1 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
-          {saving ? "Guardando..." : "Guardar setlist"}
-        </button>
+        </Button>
+        <Button
+          variant="primary"
+          size="lg"
+          className="flex-1"
+          onClick={save}
+          busy={saving}
+          busyLabel="Guardando..."
+          disabled={saveConflict || !observed || staleRows.length > 0}
+        >
+          Guardar setlist
+        </Button>
       </div>
 
       {/* Create song modal (nested above the ServicesPanel modal) */}
