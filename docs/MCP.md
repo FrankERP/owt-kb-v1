@@ -683,7 +683,11 @@ the decisions and the rejected alternatives are
 ### The proposal card (MCP Apps)
 
 `solve_month` names one resource in its tool `_meta` (`ui.resourceUri` plus the legacy
-`ui/resourceUri`): `ui://owt/proposal-editor`, served as `text/html;profile=mcp-app`. A host that
+`ui/resourceUri`): `ui://owt/proposal-editor/<digest>`, served as `text/html;profile=mcp-app`.
+The `<digest>` is the first 8 hex characters of a SHA-256 of the built document. The Claude app
+keeps a card's HTML by its URI, so a new build needs a new URI before the host reads it again
+(ADR-0069). The first URI, `ui://owt/proposal-editor`, still serves the same document for a client
+whose tool list predates the change. A host that
 supports [MCP Apps](https://github.com/modelcontextprotocol/ext-apps) (claude.ai, the Claude app)
 reads it with `resources/read` — through the same bearer check as every tool — and draws the
 solve's result as a card next to the chat: the months, how long the proposal is kept, each
@@ -996,6 +1000,10 @@ list, Claude goes on using its old copy until the connector is refreshed. That h
   never shows it (`textLines` drops it by its prefix), and `structuredContent` is unchanged.
 - **A refusal carries it too.** When the SDK refuses a stale call's arguments, its error text gets
   the same note. `versionToolList` wraps `validateToolInput` to add it.
+- **The card too.** The card's URI carries a digest of its HTML (see
+  [The proposal card](#the-proposal-card-mcp-apps)). A card build changes the tools' `_meta`, and
+  with it the version, so a refresh also brings the new card. On 2026-10-23 the Claude app was
+  still drawing a two-releases-old card from the fixed URI.
 - **How Frank refreshes.** Settings → Connectors → OWT Backstage → «⋯» → «Refresh tools list».
   If that item isn't there, use Disconnect and then Connect.
 - **Writing descriptions.** Keep them to what Claude needs before it calls. Anything that depends

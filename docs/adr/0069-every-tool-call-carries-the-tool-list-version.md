@@ -75,6 +75,14 @@ again, and the two had drifted apart.
 - **The commit as the version.** Every deployment would look like a change and would nag for
   nothing.
 
+**The card's URI is versioned too** (added 2026-10-23, after the release). The Claude app keeps a
+card's HTML by its resource URI. After #189 shipped, Frank's card still sent the «Guardar» message
+of a build two releases old, while the server already served the new one. `PROPOSAL_CARD_URI` is
+now `ui://owt/proposal-editor/<8 hex of the HTML's SHA-256>` (`app/mcp/apps/proposalCard.ts`). A
+new build therefore names a new URI in the tools' `_meta`, which changes the tool list version and
+makes the host read the new document. The first URI still serves the current HTML, for a client
+whose list predates the change.
+
 ## Consequences
 
 - Any release that changes a tool's name, title, description, schema, annotations or `_meta`
