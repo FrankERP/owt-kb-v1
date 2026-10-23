@@ -136,14 +136,19 @@ disagree, `CLAUDE.md` wins and this file is the one to fix.
   member — screenshots, text, a11y tree, console. Use it for the human-eyes step of the push
   order when the change is visual; it never writes, and it still is not a substitute for
   Frank's own look at a release.
-- **Only `main`, `preview` and `verify/service-readiness` spend a Vercel build.**
-  `vercel.json`'s `ignoreCommand` runs `scripts/vercel-ignore-build.mjs` and skips
-  every other ref — the deployment is still CREATED, as `CANCELED` with a URL that
-  serves nothing, so a `claude/*` push proves nothing and you still verify on
-  `dev-owt-backstage` by merging into `preview`. Function Storage counts every
-  RETAINED deployment (the embedded Studio makes each ~75 MB), which is how the free
-  tier hit 100% on 2026-09-17 with 136 of them; a canceled build stores nothing but
-  still counts against the per-day deployment quota. To build a skipped ref ON
+- **Only `main`, `preview` and `verify/service-readiness` get a Vercel deployment.**
+  `vercel.json`'s `git.deploymentEnabled` is `"**": false` plus those three refs
+  `true` (minimatch; one `true` match deploys), so Vercel creates NOTHING for any
+  other ref — a `claude/*` push proves nothing and you still verify on
+  `dev-owt-backstage` by merging into `preview`. The `ignoreCommand`
+  (`scripts/vercel-ignore-build.mjs`) stays as the fail-open belt for whatever
+  still reaches a build. Two quotas drove this: Function Storage counts every
+  RETAINED deployment (the embedded Studio makes each ~75 MB; the free tier hit
+  100% on 2026-09-17 with 136 of them), and the Hobby plan allows 100 deployments
+  per day INCLUDING canceled ones — on 2026-10-22 four threads pushed 44 canceled
+  `claude/*` deployments beside 42 real builds, and from 19:50 UTC neither dev nor
+  production could build until the next day (ADR-0068). A branch created before
+  the change still deploys once until it merges `main`. To build a skipped ref ON
   PURPOSE, redeploy from the dashboard with «Use project's Ignore Build Step»
   unchecked — a plain redeploy and a deploy hook both carry the branch's ref and are
   skipped again — and that checkbox is documented for a Project Settings ignore

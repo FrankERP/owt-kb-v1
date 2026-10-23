@@ -13,15 +13,19 @@
 // is the GitHub Actions `gates` job. Vercel contributes no status check, so a
 // feature-branch deployment is read by no human and gates no merge.
 //
-// `git.deploymentEnabled` in `vercel.json` cannot express this: as an object it
-// is a BLACKLIST ("unspecified branches default to true"), and as `false` it
-// disables every branch including production. So the policy lives here and is
-// wired as the Ignored Build Step, which skips the build before install —
-// meaning this module may use Node builtins ONLY, never a dependency.
+// Since 2026-10-23 the SAME list is also written as `git.deploymentEnabled` in
+// `vercel.json` (`"**": false` plus the three refs `true` — minimatch, and a
+// branch matching one `true` rule deploys), so Vercel does not even CREATE a
+// deployment for any other ref. That matters because a canceled deployment
+// still counts against the Hobby plan's 100 deployments per day: on 2026-10-22
+// four threads pushed 44 canceled `claude/*` deployments and the cap stopped
+// `main` and `preview` from building for the rest of the day (ADR-0068).
 //
-// A skipped ref still gets a deployment, as CANCELED with a URL that serves
-// nothing. That ends the storage accumulation, which was the problem; it does
-// not make a feature-branch push free of the per-day deployment quota.
+// This module stays as the belt: the Ignored Build Step runs before install
+// (Node builtins ONLY, never a dependency) and fails open, so a deployment
+// that `deploymentEnabled` lets through for a ref not listed here still builds
+// only when it is production, and a config typo cannot strand a release.
+// `deployBranchPolicy.test.ts` asserts the two lists agree.
 //
 // Three refs deploy, and each is load-bearing:
 //   main                      → production, `owt-backstage.vercel.app`

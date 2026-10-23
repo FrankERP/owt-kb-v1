@@ -87,6 +87,23 @@ describe("the policy is actually wired", () => {
     expect(runPolicy({ VERCEL_GIT_COMMIT_REF: "release", VERCEL_ENV: "production" })).toBe(1);
   });
 
+  // Vercel reads `git.deploymentEnabled` before it creates a deployment, so a
+  // ref that is `false` there costs none of the Hobby plan's 100 deployments a
+  // day — the cap four threads hit on 2026-10-22 with 44 canceled `claude/*`
+  // pushes (ADR-0068). The rule is a whitelist built from a blacklist: every
+  // branch off, the deploying refs on. If someone drops `"**": false` the
+  // suite stays green while every push spends a slot again; if someone drops
+  // a deploying ref, that target silently stops deploying.
+  it("vercel.json creates deployments only for the deploying refs", () => {
+    const cfg = JSON.parse(readFileSync(resolve(repoRoot, "vercel.json"), "utf8"));
+    const enabled = cfg.git?.deploymentEnabled;
+    expect(enabled).toBeTypeOf("object");
+    expect(enabled["**"]).toBe(false);
+    for (const ref of DEPLOYING_REFS) expect(enabled[ref]).toBe(true);
+    const extra = Object.keys(enabled).filter((k) => k !== "**" && !DEPLOYING_REFS.includes(k));
+    expect(extra).toEqual([]);
+  });
+
   it("keeps the verification branch deploying, as deployment-coherence expects", () => {
     // Imported, not regex-scraped out of the source: an unanchored match would
     // read a stale `OLD_VERIFICATION_REF` during exactly the rename this guard

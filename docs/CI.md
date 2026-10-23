@@ -485,27 +485,41 @@ runner over the pure `evaluateDeployPolicy` in
 **0 ignores the build, 1 continues it.** The step runs *before* `npm install`,
 so that module may use Node builtins only.
 
-**A skipped ref still gets a deployment**, in state `CANCELED`, with a URL that
-serves nothing. So the Function Storage saving is complete — no build output
-means no function bundle and no retained GB — but canceled builds still count
-against the deployments-per-day quota and can still take a concurrent build
-slot. "Feature branches are free now" is the wrong summary; "feature branches
-stop accumulating storage" is the right one. `git.deploymentEnabled` would
-prevent the deployment from being created at all, which is the one thing it
-does better; it still loses on the point below.
+**Since 2026-10-23 a skipped ref gets NO deployment at all.** `vercel.json`
+also carries the same list as `git.deploymentEnabled`:
 
-**Why, and why not `git.deploymentEnabled`.** Vercel's Function Storage quota
-counts the function bundle of every *retained* deployment, not just the current
-one. On 2026-09-17 this project hit 100% of the 10 GB Hobby allowance with 136
+```json
+"git": { "deploymentEnabled": { "**": false, "main": true, "preview": true, "verify/service-readiness": true } }
+```
+
+Vercel matches branch names with minimatch, and a branch that matches at least
+one `true` rule deploys, so `"**": false` plus three `true` entries is a
+whitelist. Vercel evaluates it *before* creating the deployment, so a push to
+any other branch creates nothing: no `CANCELED` row, no entry in the Git
+integration's comment, and — the reason it exists — **no slot of the Hobby
+plan's 100 deployments per day**. Before this, every push still created a
+`CANCELED` deployment that counted: on 2026-10-22 four threads pushed 44 of
+them beside 24 `preview` and 18 `main` builds, the cap was hit at 19:50 UTC
+and neither dev nor production could build until the next day (ADR-0068).
+"Feature branches are free now" is finally the right summary. Vercel reads the
+file from the commit being pushed, so a branch created before the change
+deploys once more until it merges `main`.
+
+**Why the Ignored Build Step stays.** Vercel's Function Storage quota counts
+the function bundle of every *retained* deployment, not just the current one.
+On 2026-09-17 this project hit 100% of the 10 GB Hobby allowance with 136
 retained deployments at roughly 75 MB each — the embedded Sanity Studio at
 `/studio` is traced into the lambda, so each one is expensive. Half of them were
 never read by anybody: every fix round pushes the feature branch *and* merges to
 `preview`, so Vercel built twice, and 20 deployments landed in 4.5 hours that
 day. The release flow above verifies on `dev-owt-backstage` and `main`'s only
 required check is the `gates` job — Vercel contributes no status check, so a
-feature-branch deployment gates nothing. `git.deploymentEnabled` cannot express
-this rule: as an object it is a *blacklist* (unspecified branches default to
-`true`), and as `false` it disables production too.
+feature-branch deployment gates nothing. The step was written when
+`git.deploymentEnabled` could not express a whitelist (no patterns, and `false`
+disabled production too); now it is the belt under the braces: a deployment
+that reaches it from a ref outside the list — a config typo, a deploy hook, a
+CLI deploy — builds only when it is production, and
+`deployBranchPolicy.test.ts` asserts that both lists name the same refs.
 
 **It fails open where it can.** A deployment that reaches the step with no
 `VERCEL_GIT_COMMIT_REF` builds, and so does anything with
