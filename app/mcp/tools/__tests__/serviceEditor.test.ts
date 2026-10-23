@@ -192,6 +192,24 @@ describe("save_service_edits", () => {
     expect(w.deps.editRole).toHaveBeenCalledTimes(2);
   });
 
+  it("the card's twin is the same save: same checks, same writes, its own log label (ADR-0066 addendum)", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      const w = serviceWorld();
+      const changes = await checked(w, MOVE_ANA);
+      const forged = changes.map((c, i) => (i === 0 ? { ...c, lines: ["domingo 8 nov · BGV: sale Bruno"] } : c));
+      expect(sc(await saveServiceEditsResult({ month: MONTH, changes: forged }, PRINCIPAL, w.deps, "save_service_edits_app"))).toMatchObject({ detail: "not_the_checked" });
+      expect(w.deps.editRole).not.toHaveBeenCalled();
+      const out = await saveServiceEditsResult({ month: MONTH, changes }, PRINCIPAL, w.deps, "save_service_edits_app");
+      expect(statuses(out)).toEqual({ sun8: "saved", sun15: "saved" });
+      expect(statuses(await save(w, changes))).toEqual({ sun8: "already", sun15: "already" });
+      const logged = info.mock.calls.map((c) => String(c[0]));
+      expect(logged.some((l) => l.includes("save_service_edits_app"))).toBe(true);
+    } finally {
+      info.mockRestore();
+    }
+  });
+
   it("a stale service refuses the whole call before any write", async () => {
     const w = serviceWorld();
     const changes = await checked(w, MOVE_ANA);

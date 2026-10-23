@@ -336,18 +336,20 @@ export const EDITOR_TOOL_NAMES = ["check_proposal_edits", "save_proposal_edits",
 /**
  * Admin parity phase 1 (ADR-0066): the saved-month editor, after the proposal editor, then
  * `create_service`. Never called here: the two checks only read but need a month's services, and
- * the other three write production services. `check_service_edits_app` is app-only (the card calls it).
+ * the other four write production services. `check_service_edits_app` and `save_service_edits_app`
+ * are app-only (the card calls them).
  */
 export const SERVICE_EDITOR_TOOL_NAMES = [
   "check_service_edits",
   "check_service_edits_app",
   "save_service_edits",
+  "save_service_edits_app",
   "copy_instruments",
   "create_service",
 ];
 
 /** The saved-month editor's writes: destructive, like every write (I14). */
-export const SERVICE_EDITOR_WRITE_NAMES = ["save_service_edits", "copy_instruments", "create_service"];
+export const SERVICE_EDITOR_WRITE_NAMES = ["save_service_edits", "save_service_edits_app", "copy_instruments", "create_service"];
 
 /**
  * Admin parity phase 1: three reads after the P1 reads (`/admin`'s Equidad, rules and integrity

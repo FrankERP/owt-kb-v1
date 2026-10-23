@@ -1,6 +1,6 @@
 # ADR-0066: Saved services are edited from the chat as checked change sets, written one service at a time
 
-**Date:** 2026-10-21 · **Status:** Accepted
+**Date:** 2026-10-21 · **Status:** Accepted; amended 2026-10-23 (the card saves, addendum below)
 
 > **Numbering.** Written as 0064 and renumbered to 0066 on 2026-10-21: PR #166 (now ADR-0064) and
 > PR #165 (now ADR-0065) reached `main` first. ADR numbers follow the order records reach `main`.
@@ -137,3 +137,43 @@ Plan: `docs/superpowers/plans/2026-10-21-owt-mcp-admin-parity-f1.md` (S2 approve
   ADR-0062: a client without MCP Apps support may show `check_service_edits_app` and its `force`.
 - Undoing F1 (a second writer) or F4 (lines compared) re-opens the gap this record closes: a chat
   edit that skips the grid's rules, or a permission prompt that does not say what will happen.
+
+## Addendum — the card saves, 2026-10-23
+
+Frank, after the card's «Guardar» put its message in the chat again: «Pero por qué para guardar a fuerzas
+tiene que ser un prompt explícito mío? No puede manejarlo la herramienta y el conector de forma interna».
+He chose «Sí, guardar desde la tarjeta» (19:17Z). Plan and its critical-tier review (two rounds with a
+blocker, then two approvals on the same bytes): `docs/superpowers/plans/2026-10-23-owt-mcp-card-saves.md`
+and its `-review-log.md`.
+
+**What changed.** «The card never writes» no longer holds. The card's «Guardar» opens its own
+confirmation (the part's `lines`: the changes in words and every rule forced, which F4 compares) and «Sí,
+guardar» calls `save_service_edits_app`: app-only, destructive, and the SAME function as
+`save_service_edits` (`saveServiceEditsResult`), so every check above (MAC, date, signed unit, «cambió»,
+a fresh judgement, F4 lines, F5 waivers) runs whoever calls it. There is no second writer.
+
+**What still holds.**
+- The model cannot force: the model-visible check mints no waiver.
+- The model cannot save without the host's permission prompt: it calls `save_service_edits`, and it
+  cannot see `save_service_edits_app`. As with `check_service_edits_app`, that rests on the host hiding
+  app-only tools (ADR-0062 Q1 (1)).
+- «Cargar» of a proposal still goes through the chat (ADR-0062 E10).
+
+**The card's one rule after a save starts:** the edit list is never replayed. An attempt can write
+some services without the card knowing which, and a replayed edit the month already holds is refused.
+So the list is either kept frozen for a repeat of the same part (an unknown outcome), or thrown away by a
+check from the empty list, which reads what is stored (any refusal, or a save that stopped part way).
+Saving one part can also make a later part's forced lines differ, because the save judges on the fresh
+board; that part is then refused and the card reads the month again.
+
+**What the person confirms is ours, not the host's.** A production write from the card is confirmed by
+the card's own question, as on `/admin`, where «Guardar» writes on one click. The host may add its own
+prompt for an app-initiated call; that is not documented. If it refuses the call, «Mandar al chat» keeps
+the old path: the chat, `save_service_edits` and the permission prompt.
+
+**Rejected.**
+- Calling the model-visible `save_service_edits` from the card: it would work, but the logs could not
+  tell the two paths apart.
+- A card save without its own confirmation: one mistaken tap would write production and email people.
+- Tracking which attempt may have written what, so a refused list could be kept: that is the defect class
+  both blocking review rounds found. Frank redoes a refused edit on the month as it is stored.

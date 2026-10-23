@@ -37,8 +37,8 @@ writer commits ──▶ after() queues a notice (own transaction, writeClient)
    sweep: gate ▶ select ▶ claim ▶ classify ▶ filter ▶ group ▶ send ▶ consume
 ```
 
-**One writer queues inline instead.** The MCP saved-service save (`save_service_edits`,
-`copy_instruments`; admin parity phase 1, ADR-0066) writes several services in one call, and Next
+**One writer queues inline instead.** The MCP saved-service save (`save_service_edits`
+and its card twin `save_service_edits_app`, one function; `copy_instruments`; admin parity phase 1, ADR-0066) writes several services in one call, and Next
 runs `after()` only once the response closes, so a call stopped at its time limit would lose the
 notices of every service it had already written. Those two tools call the shared commits with
 `notices: "inline"`: the same notices, from the same pre-commit `before`, are upserted with
