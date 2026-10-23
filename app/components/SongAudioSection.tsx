@@ -41,9 +41,7 @@ export default function SongAudioSection({ tracks, songTitle, songSlug }: Props)
           <li key={i} className="flex items-center gap-3 py-2.5">
             {isCurrent ? (
               <Button
-                variant="cta"
-                size="lg"
-                className="h-11 w-11 shrink-0 rounded-full p-0"
+                variant="roundCta"
                 onClick={() => togglePlay()}
                 aria-label={`${playing ? "Pausar" : "Reproducir"} ${trackName}`}
               >
@@ -51,9 +49,7 @@ export default function SongAudioSection({ tracks, songTitle, songSlug }: Props)
               </Button>
             ) : (
               <Button
-                variant="icon"
-                size="lg"
-                className="shrink-0 rounded-full border border-ink/[0.28] text-ink"
+                variant="round"
                 onClick={() => playTrack(audioTrack)}
                 aria-label={`Reproducir ${trackName}`}
               >

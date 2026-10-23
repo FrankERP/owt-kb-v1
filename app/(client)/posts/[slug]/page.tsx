@@ -165,6 +165,9 @@ const SECTION_SCROLL =
 // From `lg` the lyric sits LEFT beside everything else (play a mix, read without
 // scrolling); the DOM keeps the nav's order and the grid places it.
 const SIDE = `${SECTION_SCROLL} mb-14 lg:col-start-2`;
+// No lyric, no left column: the sections stack in one readable column instead of
+// sitting in the right half beside an empty 34rem (~15 songs have no lyrics).
+const STACKED = `${SECTION_SCROLL} mb-14`;
 const LYRIC = `${SECTION_SCROLL} mb-14 lg:col-start-1 lg:row-start-1 lg:row-span-6`;
 
 const HISTORY_DATE = new Intl.DateTimeFormat("es-ES", { year: "numeric", month: "long", day: "numeric" });
@@ -221,6 +224,7 @@ const Page = async ({ params }: Params) => {
   const bpmText         = post?.bpm && bpm === null ? String(post.bpm) : null;
   const hasTutorials    = shows("tutoriales");
   const hasLyrics       = shows("letra");
+  const side            = hasLyrics ? SIDE : STACKED;
   // How long the autoscroll should take: every chart's lines when there are
   // charts (the section renders them all), otherwise one PortableText BLOCK per line — an approximation (a long
   // paragraph wraps to several), accepted because the speed is clamped to a
@@ -320,7 +324,13 @@ const Page = async ({ params }: Params) => {
       )}
 
       {/* ── Content ──────────────────────────────────────────────────────── */}
-      <div className="mx-auto max-w-7xl px-6 pb-8 pt-10 lg:grid lg:grid-cols-[minmax(0,34rem)_minmax(0,1fr)] lg:items-start lg:gap-x-24">
+      <div
+        className={
+          hasLyrics
+            ? "mx-auto max-w-7xl px-6 pb-8 pt-10 lg:grid lg:grid-cols-[minmax(0,34rem)_minmax(0,1fr)] lg:items-start lg:gap-x-24"
+            : "mx-auto max-w-7xl px-6 pb-8 pt-10 lg:[&>*]:max-w-3xl"
+        }
+      >
 
         {/* `sections` is already the list of what will paint, so it answers this
             exactly. A song with no audio, tutorials, references, lyrics or
@@ -328,7 +338,7 @@ const Page = async ({ params }: Params) => {
             half-loaded rather than empty, and ~15 songs have no lyrics source in
             the catalogue at all, so this is a real state, not a hypothetical. */}
         {sections.length === 0 && (
-          <div className="flex flex-col items-center gap-3 py-16 text-ink-muted lg:col-span-2">
+          <div className="flex flex-col items-center gap-3 py-16 text-ink-muted">
             <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M9 18V5l12-2v13" />
               <circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" />
@@ -342,7 +352,7 @@ const Page = async ({ params }: Params) => {
 
         {/* Ensayo */}
         {hasRehearsal && (
-          <section id="ensayo" className={SIDE}>
+          <section id="ensayo" className={side}>
             <SectionHeader>Ensayo</SectionHeader>
             <RehearsalPlayer
               mixes={post.rehearsalMixes!}
@@ -356,7 +366,7 @@ const Page = async ({ params }: Params) => {
 
         {/* Audio */}
         {hasAudio && (
-          <section id="audio" className={SIDE}>
+          <section id="audio" className={side}>
             <SectionHeader>Audio</SectionHeader>
             <SongAudioSection
               tracks={post.audioTracks!}
@@ -368,7 +378,7 @@ const Page = async ({ params }: Params) => {
 
         {/* Tutoriales */}
         {hasTutorials && (
-          <section id="tutoriales" className={SIDE}>
+          <section id="tutoriales" className={side}>
             <SectionHeader>Tutoriales</SectionHeader>
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
               {post.tutorials2!.filter((tutorial) => tutorial.url).map((tutorial, i) => (
@@ -387,7 +397,7 @@ const Page = async ({ params }: Params) => {
 
         {/* Reference Links */}
         {hasRefLinks && (
-          <section id="referencia" className={SIDE}>
+          <section id="referencia" className={side}>
             <SectionHeader>Referencia</SectionHeader>
             <ul className="divide-y divide-ink/[0.10] border-y border-ink/[0.10]">
               {(post.musicalReferenceUrl || (post.referenceLinks?.[0]?.url)) && (
@@ -447,7 +457,7 @@ const Page = async ({ params }: Params) => {
 
         {/* Historial — one row per play: the day, the set it shared, the key. */}
         {hasHistory && (
-          <section id="historial" className={SIDE}>
+          <section id="historial" className={side}>
             <SectionHeader>Última vez tocada</SectionHeader>
             <ol className="divide-y divide-ink/[0.10] border-y border-ink/[0.10]">
               {history.map((entry, i) => (
@@ -493,13 +503,12 @@ export default Page;
 
 const myPortableTextComponents: PortableTextComponents = {
   block: {
-    // Section names render as an EYEBROW, not a heading: this block is prose, and
-    // `prose`'s own heading rules would re-style an <h2> out from under the token.
+    // Section names render as an EYEBROW, not a heading: they label blocks of a
+    // lyric, while the page's outline is its SHEET_TITLE section headings.
     // No label is added — these are the headings the lyric sheet already carries.
     //
-    // A `div`, and that is load-bearing: a `p` here loses the source-order tie to
-    // the wrapper's `prose-p:!mt-0 prose-p:!mb-0` and renders with no margins at
-    // all. See LYRIC_EYEBROW_BLOCK.
+    // A `div`, because the wrapper's `[&>div:first-child>div:first-child]:!mt-0`
+    // finds the first group's eyebrow by that shape. See LYRIC_EYEBROW_BLOCK.
     h1: ({ children }) => <div className={LYRIC_EYEBROW_BLOCK}>{children}</div>,
     h2: ({ children }) => <div className={LYRIC_EYEBROW_BLOCK}>{children}</div>,
     h3: ({ children }) => <div className={LYRIC_EYEBROW_BLOCK}>{children}</div>,

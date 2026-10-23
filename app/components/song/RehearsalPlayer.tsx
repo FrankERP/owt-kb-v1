@@ -156,12 +156,10 @@ export default function RehearsalPlayer({
                   <div className="flex items-center gap-3">
                     {/* Both controls keep the 44px hit box every playback control
                         has; the loaded row's play is FILLED (the house `cta`
-                        fill, round), an idle row's is a ring. */}
+                        fill, `roundCta`), an idle row's is a ring (`round`). */}
                     {current ? (
                       <Button
-                        variant="cta"
-                        size="lg"
-                        className="h-11 w-11 shrink-0 rounded-full p-0"
+                        variant="roundCta"
                         onClick={() => play(m)}
                         aria-label={`${playing ? "Pausar" : "Reproducir"} ${label}`}
                       >
@@ -169,9 +167,7 @@ export default function RehearsalPlayer({
                       </Button>
                     ) : (
                       <Button
-                        variant="icon"
-                        size="lg"
-                        className="shrink-0 rounded-full border border-ink/[0.28] text-ink"
+                        variant="round"
                         onClick={() => play(m)}
                         aria-label={`Reproducir ${label}`}
                       >
@@ -203,19 +199,25 @@ export default function RehearsalPlayer({
                       when the mix has one (an isolated instrument, with the accent
                       spans where that part sounds), a plain seek bar when it does
                       not (the full-band mix carries no peaks). */}
-                  {current && (m.kind === "up" && m.peaks ? (
-                    <Waveform
-                      peaks={m.peaks}
-                      active={m.active}
-                      duration={time.duration}
-                      progress={progress}
-                      label={`Onda ${label}`}
-                      onSeek={seek}
-                      className="pl-14"
-                    />
-                  ) : (
-                    <SeekBar progress={progress} label={`Posición ${label}`} onSeek={seek} className="pl-14" />
-                  ))}
+                  {/* The indent lives on a wrapper, never on the seek control: the
+                      control maps a click over its OWN box, so padding inside it
+                      would seek ahead of the pointer. */}
+                  {current && (
+                    <div className="pl-14">
+                      {m.kind === "up" && m.peaks ? (
+                        <Waveform
+                          peaks={m.peaks}
+                          active={m.active}
+                          duration={time.duration}
+                          progress={progress}
+                          label={`Onda ${label}`}
+                          onSeek={seek}
+                        />
+                      ) : (
+                        <SeekBar progress={progress} label={`Posición ${label}`} onSeek={seek} />
+                      )}
+                    </div>
+                  )}
                 </li>
               );
             })}

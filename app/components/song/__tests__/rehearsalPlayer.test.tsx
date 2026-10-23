@@ -90,6 +90,10 @@ describe("RehearsalPlayer", () => {
     expect(getByText(/1:42 \/ 4:36/)).toBeTruthy();
     const bar = getByRole("button", { name: "Posición Banda completa" });
     expect(queryByRole("button", { name: /^Onda/ })).toBeNull();
+    // The indent is the wrapper's: padding inside the control would skew the
+    // click-to-fraction maths, which reads the control's own box.
+    expect(bar.className).not.toMatch(/\bp[lx]?-\d/);
+    expect((bar.parentElement as HTMLElement).className).toContain("pl-14");
     fireEvent.keyDown(bar, { key: "ArrowRight" });
     expect(seek).toHaveBeenCalledWith(0.42);
     // The loaded row's control is the filled (cta) pause, and it pauses.
@@ -102,7 +106,10 @@ describe("RehearsalPlayer", () => {
 
   it("E — the play control and the download keep a 44px hit box on a compact row", () => {
     const { getByRole } = render(<RehearsalPlayer {...props} />);
-    expect(getByRole("button", { name: "Reproducir EG 1" }).className).toContain("min-h-[44px]");
+    // The round playback control is a fixed 44 px circle (`round`, h-11 w-11).
+    const play = getByRole("button", { name: "Reproducir EG 1" }).className;
+    expect(play).toContain("h-11");
+    expect(play).toContain("w-11");
     expect(getByRole("link", { name: "Descargar EG 1" }).className).toContain("min-h-[44px]");
   });
 

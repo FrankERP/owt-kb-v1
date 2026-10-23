@@ -3,25 +3,21 @@
 // The loaded row's seek control when the mix carries NO envelope (the full-band
 // mix: abletonnl's manifest renders peaks for the isolated instruments only,
 // `docs/REHEARSAL_MIXES.md`). It sits in the slot `Waveform` takes on an
-// isolated row — same height, same seek by click and ←/→ — so the row keeps one
-// shape whichever mix is loaded. A track with a played fill in the accent and a
-// playhead; nothing is drawn before playback starts.
-import { useId } from "react";
-
-const STEP = 5 / 100;
+// isolated row — same height, same seek maths (`seekFractionAt` / `seekStep`) —
+// so the row keeps one shape whichever mix is loaded. A track with a played
+// fill in the accent and a playhead; nothing is drawn before playback starts.
+// No padding on it: the click maps over its own box (the row indents a wrapper).
+import { seekFractionAt, seekStep } from "@/app/utils/rehearsalMixes";
 
 export default function SeekBar({
   progress,
   label,
   onSeek,
-  className = "",
 }: {
   progress: number;
   label: string;
   onSeek?: (fraction: number) => void;
-  className?: string;
 }) {
-  const id = useId();
   const pct = `${Math.round(Math.min(1, Math.max(0, progress)) * 1000) / 10}%`;
   const track = (
     <span aria-hidden="true" className="relative block h-10 w-full">
@@ -35,28 +31,21 @@ export default function SeekBar({
     </span>
   );
   if (!onSeek) {
-    return (
-      <div className={className}>
-        <span role="img" aria-label={label} id={id}>{track}</span>
-      </div>
-    );
+    return <span role="img" aria-label={label} className="block">{track}</span>;
   }
   return (
     <button
       type="button"
       aria-label={label}
       onClick={(e) => {
-        // A synthetic click from Enter/Space carries detail 0 — never seek to 0 on it.
-        if (e.detail === 0) return;
-        const rect = e.currentTarget.getBoundingClientRect();
-        if (rect.width <= 0) return;
-        onSeek(Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)));
+        const f = seekFractionAt(e.clientX, e.detail, e.currentTarget.getBoundingClientRect());
+        if (f !== null) onSeek(f);
       }}
       onKeyDown={(e) => {
-        if (e.key === "ArrowRight") { e.preventDefault(); onSeek(Math.min(1, +(progress + STEP).toFixed(2))); }
-        if (e.key === "ArrowLeft") { e.preventDefault(); onSeek(Math.max(0, +(progress - STEP).toFixed(2))); }
+        const f = seekStep(progress, e.key);
+        if (f !== null) { e.preventDefault(); onSeek(f); }
       }}
-      className={`block w-full cursor-pointer rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 ${className}`}
+      className="block w-full cursor-pointer rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
     >
       {track}
     </button>

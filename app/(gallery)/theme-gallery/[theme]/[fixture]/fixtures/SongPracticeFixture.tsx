@@ -16,6 +16,7 @@ import SongHeroPills from "@/app/components/song/SongHeroPills";
 import { TransposeProvider } from "@/app/components/song/TransposeProvider";
 import TutorialPoster from "@/app/components/song/TutorialPoster";
 import { PlayerProvider } from "@/app/context/PlayerContext";
+import { SHEET_TITLE } from "@/app/utils/homeHero";
 import { dimRepeatMarkers, LYRIC_EYEBROW_BLOCK } from "@/app/utils/lyricMarkers";
 
 /** 0.1 s of 8 kHz mono PCM silence. Inline because the gallery has no network. */
@@ -52,26 +53,24 @@ export function SongPracticeFixture() {
     <PlayerProvider>
       <TransposeProvider nativeKey="G">
         <div className="space-y-10">
-          <div id="song-hero" className="brand-song-hero -mx-6">
-            <div className="relative mx-auto flex max-w-7xl flex-col items-center px-6 pb-14 pt-12 text-center sm:pb-16 sm:pt-16">
-              <div className="mb-6 flex flex-wrap justify-center gap-2">
-                {TAGS.map((tag) => (
-                  <span
-                    key={tag}
-                    className="rounded-md border border-accent/15 bg-accent/[0.055] px-2.5 py-1.5 font-label text-[10px] lowercase tracking-wider text-accent/70"
-                  >
-                    #{tag}
-                  </span>
-                ))}
-              </div>
-
-              <h1 className="max-w-4xl text-balance break-words font-display text-3xl font-semibold leading-[0.98] text-ink sm:text-5xl lg:text-6xl">
-                Canción de muestra
-              </h1>
-
-              <p className="mb-9 mt-4 font-body text-lg text-ink-dim">Autor de muestra</p>
-
+          {/* The song page's hero since ADR-0070's Canción pass: a title on the
+              plain page (no painted band, no centred stack), the original title
+              and the authors on one muted line, the 48 px ring pills, then the
+              tags as quiet lowercase links. */}
+          <div id="song-hero">
+            <h1 className="max-w-4xl text-balance break-words font-display text-[2.875rem] font-semibold leading-[0.98] tracking-tight text-ink md:text-[4.75rem]">
+              Canción de muestra
+            </h1>
+            <p className="mt-4 font-body text-[17px] leading-snug text-ink-muted md:text-xl">Sample Song · Autor de muestra</p>
+            <div className="mt-6">
               <SongHeroPills keyLabel="G" bpm={120} timeSig="4/4" transposable />
+            </div>
+            <div className="mt-5 flex flex-wrap gap-x-3.5 gap-y-1.5">
+              {TAGS.map((tag) => (
+                <span key={tag} className="py-1 font-label text-[13px] font-semibold lowercase text-accent/70">
+                  #{tag}
+                </span>
+              ))}
             </div>
           </div>
 
@@ -80,7 +79,7 @@ export function SongPracticeFixture() {
           <SongAudioSection tracks={TRACKS} songTitle="Canción de muestra" songSlug="cancion-de-muestra" />
 
           <section className="space-y-4">
-            <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">Ensayo</p>
+            <h2 className={SHEET_TITLE}>Ensayo</h2>
             <RehearsalPlayer mixes={MIXES} songId="gallery" songTitle="Santo" songSlug="santo" preselect={["EG"]} />
           </section>
 

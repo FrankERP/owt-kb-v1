@@ -92,6 +92,11 @@ pill; «Equipo» is the small-caps title, «Banda» is 17 px sentence case; a sh
   `Historial`, the mixes), the lyric wrapper is 17 px body with no `prose`, and the loaded mix row is
   the ONE row that differs: a filled `cta` control, «Tono · BPM · 1:42 / 4:36» from the `<audio>`
   (`formatClock`), and its seek control under the name — the `Waveform` when the mix has peaks, a
-  `SeekBar` when it does not (the full-band mix). Tests: `keyDial`, `tempoPill`, `rehearsalPlayer`,
+  `SeekBar` when it does not (the full-band mix). The play control is `Button`'s new `round` /
+  `roundCta` pair (a fixed 44 px circle, so no caller overrides `SIZE.lg` padding from `className`);
+  the seek maths is shared (`seekFractionAt` / `seekStep`). Without a lyric the page drops its
+  two-column grid and stacks one readable column; `loading.tsx` and the gallery's song fixture
+  mirror the new hero, and `.brand-song-hero` (the painted band) is deleted from `brand.css`
+  (`tokenLayer.test.ts` 42 → 37 occurrences). Tests: `keyDial`, `tempoPill`, `rehearsalPlayer`,
   `seekBar`, `songTitle`, `formatClock`, `lyricMarkers` (the gallery fixture mirrors the new wrapper).
 - Undoing it means re-adding the eyebrows and frames the mock removed; the tests above will say so.
