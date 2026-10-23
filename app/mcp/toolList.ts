@@ -55,7 +55,7 @@ export function registerAllTools(server: McpServer, deps: { version: string }): 
   // /admin's own writers) and create_service (through the roles POST's).
   registerServiceEditor(server);
   registerCreateService(server);
-  // The one resource: `solve_month`'s card (MCP Apps). Fixed per deployment, like the tools.
+  // The card (MCP Apps), at a URI that carries its build's digest. Fixed per deployment, like the tools.
   registerProposalCard(server);
 }
 

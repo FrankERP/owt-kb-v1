@@ -9,11 +9,24 @@
 // and it sends nothing back (plan E1). A host without MCP Apps ignores both keys and keeps
 // showing the text answer.
 
-import type { McpServer } from "@modelcontextprotocol/server";
+import { createHash } from "node:crypto";
+import { ResourceTemplate, type McpServer } from "@modelcontextprotocol/server";
 import { PROPOSAL_CARD_HTML } from "@/mcp-app/generated/proposalCardHtml";
 
-/** Kept from the plan's editor so the editing slice (S4) replaces this document, not the URI. */
-export const PROPOSAL_CARD_URI = "ui://owt/proposal-editor";
+/**
+ * The card's first URI, still served so a client whose tool list predates the versioned one keeps
+ * drawing a card until it refreshes (ADR-0069).
+ */
+export const LEGACY_PROPOSAL_CARD_URI = "ui://owt/proposal-editor";
+
+/**
+ * The URI carries a digest of the document. The Claude app keeps a card's HTML by its URI: on
+ * 2026-10-23 Frank's card still sent the «Guardar» message of a build two releases old after
+ * the server had the new one. A new build is a new URI, so the host has to read it; and since
+ * the tools name the URI in their `_meta`, it also changes the tool list's version, so a stale
+ * client hears it should refresh.
+ */
+export const PROPOSAL_CARD_URI = `${LEGACY_PROPOSAL_CARD_URI}/${createHash("sha256").update(PROPOSAL_CARD_HTML).digest("hex").slice(0, 8)}`;
 /** The MCP Apps profile; a host renders only a resource of this type as an app. */
 export const MCP_APP_MIME_TYPE = "text/html;profile=mcp-app";
 
@@ -26,25 +39,37 @@ export const PROPOSAL_CARD_TOOL_META = {
   "ui/resourceUri": PROPOSAL_CARD_URI,
 } as const;
 
-export function registerProposalCard(server: McpServer): void {
-  server.registerResource(
-    "proposal_card",
-    PROPOSAL_CARD_URI,
+const CARD_METADATA = {
+  title: "Propuesta del mes",
+  description: "Tarjeta de solo lectura con la propuesta que devolvió solve_month.",
+  mimeType: MCP_APP_MIME_TYPE,
+};
+
+/** Whatever URI was asked for, the current document. */
+const readCard = async (uri: URL) => ({
+  contents: [
     {
-      title: "Propuesta del mes",
-      description: "Tarjeta de solo lectura con la propuesta que devolvió solve_month.",
+      uri: uri.href,
       mimeType: MCP_APP_MIME_TYPE,
+      text: PROPOSAL_CARD_HTML,
+      // Inline only: no network origin is declared, so the host's CSP admits none.
+      _meta: { ui: { prefersBorder: true } },
     },
-    async (uri) => ({
-      contents: [
-        {
-          uri: uri.href,
-          mimeType: MCP_APP_MIME_TYPE,
-          text: PROPOSAL_CARD_HTML,
-          // Inline only: no network origin is declared, so the host's CSP admits none.
-          _meta: { ui: { prefersBorder: true } },
-        },
-      ],
-    }),
+  ],
+});
+
+/**
+ * The current URI and the first one are listed. An EARLIER build's URI (a client that refreshed on
+ * that build, a chat reopened elsewhere) is not listed, but the template still answers it with the
+ * current card, as the fixed URI did before; exact URIs are matched before templates.
+ */
+export function registerProposalCard(server: McpServer): void {
+  server.registerResource("proposal_card", PROPOSAL_CARD_URI, CARD_METADATA, readCard);
+  server.registerResource("proposal_card_legacy", LEGACY_PROPOSAL_CARD_URI, CARD_METADATA, readCard);
+  server.registerResource(
+    "proposal_card_any_build",
+    new ResourceTemplate(`${LEGACY_PROPOSAL_CARD_URI}/{build}`, { list: undefined }),
+    CARD_METADATA,
+    readCard,
   );
 }

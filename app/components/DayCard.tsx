@@ -26,6 +26,10 @@ import useLongPress from "./ui/useLongPress";
 import { useToast } from "./ui/Toast";
 import TeamSections from "./TeamSections";
 import { formatKey } from "@/app/utils/formatKey";
+// The sheet's one small-caps title lives in a NEUTRAL module (ADR-0028): the home
+// page is a Server Component and reads it as a string, which an export from this
+// "use client" file would not be there.
+import { SHEET_TITLE } from "@/app/utils/homeHero";
 
 export interface DayCardProps {
   day: string;
@@ -61,6 +65,13 @@ export interface DayCardProps {
    * rail, so the same affordance never appears twice on one card.
    */
   hero?: boolean;
+  /**
+   * The run-sheet rendering WITHOUT the hero's own head (ADR-0070): hairline
+   * rows, the sheet's titles and body-type labels, no card header — what a
+   * «Después» row on home opens onto, since the row already names the service.
+   * `hero` implies it.
+   */
+  sheet?: boolean;
   /** Rendered inside `DayCardDisclosure`, which already draws the card's ground,
    *  hairline and rail: drop this card's own so there is one card, not two. */
   nested?: boolean;
@@ -92,7 +103,7 @@ export interface DayCardProps {
 /** The neutral the card's quiet chrome (the medley spine) is drawn in. */
 const NEUTRAL = "--ink-dim-rgb";
 
-export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instruments, fohTeam, bgvs, chorus, roleId, serviceId, isNext, layout = "card", hero = false, nested = false, photos, viewerTypes, viewerName, viewerIsAdmin }: DayCardProps) {
+export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instruments, fohTeam, bgvs, chorus, roleId, serviceId, isNext, layout = "card", hero = false, sheet: sheetProp = false, nested = false, photos, viewerTypes, viewerName, viewerIsAdmin }: DayCardProps) {
   const { openSheet } = usePlayer();
   const { data: session } = useSession();
   const { toast } = useToast();
@@ -115,6 +126,7 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
     setActionsOpen(true);
   }, []);
 
+  const sheet = hero || sheetProp;
   const hasRole     = !!(leads?.length || instruments?.length || fohTeam?.length || bgvs?.length || chorus?.length);
   const hasSetlist  = !!(setlist?.songs?.length);
 
@@ -203,7 +215,7 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
       {hasSetlist && (
         <section>
           <div className="flex items-center justify-between mb-2">
-            <h4 className="font-label text-xs md:text-sm lg:text-base uppercase tracking-widest text-surface-ink-l70-d50">
+            <h4 className={sheet ? SHEET_TITLE : "font-label text-xs md:text-sm lg:text-base uppercase tracking-widest text-surface-ink-l70-d50"}>
               Setlist
             </h4>
             <div className="flex items-center gap-3">
@@ -219,14 +231,14 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
               )}
             </div>
           </div>
-          <ol className="divide-y divide-ink-dim/[0.06]">
+          <ol className={sheet ? "divide-y divide-ink/[0.10] border-y border-ink/[0.10]" : "divide-y divide-ink-dim/[0.06]"}>
             {runs.map((run) => {
               // Single-song medley groups render as plain singles
               if (run.kind === "single" || (run.kind === "medley" && run.songs.length === 1)) {
                 const { song, n } = run.kind === "single" ? run : run.songs[0];
                 return (
                   <li key={song._id}>
-                    <SongRow song={song} n={n} onOpen={openSheet} onQuickActions={onQuickActions} />
+                    <SongRow song={song} n={n} onOpen={openSheet} onQuickActions={onQuickActions} sheet={sheet} />
                   </li>
                 );
               }
@@ -251,9 +263,9 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
                   {run.songs.map(({ song, n }, si) => (
                     <div key={song._id}>
                       {si > 0 && (
-                        <span className="block w-4 text-center font-label text-[11px] leading-none -my-0.5" style={{ color: `${themeColour(NEUTRAL, 0.6)}` }}>+</span>
+                        <span className={`block ${sheet ? "w-7 text-right" : "w-4 text-center"} font-label text-[11px] leading-none -my-0.5`} style={{ color: `${themeColour(NEUTRAL, 0.6)}` }}>+</span>
                       )}
-                      <SongRow song={song} n={n} onOpen={openSheet} onQuickActions={onQuickActions} dense />
+                      <SongRow song={song} n={n} onOpen={openSheet} onQuickActions={onQuickActions} dense sheet={sheet} />
                     </div>
                   ))}
                 </li>
@@ -267,12 +279,47 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
 
   return (
     <>
-      <div className={nested ? "relative overflow-hidden rounded-[var(--brand-radius-panel)]" : "brand-facet-panel brand-surface overflow-hidden rounded-[var(--brand-radius-panel)]"}>
-        {!nested && <span aria-hidden className={`absolute inset-y-0 left-0 z-[1] w-[3px] ${TONE_RAIL[tone]}`} />}
-        {/* Header — day · date with the countdown on the right (next service
-            only), and on the hero its one action as a full-width button below.
-            §18 keeps one eyebrow per surface, so the `Servicio` label and the
-            long date are gone; the date the header already shows is the date. */}
+      {/* A SHEET is not a card (ADR-0070): no panel, no rail, no card header — the
+          page's gutter is its padding. The hero keeps a one-line identity («Domingo
+          · 25 oct · 11:00»): the greeting band above it names the member's OWN next
+          service, which is not always this one (a Sunday Lead opens the page on a
+          week whose next service is Saturday), so the sheet says which service it
+          is. A «Después» row already does, so a plain sheet draws none. Only the
+          one action, «Ensayar», leads. */}
+      <div className={sheet ? "relative" : nested ? "relative overflow-hidden rounded-[var(--brand-radius-panel)]" : "brand-facet-panel brand-surface overflow-hidden rounded-[var(--brand-radius-panel)]"}>
+        {!nested && !sheet && <span aria-hidden className={`absolute inset-y-0 left-0 z-[1] w-[3px] ${TONE_RAIL[tone]}`} />}
+        {sheet ? (
+          <div className="flex flex-col gap-4 empty:hidden">
+            {hero && (
+              <p className="font-body text-sm text-ink-muted">
+                {day}{shortDate && ` · ${shortDate}`}{(time || startTime) && <span className="tabular-nums"> · {time || startTime}</span>}
+              </p>
+            )}
+            {/* Capped from `md`: full width on a phone is the thumb's target, but the
+                same button across a 56rem desktop page read as a banner (D). */}
+            {hero && hasSetlist && (
+              <div className="md:max-w-md">
+                <PracticePlaylistButton variant="hero" songs={setlist!.songs} mySeat={mySeat} accentVar="--accent-rgb" />
+              </div>
+            )}
+            {((myLeadSongs && myLeadSongs.length > 0) || canMessage) && (
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                {myLeadSongs && myLeadSongs.length > 0 ? (
+                  <p className="font-body text-sm text-accent">Diriges: {myLeadSongs.join(", ")}</p>
+                ) : <span />}
+                {canMessage && (
+                  <Button variant="ghost" size="sm" onClick={() => setMessagesOpen(true)}>
+                    <ChatIcon />
+                    Mensajes
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+        // Header — day · date with the countdown on the right (next service
+        // only). §18 keeps one eyebrow per surface, so the `Servicio` label and
+        // the long date are gone; the date the header already shows is the date.
         <div className="border-b border-ink/[0.08] px-5 py-4">
           {/* THE ROW WRAPS. It was written for title + countdown + «Ensayar» side by
               side, verified in the iOS Simulator at every preset: with no wrap, a
@@ -306,18 +353,10 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
               )}
             </div>
           </div>
-          {/* The page's one primary action, filled and the card's full width
-              (2026-10-21): beside the countdown it read as one more pill. */}
-          {/* Capped from `md`: full width on a phone is the thumb's target, but the
-              same button across a 56rem desktop card read as a banner (D). */}
-          {hero && hasSetlist && (
-            <div className="mt-4 md:max-w-md">
-              <PracticePlaylistButton variant="hero" songs={setlist!.songs} mySeat={mySeat} accentVar="--accent-rgb" />
-            </div>
-          )}
         </div>
+        )}
 
-        <div className="space-y-5 p-5 md:p-6">
+        <div className={hero ? "mt-8 space-y-6" : sheet ? "mt-2 space-y-6 pb-2" : "space-y-5 p-5 md:p-6"}>
           {/* The run sheet reads left-to-right from `lg`: the message and the
               songs in the wide column, the seats in a fixed rail (22rem, 24rem
               from `xl`: two faces with their names to a row). The message sits
@@ -335,7 +374,8 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
                 run sheet every section starts open from `lg`, where the rail
                 has the room and the page is one screen anyway. */}
             {hasRole && (
-              <section className={hasSetlist ? `border-t border-ink-dim/[0.12] pt-2${wide ? " lg:border-t-0 lg:pt-0" : ""}` : ""}>
+              <section className={sheet ? "pt-2" : hasSetlist ? `border-t border-ink-dim/[0.12] pt-2${wide ? " lg:border-t-0 lg:pt-0" : ""}` : ""}>
+                {sheet && <h4 className={`${SHEET_TITLE} mb-3`}>Equipo</h4>}
                 <TeamSections
                   team={{ leads, bgvs, chorus, instruments, fohTeam }}
                   myName={myName}
@@ -343,6 +383,7 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
                   viewerTypes={viewerTypes}
                   openAll={openAllSections}
                   openAllFrom={wide ? "lg" : undefined}
+                  sheet={sheet}
                 />
               </section>
             )}
@@ -472,7 +513,7 @@ function TeamNote({ text }: { text: string }) {
  * row's text instead of doing anything, which is what `select-none` (and the
  * hook's own `user-select` style) now prevents.
  */
-function SongRow({ song, n, onOpen, onQuickActions, dense = false }: {
+function SongRow({ song, n, onOpen, onQuickActions, dense = false, sheet = false }: {
   song: SetlistSong;
   n: number;
   onOpen: (songId: string, playKey?: string) => void;
@@ -480,6 +521,9 @@ function SongRow({ song, n, onOpen, onQuickActions, dense = false }: {
   // the hook's timer mid-press.
   onQuickActions?: (song: SetlistSong) => void;
   dense?: boolean;
+  /** The hero's run sheet (ADR-0070): a display-face number, a 17 px title with the
+   *  artist on its own line, the key as a hairline pill — one row per 68 px. */
+  sheet?: boolean;
 }) {
   const longPress = useLongPress(() => onQuickActions?.(song));
   const leadNames = formatLeadNames(song.leads);
@@ -487,21 +531,30 @@ function SongRow({ song, n, onOpen, onQuickActions, dense = false }: {
     <button
       {...longPress}
       onClick={() => onOpen(song._id, song.play_key || undefined)}
-      className={`group -mx-2 flex w-full cursor-pointer select-none items-center gap-3 rounded-lg px-2 ${dense ? "py-2" : "py-2.5"} text-left transition-colors hover:bg-accent/[0.055]`}
+      className={`group -mx-2 flex w-full cursor-pointer select-none items-center ${sheet ? "gap-4" : "gap-3"} rounded-lg px-2 ${sheet ? (dense ? "py-2.5" : "py-3.5") : dense ? "py-2" : "py-2.5"} text-left transition-colors hover:bg-accent/[0.055]`}
     >
-      <span className="font-label text-xs text-mono-400 w-4 shrink-0 text-right tabular-nums">{n}</span>
+      {/* `w-7`, right-aligned: two digits of 20 px display type need the room, and a
+          medley's «+» sits in the same column. */}
+      <span className={sheet ? "w-7 shrink-0 text-right font-display text-xl font-semibold leading-none text-ink-dim tabular-nums" : "font-label text-xs text-mono-400 w-4 shrink-0 text-right tabular-nums"}>{n}</span>
       <div className="flex-1 min-w-0">
-        <div className="min-w-0 flex items-baseline gap-1.5">
-          <span className="truncate font-body text-base font-semibold transition-colors group-hover:text-accent md:text-lg">{song.title}</span>
-          {song.author && <span className="text-mono-500 text-xs truncate hidden sm:inline">· {song.author}</span>}
-        </div>
-        {leadNames && <span className="block truncate font-label text-[11px] text-mono-500">Dirige: {leadNames}</span>}
+        {sheet ? (
+          <>
+            <span className="block truncate font-body text-[17px] font-semibold leading-snug transition-colors group-hover:text-accent">{song.title}</span>
+            {song.author && <span className="block truncate font-body text-sm text-ink-muted">{song.author}</span>}
+          </>
+        ) : (
+          <div className="min-w-0 flex items-baseline gap-1.5">
+            <span className="truncate font-body text-base font-semibold transition-colors group-hover:text-accent md:text-lg">{song.title}</span>
+            {song.author && <span className="text-mono-500 text-xs truncate hidden sm:inline">· {song.author}</span>}
+          </div>
+        )}
+        {leadNames && <span className={`block truncate ${sheet ? "font-body text-sm text-ink-muted" : "font-label text-[11px] text-mono-500"}`}>Dirige: {leadNames}</span>}
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         {song.play_key && song.key && song.play_key !== song.key && (
           <span className="font-label text-[11px] px-1.5 py-0.5 rounded border border-mono-700 bg-mono-800/50 text-mono-500 leading-tight">orig. {formatKey(song.key)}</span>
         )}
-        <span className="font-label text-xs font-semibold text-ink">{formatKey(song.play_key || song.key)}</span>
+        <span className={sheet ? "rounded-full border border-ink/[0.18] px-2.5 py-1 font-label text-sm font-semibold text-ink" : "font-label text-xs font-semibold text-ink"}>{formatKey(song.play_key || song.key)}</span>
         {song.bpm && <span className="hidden w-10 text-right font-label text-[11px] text-mono-500 tabular-nums sm:inline">{song.bpm}</span>}
       </div>
     </button>
