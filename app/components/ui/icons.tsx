@@ -43,6 +43,15 @@ export function ChevronDownIcon(props: IconProps) {
   return <Icon name="chevron-down" {...props}><path d="M6 9l6 6 6-6" /></Icon>;
 }
 
+export function ChevronUpIcon(props: IconProps) {
+  return <Icon name="chevron-up" {...props}><path d="m18 15-6-6-6 6" /></Icon>;
+}
+
+/** Dismiss or remove — the «X» on a row or a chip (CueDialog's own close stays its own). */
+export function CloseIcon(props: IconProps) {
+  return <Icon name="close" {...props}><path d="M18 6 6 18" /><path d="m6 6 12 12" /></Icon>;
+}
+
 export function ChevronRightIcon(props: IconProps) {
   return <Icon name="chevron-right" {...props}><path d="m9 18 6-6-6-6" /></Icon>;
 }
