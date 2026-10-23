@@ -32,8 +32,10 @@ export default defineConfig({
     // discard/restore/schedule/…) for a protected type. This resolver runs for
     // whichever document pane is open, so a hand-typed Studio URL is covered too.
     actions: protectedDocumentActions,
-    // Removes protected types from every "create new" affordance.
-    newDocumentOptions: protectedNewDocumentOptions,
+    // Removes protected types from every "create new" affordance — and the
+    // singleton `homeSettings` (ADR-0070), which has its own pane in the structure.
+    newDocumentOptions: (prev) =>
+      protectedNewDocumentOptions(prev).filter((item) => item.templateId !== 'homeSettings'),
   },
   plugins: [
     structureTool({structure: serviceReadinessStructure}),
