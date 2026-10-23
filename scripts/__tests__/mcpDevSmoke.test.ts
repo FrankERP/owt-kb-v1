@@ -407,10 +407,10 @@ describe("checkToolList", () => {
   /** A tools/list result exactly as the P3 route registers it. */
   const solve = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
   const annotationsOf = (name: string) =>
-    name === "solve_month" || name === "save_proposal_edits" || name === "revise_proposal" ? solve : WRITE_TOOL_NAMES.includes(name) || name === "apply_schedule" || ["save_service_edits", "copy_instruments", "create_service"].includes(name) ? destructive : readOnly;
+    name === "solve_month" || name === "save_proposal_edits" || name === "revise_proposal" ? solve : WRITE_TOOL_NAMES.includes(name) || name === "apply_schedule" || ["save_service_edits", "save_service_edits_app", "copy_instruments", "create_service"].includes(name) ? destructive : readOnly;
   const registered = () => EXPECTED_TOOLS.map((name) => ({ name, annotations: annotationsOf(name) }));
 
-  it("pins twenty-five tools: ping, the seven reads, the three admin reads, the four writes, the two month tools, the three proposal-editor tools, then the five saved-month editor tools, in registration order", () => {
+  it("pins twenty-six tools: ping, the seven reads, the three admin reads, the four writes, the two month tools, the three proposal-editor tools, then the six saved-month editor tools, in registration order", () => {
     expect(EXPECTED_TOOLS).toEqual([
       "ping",
       "get_service",
@@ -435,6 +435,7 @@ describe("checkToolList", () => {
       "check_service_edits",
       "check_service_edits_app",
       "save_service_edits",
+      "save_service_edits_app",
       "copy_instruments",
       "create_service",
     ]);
@@ -442,7 +443,7 @@ describe("checkToolList", () => {
     expect(WRITE_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(11, 15));
     expect(MONTH_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(15, 17));
     expect(EDITOR_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(17, 20));
-    expect(SERVICE_EDITOR_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(20, 25));
+    expect(SERVICE_EDITOR_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(20, 26));
   });
 
   it("per-tool annotations: every read read-only, every write destructive (I14), solve_month and the two editor saves writing only their record", () => {
@@ -454,7 +455,7 @@ describe("checkToolList", () => {
     }
   });
 
-  it("accepts the exact twenty-five names, in order, each with its own annotations", () => {
+  it("accepts the exact twenty-six names, in order, each with its own annotations", () => {
     expect(checkToolList(registered())).toEqual({ ok: true });
   });
 
@@ -533,7 +534,7 @@ describe("toolCallRequest — DV1: the dev smoke never calls a write tool", () =
     expect(WRITE_TOOL_NAMES).toHaveLength(4);
     expect(MONTH_TOOL_NAMES).toHaveLength(2);
     expect(EDITOR_TOOL_NAMES).toHaveLength(3);
-    expect(SERVICE_EDITOR_TOOL_NAMES).toHaveLength(5);
+    expect(SERVICE_EDITOR_TOOL_NAMES).toHaveLength(6);
     for (const name of [...WRITE_TOOL_NAMES, ...MONTH_TOOL_NAMES, ...EDITOR_TOOL_NAMES, ...SERVICE_EDITOR_TOOL_NAMES]) {
       expect(() => toolCallRequest(name, {}), name).toThrow(/DV1/);
       expect(() => toolCallRequest(name, { serviceId: "role-1", rev: "rev-1" }, 9), name).toThrow(/DV1/);

@@ -1,5 +1,5 @@
 // The MCP editor over a SAVED month (admin parity phase 1, S2:
-// docs/superpowers/plans/2026-10-21-owt-mcp-admin-parity-f1.md, T2.4–T2.5 and S3; ADR-0066). Four
+// docs/superpowers/plans/2026-10-21-owt-mcp-admin-parity-f1.md, T2.4–T2.5 and S3; ADR-0066). Five
 // entries over one judge:
 //
 //   check_service_edits      model-visible, read-only: edits asked for in the chat (services by id
@@ -10,6 +10,9 @@
 //                            token for every rule finding a forced edit created (F5).
 //   save_service_edits       destructive: writes the checked change set, one service at a time,
 //                            through `/admin`'s own PATCH writer (`roleEditCommit.ts`, F1).
+//   save_service_edits_app   app-only, destructive: the SAME save, called by the card after its own
+//                            confirmation (ADR-0066 addendum, 2026-10-23). One function behind both
+//                            names; only the log label differs.
 //   copy_instruments         destructive (S3): one service's instruments onto another, through
 //                            `/admin`'s own copy writer (`copyInstrumentsCommit.ts`). Checked first as
 //                            `copy` in check_service_edits: the destination's target judged as a diff,
@@ -1180,9 +1183,10 @@ export async function saveServiceEditsResult(
   args: SaveServiceEditsArgs,
   principal: McpPrincipal | null,
   deps: ServiceEditorDeps = defaultServiceEditorDeps(),
+  tool: "save_service_edits" | "save_service_edits_app" = "save_service_edits",
 ): Promise<CallToolResult> {
   return runWriteTool(
-    "save_service_edits",
+    tool,
     async ({ callDomain }) => {
       const startedAt = deps.nowMs();
       const elapsed = () => deps.nowMs() - startedAt;
@@ -1401,6 +1405,19 @@ export function registerServiceEditor(server: McpServer): void {
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     },
     async (args, ctx: ServerContext) => saveServiceEditsResult(args, principalOf(ctx)),
+  );
+  server.registerTool(
+    "save_service_edits_app",
+    {
+      title: "Guardar cambios a servicios (tarjeta)",
+      description: "Solo para la tarjeta del mes guardado: guarda los cambios que la tarjeta revisó y la persona confirmó.",
+      inputSchema: SAVE_SERVICE_EDITS_INPUT,
+      // The same save as `save_service_edits` (one function): it re-checks every change set whoever calls it.
+      // The card asks the person first (ADR-0066 addendum); a host that honours MCP Apps hides it from the model.
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+      _meta: APP_ONLY_META,
+    },
+    async (args, ctx: ServerContext) => saveServiceEditsResult(args, principalOf(ctx), undefined, "save_service_edits_app"),
   );
   server.registerTool(
     "copy_instruments",

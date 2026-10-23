@@ -471,7 +471,10 @@ several exist precisely to stop a plausible-looking change.
   in a past CDMX month is refused on the server. `copy_instruments` goes through
   `copyInstrumentsCommit` with lines naming every seat and no waivers (per-seat rules bind voice
   rows only); `create_service` through `roleCreateCommit`, idempotent by a hash of the call. The
-  card's saved-month mode never writes: «Guardar» goes through the chat. No delete in phase 1.
+  card's saved-month «Guardar» asks in the card and saves through the app-only `save_service_edits_app`,
+  the same function as the chat's save (ADR-0066 addendum, 2026-10-23); once a save starts the card never
+  replays its edit list (it keeps it frozen for a repeat, or reads the month from an empty list);
+  «Mandar al chat» is the old path through the permission prompt. No delete in phase 1.
 - **The admin assistant (`/api/admin/chat`, the `AssistantBubble` on every page) is READ-ONLY** (ADR-0060). Access:
   `super-admin`, or `admin` with the `worship` ministry (`canUseAdminChat`), from the live access
   snapshot, never while impersonating — the spend would land on someone else. Its five tools call
