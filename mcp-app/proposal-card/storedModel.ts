@@ -201,7 +201,8 @@ export const joinWords = (items: readonly string[]): string =>
 /**
  * A short key for one part's arguments (FNV-1a over its JSON, base 36): the message and the context
  * line both carry it, so the model takes THESE arguments — never an earlier check's line, which is
- * still in the chat with a valid MAC — and can tell when they did not arrive.
+ * still in the chat with a valid MAC. `save_service_edits`' description says what to do with a key
+ * whose line is not there (ask for «Guardar» again), because that is exactly when the context is missing.
  */
 export function argsKey(json: string): string {
   let h = 0x811c9dc5;
@@ -220,21 +221,24 @@ export function saveRequest(month: string, part: readonly StoredChange[], index:
   const json = JSON.stringify({ month, changes: part });
   const key = argsKey(json);
   const which = total > 1 ? `la parte ${index + 1} de ${total} de ` : "";
-  // The chat shows what a person would write (Frank, 2026-10-23: the instructions read «raro»);
-  // what only the model needs — which tool, which line, what to do if it is missing — rides in the
-  // context line next to the arguments.
+  // The chat shows what a person would write (Frank, 2026-10-23: the instructions read «raro»). Each
+  // context line is a neutral label; the one rule tying a save to the key the person asked for is
+  // `CONTEXT_HEAD`, so a part the person declined is never saved because its line is still there.
   return {
     key,
     message: [`Guarda ${which}mis cambios de la tarjeta (${key}):`, ...part.flatMap((c) => c.lines.map((l) => `- ${l}`))].join("\n"),
-    contextLine:
-      `Tarjeta de ${monthName(month)}, cambios ${key}${total > 1 ? ` (parte ${index + 1} de ${total})` : ""}: guárdalos con save_service_edits con ` +
-      `los argumentos de esta línea, no con los de una revisión anterior; si no la ves, pide tocar «Guardar» otra vez. ${ARGS_LINE_PREFIXES[0]} ${json}`,
+    contextLine: `Cambios ${key} de ${monthName(month)}${total > 1 ? ` (parte ${index + 1} de ${total})` : ""}. ${ARGS_LINE_PREFIXES[0]} ${json}`,
   };
 }
 
-/** The context the card sets: every part handed over for the current edit list, in order. */
+/** The model-only rule above the parts: save only the key the person's message names. */
+export const CONTEXT_HEAD =
+  "Cambios listos en la tarjeta. Guarda con save_service_edits solo los cambios cuya clave nombra el último mensaje, con los " +
+  "argumentos de su línea, nunca con los de una revisión anterior; si esa clave no está aquí, no guardes y pide tocar «Guardar» otra vez.";
+
+/** The context the card sets: the rule, then every part handed over for the current edit list, in order. */
 export const contextOf = (lines: ReadonlyMap<number, string>): string =>
-  [...lines.entries()].sort(([a], [b]) => a - b).map(([, l]) => l).join("\n");
+  [CONTEXT_HEAD, ...[...lines.entries()].sort(([a], [b]) => a - b).map(([, l]) => l)].join("\n");
 
 /**
  * «Guardar»'s chat message for one part: the lines in words (what the permission prompt will show),
