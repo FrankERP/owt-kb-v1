@@ -66,7 +66,7 @@ export interface DayCardProps {
    */
   hero?: boolean;
   /**
-   * The run-sheet rendering WITHOUT the hero's own head (ADR-0071): hairline
+   * The run-sheet rendering WITHOUT the hero's own head (ADR-0070): hairline
    * rows, the sheet's titles and body-type labels, no card header — what a
    * «Después» row on home opens onto, since the row already names the service.
    * `hero` implies it.
@@ -279,7 +279,7 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
 
   return (
     <>
-      {/* A SHEET is not a card (ADR-0071): no panel, no rail, no card header — the
+      {/* A SHEET is not a card (ADR-0070): no panel, no rail, no card header — the
           page's gutter is its padding. The hero keeps a one-line identity («Domingo
           · 25 oct · 11:00»): the greeting band above it names the member's OWN next
           service, which is not always this one (a Sunday Lead opens the page on a
@@ -521,7 +521,7 @@ function SongRow({ song, n, onOpen, onQuickActions, dense = false, sheet = false
   // the hook's timer mid-press.
   onQuickActions?: (song: SetlistSong) => void;
   dense?: boolean;
-  /** The hero's run sheet (ADR-0071): a display-face number, a 17 px title with the
+  /** The hero's run sheet (ADR-0070): a display-face number, a 17 px title with the
    *  artist on its own line, the key as a hairline pill — one row per 68 px. */
   sheet?: boolean;
 }) {

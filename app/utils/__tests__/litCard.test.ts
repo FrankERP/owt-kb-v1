@@ -94,13 +94,13 @@ describe("brand.css — .brand-lit-card", () => {
   });
 });
 
-// ADR-0071 (2026-10-23): the hero is a run SHEET on the page, with no frame — and
+// ADR-0070 (2026-10-23): the hero is a run SHEET on the page, with no frame — and
 // a border pass needs a border. The rules above stay in `brand.css` (removing
 // `--lit-beam` would move the pinned composed-token count for nothing) and the
 // CSS half of this guard keeps them honest for the day a framed surface adopts
 // the pass again. Until then NOTHING sets `data-lit`: a count of 1 here would
 // mean someone re-framed the hero without rereading the ADR.
-describe("app/** — data-lit has no site since ADR-0071", () => {
+describe("app/** — data-lit has no site since ADR-0070", () => {
   it("no component sets data-lit", () => {
     const walk = (dir: string): string[] =>
       readdirSync(path.join(REPO_ROOT, dir), { withFileTypes: true }).flatMap((e) => {
