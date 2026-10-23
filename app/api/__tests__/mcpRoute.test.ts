@@ -673,7 +673,7 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     for (const tool of [ping!, getService!, listServices!, getSong!, getMemberAvailability!, getParticipation!, listProposals!]) {
       expect(tool.description, String(tool.name)).toMatch(/America\/Mexico_City/);
     }
-    // `toolsVersion` (ADR-0069) rides on every model-visible tool; `argsOf` lists a tool's own arguments.
+    // `toolsVersion` (ADR-0070) rides on every model-visible tool; `argsOf` lists a tool's own arguments.
     const argsOf = (tool: Record<string, unknown>) =>
       Object.keys((tool.inputSchema as { properties: object }).properties).filter((key) => key !== TOOLS_VERSION_ARG);
     expect(argsOf(ping!)).toEqual([]);
@@ -811,7 +811,7 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     );
   });
 
-  describe("the tool list's version (ADR-0069)", () => {
+  describe("the tool list's version (ADR-0070)", () => {
     const callPing = async (args?: Record<string, unknown>) => {
       const token = await accessToken(await liveGrant());
       const params = args === undefined ? { name: "ping" } : { name: "ping", arguments: args };

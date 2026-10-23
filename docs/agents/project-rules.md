@@ -424,7 +424,7 @@ several exist precisely to stop a plausible-looking change.
   SDK's refusal of a stale call's arguments. A tool registered outside `registerAllTools`
   would stay out of the digest. Keep `toolsVersion` optional: making it required would turn the
   note into a refused call. Put guidance that depends on an answer (repeat, check again) in the
-  answer, which is never stale, not in the description. ADR-0069; tests in `mcpRoute.test.ts`
+  answer, which is never stale, not in the description. ADR-0070; tests in `mcpRoute.test.ts`
   («the tool list's version»).
 - **The eight admin write paths (setlists PUT, roles create, roles PATCH, copy-instruments, swap,
   publish-ready, unpublish, the fairness PUT) delegate everything after authorization to `app/utils/*Commit.ts`;

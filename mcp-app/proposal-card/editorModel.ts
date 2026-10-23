@@ -104,7 +104,7 @@ const objects = (v: unknown): Obj[] => (Array.isArray(v) ? v.filter(isObj) : [])
 
 /**
  * How the server's «refresh the connector» note starts (`STALE_TOOL_LIST_NOTE`, app/mcp/toolListVersion.ts;
- * ADR-0069): it is for the model, never the screen. Copied, not imported, like the args prefixes: the card
+ * ADR-0070): it is for the model, never the screen. Copied, not imported, like the args prefixes: the card
  * bundle takes nothing from the server. `storedMonthCard.test.tsx` keeps the two in step.
  */
 export const STALE_NOTE_PREFIX = "Aviso del servidor OWT Backstage:";

@@ -167,7 +167,7 @@ describe("the argument lines the model reads", () => {
   });
 });
 
-describe("the server's «refresh the connector» note (ADR-0069)", () => {
+describe("the server's «refresh the connector» note (ADR-0070)", () => {
   it("the card's copy of its prefix matches the server's note", () => {
     expect(STALE_TOOL_LIST_NOTE.startsWith(STALE_NOTE_PREFIX)).toBe(true);
   });

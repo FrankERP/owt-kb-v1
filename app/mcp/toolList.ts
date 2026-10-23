@@ -1,5 +1,5 @@
 // The connector's tool list: what `/api/mcp` registers on every per-request server, and the digest of
-// that list (ADR-0069). Its own module because a Next route file may export only route fields, and
+// that list (ADR-0070). Its own module because a Next route file may export only route fields, and
 // the route tests need the digest to call a tool as a current client would.
 
 import type { McpServer } from "@modelcontextprotocol/server";
@@ -60,7 +60,7 @@ export function registerAllTools(server: McpServer, deps: { version: string }): 
 }
 
 /**
- * The digest of the tool list this deployment serves (ADR-0069). Every model-visible tool asks for
+ * The digest of the tool list this deployment serves (ADR-0070). Every model-visible tool asks for
  * it back as `toolsVersion`, so a client still holding an older copy of the list is told to refresh.
  */
 export const TOOL_LIST_VERSION = toolListDigest((server) => registerAllTools(server, { version: "" }));
