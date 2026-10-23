@@ -1,4 +1,4 @@
-# ADR-0069: Vercel creates deployments only for `main`, `preview` and the verification branch
+# ADR-0068: Vercel creates deployments only for `main`, `preview` and the verification branch
 
 **Date:** 2026-10-23 · **Status:** Accepted
 

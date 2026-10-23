@@ -19,7 +19,7 @@
 // deployment for any other ref. That matters because a canceled deployment
 // still counts against the Hobby plan's 100 deployments per day: on 2026-10-22
 // four threads pushed 44 canceled `claude/*` deployments and the cap stopped
-// `main` and `preview` from building for the rest of the day (ADR-0069).
+// `main` and `preview` from building for the rest of the day (ADR-0068).
 //
 // This module stays as the belt: the Ignored Build Step runs before install
 // (Node builtins ONLY, never a dependency) and fails open, so a deployment

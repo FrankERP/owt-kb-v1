@@ -106,7 +106,7 @@ the budget goes there, once.
   **exclusively** by `preview` — update dev only by merging into `preview`), `main` →
   production. No staging branch.
 - **Only `main`, `preview` and `verify/service-readiness` get a deployment** — `vercel.json`
-  `git.deploymentEnabled` (`"**": false` + those three, ADR-0069) creates nothing for any other
+  `git.deploymentEnabled` (`"**": false` + those three, ADR-0068) creates nothing for any other
   ref, and `ignoreCommand` → `scripts/vercel-ignore-build.mjs` is the fail-open belt. A `claude/*`
   push proves nothing. Guard: `deployBranchPolicy.test.ts`; quotas and the deliberate-build hatch:
   `docs/CI.md`.
