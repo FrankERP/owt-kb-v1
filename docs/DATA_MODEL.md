@@ -401,7 +401,7 @@ after each solve and after an apply's confirm (not on its refusals) that deletes
 it but `apply_schedule` and the editor's three tools, and nothing in it is ever returned to the
 model (members cross the wire as tokens, never ids).
 
-## `homeSettings` — Inicio's team photo (ADR-0070)
+## `homeSettings` — Inicio's team photo (ADR-0071)
 
 ONE hand-authored document with the FIXED id `homeSettings` — a singleton pane in
 `sanity/structure.ts` (`S.document().documentId('homeSettings')`), and the global «Create» menu

@@ -33,7 +33,7 @@ export default defineConfig({
     // whichever document pane is open, so a hand-typed Studio URL is covered too.
     actions: protectedDocumentActions,
     // Removes protected types from every "create new" affordance — and the
-    // singleton `homeSettings` (ADR-0070), which has its own pane in the structure.
+    // singleton `homeSettings` (ADR-0071), which has its own pane in the structure.
     newDocumentOptions: (prev) =>
       protectedNewDocumentOptions(prev).filter((item) => item.templateId !== 'homeSettings'),
   },

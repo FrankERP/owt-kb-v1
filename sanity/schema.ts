@@ -46,7 +46,7 @@ import { adminChatUsage } from './schemas/adminChatUsage';
 import { mcpProposal } from './schemas/mcpProposal';
 // The conversation about a service before its setlist proposal exists (ADR-0065).
 import { serviceThread } from './schemas/serviceThread';
-// Inicio's team photo (ADR-0070): one document, edited in the Studio.
+// Inicio's team photo (ADR-0071): one document, edited in the Studio.
 import { homeSettings } from './schemas/homeSettings';
 
 export const schema: { types: SchemaTypeDefinition[] } = {

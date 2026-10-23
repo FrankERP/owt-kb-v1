@@ -35,7 +35,7 @@ import { myNameFromSession, mySeats, serviceTone, TONE_RAIL } from "@/app/utils/
 import { joinNames } from "@/app/utils/homeGreeting";
 
 /**
- * `sheet` (ADR-0070): home's «Después» list — a hairline row in the page's own
+ * `sheet` (ADR-0071): home's «Después» list — a hairline row in the page's own
  * type (17 px sentence-case title, a plain countdown) with no card chrome and no
  * tone rail; the parent draws the dividers. Without it, the opaque card with the
  * day rail, as the calendar still shows it.

@@ -1,4 +1,4 @@
-# ADR-0070: Inicio is set on one type scale, with small caps on section titles only, over a team photo
+# ADR-0071: Inicio is set on one type scale, with small caps on section titles only, over a team photo
 
 **Date:** 2026-10-23 · **Status:** Accepted
 

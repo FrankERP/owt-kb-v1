@@ -1,4 +1,4 @@
-// Inicio's photo band and the run sheet's one small-caps title (ADR-0070).
+// Inicio's photo band and the run sheet's one small-caps title (ADR-0071).
 //
 // NEUTRAL module — no "use client" — because `app/(client)/page.tsx` is a Server
 // Component and USES these as values (ADR-0028): a string constant imported from

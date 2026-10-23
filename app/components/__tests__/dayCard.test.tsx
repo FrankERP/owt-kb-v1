@@ -165,7 +165,7 @@ describe("DayCard", () => {
     expect(screen.queryByRole("button", { name: /Practicar/ })).toBeNull();
   });
 
-  describe("ADR-0070 — the hero is a run sheet, not a card", () => {
+  describe("ADR-0071 — the hero is a run sheet, not a card", () => {
     it("draws no day heading and no countdown pill, but one identity line — the greeting band names the member's OWN next service, not always this one", () => {
       vi.useFakeTimers({ toFake: ["Date"] });
       vi.setSystemTime(new Date(2026, 8, 11, 9, 0, 0));
