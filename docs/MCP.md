@@ -982,7 +982,7 @@ claude.ai reads `tools/list` when the connector connects and keeps that copy: na
 descriptions, input schemas. It does not act on `notifications/tools/list_changed`, and this
 server sends none (`listChanged: false`; no held streams). So after a release that changes the
 list, Claude goes on using its old copy until the connector is refreshed. That happened with
-`focus` (PR #171), when Claude kept opening the whole month (ADR-0070).
+`focus` (PR #171), when Claude kept opening the whole month (ADR-0069).
 
 - **How the server notices.** `TOOL_LIST_VERSION` (`app/mcp/toolList.ts`) is an 8-character
   digest of what a client caches about each tool: name, title, description, schemas, annotations

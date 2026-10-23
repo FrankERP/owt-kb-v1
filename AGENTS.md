@@ -243,7 +243,7 @@ looks wrong** — several exist to stop a plausible-looking change.
   callback that drops it (`authRedirectCallback.test.ts`; `docs/MCP.md`).
 - **MCP tools register only in `registerAllTools`** (`app/mcp/toolList.ts`): its digest is the
   `toolsVersion` every model-visible tool asks for, and a stale Claude copy gets a refresh note
-  (ADR-0070). Guidance that depends on an answer goes in the answer, not the description.
+  (ADR-0069). Guidance that depends on an answer goes in the answer, not the description.
 - **The eight admin write paths** (setlists PUT, roles create, roles PATCH, copy-instruments, swap,
   publish-ready, unpublish, the fairness PUT) delegate everything after authorization to
   `app/utils/*Commit.ts`; MCP writes go only through them (`apply_schedule`: roles create + fairness
