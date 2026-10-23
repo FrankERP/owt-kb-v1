@@ -656,7 +656,7 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     // read or a destructive write declares.
     for (const tool of tools) {
       const name = String(tool.name);
-      const write = (WRITE_TOOL_NAMES as string[]).includes(name) || name === "apply_schedule" || ["save_service_edits", "copy_instruments", "create_service"].includes(name);
+      const write = (WRITE_TOOL_NAMES as string[]).includes(name) || name === "apply_schedule" || ["save_service_edits", "save_service_edits_app", "copy_instruments", "create_service"].includes(name);
       expect(tool.annotations, name).toEqual(
         name === "solve_month" || name === "save_proposal_edits" || name === "revise_proposal"
           ? { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }
@@ -834,6 +834,20 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
         }
       }
       expect(tools.some((t) => t.inputSchema.properties[TOOLS_VERSION_ARG] === undefined)).toBe(true);
+    });
+
+    it("the card's save twin takes the chat's save schema, without the version, and is destructive (ADR-0066 addendum)", async () => {
+      const token = await accessToken(await liveGrant());
+      const result = await rpcResult(await POST(mcpRequest(rpc("tools/list"), { token })));
+      const tools = result.tools as { name: string; inputSchema: { properties: Record<string, unknown>; required?: string[] }; annotations?: unknown; _meta?: unknown }[];
+      const chat = tools.find((t) => t.name === "save_service_edits")!;
+      const card = tools.find((t) => t.name === "save_service_edits_app")!;
+      const { [TOOLS_VERSION_ARG]: version, ...chatProperties } = chat.inputSchema.properties;
+      expect(version).toBeDefined();
+      expect(card.inputSchema.properties).toEqual(chatProperties);
+      expect(card.inputSchema.required).toEqual(chat.inputSchema.required);
+      expect(card.annotations).toEqual(chat.annotations);
+      expect(card._meta).toEqual({ ui: { resourceUri: PROPOSAL_CARD_URI, visibility: ["app"] } });
     });
 
     it("a current caller gets the tool's answer alone", async () => {
@@ -1754,13 +1768,14 @@ describe("/api/mcp — the proposal card resource (MCP Apps, S1)", () => {
     const withCard = tools.filter((t) => t._meta && ("ui" in t._meta || "ui/resourceUri" in t._meta));
     expect(withCard.map((t) => t.name)).toEqual([
       "solve_month", "check_proposal_edits", "save_proposal_edits", "revise_proposal", "check_service_edits", "check_service_edits_app",
+      "save_service_edits_app",
     ]);
     const meta = new Map(withCard.map((t) => [t.name, t._meta]));
     for (const name of ["solve_month", "revise_proposal", "check_service_edits"]) {
       expect(meta.get(name), name).toEqual({ ui: { resourceUri: PROPOSAL_CARD_URI }, "ui/resourceUri": PROPOSAL_CARD_URI });
     }
     // Q1 (1): the force flag lives only on a tool a host that honours MCP Apps hides from the model.
-    for (const name of ["check_proposal_edits", "save_proposal_edits", "check_service_edits_app"]) {
+    for (const name of ["check_proposal_edits", "save_proposal_edits", "check_service_edits_app", "save_service_edits_app"]) {
       expect(meta.get(name), name).toEqual({ ui: { resourceUri: PROPOSAL_CARD_URI, visibility: ["app"] } });
     }
   });

@@ -1,6 +1,7 @@
 // The guarded role-edit writer (Service Readiness A2 §2) — the domain body of
 // `PATCH /api/admin/roles/[id]`, moved here VERBATIM so the MCP stored-service save
-// (`save_service_edits`, admin parity phase 1, T2.1) calls the very same code path.
+// (`save_service_edits` and its card twin `save_service_edits_app`, admin parity phase 1, T2.1)
+// calls the very same code path.
 // The admin route keeps only its authorization prefix, its JSON parse and
 // `parseEditRequest`; it cannot export this function itself, because Next
 // type-checks a route module's export set against a fixed list.

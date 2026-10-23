@@ -1,11 +1,13 @@
 // The card over a SAVED month (admin parity phase 1, S4: docs/superpowers/plans/2026-10-21-owt-mcp-admin-parity-f1.md;
 // ADR-0066): what the screen keeps between `check_service_edits_app` answers, how it reads them,
-// and the chat message «Guardar» sends. Pure, so it is tested without a browser or a host.
+// how it reads the card's own save, and the chat message «Mandar al chat» sends. Pure, so it is tested
+// without a browser or a host.
 //
 // The proposal editor's rule holds (E1): the screen keeps a LIST OF EDITS, never a board it trusts;
-// every gesture re-sends the whole list and shows the server's board. And the card never writes:
-// «Guardar» hands the checked change sets to the chat, where Claude calls the destructive
-// `save_service_edits`, so the Claude app asks before anything changes in production (F3, Q1).
+// every gesture re-sends the whole list and shows the server's board. «Guardar» asks in the card and
+// then saves through the app-only `save_service_edits_app` — the same save as the chat's, which
+// re-checks every change set (ADR-0066 addendum, 2026-10-23: docs/superpowers/plans/2026-10-23-owt-mcp-card-saves.md).
+// «Mandar al chat» keeps the old way: Claude calls `save_service_edits` and the Claude app asks first.
 
 import { boardOf, textLines, type Candidate, type ServiceView } from "./editorModel";
 
@@ -161,7 +163,7 @@ export function forceStoredLast(edits: readonly StoredEdit[]): StoredEdit[] {
 export const MAX_CHANGES_PER_SAVE = 31;
 
 /**
- * The change sets split into the calls «Guardar» sends. Normally one. Each change carries the server's
+ * The change sets split into the saves «Guardar» makes (and the messages «Mandar al chat» sends). Normally one. Each change carries the server's
  * signed `unit` (a whole group, or a piece of `maxGroup` services of a larger one, ADR-0066), and the
  * save refuses a call that leaves out any service of a unit it names — so units are never cut here,
  * only packed. When a group is larger than `maxGroup` the parts stay that small (two pieces of one
@@ -202,7 +204,8 @@ export const joinWords = (items: readonly string[]): string =>
  * A short key for one part's arguments (FNV-1a over its JSON, base 36): the message and the context
  * line both carry it, so the model takes THESE arguments — never an earlier check's line, which is
  * still in the chat with a valid MAC. `save_service_edits`' description says what to do with a key
- * whose line is not there (ask for «Guardar» again), because that is exactly when the context is missing.
+ * whose line is not there (ask for «Guardar» again, which now saves from the card), because that is exactly when
+ * the context is missing.
  */
 export function argsKey(json: string): string {
   let h = 0x811c9dc5;
@@ -211,7 +214,7 @@ export function argsKey(json: string): string {
 }
 
 /**
- * «Guardar» on a host that takes model context (Frank, 2026-10-22: the JSON in the chat «no me
+ * «Mandar al chat» (once «Guardar» itself) on a host that takes model context (Frank, 2026-10-22: the JSON in the chat «no me
  * encantó»): the chat shows the changes in words and a key; the arguments ride in the model's
  * context, on the check's own `Argumentos para save_service_edits` line, labelled with that key.
  * The host keeps only the LAST context update, so the card sends every part handed over so far
@@ -241,7 +244,7 @@ export const contextOf = (lines: ReadonlyMap<number, string>): string =>
   [CONTEXT_HEAD, ...[...lines.entries()].sort(([a], [b]) => a - b).map(([, l]) => l)].join("\n");
 
 /**
- * «Guardar»'s chat message for one part: the lines in words (what the permission prompt will show),
+ * «Mandar al chat»'s message for one part: the lines in words (what the permission prompt will show),
  * then `month` and `changes` as JSON, verbatim, so Claude passes them to `save_service_edits` unchanged.
  */
 export function saveMessage(month: string, part: readonly StoredChange[], index: number, total: number): string {
@@ -249,4 +252,80 @@ export function saveMessage(month: string, part: readonly StoredChange[], index:
     ? `Guarda la parte ${index + 1} de ${total} de los cambios de ${monthName(month)} con save_service_edits:`
     : `Guarda estos cambios de ${monthName(month)} con save_service_edits:`;
   return [head, ...part.flatMap((c) => c.lines.map((l) => `- ${l}`)), "Pasa month y changes exactamente así:", JSON.stringify({ month, changes: part })].join("\n");
+}
+
+/** What `save_service_edits_app` answered, as the card acts on it (ADR-0066 addendum). */
+export interface StoredSaveView {
+  /** False: no structured answer (`runWriteTool`'s own text) — whether anything was written is unknown. */
+  structured: boolean;
+  ok: boolean;
+  /** A refusal: every one returns before the save's first write. */
+  refused: boolean;
+  next: "repeat_same_call" | "check_again" | null;
+  /** The save's lines in the card's words (the ones written for Claude dropped or trimmed). */
+  lines: string[];
+}
+
+/**
+ * The save's lines that tell CLAUDE what to call next; the card says its own next step instead.
+ * Mirrors `V3_STORED_EDITOR_LINES` (`repeatSame`, `recheck`, `needsCard`) in `app/components/admin/v3Copy.ts`
+ * (pinned by `storedCardSave.test.tsx`), as `ARGS_LINE_PREFIXES` mirrors the argument prefixes.
+ */
+export const MODEL_ONLY_SAVE_LINES = [
+  "Repite exactamente la misma llamada: lo que ya quedó se reconoce como «ya estaba» y se guarda el resto.",
+  "Revisa el mes de nuevo con check_service_edits antes de volver a guardar.",
+  "Forzar una regla por lugar solo se puede desde la tarjeta («Asignar de todos modos»); desde el chat no se fuerza nada.",
+] as const;
+
+/**
+ * Tails of the save's lines that name a tool or a call; trimmed off on the card. Mirrors `changed`,
+ * `notTheChecked`, `unitIncomplete` and the status `notSavedRepeat` (`V3_STORED_EDITOR_LINES`) and the
+ * runner's `SERVICE_EDITOR_COPY.domain` (`app/mcp/tools/serviceEditor.ts`), pinned by `storedCardSave.test.tsx`.
+ */
+export const MODEL_ONLY_SAVE_TAILS = [
+  " Revisa el mes de nuevo con check_service_edits.",
+  " Revisa de nuevo con check_service_edits.",
+  "; repite la misma llamada",
+  " Manda también esos cambios, tal cual los devolvió la revisión.",
+  " Repite exactamente la misma llamada: lo que ya quedó se reconoce como «ya estaba».",
+] as const;
+
+const forTheCard = (line: string): string => MODEL_ONLY_SAVE_TAILS.reduce((l, tail) => l.split(tail).join(""), line);
+
+export function storedSaveViewOf(result: { content?: unknown; structuredContent?: unknown; isError?: boolean } | undefined): StoredSaveView {
+  const s = isObj(result?.structuredContent) ? (result!.structuredContent as Obj) : null;
+  return {
+    structured: s !== null,
+    ok: s !== null && !result?.isError && s.ok === true,
+    refused: s?.refused === true,
+    next: s?.next === "repeat_same_call" || s?.next === "check_again" ? s.next : null,
+    lines: textLines(result?.content)
+      .filter((l) => !(MODEL_ONLY_SAVE_LINES as readonly string[]).includes(l))
+      .map(forTheCard),
+  };
+}
+
+/** The card's own words around a save (ADR-0066 addendum). */
+export const CARD_SAVE = {
+  confirmHead: "¿Guardar estos cambios?",
+  confirmNote: "Se guarda en la app y se avisa por correo a quien le toque, como en /admin.",
+  yes: "Sí, guardar",
+  no: "Cancelar",
+  again: "Guardar de nuevo",
+  toChat: "Mandar al chat",
+  repeat: "Toca «Guardar de nuevo»: lo que ya quedó dirá «ya estaba».",
+  unknown:
+    "No supe si se guardó (o la app no dejó que la tarjeta guardara). Toca «Guardar de nuevo»: lo que ya quedó dirá «ya estaba». " +
+    "Si sigue fallando, actualiza el conector o usa «Mandar al chat».",
+  reread: "Lo que no se guardó ya no está en la tarjeta: vuelve a hacerlo sobre el mes como quedó.",
+  rereadFailed: "No pude volver a leer el mes; los cambios siguen bloqueados. Toca «Descartar cambios» para leerlo de nuevo.",
+  foot: "Al confirmar, la tarjeta guarda directo; Claude no interviene. Si la tarjeta no puede guardar, aparece «Mandar al chat»: Claude guarda y la app te pide permiso.",
+} as const;
+
+/** The model's context after a card save: what happened, so Claude never saves these again from an older line. */
+export function savedContext(month: string, ok: boolean, lines: readonly string[]): string {
+  const head = ok
+    ? `La persona guardó desde la tarjeta los cambios de ${monthName(month)} (ya están guardados; no los guardes otra vez):`
+    : `La tarjeta intentó guardar cambios de ${monthName(month)} y no se guardó todo; la tarjeta ya se lo dijo a la persona:`;
+  return [head, ...lines].join("\n");
 }
