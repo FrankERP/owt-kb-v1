@@ -166,7 +166,7 @@ describe("DayCard", () => {
   });
 
   describe("ADR-0070 — the hero is a run sheet, not a card", () => {
-    it("draws no day heading and no countdown pill: the page's greeting band carries both", () => {
+    it("draws no day heading and no countdown pill, but one identity line — the greeting band names the member's OWN next service, not always this one", () => {
       vi.useFakeTimers({ toFake: ["Date"] });
       vi.setSystemTime(new Date(2026, 8, 11, 9, 0, 0));
       const { container } = mount({ hero: true, isNext: true });
@@ -175,8 +175,14 @@ describe("DayCard", () => {
       // No panel, no rail: the sheet sits straight on the page.
       expect(container.querySelector(".brand-surface")).toBeNull();
       expect(container.querySelector(".w-\\[3px\\]")).toBeNull();
-      // Ensayar is the first thing on it.
+      // Day · date · the weekend's standing hour, in muted body type, then Ensayar.
+      expect(container.querySelector("p.font-body")?.textContent).toMatch(/Domingo\s*·\s*13\s*sep\s*·\s*11:00/i);
       expect(container.querySelector("button")?.textContent).toMatch(/Ensayar/);
+      cleanup();
+      // A special carries its own clock; an untimed one has none.
+      expect(mount({ hero: true, day: "Campamento", roleId: "r1", time: "18:45" }).container.querySelector("p.font-body")?.textContent).toMatch(/Campamento\s*·\s*13\s*sep\s*·\s*18:45/i);
+      cleanup();
+      expect(mount({ hero: true, day: "Campamento", roleId: "r1" }).container.querySelector("p.font-body")?.textContent).not.toMatch(/\d\d:\d\d/);
     });
 
     it("titles the team «Equipo» in the sheet's small caps, and labels its sections in sentence-case body type", () => {
@@ -191,6 +197,15 @@ describe("DayCard", () => {
       mount({ instruments: [{ label: "Keys", person: "Gaby" }] });
       expect(screen.queryByRole("heading", { level: 4, name: "Equipo" })).toBeNull();
       expect(screen.getAllByText(/^Banda/)[0].className).toContain("uppercase");
+    });
+
+    it("`sheet` without `hero` is the same rendering minus the head — no identity line, no Ensayar", () => {
+      const { container } = mount({ sheet: true });
+      expect(screen.queryByRole("heading", { level: 3 })).toBeNull();
+      expect(screen.queryByRole("button", { name: /Ensayar/ })).toBeNull();
+      expect(container.textContent).not.toMatch(/13\s*sep/i);
+      expect(container.querySelector(".brand-surface")).toBeNull();
+      expect(screen.getByRole("heading", { level: 4, name: "Setlist" }).className).toContain("tracking-[0.22em]");
     });
 
     it("sets a sheet row as display number · 17 px title · artist on its own line · key pill", () => {

@@ -108,11 +108,19 @@ describe("DayCardDisclosure", () => {
     expect(title.className).toContain("font-body");
     expect(title.className).not.toContain("uppercase");
     expect(trigger.textContent).toContain("en 11 días");
-    // The card version keeps both.
+    // Opened, the row is still a sheet: no card header repeats the day inside it.
+    const region = document.getElementById(trigger.getAttribute("aria-controls")!)!;
+    // `hidden`: the closed region is inert and aria-hidden, which role queries skip.
+    expect(within(region).queryByRole("heading", { level: 3, hidden: true })).toBeNull();
+    expect(within(region).getByRole("heading", { level: 4, name: "Setlist", hidden: true })).toBeTruthy();
+    // The card version keeps both, and its open card keeps the header.
     cleanup();
     const card = mount();
     expect(card.container.querySelector(".brand-surface")).toBeTruthy();
     expect(card.container.querySelector(".w-\\[3px\\]")).toBeTruthy();
+    const cardTrigger = screen.getByRole("button", { name: /Sábado/ });
+    const cardRegion = document.getElementById(cardTrigger.getAttribute("aria-controls")!)!;
+    expect(within(cardRegion).getByRole("heading", { level: 3, hidden: true })).toBeTruthy();
   });
 
   it("opens onto the card, and the setlist lives inside the collapsed region", () => {

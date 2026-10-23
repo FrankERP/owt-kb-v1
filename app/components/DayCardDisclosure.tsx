@@ -152,7 +152,9 @@ export default function DayCardDisclosure({ sheet = false, ...props }: DayCardPr
       <Collapse open={open} id={id} className={sheet ? "pb-4" : "px-2 pb-2"}>
         {/* `nested`: this wrapper already is the card (ground, hairline, rail), so the
             inner one drops its own chrome — two rails 5 px apart otherwise. */}
-        <DayCard {...props} nested />
+        {/* `sheet` with `sheet`: the open row keeps the hairline typography and draws
+            no card header — this row already names the service. */}
+        <DayCard {...props} nested sheet={sheet} />
       </Collapse>
       <QuickActions
         open={actionsOpen}

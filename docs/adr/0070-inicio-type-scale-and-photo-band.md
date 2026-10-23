@@ -26,8 +26,12 @@ faces (Advent Pro display, Urbanist body, Jura labels — the font family was ne
 - **The greeting is the page's title**, in the display face at 52 px on a phone and 88 px from `md`
   («Te toca el **domingo**»), «Hola, Frank» and the line under it in 17 px body. The line carries the
   seat, the weekend's standing hour and the distance («Eléctrica · 11:00 · en 2 días · 4 canciones»,
-  `homeGreeting`), so the card's own countdown pill is gone from the hero.
-- **Small caps on section titles only** — `SHEET_TITLE` (`DayCard.tsx`): 12 px Jura, tracked, muted,
+  `homeGreeting`), so the card's own countdown pill is gone from the hero. The greeting names the
+  member's OWN next service, which is not always the hero (a Sunday Lead, on a week whose next
+  service is Saturday), so the sheet keeps ONE identity line in muted body — «Sábado · 24 oct ·
+  18:00» — above «Ensayar».
+- **Small caps on section titles only** — `SHEET_TITLE` (`app/utils/homeHero.ts`, a neutral module:
+  the page is a Server Component and reads it as a string, ADR-0028): 12 px Jura, tracked, muted,
   over «Setlist», «Equipo» and «Después». Everything else on the page is sentence-case body type:
   the team's «Voces · 8» at 17 px semibold, a Voces group as «Lead · 2» in muted body, the setlist's
   artist on its own line, the key as a hairline pill. The card titles elsewhere in the app keep their
@@ -35,13 +39,17 @@ faces (Advent Pro display, Urbanist body, Jura labels — the font family was ne
 - **Hairlines instead of frames.** The hero is a run SHEET on the page: no lit card, no panel, no
   tone rail, no header of its own; the setlist and the «Después» rows are hairline-divided rows. The
   other surfaces that render `DayCard` (the calendar, the disclosure's open state, admin previews)
-  are untouched: `hero`/`sheet` is a prop, the card is the default.
+  are untouched: `hero`/`sheet` is a prop, the card is the default. A «Después» row opens onto the
+  sheet rendering too (`DayCard sheet`): the row names the service, so the open card draws no header.
 - **A team photo behind the greeting** — the signature. ONE Studio document, `homeSettings`
-  (`sanity/schemas/homeSettings.ts`: `heroPhoto` with hotspot, `heroAlt`), read as
-  `*[_type == "homeSettings"][0]`; `heroPhotoSrc`/`heroPhotoPosition` (`app/utils/homeHero.ts`) cap
-  it at 1800 px as JPEG (never WebP — the iOS WKWebView rule the avatars follow) and turn the
-  hotspot into `object-position`, so the crop keeps the faces on a tall phone band and a wide desktop
-  one. A bottom scrim in the page's own ground colour keeps the words readable. Without the document,
+  (`sanity/schemas/homeSettings.ts`: `heroPhoto` with hotspot and crop, `heroAlt`), with the FIXED
+  id `homeSettings` (a singleton pane in `sanity/structure.ts`, kept out of the global «Create»
+  menu), read as `*[_id == "homeSettings"][0]` through the published perspective;
+  `heroPhotoSrc`/`heroPhotoPosition` (`app/utils/homeHero.ts`) cap it at 1800 px, ALWAYS as JPEG
+  (never WebP — the iOS WKWebView rule the avatars follow; a photo under a scrim has no use for
+  transparency), apply the Studio crop as a `rect` and re-express the hotspot (stored against the
+  uncropped image) as `object-position` inside it, so the crop keeps the faces on a tall phone band
+  and a wide desktop one. A bottom scrim in the page's own ground colour keeps the words readable. Without the document,
   or without a photo, the band is the greeting on the plain page — the photo is never a blocker.
 
 The ratchet that keeps the scale honest is the tests: `dayCard.test.tsx` (hero draws no `h3` and no

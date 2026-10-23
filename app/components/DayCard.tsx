@@ -26,13 +26,10 @@ import useLongPress from "./ui/useLongPress";
 import { useToast } from "./ui/Toast";
 import TeamSections from "./TeamSections";
 import { formatKey } from "@/app/utils/formatKey";
-
-/**
- * The run sheet's section title (ADR-0070): the ONE uppercase on the hero — 12 px,
- * tracked, muted — over «Setlist» and «Equipo». Home's «Después» uses the same
- * classes, so the three sections of Inicio read as one scale.
- */
-export const SHEET_TITLE = "font-label text-xs uppercase tracking-[0.22em] text-surface-ink-l70-d50";
+// The sheet's one small-caps title lives in a NEUTRAL module (ADR-0028): the home
+// page is a Server Component and reads it as a string, which an export from this
+// "use client" file would not be there.
+import { SHEET_TITLE } from "@/app/utils/homeHero";
 
 export interface DayCardProps {
   day: string;
@@ -68,6 +65,13 @@ export interface DayCardProps {
    * rail, so the same affordance never appears twice on one card.
    */
   hero?: boolean;
+  /**
+   * The run-sheet rendering WITHOUT the hero's own head (ADR-0070): hairline
+   * rows, the sheet's titles and body-type labels, no card header — what a
+   * «Después» row on home opens onto, since the row already names the service.
+   * `hero` implies it.
+   */
+  sheet?: boolean;
   /** Rendered inside `DayCardDisclosure`, which already draws the card's ground,
    *  hairline and rail: drop this card's own so there is one card, not two. */
   nested?: boolean;
@@ -99,7 +103,7 @@ export interface DayCardProps {
 /** The neutral the card's quiet chrome (the medley spine) is drawn in. */
 const NEUTRAL = "--ink-dim-rgb";
 
-export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instruments, fohTeam, bgvs, chorus, roleId, serviceId, isNext, layout = "card", hero = false, nested = false, photos, viewerTypes, viewerName, viewerIsAdmin }: DayCardProps) {
+export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instruments, fohTeam, bgvs, chorus, roleId, serviceId, isNext, layout = "card", hero = false, sheet: sheetProp = false, nested = false, photos, viewerTypes, viewerName, viewerIsAdmin }: DayCardProps) {
   const { openSheet } = usePlayer();
   const { data: session } = useSession();
   const { toast } = useToast();
@@ -122,6 +126,7 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
     setActionsOpen(true);
   }, []);
 
+  const sheet = hero || sheetProp;
   const hasRole     = !!(leads?.length || instruments?.length || fohTeam?.length || bgvs?.length || chorus?.length);
   const hasSetlist  = !!(setlist?.songs?.length);
 
@@ -210,7 +215,7 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
       {hasSetlist && (
         <section>
           <div className="flex items-center justify-between mb-2">
-            <h4 className={hero ? SHEET_TITLE : "font-label text-xs md:text-sm lg:text-base uppercase tracking-widest text-surface-ink-l70-d50"}>
+            <h4 className={sheet ? SHEET_TITLE : "font-label text-xs md:text-sm lg:text-base uppercase tracking-widest text-surface-ink-l70-d50"}>
               Setlist
             </h4>
             <div className="flex items-center gap-3">
@@ -226,14 +231,14 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
               )}
             </div>
           </div>
-          <ol className={hero ? "divide-y divide-ink/[0.10] border-y border-ink/[0.10]" : "divide-y divide-ink-dim/[0.06]"}>
+          <ol className={sheet ? "divide-y divide-ink/[0.10] border-y border-ink/[0.10]" : "divide-y divide-ink-dim/[0.06]"}>
             {runs.map((run) => {
               // Single-song medley groups render as plain singles
               if (run.kind === "single" || (run.kind === "medley" && run.songs.length === 1)) {
                 const { song, n } = run.kind === "single" ? run : run.songs[0];
                 return (
                   <li key={song._id}>
-                    <SongRow song={song} n={n} onOpen={openSheet} onQuickActions={onQuickActions} sheet={hero} />
+                    <SongRow song={song} n={n} onOpen={openSheet} onQuickActions={onQuickActions} sheet={sheet} />
                   </li>
                 );
               }
@@ -258,9 +263,9 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
                   {run.songs.map(({ song, n }, si) => (
                     <div key={song._id}>
                       {si > 0 && (
-                        <span className="block w-4 text-center font-label text-[11px] leading-none -my-0.5" style={{ color: `${themeColour(NEUTRAL, 0.6)}` }}>+</span>
+                        <span className={`block ${sheet ? "w-7 text-right" : "w-4 text-center"} font-label text-[11px] leading-none -my-0.5`} style={{ color: `${themeColour(NEUTRAL, 0.6)}` }}>+</span>
                       )}
-                      <SongRow song={song} n={n} onOpen={openSheet} onQuickActions={onQuickActions} dense sheet={hero} />
+                      <SongRow song={song} n={n} onOpen={openSheet} onQuickActions={onQuickActions} dense sheet={sheet} />
                     </div>
                   ))}
                 </li>
@@ -274,17 +279,25 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
 
   return (
     <>
-      {/* The hero is a run SHEET, not a card (ADR-0070): no panel, no rail, no
-          header of its own — the page's greeting band above it is the title and
-          the countdown, and the page's gutter is its padding. Only the one
-          action, «Ensayar», leads. */}
-      <div className={hero ? "relative" : nested ? "relative overflow-hidden rounded-[var(--brand-radius-panel)]" : "brand-facet-panel brand-surface overflow-hidden rounded-[var(--brand-radius-panel)]"}>
-        {!nested && !hero && <span aria-hidden className={`absolute inset-y-0 left-0 z-[1] w-[3px] ${TONE_RAIL[tone]}`} />}
-        {hero ? (
-          <div className="flex flex-col gap-4">
+      {/* A SHEET is not a card (ADR-0070): no panel, no rail, no card header — the
+          page's gutter is its padding. The hero keeps a one-line identity («Domingo
+          · 25 oct · 11:00»): the greeting band above it names the member's OWN next
+          service, which is not always this one (a Sunday Lead opens the page on a
+          week whose next service is Saturday), so the sheet says which service it
+          is. A «Después» row already does, so a plain sheet draws none. Only the
+          one action, «Ensayar», leads. */}
+      <div className={sheet ? "relative" : nested ? "relative overflow-hidden rounded-[var(--brand-radius-panel)]" : "brand-facet-panel brand-surface overflow-hidden rounded-[var(--brand-radius-panel)]"}>
+        {!nested && !sheet && <span aria-hidden className={`absolute inset-y-0 left-0 z-[1] w-[3px] ${TONE_RAIL[tone]}`} />}
+        {sheet ? (
+          <div className="flex flex-col gap-4 empty:hidden">
+            {hero && (
+              <p className="font-body text-sm text-ink-muted">
+                {day}{shortDate && ` · ${shortDate}`}{(time || startTime) && <span className="tabular-nums"> · {time || startTime}</span>}
+              </p>
+            )}
             {/* Capped from `md`: full width on a phone is the thumb's target, but the
                 same button across a 56rem desktop page read as a banner (D). */}
-            {hasSetlist && (
+            {hero && hasSetlist && (
               <div className="md:max-w-md">
                 <PracticePlaylistButton variant="hero" songs={setlist!.songs} mySeat={mySeat} accentVar="--accent-rgb" />
               </div>
@@ -343,7 +356,7 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
         </div>
         )}
 
-        <div className={hero ? "mt-8 space-y-6" : "space-y-5 p-5 md:p-6"}>
+        <div className={hero ? "mt-8 space-y-6" : sheet ? "mt-2 space-y-6 pb-2" : "space-y-5 p-5 md:p-6"}>
           {/* The run sheet reads left-to-right from `lg`: the message and the
               songs in the wide column, the seats in a fixed rail (22rem, 24rem
               from `xl`: two faces with their names to a row). The message sits
@@ -361,8 +374,8 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
                 run sheet every section starts open from `lg`, where the rail
                 has the room and the page is one screen anyway. */}
             {hasRole && (
-              <section className={hero ? "pt-2" : hasSetlist ? `border-t border-ink-dim/[0.12] pt-2${wide ? " lg:border-t-0 lg:pt-0" : ""}` : ""}>
-                {hero && <h4 className={`${SHEET_TITLE} mb-3`}>Equipo</h4>}
+              <section className={sheet ? "pt-2" : hasSetlist ? `border-t border-ink-dim/[0.12] pt-2${wide ? " lg:border-t-0 lg:pt-0" : ""}` : ""}>
+                {sheet && <h4 className={`${SHEET_TITLE} mb-3`}>Equipo</h4>}
                 <TeamSections
                   team={{ leads, bgvs, chorus, instruments, fohTeam }}
                   myName={myName}
@@ -370,7 +383,7 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
                   viewerTypes={viewerTypes}
                   openAll={openAllSections}
                   openAllFrom={wide ? "lg" : undefined}
-                  sheet={hero}
+                  sheet={sheet}
                 />
               </section>
             )}
@@ -520,7 +533,9 @@ function SongRow({ song, n, onOpen, onQuickActions, dense = false, sheet = false
       onClick={() => onOpen(song._id, song.play_key || undefined)}
       className={`group -mx-2 flex w-full cursor-pointer select-none items-center ${sheet ? "gap-4" : "gap-3"} rounded-lg px-2 ${sheet ? (dense ? "py-2.5" : "py-3.5") : dense ? "py-2" : "py-2.5"} text-left transition-colors hover:bg-accent/[0.055]`}
     >
-      <span className={sheet ? "w-5 shrink-0 font-display text-xl font-semibold leading-none text-ink-dim tabular-nums" : "font-label text-xs text-mono-400 w-4 shrink-0 text-right tabular-nums"}>{n}</span>
+      {/* `w-7`, right-aligned: two digits of 20 px display type need the room, and a
+          medley's «+» sits in the same column. */}
+      <span className={sheet ? "w-7 shrink-0 text-right font-display text-xl font-semibold leading-none text-ink-dim tabular-nums" : "font-label text-xs text-mono-400 w-4 shrink-0 text-right tabular-nums"}>{n}</span>
       <div className="flex-1 min-w-0">
         {sheet ? (
           <>

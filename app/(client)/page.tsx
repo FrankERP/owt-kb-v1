@@ -13,8 +13,7 @@ import { requireWorshipPage } from "../utils/worshipPageGate";
 import { myNameFromSession } from "../utils/agenda";
 import { homeGreeting } from "../utils/homeGreeting";
 import { seatPhotos } from "../utils/teamSections";
-import { heroPhotoPosition, heroPhotoSrc, type HomeHero } from "../utils/homeHero";
-import { SHEET_TITLE } from "../components/DayCard";
+import { heroPhotoPosition, heroPhotoSrc, SHEET_TITLE, type HomeHero } from "../utils/homeHero";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -75,7 +74,7 @@ const WEEKEND_QUERY = `{
     ${ROLE_FIELDS}
   },
   "viewer": *[_type == "teamMembers" && _id == $me][0]{ memberType },
-  "home": *[_type == "homeSettings"][0]{ "photo": heroPhoto.asset->url, "hotspot": heroPhoto.hotspot{ x, y }, heroAlt }
+  "home": *[_id == "homeSettings"][0]{ "photo": heroPhoto.asset->url, "hotspot": heroPhoto.hotspot{ x, y }, "crop": heroPhoto.crop{ top, bottom, left, right }, heroAlt }
 }`;
 
 export const revalidate = 60;
@@ -247,10 +246,16 @@ export default async function Home() {
     viewerIsAdmin: ["super-admin", "admin"].includes(session.user.role),
   };
   const greeting = homeGreeting(services.map((s) => s.props), session.user, myName);
-  // The team photo behind the greeting (ADR-0070): one Studio document, optional.
-  // Without it the band is just the greeting on the page — never a blank block.
+  // The team photo behind the greeting (ADR-0070): the ONE Studio document
+  // (`_id` "homeSettings", a singleton pane in `sanity/structure.ts`), published
+  // — this client reads the published perspective. Without it the band is just
+  // the greeting on the page, never a blank block.
   const photo = weekend.home?.photo
-    ? { src: heroPhotoSrc(weekend.home.photo), position: heroPhotoPosition(weekend.home.hotspot), alt: weekend.home.heroAlt?.trim() ?? "" }
+    ? {
+        src: heroPhotoSrc(weekend.home.photo, weekend.home.crop),
+        position: heroPhotoPosition(weekend.home.hotspot, weekend.home.crop),
+        alt: weekend.home.heroAlt?.trim() ?? "",
+      }
     : null;
 
   return (
