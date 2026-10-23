@@ -32,9 +32,16 @@ export const serviceReadinessStructure: StructureResolver = (S) => {
   return S.list()
     .title('Contenido')
     .items([
+      // Inicio's team photo (ADR-0070) is ONE document with a fixed id: a pane,
+      // not a list, so a second «Create» can never leave the page picking one of
+      // two at random (`app/(client)/page.tsx` reads `_id == "homeSettings"`).
+      S.listItem()
+        .title('Inicio (foto del equipo)')
+        .id('homeSettings')
+        .child(S.document().schemaType('homeSettings').documentId('homeSettings')),
       ...typeItems.filter((item) => {
         const id = item.getId()
-        return typeof id === 'string' && editable.has(id)
+        return typeof id === 'string' && editable.has(id) && id !== 'homeSettings'
       }),
       S.divider(),
       S.listItem()
