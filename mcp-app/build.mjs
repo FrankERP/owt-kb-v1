@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Builds the MCP Apps proposal card (S1 of docs/superpowers/plans/2026-10-21-owt-mcp-proposal-editor.md)
 // into ONE self-contained HTML document and writes it to `mcp-app/generated/proposalCardHtml.ts`,
-// which `/api/mcp` serves as the `ui://owt/proposal-editor` resource.
+// which `/api/mcp` serves as the `ui://owt/proposal-editor/<digest>` resource (ADR-0069).
 //
 // One inline document because the host renders it in a sandboxed iframe whose CSP admits no
 // other origin: a <script src> or a font URL would simply not load. The output is committed
