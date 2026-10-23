@@ -102,10 +102,11 @@ the budget goes there, once.
 - **Two branches deploy, both real:** `preview` → `dev-owt-backstage.vercel.app` (owned
   **exclusively** by `preview` — update dev only by merging into `preview`), `main` →
   production. No staging branch.
-- **Only `main`, `preview` and `verify/service-readiness` spend a build** (`vercel.json`
-  `ignoreCommand` → `scripts/vercel-ignore-build.mjs`; fails open). Other refs are created
-  `CANCELED` with a URL that serves nothing, so a `claude/*` push proves nothing. Guard:
-  `deployBranchPolicy.test.ts`; storage quota and the deliberate-build hatch: `docs/CI.md`.
+- **Only `main`, `preview` and `verify/service-readiness` get a deployment** — `vercel.json`
+  `git.deploymentEnabled` (`"**": false` + those three, ADR-0068) creates nothing for any other
+  ref, and `ignoreCommand` → `scripts/vercel-ignore-build.mjs` is the fail-open belt. A `claude/*`
+  push proves nothing. Guard: `deployBranchPolicy.test.ts`; quotas and the deliberate-build hatch:
+  `docs/CI.md`.
 - **Verifying a deploy means checking the ALIAS:** the target domain is in the deployment's
   `alias` and `meta.githubCommitSha` is the pushed commit. A `● Ready` build proves only that
   it compiled; HTTP checks prove nothing (SSO answers `302`). Builds take ~90 s: one
