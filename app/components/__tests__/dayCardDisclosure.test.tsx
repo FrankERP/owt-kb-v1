@@ -97,6 +97,24 @@ describe("DayCardDisclosure", () => {
     expect(screen.getByRole("button", { name: /Campamento/ }).textContent).toMatch(/18:45/);
   });
 
+  it("ADR-0070 — as a `sheet` row it drops the card chrome and the rail, and sets its title in body type", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 8, 9, 0, 0));
+    const { container } = mount({ sheet: true });
+    expect(container.querySelector(".brand-surface")).toBeNull();
+    expect(container.querySelector(".w-\\[3px\\]")).toBeNull();
+    const trigger = screen.getByRole("button", { name: /Sábado/ });
+    const title = within(trigger).getByText(/Sábado/, { selector: "span" });
+    expect(title.className).toContain("font-body");
+    expect(title.className).not.toContain("uppercase");
+    expect(trigger.textContent).toContain("en 11 días");
+    // The card version keeps both.
+    cleanup();
+    const card = mount();
+    expect(card.container.querySelector(".brand-surface")).toBeTruthy();
+    expect(card.container.querySelector(".w-\\[3px\\]")).toBeTruthy();
+  });
+
   it("opens onto the card, and the setlist lives inside the collapsed region", () => {
     mount();
     const trigger = screen.getByRole("button", { name: /Sábado/ });

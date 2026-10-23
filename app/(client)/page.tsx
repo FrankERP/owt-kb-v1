@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import Button from "@/app/components/ui/Button";
 import { Setlist, SetlistSong, SpecialRole } from "../utils/interface";
@@ -12,6 +13,8 @@ import { requireWorshipPage } from "../utils/worshipPageGate";
 import { myNameFromSession } from "../utils/agenda";
 import { homeGreeting } from "../utils/homeGreeting";
 import { seatPhotos } from "../utils/teamSections";
+import { heroPhotoPosition, heroPhotoSrc, type HomeHero } from "../utils/homeHero";
+import { SHEET_TITLE } from "../components/DayCard";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -71,7 +74,8 @@ const WEEKEND_QUERY = `{
     songs[]{ play_key, medley_tag, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "bpm": song->bpm, "key": song->key, "leads": leads[]->{ member_name, alias } },
     ${ROLE_FIELDS}
   },
-  "viewer": *[_type == "teamMembers" && _id == $me][0]{ memberType }
+  "viewer": *[_type == "teamMembers" && _id == $me][0]{ memberType },
+  "home": *[_type == "homeSettings"][0]{ "photo": heroPhoto.asset->url, "hotspot": heroPhoto.hotspot{ x, y }, heroAlt }
 }`;
 
 export const revalidate = 60;
@@ -100,6 +104,7 @@ export default async function Home() {
     satRole: WeekendRole[];
     specials: SpecialRole[];
     viewer: { memberType?: string[] } | null;
+    home: HomeHero | null;
   }>(WEEKEND_QUERY, { sun, sat, today, me: session.user.sanityId });
 
   // Fail closed on an ambiguous weekend target: a duplicate canonical document
@@ -242,26 +247,58 @@ export default async function Home() {
     viewerIsAdmin: ["super-admin", "admin"].includes(session.user.role),
   };
   const greeting = homeGreeting(services.map((s) => s.props), session.user, myName);
+  // The team photo behind the greeting (ADR-0070): one Studio document, optional.
+  // Without it the band is just the greeting on the page — never a blank block.
+  const photo = weekend.home?.photo
+    ? { src: heroPhotoSrc(weekend.home.photo), position: heroPhotoPosition(weekend.home.hotspot), alt: weekend.home.heroAlt?.trim() ?? "" }
+    : null;
 
   return (
     <div>
-      {/* `cue={false}`: the hero card below is the countdown. */}
+      {/* `cue={false}`: the greeting band below carries the countdown. */}
       <Navbar title="OWT" cue={false} />
 
-      <div className="mx-auto mb-16 max-w-7xl px-6 pt-12">
-        {/* The page opens on the member's own answer — «Te toca el sábado · Lead
-            con Gaby» — not a label that read the same for everyone. The day word
-            is green: the colour the card uses for «tú». */}
-        <div className="brand-section-heading mb-7" {...revealProps(0)}>
-          {greeting.hello && (
-            <p className="font-label text-[10px] uppercase tracking-[0.24em] text-accent">{greeting.hello}</p>
-          )}
-          <h2 className="mt-1 font-display text-3xl font-semibold text-ink md:text-4xl">
+      {/* The band (ADR-0070, the «Inicio de millones» mock, variant B): the page
+          opens on the member's own answer — «Te toca el domingo / Eléctrica ·
+          11:00 · en 2 días» — set LARGE in the display face over the team photo,
+          with a scrim so the words stay on the page's own ground. The day word
+          is green: the colour the card uses for «tú». «Hola, Frank» is body
+          text, not an eyebrow: the sheet keeps its small caps for section
+          titles only. */}
+      <section
+        aria-label="Tu próximo servicio"
+        className={`relative flex flex-col justify-end ${photo ? "min-h-[24rem] md:min-h-[32rem]" : "pt-12"}`}
+        {...revealProps(0)}
+      >
+        {photo && (
+          <>
+            {/* `unoptimized`: the original JPEG, never Next's WebP — the iOS
+                WKWebView fails to decode it (same reason as the avatars).
+                `priority`: it is the page's largest paint. */}
+            <Image
+              src={photo.src}
+              alt={photo.alt}
+              fill
+              unoptimized
+              priority
+              sizes="100vw"
+              className="object-cover"
+              style={{ objectPosition: photo.position }}
+            />
+            <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-surface-base via-surface-base/60 to-transparent" />
+          </>
+        )}
+        <div className="relative mx-auto w-full max-w-7xl px-6 pb-2">
+          {greeting.hello && <p className="font-body text-[17px] text-ink-muted">{greeting.hello}</p>}
+          <h2 className="mt-2 font-display text-[3.25rem] font-semibold leading-[0.98] tracking-tight text-ink md:text-[5.5rem]">
             {greeting.lead}
             {greeting.day && <span className="text-positive-fg">{greeting.day}</span>}
           </h2>
-          {hero && <p className="mt-1.5 font-body text-sm text-ink-muted">{greeting.sub}</p>}
+          {hero && <p className="mt-3 font-body text-[17px] leading-snug text-ink md:text-xl">{greeting.sub}</p>}
         </div>
+      </section>
+
+      <div className="mx-auto mb-16 max-w-7xl px-6 pt-6">
         {/* No hero means no painting service at all — the quiet-week state. */}
         {!hero ? (
           <div className="flex flex-col items-center gap-3 py-16 text-mono-600">
@@ -279,24 +316,26 @@ export default async function Home() {
           </div>
         ) : (
           <>
-            {/* The hero spans the container — no centred `max-w-3xl` card. The
-                lit-card pass (spec §23, decision Q) reads `data-lit`; its CSS
-                lives in `app/brand.css` (`.brand-lit-card[data-lit]::before`).
-                The wrapper clips (that is how the beam stays on the border), so
-                it casts the elevation the card's own `.brand-surface` shadow
-                cannot. Neutral since 2026-10-20: an accent glow under it was
-                one more colour on the most-seen card. */}
-            <div className="brand-lit-card shadow-md shadow-elevation/10" data-lit {...revealProps(1)}>
+            {/* The hero is the run SHEET, straight on the page (ADR-0070): the
+                lit card it sat in until 2026-10-23 was one more frame around the
+                most-seen content, and the type pass is about fewer frames, not
+                more. `DayCard hero` draws no panel, rail or header of its own. */}
+            <div {...revealProps(1)}>
               <DayCard {...hero.props} {...viewer} layout="wide" hero />
             </div>
+            {/* «Después»: the week's other services as hairline rows, under the
+                sheet's third small-caps title. */}
             {rest.length > 0 && (
-              <div className="mt-4 space-y-3">
-                {rest.map((s, i) => (
-                  <div key={s.key} {...revealProps(2 + i)}>
-                    <DayCardDisclosure {...s.props} {...viewer} />
-                  </div>
-                ))}
-              </div>
+              <section aria-labelledby="home-despues" className="mt-12">
+                <h3 id="home-despues" className={SHEET_TITLE}>Después</h3>
+                <div className="mt-2 divide-y divide-ink/[0.10] border-y border-ink/[0.10]">
+                  {rest.map((s, i) => (
+                    <div key={s.key} {...revealProps(2 + i)}>
+                      <DayCardDisclosure {...s.props} {...viewer} sheet />
+                    </div>
+                  ))}
+                </div>
+              </section>
             )}
           </>
         )}

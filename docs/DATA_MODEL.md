@@ -401,6 +401,17 @@ after each solve and after an apply's confirm (not on its refusals) that deletes
 it but `apply_schedule` and the editor's three tools, and nothing in it is ever returned to the
 model (members cross the wire as tokens, never ids).
 
+## `homeSettings` — Inicio's team photo (ADR-0070)
+
+ONE hand-authored document, created and edited in the Studio by an admin: `heroPhoto` (image with
+hotspot) and `heroAlt` (string). `app/(client)/page.tsx` reads `*[_type == "homeSettings"][0]` in
+its weekend query and paints the photo behind the greeting (`heroPhotoSrc`/`heroPhotoPosition`,
+`app/utils/homeHero.ts`: JPEG ≤ 1800 px, the hotspot as `object-position`). Absent, or without a
+photo, the band is text only — the designed fallback. Not draft-gated (it is not member content),
+not protected (it is meant to be edited), shared with `preview` like everything else.
+
+---
+
 ## `solverConfig` — the shared planner rule set (singleton)
 
 One document, always at `_id: "solverConfig"`

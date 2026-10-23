@@ -8,12 +8,12 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 305,
-    "filesScanned": 522,
+    "literalRows": 306,
+    "filesScanned": 523,
     "filesWithColour": 56,
     "byCategory": {
       "2": 2,
-      "4": 64,
+      "4": 65,
       "8": 87,
       "9": 10,
       "11": 8,
@@ -22,13 +22,13 @@
     "byDisposition": {
       "B": 112,
       "exempt": 58,
-      "keep": 241,
+      "keep": 240,
       "C": 5,
       "D": 14
     },
     "compositingClasses": 23,
     "compositingSelectorOccurrences": 62,
-    "compositingClassNameOccurrences": 58,
+    "compositingClassNameOccurrences": 56,
     "compositingRuleBodies": 54,
     "lightCounterpartClasses": 14,
     "pairs": 7,
@@ -283,9 +283,21 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 268,
+      "line": 305,
       "disposition": "B",
       "reason": null
+    },
+    {
+      "file": "app/(client)/page.tsx",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "to-transparent",
+      "alpha": null,
+      "utility": "to",
+      "carrier": null,
+      "line": 288,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
     },
     {
       "file": "app/(client)/posts/[slug]/page.tsx",
@@ -2479,7 +2491,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 5592,
+      "line": 5580,
       "disposition": "B",
       "reason": null
     },
@@ -2491,7 +2503,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2611,
+      "line": 2596,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2503,7 +2515,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 3491,
+      "line": 3476,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2647,7 +2659,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 575,
+      "line": 580,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2659,7 +2671,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 618,
+      "line": 646,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2671,7 +2683,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 624,
+      "line": 653,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2683,7 +2695,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 104,
+      "line": 111,
       "disposition": "B",
       "reason": null
     },
@@ -3019,7 +3031,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 270,
+      "line": 281,
       "disposition": "B",
       "reason": null
     },
@@ -3031,7 +3043,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 270,
+      "line": 281,
       "disposition": "B",
       "reason": null
     },
@@ -3043,7 +3055,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 513,
+      "line": 551,
       "disposition": "B",
       "reason": null
     },
@@ -3055,7 +3067,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 522,
+      "line": 560,
       "disposition": "B",
       "reason": null
     },
@@ -3067,7 +3079,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 92,
+      "line": 98,
       "disposition": "B",
       "reason": null
     },
@@ -3079,7 +3091,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 136,
+      "line": 142,
       "disposition": "B",
       "reason": null
     },
@@ -3415,7 +3427,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 196,
+      "line": 209,
       "disposition": "B",
       "reason": null
     },
@@ -3535,7 +3547,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 119,
+      "line": 134,
       "disposition": "B",
       "reason": null
     },
@@ -3933,22 +3945,6 @@
       "file": "app/(client)/me/propose/[roleId]/ProposalEditor.tsx",
       "kind": "className",
       "class": "search-console",
-      "count": 1,
-      "disposition": "keep",
-      "reason": "Usage site of a compositing class"
-    },
-    {
-      "file": "app/(client)/page.tsx",
-      "kind": "className",
-      "class": "lit-card",
-      "count": 1,
-      "disposition": "keep",
-      "reason": "Usage site of a compositing class"
-    },
-    {
-      "file": "app/(client)/page.tsx",
-      "kind": "className",
-      "class": "section-heading",
       "count": 1,
       "disposition": "keep",
       "reason": "Usage site of a compositing class"

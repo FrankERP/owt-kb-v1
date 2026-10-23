@@ -24,23 +24,23 @@ describe("joinNames / firstName", () => {
 describe("homeGreeting", () => {
   it("names the weekday, the co-lead, the distance and the songs", () => {
     const g = homeGreeting([sat({ leads: ["Frank", "Gaby"] }), sun()], { alias: "Frank" }, "frank", NOW);
-    expect(g).toEqual({ hello: "Hola, Frank", lead: "Te toca el ", day: "sábado", sub: "Lead con Gaby · en 3 días · 5 canciones" });
+    expect(g).toEqual({ hello: "Hola, Frank", lead: "Te toca el ", day: "sábado", sub: "Lead con Gaby · 18:00 · en 3 días · 5 canciones" });
   });
 
   it("picks the EARLIEST service the member serves, not the next service overall", () => {
     const g = homeGreeting([sat(), sun({ instruments: [{ label: "Bajo", person: "Frank" }] })], { alias: "Frank" }, "frank", NOW);
     expect(g.day).toBe("domingo");
-    expect(g.sub).toBe("Bajo · en 4 días · 6 canciones");
+    expect(g.sub).toBe("Bajo · 11:00 · en 4 días · 6 canciones");
   });
 
   it("says «hoy» and «mañana» in the heading and drops the distance from the line", () => {
     const today = homeGreeting([{ ...sat({ bgvs: [{ member_name: "Frank" }] }), date: "2026-10-21" }], { name: "Frank" }, "frank", NOW);
-    expect([today.lead, today.day, today.sub]).toEqual(["Te toca ", "hoy", "BGVs · 5 canciones"]);
+    expect([today.lead, today.day, today.sub]).toEqual(["Te toca ", "hoy", "BGVs · 18:00 · 5 canciones"]);
     const tomorrow = homeGreeting([{ ...sat({ chorus: [{ member_name: "Francisco", alias: "Frank" }] }), date: "2026-10-22" }], { name: "Frank" }, "frank", NOW);
-    expect([tomorrow.day, tomorrow.sub]).toEqual(["mañana", "Coro · 5 canciones"]);
+    expect([tomorrow.day, tomorrow.sub]).toEqual(["mañana", "Coro · 18:00 · 5 canciones"]);
   });
 
-  it("names a special and its clock; a weekend needs neither", () => {
+  it("names a special and its clock; a weekend carries the team's standing hour after the seat", () => {
     const sp: GreetingService = { day: "Noche de alabanza", date: "2026-10-23", time: "19:30", leads: ["Frank"], setlist: songs(1) };
     expect(homeGreeting([sp], { alias: "Frank" }, "frank", NOW).sub).toBe("Noche de alabanza · 19:30 · Lead · en 2 días · 1 canción");
   });

@@ -42,7 +42,10 @@ still one-shot:
 4. **Drop landing** (spec §2.1, not yet built — lands with the drag-and-drop
    phase) — when a dragged chip lands, the target cell flashes the beam edge
    once, 120ms.
-5. **The lit card on `/`** (once, 900 ms) — after the route reveal, the next
+5. **The lit card on `/`** (once, 900 ms) — **no site since ADR-0070 (2026-10-23)**: the
+   hero is a run sheet with no frame, and a border pass needs a border; the rules stay
+   for a framed surface to adopt, `litCard.test.ts` asserts nothing sets `data-lit`. As
+   designed: after the route reveal, the next
    service's hero card gets one light pass around its border, then rests on its
    own accent border. `.brand-lit-card[data-lit]::before`, `@keyframes
    brand-lit-pass`, `--lit-beam`. `data-lit` is set by `app/(client)/page.tsx`
@@ -609,8 +612,8 @@ cards — see spec Part X for the full ledger; the motion-relevant pieces:
   the run sheet only, the song list moved to `/biblioteca` with no repeated count of its
   own; the ONE count on that surface lives in the search placeholder), and "Repertorio"
   (`PostComponent`'s song-card eyebrow — the card itself is gone).
-- **The lit card** (`.brand-lit-card`, `--lit-beam` — see "The beam" above) is the home
-  hero's one-shot border pass; it is the fifth enumerated beam use and the first CSS-only
+- **The lit card** (`.brand-lit-card`, `--lit-beam` — see "The beam" above) was the home
+  hero's one-shot border pass until ADR-0070 (the hero lost its frame; the CSS stays, unused); it is the fifth enumerated beam use and the first CSS-only
   one (no `motion` import, so it costs nothing against the bundle budget below). Guarded by
   `litCard.test.ts`, which reads `brand.css`/`page.tsx` as text and cannot see geometry —
   see the file's own header for what closed that gap.
