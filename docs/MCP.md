@@ -794,9 +794,11 @@ decisions and the rejected alternatives:
 - **The card** (`mcp-app/proposal-card/useStoredEditor.tsx`) opens on a `check_service_edits`
   answer with its edits, edits seats like the proposal editor, and «Guardar» sends the change sets
   to the chat (in parts when a group is too large); it never writes. On a host that takes model
-  context (`updateModelContext` with text), the chat message carries the changes in words and a short
-  key, and the change sets ride in the model's context on the `Argumentos para save_service_edits`
-  line labelled with that key, so the model never takes an earlier check's line (still in the chat,
+  context (`updateModelContext` with text), the chat message is what a person would write («Guarda mis
+  cambios de la tarjeta (2tgeu4):» and the changes in words); which tool to call and what to do when
+  the line is missing ride in the model's context, next to the change sets on the `Argumentos para
+  save_service_edits` line, labelled with that key (Frank, 2026-10-23: the instructions in the chat
+  read «raro»), so the model never takes an earlier check's line (still in the chat,
   MAC still valid). The host keeps only the last context update, so the card resends every part
   handed over for the current list. «Enviar de nuevo» repeats a part (safe: «ya estaba»), the way
   back when the context did not arrive. A host without it, or one that refuses the update, gets the

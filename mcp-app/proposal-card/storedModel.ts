@@ -220,14 +220,15 @@ export function saveRequest(month: string, part: readonly StoredChange[], index:
   const json = JSON.stringify({ month, changes: part });
   const key = argsKey(json);
   const which = total > 1 ? `la parte ${index + 1} de ${total} de ` : "";
+  // The chat shows what a person would write (Frank, 2026-10-23: the instructions read «raro»);
+  // what only the model needs — which tool, which line, what to do if it is missing — rides in the
+  // context line next to the arguments.
   return {
     key,
-    message: [
-      `Guarda con save_service_edits ${which}mis cambios de ${monthName(month)} en la tarjeta (clave ${key}):`,
-      ...part.flatMap((c) => c.lines.map((l) => `- ${l}`)),
-      `Los argumentos van en el contexto de la tarjeta con la clave ${key}; no uses los de una revisión anterior. Si no los ves, dímelo y vuelvo a tocar «Guardar».`,
-    ].join("\n"),
-    contextLine: `Tarjeta, clave ${key}${total > 1 ? ` (parte ${index + 1} de ${total})` : ""}. ${ARGS_LINE_PREFIXES[0]} ${json}`,
+    message: [`Guarda ${which}mis cambios de la tarjeta (${key}):`, ...part.flatMap((c) => c.lines.map((l) => `- ${l}`))].join("\n"),
+    contextLine:
+      `Tarjeta de ${monthName(month)}, cambios ${key}${total > 1 ? ` (parte ${index + 1} de ${total})` : ""}: guárdalos con save_service_edits con ` +
+      `los argumentos de esta línea, no con los de una revisión anterior; si no la ves, pide tocar «Guardar» otra vez. ${ARGS_LINE_PREFIXES[0]} ${json}`,
   };
 }
 
