@@ -7,7 +7,7 @@ import { ChainLinkIcon } from "../ChainLinkIcon";
 import Button from "../ui/Button";
 import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
-import Select, { useFinePointer } from "../ui/Select";
+import Select, { useAnyCoarsePointer, useFinePointer } from "../ui/Select";
 import { ChevronDownIcon, ChevronUpIcon, CloseIcon, PlusIcon } from "../ui/icons";
 import { canEditSetlistResponse, SETLIST_READ_ISSUE_COPY } from "../../utils/setlistReadContract";
 import { serviceDayOffset, serviceTodayIso } from "./serviceReadiness";
@@ -15,6 +15,11 @@ import { MUTATION_TIMEOUT_MS } from "./serviceMutationErrors";
 import { writeErrorMessage } from "@/app/utils/writeError";
 import { WORSHIP_NIGHT_FORMAT } from "@/app/utils/serviceFormat";
 import { unassignedLeads } from "@/app/utils/songLeads";
+
+// The row's icon buttons: a 44 px target on a phone, the 36 px icon default from `sm`
+// (no `size` is responsive, so the desktop half is an additive utility), dimmed and
+// inert while `aria-disabled` (see the row for why not `disabled`).
+const ROW_ICON = "sm:min-h-9 sm:min-w-9 aria-disabled:opacity-50 aria-disabled:pointer-events-none";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -161,11 +166,15 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
   const [roster, setRoster]             = useState<{ id: string; name: string }[]>([]);
   const dragSrc     = useRef<number | null>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Drag-and-drop is a mouse affordance: HTML5 drag does not start from a touch,
-  // and on iOS a long press on a `draggable` row hijacks the scroll instead. On
-  // a coarse pointer the row is not draggable and the grip is not drawn; the
-  // 44 px «Subir / Bajar / Quitar» buttons are the only reorder there (bloque 6).
+  // HTML5 drag is a mouse/trackpad affordance: a touch screen never starts it,
+  // and on iOS a long press on a `draggable` row hijacks the scroll instead. So a
+  // row is draggable only on a fine pointer with NO touch screen attached (an iPad
+  // with a trackpad is fine-pointer AND any-pointer coarse); elsewhere the grip is
+  // not drawn and the 44 px «Subir / Bajar / Quitar» buttons are the only reorder
+  // (bloque 6).
   const finePointer = useFinePointer();
+  const anyCoarse = useAnyCoarsePointer();
+  const dragPointer = finePointer && !anyCoarse;
 
   useEffect(() => {
     let alive = true;
@@ -499,7 +508,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
             return (
               <Fragment key={e.localId}>
                 <div
-                  draggable={finePointer}
+                  draggable={dragPointer}
                   onDragStart={ev => { ev.dataTransfer.effectAllowed = "move"; dragSrc.current = idx; setDraggingIdx(idx); }}
                   onDragOver={ev => { ev.preventDefault(); ev.dataTransfer.dropEffect = "move"; setDragOverIdx(idx); }}
                   onDragLeave={() => setDragOverIdx(null)}
@@ -515,7 +524,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
                       : "border-accent/10 bg-surface-sunken/30"
                   }`}
                 >
-                  {finePointer && (
+                  {dragPointer && (
                     <div className="cursor-grab active:cursor-grabbing text-mono-600 hover:text-mono-400 shrink-0 transition-colors" aria-hidden="true">
                       <GripIcon />
                     </div>
@@ -534,7 +543,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
                           id={`dirige-${e.localId}`}
                           label="Dirige"
                           aria-label={`Dirige ${e.song.title}`}
-                          size="sm"
+                          size="md"
                           className="min-w-0 flex-1"
                           value={e.leadIds[0] ?? ""}
                           onChange={ev => setLead(e.localId, 0, ev.target.value)}
@@ -547,7 +556,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
                           id={`dirige-y-${e.localId}`}
                           label="y"
                           aria-label={`Y también dirige ${e.song.title}`}
-                          size="sm"
+                          size="md"
                           className="min-w-0 flex-1"
                           disabled={!e.leadIds[0]}
                           value={e.leadIds[1] ?? ""}
@@ -568,20 +577,25 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
                       Three 44 px targets: a thumb cannot hit an 11 px glyph. */}
                   <div className="flex basis-full items-center gap-1 sm:basis-auto">
                     <input
-                      className="w-16 min-h-[44px] rounded-lg border border-edge-control bg-transparent px-1.5 text-center font-body text-[16px] focus:outline-none focus:border-accent sm:min-h-0 sm:py-1 sm:text-xs"
+                      className="w-16 min-h-[44px] select-text rounded-lg border border-edge-control bg-transparent px-1.5 text-center font-body text-[16px] focus:outline-none focus:border-accent sm:min-h-9 sm:text-xs"
                       placeholder="Tono"
                       aria-label={`Tono de ${e.song.title}`}
                       value={e.play_key}
                       onChange={ev => setEntries(prev => prev.map(x => x.localId === e.localId ? { ...x, play_key: ev.target.value } : x))}
                     />
+                    {/* 44 px on a phone, the 36 px icon default from `sm` so a desktop row keeps
+                        its height (the key field matches with `sm:min-h-9`). The end buttons are
+                        `aria-disabled`, not `disabled`: a `disabled` button drops focus to <body>
+                        the moment the row it just moved reaches the end, and `move()` already
+                        refuses a step past either end. */}
                     <div className="ml-auto flex items-center">
-                      <Button variant="icon" size="lg" onClick={() => move(idx, -1)} disabled={idx === 0} aria-label={`Subir ${e.song.title}`}>
+                      <Button variant="icon" size="lg" className={ROW_ICON} onClick={() => move(idx, -1)} aria-disabled={idx === 0 || undefined} aria-label={`Subir ${e.song.title}`}>
                         <ChevronUpIcon size={16} />
                       </Button>
-                      <Button variant="icon" size="lg" onClick={() => move(idx, 1)} disabled={idx === entries.length - 1} aria-label={`Bajar ${e.song.title}`}>
+                      <Button variant="icon" size="lg" className={ROW_ICON} onClick={() => move(idx, 1)} aria-disabled={idx === entries.length - 1 || undefined} aria-label={`Bajar ${e.song.title}`}>
                         <ChevronDownIcon size={16} />
                       </Button>
-                      <Button variant="icon" size="lg" tone="danger" onClick={() => remove(e.localId)} aria-label={`Quitar ${e.song.title}`}>
+                      <Button variant="icon" size="lg" className={ROW_ICON} tone="danger" onClick={() => remove(e.localId)} aria-label={`Quitar ${e.song.title}`}>
                         <CloseIcon size={16} />
                       </Button>
                     </div>
@@ -589,11 +603,16 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
                 </div>
                 {idx < entries.length - 1 && (
                   <div className="-my-0.5 flex items-center justify-center relative z-10">
-                    {/* The wrapper paints the page surface so the pill masks the gap between rows. */}
-                    <span className="rounded-full bg-surface-base">
+                    {/* The wrapper paints the page surface so the pill masks the gap between rows
+                        (`inline-flex`, so its box is the pill's, not a line box with a descender).
+                        On a phone an invisible `before:` pseudo-element stretches the pill's hit
+                        area to ~44 px without moving the rows apart; from `sm` the pointer is a
+                        mouse and the pill's own box is the target. */}
+                    <span className="inline-flex rounded-full bg-surface-base">
                       <Button
                         variant="pill"
                         size="sm"
+                        className="relative before:absolute before:inset-x-0 before:-inset-y-3 before:content-[''] sm:before:content-none"
                         active={linked}
                         onClick={() => toggleMedleyLink(idx, idx + 1)}
                         title={linked ? "Desagrupar medley" : "Agrupar en medley"}

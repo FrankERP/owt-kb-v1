@@ -327,14 +327,22 @@ describe("SetlistEditor — reorder and remove on a phone (bloque 6)", () => {
     const { onSaved } = mount();
     await screen.findByText("Canción 1");
 
-    // The ends are inert: nothing above the first, nothing below the last.
-    expect((screen.getByRole("button", { name: "Subir Canción 1" }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole("button", { name: "Bajar Canción 2" }) as HTMLButtonElement).disabled).toBe(true);
-
-    fireEvent.click(screen.getByRole("button", { name: "Bajar Canción 1" }));
+    // The ends are inert but stay focusable (`aria-disabled`, not `disabled`): a
+    // `disabled` button would drop focus to <body> the moment its row reached the end.
+    const ariaDisabled = (name: string) => screen.getByRole("button", { name }).getAttribute("aria-disabled");
+    expect(ariaDisabled("Subir Canción 1")).toBe("true");
+    expect(ariaDisabled("Bajar Canción 2")).toBe("true");
+    expect(ariaDisabled("Bajar Canción 1")).toBeNull();
     const titles = () => screen.getAllByText(/^Canción \d$/).map((el) => el.textContent);
+    fireEvent.click(screen.getByRole("button", { name: "Subir Canción 1" }));
+    expect(titles()).toEqual(["Canción 1", "Canción 2"]);
+
+    const bajar1 = screen.getByRole("button", { name: "Bajar Canción 1" });
+    bajar1.focus();
+    fireEvent.click(bajar1);
     expect(titles()).toEqual(["Canción 2", "Canción 1"]);
-    expect((screen.getByRole("button", { name: "Bajar Canción 1" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(ariaDisabled("Bajar Canción 1")).toBe("true");
+    expect(document.activeElement).toBe(bajar1);
 
     fireEvent.click(screen.getByRole("button", { name: "Subir Canción 1" }));
     expect(titles()).toEqual(["Canción 1", "Canción 2"]);
@@ -368,11 +376,16 @@ describe("SetlistEditor — reorder and remove on a phone (bloque 6)", () => {
       const cls = screen.getByRole("button", { name }).className;
       expect(cls, name).toContain("min-h-[44px]");
       expect(cls, name).toContain("min-w-[44px]");
+      // …and the 36 px icon default from `sm`, so a desktop row keeps its height.
+      expect(cls, name).toContain("sm:min-h-9");
     }
     const tono = screen.getByLabelText("Tono de Canción 1").className;
     expect(tono).toContain("min-h-[44px]");
     expect(tono).toContain("text-[16px]");
+    expect(tono).toContain("select-text");
     expect(screen.getByPlaceholderText("Buscar por título...").className).toContain("text-[16px]");
+    // The medley toggle keeps its small pill but gains a phone-only hit area.
+    expect(screen.getByRole("button", { name: /Agrupar en medley/ }).className).toContain("before:-inset-y-3");
     expect(screen.getByRole("button", { name: "Guardar setlist" }).className).toContain("min-h-[44px]");
   });
 
@@ -385,13 +398,19 @@ describe("SetlistEditor — reorder and remove on a phone (bloque 6)", () => {
     expect(rowEl.querySelector(".cursor-grab")).toBeNull();
   });
 
-  it("keeps drag, and its handle, on a fine pointer", async () => {
+  function stubPointer(matching: string[]) {
     vi.stubGlobal("matchMedia", (q: string) => ({
-      matches: q === "(hover: hover) and (pointer: fine)",
+      matches: matching.includes(q),
       media: q,
       addEventListener: () => {},
       removeEventListener: () => {},
     }));
+  }
+  const FINE = "(hover: hover) and (pointer: fine)";
+  const ANY_COARSE = "(any-pointer: coarse)";
+
+  it("keeps drag, and its handle, on a fine pointer with no touch screen", async () => {
+    stubPointer([FINE]);
     stubFetch(singleRead({ format: null, leadRoster: [] }));
     mount();
     const title = await screen.findByText("Canción 1");
@@ -400,5 +419,22 @@ describe("SetlistEditor — reorder and remove on a phone (bloque 6)", () => {
     expect(rowEl.querySelector(".cursor-grab")).not.toBeNull();
     // The buttons stay: a trackpad user may still prefer them.
     expect(screen.getByRole("button", { name: "Bajar Canción 1" })).not.toBeNull();
+  });
+
+  it("keeps drag off on an iPad with a trackpad (fine pointer, but a touch screen too)", async () => {
+    stubPointer([FINE, ANY_COARSE]);
+    stubFetch(singleRead({ format: null, leadRoster: [] }));
+    mount();
+    const title = await screen.findByText("Canción 1");
+    const rowEl = title.closest("[class*='rounded-lg border']") as HTMLElement;
+    expect(rowEl.getAttribute("draggable")).not.toBe("true");
+    expect(rowEl.querySelector(".cursor-grab")).toBeNull();
+  });
+
+  it("gives the «Dirige» pickers 16 px on a phone too", async () => {
+    stubFetch(singleRead());
+    mount();
+    const picker = await screen.findByLabelText("Dirige Canción 1");
+    expect(picker.className).toContain("text-[16px]");
   });
 });

@@ -45,23 +45,38 @@ const CHROME =
   "focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50";
 
 const FINE_POINTER = "(hover: hover) and (pointer: fine)";
+const ANY_COARSE_POINTER = "(any-pointer: coarse)";
 
-/** `matchMedia` is absent in jsdom and on the server; both answer the COARSE path. */
-function mql() {
+/** `matchMedia` is absent in jsdom and on the server; both answer `false` (the COARSE path for `useFinePointer`). */
+function mql(query: string) {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") return null;
-  return window.matchMedia(FINE_POINTER);
+  return window.matchMedia(query);
 }
-function subscribeFine(onChange: () => void) {
-  const q = mql();
-  q?.addEventListener?.("change", onChange);
-  return () => q?.removeEventListener?.("change", onChange);
+function subscribe(query: string) {
+  return (onChange: () => void) => {
+    const q = mql(query);
+    q?.addEventListener?.("change", onChange);
+    return () => q?.removeEventListener?.("change", onChange);
+  };
 }
-const fineSnapshot = () => mql()?.matches ?? false;
-const fineServerSnapshot = () => false;
+const subscribeFine = subscribe(FINE_POINTER);
+const fineSnapshot = () => mql(FINE_POINTER)?.matches ?? false;
+const subscribeAnyCoarse = subscribe(ANY_COARSE_POINTER);
+const anyCoarseSnapshot = () => mql(ANY_COARSE_POINTER)?.matches ?? false;
+const serverSnapshot = () => false;
 
 /** True on a mouse/trackpad: the pointer test `Select` uses to pick the house menu over the OS one. */
 export function useFinePointer(): boolean {
-  return useSyncExternalStore(subscribeFine, fineSnapshot, fineServerSnapshot);
+  return useSyncExternalStore(subscribeFine, fineSnapshot, serverSnapshot);
+}
+
+/**
+ * True when ANY input is a touch screen. An iPad with a trackpad is `useFinePointer`
+ * true AND this true: fine enough for the house menu, but a finger still reaches the
+ * screen, so HTML5 drag (which iOS turns into a scroll hijack) stays off there.
+ */
+export function useAnyCoarsePointer(): boolean {
+  return useSyncExternalStore(subscribeAnyCoarse, anyCoarseSnapshot, serverSnapshot);
 }
 
 /**
