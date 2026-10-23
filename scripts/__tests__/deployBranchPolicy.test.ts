@@ -94,7 +94,7 @@ describe("the policy is actually wired", () => {
   // Vercel reads `git.deploymentEnabled` before it creates a deployment, so a
   // ref that is `false` there costs none of the Hobby plan's 100 deployments a
   // day — the cap four threads hit on 2026-10-22 with 44 canceled `claude/*`
-  // pushes (ADR-0068). The rule is a whitelist built from a blacklist: every
+  // pushes (ADR-0069). The rule is a whitelist built from a blacklist: every
   // branch off, the deploying refs on. Without this test, dropping `"**": false`
   // keeps the suite green while every push spends a slot again, and dropping
   // a deploying ref silently stops that target from deploying.
