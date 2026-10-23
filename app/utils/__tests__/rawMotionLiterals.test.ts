@@ -34,7 +34,9 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 // that reason. Widening the scan found that ONE site and no other; it was retired
 // in the same commit for the properties the card's tones actually change, so the
 // baseline is unchanged rather than raised.
-const BASELINE = { transitionAll: 5, rawDuration: 0 };
+// 2026-10-23 diseño para admins, bloque 6: `SetlistEditor`'s hand-rolled medley
+// toggle (a `transition-all` pill) became the house `Button` pill (−1 transition-all).
+const BASELINE = { transitionAll: 4, rawDuration: 0 };
 
 /** Every `.tsx` AND `.ts` under `app/**`, minus `__tests__` and the ui primitives. */
 function sourceFiles(): string[] {

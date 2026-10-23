@@ -181,7 +181,7 @@ describe("SetlistEditor — «Dirige» on a worship night", () => {
     const { onSaved } = mount();
 
     fireEvent.change(await screen.findByPlaceholderText("Buscar por título..."), { target: { value: "Canción" } });
-    fireEvent.click(await screen.findByRole("button", { name: "+ Añadir" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Añadir Canción 3" }));
     const picker = screen.getByLabelText("Dirige Canción 3");
     // A song added from search starts with no leader.
     expect((picker as HTMLSelectElement).value).toBe("");
@@ -249,7 +249,7 @@ describe("SetlistEditor — «Nueva canción» offers the existing artists", () 
 
   async function openCreate() {
     await screen.findByText("Canción 1");
-    fireEvent.click(screen.getByRole("button", { name: /\+ Crear/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Crear nueva canción" }));
     return (await screen.findByLabelText("Artista")) as HTMLInputElement;
   }
 
@@ -311,5 +311,94 @@ describe("SetlistEditor — «Nueva canción» offers the existing artists", () 
     const chips = screen.getAllByRole("button", { name: "Un Corazón" });
     expect(chips).toHaveLength(1);
     expect(chips[0].getAttribute("aria-pressed")).toBe("true");
+  });
+});
+
+// Bloque 6 (diseño para admins): the weekly dialog on a phone. Reordering no
+// longer depends on drag (which a touch screen never starts): every row carries
+// 44 px «Subir / Bajar / Quitar» buttons, and the drag handle plus `draggable`
+// exist only on a fine pointer. jsdom has no `matchMedia`, so the default run
+// is the coarse (phone) path; a stub answers the desktop one.
+describe("SetlistEditor — reorder and remove on a phone (bloque 6)", () => {
+  const PUT_SONGS = (puts: unknown[]) => (puts[0] as { songs: { songId: string }[] }).songs.map((s) => s.songId);
+
+  it("moves a song with «Bajar»/«Subir» and saves the new order", async () => {
+    const { puts } = stubFetch(singleRead({ format: null, leadRoster: [] }));
+    const { onSaved } = mount();
+    await screen.findByText("Canción 1");
+
+    // The ends are inert: nothing above the first, nothing below the last.
+    expect((screen.getByRole("button", { name: "Subir Canción 1" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Bajar Canción 2" }) as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Bajar Canción 1" }));
+    const titles = () => screen.getAllByText(/^Canción \d$/).map((el) => el.textContent);
+    expect(titles()).toEqual(["Canción 2", "Canción 1"]);
+    expect((screen.getByRole("button", { name: "Bajar Canción 1" }) as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Subir Canción 1" }));
+    expect(titles()).toEqual(["Canción 1", "Canción 2"]);
+    fireEvent.click(screen.getByRole("button", { name: "Bajar Canción 1" }));
+
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(PUT_SONGS(puts)).toEqual(["s2", "s1"]);
+  });
+
+  it("removes a song with «Quitar» and saves without it", async () => {
+    const { puts } = stubFetch(singleRead({ format: null, leadRoster: [] }));
+    const { onSaved } = mount();
+    await screen.findByText("Canción 1");
+
+    fireEvent.click(screen.getByRole("button", { name: "Quitar Canción 1" }));
+    expect(screen.queryByText("Canción 1")).toBeNull();
+    expect(screen.getByText("Canción 2")).not.toBeNull();
+
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(PUT_SONGS(puts)).toEqual(["s2"]);
+  });
+
+  it("gives the row controls and the key field a 44 px target, and the inputs 16 px on a phone", async () => {
+    stubFetch(singleRead({ format: null, leadRoster: [] }));
+    mount();
+    await screen.findByText("Canción 1");
+
+    for (const name of ["Subir Canción 2", "Bajar Canción 1", "Quitar Canción 1"]) {
+      const cls = screen.getByRole("button", { name }).className;
+      expect(cls, name).toContain("min-h-[44px]");
+      expect(cls, name).toContain("min-w-[44px]");
+    }
+    const tono = screen.getByLabelText("Tono de Canción 1").className;
+    expect(tono).toContain("min-h-[44px]");
+    expect(tono).toContain("text-[16px]");
+    expect(screen.getByPlaceholderText("Buscar por título...").className).toContain("text-[16px]");
+    expect(screen.getByRole("button", { name: "Guardar setlist" }).className).toContain("min-h-[44px]");
+  });
+
+  it("draws no drag handle and no `draggable` row on a coarse pointer", async () => {
+    stubFetch(singleRead({ format: null, leadRoster: [] }));
+    mount();
+    const title = await screen.findByText("Canción 1");
+    const rowEl = title.closest("[class*='rounded-lg border']") as HTMLElement;
+    expect(rowEl.getAttribute("draggable")).not.toBe("true");
+    expect(rowEl.querySelector(".cursor-grab")).toBeNull();
+  });
+
+  it("keeps drag, and its handle, on a fine pointer", async () => {
+    vi.stubGlobal("matchMedia", (q: string) => ({
+      matches: q === "(hover: hover) and (pointer: fine)",
+      media: q,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+    stubFetch(singleRead({ format: null, leadRoster: [] }));
+    mount();
+    const title = await screen.findByText("Canción 1");
+    const rowEl = title.closest("[class*='rounded-lg border']") as HTMLElement;
+    expect(rowEl.getAttribute("draggable")).toBe("true");
+    expect(rowEl.querySelector(".cursor-grab")).not.toBeNull();
+    // The buttons stay: a trackpad user may still prefer them.
+    expect(screen.getByRole("button", { name: "Bajar Canción 1" })).not.toBeNull();
   });
 });

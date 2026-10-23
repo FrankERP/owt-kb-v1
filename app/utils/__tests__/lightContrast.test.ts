@@ -389,8 +389,8 @@ describe("alpha-modified text roles still clear AA, in both themes", () => {
     //   surface-sunken, its worst ground in either theme: 3.38, so 1.4.11 at 3:1
     //   governs it, and the icon guard below already measures accent/65 — this
     //   site adds no new role/alpha pair to it.
-    "mono-700/40@app/components/admin/SetlistEditor.tsx",
-    "accent/40@app/components/admin/SetlistEditor.tsx",
+    //   (SetlistEditor's pair left 2026-10-23 — bloque 6 moved its medley toggle
+    //   onto the house pill, whose pressed colours live in Button.tsx.)
     "mono-600/50@app/(client)/me/propose/[roleId]/ProposalEditor.tsx",
     "accent/50@app/(client)/me/propose/[roleId]/ProposalEditor.tsx",
     //   the medley toggle, linked/unlinked. An earlier version of this comment
