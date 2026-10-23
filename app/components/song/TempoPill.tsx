@@ -28,13 +28,13 @@ import { haptic } from "@/app/utils/haptics";
 import { beatsPerBar, tempoPeriodMs } from "@/app/utils/practice";
 import { createMetronome, type Metronome } from "./metronome";
 
-// Two chromes, one component (F2, ruling 14): "md" is the song hero's console
-// pill, "sm" the smaller outlined pill the `SongSheet`'s meta row already drew
-// as static text. Only the chrome differs — the ring, the click and the label are
+// Two chromes, one component (F2, ruling 14): "md" is the song hero's 48 px
+// ring in body text (ADR-0070), "sm" the smaller outlined pill the
+// `SongSheet`'s meta row already drew as static text. Only the chrome differs — the ring, the click and the label are
 // the same pill in both.
 const CHROME = {
-  md: "brand-search-console h-[2.4rem] px-3 text-[11px] uppercase tracking-widest text-ink-dim transition-[color,transform]",
-  sm: "rounded-full border border-ink-muted/15 px-3 py-1 text-sm text-ink-muted/70 transition-[color,border-color,transform] aria-pressed:border-accent/60",
+  md: "min-h-[48px] gap-2 rounded-full border border-ink/[0.18] px-4 font-body text-base font-semibold text-ink transition-[color,border-color,transform] aria-pressed:border-accent/60",
+  sm: "rounded-full border border-ink-muted/15 px-3 py-1 font-label text-sm text-ink-muted/70 transition-[color,border-color,transform] aria-pressed:border-accent/60",
 } as const;
 
 export default function TempoPill({
@@ -115,8 +115,11 @@ export default function TempoPill({
       // [data-active="true"], and the attribute is the state.
       data-active={active || undefined}
       style={{ "--tempo-period": `${tempoPeriodMs(bpm)}ms` } as React.CSSProperties}
-      className={`brand-tempo-pill relative flex min-h-[44px] items-center font-label duration-fast ease-out-brand active:translate-y-px active:scale-[0.985] aria-pressed:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base ${CHROME[size]}`}
+      className={`brand-tempo-pill relative flex min-h-[44px] items-center duration-fast ease-out-brand active:translate-y-px active:scale-[0.985] aria-pressed:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base ${CHROME[size]}`}
     >
+      {/* The dot says «this one ticks» (the hero pill only): the sheet's small
+          pill keeps its text-only chrome. */}
+      {size === "md" && <span aria-hidden="true" className="h-2 w-2 rounded-full bg-accent" />}
       {bpm} BPM
     </button>
   );

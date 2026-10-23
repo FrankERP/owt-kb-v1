@@ -24,10 +24,12 @@ import TempoPill from "./TempoPill";
 import { useTransposeOptional } from "./TransposeProvider";
 import { formatKey } from "@/app/utils/formatKey";
 
-// The two pills that are never controls. `min-h-[44px]` matches the dial and the
-// tempo pill so the row is flush — 2.4rem alone is 38.4px and left them short.
+// The two pills that are never controls: 48 px, a hairline ring, body text —
+// the dial and the tempo pill share the height so the row is flush (ADR-0070:
+// the pills stop shouting in 11 px small caps; the title above them is the
+// loud thing).
 const STATIC_PILL =
-  "brand-search-console flex h-[2.4rem] min-h-[44px] items-center px-3 font-label text-[11px] uppercase tracking-widest text-ink-dim";
+  "inline-flex min-h-[48px] items-center rounded-full border border-ink/[0.18] px-4 font-body text-base font-semibold text-ink";
 
 export default function SongHeroPills({
   keyLabel,
@@ -73,7 +75,7 @@ export default function SongHeroPills({
 
   return (
     <>
-      <div {...(revealIndex !== undefined ? revealProps(revealIndex) : {})} className="flex flex-wrap justify-center gap-2.5">
+      <div {...(revealIndex !== undefined ? revealProps(revealIndex) : {})} className="flex flex-wrap items-center gap-2.5">
         {keyLabel &&
           (canTranspose ? (
             <KeyDial
@@ -83,7 +85,7 @@ export default function SongHeroPills({
               keyLabel={keyLabel}
             />
           ) : (
-            <span className="brand-key-dial min-h-[44px] px-3 font-display text-sm">{formatKey(keyLabel)}</span>
+            <span className="inline-flex min-h-[48px] items-center rounded-full border border-ink/[0.28] px-[18px] font-display text-2xl font-semibold text-ink">{formatKey(keyLabel)}</span>
           ))}
         {bpm ? (
           <TempoPill bpm={bpm} timeSig={timeSig} />

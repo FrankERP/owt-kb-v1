@@ -15,7 +15,10 @@
 
 import { Children, isValidElement, type ReactNode } from "react";
 
-export const LYRIC_EYEBROW = "font-label text-[11px] uppercase tracking-[0.24em] text-accent/80";
+// 12 px Jura, tracked, MUTED — the same small caps the run sheet's section
+// titles wear (`SHEET_TITLE`, ADR-0070): on the song page the eyebrows mark the
+// blocks of a lyric, which is the one job small caps keep.
+export const LYRIC_EYEBROW = "font-label text-xs font-semibold uppercase tracking-[0.22em] text-ink-muted";
 
 /**
  * The eyebrow as it appears INSIDE the lyric `prose` wrapper — the token plus its

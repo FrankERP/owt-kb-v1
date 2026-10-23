@@ -153,10 +153,16 @@ describe("TempoPill", () => {
     expect(pill.className).toContain("aria-pressed:border-accent/60");
     expect(pill.className).not.toContain("brand-search-console");
 
+    // The hero (md) wears the same 48 px ring as the key and the time signature
+    // (ADR-0070): body face, sentence case, no console skin.
     rerender(<TempoPill bpm={120} timeSig="4/4" />);
-    expect(pill.className).toContain("brand-search-console");
-    expect(pill.className).toContain("uppercase");
-    expect(pill.className).not.toContain("rounded-full");
+    expect(pill.className).toContain("min-h-[48px]");
+    expect(pill.className).toContain("rounded-full");
+    expect(pill.className).toContain("border-ink/[0.18]");
+    expect(pill.className).toContain("font-body");
+    expect(pill.className).not.toContain("brand-search-console");
+    expect(pill.className).not.toContain("uppercase");
+    expect(pill.className).not.toContain("font-label");
   });
 
   it("still rings where the Web Audio API does not exist", () => {

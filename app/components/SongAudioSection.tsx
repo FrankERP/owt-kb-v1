@@ -2,6 +2,7 @@
 
 import { usePlayer, AudioTrack } from "@/app/context/PlayerContext";
 import { DownloadIcon } from "./ui/icons";
+import Button, { buttonClass } from "@/app/components/ui/Button";
 import Equalizer from "@/app/components/ui/Equalizer";
 import PlayPauseGlyph from "@/app/components/ui/PlayPauseGlyph";
 
@@ -21,7 +22,9 @@ export default function SongAudioSection({ tracks, songTitle, songSlug }: Props)
   const { playTrack, togglePlay, player } = usePlayer();
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    // Hairline rows, like the rehearsal mixes (ADR-0070): the playing row is the
+    // one with a filled control and the equaliser; the download is an icon.
+    <ul className="divide-y divide-ink/[0.10] border-y border-ink/[0.10]">
       {tracks.filter(t => t.audioFileURL).map((track, i) => {
         const audioTrack: AudioTrack = {
           url: track.audioFileURL,
@@ -31,50 +34,49 @@ export default function SongAudioSection({ tracks, songTitle, songSlug }: Props)
           songSlug,
         };
         const isCurrent = player.track?.url === track.audioFileURL;
+        const playing = isCurrent && player.isPlaying;
         const trackName = `${track.title || "Audio"} ${i + 1}`;
 
         return (
-          <div
-            key={i}
-            className={`rounded-xl border p-5 space-y-4 transition-colors ${
-              isCurrent
-                ? "border-accent/50 bg-accent/5"
-                : "border-surface-accent-l25-d15"
-            }`}
-          >
-            <div className="flex items-start gap-3">
-              <div className="min-w-0 flex-1">
-                <p className="font-display text-base font-semibold leading-snug">{track.title}</p>
-                {track.tone && (
-                  <p className="font-label text-xs text-accent uppercase tracking-wide mt-1">{track.tone}</p>
-                )}
-              </div>
-              <Equalizer playing={isCurrent && player.isPlaying} className="ml-auto" />
+          <li key={i} className="flex items-center gap-3 py-2.5">
+            {isCurrent ? (
+              <Button
+                variant="cta"
+                size="lg"
+                className="h-11 w-11 shrink-0 rounded-full p-0"
+                onClick={() => togglePlay()}
+                aria-label={`${playing ? "Pausar" : "Reproducir"} ${trackName}`}
+              >
+                <PlayPauseGlyph playing={playing} size={14} />
+              </Button>
+            ) : (
+              <Button
+                variant="icon"
+                size="lg"
+                className="shrink-0 rounded-full border border-ink/[0.28] text-ink"
+                onClick={() => playTrack(audioTrack)}
+                aria-label={`Reproducir ${trackName}`}
+              >
+                <PlayPauseGlyph playing={false} size={14} />
+              </Button>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-body text-[17px] font-semibold leading-tight text-ink">{track.title}</p>
+              {track.tone && <p className="font-body text-sm text-ink-muted">{track.tone}</p>}
             </div>
-            <button
-              onClick={() => (isCurrent ? togglePlay() : playTrack(audioTrack))}
-              aria-label={`${isCurrent && player.isPlaying ? "Pausar" : "Reproducir"} ${trackName}`}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors ${
-                isCurrent
-                  ? "border-accent/50 bg-accent/15 text-accent"
-                  : "border-accent-deep/30 hover:border-accent/40 hover:bg-accent/5 text-mono-400 hover:text-accent"
-              }`}
-            >
-              <PlayPauseGlyph playing={isCurrent && player.isPlaying} />
-              {isCurrent && player.isPlaying ? "Reproduciendo" : "Reproducir"}
-            </button>
+            <Equalizer playing={playing} />
             <a
               href={track.audioFileURL}
               download={`${songTitle} — ${track.title}.mp3`}
               aria-label={`Descargar ${trackName}`}
-              className="block text-center font-label text-xs uppercase tracking-widest text-mono-500 dark:text-mono-400 hover:text-accent dark:hover:text-accent transition-colors"
+              title={`Descargar ${trackName}`}
+              className={buttonClass("icon", "lg")}
             >
-              <DownloadIcon size={12} className="mr-1 inline-block align-[-2px]" />
-              Descargar
+              <DownloadIcon size={16} />
             </a>
-          </div>
+          </li>
         );
       })}
-    </div>
+    </ul>
   );
 }

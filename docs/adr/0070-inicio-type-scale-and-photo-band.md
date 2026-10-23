@@ -84,4 +84,14 @@ pill; «Equipo» is the small-caps title, «Banda» is 17 px sentence case; a sh
   needs a border. Its CSS and `--lit-beam` stay in `brand.css` (removing the token would move the
   pinned composed-token count for nothing), and `litCard.test.ts` now asserts that NOTHING sets
   `data-lit` — a framed surface may adopt it again on purpose, never by accident.
+- **Canción took the system second (2026-10-23, same thread, branch `claude/project-thread-bkhhgz`):**
+  the page's title IS the song's name in the display face (`splitSongTitle` moves a trailing
+  «(Original Title)» to the authors' line), the key / BPM / compás pills share one 48 px ring in the
+  body face (`KeyDial`, `SongHeroPills`, `TempoPill` `md` — the sheet's `.brand-key-dial` badge and
+  the `sm` pill are unchanged), sections are `SHEET_TITLE` headings over hairline rows (`Referencia`,
+  `Historial`, the mixes), the lyric wrapper is 17 px body with no `prose`, and the loaded mix row is
+  the ONE row that differs: a filled `cta` control, «Tono · BPM · 1:42 / 4:36» from the `<audio>`
+  (`formatClock`), and its seek control under the name — the `Waveform` when the mix has peaks, a
+  `SeekBar` when it does not (the full-band mix). Tests: `keyDial`, `tempoPill`, `rehearsalPlayer`,
+  `seekBar`, `songTitle`, `formatClock`, `lyricMarkers` (the gallery fixture mirrors the new wrapper).
 - Undoing it means re-adding the eyebrows and frames the mock removed; the tests above will say so.

@@ -1,9 +1,9 @@
 "use client";
 
-// The hero key, as a control (R4 ruling 8). It is the SAME `brand-key-dial`
-// chrome the static badge has always worn — a transposable song does not get a
-// different-looking key, it gets a key you can press — plus a chevron and the
-// press/focus affordances of a real button.
+// The hero key, as a control (R4 ruling 8). It is the SAME chrome the static
+// badge wears (a 48 px ring, the key in the display face — ADR-0070) — a
+// transposable song does not get a different-looking key, it gets a key you
+// can press — plus a chevron and the press/focus affordances of a real button.
 //
 // The readout is the SOUNDING key, so it moves with the chart below it: this
 // reads `useTransposeOptional()` and only falls back to the label the page
@@ -37,16 +37,16 @@ export default function KeyDial({
       aria-controls={controls}
       aria-label={`Tonalidad ${soundingKey}. Transponer`}
       data-open={open}
-      className="brand-key-dial gap-1.5 px-3 font-display text-sm min-h-[44px] select-none transition-[transform,box-shadow] duration-fast ease-out-brand active:translate-y-px active:scale-[0.985] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base data-[open=true]:shadow-[0_0_0_2px_rgb(var(--accent-rgb)/0.35)]"
+      className="inline-flex min-h-[48px] select-none items-center justify-center gap-2 rounded-full border border-ink/[0.28] pl-[18px] pr-4 font-display text-2xl font-semibold text-ink transition-[transform,box-shadow] duration-fast ease-out-brand active:translate-y-px active:scale-[0.985] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base data-[open=true]:shadow-[0_0_0_2px_rgb(var(--accent-rgb)/0.35)]"
     >
       <NumberRoll value={formatKey(soundingKey)} />
       <svg
-        width="12"
-        height="12"
+        width="16"
+        height="16"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
-        strokeWidth="2.5"
+        strokeWidth="2.2"
         strokeLinecap="round"
         strokeLinejoin="round"
         aria-hidden="true"

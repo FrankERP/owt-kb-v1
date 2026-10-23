@@ -51,9 +51,15 @@ export default function Waveform({
       const seconds = duration > 0 ? ((i + 0.5) / bars) * duration : -1;
       const on = seconds >= 0 && isActiveAt(active, seconds);
       const played = x <= playedUntil;
-      ctx.fillStyle = on
-        ? themeColour("--accent-rgb", played ? 1 : 0.55)
-        : themeColour("--mono-400-rgb", played ? 0.9 : 0.35);
+      // The PLAYED part reads in the accent, as the members' mock drew it
+      // (design pass, 2026-10-23): grey played bars made the loaded row look
+      // idle. The accent spans stay the brightest, and ahead of the playhead
+      // they alone carry colour — «where my part sounds» still reads at a glance.
+      ctx.fillStyle = played
+        ? themeColour("--accent-rgb", on ? 1 : 0.6)
+        : on
+          ? themeColour("--accent-rgb", 0.4)
+          : themeColour("--mono-400-rgb", 0.35);
       const bh = Math.max(2, values[i] * (h - 2));
       ctx.fillRect(x, (h - bh) / 2, BAR_W, bh);
     }

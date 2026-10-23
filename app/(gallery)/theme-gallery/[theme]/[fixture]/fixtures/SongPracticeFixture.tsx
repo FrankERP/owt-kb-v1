@@ -103,11 +103,11 @@ export function SongPracticeFixture() {
             </div>
           </div>
 
-          {/* The wrapper class string is the song page's, character for character:
-              the eyebrow's margins only survive because they sit on a `div` rather
-              than a `p` the `prose-p:` variants would zero, and a fixture with a
-              different wrapper would not reproduce that cascade at all. */}
-          <div className="prose prose-sm sm:prose dark:prose-invert prose-p:leading-relaxed prose-p:!mt-0 prose-p:!mb-0 max-w-[62ch] mx-auto [&>div:first-child>div:first-child]:!mt-0">
+          {/* The wrapper class string is the song page's, character for character
+              (17 px body, no `prose` since ADR-0070): the eyebrow sits on a `div`
+              so the `[&>div:first-child>div:first-child]` clause can find it, and
+              a fixture with a different wrapper would not reproduce that cascade. */}
+          <div className="max-w-[62ch] font-body text-[17px] leading-relaxed text-ink [&>div:first-child>div:first-child]:!mt-0">
             {/* Two GROUPS, because `groupBySections` produces one wrapper div per
                 section and that nesting is exactly what the wrapper's
                 `[&>div:first-child>div:first-child]` clause selects against: only
