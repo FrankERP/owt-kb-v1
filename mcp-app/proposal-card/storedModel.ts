@@ -1,6 +1,7 @@
 // The card over a SAVED month (admin parity phase 1, S4: docs/superpowers/plans/2026-10-21-owt-mcp-admin-parity-f1.md;
 // ADR-0066): what the screen keeps between `check_service_edits_app` answers, how it reads them,
-// and the chat message «Guardar» sends. Pure, so it is tested without a browser or a host.
+// how it reads the card's own save, and the chat message «Mandar al chat» sends. Pure, so it is tested
+// without a browser or a host.
 //
 // The proposal editor's rule holds (E1): the screen keeps a LIST OF EDITS, never a board it trusts;
 // every gesture re-sends the whole list and shows the server's board. «Guardar» asks in the card and
@@ -162,7 +163,7 @@ export function forceStoredLast(edits: readonly StoredEdit[]): StoredEdit[] {
 export const MAX_CHANGES_PER_SAVE = 31;
 
 /**
- * The change sets split into the calls «Guardar» sends. Normally one. Each change carries the server's
+ * The change sets split into the saves «Guardar» makes (and the messages «Mandar al chat» sends). Normally one. Each change carries the server's
  * signed `unit` (a whole group, or a piece of `maxGroup` services of a larger one, ADR-0066), and the
  * save refuses a call that leaves out any service of a unit it names — so units are never cut here,
  * only packed. When a group is larger than `maxGroup` the parts stay that small (two pieces of one
@@ -203,7 +204,8 @@ export const joinWords = (items: readonly string[]): string =>
  * A short key for one part's arguments (FNV-1a over its JSON, base 36): the message and the context
  * line both carry it, so the model takes THESE arguments — never an earlier check's line, which is
  * still in the chat with a valid MAC. `save_service_edits`' description says what to do with a key
- * whose line is not there (ask for «Guardar» again), because that is exactly when the context is missing.
+ * whose line is not there (ask for «Guardar» again, which now saves from the card), because that is exactly when
+ * the context is missing.
  */
 export function argsKey(json: string): string {
   let h = 0x811c9dc5;
@@ -212,7 +214,7 @@ export function argsKey(json: string): string {
 }
 
 /**
- * «Guardar» on a host that takes model context (Frank, 2026-10-22: the JSON in the chat «no me
+ * «Mandar al chat» (once «Guardar» itself) on a host that takes model context (Frank, 2026-10-22: the JSON in the chat «no me
  * encantó»): the chat shows the changes in words and a key; the arguments ride in the model's
  * context, on the check's own `Argumentos para save_service_edits` line, labelled with that key.
  * The host keeps only the LAST context update, so the card sends every part handed over so far
@@ -242,7 +244,7 @@ export const contextOf = (lines: ReadonlyMap<number, string>): string =>
   [CONTEXT_HEAD, ...[...lines.entries()].sort(([a], [b]) => a - b).map(([, l]) => l)].join("\n");
 
 /**
- * «Guardar»'s chat message for one part: the lines in words (what the permission prompt will show),
+ * «Mandar al chat»'s message for one part: the lines in words (what the permission prompt will show),
  * then `month` and `changes` as JSON, verbatim, so Claude passes them to `save_service_edits` unchanged.
  */
 export function saveMessage(month: string, part: readonly StoredChange[], index: number, total: number): string {
@@ -275,11 +277,17 @@ export const MODEL_ONLY_SAVE_LINES = [
   "Forzar una regla por lugar solo se puede desde la tarjeta («Asignar de todos modos»); desde el chat no se fuerza nada.",
 ] as const;
 
-/** Tails of the save's lines that name a tool or a call; trimmed off on the card. */
+/**
+ * Tails of the save's lines that name a tool or a call; trimmed off on the card. Mirrors `changed`,
+ * `notTheChecked`, `unitIncomplete` and the status `notSavedRepeat` (`V3_STORED_EDITOR_LINES`) and the
+ * runner's `SERVICE_EDITOR_COPY.domain` (`app/mcp/tools/serviceEditor.ts`), pinned by `storedCardSave.test.tsx`.
+ */
 export const MODEL_ONLY_SAVE_TAILS = [
   " Revisa el mes de nuevo con check_service_edits.",
   " Revisa de nuevo con check_service_edits.",
   "; repite la misma llamada",
+  " Manda también esos cambios, tal cual los devolvió la revisión.",
+  " Repite exactamente la misma llamada: lo que ya quedó se reconoce como «ya estaba».",
 ] as const;
 
 const forTheCard = (line: string): string => MODEL_ONLY_SAVE_TAILS.reduce((l, tail) => l.split(tail).join(""), line);
@@ -311,7 +319,7 @@ export const CARD_SAVE = {
     "Si sigue fallando, actualiza el conector o usa «Mandar al chat».",
   reread: "Lo que no se guardó ya no está en la tarjeta: vuelve a hacerlo sobre el mes como quedó.",
   rereadFailed: "No pude volver a leer el mes; los cambios siguen bloqueados. Toca «Descartar cambios» para leerlo de nuevo.",
-  foot: "Al confirmar, la tarjeta guarda directo; Claude no interviene. «Mandar al chat» es la otra vía: Claude guarda y la app te pide permiso.",
+  foot: "Al confirmar, la tarjeta guarda directo; Claude no interviene. Si la tarjeta no puede guardar, aparece «Mandar al chat»: Claude guarda y la app te pide permiso.",
 } as const;
 
 /** The model's context after a card save: what happened, so Claude never saves these again from an older line. */

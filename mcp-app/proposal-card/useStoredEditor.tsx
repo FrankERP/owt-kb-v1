@@ -76,6 +76,8 @@ export function useStoredEditor(app: App | null): StoredEditorState {
   const [retry, setRetry] = useState<number[]>([]);
   /** The last save's lines: kept as the notice by a later check from the empty list. */
   const lastSaveLines = useRef<string[] | null>(null);
+  /** The saved parts' lines for the current list: what Claude is told is saved (the host keeps one update). */
+  const savedReport = useRef<string[]>([]);
   /** The month a save started in: reopening it from the chat's edits would replay them. */
   const wroteMonth = useRef<string | null>(null);
   const seatRequest = useRef(0);
@@ -121,6 +123,9 @@ export function useStoredEditor(app: App | null): StoredEditorState {
           setNotice(kept());
         }
         if (next.length === 0 && view.ok) {
+          // A new list starts: an older list's report is not this one's (`keep` is already on screen).
+          lastSaveLines.current = null;
+          savedReport.current = [];
           setFrozen(false);
           setSaved([]);
           setRetry([]);
@@ -157,6 +162,7 @@ export function useStoredEditor(app: App | null): StoredEditorState {
       setRetry([]);
       setConfirming(null);
       lastSaveLines.current = null;
+      savedReport.current = [];
       // After a save in this month, the chat's edits may already be in it: open what is stored instead.
       void runCheck(m, wroteMonth.current === m ? [] : initial);
     },
@@ -227,9 +233,15 @@ export function useStoredEditor(app: App | null): StoredEditorState {
     wroteMonth.current = at;
     // Nothing handed to the chat earlier for this list stays in what a later «Mandar al chat» sends.
     contextLines.current = new Map();
+    // The host keeps only the last update, so it carries every part saved for this list, then this answer.
     const tellClaude = (ok: boolean, lines: string[]) => {
+      if (ok) savedReport.current = [...savedReport.current, ...lines];
       if (!app.getHostCapabilities()?.updateModelContext?.text) return;
-      app.updateModelContext({ content: [{ type: "text", text: savedContext(at, ok, lines) }] }).catch(() => {});
+      const text = [
+        ...(savedReport.current.length ? [savedContext(at, true, savedReport.current)] : []),
+        ...(ok ? [] : [savedContext(at, false, lines)]),
+      ].join("\n");
+      app.updateModelContext({ content: [{ type: "text", text }] }).catch(() => {});
     };
     const toRetry = (lines: string[]) => {
       setRetry((r) => (r.includes(index) ? r : [...r, index]));

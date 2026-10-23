@@ -40,7 +40,7 @@ writer commits ──▶ after() queues a notice (own transaction, writeClient)
 **One writer queues inline instead.** The MCP saved-service save (`save_service_edits`
 and its card twin `save_service_edits_app`, one function; `copy_instruments`; admin parity phase 1, ADR-0066) writes several services in one call, and Next
 runs `after()` only once the response closes, so a call stopped at its time limit would lose the
-notices of every service it had already written. Those two tools call the shared commits with
+notices of every service it had already written. Those tools call the shared commits with
 `notices: "inline"`: the same notices, from the same pre-commit `before`, are upserted with
 `queueRoleNoticesNow` and AWAITED before the next service is written, with **no layer-2 sweep** —
 layers 1 and 3 deliver them. `/admin`'s routes keep the deferred path above.

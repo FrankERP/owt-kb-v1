@@ -30,7 +30,8 @@ import { MONTH, serviceWorld, type ServiceWorld } from "@/app/mcp/tools/__tests_
 import { V3_STORED_EDITOR_LINES } from "@/app/components/admin/v3Copy";
 import { Editor } from "@/mcp-app/proposal-card/Editor";
 import { useStoredEditor } from "@/mcp-app/proposal-card/useStoredEditor";
-import { CARD_SAVE, CONTEXT_HEAD, MODEL_ONLY_SAVE_LINES, storedSaveViewOf, type StoredEdit } from "@/mcp-app/proposal-card/storedModel";
+import { SERVICE_EDITOR_COPY } from "@/app/mcp/tools/serviceEditor";
+import { CARD_SAVE, CONTEXT_HEAD, MODEL_ONLY_SAVE_LINES, MODEL_ONLY_SAVE_TAILS, storedSaveViewOf, type StoredEdit } from "@/mcp-app/proposal-card/storedModel";
 
 type Result = { content?: unknown; structuredContent?: unknown; isError?: boolean };
 type Call = { name: string; arguments: Record<string, unknown> };
@@ -49,7 +50,7 @@ interface Host {
  * the real save, or throws); past the script, the real save runs. `split` makes every check answer save in
  * parts of one service (`maxGroup: 1`), so two independent changes are two parts.
  */
-function host(w: ServiceWorld, saves: Array<(args: Record<string, unknown>) => Promise<Result>> = [], split = false): Host {
+function host(w: ServiceWorld, saves: Array<(args: Record<string, unknown>) => Promise<Result>> = [], split = false, checksFailAfterSave = false): Host {
   const calls: Call[] = [];
   const sendMessage = vi.fn(async () => ({}));
   const updateModelContext = vi.fn(async () => ({}));
@@ -58,6 +59,7 @@ function host(w: ServiceWorld, saves: Array<(args: Record<string, unknown>) => P
     callServerTool: vi.fn(async (params: Call, options?: { timeout?: number }) => {
       calls.push(params);
       if (params.name === "check_service_edits_app") {
+        if (checksFailAfterSave && calls.some((c) => c.name === "save_service_edits_app")) throw new Error("lost");
         const out = await checkServiceEditsAppResult(params.arguments as never, PRINCIPAL, w.deps);
         if (!split) return out;
         return { ...out, structuredContent: { ...(out.structuredContent as object), maxGroup: 1 } };
@@ -281,6 +283,53 @@ describe("«Guardar» saves from the card", () => {
   });
 });
 
+describe("while and after a save", () => {
+  it("every button is held while the save runs (no second save can start)", async () => {
+    const w = serviceWorld();
+    let finish: (r: Result) => void = () => {};
+    const h = host(w, [() => new Promise<Result>((resolve) => (finish = resolve))]);
+    render(<Card app={h.app} edits={PLACE_CARLA(w)} />);
+    await screen.findAllByText(/1 servicio cambia/);
+    fireEvent.click(button("Guardar"));
+    await act(async () => fireEvent.click(button(CARD_SAVE.yes)));
+    expect(button("Guardar")).toHaveProperty("disabled", true);
+    expect(button("Descartar cambios")).toHaveProperty("disabled", true);
+    expect(button("Cerrar")).toHaveProperty("disabled", true);
+    await act(async () => finish(await saveServiceEditsResult({ month: MONTH, changes: (h.calls.at(-1)!.arguments as { changes: never }).changes }, PRINCIPAL, w.deps)));
+    await screen.findByText("Sin cambios");
+    expect(h.calls.filter((c) => c.name === "save_service_edits_app")).toHaveLength(1);
+  });
+
+  it("`check_again` reads the month from the empty list and says what was not saved", async () => {
+    const w = serviceWorld();
+    const h = host(w, [
+      async () => ({ isError: true, content: [{ type: "text", text: "Resultado del guardado:" }], structuredContent: { ok: false, month: MONTH, services: [], next: "check_again" } }),
+    ]);
+    render(<Card app={h.app} edits={PLACE_CARLA(w)} />);
+    await screen.findAllByText(/1 servicio cambia/);
+    fireEvent.click(button("Guardar"));
+    await act(async () => fireEvent.click(button(CARD_SAVE.yes)));
+    await screen.findByText("Sin cambios");
+    expectNoReplay(h);
+    expect(screen.getByRole("status").textContent).toContain(CARD_SAVE.reread);
+    expect(allDisabled("Agregar en Lead")).toBe(false);
+  });
+
+  it("a failed read of the month after a save keeps the list frozen and says so", async () => {
+    const w = serviceWorld();
+    const h = host(w, [], false, true);
+    render(<Card app={h.app} edits={PLACE_CARLA(w)} />);
+    await screen.findAllByText(/1 servicio cambia/);
+    fireEvent.click(button("Guardar"));
+    await act(async () => fireEvent.click(button(CARD_SAVE.yes)));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain(CARD_SAVE.rereadFailed));
+    expect(screen.getByRole("status").textContent).toContain("Resultado del guardado:");
+    expect(allDisabled("Agregar en Lead")).toBe(true);
+    expect(button("Descartar cambios")).toHaveProperty("disabled", false);
+    expectNoReplay(h);
+  });
+});
+
 describe("the save's answer on the card", () => {
   it("drops and trims what is written for Claude; mirrors v3Copy's lines", () => {
     expect([...MODEL_ONLY_SAVE_LINES]).toEqual([V3_STORED_EDITOR_LINES.repeatSame, V3_STORED_EDITOR_LINES.recheck, V3_STORED_EDITOR_LINES.needsCard]);
@@ -293,5 +342,15 @@ describe("the save's answer on the card", () => {
     expect(view.lines.join(" ")).not.toContain("check_service_edits");
     expect(view.lines.join(" ")).toContain("domingo 15 nov cambió");
     expect(storedSaveViewOf({ isError: true, content: [{ type: "text", text: "x" }] })).toMatchObject({ structured: false, ok: false });
+    // Every tail is a real tail of the server's copy, so a rewording there fails here.
+    const sources = [
+      V3_STORED_EDITOR_LINES.changed(["x"]),
+      V3_STORED_EDITOR_LINES.notTheChecked("x"),
+      V3_STORED_EDITOR_LINES.unitIncomplete(["x"]),
+      V3_STORED_EDITOR_LINES.status.notSavedRepeat,
+      SERVICE_EDITOR_COPY.domain,
+    ];
+    for (const tail of MODEL_ONLY_SAVE_TAILS) expect(sources.some((s) => s.includes(tail)), tail).toBe(true);
+    expect(storedSaveViewOf({ isError: true, content: [{ type: "text", text: SERVICE_EDITOR_COPY.domain }] }).lines).toEqual(["No pude confirmar qué se guardó."]);
   });
 });

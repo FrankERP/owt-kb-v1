@@ -138,7 +138,7 @@ editor adds three more, seventeen in all, registered after `apply_schedule`
 (see [Editing a proposal](#editing-a-proposal); in production since 2026-10-21, PR #160). Admin
 parity phase 1 adds eight, twenty-five in all: three reads registered after the P1 reads
 (`get_fairness_ledger`, `get_solver_rules`, `get_integrity_queue`) and the saved-month editor's
-five registered last (see [Editing saved services](#editing-saved-services-admin-parity-phase-1);
+five registered last; the card's save twin `save_service_edits_app` (2026-10-23) makes it six, twenty-six in all (see [Editing saved services](#editing-saved-services-admin-parity-phase-1);
 in production since 2026-10-22, PR #167). Every tool is
 registered the same way — one file per tool in `app/mcp/tools/`, exporting a
 `register<Tool>(server, deps?)` function that `registerAllTools` (`app/mcp/toolList.ts`) calls,
@@ -762,7 +762,7 @@ Three tools, in production since 2026-10-21 (PR #160, `main` `2e075190`; live pr
 
 ### Editing saved services (admin parity, phase 1)
 
-Five tools over the services already in `/admin`, plus three reads, in production since 2026-10-22 (PR #167). Plan:
+Five tools over the services already in `/admin`, plus three reads, in production since 2026-10-22 (PR #167); a sixth, the card's save twin, since 2026-10-23. Plan:
 [2026-10-21-owt-mcp-admin-parity-f1.md](superpowers/plans/2026-10-21-owt-mcp-admin-parity-f1.md);
 decisions and the rejected alternatives:
 [ADR-0066](adr/0066-saved-services-are-edited-from-the-chat-as-checked-change-sets.md).

@@ -69,7 +69,7 @@ Plan: `docs/superpowers/plans/2026-10-21-owt-mcp-admin-parity-f1.md` (S2 approve
   `group_too_big`; no line at all when the check needs the card, since that save would refuse too.
   Any future tool whose output the model must pass on puts it in
   the text, as `solve_month` does with its handle.
-- **The card never writes.** Its saved-month mode (`useStoredEditor.tsx`) hands the checked change
+- **The card never writes** (amended 2026-10-23: the card saves; see the addendum). Its saved-month mode (`useStoredEditor.tsx`) hands the checked change
   sets to the chat; Claude calls `save_service_edits`, so the Claude app asks first. The change sets
   go through the model's context (`updateModelContext`) and the chat shows only the changes in words
   and a short key naming them, because the JSON in the chat put Frank off (2026-10-22). The key is
