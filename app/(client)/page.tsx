@@ -246,7 +246,7 @@ export default async function Home() {
     viewerIsAdmin: ["super-admin", "admin"].includes(session.user.role),
   };
   const greeting = homeGreeting(services.map((s) => s.props), session.user, myName);
-  // The team photo behind the greeting (ADR-0071): the ONE Studio document
+  // The team photo behind the greeting (ADR-0070): the ONE Studio document
   // (`_id` "homeSettings", a singleton pane in `sanity/structure.ts`), published
   // — this client reads the published perspective. Without it the band is just
   // the greeting on the page, never a blank block.
@@ -263,7 +263,7 @@ export default async function Home() {
       {/* `cue={false}`: the greeting band below carries the countdown. */}
       <Navbar title="OWT" cue={false} />
 
-      {/* The band (ADR-0071, the «Inicio de millones» mock, variant B): the page
+      {/* The band (ADR-0070, the «Inicio de millones» mock, variant B): the page
           opens on the member's own answer — «Te toca el domingo / Eléctrica ·
           11:00 · en 2 días» — set LARGE in the display face over the team photo,
           with a scrim so the words stay on the page's own ground. The day word
@@ -321,7 +321,7 @@ export default async function Home() {
           </div>
         ) : (
           <>
-            {/* The hero is the run SHEET, straight on the page (ADR-0071): the
+            {/* The hero is the run SHEET, straight on the page (ADR-0070): the
                 lit card it sat in until 2026-10-23 was one more frame around the
                 most-seen content, and the type pass is about fewer frames, not
                 more. `DayCard hero` draws no panel, rail or header of its own. */}

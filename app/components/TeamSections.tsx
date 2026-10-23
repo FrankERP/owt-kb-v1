@@ -73,7 +73,7 @@ export default function TeamSections({
    */
   openAllFrom?: "lg";
   /**
-   * The hero's run sheet (ADR-0071): section labels in the page's own type —
+   * The hero's run sheet (ADR-0070): section labels in the page's own type —
    * «Voces · 8» at 17 px sentence case, a Voces group as «Lead · 2» in muted
    * body — instead of the card's tracked small caps. The faces are the same.
    */
@@ -129,7 +129,7 @@ function OpenSection({ section, myName, photos, sheet = false }: { section: Team
   );
 }
 
-/** The sheet's section label (ADR-0071): the page's 17 px semibold, no small caps. */
+/** The sheet's section label (ADR-0070): the page's 17 px semibold, no small caps. */
 const SHEET_LABEL = "font-body text-[17px] font-semibold text-ink";
 
 /** «Voces · 8», plus the ⚠ count when someone is seated twice in the section. */

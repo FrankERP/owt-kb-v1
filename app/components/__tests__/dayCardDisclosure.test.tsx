@@ -97,7 +97,7 @@ describe("DayCardDisclosure", () => {
     expect(screen.getByRole("button", { name: /Campamento/ }).textContent).toMatch(/18:45/);
   });
 
-  it("ADR-0071 — as a `sheet` row it drops the card chrome and the rail, and sets its title in body type", () => {
+  it("ADR-0070 — as a `sheet` row it drops the card chrome and the rail, and sets its title in body type", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(2026, 8, 8, 9, 0, 0));
     const { container } = mount({ sheet: true });

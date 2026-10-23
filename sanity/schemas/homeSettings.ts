@@ -1,7 +1,7 @@
 import { defineField, defineType } from "sanity";
 
 /**
- * What Inicio shows above the greeting: the team photo (ADR-0071, the «Inicio
+ * What Inicio shows above the greeting: the team photo (ADR-0070, the «Inicio
  * de millones» reference mock Frank approved 2026-10-23).
  *
  * ONE document with the fixed id `homeSettings` (a singleton pane in
