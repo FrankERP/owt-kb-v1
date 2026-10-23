@@ -61,7 +61,7 @@ describe("check_service_edits (the chat)", () => {
     const app = await checkServiceEditsAppResult({ month: MONTH, edits: appEdits }, PRINCIPAL, w.deps);
     expect(changesOf(app)).toHaveLength(1);
     expect(textOf(app)).not.toContain(SAVE_ARGS_PREFIX);
-    expect(textOf(app)).not.toContain("última línea");
+    expect(textOf(app)).not.toContain("Para guardar");
   });
 
   it("focus only tells the card which days to show: echoed, checked against the month, and it may open the card without edits", async () => {
@@ -427,7 +427,7 @@ describe("save_service_edits", () => {
     expect(sc(saved)).toMatchObject({ detail: "group_too_big" });
     expect(w.deps.editRole).not.toHaveBeenCalled();
     // The text closes with one argument line per signed unit (6 + 1), and saving from those lines alone works.
-    expect(textOf(out)).toContain("una vez por cada una de las últimas 2 líneas");
+    expect(textOf(out)).toContain("una vez por cada una de las 2 líneas «Argumentos para save_service_edits»");
     const argLines = textOf(out).split("\n").slice(-2);
     expect(argLines.every((l) => l.startsWith(SAVE_ARGS_PREFIX)), textOf(out)).toBe(true);
     const parts = argLines.map((l) => JSON.parse(l.slice(SAVE_ARGS_PREFIX.length)) as SaveServiceEditsArgs);
