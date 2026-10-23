@@ -198,6 +198,27 @@ describe("a reload holds the last settled tone", () => {
     expect(result.current.tone).toBe("clean");
   });
 
+  it("`firstLoad` is true only until the first reading settles — a reload is never one", async () => {
+    mockRoutes({ setlists: null });
+    const { result } = renderHook(() => useIntegrityQueue());
+    expect(result.current.firstLoad).toBe(true);
+    expect(result.current.loading).toBe(true);
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.firstLoad).toBe(false);
+    expect(result.current.tone).toBe("unknown");
+
+    // An unproven reading reloaded: still not a first load, so the panel keeps
+    // its full section instead of folding into «comprobando».
+    const seen: boolean[] = [];
+    await act(async () => {
+      result.current.reload();
+    });
+    seen.push(result.current.firstLoad);
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    seen.push(result.current.firstLoad);
+    expect(seen).toEqual([false, false]);
+  });
+
   it("still reports `unknown` on a FIRST load, until something settles", async () => {
     mockRoutes();
     const seen: string[] = [];
@@ -325,11 +346,14 @@ describe("IntegrityQueuePanel renders the queue it is handed", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("starts collapsed when the queue is proven clean", () => {
-    panel("clean");
-    expect(screen.getByRole("button", { name: /Integridad de datos/ }).getAttribute("aria-expanded")).toBe(
-      "false",
-    );
+  it("is one status line, not a section, when the queue is proven clean (bloque 4)", () => {
+    // A clean queue used to be a collapsed section the admin had to open to
+    // learn nothing was wrong. Now the panel says so in one line under the
+    // board heading, with nothing to expand.
+    const { container } = panel("clean");
+    expect(container.querySelector('[data-integrity-compact="clean"]')).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Integridad de datos/ })).toBeNull();
+    expect(screen.getByRole("status").textContent).toContain("sin problemas de integridad");
   });
 
   it("starts open when there is something to say, and stays togglable", () => {
@@ -352,7 +376,7 @@ describe("IntegrityQueuePanel renders the queue it is handed", () => {
     // `Button`'s BASE is `justify-center` + `uppercase tracking-widest`: without
     // the `!` and the two spans' own case/tracking, adopting the house control
     // centred the title and shouted the summary sentence.
-    const { container } = panel("clean");
+    const { container } = panel("issues", ISSUES);
     const summary = container.querySelector("[data-integrity-summary]");
     expect(summary?.className).toContain("normal-case");
     expect(summary?.className).toContain("tracking-normal");

@@ -39,8 +39,9 @@ FOH rows carry a ✕ beside their label instead of the «asignación manual» li
 says «3/2 · sobre el objetivo» (the full sentence stays for screen readers and as
 the tooltip); the add-row forms fold under **«+ Agregar fila»**; the solver hint is
 create-mode only. One **sticky bar** at the bottom holds Cerrar · «N servicios con
-cambios» · Guardar. AdminPanel hides **«Integridad de datos»** while the month
-editor is open (`ServicesPanel`'s `onMonthEditorOpenChange`) — the check keeps
+cambios» · Guardar. **«Integridad de datos»** is not shown over the month editor
+(since 2026-10-22 it is `ServicesPanel`'s `integritySlot`, rendered on the board
+only — not on «Editar mes», «Editar servicio» or «Generar mes») — the check keeps
 running, the rail's dot still shows it, and the editor's edit admission
 (`storedInventory.coherent`) still reads it.
 

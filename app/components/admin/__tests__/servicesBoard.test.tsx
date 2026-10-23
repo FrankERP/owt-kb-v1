@@ -146,7 +146,11 @@ describe("the Servicios board", () => {
     expect(grid.className).not.toMatch(/overflow-x-(auto|scroll)/);
     expect(trackClasses(grid)).toEqual([]);
     expect(classes).toContain("grid");
-    expect(classes).toContain("lg:grid-cols-[repeat(auto-fill,minmax(360px,1fr))]");
+    // ONE column since 2026-10-22: the compact card spends the width on its own
+    // «Equipo» | «Setlist» columns, so the board no longer wraps cards into
+    // `minmax(360px,1fr)` columns (ADR-0044, amended).
+    expect(classes).toContain("grid-cols-1");
+    expect(classes.filter((c) => /grid-cols-/.test(c))).toEqual(["grid-cols-1"]);
     // A grid column must never be sized by its content.
     expect(classes).toContain("min-w-0");
   });
@@ -203,6 +207,47 @@ describe("the Servicios board", () => {
     for (const child of [...aside.children].slice(0, -1)) {
       expect(child.className, "only the rows list scrolls inside the aside").not.toMatch(/overflow-/);
     }
+  });
+
+  it("on a phone: one toolbar menu beside «+ Nuevo», and the chart folded after the cards", async () => {
+    // Measured at 390px before this: four toolbar buttons in three rows, two
+    // rows of month pills and the whole chart before the first card — ~1 300px
+    // of scroll to reach a service. jsdom applies no CSS, so this pins the
+    // classes that make the phone layout and the controls that drive it.
+    const { container } = mount();
+    await waitFor(() => expect(container.querySelectorAll("[data-card-id]").length).toBe(2));
+
+    // The once-a-month actions are desktop buttons, hidden below `sm`…
+    for (const name of [/Generar mes/, "Editar mes"]) {
+      const btn = screen.getByRole("button", { name });
+      expect(btn.className.split(/\s+/)).toEqual(expect.arrayContaining(["hidden", "sm:inline-flex"]));
+    }
+    // …and ONE menu, shown only below `sm`, carries them (plus full screen).
+    const menuTrigger = screen.getByRole("button", { name: "Más acciones de servicios" });
+    expect(menuTrigger.parentElement?.className.split(/\s+/)).toContain("sm:hidden");
+    fireEvent.click(menuTrigger);
+    const items = screen.getAllByRole("menuitem").map((i) => i.textContent?.trim());
+    expect(items).toEqual(expect.arrayContaining(["Generar mes", "Editar mes", "Pantalla completa"]));
+    // `Menu` listens for Escape on its panel and trigger, not on `document`.
+    fireEvent.keyDown(screen.getAllByRole("menuitem")[0], { key: "Escape" });
+    expect(screen.queryAllByRole("menuitem")).toHaveLength(0);
+    // «+ Nuevo» stays a real button at every width.
+    expect(screen.getByRole("button", { name: /Nuevo/ }).className).not.toMatch(/\bhidden\b/);
+
+    // The chart: last below `lg`, the grid's own column from `lg` (`lg:contents`
+    // dissolves the wrapper so the aside's sticky still applies to a grid item).
+    const wrap = container.querySelector("[data-board-chart]") as HTMLElement;
+    expect(wrap.className.split(/\s+/)).toEqual(expect.arrayContaining(["order-last", "lg:order-none", "lg:contents"]));
+    expect(wrap.querySelector("aside:has([data-rail-header])")).not.toBeNull();
+    // Folded by default on a phone, opened by its own toggle, never on desktop.
+    const toggle = screen.getByRole("button", { name: /Participaciones/ });
+    expect(toggle.className.split(/\s+/)).toContain("lg:hidden");
+    const fold = document.getElementById(toggle.getAttribute("aria-controls")!) as HTMLElement;
+    expect(fold.className.split(/\s+/)).toContain("max-lg:hidden");
+    expect(fold.className.split(/\s+/)).toContain("lg:contents");
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(fold.className.split(/\s+/)).not.toContain("max-lg:hidden");
   });
 
   it("keeps the month filter multi-select, and says so with aria-pressed", async () => {
@@ -267,7 +312,8 @@ describe("the Servicios board", () => {
     expect(group.querySelectorAll(".brand-skeleton").length).toBe(7);
     expect(group.className).toContain("lg:grid-cols-[320px_1fr]");
     const cards = group.children[1] as HTMLElement;
-    expect(cards.className).toContain("lg:grid-cols-[repeat(auto-fill,minmax(360px,1fr))]");
+    expect(cards.className).toContain("grid-cols-1");
+    expect(cards.className).not.toContain("auto-fill");
     expect(trackClasses(cards)).toEqual([]);
     expect(cards.querySelectorAll(".brand-skeleton").length).toBe(6);
     expect(container.querySelectorAll(".animate-pulse").length).toBe(0);
@@ -291,35 +337,53 @@ function adminRailTop(): string {
   return top!;
 }
 
-describe("the month editor tells AdminPanel when it is open", () => {
-  // AdminPanel hides «Integridad de datos» while «Editar mes» is open (the panel sat ABOVE the
-  // editor and pushed the grid down; the check itself keeps running, and the editor's own
-  // admission still reads it). This is the half that reports the edge.
+describe("the «Integridad de datos» slot (bloque 4)", () => {
+  // AdminPanel hands the board its integrity panel as a slot; the board shows it under its
+  // heading and NOT over «Editar mes» (the editor's own admission reads the same inventory and
+  // refuses in its own words) nor over «Generar mes» (a composer with nothing to clean up). The
+  // check itself keeps running either way — only where it is written changes.
   beforeEach(() => {
     vi.unstubAllGlobals();
     stubFetch();
   });
   afterEach(() => cleanup());
 
-  it("reports open on «Editar mes» and closed on unmount", async () => {
-    const onMonthEditorOpenChange = vi.fn();
-    const { container, unmount } = render(
+  const renderWithSlot = () =>
+    render(
       <ToastProvider>
         <CueDialogProvider>
-          <ServicesPanel onMonthEditorOpenChange={onMonthEditorOpenChange} />
+          <ServicesPanel integritySlot={<div data-testid="integrity-slot">integridad</div>} />
         </CueDialogProvider>
       </ToastProvider>,
     );
-    await waitFor(() => expect(container.querySelectorAll("[data-card-id]").length).toBe(2));
-    expect(onMonthEditorOpenChange).toHaveBeenLastCalledWith(false);
 
+  it("renders the slot under the board's heading, after the h1", async () => {
+    const { container } = renderWithSlot();
+    await waitFor(() => expect(container.querySelectorAll("[data-card-id]").length).toBe(2));
+    const slot = screen.getByTestId("integrity-slot");
+    const h1 = screen.getByRole("heading", { level: 1, name: "Servicios" });
+    expect(h1.compareDocumentPosition(slot) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const firstCard = container.querySelector("[data-card-id]") as HTMLElement;
+    expect(slot.compareDocumentPosition(firstCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("drops the slot while «Editar mes» is open", async () => {
+    const { container } = renderWithSlot();
+    await waitFor(() => expect(container.querySelectorAll("[data-card-id]").length).toBe(2));
     const open = screen.getAllByRole("button", { name: /Editar mes/ })[0] as HTMLButtonElement;
     expect(open.disabled).toBe(false);
     fireEvent.click(open);
-    await waitFor(() => expect(onMonthEditorOpenChange).toHaveBeenLastCalledWith(true));
+    await waitFor(() => expect(screen.queryByTestId("integrity-slot")).toBeNull());
+  });
 
-    unmount();
-    expect(onMonthEditorOpenChange).toHaveBeenLastCalledWith(false);
+  it("drops the slot while «Generar mes» is open", async () => {
+    const { container } = renderWithSlot();
+    await waitFor(() => expect(container.querySelectorAll("[data-card-id]").length).toBe(2));
+    const open = screen.getAllByRole("button", { name: /Generar mes/ })[0] as HTMLButtonElement;
+    expect(open.disabled).toBe(false);
+    fireEvent.click(open);
+    await waitFor(() => expect(screen.queryByTestId("integrity-slot")).toBeNull());
+    expect(screen.getByRole("heading", { level: 1, name: "Generar mes" })).toBeTruthy();
   });
 });
 

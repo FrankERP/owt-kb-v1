@@ -45,11 +45,11 @@ publishing a service computed over data nobody proved.
 | `proposalHandoff.ts` | pure | The card → tab → panel handoff contract. |
 | `applyRefreshedRole.ts` | pure | Adopts the committed `_rev` a guarded edit returns. |
 | `serviceHandoffContext.tsx` | context | The handoff API a card calls; no-ops outside a provider. |
-| `ServiceReadinessCard.tsx` | component | One service card. |
+| `ServiceReadinessCard.tsx` | component | One service card — since 2026-10-22 the compact card: one header line (`Dom 25 oct · en 3 días` + the state chip + the primary action + the icon cluster), then «Equipo» beside «Setlist» when the card is ≥36 rem wide (`.brand-service-card-body`, a container query in `brand.css`), its day colour a 3 px rail only (ADR-0059). |
 | `ReadinessBadge.tsx` | component | One icon + text + tone chip. |
 | `ServiceIssueList.tsx` | component | Blocking-issue lines, truncated with a count. |
-| `ServicePrimaryAction.tsx` | component | The single primary-action button — a house `Button` still emitting `data-action-kind`/`-rule`/`-route`; its tone is the variant. |
-| `IntegrityQueuePanel.tsx` | component | The "Integridad de datos" panel — renders the queue `useIntegrityQueue` hands it (R5). It is the ONLY place that state is written out: `ServicesPanel` used to repeat the title and summary under its own heading, and the rail's dot says it a second time already. |
+| `ServicePrimaryAction.tsx` | component | The single primary-action button — a house `Button` still emitting `data-action-kind`/`-rule`/`-route`; its tone is the variant. It renders inside the card's header row (`data-card-primary-action`): its own width from `sm`, a full-width line of its own below it. |
+| `IntegrityQueuePanel.tsx` | component | The "Integridad de datos" panel — renders the queue `useIntegrityQueue` hands it (R5). It is the ONLY place that state is written out: `ServicesPanel` used to repeat the title and summary under its own heading, and the rail's dot says it a second time already. Two shapes since 2026-10-22 (bloque 4): one status line («✓ sin problemas de integridad» + «Recargar»; «… comprobando» on the first load — `firstLoad` + `loading` from the hook; a reload keeps the held shape with «Recargar» busy) when the inventory is proven clean, the full section only when there are issues or the inventory could not be proven clean. `AdminPanel` hands it to `ServicesPanel` as `integritySlot`, which renders it under the board's heading and NOT on «Editar mes», «Editar servicio» or «Generar mes». |
 | `useIntegrityQueue.ts` | hook | The ONE loader for the three service-integrity routes; `AdminPanel` calls it once and shares the queue with the rail's dot. `enabled` gates it on the role having a Servicios tab. |
 
 Mounting hierarchy:
@@ -57,8 +57,8 @@ Mounting hierarchy:
 ```
 AdminPanel.tsx  (services tab)
 └─ ServiceHandoffProvider
-   ├─ IntegrityQueuePanel        ← renders the queue; `useIntegrityQueue` (in AdminPanel) does the fetching
    └─ ServicesPanel
+      ├─ IntegrityQueuePanel     ← `integritySlot` under the board heading (board only); `useIntegrityQueue` (in AdminPanel) does the fetching
       └─ ServiceReadinessCard    ← one per visible card
          ├─ ReadinessBadge       (publication badge)
          ├─ ServiceIssueList
@@ -313,8 +313,17 @@ silently re-arm a submit built on the pre-failure snapshot. The operator reloads
 - `CARD_SECTIONS` **is** the rendered order — the card maps over it, so a reorder breaks a
   test rather than drifting silently. The four-module readiness strip that Plan B put at
   position 2 was removed: it repeated the issue lines and the preview, and it crowded out
-  the card content in the three-column month view. Readiness itself is unchanged — the
-  issue lines and the primary action still render the same ladder.
+  the card content in the three-column month view. Since 2026-10-22 `primary_action` is not
+  a section either: the ONE primary action lives in the `identity` header row (twelve
+  full-width buttons under twelve setlists made the board 5 570 px tall), and the icon
+  whose flow the primary action already opens («Editar equipo» when the action routes to
+  the service modal, «Editar setlist» when it routes to the setlist editor) steps aside so
+  the same control is never on the row twice. Readiness itself is unchanged — the issue
+  lines and the primary action still render the same ladder.
+- The headline is `cardIdentity().headline` — `Dom 25 oct` for a weekend (no type chip
+  repeats the weekday), the service's name for a special with `Sáb 7 nov · 19:00` as its
+  `subline`. The long date is the heading's `title`, capitalised at its first letter only
+  (`capitalizeFirst`), never through CSS `capitalize`, which produced «25 De Octubre».
 - A service with no setlist yet emits **no** issue line. Roles are published before anyone
   plans a setlist, so "sin setlist" is the normal starting state, not a problem to flag.
 - `ServiceIssueList` truncates to 4 lines plus "y N problema(s) más", so a broken record

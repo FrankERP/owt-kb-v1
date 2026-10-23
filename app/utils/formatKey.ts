@@ -28,3 +28,8 @@ export function formatKey(key: string | null | undefined): string {
   if (!key) return "";
   return key.trim().split("/").map(formatRoot).join("/");
 }
+
+/** Several keys on one line, as a history reads: «B♭ · A♭». One separator, everywhere. */
+export function formatKeys(keys: ReadonlyArray<string>, separator = " · "): string {
+  return keys.map(formatKey).join(separator);
+}

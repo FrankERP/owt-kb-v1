@@ -3,7 +3,7 @@
 import { useToast } from "@/app/components/ui/Toast";
 import Collapse from "@/app/components/ui/Collapse";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import PanelSkeleton from "./PanelSkeleton";
 import PanelBoundary from "./PanelBoundary";
@@ -87,11 +87,13 @@ import type {
   SetlistDomainSummary,
 } from "@/app/utils/serviceReadSummary";
 import { BOARD_STICKY, ParticipationSidebar } from "@/app/components/admin/ParticipationSidebar";
+import { CalendarIcon, ExpandIcon } from "@/app/components/ui/icons";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
 import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
 import ServiceMessagesDialog from "./ServiceMessagesDialog";
 import Button from "../ui/Button";
+import Menu, { MenuItem } from "../ui/Menu";
 import Skeleton, { SkeletonGroup } from "../ui/Skeleton";
 import { revealProps } from "@/app/utils/reveal";
 import { upcomingMonthPills } from "./monthPills";
@@ -116,15 +118,20 @@ const formatDate = (iso: string) => formatServiceDate(iso, "es-MX");
 // Declared once so the loading skeleton and the loaded board are the SAME shape:
 // a skeleton laid out differently from what replaces it is a layout jump.
 //
-// The chart column is 320px; the cards take the rest in `minmax(360px,1fr)`
-// columns and the PAGE scrolls vertically. `min-w-0` keeps that column from ever
-// being sized by its content. Inside the admin frame's 1232px (`max-w-7xl` less
-// `px-6`) that comes to ONE column beside an expanded rail (1232 − 232 − 344 =
-// 656) and TWO beside a collapsed one (1232 − 88 − 344 = 800), never three — the
-// 1280 cap stays; lifting it is the planner's `:has(.planner-wide)` arithmetic.
-// `items-start` lets each card be its own height instead of the row's tallest.
+// The chart column is 320px; the cards take the rest in ONE column and the PAGE
+// scrolls vertically. `min-w-0` keeps that column from ever being sized by its
+// content. Inside the admin frame's 1232px (`max-w-7xl` less `px-6`) a card is
+// 656px wide beside an expanded rail (1232 − 232 − 344) and 800px beside a
+// collapsed one (1232 − 88 − 344) — the 1280 cap stays; lifting it is the
+// planner's `:has(.planner-wide)` arithmetic. Until 2026-10-22 the cards wrapped
+// into `minmax(360px,1fr)` columns (ADR-0044); the compact card spends that width
+// on its own two columns, «Equipo» beside «Setlist» (a container query in
+// `brand.css`), and two 400px cards side by side would each have stacked them
+// again. `items-start` lets each card be its own height instead of the row's tallest.
 const BOARD_LAYOUT = "grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start";
-const BOARD_CARDS = "grid min-w-0 grid-cols-1 gap-4 items-start lg:grid-cols-[repeat(auto-fill,minmax(360px,1fr))]";
+const BOARD_CARDS = "grid min-w-0 grid-cols-1 gap-3 items-start";
+// The phone's fold around the chart: a gap between the toggle and the open chart.
+const CHART_FOLD = "space-y-2 lg:space-y-0";
 
 // Spanish message for a rejected mutation. A 409 always means "your view is
 // stale": the modal/mode stays open and the operator is told to reload.
@@ -196,18 +203,19 @@ function Modal({
 export default function ServicesPanel({
   engine = "v2",
   viewerId = null,
-  onMonthEditorOpenChange,
+  integritySlot = null,
 }: {
   engine?: SolverEngine;
   /** The signed-in admin's Sanity id — right-aligns their own bubbles in «Mensajes». */
   viewerId?: string | null;
   /**
-   * Told when the stored month editor («Editar mes» / «Editar servicio») opens and closes, so
-   * `AdminPanel` can drop the «Integridad de datos» panel above it. The editor runs the SAME
-   * integrity read for its own edit admission and says so itself when it refuses, so the panel
-   * only repeats an «OK» there. The queue, its routes and the rail's dot are untouched.
+   * `AdminPanel`'s «Integridad de datos» (`IntegrityQueuePanel`, fed by the page's ONE
+   * `useIntegrityQueue`), placed under this board's heading — on the BOARD only (bloque 4,
+   * 2026-10-22). «Editar mes» / «Editar servicio» run the same integrity read for their own edit
+   * admission and refuse in their own words, and «Generar mes» is a composer with nothing to
+   * clean up, so neither view shows it. The queue, its routes and the rail's dot are untouched.
    */
-  onMonthEditorOpenChange?: (open: boolean) => void;
+  integritySlot?: ReactNode;
 } = {}) {
   const [roles, setRoles]       = useState<ServiceRole[]>([]);
   const [members, setMembers]   = useState<MemberOption[]>([]);
@@ -267,18 +275,18 @@ export default function ServicesPanel({
   const generatorTriggerRef = useRef<HTMLButtonElement>(null);
   const monthEditorTriggerRef = useRef<HTMLButtonElement>(null);
   const newServiceTriggerRef = useRef<HTMLButtonElement>(null);
-  const monthEditorOpenerRef = useRef<{ kind: "toolbar" | "new" | "card"; roleId?: string }>({ kind: "toolbar" });
+  // The phone's «⋯» trigger. Below `sm` the Generar/Editar mes buttons are
+  // `display:none`, and `.focus()` on one is a no-op: focus would land on
+  // <body> and the next Tab start from the top of /admin. An opener that was
+  // the menu returns focus to the menu.
+  const moreTriggerRef = useRef<HTMLButtonElement>(null);
+  const generatorOpenerRef = useRef<"toolbar" | "menu">("toolbar");
+  const monthEditorOpenerRef = useRef<{ kind: "toolbar" | "menu" | "new" | "card"; roleId?: string }>({ kind: "toolbar" });
   const wasShowingGeneratorRef = useRef(false);
   const wasShowingMonthEditorRef = useRef(false);
-  const monthEditorOpen = monthEditor !== null;
-  useEffect(() => {
-    onMonthEditorOpenChange?.(monthEditorOpen);
-  }, [monthEditorOpen, onMonthEditorOpenChange]);
-  // The panel comes back if this one unmounts mid-edit (a tab change keeps nothing open).
-  useEffect(() => () => onMonthEditorOpenChange?.(false), [onMonthEditorOpenChange]);
   useEffect(() => {
     if (wasShowingGeneratorRef.current && !showGenerator) {
-      generatorTriggerRef.current?.focus();
+      (generatorOpenerRef.current === "menu" ? moreTriggerRef : generatorTriggerRef).current?.focus();
     }
     wasShowingGeneratorRef.current = showGenerator;
   }, [showGenerator]);
@@ -287,6 +295,7 @@ export default function ServicesPanel({
       const opener = monthEditorOpenerRef.current;
       requestAnimationFrame(() => {
         if (opener.kind === "new") newServiceTriggerRef.current?.focus();
+        else if (opener.kind === "menu") moreTriggerRef.current?.focus();
         else if (opener.kind === "card" && opener.roleId) {
           const escaped = typeof CSS !== "undefined" && typeof CSS.escape === "function"
             ? CSS.escape(opener.roleId)
@@ -814,9 +823,10 @@ export default function ServicesPanel({
     setSetlistOpen(true);
   }
 
-  function openGenerator() {
+  function openGenerator(opener: "toolbar" | "menu" = "toolbar") {
     const guard = guardControl(sources, "generateMonth");
     if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return; }
+    generatorOpenerRef.current = opener;
     setMonthEditor(null);
     setShowGenerator(true);
   }
@@ -825,7 +835,7 @@ export default function ServicesPanel({
     month: string,
     focusRoleId?: string,
     openComposerInitially = false,
-    opener: { kind: "toolbar" | "new" | "card"; roleId?: string } = { kind: "toolbar" },
+    opener: { kind: "toolbar" | "menu" | "new" | "card"; roleId?: string } = { kind: "toolbar" },
   ) {
     if (openComposerInitially) {
       const guard = guardControl(sources, "createService");
@@ -901,6 +911,13 @@ export default function ServicesPanel({
 
   const counters = commandSummaryCounters({ all: cards, visible: visibleCards });
   const summaryLine = commandSummarySegments(counters).join(" · ");
+  /** The toolbar's «Editar mes»: the one selected month, else the current one. */
+  const openMonthEditor1 = (opener: "toolbar" | "menu" = "toolbar") =>
+    openMonthEditor(selectedMonths.size === 1 ? [...selectedMonths][0] : currentYM, undefined, false, { kind: opener });
+  // Below `lg` the chart stacks AFTER the cards and starts folded: on a phone
+  // «who serves» comes first and the counts are consulted after, and the
+  // whole chart before the first card was ~500px of the ~1 300px measured.
+  const [chartOpenOnPhone, setChartOpenOnPhone] = useState(false);
 
   // Availability conflicts across the visible, still-upcoming cards.
   const conflictNotices = visibleCards
@@ -982,7 +999,9 @@ export default function ServicesPanel({
   // the closed gate has to say why in the layout rather than on hover.
   const toolbarGateReason =
     [
-      visibleCards.some(c => c.readiness.publishState === "draft") ? publishGate : null,
+      // The same condition that renders «Publicar listos»: a reason for a
+      // button that is not on the toolbar would pre-empt the reason of one that is.
+      counters.readyToPublish > 0 ? publishGate : null,
       generateGate,
       editTeamGate,
       copyMode ? null : createGate,
@@ -1141,10 +1160,10 @@ export default function ServicesPanel({
                 {summaryLine}
               </p>
               {/*
-                The global integrity state is NOT repeated here. `IntegrityQueuePanel`
-                states it above this panel and the rail's Servicios dot carries its
-                tone (R5 ruling 4) — a third copy under the heading said
-                "sin problemas de integridad" twice on one screen.
+                The global integrity state is NOT written here. `IntegrityQueuePanel`
+                (the `integritySlot` below this header) is the ONE place it is rendered
+                and the rail's Servicios dot carries its tone (R5 ruling 4) — a third
+                copy under the heading said "sin problemas de integridad" twice.
               */}
             </>
           )}
@@ -1158,13 +1177,27 @@ export default function ServicesPanel({
           toolbar's own column.
         */}
         <div className="flex min-w-0 flex-col items-end gap-1">
+          {/*
+            Below `sm` the three once-a-month actions fold into ONE menu beside
+            «+ Nuevo», the only action an admin takes from a phone between
+            weeks: measured at 390px, the four buttons took three rows and,
+            with the month pills and the chart, pushed the first service card
+            ~1 300px down. The desktop buttons stay mounted (hidden) so the
+            focus-return refs the editors use keep pointing at a real control;
+            on a phone that return lands on a hidden button and is a no-op,
+            which is the accepted trade for one toolbar rather than two.
+          */}
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            {visibleCards.some(c => c.readiness.publishState === "draft") && (
+            {/* Only when there is something to publish: «Publicar listos (0)» was a
+                button whose press opened an empty plan. Every ready draft still
+                has the card's own rule-13 «Publicar». */}
+            {counters.readyToPublish > 0 && (
               <Button
                 variant="secondary"
                 size="lg"
                 disabled={!publishGate.enabled}
                 onClick={() => openPublishPlan(visibleCards)}
+                className="hidden sm:inline-flex"
               >
                 Publicar listos ({counters.readyToPublish})
               </Button>
@@ -1173,17 +1206,19 @@ export default function ServicesPanel({
               ref={generatorTriggerRef}
               variant="secondary"
               size="lg"
-              onClick={openGenerator}
+              onClick={() => openGenerator()}
               disabled={!generateGate.enabled}
+              className="hidden sm:inline-flex"
             >
-              📅 Generar mes
+              <CalendarIcon /> Generar mes
             </Button>
             <Button
               ref={monthEditorTriggerRef}
               variant="secondary"
               size="lg"
-              onClick={() => openMonthEditor(selectedMonths.size === 1 ? [...selectedMonths][0] : currentYM, undefined, false, { kind: "toolbar" })}
+              onClick={() => openMonthEditor1()}
               disabled={!editTeamGate.enabled}
+              className="hidden sm:inline-flex"
             >
               Editar mes
             </Button>
@@ -1198,6 +1233,31 @@ export default function ServicesPanel({
                 <span className="text-base leading-none">+</span> Nuevo
               </Button>
             )}
+            <Menu
+              label="Más acciones de servicios"
+              align="end"
+              className="inline-block sm:hidden"
+              trigger={
+                <Button ref={moreTriggerRef} variant="secondary" size="lg" aria-label="Más acciones de servicios" className="px-3">
+                  <span aria-hidden="true" className="text-base leading-none">⋯</span>
+                </Button>
+              }
+            >
+              {counters.readyToPublish > 0 && (
+                <MenuItem disabled={!publishGate.enabled} onSelect={() => openPublishPlan(visibleCards)}>
+                  Publicar listos ({counters.readyToPublish})
+                </MenuItem>
+              )}
+              <MenuItem disabled={!generateGate.enabled} onSelect={() => openGenerator("menu")}>
+                Generar mes
+              </MenuItem>
+              <MenuItem disabled={!editTeamGate.enabled} onSelect={() => openMonthEditor1("menu")}>
+                Editar mes
+              </MenuItem>
+              <MenuItem disabled={view !== "cards"} onSelect={() => setOverviewOpen(true)}>
+                Pantalla completa
+              </MenuItem>
+            </Menu>
           </div>
           {toolbarGateReason && (
             <p className={`font-label text-[11px] text-ink-dim text-right ${CARD_STYLE.longText}`}>
@@ -1206,6 +1266,9 @@ export default function ServicesPanel({
           )}
         </div>
       </div>
+
+      {/* «Integridad de datos»: one quiet line when clean, the full panel when it has something to say. */}
+      {integritySlot}
 
       {/* Source state — names the missing source and offers its retry */}
       {view !== "loading" && unreadySummary && (
@@ -1272,7 +1335,7 @@ export default function ServicesPanel({
             <Button
               variant="secondary"
               size="sm"
-              className="ml-auto"
+              className="ml-auto hidden sm:inline-flex"
               data-services-overview-opener=""
               onClick={() => setOverviewOpen(true)}
               // Not disabled by an EMPTY filter: a reload that empties it while
@@ -1280,7 +1343,7 @@ export default function ServicesPanel({
               // way out would fall to <body>. The view says «No hay servicios».
               disabled={view !== "cards"}
             >
-              ⛶ Pantalla completa
+              <ExpandIcon /> Pantalla completa
             </Button>
           </div>
           {pastMonths.length > 0 && (
@@ -1362,7 +1425,7 @@ export default function ServicesPanel({
       {/* Loading */}
       {view === "loading" && (
         <SkeletonGroup label="Cargando servicios" className={BOARD_LAYOUT}>
-          <Skeleton className="h-96 w-full" rounded="lg" />
+          <Skeleton className="h-96 w-full order-last lg:order-none" rounded="lg" />
           <div className={BOARD_CARDS}>
             {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-40 w-full" rounded="lg" />)}
           </div>
@@ -1383,21 +1446,49 @@ export default function ServicesPanel({
       {/* Board */}
       {view === "cards" && (
         <div className={BOARD_LAYOUT}>
-          {participationGate.enabled ? (
-            <ParticipationSidebar
-              roles={visibleCards.map(c => c.role) as ParticipantRole[]}
-              monthLabel={monthLabel}
-              placement="board"
-            />
-          ) : (
-            // Never compute participation from partial membership. Pinned where
-            // the chart would be, so its «Reintentar carga» stays in reach too.
-            <aside className={`rounded-xl border border-accent/20 bg-surface-ink-l40-d100-base p-3 space-y-2 self-start ${BOARD_STICKY}`}>
-              <p className="font-label text-xs uppercase tracking-widest text-accent">Participaciones</p>
-              <p className="font-body text-xs text-mono-400">{participationGate.reason}</p>
-              <Button variant="secondary" size="sm" onClick={retryLoad}>Reintentar carga</Button>
-            </aside>
-          )}
+          {/*
+            `lg:contents`: from `lg` this wrapper vanishes and the aside is the
+            grid's own first column again (its sticky top needs to be a grid
+            item, not a child of one). Below `lg` it is a block placed LAST,
+            holding the toggle and the folded chart.
+
+            The fold is a plain hidden/shown div, not `Collapse`, on purpose:
+            `Collapse` wraps its content in an animated, overflow-clipped
+            element, and from `lg` THAT element would be the grid item in the
+            aside's place — it can be neither `contents` nor the sticky column.
+            Below `lg` the chart is a whole aside, not a few lines, so the
+            height motion it would buy is not worth a second wrapper.
+          */}
+          <div data-board-chart="" className={`order-last min-w-0 lg:order-none lg:contents ${CHART_FOLD}`}>
+            <Button
+              variant="ghost"
+              size="lg"
+              className="lg:hidden w-full !justify-between"
+              aria-expanded={chartOpenOnPhone}
+              aria-controls="services-board-chart"
+              onClick={() => setChartOpenOnPhone(v => !v)}
+            >
+              Participaciones
+              <span aria-hidden="true" className={`transition-transform duration-base ${chartOpenOnPhone ? "rotate-180" : ""}`}>▾</span>
+            </Button>
+            <div id="services-board-chart" className={`${chartOpenOnPhone ? "" : "max-lg:hidden"} lg:contents`}>
+              {participationGate.enabled ? (
+                <ParticipationSidebar
+                  roles={visibleCards.map(c => c.role) as ParticipantRole[]}
+                  monthLabel={monthLabel}
+                  placement="board"
+                />
+              ) : (
+                // Never compute participation from partial membership. Pinned where
+                // the chart would be, so its «Reintentar carga» stays in reach too.
+                <aside className={`rounded-xl border border-accent/20 bg-surface-ink-l40-d100-base p-3 space-y-2 self-start ${BOARD_STICKY}`}>
+                  <p className="font-label text-xs uppercase tracking-widest text-accent">Participaciones</p>
+                  <p className="font-body text-xs text-mono-400">{participationGate.reason}</p>
+                  <Button variant="secondary" size="sm" onClick={retryLoad}>Reintentar carga</Button>
+                </aside>
+              )}
+            </div>
+          </div>
           {/*
             The board scrolls VERTICALLY (ADR-0044, reversing R5 ruling 5's
             horizontal snap track). The cards wrap into as many 360px-minimum
@@ -1819,3 +1910,4 @@ function MonthPill({ label, selected, onClick, past }: { label: string; selected
     </Button>
   );
 }
+

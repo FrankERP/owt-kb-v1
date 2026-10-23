@@ -9,6 +9,18 @@ import { useToast } from "@/app/components/ui/Toast";
 import ProposalThread, { type ThreadMessage } from "@/app/components/ProposalThread";
 import CueDialog from "@/app/components/ui/CueDialog";
 import Button from "@/app/components/ui/Button";
+import { ArrowLeftIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, CloseIcon, MusicNoteIcon, PlusIcon } from "@/app/components/ui/icons";
+import { formatKey, formatKeys } from "@/app/utils/formatKey";
+
+// Design pass (2026-10-22, item 12 of «Diseño para miembros»): the oldest screen
+// in the app, and every one of its controls was drawn by hand — «Volver»,
+// «Recargar», the dashed «Agregar canción», the key picker, the «X», the save
+// bar. They are the house `Button` now, doing exactly what they did. Keys are
+// SHOWN through `formatKey` («B♭», never «Bb») and stored untouched. The song
+// search, which was a 256 px box floating over the list with its results
+// clipped inside, is a `CueDialog` sheet: the results get the screen, and the
+// sheet stays open after an add so a lead can pick the whole set in one go —
+// the row the lead just added reads «En lista».
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 
@@ -79,6 +91,17 @@ const KEY_OPTIONS = [
   "C#", "C#m", "D", "Dm", "Eb", "Ebm", "E", "Em",
   "F", "Fm", "F#", "F#m", "G", "Gm", "Ab", "Abm",
 ];
+
+/**
+ * The picker's options for one row: the list above, plus the song's own
+ * spellings when the catalogue stores one the list lacks («Db», «G#»). Without
+ * them the row's key would press no pill, and a lead who changed it by mistake
+ * could not get back to the song's own key short of removing and re-adding it.
+ */
+function keyOptionsFor(song: Pick<ProposalSong, "key" | "play_key">): string[] {
+  const own = [song.play_key, song.key].filter(k => k && !KEY_OPTIONS.includes(k));
+  return own.length ? [...new Set(own), ...KEY_OPTIONS] : KEY_OPTIONS;
+}
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
@@ -158,7 +181,9 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
   const [leadNotes, setLeadNotes] = useState(proposal?.lead_notes ?? "");
   const [teamNotes, setTeamNotes] = useState(proposal?.team_notes ?? "");
   const [status, setStatus]       = useState<ProposalStatus>(proposal?.status ?? "draft");
-  const [saving, setSaving]       = useState(false);
+  // Which save is in flight — the bar's two buttons each swap their own label.
+  const [savingAs, setSavingAs]   = useState<"draft" | "pending" | null>(null);
+  const saving = savingAs !== null;
   const { toast } = useToast();
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [staleReload, setStaleReload] = useState(false);
@@ -294,37 +319,42 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
   const [searchQuery, setSearchQuery]   = useState("");
   const [searchResults, setSearchResults] = useState<SongResult[]>([]);
   const [searching, setSearching]       = useState(false);
-  const [showSearch, setShowSearch]     = useState(false);
-  const searchRef    = useRef<HTMLDivElement>(null);
+  const [searchFailed, setSearchFailed] = useState(false);
+  const [sheetOpen, setSheetOpen]       = useState(false);
   const debounceRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The newest request wins: a slower, earlier answer must not replace the
+  // list the lead is looking at, nor flip `searching` off while the newer
+  // request is still out.
+  const searchSeq    = useRef(0);
 
   const showToast = (msg: string, ok = true) => toast({ message: msg, tone: ok ? "ok" : "error" });
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
-        setShowSearch(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
 
   const search = useCallback((q: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
+      const seq = ++searchSeq.current;
       setSearching(true);
       try {
         const res = await fetch(`/api/me/songs?q=${encodeURIComponent(q)}`);
         // Guard against a non-array body (e.g. a 401/500 { error } object): storing
         // it and calling .map() on render would white-screen the editor and lose
-        // the in-progress setlist. Fall back to an empty result set instead.
+        // the in-progress setlist. A failed read is SAID, not shown as an empty
+        // catalogue — «Sin resultados» and «your session expired» must not look alike.
         const data: unknown = res.ok ? await res.json() : null;
-        setSearchResults(Array.isArray(data) ? (data as SongResult[]) : []);
+        if (seq !== searchSeq.current) return;
+        if (Array.isArray(data)) {
+          setSearchResults(data as SongResult[]);
+          setSearchFailed(false);
+        } else {
+          setSearchResults([]);
+          setSearchFailed(true);
+        }
       } catch {
+        if (seq !== searchSeq.current) return;
         setSearchResults([]);
+        setSearchFailed(true);
       } finally {
-        setSearching(false);
+        if (seq === searchSeq.current) setSearching(false);
       }
     }, 300);
   }, []);
@@ -337,10 +367,11 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
     if (debounceRef.current) clearTimeout(debounceRef.current);
   }, []);
 
-  useEffect(() => {
-    if (!showSearch && searchResults.length === 0) search("");
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showSearch]);
+  // The catalogue is fetched on mount by the effect above (an empty query), so
+  // the sheet opens on songs, not on «Buscando…». Closing resets the query,
+  // which fetches the full list again for the next opening.
+  const openSheet = () => { setKeyPickerIdx(null); setSheetOpen(true); };
+  const closeSheet = () => { setSheetOpen(false); setSearchQuery(""); };
 
   const addSong = (song: SongResult) => {
     if (songs.some(s => s.songId === song._id)) return;
@@ -352,8 +383,6 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
       play_key: song.key,
       previous_keys: song.previous_keys,
     }]);
-    setShowSearch(false);
-    setSearchQuery("");
   };
 
   // Removing a song can orphan its medley partner — re-normalize tags.
@@ -365,7 +394,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
   };
 
   const save = async (submitStatus: "draft" | "pending") => {
-    setSaving(true);
+    setSavingAs(submitStatus);
     try {
       const res = await fetch("/api/me/proposals", {
         method: "POST",
@@ -432,7 +461,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
     } catch {
       showToast("Error al guardar", false);
     } finally {
-      setSaving(false);
+      setSavingAs(null);
     }
   };
 
@@ -518,16 +547,10 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
 
       {/* Header */}
       <div>
-        <button
-          type="button"
-          onClick={leaveEditor}
-          className="flex items-center gap-1.5 font-label text-xs uppercase tracking-widest text-mono-500 hover:text-accent transition-colors mb-5"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-mono-600">
-            <path d="M19 12H5M12 5l-7 7 7 7" />
-          </svg>
+        <Button variant="ghost" size="sm" onClick={leaveEditor} className="-ml-3 mb-4">
+          <ArrowLeftIcon />
           Volver
-        </button>
+        </Button>
 
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
@@ -561,13 +584,9 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
             Otro líder actualizó esta propuesta compartida (o ya fue aprobada). Recarga para ver
             los cambios antes de volver a guardar.
           </p>
-          <button
-            type="button"
-            onClick={() => { setStaleReload(false); router.refresh(); }}
-            className="mt-1 py-2 px-4 rounded-lg border border-recency-fg/40 font-label text-xs uppercase tracking-widest text-recency-soft hover:bg-recency-fg/10 transition-colors"
-          >
+          <Button variant="secondary" size="sm" className="mt-1" onClick={() => { setStaleReload(false); router.refresh(); }}>
             Recargar
-          </button>
+          </Button>
         </div>
       )}
 
@@ -613,9 +632,9 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
 
         {songs.length === 0 && (
           <div className="flex flex-col items-center py-8 gap-3 text-mono-600">
-            <MusicIcon />
+            <MusicNoteIcon size={32} strokeWidth={1.5} />
             <p className="font-body text-sm text-center">
-              Agrega canciones usando el buscador abajo.
+              Aún no hay canciones. Agrégalas con «Agregar canción».
             </p>
           </div>
         )}
@@ -626,6 +645,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
           const nextSong = songs[idx + 1];
           const linked = !!song.medley_tag && !!nextSong?.medley_tag && song.medley_tag === nextSong.medley_tag;
           const inMedley = !!song.medley_tag;
+          const shownKey = formatKey(song.play_key);
           return (
           <Fragment key={song.songId}>
           <div
@@ -634,7 +654,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
             onDragOver={e => onDragOver(e, idx)}
             onDrop={() => onDrop(idx)}
             onDragEnd={onDragEnd}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${idx > 0 ? "mt-1.5" : ""} ${
+            className={`flex items-center gap-2 pl-3 pr-2 py-2.5 md:gap-3 md:px-4 md:py-3 rounded-xl border transition-all ${idx > 0 ? "mt-1.5" : ""} ${
               dragOverIdx === idx && draggingIdx !== idx
                 ? "border-accent/60 bg-accent/10 scale-[1.01]"
                 : draggingIdx === idx
@@ -651,36 +671,32 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
               </span>
             )}
 
-            {/* Up / down buttons (mobile fallback for DnD) */}
+            {/* Up / down (the phone's reorder — drag needs a pointer). Icon
+                buttons keep a 36 px target each; the pair overlaps the row's
+                padding so the row stays as tall as its three lines of text. */}
             {!isApproved && (
-              <div className="flex flex-col gap-0.5 shrink-0 md:hidden">
-                <button
-                  type="button"
+              <div className="flex flex-col -my-2 shrink-0 md:hidden">
+                <Button
+                  variant="icon"
                   onClick={(e) => { e.stopPropagation(); moveSong(idx, idx - 1); }}
                   disabled={idx === 0}
-                  className="p-1 rounded text-mono-400 hover:text-accent disabled:opacity-20 disabled:cursor-default"
-                  aria-label="Mover arriba"
+                  aria-label={`Mover arriba: ${song.title}`}
                 >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="18 15 12 9 6 15" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
+                  <ChevronUpIcon />
+                </Button>
+                <Button
+                  variant="icon"
                   onClick={(e) => { e.stopPropagation(); moveSong(idx, idx + 1); }}
                   disabled={idx === songs.length - 1}
-                  className="p-1 rounded text-mono-400 hover:text-accent disabled:opacity-20 disabled:cursor-default"
-                  aria-label="Mover abajo"
+                  aria-label={`Mover abajo: ${song.title}`}
                 >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="6 9 12 15 18 9" />
-                  </svg>
-                </button>
+                  <ChevronDownIcon />
+                </Button>
               </div>
             )}
 
             {/* Position */}
-            <span className="font-label text-xs text-mono-500 w-5 text-center shrink-0">{idx + 1}</span>
+            <span className="font-label text-xs text-mono-500 w-5 text-center shrink-0 tabular-nums">{idx + 1}</span>
 
             {/* Song info */}
             <div className="flex-1 min-w-0">
@@ -688,41 +704,44 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
               <p className="font-body text-xs text-mono-400 truncate">{song.author}</p>
               {!!song.previous_keys?.length && (
                 <p className="font-body text-xs text-mono-500 mt-0.5">
-                  Tonos anteriores: <span className="text-accent/80">{song.previous_keys.join(" · ")}</span>
+                  Tonos anteriores: <span className="text-accent/80">{formatKeys(song.previous_keys)}</span>
                 </p>
               )}
             </div>
 
-            {/* Custom key picker */}
+            {/* Key picker: the row's key as a small button, a popover of pills under it */}
             {!isApproved && (
               <div
                 className="relative shrink-0"
                 ref={keyPickerIdx === idx ? keyPickerRef : undefined}
               >
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  aria-expanded={keyPickerIdx === idx}
+                  aria-label={`Tono de ${song.title}: ${shownKey}`}
                   onClick={(e) => { e.stopPropagation(); setKeyPickerIdx(keyPickerIdx === idx ? null : idx); }}
                   onMouseDown={e => e.stopPropagation()}
-                  className="font-label text-xs px-2.5 py-1 rounded-lg border border-accent/20 hover:border-accent/50 text-accent transition-colors min-w-[2.75rem] text-center"
+                  className="min-w-[2.75rem] normal-case"
                 >
-                  {song.play_key}
-                </button>
+                  {shownKey}
+                </Button>
                 {keyPickerIdx === idx && (
-                  <div className="absolute right-0 top-full mt-1.5 z-30 bg-surface-overlay-deepest border border-accent/20 rounded-xl shadow-2xl p-2.5 min-w-[9rem]">
-                    <div className="grid grid-cols-4 gap-1">
-                      {KEY_OPTIONS.map(k => (
-                        <button
+                  // 15.5rem: four `sm` pills of «C♯m» width (padding, border, 0.1em
+                  // tracking) plus gaps and padding — the pill keeps its own padding.
+                  <div className="absolute right-0 top-full mt-1.5 z-30 bg-surface-overlay-deepest border border-accent/20 rounded-xl shadow-2xl p-2.5 w-[15.5rem]">
+                    <div className="grid grid-cols-4 gap-1" role="group" aria-label={`Elegir tono de ${song.title}`}>
+                      {keyOptionsFor(song).map(k => (
+                        <Button
                           key={k}
-                          type="button"
+                          variant="pill"
+                          size="sm"
+                          active={k === song.play_key}
                           onClick={() => setPlayKey(idx, k)}
-                          className={`font-label text-[11px] px-1.5 py-1.5 rounded-lg transition-colors ${
-                            k === song.play_key
-                              ? "bg-accent/20 text-accent"
-                              : "text-mono-400 hover:bg-accent/10 hover:text-accent"
-                          }`}
+                          className="normal-case"
                         >
-                          {k}
-                        </button>
+                          {formatKey(k)}
+                        </Button>
                       ))}
                     </div>
                   </div>
@@ -732,20 +751,22 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
 
             {isApproved && (
               <span className="font-label text-xs px-2 py-0.5 rounded-full border border-accent/20 text-accent shrink-0">
-                {song.play_key}
+                {shownKey}
               </span>
             )}
 
             {/* Remove */}
             {!isApproved && (
-              <button
-                type="button"
+              <Button
+                variant="icon"
+                tone="danger"
                 onClick={() => removeSong(idx)}
-                className="p-1.5 rounded-lg text-mono-500 hover:text-negative-fg hover:bg-negative-strong/10 transition-colors shrink-0"
+                aria-label={`Quitar ${song.title}`}
                 title="Quitar"
+                className="-mr-1"
               >
-                <XIcon />
-              </button>
+                <CloseIcon />
+              </Button>
             )}
           </div>
 
@@ -784,67 +805,19 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
         </div>
         )}
 
-        {/* Song search */}
+        {/* Add a song: opens the search sheet */}
         {!isApproved && (
-          <div ref={searchRef} className="relative">
-            <button
-              type="button"
-              className="w-full text-left flex items-center gap-2 px-4 py-3 rounded-xl border border-dashed border-accent/25 hover:border-accent/50 focus-visible:border-accent/50 transition-colors cursor-pointer"
-              onClick={() => { setShowSearch(true); setKeyPickerIdx(null); }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent shrink-0">
-                <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-              <span className="font-label text-xs uppercase tracking-widest text-mono-500">Agregar canción</span>
-            </button>
-
-            {showSearch && (
-              <div className="absolute top-full left-0 right-0 mt-1 z-20 rounded-xl border border-accent/20 bg-surface-overlay-deepest shadow-2xl overflow-hidden">
-                <div className="p-2 border-b border-accent/10">
-                  <input
-                    autoFocus
-                    className={inputCls}
-                    placeholder="Buscar canción…"
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                  />
-                </div>
-                <div className="max-h-64 overflow-y-auto">
-                  {searching && (
-                    <p className="font-body text-sm text-mono-500 text-center py-4">Buscando…</p>
-                  )}
-                  {!searching && searchResults.length === 0 && (
-                    <p className="font-body text-sm text-mono-500 text-center py-4">Sin resultados</p>
-                  )}
-                  {!searching && searchResults.map(song => {
-                    const already = songs.some(s => s.songId === song._id);
-                    return (
-                      <button
-                        key={song._id}
-                        onClick={() => !already && addSong(song)}
-                        disabled={already}
-                        className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
-                          already ? "opacity-40 cursor-not-allowed" : "hover:bg-accent/5"
-                        }`}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className="font-body text-sm font-semibold truncate">{song.title}</p>
-                          <p className="font-body text-xs text-mono-400 truncate">{song.author}</p>
-                          <p className="font-body text-xs text-mono-500 mt-0.5">
-                            {song.previous_keys.length > 0
-                              ? <>Tonos anteriores: <span className="text-accent/80">{song.previous_keys.join(" · ")}</span></>
-                              : "Sin historial previo"}
-                          </p>
-                        </div>
-                        <span className="font-label text-xs text-mono-500 shrink-0">{song.key}</span>
-                        {already && <span className="font-label text-[11px] text-mono-500">En lista</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
+          <Button
+            variant="secondary"
+            size="lg"
+            className="w-full"
+            aria-haspopup="dialog"
+            aria-expanded={sheetOpen}
+            onClick={openSheet}
+          >
+            <PlusIcon />
+            Agregar canción
+          </Button>
         )}
       </div>
 
@@ -895,16 +868,11 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
         </div>
       )}
 
-
-
       {/* Approved banner */}
       {isApproved && (
-        <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-positive-deep/20 bg-positive-deep/5">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-positive-strong shrink-0">
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-            <polyline points="22 4 12 14.01 9 11.01" />
-          </svg>
-          <p className="font-label text-xs uppercase tracking-widest text-positive-strong">
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-positive-deep/20 bg-positive-deep/5 text-positive-strong">
+          <CheckIcon size={16} className="shrink-0" />
+          <p className="font-label text-xs uppercase tracking-widest">
             Propuesta aprobada — el setlist ha sido publicado
           </p>
         </div>
@@ -919,23 +887,109 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
             </p>
           )}
           <div className="flex gap-3">
-            <button
-              onClick={() => save("draft")}
+            <Button
+              variant="secondary"
+              size="lg"
+              className="flex-1"
               disabled={saving}
-              className="flex-1 py-2.5 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors disabled:opacity-50"
+              busy={savingAs === "draft"}
+              busyLabel="Guardando…"
+              onClick={() => save("draft")}
             >
-              {saving ? "Guardando…" : "Guardar borrador"}
-            </button>
-            <button
-              onClick={() => setConfirmSubmit(true)}
+              Guardar borrador
+            </Button>
+            <Button
+              variant="primary"
+              size="lg"
+              className="flex-1"
               disabled={saving || songs.length === 0}
-              className="flex-1 py-2.5 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+              busy={savingAs === "pending"}
+              busyLabel="Enviando…"
+              onClick={() => setConfirmSubmit(true)}
             >
-              {saving ? "Enviando…" : "Enviar propuesta"}
-            </button>
+              Enviar propuesta
+            </Button>
           </div>
         </div>
       )}
+
+      {/* Song search sheet. A sheet on a phone and a modal from `sm` up, so the
+          results get the whole screen instead of a 256 px box over the list. It
+          stays open after an add: picking four songs is one trip, and the row
+          just added reads «En lista». */}
+      <CueDialog open={sheetOpen} mode="sheet" size="md" title="Agregar canción" label="Agregar canción" onDismiss={closeSheet}>
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="px-5 pt-5 pb-3">
+            <div className="brand-search-console">
+              {/* `autoFocus`: focus lands on the box rather than on the dialog's own
+                  close button (its entry focus yields to a focus already inside). */}
+              <input
+                autoFocus
+                type="search"
+                aria-label="Buscar canción"
+                placeholder="Buscar por título o artista…"
+                autoComplete="off"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full bg-transparent px-3 py-2.5 font-body text-[16px] sm:text-sm text-ink placeholder:text-placeholder focus:outline-none"
+              />
+            </div>
+          </div>
+          {/* The rows stay mounted while a newer search is out (the list is only
+              marked busy), so a keystroke never blanks a full screen of results
+              and loses its scroll position. */}
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
+            {searchFailed && (
+              <p role="alert" className="font-body text-sm text-negative-fg text-center py-6">
+                No se pudieron cargar las canciones. Revisa tu conexión o vuelve a entrar.
+              </p>
+            )}
+            {!searchFailed && searchResults.length === 0 && (
+              <p className="font-body text-sm text-mono-500 text-center py-6">{searching ? "Buscando…" : "Sin resultados"}</p>
+            )}
+            {!searchFailed && searchResults.length > 0 && (
+              <ul className={`divide-y divide-ink-dim/10 transition-opacity duration-fast ${searching ? "opacity-60" : ""}`} aria-label="Resultados" aria-busy={searching || undefined}>
+                {searchResults.map(song => {
+                  const already = songs.some(s => s.songId === song._id);
+                  return (
+                    <li key={song._id}>
+                      <button
+                        type="button"
+                        onClick={() => !already && addSong(song)}
+                        disabled={already}
+                        aria-label={already ? `${song.title} — en lista` : `Agregar ${song.title}`}
+                        className={`w-full flex items-center gap-3 px-2 py-3 text-left rounded-lg transition-colors duration-fast ease-out-brand ${
+                          already ? "opacity-40 cursor-not-allowed" : "hover:bg-accent/5"
+                        }`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="font-body text-sm font-semibold truncate">{song.title}</p>
+                          <p className="font-body text-xs text-mono-400 truncate">{song.author}</p>
+                          <p className="font-body text-xs text-mono-500 mt-0.5">
+                            {song.previous_keys.length > 0
+                              ? <>Tonos anteriores: <span className="text-accent/80">{formatKeys(song.previous_keys)}</span></>
+                              : "Sin historial previo"}
+                          </p>
+                        </div>
+                        <span className="font-label text-xs text-mono-500 shrink-0">{formatKey(song.key)}</span>
+                        {already
+                          ? <span className="font-label text-[11px] uppercase tracking-widest text-mono-500 shrink-0">En lista</span>
+                          : <span className="text-accent shrink-0" aria-hidden="true"><PlusIcon /></span>}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+          <div className="flex items-center justify-between gap-3 border-t border-surface-accent-faint px-5 py-3">
+            <p className="font-label text-xs text-mono-500 tabular-nums">
+              {songs.length} en la lista
+            </p>
+            <Button variant="primary" onClick={closeSheet}>Listo</Button>
+          </div>
+        </div>
+      </CueDialog>
 
       {/* Submit confirmation dialog */}
       <CueDialog open={confirmSubmit} title="Enviar propuesta" size="sm" onDismiss={() => setConfirmSubmit(false)}>
@@ -948,7 +1002,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
               <li key={s.songId} className="flex items-center gap-2">
                 <span className="w-4 text-right font-label text-[11px] tabular-nums text-mono-600">{i + 1}</span>
                 <span className="flex-1 truncate font-body text-sm">{s.title}</span>
-                <span className="shrink-0 font-label text-xs text-accent">{s.play_key}</span>
+                <span className="shrink-0 font-label text-xs text-accent">{formatKey(s.play_key)}</span>
               </li>
             ))}
           </ul>
@@ -968,36 +1022,18 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
 
 function GripIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
       <line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
     </svg>
   );
 }
 
-function XIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
-  );
-}
-
 function UserIcon() {
   return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent/70">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent/70" aria-hidden="true">
       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
       <circle cx="12" cy="7" r="4" />
-    </svg>
-  );
-}
-
-function MusicIcon() {
-  return (
-    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 18V5l12-2v13" />
-      <circle cx="6" cy="18" r="3" />
-      <circle cx="18" cy="16" r="3" />
     </svg>
   );
 }

@@ -724,13 +724,16 @@ export const INTEGRITY_QUEUE_TITLE = "Integridad de datos";
 export const INTEGRITY_INCOMPLETE_NOTE =
   "El inventario de integridad está incompleto: esta lista puede tener menos problemas de los que existen.";
 
+/** The clean reading of `integrityQueueSummary` — the panel's one-line shape repeats it while a reload holds a clean tone. */
+export const INTEGRITY_CLEAN_SUMMARY = "Sin problemas de integridad";
+
 /** One-line Spanish summary for the command-summary entry and the panel header. */
 export function integrityQueueSummary(queue: IntegrityQueue): string {
   const n = queue.count;
   const problems = `${n} ${n === 1 ? "problema" : "problemas"}`;
   switch (integrityQueueTone(queue)) {
     case "clean":
-      return "Sin problemas de integridad";
+      return INTEGRITY_CLEAN_SUMMARY;
     case "unknown":
       return "Inventario incompleto";
     case "issues":

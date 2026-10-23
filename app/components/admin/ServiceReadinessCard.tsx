@@ -2,16 +2,26 @@
 
 // One service card, in the plan's hierarchy (Plan B items 7-9):
 //
-//   1 identity + publication state + the action cluster
+//   1 identity + publication state + the action cluster + the ONE primary action
 //   2 blocking issue summary
-//   3 assigned-team / setlist preview
-//   4 ONE primary action
+//   3 assigned-team | setlist preview
 //
-// Two of the plan's sections are gone (see `CARD_SECTIONS` in `serviceCardModel`):
-// the four-module readiness strip, and the full-width `Más acciones` bar. The
-// card's secondary actions now live top-right in the header — `Editar equipo` and
-// `Editar setlist` as icon buttons, everything else behind the kebab beside them.
-// Every action and every gate survived the move; only their placement changed.
+// Three of the plan's sections are gone (see `CARD_SECTIONS` in `serviceCardModel`):
+// the four-module readiness strip, the full-width `Más acciones` bar, and the
+// full-width primary action at the foot. The secondary actions live top-right in
+// the header — `Editar equipo` and `Editar setlist` as icon buttons, everything
+// else behind the kebab beside them — and the primary action sits in the same
+// row as a normal-width button (2026-10-22, the compact card). Every action and
+// every gate survived the moves; only their placement changed.
+//
+// The compact card (2026-10-22) is one line of identity — `Dom 25 oct · en 3 días`
+// and the state chip — over a two-column body, «Equipo» beside «Setlist», when the
+// card is wide enough for both (a container query in `brand.css`, not a viewport
+// breakpoint: the same card is ~656 px beside the Participaciones column and
+// ~340 px on a phone). Its day colour is a 3 px rail down the left edge and
+// nothing else (ADR-0059, `CARD_RAIL`): the header ground, the borders, the
+// section labels, the keys and the chips are all neutral, so Saturday no longer
+// wears the alerts' amber and twelve cards fit in ~a third of the height.
 //
 // The card renders by MAPPING over `CARD_SECTIONS`, so that exported constant is
 // the real rendered order and the ordering test cannot drift from the DOM.
@@ -26,21 +36,16 @@
 
 import { ChainLinkIcon } from "../ChainLinkIcon";
 import { buildRuns } from "../../utils/medley";
+import Button from "../ui/Button";
 import Menu, { MenuItem, MenuSeparator } from "../ui/Menu";
 import NumberRoll from "../ui/NumberRoll";
 import ReadinessBadge from "./ReadinessBadge";
 import ServiceIssueList from "./ServiceIssueList";
 import ServicePrimaryAction from "./ServicePrimaryAction";
 import {
-  CARD_ACCENT,
-  CARD_ACCENT_VAR,
-  CARD_ACCENT_MUTED,
-  CARD_BORDER,
-  CARD_DIVIDER,
-  CARD_HEADER,
+  CARD_RAIL,
   CARD_SECTIONS,
   CARD_STYLE,
-  SERVICE_BADGE,
   cardIdentity,
   cardPreview,
   dn,
@@ -56,6 +61,9 @@ import {
 import type { ServiceSourceStates } from "./serviceReadiness";
 import type { RevealProps } from "@/app/utils/reveal";
 import { themeColour } from "@/app/utils/themeColour";
+
+/** The medley spine's token: neutral, as on the member-facing `DayCard` (ADR-0059). */
+const NEUTRAL = "--ink-dim-rgb";
 
 /**
  * One control's current availability, derived from the five individual source
@@ -135,6 +143,14 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
   const isCardSelected = swapSource?.kind === "card" && swapSource.roleId === role._id;
   const modeActive = swapMode || copyMode;
 
+  // The two promoted icons and the primary action share a row now, so an icon
+  // whose flow IS the primary action's flow would be the same control twice
+  // («Editar setlist» as a button and as a note icon beside it). The button
+  // carries the label; the icon steps aside. Nothing is lost: the primary action
+  // opens exactly the editor the icon would have.
+  const showTeamIcon = action.route !== "service_modal";
+  const showSetlistIcon = action.route !== "setlist_editor";
+
   const isChipSource = (section: string, itemKey?: string) =>
     !!itemKey &&
     !!swapSource &&
@@ -151,81 +167,126 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
     .filter((s) => s.person)
     .map((s) => ({ label: s.role, person: s.person! }))
     .sort((a, b) => pillWidth(a.label, dn(a.person)) - pillWidth(b.label, dn(b.person)));
-  const hasTeam =
-    (role.leads ?? []).length > 0 ||
-    (role.bgvs ?? []).length > 0 ||
-    (role.chorus ?? []).length > 0 ||
-    instrPills.length > 0 ||
-    fohPills.length > 0;
+  const hasVoices =
+    (role.leads ?? []).length + (role.bgvs ?? []).length + (role.chorus ?? []).length > 0;
+  const hasTeam = hasVoices || instrPills.length > 0 || fohPills.length > 0;
   const songs: SetlistSong[] = role.songs ?? [];
 
   const bodyPad = "px-4 sm:px-5";
+  const vocalConflicts = highlightConflict ? conflictIds : EMPTY_SET;
 
   function renderSection(section: CardSection) {
     switch (section) {
-      // ── 1. Identity + publication state ──────────────────────────────────
+      // ── 1. Identity + publication state + actions ────────────────────────
       case "identity":
         return (
           <div
-            className={`${CARD_HEADER[role._type]} min-w-0 rounded-t-xl border-b px-4 py-3`}
+            data-card-header=""
+            className={`${bodyPad} flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 pt-4`}
           >
             {/*
-              Only the TITLE shares a row with the action cluster. The date and the
-              badges span the full header width below it, so three 44px targets in a
-              260px-wide month column cannot squeeze the date into a four-line wrap.
+              ONE wrapping row. On a wide card it reads
+                Dom 25 oct · en 3 días · [Publicado]        [Completar setlist] [👥] [⋮]
+              On a phone (below `sm`) the same items re-order into three lines —
+                Dom 25 oct                                   [👥] [🎵] [⋮]
+                en 3 días · [Publicado]
+                [Completar setlist                                        ]
+              — the icons stay up beside the date (`max-sm:order-1`), the
+              countdown and the state take a line of their own (`max-sm:order-2
+              max-sm:basis-full`), and the primary action wraps last
+              (`basis-full order-last` in `ServicePrimaryAction`). Three 44px icons
+              therefore never squeeze the date into a four-line wrap, and nothing
+              is rendered twice for the two layouts.
             */}
-            <div className="flex min-w-0 items-start justify-between gap-2">
+            <div className={`flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 ${CARD_STYLE.longText}`}>
               <h3
-                className={`font-display text-xl font-bold uppercase text-ink-muted md:text-2xl ${CARD_STYLE.longText}`}
+                title={identity.dateText}
+                className={`font-display text-xl font-bold uppercase leading-none text-ink md:text-2xl ${CARD_STYLE.longText}`}
               >
-                {identity.title}
+                {identity.headline}
               </h3>
+              {identity.subline && (
+                <span className="font-label text-xs tabular-nums text-ink-dim">{identity.subline}</span>
+              )}
+            </div>
+            <div
+              data-card-meta=""
+              className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 max-sm:order-2 max-sm:basis-full"
+            >
+              {identity.relative && (
+                <span className="font-label text-[11px] uppercase tracking-widest text-ink-dim">
+                  <NumberRoll value={identity.relative} />
+                </span>
+              )}
+              <ReadinessBadge
+                text={identity.publication.text}
+                icon={isDraft ? "◌" : "◉"}
+                tone={identity.publication.tone}
+                className="!py-0.5"
+              />
+            </div>
 
-              {/* Mode affordances replace the action cluster while a mode is active. */}
-              {swapMode ? (
-                <button
-                  type="button"
-                  onClick={props.onCardSwapSelect}
-                  disabled={!gates.swap.enabled}
-                  title={gates.swap.reason ?? "Intercambiar equipo completo"}
-                  className={`${CARD_STYLE.menuTrigger} shrink-0 rounded-lg px-2.5 font-label text-xs transition-colors disabled:opacity-40 ${
-                    isCardSelected
-                      ? "border border-surface-lift/40 bg-surface-lift/20 text-ink"
-                      : "border border-transparent text-ink-muted/70 hover:bg-surface-lift/15 hover:text-ink"
-                  }`}
-                >
-                  ⇄ Equipo
-                </button>
-              ) : copyMode ? (
-                isCopySource ? (
-                  <span className="shrink-0 rounded-lg border border-surface-lift/40 bg-surface-lift/20 px-2.5 py-1.5 font-label text-[11px] uppercase tracking-widest text-ink">
-                    Origen
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={props.onCopyPick}
-                    disabled={!gates.copyInstruments.enabled}
-                    title={gates.copyInstruments.reason ?? "Copiar los instrumentos del origen a este día"}
-                    className={`${CARD_STYLE.menuTrigger} shrink-0 rounded-lg border border-accent/40 px-2.5 font-label text-xs text-ink-muted/70 transition-colors hover:bg-accent/25 hover:text-ink disabled:opacity-40`}
-                  >
-                    Pegar aquí
-                  </button>
-                )
+            {/* Mode affordances replace the action cluster while a mode is active. */}
+            {/*
+              Both mode controls are house Buttons: the swap pick is a `pill`, whose
+              pressed state (`active`) is the selection, and the paste target a
+              `secondary`. A closed gate's reason rides on `title`; the toolbar's
+              line explains the mode's gate as a whole.
+            */}
+            {swapMode ? (
+              <Button
+                variant="pill"
+                size="lg"
+                active={isCardSelected}
+                onClick={props.onCardSwapSelect}
+                disabled={!gates.swap.enabled}
+                title={gates.swap.reason ?? "Intercambiar equipo completo"}
+                className="ml-auto shrink-0 max-sm:order-1"
+              >
+                ⇄ Equipo
+              </Button>
+            ) : copyMode ? (
+              isCopySource ? (
+                <span className="ml-auto shrink-0 rounded-lg border border-surface-lift/40 bg-surface-lift/20 px-2.5 py-1.5 font-label text-[11px] uppercase tracking-widest text-ink max-sm:order-1">
+                  Origen
+                </span>
               ) : (
-                <div className="relative flex shrink-0 items-center gap-0.5">
-                  <IconAction
-                    label="Editar equipo"
-                    gate={gates.editTeam}
-                    onClick={props.onEdit}
-                    icon={<UsersIcon />}
-                  />
-                  <IconAction
-                    label="Editar setlist"
-                    gate={gates.editSetlist}
-                    onClick={props.onSetlist}
-                    icon={<MusicIcon />}
-                  />
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  onClick={props.onCopyPick}
+                  disabled={!gates.copyInstruments.enabled}
+                  title={gates.copyInstruments.reason ?? "Copiar los instrumentos del origen a este día"}
+                  className="ml-auto shrink-0 max-sm:order-1"
+                >
+                  Pegar aquí
+                </Button>
+              )
+            ) : (
+              // `contents` below `sm`: the primary action and the icon cluster are
+              // the header row's own flex items there (the action wraps to a full
+              // line, the icons stay up beside the date). From `sm` the two become
+              // ONE right-aligned cluster, so a long special name can push the pair
+              // down together but never leave the icons orphaned on a line of their own.
+              <div className="contents sm:ml-auto sm:flex sm:shrink-0 sm:items-center sm:gap-3">
+                <ServicePrimaryAction action={action} onAction={props.onPrimaryAction} />
+                <div className="ml-auto flex shrink-0 items-center gap-0.5 max-sm:order-1 sm:ml-0">
+                  {showTeamIcon && (
+                    <IconAction
+                      label="Editar equipo"
+                      gate={gates.editTeam}
+                      onClick={props.onEdit}
+                      icon={<UsersIcon />}
+                    />
+                  )}
+                  {showSetlistIcon && (
+                    <IconAction
+                      label="Editar setlist"
+                      gate={gates.editSetlist}
+                      onClick={props.onSetlist}
+                      icon={<MusicIcon />}
+                    />
+                  )}
                   <Menu
                     label="Más acciones"
                     align="end"
@@ -285,28 +346,8 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                     </MenuItem>
                   </Menu>
                 </div>
-              )}
-            </div>
-
-            <p className="font-label text-xs capitalize text-ink-muted/70">{identity.dateText}</p>
-            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-              <span
-                className={`rounded-full px-2 py-0.5 font-label text-[11px] uppercase tracking-widest ${SERVICE_BADGE[role._type]}`}
-              >
-                {identity.typeLabel}
-              </span>
-              <ReadinessBadge
-                text={identity.publication.text}
-                icon={isDraft ? "◌" : "◉"}
-                tone={identity.publication.tone}
-                className="!py-0.5"
-              />
-              {identity.relative && (
-                <span className="font-label text-[11px] uppercase tracking-widest text-ink-muted/70">
-                  <NumberRoll value={identity.relative} />
-                </span>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         );
 
@@ -319,84 +360,186 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
           </div>
         );
 
-      // ── 3. Assigned-team / setlist preview ───────────────────────────────
+      // ── 3. Team | setlist preview ────────────────────────────────────────
       case "preview":
         return (
-          <div className={`${bodyPad} min-w-0 space-y-4`}>
-            {songs.length > 0 && (
-              <section>
-                <SectionHead
-                  label={`Setlist · ${preview.songCount} canción${preview.songCount === 1 ? "" : "es"}`}
-                  accent={CARD_ACCENT_MUTED[role._type]}
-                  divider={CARD_DIVIDER[role._type]}
-                />
-                <ol className="mt-3 space-y-2.5">
-                  {buildRuns(songs).map((run) => {
-                    const renderRow = (entry: SetlistSong, n: number) => (
-                      <div className="flex min-w-0 items-start gap-2">
-                        <span className="mt-0.5 w-5 shrink-0 text-sm text-mono-500">{n}.</span>
-                        <div className="min-w-0">
-                          <span
-                            className={`font-body text-sm font-semibold ${CARD_STYLE.longText}`}
-                          >
-                            {entry.song.title}
+          <div className={`${bodyPad} brand-service-card-body min-w-0`}>
+            <section className="min-w-0" data-card-team="">
+              <SectionHead label="Equipo" />
+              {swapMode ? (
+                // Swap mode: seat chips, addressed by their stored `_key`.
+                <div className="mt-2 space-y-2">
+                  {(
+                    [
+                      ["leads", role.leads ?? [], "Líderes"],
+                      ["bgvs", role.bgvs ?? [], "BGVs"],
+                      ["chorus", role.chorus ?? [], "Coro"],
+                    ] as const
+                  ).map(
+                    ([section, arr, lbl]) =>
+                      arr.length > 0 && (
+                        <div key={section} className="flex min-w-0 flex-wrap items-start gap-2">
+                          <span className="w-12 shrink-0 pt-0.5 font-label text-[10px] uppercase tracking-widest text-mono-600">
+                            {lbl}
                           </span>
-                          <span className="text-sm text-mono-500"> — {entry.song.author}</span>
-                          <div className="mt-0.5 flex items-center gap-2">
-                            <span
-                              className={`font-label text-xs font-semibold ${CARD_ACCENT[role._type]}`}
-                            >
-                              {entry.play_key || entry.song.key}
-                            </span>
-                            {entry.play_key &&
-                              entry.song.key &&
-                              entry.play_key !== entry.song.key && (
-                                <span className="rounded border border-mono-700 bg-mono-800/60 px-1.5 py-0.5 font-label text-[11px] leading-tight text-mono-500">
-                                  orig. {entry.song.key}
-                                </span>
-                              )}
+                          <div className="flex min-w-0 flex-wrap gap-1">
+                            {arr.map((m) => (
+                              <MemberChip
+                                key={m._key ?? m._id}
+                                name={dn(m)}
+                                isSource={isChipSource(section, m._key)}
+                                onClick={
+                                  swapSource?.kind === "card" || !m._key || !gates.swap.enabled
+                                    ? undefined
+                                    : () =>
+                                        props.onMemberChipClick({
+                                          kind: "member",
+                                          roleId: role._id,
+                                          section,
+                                          itemKey: m._key!,
+                                          member: m,
+                                        })
+                                }
+                              />
+                            ))}
                           </div>
                         </div>
-                      </div>
-                    );
+                      ),
+                  )}
+                  {(
+                    [
+                      ["instruments", role.instruments ?? [], "Instr."],
+                      ["foh", role.foh ?? [], "FOH"],
+                    ] as const
+                  ).map(
+                    ([section, arr, lbl]) =>
+                      arr.length > 0 && (
+                        <div key={section} className="flex min-w-0 flex-wrap items-start gap-2">
+                          <span className="w-12 shrink-0 pt-0.5 font-label text-[10px] uppercase tracking-widest text-mono-600">
+                            {lbl}
+                          </span>
+                          <div className="flex min-w-0 flex-wrap gap-1">
+                            {arr.map(
+                              (s, i) =>
+                                s.person && (
+                                  <MemberChip
+                                    key={s._key ?? i}
+                                    name={`${dn(s.person)} · ${
+                                      section === "instruments"
+                                        ? (s as { instrument: string }).instrument
+                                        : (s as { role: string }).role
+                                    }`}
+                                    isSource={isChipSource(section, s._key)}
+                                    onClick={
+                                      swapSource?.kind === "card" || !s._key || !gates.swap.enabled
+                                        ? undefined
+                                        : () =>
+                                            props.onMemberChipClick({
+                                              kind: "slot",
+                                              roleId: role._id,
+                                              section,
+                                              itemKey: s._key!,
+                                              member: s.person,
+                                              slotLabel:
+                                                section === "instruments"
+                                                  ? (s as { instrument: string }).instrument
+                                                  : (s as { role: string }).role,
+                                            })
+                                    }
+                                  />
+                                ),
+                            )}
+                          </div>
+                        </div>
+                      ),
+                  )}
+                  {!hasTeam && (
+                    <p className="font-body text-xs italic text-mono-600">Sin miembros asignados</p>
+                  )}
+                </div>
+              ) : hasTeam ? (
+                <div className="mt-2 space-y-2.5">
+                  {hasVoices && (
+                    // All three columns, always — an empty one shows «—» so Lead,
+                    // BGVs and Coro sit in the same place on every card.
+                    <div className="grid grid-cols-3 gap-x-3">
+                      <VocalCol label="Lead" members={role.leads ?? []} conflictIds={vocalConflicts} notes={conflictNotes} />
+                      <VocalCol label="BGVs" members={role.bgvs ?? []} conflictIds={vocalConflicts} notes={conflictNotes} />
+                      <VocalCol label="Coro" members={role.chorus ?? []} conflictIds={vocalConflicts} notes={conflictNotes} />
+                    </div>
+                  )}
+                  {(instrPills.length > 0 || fohPills.length > 0) && (
+                    // Instruments and FOH share one band: the label on each chip
+                    // («Bajo», «Audio») already says which is which, and two
+                    // headed blocks for five chips cost more height than they named.
+                    <div className="flex min-w-0 flex-wrap gap-1.5" data-card-band="">
+                      {[...instrPills, ...fohPills].map((p, i) => (
+                        <TeamRow
+                          key={i}
+                          label={p.label}
+                          value={dn(p.person)}
+                          isConflict={highlightConflict && conflictIds.has(p.person._id)}
+                          conflictNote={conflictNotes.get(p.person._id)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="mt-2 font-body text-xs italic text-mono-600">Sin miembros asignados</p>
+              )}
+            </section>
 
+            <section className="min-w-0" data-card-setlist="">
+              <SectionHead
+                label={
+                  songs.length > 0
+                    ? `Setlist · ${preview.songCount} ${preview.songCount === 1 ? "canción" : "canciones"}`
+                    : "Setlist"
+                }
+              />
+              {songs.length > 0 ? (
+                <ol className="mt-2 space-y-1">
+                  {buildRuns(songs).map((run) => {
                     if (run.kind === "single" || run.songs.length === 1) {
                       const { song, n } = run.kind === "single" ? run : run.songs[0];
-                      return <li key={song.song._id}>{renderRow(song, n)}</li>;
+                      return (
+                        <li key={song.song._id}>
+                          <SongRow entry={song} n={n} />
+                        </li>
+                      );
                     }
-
-                    const accentVar = CARD_ACCENT_VAR[role._type];
                     return (
                       <li key={run.songs[0].song.song._id + "_m"} className="relative pl-3.5">
                         <span
                           aria-hidden
                           className="absolute bottom-1 left-0.5 top-5 w-[2px] rounded-full"
                           style={{
-                            background: `linear-gradient(to bottom, ${themeColour(accentVar, 0)}, ${themeColour(accentVar, 0.3333)} 12%, ${themeColour(accentVar, 0.3333)} 88%, ${themeColour(accentVar, 0)})`,
+                            background: `linear-gradient(to bottom, ${themeColour(NEUTRAL, 0)}, ${themeColour(NEUTRAL, 0.3333)} 12%, ${themeColour(NEUTRAL, 0.3333)} 88%, ${themeColour(NEUTRAL, 0)})`,
                           }}
                         />
                         {/* `color` on the wrapper — see DayCard: a token in `stroke=` is dropped. */}
-                        <div className="mb-1 flex items-center gap-1" style={{ color: themeColour(accentVar) }}>
+                        <div className="mb-0.5 flex items-center gap-1" style={{ color: themeColour(NEUTRAL) }}>
                           <ChainLinkIcon opacity={0.7} />
                           <span
                             className="font-label text-[10px] uppercase tracking-[0.18em]"
-                            style={{ color: `${themeColour(accentVar, 0.6)}` }}
+                            style={{ color: `${themeColour(NEUTRAL, 0.8)}` }}
                           >
                             Medley
                           </span>
                         </div>
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           {run.songs.map(({ song, n }, si) => (
                             <div key={song.song._id}>
                               {si > 0 && (
                                 <span
                                   className="-my-0.5 block w-5 text-center font-label text-[11px] leading-none"
-                                  style={{ color: `${themeColour(accentVar, 0.4392)}` }}
+                                  style={{ color: `${themeColour(NEUTRAL, 0.6)}` }}
                                 >
                                   +
                                 </span>
                               )}
-                              {renderRow(song, n)}
+                              <SongRow entry={song} n={n} />
                             </div>
                           ))}
                         </div>
@@ -404,191 +547,10 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                     );
                   })}
                 </ol>
-              </section>
-            )}
-
-            {/* Swap mode: seat chips, addressed by their stored `_key`. */}
-            {swapMode ? (
-              <div className="space-y-2">
-                {(
-                  [
-                    ["leads", role.leads ?? [], "Líderes"],
-                    ["bgvs", role.bgvs ?? [], "BGVs"],
-                    ["chorus", role.chorus ?? [], "Coro"],
-                  ] as const
-                ).map(
-                  ([section, arr, lbl]) =>
-                    arr.length > 0 && (
-                      <div key={section} className="flex min-w-0 flex-wrap items-start gap-2">
-                        <span className="w-12 shrink-0 pt-0.5 font-label text-[10px] uppercase tracking-widest text-mono-600">
-                          {lbl}
-                        </span>
-                        <div className="flex min-w-0 flex-wrap gap-1">
-                          {arr.map((m) => (
-                            <MemberChip
-                              key={m._key ?? m._id}
-                              name={dn(m)}
-                              isSource={isChipSource(section, m._key)}
-                              onClick={
-                                swapSource?.kind === "card" || !m._key || !gates.swap.enabled
-                                  ? undefined
-                                  : () =>
-                                      props.onMemberChipClick({
-                                        kind: "member",
-                                        roleId: role._id,
-                                        section,
-                                        itemKey: m._key!,
-                                        member: m,
-                                      })
-                              }
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    ),
-                )}
-                {(
-                  [
-                    ["instruments", role.instruments ?? [], "Instr."],
-                    ["foh", role.foh ?? [], "FOH"],
-                  ] as const
-                ).map(
-                  ([section, arr, lbl]) =>
-                    arr.length > 0 && (
-                      <div key={section} className="flex min-w-0 flex-wrap items-start gap-2">
-                        <span className="w-12 shrink-0 pt-0.5 font-label text-[10px] uppercase tracking-widest text-mono-600">
-                          {lbl}
-                        </span>
-                        <div className="flex min-w-0 flex-wrap gap-1">
-                          {arr.map(
-                            (s, i) =>
-                              s.person && (
-                                <MemberChip
-                                  key={s._key ?? i}
-                                  name={`${dn(s.person)} · ${
-                                    section === "instruments"
-                                      ? (s as { instrument: string }).instrument
-                                      : (s as { role: string }).role
-                                  }`}
-                                  isSource={isChipSource(section, s._key)}
-                                  onClick={
-                                    swapSource?.kind === "card" || !s._key || !gates.swap.enabled
-                                      ? undefined
-                                      : () =>
-                                          props.onMemberChipClick({
-                                            kind: "slot",
-                                            roleId: role._id,
-                                            section,
-                                            itemKey: s._key!,
-                                            member: s.person,
-                                            slotLabel:
-                                              section === "instruments"
-                                                ? (s as { instrument: string }).instrument
-                                                : (s as { role: string }).role,
-                                          })
-                                  }
-                                />
-                              ),
-                          )}
-                        </div>
-                      </div>
-                    ),
-                )}
-                {!hasTeam && (
-                  <p className="font-body text-xs italic text-mono-600">Sin miembros asignados</p>
-                )}
-              </div>
-            ) : hasTeam ? (
-              <section className={songs.length > 0 ? "border-t border-mono-200 pt-4 dark:border-mono-800" : ""}>
-                <div className="space-y-3">
-                  {(role.leads ?? []).length + (role.bgvs ?? []).length + (role.chorus ?? []).length >
-                    0 && (
-                    <div>
-                      <SectionHead
-                        label="Voces"
-                        accent={CARD_ACCENT_MUTED[role._type]}
-                        divider={CARD_DIVIDER[role._type]}
-                      />
-                      <div className="mt-2 grid grid-cols-3 gap-x-3">
-                        <VocalCol
-                          label="Lead"
-                          members={role.leads ?? []}
-                          conflictIds={highlightConflict ? conflictIds : EMPTY_SET}
-                          notes={conflictNotes}
-                        />
-                        <VocalCol
-                          label="BGVs"
-                          members={role.bgvs ?? []}
-                          conflictIds={highlightConflict ? conflictIds : EMPTY_SET}
-                          notes={conflictNotes}
-                        />
-                        <VocalCol
-                          label="Coro"
-                          members={role.chorus ?? []}
-                          conflictIds={highlightConflict ? conflictIds : EMPTY_SET}
-                          notes={conflictNotes}
-                        />
-                      </div>
-                    </div>
-                  )}
-                  {instrPills.length > 0 && (
-                    <div>
-                      <SectionHead
-                        label="Instrumentos"
-                        accent={CARD_ACCENT_MUTED[role._type]}
-                        divider={CARD_DIVIDER[role._type]}
-                      />
-                      <div className="mt-2 flex min-w-0 flex-wrap gap-2">
-                        {instrPills.map((p, i) => (
-                          <TeamRow
-                            key={i}
-                            label={p.label}
-                            value={dn(p.person)}
-                            accentVar={CARD_ACCENT_VAR[role._type]}
-                            isConflict={highlightConflict && conflictIds.has(p.person._id)}
-                            conflictNote={conflictNotes.get(p.person._id)}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {fohPills.length > 0 && (
-                    <div>
-                      <SectionHead
-                        label="Front of House"
-                        accent={CARD_ACCENT_MUTED[role._type]}
-                        divider={CARD_DIVIDER[role._type]}
-                      />
-                      <div className="mt-2 flex min-w-0 flex-wrap gap-2">
-                        {fohPills.map((p, i) => (
-                          <TeamRow
-                            key={i}
-                            label={p.label}
-                            value={dn(p.person)}
-                            accentVar={CARD_ACCENT_VAR[role._type]}
-                            isConflict={highlightConflict && conflictIds.has(p.person._id)}
-                            conflictNote={conflictNotes.get(p.person._id)}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </section>
-            ) : (
-              songs.length === 0 && (
-                <p className="font-body text-xs italic text-mono-600">Sin información todavía.</p>
-              )
-            )}
-          </div>
-        );
-
-      // ── 4. ONE primary action ────────────────────────────────────────────
-      case "primary_action":
-        if (modeActive) return null;
-        return (
-          <div className={`${bodyPad} min-w-0`}>
-            <ServicePrimaryAction action={action} onAction={props.onPrimaryAction} />
+              ) : (
+                <p className="mt-2 font-body text-xs italic text-mono-600">Sin canciones todavía.</p>
+              )}
+            </section>
           </div>
         );
 
@@ -601,16 +563,18 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
     <div
       data-card-id={card.cardId}
       {...props.revealAttrs}
-      className={`${CARD_STYLE.container} flex flex-col gap-3.5 pb-4 ${props.className ?? ""} ${
+      className={`${CARD_STYLE.container} brand-service-card relative isolate flex flex-col gap-3 overflow-hidden bg-surface-card pb-4 ${props.className ?? ""} ${
         card.isPast && !modeActive
-          ? `${CARD_BORDER[role._type]} opacity-50 shadow-md`
+          ? "border-ink/[0.08] opacity-50 shadow-md"
           : isCardSelected || (copyMode && isCopySource)
-            ? `${CARD_BORDER[role._type]} ring-2 ring-accent/40 shadow-md`
+            ? "border-ink/[0.08] ring-2 ring-accent/40 shadow-md"
             : highlightConflict
               ? "border-2 border-negative-strong shadow-lg shadow-negative-strong/30 ring-2 ring-negative-strong/40"
-              : `${CARD_BORDER[role._type]} shadow-md`
+              : "border-ink/[0.08] shadow-md"
       }`}
     >
+      {/* The day's ONE colour (ADR-0059): a 3 px rail, as on the member-facing DayCard. */}
+      <span aria-hidden data-card-rail="" className={`absolute inset-y-0 left-0 z-[1] w-[3px] ${CARD_RAIL[role._type]}`} />
       {CARD_SECTIONS.map((section) => {
         const content = renderSection(section);
         return content ? <div key={section} className="min-w-0">{content}</div> : null;
@@ -644,21 +608,44 @@ function routeGate(props: ServiceReadinessCardProps): CardGate | null {
 
 const EMPTY_SET: Set<string> = new Set();
 
-function SectionHead({
-  label,
-  accent,
-  divider,
-}: {
-  label: string;
-  accent: string;
-  divider: string;
-}) {
+/** A neutral section label with a hairline — no day tint (ADR-0059). */
+function SectionHead({ label }: { label: string }) {
   return (
     <div className="flex min-w-0 items-center gap-2">
-      <span className={`shrink-0 font-label text-xs uppercase tracking-wide ${accent}`}>
+      <span className="shrink-0 font-label text-[11px] uppercase tracking-widest text-mono-400">
         {label}
       </span>
-      <div className={`h-px flex-1 ${divider}`} />
+      <div className="h-px flex-1 bg-ink-dim/15" />
+    </div>
+  );
+}
+
+/**
+ * One setlist line: number, title, author, and the key at the end of the line.
+ * One row per song (not the «Nadie D · Lavado B» string of the phone mock) because a
+ * medley needs its spine and a transposed song its «orig.» badge, and neither
+ * fits inside a run-on sentence.
+ */
+function SongRow({ entry, n }: { entry: SetlistSong; n: number }) {
+  const key = entry.play_key || entry.song.key;
+  const transposed = !!entry.play_key && !!entry.song.key && entry.play_key !== entry.song.key;
+  return (
+    <div className="flex min-w-0 items-baseline gap-2">
+      <span className="w-4 shrink-0 text-right font-label text-[11px] tabular-nums text-ink-dim">{n}</span>
+      <span className={`min-w-0 flex-1 font-body text-[13px] leading-snug ${CARD_STYLE.longText}`}>
+        <span className="font-semibold text-ink">{entry.song.title}</span>
+        {entry.song.author && <span className="text-ink-dim"> — {entry.song.author}</span>}
+      </span>
+      {key && (
+        <span className="flex shrink-0 items-center gap-1 font-label text-xs font-semibold text-ink">
+          {key}
+          {transposed && (
+            <span className="rounded border border-mono-700 bg-mono-800/60 px-1.5 py-0.5 font-label text-[10px] font-normal leading-tight text-mono-500">
+              orig. {entry.song.key}
+            </span>
+          )}
+        </span>
+      )}
     </div>
   );
 }
@@ -674,73 +661,69 @@ function VocalCol({
   conflictIds: Set<string>;
   notes: Map<string, string>;
 }) {
-  if (members.length === 0) return <div />;
   return (
     <div className="min-w-0">
-      <p className="mb-0.5 font-label text-[11px] uppercase tracking-widest text-mono-400">
+      <p className="mb-0.5 font-label text-[10px] uppercase tracking-widest text-ink-dim">
         {label}
       </p>
       <p className={`font-body text-sm leading-snug ${CARD_STYLE.longText}`}>
-        {members.map((m, i) => (
-          <span key={m._key ?? m._id}>
-            {i > 0 && ", "}
-            {conflictIds.has(m._id) ? (
-              <span title={notes.get(m._id)} className="font-semibold text-negative-fg">
-                ⚠&nbsp;{dn(m)}
-              </span>
-            ) : (
-              <span>{dn(m)}</span>
-            )}
-          </span>
-        ))}
+        {members.length === 0 ? (
+          <span className="text-ink-dim">—</span>
+        ) : (
+          members.map((m, i) => (
+            <span key={m._key ?? m._id}>
+              {i > 0 && ", "}
+              {conflictIds.has(m._id) ? (
+                <span title={notes.get(m._id)} className="font-semibold text-negative-fg">
+                  ⚠&nbsp;{dn(m)}
+                </span>
+              ) : (
+                <span>{dn(m)}</span>
+              )}
+            </span>
+          ))
+        )}
       </p>
     </div>
   );
 }
 
+/**
+ * One instrument/FOH chip: `BAJO · Mkz`. Neutral (ADR-0059); only a live
+ * availability conflict colours it, and then with the text and the ⚠ too.
+ */
 function TeamRow({
   label,
   value,
-  accentVar,
   isConflict,
   conflictNote,
 }: {
   label: string;
   value: string;
-  accentVar: string;
   isConflict?: boolean;
   conflictNote?: string;
 }) {
   return (
-    <div
-      className="flex min-w-0 items-stretch overflow-hidden rounded-lg"
-      style={{
-        border: isConflict ? "1px solid rgb(var(--negative-strong-rgb) / 0.7)" : `1px solid ${themeColour(accentVar, 0.251)}`,
-      }}
+    <span
+      title={isConflict && conflictNote ? conflictNote : undefined}
+      className={`inline-flex min-w-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 ${
+        isConflict
+          ? "border-negative-strong/70 bg-negative-strong/10 text-negative-fg"
+          : "border-ink-dim/30 text-ink"
+      }`}
     >
       <span
-        className="flex min-w-[3.5rem] shrink-0 items-center justify-center rounded-l-[7px] px-2.5 font-label text-xs uppercase tracking-wide"
-        style={{
-          background: isConflict ? "rgb(var(--negative-strong-rgb) / 0.18)" : `${themeColour(accentVar, 0.0941)}`,
-          color: isConflict ? themeColour("--negative-fg-rgb") : themeColour(accentVar),
-          borderRight: isConflict
-            ? "1px solid rgb(var(--negative-strong-rgb) / 0.45)"
-            : `1px solid ${themeColour(accentVar, 0.1882)}`,
-        }}
+        className={`shrink-0 font-label text-[9px] uppercase tracking-widest ${
+          isConflict ? "text-negative-fg" : "text-ink-dim"
+        }`}
       >
         {label}
       </span>
-      <span
-        title={isConflict && conflictNote ? conflictNote : undefined}
-        className={`flex min-w-[3.5rem] items-center justify-center gap-1 px-3 py-1.5 font-body text-sm leading-tight ${CARD_STYLE.longText} ${
-          isConflict ? "font-semibold text-negative-fg" : ""
-        }`}
-        style={isConflict ? { background: "rgb(var(--negative-strong-rgb) / 0.10)" } : undefined}
-      >
-        {isConflict && <span aria-hidden="true">⚠</span>}
+      <span className={`font-body text-xs leading-tight ${CARD_STYLE.longText} ${isConflict ? "font-semibold" : ""}`}>
+        {isConflict && <span aria-hidden="true">⚠ </span>}
         {value}
       </span>
-    </div>
+    </span>
   );
 }
 

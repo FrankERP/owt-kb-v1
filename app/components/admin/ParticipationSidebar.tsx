@@ -128,7 +128,8 @@ const DEFAULT_PLACEMENT =
  * in the same term order the test derives — plus a 1.5rem breath, so a month
  * with many members scrolls inside the chart instead of pushing its bottom
  * off-screen.
- * Only `lg`: below it the board is one column and the chart simply stacks.
+ * Only `lg`: below it the board is one column and the chart is placed LAST,
+ * folded behind a «Participaciones» toggle (`ServicesPanel`'s `data-board-chart`).
  * Exported so the Servicios fallback `<aside>` shares the spelling.
  *
  * Under the cap the aside is a flex COLUMN and the rows list (`BOARD_LIST`) is

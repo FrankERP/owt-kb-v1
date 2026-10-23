@@ -146,20 +146,30 @@ disagree, `CLAUDE.md` wins and this file is the one to fix.
   member — screenshots, text, a11y tree, console. Use it for the human-eyes step of the push
   order when the change is visual; it never writes, and it still is not a substitute for
   Frank's own look at a release.
-- **Only `main`, `preview` and `verify/service-readiness` spend a Vercel build.**
-  `vercel.json`'s `ignoreCommand` runs `scripts/vercel-ignore-build.mjs` and skips
-  every other ref — the deployment is still CREATED, as `CANCELED` with a URL that
-  serves nothing, so a `claude/*` push proves nothing and you still verify on
-  `dev-owt-backstage` by merging into `preview`. Function Storage counts every
-  RETAINED deployment (the embedded Studio makes each ~75 MB), which is how the free
-  tier hit 100% on 2026-09-17 with 136 of them; a canceled build stores nothing but
-  still counts against the per-day deployment quota. To build a skipped ref ON
-  PURPOSE, redeploy from the dashboard with «Use project's Ignore Build Step»
-  unchecked — a plain redeploy and a deploy hook both carry the branch's ref and are
-  skipped again — and that checkbox is documented for a Project Settings ignore
-  step, not for a `vercel.json` one, so the hatch that CANNOT fail is changing what
-  the branch carries: merge into `preview`, or drop `ignoreCommand` and push. It
-  fails open: no git ref, `VERCEL_ENV=production`, or a broken policy module all
+- **Only `main`, `preview` and `verify/service-readiness` get a Vercel deployment.**
+  `vercel.json`'s `git.deploymentEnabled` is `"**": false` plus those three refs
+  `true` (minimatch; one `true` match deploys), so Vercel creates NOTHING for any
+  other ref — a `claude/*` push proves nothing and you still verify on
+  `dev-owt-backstage` by merging into `preview`. The `ignoreCommand`
+  (`scripts/vercel-ignore-build.mjs`) stays as the fail-open belt for whatever
+  still reaches a build. Two quotas drove this: Function Storage counts every
+  RETAINED deployment (the embedded Studio makes each ~75 MB; the free tier hit
+  100% on 2026-09-17 with 136 of them), and the Hobby plan allows 100 deployments
+  per day INCLUDING canceled ones — on 2026-10-22 four threads pushed 44 canceled
+  `claude/*` deployments beside 42 real builds, and from 19:50 UTC neither dev nor
+  production could build until the next day (ADR-0068). Vercel reads `vercel.json`
+  from the commit being pushed, so every push of a branch that does not yet carry
+  the map still creates a counted deployment, and merging `main` into it helps
+  only once the map is on `main`. To build a skipped ref ON PURPOSE the only hatch
+  that CANNOT fail is changing what the branch carries: merge into `preview`, or —
+  on that branch only, never on `main` — list it `true` in `git.deploymentEnabled`
+  AND drop `ignoreCommand`, then push (the map decides whether a deployment is
+  created, the step whether it builds). A branch in the `false` set has no
+  deployment to redeploy and a deploy hook bound to it is refused by the same map;
+  for a deployment that does exist, the dashboard's «Use project's Ignore Build
+  Step» checkbox is documented for a Project Settings ignore step, not a
+  `vercel.json` one, so it is a maybe, and a plain redeploy carries the original
+  ref and is skipped again. The step fails open: no git ref, `VERCEL_ENV=production`, or a broken policy module all
   build. `deployBranchPolicy.test.ts` guards the policy AND the wiring, and runs the
   script as a process so swapped exit codes cannot pass. See `docs/CI.md`.
 - The stable dev domain is owned **exclusively** by the `preview` branch. Never
@@ -566,7 +576,10 @@ through `PlayerContext`, URLs are always `/api/audio/[song]/[key]`, never `cdn.s
 canvas paints with `themeColour`; the KEY is the hero dial's — `mixesForKey(mixes, soundingKey)`,
 never a picker of its own), `rehearsalMixes.ts` (`app/utils/` — neutral `groupMixes`/
 `preselectMix`/`waveformBars`/`mixTones`/`mixesForKey`; `SEAT_TO_FAMILY` pins app seats to
-abletonnl families),
+abletonnl families), `rehearsalQueue.ts` (`app/utils/` — «Ensayar el setlist»: the ONE builder of
+a setlist's run, `buildRehearsalQueue`/`pickQueueMix`; set key → nearest rendered key, full band
+or the seat's family, songs with no mixes skipped and named; it plays through `PlayerContext`'s
+`playQueue`, the same one `<audio>`, so a run advances on a locked phone),
 `fillSpecialGroup`/`orderGroup` (`app/components/admin/groupFill.ts` — the ONLY stored-mode
 filler: a ticked group of special services, Lead/BGV via `fillColumn` and instruments via
 `fillInstruments({ fillColumns })`, with `columns = group` and `savedWindow = []` so only
@@ -639,7 +652,7 @@ read of that history: checked, never throws, `{ ok: false }` on any failure, use
 hook, and by every Auto only while `SOLVER_SENDS_HISTORY` is true), `SOLVER_HISTORY_SOURCE`
 (`app/components/admin/solverHistorySource.ts` — the deployment-wide switch, `"derived"`; `"local"`
 is the rollback until D3), `SOLVER_SENDS_HISTORY` (same file — `false`: Auto sends `history: []`,
-ADR-0046; `true` is the rollback), `countsForFairness`/`countsForFairnessDefault`/`COUNTS_FOR_FAIRNESS_GROQ` (`app/utils/countsForFairness.ts` — the ONE «Cuenta para equidad» read rule; neutral; nothing else spells the fragment or the default), `SOLVER_ENGINE` (`app/components/admin/solverEngine.ts` — the engine constant only, `"v3"` since 2026-10-15, `"v2"` the rollback, ADR-0056; the effective engine is `resolveSolverEngine`'s (`app/utils/solverDeployment.ts`), parent A1), `FairnessSwitch`/`FairnessEngineNote` (`app/components/admin/FairnessSwitch.tsx` — the ONE «Cuenta para equidad» control and its v2 note on all four surfaces; the past-month rule and effective values live in `fairnessToggleModel.ts`), `trailingSaturday`/`rolesOfPattern` (`app/components/admin/plannerModel.ts` — the ONE definition of the Saturday after the last Sunday, solver week `weeks + 1`, ADR-0048; and the ONE pattern → solver-roles map, mirroring the solver's `expand_pattern`, guarded by `patternRolesSync.test.ts`), `rolesOfPatternV3` (`plannerModel.ts` — the ONE v3 six-key pattern map; equals `rolesOfPattern` on the five v2 keys and adds `Sat.Choir`; synced by `patternRolesV3Sync.test.ts`), `capValueForMonth` (`app/components/admin/serviceRuleContext.ts` — the ONE per-month count resolution, over `resolvedCapValue`, a typed result never rounded or clamped), `memberFitsRoleKey` (`plannerModel.ts` — the ONE does-this-Tipo-fit-this-v3-role-key predicate, shared by the eligibility resolver and the record writer), `resolveMonthEligibility` (`app/utils/fairnessEligibility.ts` — the ONE v3 eligibility resolver; client-callable; an `ok` body always passes the record validator), `formatFairnessTenths`/`saldoWords` (`app/utils/fairnessFormat.ts` — the ONLY fairness-figure formatter: one decimal from a tenths figure computed from the exact value, never from hundredths), `resolveSolverEngine` (`app/utils/solverDeployment.ts` — the ONE reader of `OWT_SOLVER_ENGINE`; it overrides `SOLVER_ENGINE` (`app/components/admin/solverEngine.ts`, C1's constant) only on the `preview` branch deployment and locally; never imported by a client module), `parseStoredFairnessMonth` (`app/utils/fairnessMonthWriteRequest.ts` — the ONE record-schema check for `fairnessMonth`; the reader and C4's script both call it), `keepVoiceSeats` (`app/utils/fairnessLedger.ts` — the ONE seat rule: duplicate weekend targets dropped, uncounted services out, one kept seat per person per service), `executeFairnessMonthWrites` (`fairnessMonthWriteRequest.ts` — the only mutation path for `fairnessMonth`, clients injected; every reader of the type carries the read token or fails closed).
+ADR-0046; `true` is the rollback), `countsForFairness`/`countsForFairnessDefault`/`COUNTS_FOR_FAIRNESS_GROQ` (`app/utils/countsForFairness.ts` — the ONE «Cuenta para equidad» read rule; neutral; nothing else spells the fragment or the default), `SOLVER_ENGINE` (`app/components/admin/solverEngine.ts` — the engine constant only, `"v3"` since 2026-10-15, `"v2"` the rollback, ADR-0056; the effective engine is `resolveSolverEngine`'s (`app/utils/solverDeployment.ts`), parent A1), `FairnessSwitch`/`FairnessEngineNote` (`app/components/admin/FairnessSwitch.tsx` — the ONE «Cuenta para equidad» control and its v2 note on all four surfaces; the past-month rule and effective values live in `fairnessToggleModel.ts`), `trailingSaturday`/`rolesOfPattern` (`app/components/admin/plannerModel.ts` — the ONE definition of the Saturday after the last Sunday, solver week `weeks + 1`, ADR-0048; and the ONE pattern → solver-roles map, mirroring the solver's `expand_pattern`, guarded by `patternRolesSync.test.ts`), `rolesOfPatternV3` (`plannerModel.ts` — the ONE v3 six-key pattern map; equals `rolesOfPattern` on the five v2 keys and adds `Sat.Choir`; synced by `patternRolesV3Sync.test.ts`), `capValueForMonth` (`app/components/admin/serviceRuleContext.ts` — the ONE per-month count resolution, over `resolvedCapValue`, a typed result never rounded or clamped), `memberFitsRoleKey` (`plannerModel.ts` — the ONE does-this-Tipo-fit-this-v3-role-key predicate, shared by the eligibility resolver and the record writer), `resolveMonthEligibility` (`app/utils/fairnessEligibility.ts` — the ONE v3 eligibility resolver; client-callable; an `ok` body always passes the record validator), `formatFairnessTenths`/`saldoWords` (`app/utils/fairnessFormat.ts` — the ONLY fairness-figure formatter: one decimal from a tenths figure computed from the exact value, never from hundredths), `resolveSolverEngine` (`app/utils/solverDeployment.ts` — the ONE reader of `OWT_SOLVER_ENGINE`; it overrides `SOLVER_ENGINE` (`app/components/admin/solverEngine.ts`, C1's constant) only on the `preview` branch deployment and locally; never imported by a client module), `parseStoredFairnessMonth` (`app/utils/fairnessMonthWriteRequest.ts` — the ONE record-schema check for `fairnessMonth`; the reader and C4's script both call it), `keepVoiceSeats` (`app/utils/fairnessLedger.ts` — the ONE seat rule: duplicate weekend targets dropped, uncounted services out, one kept seat per person per service), `executeFairnessMonthWrites` (`fairnessMonthWriteRequest.ts` — the only mutation path for `fairnessMonth`, clients injected; every reader of the type carries the read token or fails closed), `ruleCopy.ts` (`app/components/admin/ruleCopy.ts` — the ONE Spanish wording of a solver rule, 2026-10-22: `restrictionChips`, `conflictSentence`, `presenceSentence`, `capSentence`, `patternLabel`; the rules card, its forms, `EXACT_ROLE_LABEL` and the MCP's `get_solver_rules` read it; the notation it replaced stays on each chip's `title` and behind «Mostrar notación del solver» because notices still name a rule by `capCardLabel`; display only, the writer never reads it).
 **Solver v3 planner (C6, behind the engine prop):** `buildV3SolveRequest` (`app/components/admin/v3SolveRequest.ts`
 — the ONE v3 request builder, pure: planner state + ledger GET + roles read + CDMX month in; request, notices,
 refusals and the run snapshot out; C7's rehearsal uses the same code), `runV3Auto` (`v3AutoRun.ts` — refusals

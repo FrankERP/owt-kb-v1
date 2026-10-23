@@ -105,10 +105,11 @@ the budget goes there, once.
 - **Two branches deploy, both real:** `preview` → `dev-owt-backstage.vercel.app` (owned
   **exclusively** by `preview` — update dev only by merging into `preview`), `main` →
   production. No staging branch.
-- **Only `main`, `preview` and `verify/service-readiness` spend a build** (`vercel.json`
-  `ignoreCommand` → `scripts/vercel-ignore-build.mjs`; fails open). Other refs are created
-  `CANCELED` with a URL that serves nothing, so a `claude/*` push proves nothing. Guard:
-  `deployBranchPolicy.test.ts`; storage quota and the deliberate-build hatch: `docs/CI.md`.
+- **Only `main`, `preview` and `verify/service-readiness` get a deployment** — `vercel.json`
+  `git.deploymentEnabled` (`"**": false` + those three, ADR-0068) creates nothing for any other
+  ref, and `ignoreCommand` → `scripts/vercel-ignore-build.mjs` is the fail-open belt. A `claude/*`
+  push proves nothing. Guard: `deployBranchPolicy.test.ts`; quotas and the deliberate-build hatch:
+  `docs/CI.md`.
 - **Verifying a deploy means checking the ALIAS:** the target domain is in the deployment's
   `alias` and `meta.githubCommitSha` is the pushed commit. A `● Ready` build proves only that
   it compiled; HTTP checks prove nothing (SSO answers `302`). Builds take ~90 s: one
@@ -273,7 +274,7 @@ each one owns, and its rules) and `docs/UTILITIES_AND_COMPONENTS.md`. Most are "
   `serviceLabel`/`serviceIdentity`, `findDuplicates`/`serviceConflicts`,
   `daysUntil`/`formatCountdown`, `MEMBER_TYPE_LABEL`, `isWorshipNight`, `songLeads.ts`
   (`sortedLeadIds` must agree byte for byte on the queue and flush sides), `transpose.ts`,
-  `practice.ts`, `rehearsalMixes.ts`, `themeColour`.
+  `practice.ts`, `rehearsalMixes.ts`, `rehearsalQueue.ts` (the setlist run), `themeColour`.
 - **Planner/solver:** `fillSpecialGroup`/`orderGroup`, `collectPins`/`pinRefusal`/
   `pinHandshakeHolds`, `planClear`, `upcomingMonthPills`/`addMonths`, `trailingSaturday`
   (ADR-0048), `rolesOfPattern`/`rolesOfPatternV3` (`patternRolesSync`/`patternRolesV3Sync`
@@ -283,7 +284,7 @@ each one owns, and its rules) and `docs/UTILITIES_AND_COMPONENTS.md`. Most are "
   `countsForFairnessDefault`/`COUNTS_FOR_FAIRNESS_GROQ`, `FairnessSwitch`, `SOLVER_ENGINE` +
   `resolveSolverEngine` (server only), `SOLVER_HISTORY_SOURCE`, `SOLVER_SENDS_HISTORY`,
   `loadSolverHistory`, `deriveSolverHistory`/`historyWindow`, `fetchDerivedHistory`,
-  `useIntegrityQueue`.
+  `useIntegrityQueue`, `ruleCopy.ts` (the ONE Spanish wording of a rule — card, forms, MCP).
 - **UI — never hand-roll these:** `Button` (the only button; `tone`, never a `hover:` pair in
   `className`), `CueDialog` (every dialog; `<CueDialog open={x}>`, never a literal `open` —
   `cueDialogMount.test.ts`), `Menu`, `Select`, `DateField`, `Switch`, `Checkbox` (never a bare

@@ -74,11 +74,89 @@ describe("DayCard", () => {
     expect(screen.getByText("En 2 días")).toBeTruthy();
   });
 
+  it("D — the next service's pill carries the start time: a weekend at the team's standing hour", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 11, 9, 0, 0));
+    const { container } = mount({ isNext: true });
+    expect(container.textContent).toContain("En 2 días · 11:00");
+    cleanup();
+    expect(mount({ isNext: true, day: "Sábado", date: "2026-09-12" }).container.textContent).toContain("Mañana · 18:00");
+  });
+
+  it("D — a special's own time is in the heading already, so the pill does not repeat it", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 11, 9, 0, 0));
+    const { container } = mount({ isNext: true, day: "Campamento", roleId: "r1", time: "18:45" });
+    expect(screen.getByRole("heading", { level: 3 }).textContent).toMatch(/18:45/);
+    expect(container.textContent).toContain("En 2 días");
+    expect(container.textContent).not.toContain("En 2 días · 18:45");
+    // An untimed special is all-day: no clock anywhere.
+    cleanup();
+    expect(mount({ isNext: true, day: "Campamento", roleId: "r1" }).container.textContent).not.toMatch(/\d\d:\d\d/);
+  });
+
   it("shows no countdown on a card that is not the next service", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(2026, 8, 11, 9, 0, 0));
     mount();
     expect(screen.queryByText("En 2 días")).toBeNull();
+  });
+
+  describe("D — «Mensaje para el equipo» folds to three lines", () => {
+    const note = "Mensaje del Pastor: la plática es de la Justicia.\nSubirían cuando empiezo a narrar la escena.";
+    // jsdom lays nothing out, so the clamped paragraph's overflow is staged on
+    // the prototype: `scrollHeight` beyond `clientHeight` is the fourth line.
+    function stageOverflow(overflowing: boolean) {
+      Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 60 });
+      Object.defineProperty(HTMLElement.prototype, "scrollHeight", { configurable: true, get: () => (overflowing ? 120 : 60) });
+    }
+    afterEach(() => {
+      delete (HTMLElement.prototype as unknown as Record<string, unknown>).clientHeight;
+      delete (HTMLElement.prototype as unknown as Record<string, unknown>).scrollHeight;
+    });
+
+    it("clamps the note and offers «Leer todo» only when a fourth line exists", () => {
+      stageOverflow(true);
+      mount({ setlist: { week: "2026-09-13", songs: [song("s1")], team_notes: note } });
+      const text = screen.getByText(/Mensaje del Pastor/);
+      expect(text.className).toContain("line-clamp-3");
+      const toggle = screen.getByRole("button", { name: "Leer todo" });
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(toggle.getAttribute("aria-controls")).toBe(text.id);
+      fireEvent.click(toggle);
+      expect(text.className).not.toContain("line-clamp-3");
+      expect(screen.getByRole("button", { name: "Leer menos" }).getAttribute("aria-expanded")).toBe("true");
+      fireEvent.click(screen.getByRole("button", { name: "Leer menos" }));
+      expect(text.className).toContain("line-clamp-3");
+    });
+
+    it("arrives folded again when the same card is handed another day's note", () => {
+      stageOverflow(true);
+      const card = (team_notes: string) => (
+        <MotionProvider>
+          <ToastProvider>
+            <CueDialogProvider>
+              <DayCard day="Domingo" date="2026-09-13" setlist={{ week: "2026-09-13", songs: [song("s1")], team_notes }} leads={["Ana"]} />
+            </CueDialogProvider>
+          </ToastProvider>
+        </MotionProvider>
+      );
+      // `CalendarView` keys its cards by index: the Saturday card's instance is
+      // reused for Sunday, and Sunday's note must not inherit Saturday's «Leer todo».
+      const { rerender } = render(card(note));
+      fireEvent.click(screen.getByRole("button", { name: "Leer todo" }));
+      expect(screen.getByText(/Mensaje del Pastor/).className).not.toContain("line-clamp-3");
+      rerender(card("Otro domingo, otra nota del pastor, igual de larga."));
+      expect(screen.getByText(/Otro domingo/).className).toContain("line-clamp-3");
+      expect(screen.getByRole("button", { name: "Leer todo" })).toBeTruthy();
+    });
+
+    it("grows no toggle for a note that already fits", () => {
+      stageOverflow(false);
+      mount({ setlist: { week: "2026-09-13", songs: [song("s1")], team_notes: note } });
+      expect(screen.getByText(/Mensaje del Pastor/)).toBeTruthy();
+      expect(screen.queryByRole("button", { name: /Leer/ })).toBeNull();
+    });
   });
 
   it("gives a hero card ONE Ensayar and drops the inline practice pill", () => {
@@ -110,6 +188,27 @@ describe("DayCard", () => {
     expect(container.querySelector(".lg\\:grid")).not.toBeNull();
     unmount();
     expect(mount().container.querySelector(".lg\\:grid")).toBeNull();
+  });
+
+  it("keeps «Mensaje para el equipo» in the setlist's column on the run sheet, with the team as the rail", () => {
+    // Frank, 2026-10-22: on a big screen the message spanned both columns and
+    // pushed the whole sheet down; it belongs over the setlist, beside the team.
+    const { container } = mount({ layout: "wide", setlist: { week: "2026-09-13", songs: [song("s1")], team_notes: "Hoy a las 10" } });
+    const grid = container.querySelector(".lg\\:grid") as HTMLElement;
+    const main = grid.querySelector("[data-run-sheet-main]") as HTMLElement;
+    expect(main).toBe(grid.firstElementChild);
+    expect(main.textContent).toContain("Mensaje para el equipo");
+    expect(main.textContent).toContain("Setlist");
+    expect(grid.lastElementChild?.textContent).toContain("Voces");
+    expect(grid.lastElementChild?.contains(main)).toBe(false);
+    // The rail's team is laid out open from `lg` (the CSS-switched rendering).
+    expect(grid.lastElementChild?.querySelector("[data-team-open]")).not.toBeNull();
+  });
+
+  it("wraps nothing on a stacked card: the message and the setlist are the card's own children", () => {
+    const { container } = mount({ setlist: { week: "2026-09-13", songs: [song("s1")], team_notes: "Hoy a las 10" } });
+    expect(container.querySelector("[data-run-sheet-main]")).toBeNull();
+    expect(container.querySelector("[data-team-open]")).toBeNull();
   });
 
   it("stacks a `wide` card with a setlist but no team, instead of reserving an empty rail", () => {

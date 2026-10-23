@@ -1324,6 +1324,33 @@ html[data-motion="off"] .brand-stage-hero::before {
   100% { opacity: 0; transform: none; }
 }
 
+/* ── Service card (admin → Servicios, 2026-10-22). The card's body is two columns
+   («Equipo» | «Setlist») when the CARD is wide enough, one when it is not — and
+   the card's width is not the viewport's: beside the 320 px Participaciones
+   column it is ~656 px with the rail expanded and ~800 px with it stowed, and
+   on a phone the same card is ~340 px. A viewport breakpoint cannot tell those
+   apart, so this is a container query on the card root (`container-type:
+   inline-size`; Tailwind 3.4 has no container-query core, hence CSS here).
+   36 rem is where three vocal columns plus the song list still get ~16 px of
+   text each; under it the two stack. jsdom applies none of this — the tests
+   pin the two class names, the dev capture pins the layout. */
+.brand-service-card {
+  container: service-card / inline-size;
+}
+
+.brand-service-card-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+
+@container service-card (min-width: 36rem) {
+  .brand-service-card-body {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    gap: 1.25rem;
+  }
+}
+
 /* ── The availability matrix's sticky first column (R5 Task 5) — a member column
    that has DETACHED from the scroller's left edge needs an edge of its own, or the
    service dates simply slide under a name with nothing between them. The edge is a

@@ -763,7 +763,7 @@ decisions and the rejected alternatives:
 | Tool | Who calls it | What it does |
 |---|---|---|
 | `get_fairness_ledger` | the model | `/admin`'s «Equidad» for a month: balances, records, who is listed. Read-only |
-| `get_solver_rules` | the model | The solver rules as `/admin` shows them: the lists, and each rule as a Spanish line. Read-only |
+| `get_solver_rules` | the model | The solver rules as `/admin` shows them: the lists, and each rule in the rules card's own Spanish sentences (`ruleCopy.ts`; a struck-through «Holgura» carries its note). Read-only |
 | `get_integrity_queue` | the model | `/admin`'s integrity queue: services whose documents do not line up. Read-only |
 | `check_service_edits` | the model (and it opens the card) | Edits by name and date («pon a Ana en el BGV del 8»): place, clear, move, exchange, and a special's name and time or «Cuenta para equidad» (`header`); or `copy {from, to}` alone. Answers per changed service the change set `save_service_edits` takes, its lines in words, the groups and the month check. The save's (or copy's) arguments are also the text's last line («Argumentos para …»; one line per save call when a group is over six services, none when it needs the card): the Claude app gives the model only a tool answer's text, never `structuredContent`; the card hides that line. Never forces: a per-seat rule refuses. Read-only |
 | `check_service_edits_app` | the card only (`_meta.ui.visibility: ["app"]`) | The same with members as month tokens, `force` per edit (mints a waiver token for each finding the forced edit creates) and a seat's candidates. Read-only |

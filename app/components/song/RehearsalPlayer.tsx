@@ -11,6 +11,7 @@ import { usePlayer, type AudioTrack } from "@/app/context/PlayerContext";
 import Equalizer from "@/app/components/ui/Equalizer";
 import PlayPauseGlyph from "@/app/components/ui/PlayPauseGlyph";
 import Button, { buttonClass } from "@/app/components/ui/Button";
+import { DownloadIcon } from "@/app/components/ui/icons";
 import type { RehearsalMix } from "@/app/utils/interface";
 import { groupMixes, mixLabel, mixTones, mixesForKey, preselectMix } from "@/app/utils/rehearsalMixes";
 import { useTransposeOptional } from "./TransposeProvider";
@@ -114,6 +115,12 @@ export default function RehearsalPlayer({
   if (mixes.length === 0) return null;
 
   const progress = time.duration > 0 ? Math.min(1, time.current / time.duration) : 0;
+  // ONE waveform on the page, the loaded row's (design pass E, 2026-10-22):
+  // eight rows each with a 40px canvas made the list a wall and pushed the
+  // second family below the fold. The canvas exists for the playhead and the
+  // seek, and the accent «where my part sounds» spans need the track's
+  // duration, which only the loaded file knows — an idle row's envelope would
+  // be a picture with none of that, which is the cost the pass set out to cut.
 
   return (
     <div className="space-y-6">
@@ -137,26 +144,31 @@ export default function RehearsalPlayer({
                   key={m._key}
                   aria-label={label}
                   aria-current={highlighted === m._key ? "true" : undefined}
-                  className={`brand-library-module flex flex-col gap-2 px-4 py-3 ${
+                  className={`brand-library-module flex flex-col gap-1.5 px-3 py-1.5 ${
                     current ? "border-accent/50 bg-accent/10" : highlighted === m._key ? "border-accent/30" : "border-accent-deep/30"
                   }`}
                 >
-                  <div className="flex items-center gap-3">
+                  {/* A 56px row (E): the play control, the name over its key · BPM, the
+                      equalizer while it sounds, and an icon-only download — the word
+                      «Descargar» on every row said the same thing eight times. Both
+                      controls keep the 44px hit box every playback control has
+                      (`size="lg"` on the icon variant); the glyph sets the weight. */}
+                  <div className="flex items-center gap-2">
                     <Button
                       variant="icon"
                       size="lg"
                       onClick={() => play(m)}
                       aria-label={`${playing ? "Pausar" : "Reproducir"} ${label}`}
                     >
-                      <PlayPauseGlyph playing={playing} size={16} />
+                      <PlayPauseGlyph playing={playing} size={14} />
                     </Button>
                     <div className="min-w-0 flex-1">
-                      <p className="font-body text-sm font-semibold truncate">{label}</p>
-                      <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">
+                      <p className="font-body text-sm font-semibold leading-tight truncate">{label}</p>
+                      <p className="font-label text-[10px] uppercase tracking-widest text-mono-500">
                         {formatKey(m.tone)}{m.bpm ? ` · ${m.bpm} BPM` : ""}
                       </p>
                     </div>
-                    <Equalizer playing={playing} />
+                    {playing && <Equalizer playing />}
                     {/* `download` is best-effort across the CDN redirect (cross-origin, so
                         the browser may ignore it); the route's `?download=1` → CDN `?dl=`
                         is what actually forces content-disposition and a saved file. */}
@@ -164,12 +176,13 @@ export default function RehearsalPlayer({
                       href={`${urlFor(m)}?download=1`}
                       download
                       aria-label={`Descargar ${label}`}
-                      className={buttonClass("ghost", "sm")}
+                      title={`Descargar ${label}`}
+                      className={buttonClass("icon", "lg")}
                     >
-                      Descargar
+                      <DownloadIcon size={16} />
                     </a>
                   </div>
-                  {m.kind === "up" && m.peaks && (
+                  {m.kind === "up" && m.peaks && current && (
                     <Waveform
                       peaks={m.peaks}
                       active={m.active}
