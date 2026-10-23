@@ -1,4 +1,12 @@
 {
   "ignoreCommand": "node scripts/vercel-ignore-build.mjs",
+  "git": {
+    "deploymentEnabled": {
+      "**": false,
+      "main": true,
+      "preview": true,
+      "verify/service-readiness": true
+    }
+  },
   "crons": [{ "path": "/api/cron/service-reminders", "schedule": "0 1 * * *" }]
 }
