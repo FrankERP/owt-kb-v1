@@ -145,7 +145,7 @@ because their own headers already show the countdown.
   Both anchors other pages link to (`#calendario` here, `#tu-cuenta` on `/me`) carry the
   navbar-clearing `UNDER_NAVBAR_SCROLL_MT` (`app/utils/navbarHeight.ts`, beside `NAVBAR_H_CLASS`;
   `LibraryIndex` composes its sticky offset from it too).
-- **`/me/propose/[roleId]`** — `Navbar`, `ProposalEditor` (co-located client component).
+- **`/me/propose/[roleId]`** — `Navbar`, `ProposalEditor` (co-located client component). Since the member design pass (2026-10-22, item 12) every control in it is the house `Button`, keys are shown through `formatKey` («B♭») and stored as typed, and «Agregar canción» opens a `CueDialog` sheet that lists the catalogue and stays open after an add (the added row reads «En lista»).
 - **`/posts/[slug]`** — `Navbar`, `TransposeProvider` (the page's one transposition seat),
   `SongHeroPills` (`KeyDial` + the 12-key drawer, `TempoPill`), `SectionNav` (whose
   `practice` prop renders `PracticeCluster` once the hero scrolls away), `LyricsAutoscroll`,

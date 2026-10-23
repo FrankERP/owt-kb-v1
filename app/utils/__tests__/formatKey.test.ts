@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatKey } from "../formatKey";
+import { formatKey, formatKeys } from "../formatKey";
 
 describe("formatKey", () => {
   it("turns the accidental after the root into a symbol", () => {
@@ -44,5 +44,13 @@ describe("formatKey", () => {
     const stored = "Bb";
     formatKey(stored);
     expect(stored).toBe("Bb");
+  });
+});
+
+describe("formatKeys", () => {
+  it("spells a history on one line with the one separator («B♭ · A♭»)", () => {
+    expect(formatKeys(["Bb", "Ab"])).toBe("B♭ · A♭");
+    expect(formatKeys([])).toBe("");
+    expect(formatKeys(["F#m", "G"], ", ")).toBe("F♯m, G");
   });
 });
