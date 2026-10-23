@@ -794,10 +794,13 @@ decisions and the rejected alternatives:
 - **The card** (`mcp-app/proposal-card/useStoredEditor.tsx`) opens on a `check_service_edits`
   answer with its edits, edits seats like the proposal editor, and «Guardar» sends the change sets
   to the chat (in parts when a group is too large); it never writes. On a host that takes model
-  context (`updateModelContext` with text), the chat message carries the changes in words and a short
-  key, and the change sets ride in the model's context on the `Argumentos para save_service_edits`
-  line labelled with that key, so the model never takes an earlier check's line (still in the chat,
-  MAC still valid). The host keeps only the last context update, so the card resends every part
+  context (`updateModelContext` with text), the chat message is what a person would write («Guarda mis
+  cambios de la tarjeta (2tgeu4):» and the changes in words; Frank, 2026-10-23: the instructions in
+  the chat read «raro»). The context holds one rule (save only the key the last message names, never
+  an earlier check's line, still in the chat with a valid MAC) above each part's neutral line,
+  `Cambios <key> … Argumentos para save_service_edits …`. What to do when a key's line is missing
+  (do not save, ask for «Guardar» again) is in `save_service_edits`' description, because that is
+  when the context is not there. The host keeps only the last context update, so the card resends every part
   handed over for the current list. «Enviar de nuevo» repeats a part (safe: «ya estaba»), the way
   back when the context did not arrive. A host without it, or one that refuses the update, gets the
   full message with the JSON (Frank, 2026-10-22: the JSON in the chat «no me encantó»).

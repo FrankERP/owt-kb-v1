@@ -266,7 +266,9 @@ export const SAVE_SERVICE_EDITS_DESCRIPTION =
   "la lista que trae la última línea de la revisión, tal cual (cada uno con su service, baseRev, target, diff, mac, unit, lines y, si " +
   "hay, waivers). Escribe un servicio a la vez con las mismas reglas y avisos por correo que /admin. Si algo cambió " +
   "desde la revisión no guarda nada y pide revisar de nuevo. Si la respuesta dice «sin confirmar» o «pendiente», repite " +
-  "exactamente la misma llamada: lo que ya quedó se reconoce como «ya estaba» y se guarda el resto.";
+  "exactamente la misma llamada: lo que ya quedó se reconoce como «ya estaba» y se guarda el resto. Si te piden guardar " +
+  "«los cambios de la tarjeta» con una clave entre paréntesis, usa solo la línea del contexto con esa clave; si no la ves, " +
+  "no guardes nada y pide tocar «Guardar» en la tarjeta otra vez.";
 
 // ── Deps ─────────────────────────────────────────────────────────────────────
 

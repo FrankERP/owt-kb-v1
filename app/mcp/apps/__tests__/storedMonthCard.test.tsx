@@ -25,6 +25,7 @@ import {
   saveParts,
   saveRequest,
   contextOf,
+  CONTEXT_HEAD,
   storedCheckViewOf,
   type StoredChange,
   type StoredEdit,
@@ -93,22 +94,23 @@ describe("the saved-month model against the real tools", () => {
     const view = await appCheck(w, [{ op: "place", service: "sun15", row: "bgv", member: w.tok("m-carla") }]);
     const [part] = saveParts(view.changes, view.maxGroup);
     const request = saveRequest(MONTH, part!, 0, 1);
-    expect(request.message.split("\n").slice(0, 2)).toEqual([
-      `Guarda con save_service_edits mis cambios de noviembre de 2026 en la tarjeta (clave ${request.key}):`,
-      "- domingo 15 nov · BGV: entra Carla",
-    ]);
+    expect(request.message).toBe(`Guarda mis cambios de la tarjeta (${request.key}):\n- domingo 15 nov · BGV: entra Carla`);
     expect(request.message).not.toContain("{");
     expect(request.key).toMatch(/^[0-9a-z]{6}$/);
-    expect(request.contextLine.startsWith(`Tarjeta, clave ${request.key}. ${SAVE_ARGS_PREFIX} `)).toBe(true);
+    expect(request.contextLine.startsWith(`Cambios ${request.key} de noviembre de 2026. ${SAVE_ARGS_PREFIX} {`)).toBe(true);
+    expect(request.contextLine).toContain(` ${SAVE_ARGS_PREFIX} {`);
     const args = JSON.parse(request.contextLine.slice(request.contextLine.indexOf(SAVE_ARGS_PREFIX) + SAVE_ARGS_PREFIX.length));
     const saved = await saveServiceEditsResult(args, PRINCIPAL, w.deps);
     expect(saved.structuredContent).toMatchObject({ ok: true, services: [{ service: "sun15", status: "saved" }] });
     // Parts: each has its own key, and the context the card sets carries every part handed over so far.
     const second = saveRequest(MONTH, [{ ...part![0]!, lines: ["otra"] }], 1, 2);
-    expect(second.message.split("\n")[0]).toBe(`Guarda con save_service_edits la parte 2 de 2 de mis cambios de noviembre de 2026 en la tarjeta (clave ${second.key}):`);
+    expect(second.message.split("\n")[0]).toBe(`Guarda la parte 2 de 2 de mis cambios de la tarjeta (${second.key}):`);
+    expect(second.contextLine.startsWith(`Cambios ${second.key} de noviembre de 2026 (parte 2 de 2). `)).toBe(true);
     expect(second.key).not.toBe(request.key);
     const first = saveRequest(MONTH, part!, 0, 2);
-    expect(contextOf(new Map([[1, second.contextLine], [0, first.contextLine]]))).toBe(`${first.contextLine}\n${second.contextLine}`);
+    // One rule on top ties a save to the key the person's message names; each part's line is only a label.
+    expect(contextOf(new Map([[1, second.contextLine], [0, first.contextLine]]))).toBe(`${CONTEXT_HEAD}\n${first.contextLine}\n${second.contextLine}`);
+    expect(first.contextLine).not.toContain("guárd");
   });
 
   it("a chat check with focus opens the card on those days only, the whole month one tap away", async () => {
