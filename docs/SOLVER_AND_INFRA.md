@@ -593,7 +593,7 @@ and `checker.py` follows, the Python test goes red until the fixture and the Typ
   `roles/secretmanager.secretAccessor` on `owt-solver-api-key` is checked
   (`gcloud secrets get-iam-policy owt-solver-api-key`), and the trigger is created. Until then the
   function does not exist and a merge that touches `gcf_v3/**` deploys nothing. **Manual fallback
-  (2026-10-22, ADR-0069):** dispatch `deploy` of `.github/workflows/solver-v3-ops.yml` from `main`
+  (2026-10-22, ADR-0070):** dispatch `deploy` of `.github/workflows/solver-v3-ops.yml` from `main`
   (Actions → Solver v3 ops → Run workflow; a phone browser works). It re-runs this same trigger at
   `main`'s tip — the same config, account and `$COMMIT_SHA` — after Frank approves the run, then
   verifies. It refuses when `main` moved since the dispatch (re-dispatch), and a `gcf_v3` merge
@@ -603,7 +603,7 @@ and `checker.py` follows, the Python test goes red until the fixture and the Typ
 
 #### Verifying a v3 deploy
 
-**From GitHub Actions (ADR-0069; status 2026-10-22: merged, NOT yet set up or rehearsed — use
+**From GitHub Actions (ADR-0070; status 2026-10-22: merged, NOT yet set up or rehearsed — use
 the manual steps until `docs/SECRETS.md` «GitHub Actions → Google» says otherwise, and treat the
 automatic push path as unproven until a `gcf_v3/**` merge after setup shows a green `verify`):** `.github/workflows/solver-v3-ops.yml`
 runs `verify` automatically after every push to `main` that touches `gcf_v3/**` (it waits up to
