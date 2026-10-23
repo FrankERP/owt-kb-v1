@@ -1885,13 +1885,13 @@ export default function PlannerGrid(props: PlannerGridProps) {
               : ""}
           </p>
           {pickedMove && (
-            <button
-              type="button"
+            <Button variant="secondary" size="lg"
+             
               onClick={() => setPickedMove(null)}
-              className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest text-ink-muted/70 hover:border-accent"
+             
             >
               Cancelar el movimiento
-            </button>
+            </Button>
           )}
         </div>
         {/*
@@ -1952,13 +1952,13 @@ export default function PlannerGrid(props: PlannerGridProps) {
           <span className="font-label text-xs uppercase tracking-widest text-ink-muted/70">
             Candidatos para {openRow.label} — {openColumn.date}
           </span>
-          <button
-            type="button"
+          <Button variant="ghost" size="lg"
+           
             onClick={closePicker}
-            className="min-h-[44px] min-w-[44px] shrink-0 font-label text-xs uppercase tracking-widest text-ink-muted/70 hover:text-ink"
+            className="shrink-0 min-w-[44px]"
           >
             Cerrar
-          </button>
+          </Button>
         </div>
         <ul className="max-h-[60vh] space-y-1.5 overflow-y-auto pr-1">
           {openCandidates.map((candidate) => (
@@ -2104,27 +2104,27 @@ export default function PlannerGrid(props: PlannerGridProps) {
           <p className="font-label text-xs uppercase tracking-widest text-mono-500">
             {monthLabel ?? "Cuadrícula del mes"}
           </p>
-          <button
-            type="button"
+          <Button variant="secondary" size="lg"
+           
             onClick={() => setFullScreen(false)}
-            className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest hover:border-accent"
+           
           >
             Salir de pantalla completa (Esc)
-          </button>
+          </Button>
         </div>
       ) : (
         <>
       {/* ── Auto controls ─────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3">
         {mode === "create" && (
-          <button
-            type="button"
+          <Button variant="primary" size="lg"
+           
             onClick={handleAutoClick}
             disabled={!!autoState.disabledReason || autoState.pending}
-            className="min-h-[44px] rounded-lg bg-surface-accent-solid text-on-fill px-4 font-label text-xs uppercase tracking-widest transition-colors hover:bg-accent-deep/80 disabled:opacity-50 dark:hover:bg-accent/30"
+           
           >
             {autoState.pending ? "Calculando..." : "🤖 Auto-asignar con Solver"}
-          </button>
+          </Button>
         )}
         {mode === "create" && fillEmpty && (
           <span className="inline-flex items-center gap-2">
@@ -2169,17 +2169,17 @@ export default function PlannerGrid(props: PlannerGridProps) {
           divide the viewport instead of overflowing it. One service alone already fits.
         */}
         {!singleColumn && (
-        <button
-          type="button"
+        <Button variant="secondary" size="lg"
+         
           // The anchor focus comes back to on the way out. An attribute rather
           // than a ref because leaving full screen rebuilds this subtree, so
           // this is a different DOM node by then — see the effect above.
           data-planner-fullscreen
           onClick={() => setFullScreen(true)}
-          className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest text-ink-muted/70 transition-colors hover:border-accent"
+         
         >
           <ExpandIcon /> Pantalla completa
-        </button>
+        </Button>
         )}
         {mode === "create" && autoState.disabledReason && (
           <p className="font-body text-xs text-warning-strong">{autoState.disabledReason}</p>
@@ -2218,20 +2218,20 @@ export default function PlannerGrid(props: PlannerGridProps) {
             </p>
           )}
           <div className="flex gap-2">
-            <button
-              type="button"
+            <Button variant="primary" size="lg"
+             
               onClick={confirmAuto}
-              className="min-h-[44px] rounded-lg bg-surface-accent-solid text-on-fill px-3 font-label text-xs uppercase tracking-widest"
+             
             >
               Confirmar
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button variant="secondary" size="lg"
+             
               onClick={() => setConfirmingAuto(false)}
-              className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest"
+             
             >
               Cancelar
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -2338,13 +2338,13 @@ export default function PlannerGrid(props: PlannerGridProps) {
               >
                 Mover de todos modos
               </button>
-              <button
-                type="button"
+              <Button variant="secondary" size="lg"
+               
                 onClick={desistPendingMove}
-                className="min-h-[44px] flex-1 rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest hover:border-accent"
+                className="flex-1"
               >
                 Desistir
-              </button>
+              </Button>
             </div>
           </div>
         </CueDialog>
@@ -2392,13 +2392,13 @@ export default function PlannerGrid(props: PlannerGridProps) {
               >
                 Copiar de todos modos
               </button>
-              <button
-                type="button"
+              <Button variant="secondary" size="lg"
+               
                 onClick={() => setPendingCopy(null)}
-                className="min-h-[44px] flex-1 rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest hover:border-accent"
+                className="flex-1"
               >
                 Desistir
-              </button>
+              </Button>
             </div>
           </div>
         </CueDialog>
@@ -3490,13 +3490,13 @@ function AddRowForm({
           placeholder={placeholder}
           className="min-h-[44px] flex-1 rounded-lg border border-accent/20 bg-transparent px-3 py-2 font-body text-xs focus:border-accent focus:outline-none"
         />
-        <button
+        <Button variant="secondary" size="md"
           type="submit"
           disabled={disabled}
-          className="shrink-0 rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest text-ink-muted/70 hover:border-accent"
+          className="shrink-0"
         >
           Añadir
-        </button>
+        </Button>
       </div>
       {error && <p className="font-body text-[11px] text-negative-fg">{error}</p>}
     </form>

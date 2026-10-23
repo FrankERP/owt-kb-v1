@@ -5151,9 +5151,9 @@ export default function MonthGenerator({
       )}
 
       <div className="flex gap-3">
-        <button type="button" onClick={() => { if (v3HasGaps) { setIncompleteOpen(true); return; } onClose(); }} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors">
+        <Button variant="secondary" size="lg" onClick={() => { if (v3HasGaps) { setIncompleteOpen(true); return; } onClose(); }} className="flex-1">
           Cancelar
-        </button>
+        </Button>
         {/*
           `disabled` uses the SAME predicate as `handlePreview`'s own gate: no
           columns at all, specials included. A weekend-only predicate
@@ -5161,15 +5161,15 @@ export default function MonthGenerator({
           this button on a specials-only month — the headline capability of E2 —
           with nothing shown to explain why.
         */}
-        <button
-          type="button"
+        <Button variant="primary" size="lg"
+         
           onClick={handlePreview}
           disabled={columns.length === 0 || !!gateBlocked || !!rulesBlocked}
           title={gateBlocked ?? rulesBlocked ?? undefined}
-          className="flex-1 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+          className="flex-1"
         >
           Previsualizar →
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -5220,18 +5220,18 @@ export default function MonthGenerator({
           */}
           {storedMode && storedInventory.coherent && !singleView && (
             <>
-              <button
-                type="button"
+              <Button variant="secondary" size="lg"
+               
                 onClick={() => {
                   setGroupFillOpen(false);
                   setComposerOpen(true);
                 }}
                 disabled={composerOpen || storedMutationLocked || storedHasUnresolvedWork || !!storedCreateBlocked}
                 title={storedCreateBlocked ?? undefined}
-                className="min-h-[44px] rounded-lg border border-accent/25 px-4 font-label text-xs uppercase tracking-widest text-accent disabled:opacity-50"
+               
               >
                 + Nuevo servicio
-              </button>
+              </Button>
               <Menu
                 label="Intercambiar"
                 // Never disabled: each panel it opens disables its OWN controls while a write is
@@ -5312,9 +5312,9 @@ export default function MonthGenerator({
             </>
           )}
           {!storedMode && (
-            <button type="button" onClick={requestBack} disabled={storedTransportActive} className="font-label text-xs uppercase tracking-widest text-mono-500 hover:text-accent transition-colors disabled:opacity-50">
+            <Button variant="ghost" size="md" onClick={requestBack} disabled={storedTransportActive}>
               ← Volver
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -5328,9 +5328,9 @@ export default function MonthGenerator({
               : storedInventory.reasons.join(", ") || "Cargando datos…"}
           </p>
           {storedSource && (
-            <button type="button" onClick={() => void storedSource.reload()} className="mt-2 min-h-[44px] rounded-lg border border-warning-soft/30 px-3 font-label text-xs uppercase tracking-widest">
+            <Button variant="secondary" size="lg" onClick={() => void storedSource.reload()} className="mt-2">
               Reintentar
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -5390,11 +5390,11 @@ export default function MonthGenerator({
                 </div>
               ) : <div />}
               <div className="flex gap-2">
-                <button type="button" onClick={() => void handleCreateOne()} disabled={creatingOne || (storedMutationLocked && createAttemptStatus !== "unknown") || storedWriteUnresolved || createAttemptStatus === "committedUnverified" || !!storedCreateBlocked} title={storedCreateBlocked ?? undefined} className="min-h-[44px] rounded-lg bg-surface-accent-solid text-on-fill px-4 font-label text-xs uppercase tracking-widest disabled:opacity-50">
+                <Button variant="primary" size="lg" onClick={() => void handleCreateOne()} disabled={creatingOne || (storedMutationLocked && createAttemptStatus !== "unknown") || storedWriteUnresolved || createAttemptStatus === "committedUnverified" || !!storedCreateBlocked} title={storedCreateBlocked ?? undefined}>
                   {creatingOne ? "Creando…" : createAttemptStatus === "unknown" ? "Reintentar misma solicitud" : createAttemptStatus === "committedUnverified" ? "Verificando…" : "Crear vacío"}
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button variant="secondary" size="lg"
+                 
                   onClick={() => {
                     setComposerOpen(false);
                     // C1 §6.5: «Cancelar» resets the switch to follow the Tipo again.
@@ -5402,14 +5402,14 @@ export default function MonthGenerator({
                     setCreateCountsChoice(false);
                   }}
                   disabled={creatingOne || createAttemptStatus !== null}
-                  className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest disabled:opacity-50"
+                 
                 >
                   Cancelar
-                </button>
+                </Button>
                 {createAttemptStatus && (
-                  <button type="button" onClick={() => void storedSource?.reload()} className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest text-accent">
+                  <Button variant="secondary" size="lg" onClick={() => void storedSource?.reload()}>
                     Recargar
-                  </button>
+                  </Button>
                 )}
               </div>
               {/* C1 §6.5: disabled with the other composer controls; the note once per composer. */}
@@ -5493,34 +5493,29 @@ export default function MonthGenerator({
               : `${pendingDiscard === "back" ? "Volver a configuración" : "Cerrar"} descarta ${assignmentCount} asignación${assignmentCount !== 1 ? "es" : ""} en este mes. ¿Continuar?`}
           </p>
           <div className="flex gap-2">
-            <button
-              type="button"
+            <Button variant="primary" size="lg"
+             
               onClick={confirmPendingDiscard}
               disabled={storedTransportActive}
-              className="min-h-[44px] rounded-lg bg-surface-accent-solid text-on-fill px-3 font-label text-xs uppercase tracking-widest disabled:opacity-50"
+             
             >
               {!storedMode && pendingDiscard === "back" ? "Volver de todos modos" : "Cerrar de todos modos"}
-            </button>
-            <button type="button" onClick={() => setPendingDiscard(null)} className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest">
+            </Button>
+            <Button variant="secondary" size="lg" onClick={() => setPendingDiscard(null)}>
               Cancelar
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
       {!storedMode && <div className="flex justify-center">
-        <div className="flex rounded-lg border border-surface-accent-30 overflow-hidden">
-          <button type="button" onClick={() => setViewMode("edit")}
-            className={`px-5 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
-              viewMode === "edit" ? "bg-surface-accent-solid text-on-fill text-ink-muted" : "text-mono-500 hover:text-ink-muted"}`}>
-            Editar
-          </button>
-          <button type="button" onClick={() => setViewMode("view")}
-            className={`px-5 py-2 font-label text-xs uppercase tracking-widest transition-colors border-l border-accent-deep/30 dark:border-accent/20 ${
-              viewMode === "view" ? "bg-surface-accent-solid text-on-fill text-ink-muted" : "text-mono-500 hover:text-ink-muted"}`}>
-            Vista
-          </button>
-        </div>
+        <SegmentedControl
+          label="Modo"
+          tone="filled"
+          value={viewMode}
+          onChange={setViewMode}
+          options={[{ value: "edit", label: "Editar" }, { value: "view", label: "Vista" }]}
+        />
       </div>}
 
       {/*
@@ -5596,22 +5591,18 @@ export default function MonthGenerator({
           <Collapse id={swapRegionId} open={swapOpen} className="flex flex-wrap items-center gap-2 pt-2">
             <span className="w-full font-body text-xs text-mono-500">Toca dos fechas para intercambiar todo su equipo.</span>
             {columns.map(col => (
-              <button
+              <Button variant="pill" size="sm" active={swapSel === col.columnId}
                 key={col.columnId}
-                type="button"
+               
                 data-swap-date={col.date}
                 // A closed fold stays clickable for its exit animation (`Collapse` sets `inert` only
                 // when it ends): a tap in that window must not leave a hidden half-made pick.
                 onClick={() => { if (swapOpen) void handleColumnSwap(col.columnId); }}
                 disabled={storedMode && storedSwapInteractionBlocked}
-                className={`min-h-[44px] px-2 py-1 rounded-full border text-[10px] font-label uppercase tracking-widest transition-colors ${
-                  swapSel === col.columnId
-                    ? "border-accent bg-accent/20 text-accent"
-                    : "border-accent/15 text-mono-500 hover:text-accent"
-                }`}
+                className="min-h-[44px]"
               >
                 {fmtDate(col.date)}
-              </button>
+              </Button>
             ))}
             {swapSel && <span className="font-label text-[11px] uppercase tracking-widest text-accent animate-pulse">Selecciona otra columna ⇄</span>}
           </Collapse>
@@ -5631,15 +5622,15 @@ export default function MonthGenerator({
             <option value="">Seleccionar…</option>
             {storedSectionServiceOptions.map((option) => <option key={`b:${option.column.roleId}`} value={option.column.roleId}>{option.label}</option>)}
           </Select>
-          <button
-            type="button"
+          <Button variant="secondary" size="lg"
+           
             onClick={() => void handleSectionSwap()}
             disabled={storedSwapInteractionBlocked || !sectionSwapFirst || !sectionSwapSecond || sectionSwapFirst === sectionSwapSecond || sectionSwapTopologyInvalid}
             title={sectionSwapTopologyInvalid ? "Coro no está disponible en servicios de sábado." : undefined}
-            className="min-h-[44px] rounded-lg border border-accent/25 px-4 font-label text-xs uppercase tracking-widest text-accent disabled:opacity-50"
+           
           >
             Intercambiar sección
-          </button>
+          </Button>
           <Button variant="ghost" size="lg" aria-label="Cerrar intercambio de sección" onClick={() => { setSectionSwapOpen(false); swapTriggerRef.current?.focus(); }}>
             Cerrar
           </Button>
@@ -5650,9 +5641,9 @@ export default function MonthGenerator({
         <div className="flex items-center justify-center gap-2 rounded-lg bg-accent/10 px-3 py-1.5">
           <p className="font-label text-[11px] uppercase tracking-widest text-accent text-center">{swapToast}</p>
           {storedMode && swapVerificationPending && storedSource && (
-            <button type="button" onClick={() => void storedSource.reload()} className="min-h-[44px] rounded-lg border border-accent/25 px-3 font-label text-[10px] uppercase tracking-widest text-accent">
+            <Button variant="secondary" size="lg" onClick={() => void storedSource.reload()}>
               Recargar y verificar
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -5923,19 +5914,19 @@ export default function MonthGenerator({
             <p className="font-body text-xs text-warning-soft">Los cambios sin guardar en la cuadrícula se descartan.</p>
           )}
           <div className="flex gap-2">
-            <button
-              type="button"
+            <Button variant="danger" size="lg"
+             
               onClick={() => void handleClearMonth()}
               disabled={clearing || clearSelection.selected.length === 0}
-              className="min-h-[44px] rounded-lg bg-negative-surface/60 hover:bg-negative-border/60 px-3 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+             
             >
               {clearing && clearProgress
                 ? `Eliminando ${clearProgress.done} de ${clearProgress.total}…`
                 : `Eliminar ${clearSelection.selected.length}`}
-            </button>
-            <button ref={clearCancelRef} type="button" onClick={() => { setClearPending(false); moreTriggerRef.current?.focus(); }} disabled={clearing} className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest disabled:opacity-50">
+            </Button>
+            <Button variant="secondary" size="lg" ref={clearCancelRef} onClick={() => { setClearPending(false); moreTriggerRef.current?.focus(); }} disabled={clearing}>
               Cancelar
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -5958,9 +5949,9 @@ export default function MonthGenerator({
             under it. Below `sm` the count steps aside — the Guardar label already carries it —
             and the buttons keep one line each.
           */}
-          <button type="button" onClick={requestBack} disabled={storedTransportActive} className="min-h-[44px] shrink-0 whitespace-nowrap rounded-lg border border-surface-accent-30 px-4 sm:px-6 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors disabled:opacity-50">
+          <Button variant="secondary" size="lg" onClick={requestBack} disabled={storedTransportActive} className="shrink-0 whitespace-nowrap">
             Cerrar
-          </button>
+          </Button>
           <p aria-live="polite" className="hidden min-w-0 flex-1 text-center font-body text-sm text-mono-500 sm:block">
             {(() => {
               const changed = dirtyStoredColumns.length + invalidStoredColumns.length;
@@ -5970,15 +5961,15 @@ export default function MonthGenerator({
               return storedHasUnresolvedWork ? "Cambios sin guardar" : "Sin cambios";
             })()}
           </p>
-          <button
-            type="button"
+          <Button variant="primary" size="lg"
+           
             onClick={() => void handleStoredSave()}
             disabled={storedMutationLocked || dirtyStoredColumns.length === 0 || invalidStoredColumns.length > 0 || !storedInventory.coherent || !!storedSaveBlocked}
             title={storedSaveBlocked ?? undefined}
-            className="ml-auto min-h-[44px] shrink-0 whitespace-nowrap rounded-lg px-4 sm:px-6 bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+            className="ml-auto shrink-0 whitespace-nowrap"
           >
             {savingStored ? "Guardando…" : singleView && dirtyStoredColumns.length <= 1 ? "Guardar" : `Guardar ${dirtyStoredColumns.length} servicio${dirtyStoredColumns.length !== 1 ? "s" : ""}`}
-          </button>
+          </Button>
         </div>
       ) : (
         <>
@@ -5996,27 +5987,27 @@ export default function MonthGenerator({
           </div>
         )}
         <div className="flex gap-3">
-          <button
-            type="button"
+          <Button variant="secondary" size="lg"
+           
             onClick={() => {
               if (storedTransportActive) return;
               if (v3HasGaps) { setIncompleteOpen(true); return; }
               if (closeWouldDiscard) { setPendingDiscard("close"); return; }
               onClose();
             }}
-            className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors"
+            className="flex-1"
           >
             Cancelar
-          </button>
+          </Button>
           {/* The lock's other half (`handleAutoV3`): no v3 confirm starts while a v3 Auto is pending. `isV3 &&` leaves v2's buttons behaving exactly as today. */}
-          <button type="button" onClick={() => handleConfirm(false)} disabled={pushing || (isV3 && autoPending) || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+          <Button variant="primary" size="lg" onClick={() => handleConfirm(false)} disabled={pushing || (isV3 && autoPending) || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1">
             {pushing ? "Creando..." : `Crear ${toCreate.length} borrador${toCreate.length !== 1 ? "es" : ""}`}
-          </button>
+          </Button>
           {/* CF-8: a 2-month confirm creates drafts only — the publish button is absent, not disabled. */}
           {!(isV3 && horizon.length === 2) && (
-          <button type="button" onClick={() => handleConfirm(true)} disabled={pushing || (isV3 && autoPending) || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+          <Button variant="primary" size="lg" onClick={() => handleConfirm(true)} disabled={pushing || (isV3 && autoPending) || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1">
             Crear y publicar
-          </button>
+          </Button>
           )}
         </div>
         </>
