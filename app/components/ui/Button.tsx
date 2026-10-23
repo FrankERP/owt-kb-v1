@@ -19,6 +19,13 @@
 //
 // `className` is for additive utilities only — never to override padding, radius, or
 // colour. Pick a variant or size instead.
+//
+// A disabled button normally takes no pointer events (no hover paint, no press).
+// With a `title` it keeps them: the title is the REASON it is disabled («Faltan
+// propuestas», «Coro no está disponible en servicios de sábado»), and
+// `pointer-events: none` is exactly what stops the browser showing it. The hover
+// colours under `disabled:opacity-50` are the price; `:active` never applies to a
+// disabled control, so the press stays off.
 
 import Link from "next/link";
 import type { ComponentPropsWithoutRef, ReactNode, Ref } from "react";
@@ -35,7 +42,9 @@ const BASE =
   "transition-[color,background-color,border-color,transform,box-shadow] duration-fast ease-out-brand " +
   "active:translate-y-px active:scale-[0.985] " +
   "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base " +
-  "disabled:opacity-50 disabled:pointer-events-none";
+  "disabled:opacity-50";
+/** Off a titled button, so the title (the reason it is disabled) can show. */
+const DISABLED_NO_POINTER = "disabled:pointer-events-none";
 
 const VARIANT: Record<ButtonVariant, string> = {
   primary:
@@ -81,6 +90,8 @@ export function buttonClass(
   size: ButtonSize,
   extra = "",
   tone: PillTone | IconTone = "accent",
+  /** `true` when the control carries a `title`: disabled, it still answers the pointer so the title shows. */
+  titled = false,
 ): string {
   const s = variant === "icon" ? (size === "lg" ? "min-h-[44px] min-w-[44px]" : "") : SIZE[size];
   const t =
@@ -89,7 +100,8 @@ export function buttonClass(
       : variant === "icon" && tone === "danger"
         ? ICON_TONE[tone]
         : "";
-  return `${BASE} ${VARIANT[variant]} ${t} ${s} ${extra}`.replace(/\s+/g, " ").trim();
+  const p = titled ? "" : DISABLED_NO_POINTER;
+  return `${BASE} ${p} ${VARIANT[variant]} ${t} ${s} ${extra}`.replace(/\s+/g, " ").trim();
 }
 
 type Common = {
@@ -120,7 +132,7 @@ export type ButtonProps = ButtonOnlyProps | LinkOnlyProps;
 // `forwardRef` wrapper needed to accept and pass it on.
 export default function Button(props: ButtonProps) {
   const { variant = "secondary", size = "md", busy = false, busyLabel, active, tone = "accent", className = "", children } = props;
-  const cls = buttonClass(variant, size, className, tone);
+  const cls = buttonClass(variant, size, className, tone, typeof props.title === "string" && props.title.length > 0);
   const label = busy && busyLabel ? busyLabel : children;
 
   if ("href" in props && typeof props.href === "string") {

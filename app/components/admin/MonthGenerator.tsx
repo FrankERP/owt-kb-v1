@@ -5162,7 +5162,6 @@ export default function MonthGenerator({
           with nothing shown to explain why.
         */}
         <Button variant="primary" size="lg"
-         
           onClick={handlePreview}
           disabled={columns.length === 0 || !!gateBlocked || !!rulesBlocked}
           title={gateBlocked ?? rulesBlocked ?? undefined}
@@ -5221,14 +5220,12 @@ export default function MonthGenerator({
           {storedMode && storedInventory.coherent && !singleView && (
             <>
               <Button variant="secondary" size="lg"
-               
                 onClick={() => {
                   setGroupFillOpen(false);
                   setComposerOpen(true);
                 }}
                 disabled={composerOpen || storedMutationLocked || storedHasUnresolvedWork || !!storedCreateBlocked}
                 title={storedCreateBlocked ?? undefined}
-               
               >
                 + Nuevo servicio
               </Button>
@@ -5394,7 +5391,6 @@ export default function MonthGenerator({
                   {creatingOne ? "Creando…" : createAttemptStatus === "unknown" ? "Reintentar misma solicitud" : createAttemptStatus === "committedUnverified" ? "Verificando…" : "Crear vacío"}
                 </Button>
                 <Button variant="secondary" size="lg"
-                 
                   onClick={() => {
                     setComposerOpen(false);
                     // C1 §6.5: «Cancelar» resets the switch to follow the Tipo again.
@@ -5402,7 +5398,6 @@ export default function MonthGenerator({
                     setCreateCountsChoice(false);
                   }}
                   disabled={creatingOne || createAttemptStatus !== null}
-                 
                 >
                   Cancelar
                 </Button>
@@ -5494,10 +5489,8 @@ export default function MonthGenerator({
           </p>
           <div className="flex gap-2">
             <Button variant="primary" size="lg"
-             
               onClick={confirmPendingDiscard}
               disabled={storedTransportActive}
-             
             >
               {!storedMode && pendingDiscard === "back" ? "Volver de todos modos" : "Cerrar de todos modos"}
             </Button>
@@ -5593,7 +5586,6 @@ export default function MonthGenerator({
             {columns.map(col => (
               <Button variant="pill" size="sm" active={swapSel === col.columnId}
                 key={col.columnId}
-               
                 data-swap-date={col.date}
                 // A closed fold stays clickable for its exit animation (`Collapse` sets `inert` only
                 // when it ends): a tap in that window must not leave a hidden half-made pick.
@@ -5623,11 +5615,9 @@ export default function MonthGenerator({
             {storedSectionServiceOptions.map((option) => <option key={`b:${option.column.roleId}`} value={option.column.roleId}>{option.label}</option>)}
           </Select>
           <Button variant="secondary" size="lg"
-           
             onClick={() => void handleSectionSwap()}
             disabled={storedSwapInteractionBlocked || !sectionSwapFirst || !sectionSwapSecond || sectionSwapFirst === sectionSwapSecond || sectionSwapTopologyInvalid}
             title={sectionSwapTopologyInvalid ? "Coro no está disponible en servicios de sábado." : undefined}
-           
           >
             Intercambiar sección
           </Button>
@@ -5915,10 +5905,8 @@ export default function MonthGenerator({
           )}
           <div className="flex gap-2">
             <Button variant="danger" size="lg"
-             
               onClick={() => void handleClearMonth()}
               disabled={clearing || clearSelection.selected.length === 0}
-             
             >
               {clearing && clearProgress
                 ? `Eliminando ${clearProgress.done} de ${clearProgress.total}…`
@@ -5962,7 +5950,6 @@ export default function MonthGenerator({
             })()}
           </p>
           <Button variant="primary" size="lg"
-           
             onClick={() => void handleStoredSave()}
             disabled={storedMutationLocked || dirtyStoredColumns.length === 0 || invalidStoredColumns.length > 0 || !storedInventory.coherent || !!storedSaveBlocked}
             title={storedSaveBlocked ?? undefined}
@@ -5988,7 +5975,6 @@ export default function MonthGenerator({
         )}
         <div className="flex gap-3">
           <Button variant="secondary" size="lg"
-           
             onClick={() => {
               if (storedTransportActive) return;
               if (v3HasGaps) { setIncompleteOpen(true); return; }

@@ -301,7 +301,6 @@ export default function MonthCalendar({
       )}
 
       <Button variant="secondary" size="lg"
-       
         onClick={() => openComposer(openDate ?? firstFreeDate)}
         className="w-full"
       >
@@ -346,14 +345,12 @@ export default function MonthCalendar({
           <FairnessEngineNote engine={engine} />
           <div className="flex gap-2">
             <Button variant="primary" size="lg"
-             
               onClick={submitSpecial}
               className="flex-1"
             >
               Agregar
             </Button>
             <Button variant="secondary" size="lg"
-             
               onClick={() => {
                 setComposerDate(null);
                 setDraftName("");
@@ -380,14 +377,12 @@ export default function MonthCalendar({
                 <span className="font-body text-xs text-ink-muted">
                   <span className="text-info-fg">{s.name}</span> — {longDate(s.date)}
                 </span>
-                <Button variant="secondary" size="lg"
-                 
+                <Button variant="danger" size="lg"
                   onClick={() => {
                     setNotice(null);
                     onRemoveSpecial(s.date);
                   }}
                   aria-label={`Quitar servicio especial del ${longDate(s.date)}`}
-                 
                 >
                   Quitar
                 </Button>

@@ -1886,9 +1886,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
           </p>
           {pickedMove && (
             <Button variant="secondary" size="lg"
-             
               onClick={() => setPickedMove(null)}
-             
             >
               Cancelar el movimiento
             </Button>
@@ -1953,7 +1951,6 @@ export default function PlannerGrid(props: PlannerGridProps) {
             Candidatos para {openRow.label} — {openColumn.date}
           </span>
           <Button variant="ghost" size="lg"
-           
             onClick={closePicker}
             className="shrink-0 min-w-[44px]"
           >
@@ -2105,9 +2102,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
             {monthLabel ?? "Cuadrícula del mes"}
           </p>
           <Button variant="secondary" size="lg"
-           
             onClick={() => setFullScreen(false)}
-           
           >
             Salir de pantalla completa (Esc)
           </Button>
@@ -2118,10 +2113,8 @@ export default function PlannerGrid(props: PlannerGridProps) {
       <div className="flex flex-wrap items-center gap-3">
         {mode === "create" && (
           <Button variant="primary" size="lg"
-           
             onClick={handleAutoClick}
             disabled={!!autoState.disabledReason || autoState.pending}
-           
           >
             {autoState.pending ? "Calculando..." : "🤖 Auto-asignar con Solver"}
           </Button>
@@ -2170,13 +2163,11 @@ export default function PlannerGrid(props: PlannerGridProps) {
         */}
         {!singleColumn && (
         <Button variant="secondary" size="lg"
-         
           // The anchor focus comes back to on the way out. An attribute rather
           // than a ref because leaving full screen rebuilds this subtree, so
           // this is a different DOM node by then — see the effect above.
           data-planner-fullscreen
           onClick={() => setFullScreen(true)}
-         
         >
           <ExpandIcon /> Pantalla completa
         </Button>
@@ -2219,16 +2210,12 @@ export default function PlannerGrid(props: PlannerGridProps) {
           )}
           <div className="flex gap-2">
             <Button variant="primary" size="lg"
-             
               onClick={confirmAuto}
-             
             >
               Confirmar
             </Button>
             <Button variant="secondary" size="lg"
-             
               onClick={() => setConfirmingAuto(false)}
-             
             >
               Cancelar
             </Button>
@@ -2339,7 +2326,6 @@ export default function PlannerGrid(props: PlannerGridProps) {
                 Mover de todos modos
               </button>
               <Button variant="secondary" size="lg"
-               
                 onClick={desistPendingMove}
                 className="flex-1"
               >
@@ -2393,7 +2379,6 @@ export default function PlannerGrid(props: PlannerGridProps) {
                 Copiar de todos modos
               </button>
               <Button variant="secondary" size="lg"
-               
                 onClick={() => setPendingCopy(null)}
                 className="flex-1"
               >

@@ -54,6 +54,21 @@ describe("Button", () => {
     expect(a.getAttribute("aria-pressed")).toBeNull();
   });
 
+  it("takes no pointer events while disabled — unless a title carries the reason", () => {
+    render(
+      <>
+        <Button disabled>Sin razón</Button>
+        <Button disabled title="Faltan propuestas.">Con razón</Button>
+        <Button disabled title="">Título vacío</Button>
+      </>,
+    );
+    expect(screen.getByRole("button", { name: "Sin razón" }).className).toContain("disabled:pointer-events-none");
+    // `pointer-events: none` is exactly what stops the browser showing the title.
+    expect(screen.getByRole("button", { name: "Con razón" }).className).not.toContain("pointer-events-none");
+    expect(screen.getByRole("button", { name: "Título vacío" }).className).toContain("disabled:pointer-events-none");
+    expect(buttonClass("primary", "md", "", "accent", true)).not.toContain("pointer-events-none");
+  });
+
   it("pill exposes aria-pressed from `active`", () => {
     render(<Button variant="pill" active>Oscuro</Button>);
     expect(screen.getByRole("button").getAttribute("aria-pressed")).toBe("true");

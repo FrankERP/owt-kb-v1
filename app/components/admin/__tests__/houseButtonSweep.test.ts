@@ -30,12 +30,15 @@ const BASELINE: Record<string, number> = {
 
 function handRolledButtons(file: string): number {
   const src = readFileSync(path.join(__dirname, "..", file), "utf8");
-  // Comments mention `<button>` when they explain why a cell is NOT one.
+  // Comments mention `<button>` when they explain why a cell is NOT one: block
+  // comments (`{/* … */}` included) go first, then `//` lines; what is left is
+  // counted only where a line OPENS the element.
   const code = src
+    .replace(/\/\*[\s\S]*?\*\//g, "")
     .split("\n")
-    .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
+    .filter((l) => !/^\s*\/\//.test(l))
     .join("\n");
-  return (code.match(/<button(?=[\s>])/g) ?? []).length;
+  return (code.match(/^\s*<button(?=[\s>]|$)/gm) ?? []).length;
 }
 
 describe("Generar / Editar mes use the house Button (bloque 7)", () => {
