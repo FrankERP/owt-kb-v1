@@ -119,7 +119,7 @@ vi.mock("mcp-handler", async (importOriginal) => {
 });
 
 import { DELETE, GET, POST } from "@/app/api/mcp/route";
-import { PROPOSAL_CARD_URI } from "@/app/mcp/apps/proposalCard";
+import { LEGACY_PROPOSAL_CARD_URI, PROPOSAL_CARD_URI } from "@/app/mcp/apps/proposalCard";
 import { PROPOSAL_CARD_HTML } from "@/mcp-app/generated/proposalCardHtml";
 import { memberResponder } from "@/app/mcp/reads/__tests__/memberFixtures";
 import { FROZEN_EVENING, readToolStore, scopedResponder } from "@/app/mcp/reads/__tests__/readToolFixtures";
@@ -1713,6 +1713,19 @@ describe("/api/mcp — the proposal card resource (MCP Apps, S1)", () => {
     expect(content!.text).toBe(PROPOSAL_CARD_HTML);
   });
 
+  it("its URI carries a digest of the document, and the first URI still serves the same card (ADR-0069)", async () => {
+    expect(PROPOSAL_CARD_URI).toMatch(/^ui:\/\/owt\/proposal-editor\/[0-9a-f]{8}$/);
+    const token = await accessToken(await liveGrant());
+    const legacy = await rpcResult(await POST(mcpRequest(rpc("resources/read", { uri: LEGACY_PROPOSAL_CARD_URI }), { token })));
+    const [content] = legacy.contents as Record<string, unknown>[];
+    expect(content).toMatchObject({ uri: LEGACY_PROPOSAL_CARD_URI, mimeType: "text/html;profile=mcp-app" });
+    expect(content!.text).toBe(PROPOSAL_CARD_HTML);
+    // An earlier build's URI is not listed but still answers the current card.
+    const older = `${LEGACY_PROPOSAL_CARD_URI}/00000000`;
+    const old = await rpcResult(await POST(mcpRequest(rpc("resources/read", { uri: older }), { token })));
+    expect((old.contents as Record<string, unknown>[])[0]).toMatchObject({ uri: older, text: PROPOSAL_CARD_HTML });
+  });
+
   it("the 2026-07-28 era reads it too (Mcp-Name is the resource URI)", async () => {
     const token = await accessToken(await liveGrant());
     const result = await modernResult(
@@ -1726,6 +1739,7 @@ describe("/api/mcp — the proposal card resource (MCP Apps, S1)", () => {
     const list = await rpcResult(await POST(mcpRequest(rpc("resources/list"), { token })));
     expect((list.resources as Record<string, unknown>[]).map((r) => [r.uri, r.mimeType])).toEqual([
       [PROPOSAL_CARD_URI, "text/html;profile=mcp-app"],
+      [LEGACY_PROPOSAL_CARD_URI, "text/html;profile=mcp-app"],
     ]);
     const init = await rpcResult(await POST(mcpRequest(INITIALIZE, { token })));
     expect(init.capabilities).toMatchObject({ resources: { listChanged: false } });
