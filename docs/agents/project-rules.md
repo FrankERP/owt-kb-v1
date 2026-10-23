@@ -147,14 +147,19 @@ disagree, `CLAUDE.md` wins and this file is the one to fix.
   100% on 2026-09-17 with 136 of them), and the Hobby plan allows 100 deployments
   per day INCLUDING canceled ones — on 2026-10-22 four threads pushed 44 canceled
   `claude/*` deployments beside 42 real builds, and from 19:50 UTC neither dev nor
-  production could build until the next day (ADR-0068). A branch created before
-  the change still deploys once until it merges `main`. To build a skipped ref ON
-  PURPOSE, redeploy from the dashboard with «Use project's Ignore Build Step»
-  unchecked — a plain redeploy and a deploy hook both carry the branch's ref and are
-  skipped again — and that checkbox is documented for a Project Settings ignore
-  step, not for a `vercel.json` one, so the hatch that CANNOT fail is changing what
-  the branch carries: merge into `preview`, or drop `ignoreCommand` and push. It
-  fails open: no git ref, `VERCEL_ENV=production`, or a broken policy module all
+  production could build until the next day (ADR-0068). Vercel reads `vercel.json`
+  from the commit being pushed, so every push of a branch that does not yet carry
+  the map still creates a counted deployment, and merging `main` into it helps
+  only once the map is on `main`. To build a skipped ref ON PURPOSE the only hatch
+  that CANNOT fail is changing what the branch carries: merge into `preview`, or —
+  on that branch only, never on `main` — list it `true` in `git.deploymentEnabled`
+  AND drop `ignoreCommand`, then push (the map decides whether a deployment is
+  created, the step whether it builds). A branch in the `false` set has no
+  deployment to redeploy and a deploy hook bound to it is refused by the same map;
+  for a deployment that does exist, the dashboard's «Use project's Ignore Build
+  Step» checkbox is documented for a Project Settings ignore step, not a
+  `vercel.json` one, so it is a maybe, and a plain redeploy carries the original
+  ref and is skipped again. The step fails open: no git ref, `VERCEL_ENV=production`, or a broken policy module all
   build. `deployBranchPolicy.test.ts` guards the policy AND the wiring, and runs the
   script as a process so swapped exit codes cannot pass. See `docs/CI.md`.
 - The stable dev domain is owned **exclusively** by the `preview` branch. Never

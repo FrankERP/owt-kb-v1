@@ -57,8 +57,10 @@ fail-open belt, and `deployBranchPolicy.test.ts` asserts that
 - A `claude/*` push creates no deployment at all, so the Git integration's PR
   comment no longer shows an «Ignored» row; verification stays on
   `dev-owt-backstage` through `preview`.
-- Vercel reads `vercel.json` from the commit being pushed: a branch that
-  predates this change deploys (canceled) once more until it merges `main`.
+- Vercel reads `vercel.json` from the commit being pushed: every push of a
+  branch that does not yet carry the map still creates a counted (canceled)
+  deployment, and merging `main` into it helps only once this change is on
+  `main`.
 - Dropping `"**": false` turns every push back into a counted deployment with
   a green suite — the guard in `deployBranchPolicy.test.ts` is what fails.
   Dropping one of the three `true` entries silently stops that target from

@@ -502,8 +502,9 @@ plan's 100 deployments per day**. Before this, every push still created a
 them beside 24 `preview` and 18 `main` builds, the cap was hit at 19:50 UTC
 and neither dev nor production could build until the next day (ADR-0068).
 "Feature branches are free now" is finally the right summary. Vercel reads the
-file from the commit being pushed, so a branch created before the change
-deploys once more until it merges `main`.
+file from the commit being pushed, so EVERY push of a branch that does not yet
+carry it still creates a counted deployment; merging `main` into such a branch
+helps only once this change is on `main`.
 
 **Why the Ignored Build Step stays.** Vercel's Function Storage quota counts
 the function bundle of every *retained* deployment, not just the current one.
@@ -529,21 +530,28 @@ policy module exits non-zero, which also builds. Wasting one build is
 recoverable; being unable to ship during a rollback is not.
 
 **To build a skipped ref on purpose**, the hatch the mechanism itself
-guarantees is that the deployment reads `vercel.json` *from the branch being
-built*: merge into `preview`, or drop `ignoreCommand` on that branch and push.
-That cannot fail, because nothing outside the branch decides it.
+guarantees is that Vercel reads `vercel.json` *from the commit being pushed*:
+merge into `preview`, or — on that branch only, never on `main` — add the
+branch as a `true` entry under `git.deploymentEnabled` (or remove
+`"**": false`) AND drop `ignoreCommand`, then push. Both halves are needed:
+the map decides whether a deployment is created at all, and the step decides
+whether a created one builds. That cannot fail, because nothing outside the
+branch decides it; `deployBranchPolicy.test.ts` goes red on that branch, which
+is the point — the change must not reach `main`.
 
-Vercel also documents a **«Use project's Ignore Build Step»** checkbox on the
-Redeploy modal, and unchecking it runs the build. Treat it as a maybe, not a
-plan: it is documented for an ignore step configured in *Project Settings*, and
-this repo's comes from `vercel.json`, which overrides that setting — whether the
-checkbox is even rendered, let alone whether it suppresses a `vercel.json`
-command, is unverified against this project's dashboard. Do not expect the
-remaining hatches at all: a *plain* redeploy re-runs this step and carries the
-original deployment's git metadata, so it is skipped again, and a **deploy
-hook** is bound to a project/repo/branch, so its deployment carries that ref
-and is skipped too. Whether a CLI `vercel deploy` attaches git metadata is
-likewise unverified — do not plan an incident around any of these.
+The dashboard offers no hatch any more for a branch in the `false` set: there
+is no deployment to redeploy, and a **deploy hook** is bound to a branch, so
+its push is refused by the same map. For a deployment that DOES exist (one of
+the three refs, or a branch that predates the map), Vercel documents a **«Use
+project's Ignore Build Step»** checkbox on the Redeploy modal, and unchecking
+it runs the build. Treat it as a maybe, not a plan: it is documented for an
+ignore step configured in *Project Settings*, and this repo's comes from
+`vercel.json`, which overrides that setting — whether the checkbox is even
+rendered, let alone whether it suppresses a `vercel.json` command, is
+unverified against this project's dashboard. A *plain* redeploy re-runs the
+step with the original deployment's git metadata, so it is skipped again.
+Whether a CLI `vercel deploy` attaches git metadata is likewise unverified —
+do not plan an incident around any of these.
 
 `scripts/__tests__/deployBranchPolicy.test.ts` is the guard. It asserts the
 wiring as well as the policy, and it *executes the runner as a process* rather

@@ -46,10 +46,13 @@ export const DEPLOYING_REFS = Object.freeze(["main", "preview", "verify/service-
  *
  * Do NOT read that as a general escape hatch: a plain dashboard redeploy
  * re-runs this step and carries the original deployment's ref, and a deploy
- * hook is bound to a branch, so both are skipped again. The way to build a
- * skipped ref that cannot fail is to change what the branch itself carries —
- * merge into `preview`, or drop `ignoreCommand` and push. `docs/CI.md` weighs
- * the dashboard checkbox against that, where someone mid-incident will find it.
+ * hook is bound to a branch, so both are skipped again — and for a ref that
+ * `git.deploymentEnabled` turns off there is no deployment to redeploy at all.
+ * The way to build a skipped ref that cannot fail is to change what the branch
+ * itself carries — merge into `preview`, or (on that branch only) list it
+ * `true` in `git.deploymentEnabled` AND drop `ignoreCommand`, then push.
+ * `docs/CI.md` weighs the dashboard checkbox against that, where someone
+ * mid-incident will find it.
  *
  * @returns {{ build: boolean, reason: string }}
  */

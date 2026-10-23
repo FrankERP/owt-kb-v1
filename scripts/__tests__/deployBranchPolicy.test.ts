@@ -8,6 +8,11 @@ import { VERIFICATION_REF } from "../lib/deployment-coherence.mjs";
 const repoRoot = resolve(__dirname, "../..");
 const runner = resolve(repoRoot, "scripts/vercel-ignore-build.mjs");
 
+/** The `vercel.json` Vercel will read — parsed fresh, so a stale import cannot vouch for it. */
+function readVercelJson(): Record<string, unknown> & { git?: { deploymentEnabled?: Record<string, boolean> } } {
+  return JSON.parse(readFileSync(resolve(repoRoot, "vercel.json"), "utf8"));
+}
+
 /** Exit code of the Ignored Build Step as Vercel would observe it. */
 function runPolicy(env: Record<string, string>): number | null {
   const result = spawnSync(process.execPath, [runner], {
@@ -68,8 +73,7 @@ describe("the policy is actually wired", () => {
   // Without this, deleting `ignoreCommand` leaves the module as dead code and
   // every branch quietly starts deploying again with a green suite.
   it("vercel.json runs the Ignored Build Step script", () => {
-    const cfg = JSON.parse(readFileSync(resolve(repoRoot, "vercel.json"), "utf8"));
-    expect(cfg.ignoreCommand).toBe("node scripts/vercel-ignore-build.mjs");
+    expect(readVercelJson().ignoreCommand).toBe("node scripts/vercel-ignore-build.mjs");
   });
 
   // Asserting that the file CONTAINS both exit codes would pass with the two
@@ -91,13 +95,13 @@ describe("the policy is actually wired", () => {
   // ref that is `false` there costs none of the Hobby plan's 100 deployments a
   // day — the cap four threads hit on 2026-10-22 with 44 canceled `claude/*`
   // pushes (ADR-0068). The rule is a whitelist built from a blacklist: every
-  // branch off, the deploying refs on. If someone drops `"**": false` the
-  // suite stays green while every push spends a slot again; if someone drops
-  // a deploying ref, that target silently stops deploying.
+  // branch off, the deploying refs on. Without this test, dropping `"**": false`
+  // keeps the suite green while every push spends a slot again, and dropping
+  // a deploying ref silently stops that target from deploying.
   it("vercel.json creates deployments only for the deploying refs", () => {
-    const cfg = JSON.parse(readFileSync(resolve(repoRoot, "vercel.json"), "utf8"));
-    const enabled = cfg.git?.deploymentEnabled;
+    const enabled = readVercelJson().git?.deploymentEnabled;
     expect(enabled).toBeTypeOf("object");
+    if (!enabled) throw new Error("unreachable");
     expect(enabled["**"]).toBe(false);
     for (const ref of DEPLOYING_REFS) expect(enabled[ref]).toBe(true);
     const extra = Object.keys(enabled).filter((k) => k !== "**" && !DEPLOYING_REFS.includes(k));
