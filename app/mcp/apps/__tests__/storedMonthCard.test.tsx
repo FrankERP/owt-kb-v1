@@ -16,6 +16,8 @@ import { cardViewOf } from "@/mcp-app/proposal-card/model";
 import { ProposalCard } from "@/mcp-app/proposal-card/ProposalCard";
 import { storedSeatOf } from "@/mcp-app/proposal-card/useStoredEditor";
 import { COPY_ARGS_PREFIX, SAVE_ARGS_PREFIX } from "@/app/components/admin/v3Copy";
+import { STALE_TOOL_LIST_NOTE } from "@/app/mcp/toolListVersion";
+import { STALE_NOTE_PREFIX, textLines } from "@/mcp-app/proposal-card/editorModel";
 import {
   ARGS_LINE_PREFIXES,
   afterStoredRefusal,
@@ -162,6 +164,22 @@ describe("the argument lines the model reads", () => {
       content: [{ type: "text", text: ["Un servicio cambia.", `${SAVE_ARGS_PREFIX} {"month":"${MONTH}","changes":[]}`].join("\n") }],
     });
     expect(view.lines).toEqual(["Un servicio cambia."]);
+  });
+});
+
+describe("the server's «refresh the connector» note (ADR-0070)", () => {
+  it("the card's copy of its prefix matches the server's note", () => {
+    expect(STALE_TOOL_LIST_NOTE.startsWith(STALE_NOTE_PREFIX)).toBe(true);
+  });
+
+  it("never reaches the screen: neither its own block nor a line inside a refusal", () => {
+    const content = [
+      { type: "text", text: "Un servicio cambia:\n- domingo 15 nov · BGV: entra Carla" },
+      { type: "text", text: STALE_TOOL_LIST_NOTE, annotations: { audience: ["assistant"] } },
+    ];
+    expect(textLines(content)).toEqual(["Un servicio cambia:", "- domingo 15 nov · BGV: entra Carla"]);
+    const refusal = [{ type: "text", text: `Input validation error: nope\n${STALE_TOOL_LIST_NOTE}` }];
+    expect(textLines(refusal)).toEqual(["Input validation error: nope"]);
   });
 });
 

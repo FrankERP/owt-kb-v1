@@ -714,8 +714,8 @@ export const V3_STORED_EDITOR_LINES = {
   checkHead: (n: number, calls: number) => {
     const head = n === 1 ? "Un servicio cambia" : `${n} servicios cambian`;
     if (calls === 0) return `${head}:`;
-    if (calls === 1) return `${head}. Para guardar, llama save_service_edits con los argumentos de la última línea, tal cual:`;
-    return `${head}. Para guardar, llama save_service_edits una vez por cada una de las últimas ${calls} líneas, con sus argumentos tal cual:`;
+    if (calls === 1) return `${head}. Para guardar, llama save_service_edits con los argumentos de la línea «Argumentos para save_service_edits», tal cual:`;
+    return `${head}. Para guardar, llama save_service_edits una vez por cada una de las ${calls} líneas «Argumentos para save_service_edits», con sus argumentos tal cual:`;
   },
   /** The model sees only the text of a tool answer, never `structuredContent`: the save's arguments travel here. */
   saveArgs: (json: string) => `${SAVE_ARGS_PREFIX} ${json}`,
@@ -780,7 +780,7 @@ export const V3_STORED_EDITOR_LINES = {
     noSource: "No encuentro el servicio de origen.",
     sameService: "El origen y el destino son el mismo servicio.",
     sourceUnreadable: "El servicio de origen no se puede leer como lo lee el planificador; copia desde /admin.",
-    checkHead: "Para copiarlos, llama copy_instruments con los argumentos de la última línea, tal cual:",
+    checkHead: "Para copiarlos, llama copy_instruments con los argumentos de la línea «Argumentos para copy_instruments», tal cual:",
     args: (json: string) => `${COPY_ARGS_PREFIX} ${json}`,
     needsCard: `Esta copia rompería una regla por lugar, y una copia no se fuerza desde el chat: hazla en /admin («Copiar instrumentos») o cambia antes esos lugares. ${NO_WRITE_THIS_CALL}`,
     notTheChecked: (service: string) =>

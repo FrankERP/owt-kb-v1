@@ -1,7 +1,7 @@
 // app/api/mcp/route.ts
 //
 // The MCP endpoint (P0 plan step 9, spec I6/O2/E1): Streamable HTTP through
-// `mcp-handler`, stateless, tools registered below: `ping`, the seven P1 reads, the three
+// `mcp-handler`, stateless, tools registered in `app/mcp/toolList.ts`: `ping`, the seven P1 reads, the three
 // admin-parity reads (fairness ledger, solver rules, integrity queue),
 // the four P3 writes, the two P4 month tools, the proposal editor and the saved-month editor
 // (`check_service_edits`, its card twin, `save_service_edits`, `copy_instruments`), `create_service`,
@@ -43,27 +43,8 @@ import { jsonNoStore, mcpUnauthorizedResponse } from "@/app/mcp/oauth/responses"
 import { verifyAccessToken } from "@/app/mcp/oauth/tokens";
 import { MCP_SERVER_NAME, mcpServerVersion } from "@/app/mcp/serverInfo";
 import { completeResponse } from "@/app/mcp/transport/completeResponse";
-import { registerGetMemberAvailability } from "@/app/mcp/tools/getMemberAvailability";
-import { registerGetParticipation } from "@/app/mcp/tools/getParticipation";
-import { registerGetFairnessLedger } from "@/app/mcp/tools/getFairnessLedger";
-import { registerGetSolverRules } from "@/app/mcp/tools/getSolverRules";
-import { registerGetIntegrityQueue } from "@/app/mcp/tools/getIntegrityQueue";
-import { registerGetService } from "@/app/mcp/tools/getService";
-import { registerGetSong } from "@/app/mcp/tools/getSong";
-import { registerListProposals } from "@/app/mcp/tools/listProposals";
-import { registerListServices } from "@/app/mcp/tools/listServices";
-import { registerPing } from "@/app/mcp/tools/ping";
-import { registerSearchSongs } from "@/app/mcp/tools/searchSongs";
-import { registerUnpublishService } from "@/app/mcp/tools/unpublishService";
-import { registerPublishService } from "@/app/mcp/tools/publishService";
-import { registerSwapAssignment } from "@/app/mcp/tools/swapAssignment";
-import { registerEditSetlist } from "@/app/mcp/tools/editSetlist";
-import { registerSolveMonth } from "@/app/mcp/tools/solveMonth";
-import { registerApplySchedule } from "@/app/mcp/tools/applySchedule";
-import { registerProposalEditor } from "@/app/mcp/tools/proposalEditor";
-import { registerServiceEditor } from "@/app/mcp/tools/serviceEditor";
-import { registerCreateService } from "@/app/mcp/tools/createService";
-import { registerProposalCard } from "@/app/mcp/apps/proposalCard";
+import { TOOL_LIST_VERSION, registerAllTools } from "@/app/mcp/toolList";
+import { versionToolList } from "@/app/mcp/toolListVersion";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -97,32 +78,8 @@ const SERVER_INFO = { name: MCP_SERVER_NAME, version: mcpServerVersion() };
  */
 const mcpHandler = createMcpHandler(
   (server) => {
-    registerPing(server, { version: SERVER_INFO.version });
-    registerGetService(server);
-    registerListServices(server);
-    registerSearchSongs(server);
-    registerGetSong(server);
-    registerGetMemberAvailability(server);
-    registerGetParticipation(server);
-    registerListProposals(server);
-    registerGetFairnessLedger(server);
-    registerGetSolverRules(server);
-    registerGetIntegrityQueue(server);
-    // The four writes (P3), after the reads. Each calls its admin counterpart's
-    // own `*Commit` module (ADR-0043) and declares itself destructive (I14).
-    registerUnpublishService(server);
-    registerPublishService(server);
-    registerSwapAssignment(server);
-    registerEditSetlist(server);
-    registerSolveMonth(server);
-    registerApplySchedule(server);
-    registerProposalEditor(server);
-    // Admin parity phase 1 (ADR-0066): the saved-month editor (its save and its copy write through
-    // /admin's own writers) and create_service (through the roles POST's).
-    registerServiceEditor(server);
-    registerCreateService(server);
-    // The one resource: `solve_month`'s card (MCP Apps). Fixed per deployment, like the tools.
-    registerProposalCard(server);
+    versionToolList(server, TOOL_LIST_VERSION);
+    registerAllTools(server, { version: SERVER_INFO.version });
   },
   {
     serverInfo: SERVER_INFO,
