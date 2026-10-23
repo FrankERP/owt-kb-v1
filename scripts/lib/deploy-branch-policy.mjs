@@ -13,15 +13,19 @@
 // is the GitHub Actions `gates` job. Vercel contributes no status check, so a
 // feature-branch deployment is read by no human and gates no merge.
 //
-// `git.deploymentEnabled` in `vercel.json` cannot express this: as an object it
-// is a BLACKLIST ("unspecified branches default to true"), and as `false` it
-// disables every branch including production. So the policy lives here and is
-// wired as the Ignored Build Step, which skips the build before install —
-// meaning this module may use Node builtins ONLY, never a dependency.
+// Since 2026-10-23 the SAME list is also written as `git.deploymentEnabled` in
+// `vercel.json` (`"**": false` plus the three refs `true` — minimatch, and a
+// branch matching one `true` rule deploys), so Vercel does not even CREATE a
+// deployment for any other ref. That matters because a canceled deployment
+// still counts against the Hobby plan's 100 deployments per day: on 2026-10-22
+// four threads pushed 44 canceled `claude/*` deployments and the cap stopped
+// `main` and `preview` from building for the rest of the day (ADR-0068).
 //
-// A skipped ref still gets a deployment, as CANCELED with a URL that serves
-// nothing. That ends the storage accumulation, which was the problem; it does
-// not make a feature-branch push free of the per-day deployment quota.
+// This module stays as the belt: the Ignored Build Step runs before install
+// (Node builtins ONLY, never a dependency) and fails open, so a deployment
+// that `deploymentEnabled` lets through for a ref not listed here still builds
+// only when it is production, and a config typo cannot strand a release.
+// `deployBranchPolicy.test.ts` asserts the two lists agree.
 //
 // Three refs deploy, and each is load-bearing:
 //   main                      → production, `owt-backstage.vercel.app`
@@ -42,10 +46,13 @@ export const DEPLOYING_REFS = Object.freeze(["main", "preview", "verify/service-
  *
  * Do NOT read that as a general escape hatch: a plain dashboard redeploy
  * re-runs this step and carries the original deployment's ref, and a deploy
- * hook is bound to a branch, so both are skipped again. The way to build a
- * skipped ref that cannot fail is to change what the branch itself carries —
- * merge into `preview`, or drop `ignoreCommand` and push. `docs/CI.md` weighs
- * the dashboard checkbox against that, where someone mid-incident will find it.
+ * hook is bound to a branch, so both are skipped again — and for a ref that
+ * `git.deploymentEnabled` turns off there is no deployment to redeploy at all.
+ * The way to build a skipped ref that cannot fail is to change what the branch
+ * itself carries — merge into `preview`, or (on that branch only) list it
+ * `true` in `git.deploymentEnabled` AND drop `ignoreCommand`, then push.
+ * `docs/CI.md` weighs the dashboard checkbox against that, where someone
+ * mid-incident will find it.
  *
  * @returns {{ build: boolean, reason: string }}
  */
