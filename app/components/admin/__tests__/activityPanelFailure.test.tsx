@@ -65,6 +65,8 @@ describe("ActivityPanel — a failed load", () => {
     })));
     const { container } = render(<ActivityPanel />);
     await waitFor(() => expect(screen.getByText("Ana")).not.toBeNull());
-    expect(container.querySelector(".sr-only")?.textContent).toBe("Sin actividad");
+    // The summary tiles carry their own `sr-only` «Activos» (bloque 5), so look
+    // for the member row's label among them rather than at the first one.
+    expect(Array.from(container.querySelectorAll(".sr-only")).map((el) => el.textContent)).toContain("Sin actividad");
   });
 });

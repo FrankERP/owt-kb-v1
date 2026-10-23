@@ -135,8 +135,8 @@ describe("Disponibilidad", () => {
     ));
 
     const { container, unmount } = render(<AvailabilityPanel />);
-    await waitFor(() => expect(screen.getByRole("button", { name: "Matriz" })).not.toBeNull());
-    fireEvent.click(screen.getByRole("button", { name: "Matriz" }));
+    await waitFor(() => expect(screen.getByRole("radio", { name: "Matriz" })).not.toBeNull());
+    fireEvent.click(screen.getByRole("radio", { name: "Matriz" }));
 
     const box = container.querySelector(".availability-matrix") as HTMLElement;
     expect(box).not.toBeNull();

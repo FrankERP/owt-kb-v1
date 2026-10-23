@@ -14,6 +14,7 @@ import {
 } from "./plannerCalendar";
 import { horizonTitle } from "./v3Copy";
 import Select from "@/app/components/ui/Select";
+import { WarningIcon } from "@/app/components/ui/icons";
 import { FairnessEngineNote, FairnessSwitch } from "./FairnessSwitch";
 import type { SolverEngine } from "./solverEngine";
 import {
@@ -264,7 +265,7 @@ export default function MonthCalendar({
               // Named for screen readers: the visible cell is a bare number.
               // Deliberately NOT containing the phrase "servicio especial" —
               // that is the composer button's accessible name.
-              aria-label={special ? `${optionLabel(date)} — ${special.name}` : optionLabel(date)}
+              aria-label={`${optionLabel(date)}${special ? ` — ${special.name}` : ""}${existing ? " — ya existe un servicio" : ""}`}
               title={
                 existing
                   ? `Ya existe un servicio (${EXISTING_LABEL[existing._type] ?? existing._type}${
@@ -276,23 +277,27 @@ export default function MonthCalendar({
               className={`${CELL_BASE} ${tone}`}
             >
               <span className="font-display text-sm leading-none">{noon(date).getDate()}</span>
-              {special && (
-                <span className="font-label text-[8px] uppercase tracking-widest leading-tight break-words">
-                  {special.name}
-                </span>
-              )}
-              {existing && (
-                <span
-                  className="font-label text-[8px] uppercase tracking-widest text-warning-strong leading-none"
-                  aria-label={`Ya existe un servicio el ${longDate(date)}`}
-                >
-                  ya existe
-                </span>
-              )}
+              {/* The name used to sit inside the cell at 8 px — unreadable on a
+                  phone. The cell keeps a dot (its tone already says «especial»,
+                  the accessible name carries the words) and the «Servicios
+                  especiales» list below the grid names it (bloque 5). */}
+              {special && <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-info-fg" />}
+              {/* The words are in the cell's accessible name (a button's own
+                  aria-label is what a reader gets, never a span's) and in the
+                  legend under the grid, which a phone can read — `title` only
+                  shows on hover. */}
+              {existing && <WarningIcon size={10} className="text-warning-strong" />}
             </button>
           );
         })}
       </div>
+
+      {existingByDate.size > 0 && (
+        <p className="flex items-center gap-1.5 font-body text-[11px] text-warning-strong">
+          <WarningIcon size={10} />
+          ya existe un servicio ese día
+        </p>
+      )}
 
       <button
         type="button"
