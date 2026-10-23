@@ -682,12 +682,13 @@ the decisions and the rejected alternatives are
 
 ### The proposal card (MCP Apps)
 
-`solve_month` names one resource in its tool `_meta` (`ui.resourceUri` plus the legacy
+`solve_month`, `revise_proposal`, the service editor and the card's app-only twins name one resource in their tool `_meta` (`ui.resourceUri` plus the legacy
 `ui/resourceUri`): `ui://owt/proposal-editor/<digest>`, served as `text/html;profile=mcp-app`.
-The `<digest>` is the first 8 hex characters of a SHA-256 of the built document. The Claude app
-keeps a card's HTML by its URI, so a new build needs a new URI before the host reads it again
-(ADR-0069). The first URI, `ui://owt/proposal-editor`, still serves the same document for a client
-whose tool list predates the change. A host that
+The `<digest>` is the first 8 hex characters of a SHA-256 of the built document. As observed on
+2026-10-23 (not documented by the host), the Claude app keeps a card's HTML by its URI, so a new
+build gets a new URI the host has to read (ADR-0069). Whether this cures the stale card is still
+to be confirmed with Frank after the release. The first URI, `ui://owt/proposal-editor`, and any
+earlier build's URI (through a template, unlisted) still serve the current document. A host that
 supports [MCP Apps](https://github.com/modelcontextprotocol/ext-apps) (claude.ai, the Claude app)
 reads it with `resources/read` — through the same bearer check as every tool — and draws the
 solve's result as a card next to the chat: the months, how long the proposal is kept, each

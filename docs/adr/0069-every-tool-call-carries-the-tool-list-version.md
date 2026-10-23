@@ -75,13 +75,14 @@ again, and the two had drifted apart.
 - **The commit as the version.** Every deployment would look like a change and would nag for
   nothing.
 
-**The card's URI is versioned too** (added 2026-10-23, after the release). The Claude app keeps a
-card's HTML by its resource URI. After #189 shipped, Frank's card still sent the «Guardar» message
+**The card's URI is versioned too** (added 2026-10-23, after the release). As observed, not
+documented by the host, the Claude app keeps a card's HTML by its resource URI. After #189 shipped, Frank's card still sent the «Guardar» message
 of a build two releases old, while the server already served the new one. `PROPOSAL_CARD_URI` is
 now `ui://owt/proposal-editor/<8 hex of the HTML's SHA-256>` (`app/mcp/apps/proposalCard.ts`). A
 new build therefore names a new URI in the tools' `_meta`, which changes the tool list version and
-makes the host read the new document. The first URI still serves the current HTML, for a client
-whose list predates the change.
+makes the host read the new document. The first URI, and any earlier build's URI (an unlisted
+template), still serve the current HTML, so no client ever gets «resource not found». Every card
+rebuild now also triggers the refresh note.
 
 ## Consequences
 

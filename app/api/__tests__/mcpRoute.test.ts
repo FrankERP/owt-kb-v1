@@ -1720,6 +1720,10 @@ describe("/api/mcp — the proposal card resource (MCP Apps, S1)", () => {
     const [content] = legacy.contents as Record<string, unknown>[];
     expect(content).toMatchObject({ uri: LEGACY_PROPOSAL_CARD_URI, mimeType: "text/html;profile=mcp-app" });
     expect(content!.text).toBe(PROPOSAL_CARD_HTML);
+    // An earlier build's URI is not listed but still answers the current card.
+    const older = `${LEGACY_PROPOSAL_CARD_URI}/00000000`;
+    const old = await rpcResult(await POST(mcpRequest(rpc("resources/read", { uri: older }), { token })));
+    expect((old.contents as Record<string, unknown>[])[0]).toMatchObject({ uri: older, text: PROPOSAL_CARD_HTML });
   });
 
   it("the 2026-07-28 era reads it too (Mcp-Name is the resource URI)", async () => {
