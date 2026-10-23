@@ -401,6 +401,22 @@ after each solve and after an apply's confirm (not on its refusals) that deletes
 it but `apply_schedule` and the editor's three tools, and nothing in it is ever returned to the
 model (members cross the wire as tokens, never ids).
 
+## `homeSettings` — Inicio's team photo (ADR-0071)
+
+ONE hand-authored document with the FIXED id `homeSettings` — a singleton pane in
+`sanity/structure.ts` (`S.document().documentId('homeSettings')`), and the global «Create» menu
+does not offer the type (`sanity.config.ts`), so a second document cannot exist to be picked at
+random. Fields: `heroPhoto` (image with hotspot and crop) and `heroAlt` (string).
+`app/(client)/page.tsx` reads `*[_id == "homeSettings"][0]` in its weekend query, through the
+PUBLISHED perspective — the admin has to press Publish, a saved draft shows nothing — and paints the
+photo behind the greeting (`heroPhotoSrc`/`heroPhotoPosition`, `app/utils/homeHero.ts`: JPEG
+≤ 1800 px, the crop as a `rect`, the hotspot as `object-position` inside it). Absent, or without a
+photo, the band is text only — the designed fallback. Not a member-content type (no `published`
+field of its own), not protected (it is meant to be edited), shared with `preview` like everything
+else.
+
+---
+
 ## `solverConfig` — the shared planner rule set (singleton)
 
 One document, always at `_id: "solverConfig"`

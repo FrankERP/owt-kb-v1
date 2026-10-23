@@ -34,7 +34,13 @@ import { normalizeText } from "@/app/utils/normalizeText";
 import { myNameFromSession, mySeats, serviceTone, TONE_RAIL } from "@/app/utils/agenda";
 import { joinNames } from "@/app/utils/homeGreeting";
 
-export default function DayCardDisclosure(props: DayCardProps) {
+/**
+ * `sheet` (ADR-0071): home's «Después» list — a hairline row in the page's own
+ * type (17 px sentence-case title, a plain countdown) with no card chrome and no
+ * tone rail; the parent draws the dividers. Without it, the opaque card with the
+ * day rail, as the calendar still shows it.
+ */
+export default function DayCardDisclosure({ sheet = false, ...props }: DayCardProps & { sheet?: boolean }) {
   const [open, setOpen] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const longPress = useLongPress(() => setActionsOpen(true));
@@ -89,8 +95,8 @@ export default function DayCardDisclosure(props: DayCardProps) {
   return (
     // Opaque, with the card's tone rail (2026-10-20). The row's focus ring is
     // `ring-inset`: this wrapper clips, and an outset ring would vanish.
-    <div className="brand-surface overflow-hidden rounded-[var(--brand-radius-panel)]">
-      <span aria-hidden className={`absolute inset-y-0 left-0 z-[1] w-[3px] ${TONE_RAIL[serviceTone(props)]}`} />
+    <div className={sheet ? "relative" : "brand-surface overflow-hidden rounded-[var(--brand-radius-panel)]"}>
+      {!sheet && <span aria-hidden className={`absolute inset-y-0 left-0 z-[1] w-[3px] ${TONE_RAIL[serviceTone(props)]}`} />}
       {/* A raw <button>, not the house Button: this is a disclosure row (the row is
         the affordance), the same exemption SongRow and LibraryRow carry. */}
     <button
@@ -99,10 +105,10 @@ export default function DayCardDisclosure(props: DayCardProps) {
         aria-expanded={open}
         aria-controls={id}
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60"
+        className={`flex w-full items-center justify-between gap-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60 ${sheet ? "min-h-[4.5rem] py-4" : "px-5 py-4"}`}
       >
         <span className="min-w-0">
-          <span className="block font-display text-lg uppercase text-ink">
+          <span className={sheet ? "block font-body text-[17px] font-semibold text-ink" : "block font-display text-lg uppercase text-ink"}>
             {props.day}
             {shortDate && <span className="text-ink-dim font-normal"> · {shortDate}</span>}
             {/* Same-day sets differ only by the clock, so the collapsed row carries
@@ -123,7 +129,7 @@ export default function DayCardDisclosure(props: DayCardProps) {
             </span>
           )}
         </span>
-        <span className="flex shrink-0 items-center gap-3 font-label text-[11px] uppercase tracking-widest text-ink-dim">
+        <span className={`flex shrink-0 items-center gap-3 ${sheet ? "font-body text-sm text-ink-muted" : "font-label text-[11px] uppercase tracking-widest text-ink-dim"}`}>
           {days !== null && formatCountdown(days).toLowerCase()}
           {/* `currentColor` on purpose: `var()` is not substituted inside an SVG
               presentation attribute, so the stroke inherits the span's colour. */}
@@ -143,10 +149,12 @@ export default function DayCardDisclosure(props: DayCardProps) {
       </button>
       {/* The padding rides on Collapse's inner div: a padded animated element
           floors its own height under border-box and never closes to zero. */}
-      <Collapse open={open} id={id} className="px-2 pb-2">
+      <Collapse open={open} id={id} className={sheet ? "pb-4" : "px-2 pb-2"}>
         {/* `nested`: this wrapper already is the card (ground, hairline, rail), so the
             inner one drops its own chrome — two rails 5 px apart otherwise. */}
-        <DayCard {...props} nested />
+        {/* `sheet` with `sheet`: the open row keeps the hairline typography and draws
+            no card header — this row already names the service. */}
+        <DayCard {...props} nested sheet={sheet} />
       </Collapse>
       <QuickActions
         open={actionsOpen}

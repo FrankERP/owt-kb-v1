@@ -47,6 +47,7 @@ export default function TeamSections({
   viewerTypes,
   openAll = false,
   openAllFrom,
+  sheet = false,
 }: {
   team: TeamInput;
   /** `myNameFromSession`'s lowercased display name; "" seats nobody. */
@@ -71,6 +72,12 @@ export default function TeamSections({
    * grid, so the two cannot drift apart.
    */
   openAllFrom?: "lg";
+  /**
+   * The hero's run sheet (ADR-0071): section labels in the page's own type —
+   * «Voces · 8» at 17 px sentence case, a Voces group as «Lead · 2» in muted
+   * body — instead of the card's tracked small caps. The faces are the same.
+   */
+  sheet?: boolean;
 }) {
   const sections = teamSections(team);
   // Overrides, not the open set itself: the default depends on `myName`, which a
@@ -90,6 +97,7 @@ export default function TeamSections({
           onToggle={(next) => setOverrides((o) => ({ ...o, [s.id]: next }))}
           myName={myName}
           photos={photos}
+          sheet={sheet}
         />
       ))}
     </div>
@@ -100,7 +108,7 @@ export default function TeamSections({
       {folding}
       <div className="hidden divide-y divide-ink/[0.06] lg:block" data-team-open="">
         {sections.map((s) => (
-          <OpenSection key={s.id} section={s} myName={myName} photos={photos} />
+          <OpenSection key={s.id} section={s} myName={myName} photos={photos} sheet={sheet} />
         ))}
       </div>
     </>
@@ -108,24 +116,27 @@ export default function TeamSections({
 }
 
 /** A section with no disclosure: its label line, then its faces — the run sheet's rail from `lg`. */
-function OpenSection({ section, myName, photos }: { section: TeamSection; myName: string; photos?: Record<string, string> }) {
+function OpenSection({ section, myName, photos, sheet = false }: { section: TeamSection; myName: string; photos?: Record<string, string>; sheet?: boolean }) {
   const dups = findDuplicates(section.people.map((p) => p.name));
   const people = section.people.filter((p) => p.name);
   return (
-    <div className="py-3">
-      <p className="mb-2 font-label text-xs uppercase tracking-widest text-mono-400">
+    <div className={sheet ? "py-4" : "py-3"}>
+      <p className={sheet ? `mb-3 ${SHEET_LABEL}` : "mb-2 font-label text-xs uppercase tracking-widest text-mono-400"}>
         <SectionLabel section={section} count={people.length} dups={dups} />
       </p>
-      <SectionBody section={section} people={people} myName={myName} photos={photos} dups={dups} />
+      <SectionBody section={section} people={people} myName={myName} photos={photos} dups={dups} sheet={sheet} />
     </div>
   );
 }
+
+/** The sheet's section label (ADR-0071): the page's 17 px semibold, no small caps. */
+const SHEET_LABEL = "font-body text-[17px] font-semibold text-ink";
 
 /** «Voces · 8», plus the ⚠ count when someone is seated twice in the section. */
 function SectionLabel({ section, count, dups }: { section: TeamSection; count: number; dups: Set<string> }) {
   return (
     <>
-      {section.label} <span className="text-ink-dim">· {count}</span>
+      {section.label} <span className="font-normal text-ink-dim">· {count}</span>
       {dups.size > 0 && (
         <span className="text-warning-strong"> · <WarningIcon size={11} className="inline-block align-[-1px]" /> {dups.size === 1 ? "repetido" : `${dups.size} repetidos`}</span>
       )}
@@ -134,18 +145,19 @@ function SectionLabel({ section, count, dups }: { section: TeamSection; count: n
 }
 
 /** The faces: Voces as its three seat panels, any other section as one row of faces. */
-function SectionBody({ section, people, myName, photos, dups }: {
+function SectionBody({ section, people, myName, photos, dups, sheet = false }: {
   section: TeamSection;
   people: TeamPerson[];
   myName: string;
   photos?: Record<string, string>;
   dups: Set<string>;
+  sheet?: boolean;
 }) {
   return section.id === "voces" ? (
     <div className="space-y-2">
       {roleGroups(people).map((g) => (
         <div key={g.role} className="rounded-xl bg-ink/[0.04] px-3 pb-3 pt-2">
-          <p className="mb-2 font-label text-[10px] uppercase tracking-widest text-ink-dim">
+          <p className={sheet ? "mb-2 font-body text-sm text-ink-muted" : "mb-2 font-label text-[10px] uppercase tracking-widest text-ink-dim"}>
             {g.role} · {g.people.length}
           </p>
           <Faces people={g.people} myName={myName} photos={photos} dups={dups} grouped />
@@ -157,12 +169,13 @@ function SectionBody({ section, people, myName, photos, dups }: {
   );
 }
 
-function Section({ section, open, onToggle, myName, photos }: {
+function Section({ section, open, onToggle, myName, photos, sheet = false }: {
   section: TeamSection;
   open: boolean;
   onToggle: (open: boolean) => void;
   myName: string;
   photos?: Record<string, string>;
+  sheet?: boolean;
 }) {
   const id = useId();
   // The same person seated twice in ONE section is the card's conflict mark (⚠);
@@ -177,10 +190,10 @@ function Section({ section, open, onToggle, myName, photos }: {
         aria-expanded={open}
         aria-controls={id}
         onClick={() => onToggle(!open)}
-        className="flex w-full items-center gap-3 rounded-lg py-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60"
+        className={`flex w-full items-center gap-3 rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60 ${sheet ? "py-4" : "py-3"}`}
       >
         <span className="min-w-0 flex-1">
-          <span className="block font-label text-xs uppercase tracking-widest text-mono-400">
+          <span className={sheet ? `block ${SHEET_LABEL}` : "block font-label text-xs uppercase tracking-widest text-mono-400"}>
             <SectionLabel section={section} count={people.length} dups={dups} />
           </span>
           {!open && (
@@ -201,7 +214,7 @@ function Section({ section, open, onToggle, myName, photos }: {
       {/* The padding rides on Collapse's inner div — a padded animated element
           never closes to zero (see Collapse). */}
       <Collapse open={open} id={id} className="pb-4 pt-1">
-        <SectionBody section={section} people={people} myName={myName} photos={photos} dups={dups} />
+        <SectionBody section={section} people={people} myName={myName} photos={photos} dups={dups} sheet={sheet} />
       </Collapse>
     </div>
   );

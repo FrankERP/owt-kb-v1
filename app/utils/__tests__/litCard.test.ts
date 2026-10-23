@@ -20,7 +20,7 @@
 // per-pixel delta against the same tree with the animation suppressed. Re-run it
 // when this rule changes; a green suite is not a substitute.
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -94,32 +94,27 @@ describe("brand.css — .brand-lit-card", () => {
   });
 });
 
-describe("app/(client)/page.tsx — data-lit", () => {
-  const src = read("app/(client)/page.tsx");
-  // The prose above the wrapper names the attribute and the selector, and a
-  // multi-line `{/* … */}` block is not recognisable line by line. So strip the
-  // comments wholesale and count what is left: only JSX can SET the attribute,
-  // and a raw count would read a doc edit as a second lit card (or miss one).
-  const jsx = src
-    .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/^\s*\/\/.*$/gm, "");
-
-  it("the stripper works — the surrounding prose does mention data-lit", () => {
-    // Fire-proof for the counter below: if this ever stops being true the
-    // stripper has become a no-op and the count is measuring the wrong thing.
-    expect(src).toMatch(/\{\/\*[\s\S]*?data-lit[\s\S]*?\*\/\}/);
-    expect(jsx).not.toMatch(/brand-lit-card\[data-lit\]/);
-  });
-
-  it("data-lit is set on exactly one element — the hero card", () => {
-    const attr = jsx.match(/\bdata-lit\b/g) ?? [];
-    expect(attr.length).toBe(1);
-  });
-
-  it("data-lit sits on the brand-lit-card wrapper, which carries the elevation the clip eats", () => {
-    // Neutral since 2026-10-20 (the «premium» audit): an accent glow under the hero
-    // was one more colour on the most-seen card.
-    expect(src).toMatch(/className="brand-lit-card shadow-md shadow-elevation\/10"\s+data-lit\b/);
+// ADR-0071 (2026-10-23): the hero is a run SHEET on the page, with no frame — and
+// a border pass needs a border. The rules above stay in `brand.css` (removing
+// `--lit-beam` would move the pinned composed-token count for nothing) and the
+// CSS half of this guard keeps them honest for the day a framed surface adopts
+// the pass again. Until then NOTHING sets `data-lit`: a count of 1 here would
+// mean someone re-framed the hero without rereading the ADR.
+describe("app/** — data-lit has no site since ADR-0071", () => {
+  it("no component sets data-lit", () => {
+    const walk = (dir: string): string[] =>
+      readdirSync(path.join(REPO_ROOT, dir), { withFileTypes: true }).flatMap((e) => {
+        const rel = path.join(dir, e.name);
+        if (rel.includes("__tests__")) return [];
+        return e.isDirectory() ? walk(rel) : rel.endsWith(".tsx") ? [rel] : [];
+      });
+    const sites = walk("app").filter((rel) => {
+      const jsx = read(rel)
+        .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/^\s*\/\/.*$/gm, "");
+      return /\bdata-lit\b/.test(jsx);
+    });
+    expect(sites).toEqual([]);
   });
 });

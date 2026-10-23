@@ -12,6 +12,7 @@
 import { mySeats } from "./agenda";
 import { daysUntil } from "./daysUntil";
 import { compareServiceTime } from "./serviceTime";
+import { serviceStartTime } from "./calendarFeed";
 
 export type GreetingService = {
   day: string;
@@ -87,6 +88,10 @@ export function homeGreeting(
     // A special names itself; «el sábado» already says Sábado.
     ...(weekend ? [] : [mine.time ? `${mine.day} · ${mine.time}` : mine.day]),
     seats.join(" · "),
+    // A weekend's clock is the team's standing hour (the feed's rule). Since the
+    // Inicio type pass (ADR-0071) the hero card has no countdown pill of its own,
+    // so this line is where the hour lives: «Eléctrica · 11:00 · en 2 días».
+    ...(weekend ? [serviceStartTime("weekend", mine.day, null)!] : []),
     // «hoy»/«mañana» are already the heading's own word.
     ...(days >= 2 ? [`en ${days} días`] : []),
     ...(songs ? [`${songs} ${songs === 1 ? "canción" : "canciones"}`] : []),
