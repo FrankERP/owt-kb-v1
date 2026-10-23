@@ -17,6 +17,11 @@ import { useToast } from "../ui/Toast";
 import { writeErrorMessage } from "@/app/utils/writeError";
 import { normalizeText } from "@/app/utils/normalizeText";
 
+/** Tags a phone shows on a song row before folding the rest into «+N». */
+const PHONE_TAGS = 2;
+const TAG_CHIP =
+  "font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-accent/10 text-mono-400 border border-accent/15";
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Song {
@@ -266,11 +271,20 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
                   {song.author && (
                     <span className="font-body text-xs text-mono-500 truncate">{song.author}</span>
                   )}
-                  {(song.tags ?? []).map((tag) => (
-                    <span key={tag._id} className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-accent/10 text-mono-400 border border-accent/15">
+                  {/* A phone shows the first two tags and «+N»; from `sm` all of
+                      them. Pure CSS (the extra chips fold to `sr-only`, so a
+                      reader still hears every tag), 147 rows cost no state and
+                      the desktop list is unchanged. */}
+                  {(song.tags ?? []).map((tag, i) => (
+                    <span key={tag._id} className={`${TAG_CHIP} ${i >= PHONE_TAGS ? "sr-only sm:not-sr-only" : ""}`}>
                       #{tag.name}
                     </span>
                   ))}
+                  {(song.tags?.length ?? 0) > PHONE_TAGS && (
+                    <span className={`${TAG_CHIP} sm:hidden`} aria-hidden="true">
+                      +{(song.tags?.length ?? 0) - PHONE_TAGS}
+                    </span>
+                  )}
                 </div>
               </div>
 

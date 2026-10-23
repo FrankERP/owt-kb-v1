@@ -142,6 +142,7 @@ vi.mock("@/app/mcp/tools/ping", async () => {
 });
 
 import { POST } from "@/app/api/mcp/route";
+import { TOOL_LIST_VERSION } from "@/app/mcp/toolList";
 import { __clearGrantCache, createGrant } from "@/app/mcp/oauth/grantStore";
 import { PREVIEW_ORIGIN } from "@/app/mcp/oauth/origin";
 import { signAccessToken } from "@/app/mcp/oauth/tokens";
@@ -177,7 +178,7 @@ function legacyToolCall(token: string, signal?: AbortSignal): Request {
       "mcp-protocol-version": LEGACY_PROTOCOL,
       authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "ping", arguments: {} } }),
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "ping", arguments: { toolsVersion: TOOL_LIST_VERSION } } }),
   });
 }
 
@@ -199,7 +200,7 @@ function modernToolCall(token: string, signal?: AbortSignal): Request {
       jsonrpc: "2.0",
       id: 1,
       method: "tools/call",
-      params: { name: "ping", arguments: {}, _meta: MODERN_META },
+      params: { name: "ping", arguments: { toolsVersion: TOOL_LIST_VERSION }, _meta: MODERN_META },
     }),
   });
 }

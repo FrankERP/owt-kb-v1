@@ -22,6 +22,7 @@ import { orderedMessages, isThreadOpen } from "@/app/utils/proposalThread";
 import { PROPOSAL_NOTES_MAX } from "@/app/utils/proposalNotesLimit";
 import { useTransientValue } from "@/app/utils/useTransientValue";
 import Checkbox from "@/app/components/ui/Checkbox";
+import Button from "@/app/components/ui/Button";
 
 export interface ThreadMessage {
   _key?: string;
@@ -217,16 +218,13 @@ export default function ProposalThread({
               <span className="font-body text-sm text-mono-300">Es el mensaje del pastor</span>
             </Checkbox>
           )}
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={post}
-              disabled={posting || !draft.trim()}
-              className="rounded-lg border border-edge-control px-3 py-1.5 font-label text-xs uppercase tracking-widest text-mono-300 transition-colors hover:border-accent disabled:opacity-50"
-            >
-              {posting ? "Enviando…" : "Enviar"}
-            </button>
+          {/* The one action of the composer is the primary, at the end of the
+              line where a form's submit sits (bloque 5); the error reads before it. */}
+          <div className="flex items-center justify-end gap-3">
             {error && <span className="font-body text-xs text-negative-muted">{error}</span>}
+            <Button variant="primary" size="sm" onClick={post} disabled={!draft.trim()} busy={posting} busyLabel="Enviando…">
+              Enviar
+            </Button>
           </div>
         </div>
       ) : (
