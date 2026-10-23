@@ -1,4 +1,4 @@
-# ADR-0070: Every tool call carries the tool list's version, and a stale one hears about it
+# ADR-0069: Every tool call carries the tool list's version, and a stale one hears about it
 
 **Date:** 2026-10-23 · **Status:** Accepted
 

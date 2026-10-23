@@ -86,7 +86,7 @@ disagree, `CLAUDE.md` wins and this file is the one to fix.
   set up as network secrets, the canonical copy of the adversarial-plan-review skill and the
   agent definitions under `~/.claude/agents/`. Google-side secret rotations go through Google
   Cloud Shell in the browser, not a laptop. **The production solver is verified and re-deployed
-  from GitHub Actions** (`.github/workflows/solver-v3-ops.yml`, keyless, ADR-0069): `verify` runs
+  from GitHub Actions** (`.github/workflows/solver-v3-ops.yml`, keyless, ADR-0070): `verify` runs
   by itself after every `gcf_v3/**` merge; a session dispatches `verify` (or, after Frank says
   yes in the thread, `deploy`) with the GitHub connector's `actions_run_trigger` and reads the
   result with `get_job_logs`. If the session's token cannot dispatch, Frank runs it from
@@ -434,7 +434,7 @@ several exist precisely to stop a plausible-looking change.
   SDK's refusal of a stale call's arguments. A tool registered outside `registerAllTools`
   would stay out of the digest. Keep `toolsVersion` optional: making it required would turn the
   note into a refused call. Put guidance that depends on an answer (repeat, check again) in the
-  answer, which is never stale, not in the description. ADR-0070; tests in `mcpRoute.test.ts`
+  answer, which is never stale, not in the description. ADR-0069; tests in `mcpRoute.test.ts`
   («the tool list's version»).
 - **The eight admin write paths (setlists PUT, roles create, roles PATCH, copy-instruments, swap,
   publish-ready, unpublish, the fairness PUT) delegate everything after authorization to `app/utils/*Commit.ts`;

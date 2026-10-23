@@ -1,4 +1,4 @@
-// The tool list's own version, so a client with a stale copy hears about it (ADR-0070).
+// The tool list's own version, so a client with a stale copy hears about it (ADR-0069).
 //
 // claude.ai reads `tools/list` when the connector connects and keeps that copy: names, descriptions
 // and input schemas. It does not act on `notifications/tools/list_changed` (and this stateless server
