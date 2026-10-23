@@ -3,7 +3,7 @@
 // tracks keeps the position, preselection only highlights, and no URL on the
 // page is a cdn.sanity.io URL.
 import { StrictMode } from "react";
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { RehearsalMix } from "@/app/utils/interface";
 import RehearsalPlayer from "../RehearsalPlayer";
@@ -75,9 +75,41 @@ describe("RehearsalPlayer", () => {
     expect(loaded.queryByRole("button", { name: "Onda Bass" })).toBeNull();
   });
 
+  it("the loaded row reads the clock and takes a seek bar when its mix has no envelope", () => {
+    // The members' before/after card (2026-10-21) showed the playing row with a
+    // filled control, «E · 55 BPM · 1:42 / 4:36» and a cyan bar. The full-band
+    // mix carries no peaks, so its bar is the plain SeekBar in the waveform's
+    // slot — same seek, same keys — and the clock comes from the <audio>.
+    audio.currentTime = 102; audio.duration = 276;
+    player = { track: { url: "/api/audio/post-1/full" }, isPlaying: true };
+    const { getByRole, queryByRole, getByText, rerender } = render(<RehearsalPlayer {...props} />);
+    // The clock arrives on timeupdate; fire the listener the player registered.
+    const tick = audio.addEventListener.mock.calls.find(([ev]) => ev === "timeupdate")?.[1] as () => void;
+    act(() => tick());
+    rerender(<RehearsalPlayer {...props} />);
+    expect(getByText(/1:42 \/ 4:36/)).toBeTruthy();
+    const bar = getByRole("button", { name: "Posición Banda completa" });
+    expect(queryByRole("button", { name: /^Onda/ })).toBeNull();
+    // The indent is the wrapper's: padding inside the control would skew the
+    // click-to-fraction maths, which reads the control's own box.
+    expect(bar.className).not.toMatch(/\bp[lx]?-\d/);
+    expect((bar.parentElement as HTMLElement).className).toContain("pl-14");
+    fireEvent.keyDown(bar, { key: "ArrowRight" });
+    expect(seek).toHaveBeenCalledWith(0.42);
+    // The loaded row's control is the filled (cta) pause, and it pauses.
+    const pause = getByRole("button", { name: "Pausar Banda completa" });
+    expect(pause.className).toContain("bg-accent");
+    expect(getByRole("button", { name: "Reproducir EG 1" }).className).not.toContain("bg-accent");
+    // An idle row shows no clock.
+    expect(getByRole("listitem", { name: "EG 1" }).textContent).not.toMatch(/\d:\d\d \//);
+  });
+
   it("E — the play control and the download keep a 44px hit box on a compact row", () => {
     const { getByRole } = render(<RehearsalPlayer {...props} />);
-    expect(getByRole("button", { name: "Reproducir EG 1" }).className).toContain("min-h-[44px]");
+    // The round playback control is a fixed 44 px circle (`round`, h-11 w-11).
+    const play = getByRole("button", { name: "Reproducir EG 1" }).className;
+    expect(play).toContain("h-11");
+    expect(play).toContain("w-11");
     expect(getByRole("link", { name: "Descargar EG 1" }).className).toContain("min-h-[44px]");
   });
 

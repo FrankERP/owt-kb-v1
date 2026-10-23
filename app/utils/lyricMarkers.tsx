@@ -15,18 +15,22 @@
 
 import { Children, isValidElement, type ReactNode } from "react";
 
-export const LYRIC_EYEBROW = "font-label text-[11px] uppercase tracking-[0.24em] text-accent/80";
+// 12 px Jura, tracked, MUTED — the same small caps the run sheet's section
+// titles wear (`SHEET_TITLE`, ADR-0070): on the song page the eyebrows mark the
+// blocks of a lyric, which is the one job small caps keep.
+export const LYRIC_EYEBROW = "font-label text-xs font-semibold uppercase tracking-[0.22em] text-ink-muted";
 
 /**
- * The eyebrow as it appears INSIDE the lyric `prose` wrapper — the token plus its
- * own vertical rhythm.
+ * The eyebrow as it appears INSIDE the lyric wrapper — the token plus its own
+ * vertical rhythm.
  *
- * The element that carries this must be a bare `div`, never a `p`: the wrapper
- * sets `prose-p:!mt-0 prose-p:!mb-0`, which is the same specificity and equally
- * `!important`, and Tailwind emits variant utilities AFTER plain ones — so a `p`
- * loses the source-order tie and every section name ships with zero margin.
- * `prose` styles no bare `div`, so there is no tie to lose. Do not try to
- * out-specify `prose-p:`; use the right element.
+ * The element that carries this is a bare `div`. Until ADR-0070's Canción pass
+ * the wrapper was `prose` with `prose-p:!mt-0 prose-p:!mb-0`, and a `p` lost the
+ * source-order tie to it and shipped with zero margin; the wrapper is plain 17 px
+ * body now, but the `div` still matters: the wrapper's first-child clause (below)
+ * selects `div > div`, and the page and gallery fixture keep that shape. The
+ * margins stay `!important` so they and that clause's `!mt-0` are both important
+ * and the clause wins on specificity alone, never on Tailwind's emission order.
  *
  * NO `first:` HERE, deliberately. `first:!mt-0` compiles to `:first-child`, and
  * `groupBySections` starts EVERY group with its heading inside its own wrapper

@@ -39,12 +39,15 @@ describe("KeyDial", () => {
       </MotionProvider>,
     );
 
-    const dial = container.querySelector(".brand-key-dial") as HTMLButtonElement;
+    // The hero key wears the 48 px ring (ADR-0070), not the sheet's `.brand-key-dial`
+    // badge — so the dial is found by what it IS, a button named after its key.
+    const dial = getByRole("button", { name: /Tonalidad G/ });
     expect(dial.textContent).toContain("G");
-    expect(getByRole("button", { name: /Tonalidad G/ }).getAttribute("aria-expanded")).toBe("false");
+    expect(dial.getAttribute("aria-expanded")).toBe("false");
 
     fireEvent.click(getByText("dos"));
-    expect((container.querySelector(".brand-key-dial") as HTMLElement).textContent).toContain("A");
+    expect(getByRole("button", { name: /Tonalidad A/ }).textContent).toContain("A");
+    expect(container.querySelector(".brand-key-dial")).toBeNull();
   });
 
   it("points at the drawer it opens", () => {
@@ -63,7 +66,7 @@ describe("KeyDial", () => {
 
 describe("SongHeroPills", () => {
   it("leaves the key a static badge when the song carries no ChordPro chart", () => {
-    const { container, queryByRole } = render(
+    const { getByText, queryByRole } = render(
       <MotionProvider>
         <TransposeProvider nativeKey="G">
           <SongHeroPills keyLabel="G" bpm={null} timeSig="4/4" transposable={false} />
@@ -72,9 +75,12 @@ describe("SongHeroPills", () => {
     );
 
     expect(queryByRole("radiogroup")).toBeNull();
-    const badge = container.querySelector(".brand-key-dial") as HTMLElement;
+    expect(queryByRole("button", { name: /Tonalidad/ })).toBeNull();
+    const badge = getByText("G");
     expect(badge.tagName).toBe("SPAN");
-    expect(badge.textContent?.trim()).toBe("G");
+    // Same ring the dial wears — a static key is not a different-looking key.
+    expect(badge.className).toContain("min-h-[48px]");
+    expect(badge.className).toContain("font-display");
   });
 
   it("opens the drawer from the dial and transposes the shared seat", () => {

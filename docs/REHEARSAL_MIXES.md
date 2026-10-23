@@ -36,6 +36,13 @@ instrument «al frente» when they serve on one that day — each in the set's k
 rendered one. A song with no mixes is skipped with a toast naming it; the YouTube playlist stays
 below a separator in the same menu (lyrics video for the voices).
 
+The player's rows are hairlines and the row loaded in the player is the one that differs
+(ADR-0070's Canción pass, 2026-10-23): a filled play/pause, «Tono · BPM · 1:42 / 4:36» from
+the `<audio>`, and a seek control under the name — the waveform for an isolated instrument,
+played bars in the accent, or a plain seek bar for the **full band, which has no envelope**:
+abletonnl's manifest carries `peaks` for the `up` files only. Rendering a full-mix envelope
+would be ingest work (a new `peaks` on the `full` item, every batch re-run), not a UI change.
+
 Re-running is safe: keys are `sha1(set.sha1 + file name)`, an asset whose sha1 already
 matches is reused, items from another render of the same song (a second key) are kept.
 A **transposed** render of the same set (`manifest.transpose.semitones ≠ 0`) is another

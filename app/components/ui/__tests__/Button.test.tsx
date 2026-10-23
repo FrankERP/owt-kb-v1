@@ -33,6 +33,21 @@ describe("Button", () => {
     expect(buttonClass("secondary", "md")).not.toContain("brand-btn-sheen");
   });
 
+  it("round / roundCta are a fixed 44 px circle that takes no size padding", () => {
+    for (const v of ["round", "roundCta"] as const) {
+      for (const size of ["sm", "md", "lg"] as const) {
+        const cls = buttonClass(v, size);
+        expect(cls).toContain("rounded-full");
+        expect(cls).toContain("h-11 w-11");
+        expect(cls).toContain("p-0");
+        expect(cls).not.toMatch(/\bpx-\d/);
+      }
+    }
+    expect(buttonClass("roundCta", "lg")).toContain("bg-accent");
+    expect(buttonClass("round", "lg")).toContain("border-ink/[0.28]");
+    expect(buttonClass("round", "lg")).not.toContain("bg-accent");
+  });
+
   it("size lg is the 44 px touch target", () => {
     render(<Button size="lg">Publicar</Button>);
     expect(screen.getByRole("button").className).toContain("min-h-[44px]");
