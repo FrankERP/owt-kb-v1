@@ -31,4 +31,6 @@ export const DELIVERY_CAPABLE_IMPORTS: readonly string[] = [
   // Admin parity phase 1 (T2.1): the edit and copy writers, extracted from their routes.
   "roleEditCommit",
   "copyInstrumentsCommit",
+  // Admin parity phase 2 (T1): the delete writer, extracted from its route.
+  "roleDeleteCommit",
 ];

@@ -17,6 +17,7 @@ import { randomUUID } from "node:crypto";
 import { operationalClient, rawIntegrityClient } from "@/sanity/lib/operationalClient";
 import { writeClient } from "@/sanity/lib/serverClient";
 import {
+  adminRolesQuery,
   canonicalMembersByIdsQuery,
   canonicalRoleByIdQuery,
   canonicalRolesByIdsQuery,
@@ -24,6 +25,7 @@ import {
   canonicalSpecialRolesForDateQuery,
   canonicalWeekendRolesForTargetQuery,
   documentsReferencingRoleQuery,
+  fairnessMembersByIdsQuery,
   proposalsForRoleOrDatesQuery,
   rawProposalDraftsForRoleOrDatesQuery,
   rawRoleDraftForBaseQuery,
@@ -124,6 +126,21 @@ async function runRaw<T>(bound: { query: string; params: Record<string, unknown>
   return Array.isArray(rows) ? rows : [];
 }
 
+// The STRICT twins of `run`/`runRaw`, on the same clients: a non-array answer THROWS instead of
+// reading as `[]`. The MCP delete (admin parity phase 2) needs them: an empty answer there would
+// make every service it was asked to delete look already gone («ya no existe»).
+async function runStrict<T>(bound: { query: string; params: Record<string, unknown> }): Promise<T[]> {
+  const rows: unknown = await operationalClient.fetch<T[]>(bound.query, bound.params);
+  if (!Array.isArray(rows)) throw new Error("role read: not an array");
+  return rows as T[];
+}
+
+async function runRawStrict<T>(bound: { query: string; params: Record<string, unknown> }): Promise<T[]> {
+  const rows: unknown = await rawIntegrityClient.fetch<T[]>(bound.query, bound.params);
+  if (!Array.isArray(rows)) throw new Error("raw role read: not an array");
+  return rows as T[];
+}
+
 // ── Role identity ───────────────────────────────────────────────────────────
 
 export interface CanonicalRoleLookup {
@@ -159,6 +176,48 @@ export async function loadRawRoleDraftIdsForBaseIds(ids: string[]): Promise<stri
   if (!ids.length) return [];
   const rows = await runRaw<{ _id: string }>(rawRoleDraftsForBaseIdsQuery(ids));
   return rows.map((r) => r._id);
+}
+
+/**
+ * The MCP delete's ONE read of the services it names (admin parity phase 2, D2): the canonical
+ * roles by id — the shape `loadRoleForWrite` reads, raw `_ref`s — plus the raw `drafts.` overlay ids
+ * on any of them. Both strict: a malformed answer throws, never «no service».
+ */
+export async function loadRolesForDelete(ids: string[]): Promise<{ roles: StoredRole[]; overlayIds: string[] }> {
+  if (!ids.length) return { roles: [], overlayIds: [] };
+  const [roles, overlays] = await Promise.all([
+    runStrict<StoredRole>(canonicalRolesByIdsQuery(ids)),
+    runRawStrict<{ _id: string }>(rawRoleDraftsForBaseIdsQuery(ids)),
+  ]);
+  return { roles, overlayIds: overlays.map((r) => r._id) };
+}
+
+/**
+ * Display names (alias, else `member_name`) of the given members, strict. The MCP delete reads them
+ * BEFORE any delete, so an answer can name who a failed notice did not reach once the role is gone.
+ */
+export async function loadMemberNamesByIds(ids: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (!ids.length) return out;
+  const rows = await runStrict<{ _id?: unknown; member_name?: unknown; alias?: unknown }>(fairnessMembersByIdsQuery(ids));
+  for (const r of rows) {
+    if (typeof r._id !== "string") continue;
+    const alias = typeof r.alias === "string" ? r.alias.trim() : "";
+    const name = alias || (typeof r.member_name === "string" ? r.member_name.trim() : "");
+    if (name) out.set(r._id, name);
+  }
+  return out;
+}
+
+/**
+ * The ids of a month's services as `/admin` lists them (`adminRolesQuery`, `date` = week or date),
+ * strict. It only CHOOSES the candidates of a delete check; no line is ever rendered from it.
+ */
+export async function loadAdminRoleIdsForMonth(month: string): Promise<string[]> {
+  const rows = await runStrict<{ _id?: unknown; date?: unknown }>(adminRolesQuery());
+  return rows
+    .filter((r) => typeof r._id === "string" && typeof r.date === "string" && r.date.slice(0, 7) === month)
+    .map((r) => r._id as string);
 }
 
 // ── Coordination documents ──────────────────────────────────────────────────
