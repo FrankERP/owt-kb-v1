@@ -34,6 +34,10 @@ import { countLyricLines } from "@/app/utils/practice";
 import { requireWorshipPage } from "@/app/utils/worshipPageGate";
 import { revealProps } from "@/app/utils/reveal";
 import { formatKey } from "@/app/utils/formatKey";
+import { splitSongTitle } from "@/app/utils/songTitle";
+import { SHEET_TITLE } from "@/app/utils/homeHero";
+import { ExternalLinkIcon } from "@/app/components/ui/icons";
+import { Fragment } from "react";
 
 interface Params {
   params: Promise<{ slug: string }>;
@@ -143,16 +147,30 @@ export async function generateStaticParams() {
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
+// Every section's title is the run sheet's small caps (`SHEET_TITLE`, ADR-0070):
+// the song's title is the one big line on the page, so a section needs no
+// display-size heading or rail of its own. `action` sits on the title's line.
 function SectionHeader({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
-    <div className="brand-section-heading mb-8 flex items-end justify-between gap-4 border-b border-ink-dim/10 pb-4">
-      <h2 className="font-display text-2xl font-semibold text-ink md:text-3xl">
-        {children}
-      </h2>
+    <div className="mb-4 flex min-h-[1.75rem] items-center justify-between gap-4">
+      <h2 className={SHEET_TITLE}>{children}</h2>
       {action}
     </div>
   );
 }
+
+// The sticky bar parks a section below itself: the same inset on every section.
+const SECTION_SCROLL =
+  "scroll-mt-[calc(8rem+env(safe-area-inset-top)+var(--impersonation-offset))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top)+var(--impersonation-offset))]";
+// From `lg` the lyric sits LEFT beside everything else (play a mix, read without
+// scrolling); the DOM keeps the nav's order and the grid places it.
+const SIDE = `${SECTION_SCROLL} mb-14 lg:col-start-2`;
+// No lyric, no left column: the sections stack in one readable column instead of
+// sitting in the right half beside an empty 34rem (~15 songs have no lyrics).
+const STACKED = `${SECTION_SCROLL} mb-14`;
+const LYRIC = `${SECTION_SCROLL} mb-14 lg:col-start-1 lg:row-start-1 lg:row-span-6`;
+
+const HISTORY_DATE = new Intl.DateTimeFormat("es-ES", { year: "numeric", month: "long", day: "numeric" });
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -162,6 +180,10 @@ const Page = async ({ params }: Params) => {
   const post: Post = await getPost(slug);
 
   if (!post) notFound();
+
+  // «Cordero y León (Lion and The Lamb)»: the Spanish name is the title, the
+  // original joins the authors' line (ADR-0070).
+  const title = splitSongTitle(post.title);
 
   const history = await getSongHistory(post._id);
 
@@ -202,6 +224,7 @@ const Page = async ({ params }: Params) => {
   const bpmText         = post?.bpm && bpm === null ? String(post.bpm) : null;
   const hasTutorials    = shows("tutoriales");
   const hasLyrics       = shows("letra");
+  const side            = hasLyrics ? SIDE : STACKED;
   // How long the autoscroll should take: every chart's lines when there are
   // charts (the section renders them all), otherwise one PortableText BLOCK per line — an approximation (a long
   // paragraph wraps to several), accepted because the speed is clamped to a
@@ -236,55 +259,56 @@ const Page = async ({ params }: Params) => {
           above the chart can never disagree with the chart. */}
       <TransposeProvider nativeKey={heroKey}>
 
-      {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <div id="song-hero" className="brand-song-hero">
-        {/* Edit control — inline, top-right (self-gates to editors); avoids a floating FAB over the lyrics */}
-        <div className="absolute top-4 right-4 z-10">
+      {/* ── Hero: a title on the plain page, as Inicio's greeting (ADR-0070) —
+          no painted band, no centred stack; the edit control keeps its corner. */}
+      <div id="song-hero" className="relative">
+        <div className="absolute right-4 top-4 z-10 md:right-6 md:top-6">
           <EditSongButton post={post} inline />
         </div>
-        <div className="relative mx-auto flex max-w-7xl flex-col items-center px-6 pb-14 pt-12 text-center sm:pb-16 sm:pt-16">
-
-          <h1 {...revealProps(0)} className="max-w-4xl text-balance break-words font-display text-3xl font-semibold leading-[0.98] text-ink sm:text-5xl lg:text-6xl">
-            {post?.title}
+        <div className="mx-auto flex max-w-7xl flex-col px-6 pb-10 pt-8 md:pb-12 md:pt-12">
+          <h1 {...revealProps(0)} className="max-w-4xl text-balance break-words pr-14 font-display text-[2.875rem] font-semibold leading-[0.98] tracking-tight text-ink md:pr-0 md:text-[4.75rem]">
+            {title.main}
           </h1>
 
-          {post?.authors && post.authors.length > 0 ? (
-            <div {...revealProps(1)} className="mb-9 mt-4 flex flex-wrap justify-center gap-x-2 gap-y-1">
-              {post.authors.map((a, i) => (
-                <span key={a._id} className="font-body text-lg text-ink-muted/70">
-                  <Link href={`/biblioteca?author=${encodeURIComponent(a.slug.current)}`} className="hover:text-accent transition-colors">
-                    {a.name}
-                  </Link>
-                  {i < post.authors!.length - 1 && <span className="text-ink-muted/30">,</span>}
-                </span>
-              ))}
-            </div>
-          ) : post?.author ? (
-            <p {...revealProps(1)} className="mb-9 mt-4 font-body text-lg text-ink-dim">{post.author}</p>
-          ) : null}
+          {(title.original || (post?.authors && post.authors.length > 0) || post?.author) && (
+            <p {...revealProps(1)} className="mt-4 font-body text-[17px] leading-snug text-ink-muted md:text-xl">
+              {title.original}
+              {title.original && ((post?.authors && post.authors.length > 0) || post?.author) ? " · " : ""}
+              {post?.authors && post.authors.length > 0
+                ? post.authors.map((a, i) => (
+                    <Fragment key={a._id}>
+                      {i > 0 && ", "}
+                      <Link href={`/biblioteca?author=${encodeURIComponent(a.slug.current)}`} className="transition-colors hover:text-accent">
+                        {a.name}
+                      </Link>
+                    </Fragment>
+                  ))
+                : post?.author}
+            </p>
+          )}
 
-          <SongHeroPills
-            keyLabel={heroKey}
-            bpm={bpm}
-            bpmText={bpmText}
-            timeSig={post?.timeSig ?? null}
-            transposable={transposable}
-            mixTones={mixTones(post?.rehearsalMixes ?? [])}
-            revealIndex={2}
-          />
+          <div className="mt-6">
+            <SongHeroPills
+              keyLabel={heroKey}
+              bpm={bpm}
+              bpmText={bpmText}
+              timeSig={post?.timeSig ?? null}
+              transposable={transposable}
+              mixTones={mixTones(post?.rehearsalMixes ?? [])}
+              revealIndex={2}
+            />
+          </div>
 
-          {/* The tags, BELOW the pills and as quiet text links (design pass E,
-              2026-10-22). They led the hero as a row of boxed chips above the
-              title — the first thing on the page was its least important: a
-              reader opens a song for its title, key and tempo, and reaches the
-              tags only to browse sideways. Last in the stagger, after the pills. */}
+          {/* The tags, after the pills and as quiet lowercase links (design pass
+              E, 2026-10-22): a reader opens a song for its title, key and tempo,
+              and reaches the tags only to browse sideways. */}
           {post?.tags && post.tags.length > 0 && (
-            <div {...revealProps(3)} className="mt-6 flex flex-wrap justify-center gap-x-3 gap-y-1">
+            <div {...revealProps(3)} className="mt-5 flex flex-wrap gap-x-3.5 gap-y-1.5">
               {post.tags.map((tag) => (
                 <Link
                   key={tag._id}
                   href={`/biblioteca?tag=${encodeURIComponent(tag.slug.current)}`}
-                  className="py-1.5 font-label text-[11px] lowercase tracking-wider text-accent/70 transition-colors duration-fast ease-out-brand hover:text-accent"
+                  className="py-1 font-label text-[13px] font-semibold lowercase text-accent/70 transition-colors duration-fast ease-out-brand hover:text-accent"
                 >
                   #{tag.name}
                 </Link>
@@ -300,7 +324,13 @@ const Page = async ({ params }: Params) => {
       )}
 
       {/* ── Content ──────────────────────────────────────────────────────── */}
-      <div className="max-w-7xl mx-auto px-6 py-12 space-y-20">
+      <div
+        className={
+          hasLyrics
+            ? "mx-auto max-w-7xl px-6 pb-8 pt-10 lg:grid lg:grid-cols-[minmax(0,34rem)_minmax(0,1fr)] lg:items-start lg:gap-x-24"
+            : "mx-auto max-w-7xl px-6 pb-8 pt-10 lg:[&>*]:max-w-3xl"
+        }
+      >
 
         {/* `sections` is already the list of what will paint, so it answers this
             exactly. A song with no audio, tutorials, references, lyrics or
@@ -308,13 +338,13 @@ const Page = async ({ params }: Params) => {
             half-loaded rather than empty, and ~15 songs have no lyrics source in
             the catalogue at all, so this is a real state, not a hypothetical. */}
         {sections.length === 0 && (
-          <div className="flex flex-col items-center gap-3 py-16 text-mono-600">
+          <div className="flex flex-col items-center gap-3 py-16 text-ink-muted">
             <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M9 18V5l12-2v13" />
               <circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" />
             </svg>
-            <p className="font-label text-sm uppercase tracking-widest text-center">Esta canción aún no tiene contenido</p>
-            <p className="font-body text-sm text-mono-500 max-w-sm text-center">
+            <p className="text-center font-body text-[17px] font-semibold text-ink">Esta canción aún no tiene contenido</p>
+            <p className="max-w-sm text-center font-body text-sm text-ink-muted">
               Todavía no hay audio, tutoriales, referencias, letra ni historial para mostrar.
             </p>
           </div>
@@ -322,7 +352,7 @@ const Page = async ({ params }: Params) => {
 
         {/* Ensayo */}
         {hasRehearsal && (
-          <section id="ensayo" className="scroll-mt-[calc(8rem+env(safe-area-inset-top)+var(--impersonation-offset))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top)+var(--impersonation-offset))]">
+          <section id="ensayo" className={side}>
             <SectionHeader>Ensayo</SectionHeader>
             <RehearsalPlayer
               mixes={post.rehearsalMixes!}
@@ -336,7 +366,7 @@ const Page = async ({ params }: Params) => {
 
         {/* Audio */}
         {hasAudio && (
-          <section id="audio" className="scroll-mt-[calc(8rem+env(safe-area-inset-top)+var(--impersonation-offset))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top)+var(--impersonation-offset))]">
+          <section id="audio" className={side}>
             <SectionHeader>Audio</SectionHeader>
             <SongAudioSection
               tracks={post.audioTracks!}
@@ -348,24 +378,16 @@ const Page = async ({ params }: Params) => {
 
         {/* Tutoriales */}
         {hasTutorials && (
-          <section id="tutoriales" className="scroll-mt-[calc(8rem+env(safe-area-inset-top)+var(--impersonation-offset))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top)+var(--impersonation-offset))]">
+          <section id="tutoriales" className={side}>
             <SectionHeader>Tutoriales</SectionHeader>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
               {post.tutorials2!.filter((tutorial) => tutorial.url).map((tutorial, i) => (
-                <div
-                  key={i}
-                  {...revealProps(i)}
-                  className="brand-surface overflow-hidden rounded-2xl"
-                >
-                  <div className="aspect-video">
+                <div key={i} {...revealProps(i)}>
+                  <div className="aspect-video overflow-hidden rounded-xl">
                     <TutorialPoster url={tutorial.url} title={tutorial.title} />
                   </div>
                   {tutorial.title && (
-                    <div className="px-4 py-3 border-t border-edge-accent-subtle">
-                      <p className="font-display text-sm font-semibold leading-snug">
-                        {tutorial.title}
-                      </p>
-                    </div>
+                    <p className="mt-2 font-body text-[17px] font-semibold leading-snug text-ink">{tutorial.title}</p>
                   )}
                 </div>
               ))}
@@ -375,114 +397,98 @@ const Page = async ({ params }: Params) => {
 
         {/* Reference Links */}
         {hasRefLinks && (
-          <section id="referencia" className="scroll-mt-[calc(8rem+env(safe-area-inset-top)+var(--impersonation-offset))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top)+var(--impersonation-offset))]">
-            <SectionHeader>Versión de referencia</SectionHeader>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
+          <section id="referencia" className={side}>
+            <SectionHeader>Referencia</SectionHeader>
+            <ul className="divide-y divide-ink/[0.10] border-y border-ink/[0.10]">
               {(post.musicalReferenceUrl || (post.referenceLinks?.[0]?.url)) && (
-                <a href={post.musicalReferenceUrl || post.referenceLinks![0].url}
-                  target="_blank" rel="noopener noreferrer"
-                  className="brand-library-module brand-surface-interactive group flex items-center gap-4 p-4">
-                  <span className="flex items-center justify-center w-11 h-11 rounded-full bg-accent/[0.12] text-accent shrink-0">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></svg>
-                  </span>
-                  <span className="flex-1">
-                    <span className="block font-display text-sm font-semibold group-hover:text-accent transition-colors">Referencia musical</span>
-                    <span className="block font-body text-xs text-surface-ink-l60-d50">Para ensayar — músicos</span>
-                  </span>
-                </a>
+                <li>
+                  <a href={post.musicalReferenceUrl || post.referenceLinks![0].url}
+                    target="_blank" rel="noopener noreferrer"
+                    className="group flex items-center gap-3.5 py-3 text-ink">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent/[0.12] text-accent">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></svg>
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-body text-[17px] font-semibold leading-snug transition-colors group-hover:text-accent">Referencia musical</span>
+                      <span className="block font-body text-sm text-ink-muted">Para ensayar · músicos</span>
+                    </span>
+                    <ExternalLinkIcon size={18} className="shrink-0 text-ink-muted" />
+                  </a>
+                </li>
               )}
               {post.lyricsVideoUrl && (
-                <a href={post.lyricsVideoUrl}
-                  target="_blank" rel="noopener noreferrer"
-                  className="brand-library-module brand-surface-interactive group flex items-center gap-4 p-4">
-                  <span className="flex items-center justify-center w-11 h-11 rounded-full bg-accent/[0.12] text-accent shrink-0">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="22" /></svg>
-                  </span>
-                  <span className="flex-1">
-                    <span className="block font-display text-sm font-semibold group-hover:text-accent transition-colors">Versión con letra</span>
-                    <span className="block font-body text-xs text-surface-ink-l60-d50">Letra en español</span>
-                  </span>
-                </a>
+                <li>
+                  <a href={post.lyricsVideoUrl}
+                    target="_blank" rel="noopener noreferrer"
+                    className="group flex items-center gap-3.5 py-3 text-ink">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent/[0.12] text-accent">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="22" /></svg>
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-body text-[17px] font-semibold leading-snug transition-colors group-hover:text-accent">Versión con letra</span>
+                      <span className="block font-body text-sm text-ink-muted">Letra en español</span>
+                    </span>
+                    <ExternalLinkIcon size={18} className="shrink-0 text-ink-muted" />
+                  </a>
+                </li>
               )}
-            </div>
+            </ul>
           </section>
         )}
 
-        {/* Letra / Body */}
+        {/* Letra / Body — 17 px on the page itself, no panel: it is what a
+            member reads mid-rehearsal with one hand busy. */}
         {hasLyrics && (
-          <section id="letra" className="scroll-mt-[calc(8rem+env(safe-area-inset-top)+var(--impersonation-offset))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top)+var(--impersonation-offset))]">
+          <section id="letra" className={LYRIC}>
             <SectionHeader action={<LyricsAutoscroll targetId="letra" bpm={bpm} lines={lyricLines} />}>Letra</SectionHeader>
-            <div className="brand-facet-panel">
-              {hasInlineChords ? (
-                <ChordChart charts={post.chords!} />
-              ) : (
-                <div className="prose prose-sm sm:prose dark:prose-invert prose-p:leading-relaxed prose-p:!mt-0 prose-p:!mb-0 max-w-[62ch] mx-auto [&>div:first-child>div:first-child]:!mt-0">
-                  {groupBySections(post.body).map((group, i) => (
-                    <div key={i}>
-                      <PortableText value={group} components={myPortableTextComponents} />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            {hasInlineChords ? (
+              <ChordChart charts={post.chords!} />
+            ) : (
+              <div className="max-w-[62ch] font-body text-[17px] leading-relaxed text-ink [&>div:first-child>div:first-child]:!mt-0">
+                {groupBySections(post.body).map((group, i) => (
+                  <div key={i}>
+                    <PortableText value={group} components={myPortableTextComponents} />
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
         )}
 
-        {/* Historial */}
+        {/* Historial — one row per play: the day, the set it shared, the key. */}
         {hasHistory && (
-          <section id="historial" className="scroll-mt-[calc(8rem+env(safe-area-inset-top)+var(--impersonation-offset))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top)+var(--impersonation-offset))]">
+          <section id="historial" className={side}>
             <SectionHeader>Última vez tocada</SectionHeader>
-            <div className="flex flex-col gap-4 max-w-xl mx-auto">
+            <ol className="divide-y divide-ink/[0.10] border-y border-ink/[0.10]">
               {history.map((entry, i) => (
-                <div
-                  key={i}
-                  {...revealProps(i)}
-                  className="brand-surface overflow-hidden rounded-2xl"
-                >
-                  {/* Header row: day + date + key */}
-                  <div className="flex items-center justify-between px-5 py-3 bg-surface-accent-wash border-b border-edge-accent-subtle">
-                    <div>
-                      <p className="font-label text-[11px] uppercase tracking-widest text-mono-500 dark:text-mono-400 mb-0.5">
-                        {entry._type === "featuredSongs" ? "Domingo" : "Sábado"}
+                <li key={i} {...revealProps(i)} className="flex items-center gap-4 py-3.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-body text-[17px] font-semibold leading-snug text-ink">
+                      {entry._type === "featuredSongs" ? "Domingo" : "Sábado"}{" "}
+                      {HISTORY_DATE.format(new Date(entry.week.slice(0, 10) + "T12:00:00"))}
+                    </p>
+                    {entry.pairedSongs?.length > 0 && (
+                      <p className="mt-0.5 font-body text-sm leading-snug text-ink-muted">
+                        Con{" "}
+                        {entry.pairedSongs.map((song, j) => (
+                          <Fragment key={j}>
+                            {j > 0 && (j === entry.pairedSongs.length - 1 ? " y " : ", ")}
+                            <Link href={`/posts/${song.slug.current}`} className="font-semibold transition-colors hover:text-accent">
+                              {song.title}
+                            </Link>
+                          </Fragment>
+                        ))}
                       </p>
-                      <p className="font-body text-sm md:text-base font-semibold">
-                        {new Date(entry.week.slice(0, 10) + "T12:00:00").toLocaleDateString("es-ES", {
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                        })}
-                      </p>
-                    </div>
-                    {entry.play_key && (
-                      <span className="font-label text-sm px-3 py-1 rounded-full border border-accent/40 text-accent shrink-0">
-                        {formatKey(entry.play_key)}
-                      </span>
                     )}
                   </div>
-
-                  {/* Paired songs */}
-                  {entry.pairedSongs?.length > 0 && (
-                    <ol className="px-5 py-3 space-y-2">
-                      {entry.pairedSongs.map((song, j) => (
-                        <li key={j} className="flex items-center justify-between gap-4">
-                          <Link
-                            href={`/posts/${song.slug.current}`}
-                            className="font-body text-sm md:text-base hover:text-accent transition-colors truncate"
-                          >
-                            {song.title}
-                          </Link>
-                          {song.play_key && (
-                            <span className="font-label text-xs text-accent/70 shrink-0">
-                              {formatKey(song.play_key)}
-                            </span>
-                          )}
-                        </li>
-                      ))}
-                    </ol>
+                  {entry.play_key && (
+                    <span className="shrink-0 rounded-full border border-ink/[0.18] px-2.5 py-1 font-label text-sm font-semibold text-ink">
+                      {formatKey(entry.play_key)}
+                    </span>
                   )}
-                </div>
+                </li>
               ))}
-            </div>
+            </ol>
           </section>
         )}
 
@@ -497,13 +503,12 @@ export default Page;
 
 const myPortableTextComponents: PortableTextComponents = {
   block: {
-    // Section names render as an EYEBROW, not a heading: this block is prose, and
-    // `prose`'s own heading rules would re-style an <h2> out from under the token.
+    // Section names render as an EYEBROW, not a heading: they label blocks of a
+    // lyric, while the page's outline is its SHEET_TITLE section headings.
     // No label is added — these are the headings the lyric sheet already carries.
     //
-    // A `div`, and that is load-bearing: a `p` here loses the source-order tie to
-    // the wrapper's `prose-p:!mt-0 prose-p:!mb-0` and renders with no margins at
-    // all. See LYRIC_EYEBROW_BLOCK.
+    // A `div`, because the wrapper's `[&>div:first-child>div:first-child]:!mt-0`
+    // finds the first group's eyebrow by that shape. See LYRIC_EYEBROW_BLOCK.
     h1: ({ children }) => <div className={LYRIC_EYEBROW_BLOCK}>{children}</div>,
     h2: ({ children }) => <div className={LYRIC_EYEBROW_BLOCK}>{children}</div>,
     h3: ({ children }) => <div className={LYRIC_EYEBROW_BLOCK}>{children}</div>,

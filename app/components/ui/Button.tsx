@@ -30,7 +30,7 @@
 import Link from "next/link";
 import type { ComponentPropsWithoutRef, ReactNode, Ref } from "react";
 
-export type ButtonVariant = "primary" | "cta" | "secondary" | "ghost" | "danger" | "icon" | "pill";
+export type ButtonVariant = "primary" | "cta" | "secondary" | "ghost" | "danger" | "icon" | "pill" | "round" | "roundCta";
 export type ButtonSize = "sm" | "md" | "lg";
 /** The pill's pressed colour — `accent` (the default) or the availability tone. */
 export type PillTone = "accent" | "availability";
@@ -56,6 +56,11 @@ const VARIANT: Record<ButtonVariant, string> = {
   danger: "rounded-lg bg-negative-surface/60 text-ink hover:bg-negative-border/60",
   icon: "rounded-lg w-9 h-9 p-0 text-mono-500 hover:text-accent hover:bg-surface-lift/5",
   pill: "rounded-full border border-surface-accent-30 text-mono-500 hover:text-accent",
+  // The 44 px round playback control of a hairline track row (ADR-0070, Canción):
+  // `round` is an idle row's ring, `roundCta` the LOADED row's fill — the one row
+  // that differs. Fixed size and no padding, so they take no `size` classes.
+  round: "rounded-full h-11 w-11 shrink-0 p-0 border border-ink/[0.28] text-ink hover:border-accent hover:text-accent",
+  roundCta: "rounded-full h-11 w-11 shrink-0 p-0 bg-accent text-surface-base shadow-lg shadow-accent/20 hover:bg-accent/85",
 };
 
 // The pressed triplet lives entirely in PILL_TONE, never in VARIANT.pill —
@@ -93,7 +98,12 @@ export function buttonClass(
   /** `true` when the control carries a `title`: disabled, it still answers the pointer so the title shows. */
   titled = false,
 ): string {
-  const s = variant === "icon" ? (size === "lg" ? "min-h-[44px] min-w-[44px]" : "") : SIZE[size];
+  const s =
+    variant === "icon"
+      ? size === "lg" ? "min-h-[44px] min-w-[44px]" : ""
+      : variant === "round" || variant === "roundCta"
+        ? ""
+        : SIZE[size];
   const t =
     variant === "pill" && tone !== "danger"
       ? PILL_TONE[tone]

@@ -402,10 +402,6 @@ describe("alpha-modified text roles still clear AA, in both themes", () => {
     //   `linked`. They colour an ICON, never text. Same category as the glyph
     //   above. (Their non-text 3:1 compliance is unmeasured — nothing in this
     //   repo checks 1.4.11 yet, and that is a real gap, named rather than hidden.)
-
-    // Punctuation.
-    "ink-muted/30@app/(client)/posts/[slug]/page.tsx",
-    //   the "," BETWEEN author names; the names themselves are ink-muted/70.
   ]);
 
   /**

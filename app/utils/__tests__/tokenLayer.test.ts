@@ -348,7 +348,10 @@ describe("brand.css rule bodies — B2's invariant, which later slices must not 
     // `.brand-library-module` and `.brand-search-console` became opaque through
     // the composed `--surface-card` — their translucent gradients and inset
     // highlights spent the other twenty).
-    expect(all.length).toBe(42);
+    // 42 → 37 (2026-10-23, ADR-0070's Canción pass: the song page's hero is a
+    // title on the plain page, so `.brand-song-hero` — border, two gradient
+    // stops, the radial glow and the `::before` sheen — is deleted.)
+    expect(all.length).toBe(37);
     expect(all.filter((o) => o.alpha === "none").length).toBe(4);
   });
 
