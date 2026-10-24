@@ -170,6 +170,8 @@ board; that part is then refused and the card reads the month again.
 the card's own question, as on `/admin`, where «Guardar» writes on one click. The host may add its own
 prompt for an app-initiated call; that is not documented. If it refuses the call, «Mandar al chat» keeps
 the old path: the chat, `save_service_edits` and the permission prompt.
+Live proof, 2026-10-24 00:16Z in production (`bf7516bf`): Frank saved
+a change from the card with «Sí, guardar», and the host let the card call the app-only save.
 
 **Rejected.**
 - Calling the model-visible `save_service_edits` from the card: it would work, but the logs could not
