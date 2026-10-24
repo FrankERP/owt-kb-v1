@@ -19,6 +19,7 @@ import type { DependencyRef } from "@/app/utils/serviceMutation";
 import type { RoleDependencyInventory } from "@/app/utils/roleDependencies";
 import type { StoredRole } from "@/app/utils/roleWriteOps";
 import { byDateThenType, isDraftRole } from "@/app/components/admin/clearMonthModel";
+import { kindOfType } from "@/app/components/admin/v3Services";
 import { V3_STORED_EDITOR_LINES } from "@/app/components/admin/v3Copy";
 import { draftLabel } from "./labels";
 
@@ -68,7 +69,7 @@ export function noticeAudience(role: StoredRole): string[] {
 export function deleteLine(role: StoredRole): string | null {
   const d = datedRole(role);
   if (!d) return null;
-  const special = role._type === "special_role" ? D.special : "";
+  const special = kindOfType(role._type) === "special" ? D.special : "";
   const state = isDraftRole(role) ? D.draft : D.published(noticeAudience(role).length);
   return nfc(`${deleteLabel(d)}${special}${state}`);
 }

@@ -9,6 +9,7 @@
 
 import type { ReactNode } from "react";
 import type { Candidate, PersonView, ServiceView, WaiverItem } from "./editorModel";
+import { CARD_DELETE } from "./storedModel";
 
 export interface SeatRef {
   service: string;
@@ -60,6 +61,11 @@ export interface StoredEditorProps extends BoardProps {
   footer: ReactNode;
   /** The chat asked for some days only (`focus`): which, and the way back to the whole month. */
   narrowed?: { shown: string; onWiden: () => void };
+  /** «Borrar este servicio» on each editable service (admin parity phase 2). */
+  onDeleteService?: (service: string) => void;
+  deleteDisabled?: boolean;
+  /** The delete's panel, shown INLINE under the service it is about. */
+  servicePanel?: { service: string; node: ReactNode } | null;
 }
 
 export type EditorProps = ProposalEditorProps | StoredEditorProps;
@@ -223,6 +229,14 @@ export function Editor(p: EditorProps) {
                 );
               })}
             </dl>
+            {p.mode === "stored" && p.onDeleteService && (
+              <div className="actions">
+                <button type="button" onClick={() => p.onDeleteService!(s.service)} disabled={p.deleteDisabled === true}>
+                  {CARD_DELETE.one}
+                </button>
+              </div>
+            )}
+            {p.mode === "stored" && p.servicePanel?.service === s.service && p.servicePanel.node}
           </details>
         ))}
         {fixed.map((s) => (

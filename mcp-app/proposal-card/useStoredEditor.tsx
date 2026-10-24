@@ -9,14 +9,25 @@
 // write some services without the card knowing which, and a replayed edit the month already holds is
 // refused, so the list is either kept FROZEN for a repeat of the same part or thrown away by a check
 // from the empty list, which reads what is stored whatever happened.
+//
+// Deleting (admin parity phase 2, T5): «Borrar servicios…» and «Borrar este servicio» run only with no
+// unsaved edits and no save started, ask `check_service_deletes`, show its lines in the card's own
+// confirmation, and «Sí, borrar» sends that list and token untouched to `delete_services_app`. The
+// same rule as a save: an unknown outcome keeps the SAME list for «Borrar de nuevo» (one repeat for a
+// contention, then a re-read), anything else reads the month again from the empty list.
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 import type { App } from "@modelcontextprotocol/ext-apps";
 import type { EditorProps, SeatRef } from "./Editor";
 import type { PersonView } from "./editorModel";
 import {
+  CARD_DELETE,
   CARD_SAVE,
   afterStoredRefusal,
+  deleteCheckViewOf,
+  deleteMessage,
+  deleteResultViewOf,
+  deletedContext,
   forceStoredLast,
   monthName,
   contextOf,
@@ -28,6 +39,7 @@ import {
   savedContext,
   storedCheckViewOf,
   storedSaveViewOf,
+  type DeleteCheckView,
   type Focus,
   type StoredCheckView,
   type StoredEdit,
@@ -37,6 +49,14 @@ const LOST = "No pude hablar con el servidor; vuelve a intentarlo. Tus cambios s
 
 /** Above the route's 60 s `maxDuration`, so the client's default 60 s never cuts a save that is finishing. */
 const SAVE_TIMEOUT_MS = 70_000;
+
+/** Where the card's delete is: choosing the scope, checking, asking, deleting, or holding an unknown outcome. */
+type DeleteFlow =
+  | { stage: "choose" }
+  | { stage: "checking"; service: string | null }
+  | { stage: "confirm"; service: string | null; view: DeleteCheckView }
+  | { stage: "running"; service: string | null; view: DeleteCheckView }
+  | { stage: "unsure"; service: string | null; view: DeleteCheckView; contentions: number; sent: boolean };
 
 /** The seat an edit lands on: where its «¿Asignar de todos modos?» is shown. */
 export function storedSeatOf(edit: StoredEdit | undefined): SeatRef | null {
@@ -83,6 +103,8 @@ export function useStoredEditor(app: App | null): StoredEditorState {
   const seatRequest = useRef(0);
   /** The context lines of the parts handed over for the CURRENT list (the host keeps only the last update). */
   const contextLines = useRef(new Map<number, string>());
+  /** The card's delete, when one is open. */
+  const [deleting, setDeleting] = useState<DeleteFlow | null>(null);
 
   const call = useCallback(
     async (args: Record<string, unknown>) => {
@@ -161,6 +183,7 @@ export function useStoredEditor(app: App | null): StoredEditorState {
       setSaved([]);
       setRetry([]);
       setConfirming(null);
+      setDeleting(null);
       lastSaveLines.current = null;
       savedReport.current = [];
       // After a save in this month, the chat's edits may already be in it: open what is stored instead.
@@ -177,6 +200,7 @@ export function useStoredEditor(app: App | null): StoredEditorState {
     setSheet(null);
     setExchanging(null);
     setConfirming(null);
+    setDeleting(null);
   }, []);
 
   const push = (edit: StoredEdit) => {
@@ -282,10 +306,183 @@ export function useStoredEditor(app: App | null): StoredEditorState {
     }
   };
 
+  // ── Deleting ───────────────────────────────────────────────────────────────
+
+  /** The delete needs a clean card: no unsaved edits, no save started, nothing else open. */
+  const canDelete = edits.length === 0 && !frozen && confirming === null && ask === null && deleting === null;
+
+  /** `check_service_deletes`, the chat's own read-only check: the whole month, or one service. */
+  const checkDeletes = async (args: { include?: "drafts" | "all"; services?: string[] }, service: string | null) => {
+    if (!app || !month) return;
+    seatRequest.current++;
+    setSheet(null);
+    setExchanging(null);
+    setDeleting({ stage: "checking", service });
+    setBusy(true);
+    try {
+      const view = deleteCheckViewOf(await app.callServerTool({ name: "check_service_deletes", arguments: { month, ...args } }));
+      if (!view.ok) {
+        setDeleting(null);
+        setNotice(view.lines.join(" ") || LOST);
+        return;
+      }
+      setDeleting({ stage: "confirm", service, view });
+    } catch {
+      setDeleting(null);
+      setNotice(LOST);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openDelete = (service: string | null) => {
+    if (!canDelete) return;
+    if (service === null) {
+      seatRequest.current++;
+      setSheet(null);
+      setExchanging(null);
+      setDeleting({ stage: "choose" });
+    } else void checkDeletes({ services: [service] }, service);
+  };
+
+  /** Reads the month after a delete; a failed read keeps the board locked and says so. */
+  const rereadAfterDelete = async (at: string, keep: string[]) => {
+    if (!(await runCheck(at, [], keep))) setNotice([...keep, CARD_DELETE.rereadFailed].join(" "));
+  };
+
+  /** «Sí, borrar» (and «Borrar de nuevo»): the check's list and token, untouched, to the card's delete. */
+  const runDelete = async (service: string | null, view: DeleteCheckView, contentions: number) => {
+    if (!app || !month || !view.token || view.deletes.length === 0) return;
+    const at = month;
+    setDeleting({ stage: "running", service, view });
+    setBusy(true);
+    setFrozen(true);
+    wroteMonth.current = at;
+    const tellClaude = (ok: boolean, lines: string[]) => {
+      if (!app.getHostCapabilities()?.updateModelContext?.text) return;
+      app.updateModelContext({ content: [{ type: "text", text: deletedContext(at, ok, lines) }] }).catch(() => {});
+    };
+    const unsure = (lines: string[], seen: number) => {
+      setDeleting({ stage: "unsure", service, view, contentions: seen, sent: false });
+      setNotice(lines.join(" "));
+    };
+    try {
+      const r = deleteResultViewOf(
+        await app.callServerTool({ name: "delete_services_app", arguments: { month: at, deletes: view.deletes, token: view.token } }, { timeout: SAVE_TIMEOUT_MS }),
+      );
+      if (!r.structured) {
+        unsure([CARD_DELETE.unknown], contentions);
+        return;
+      }
+      tellClaude(r.ok, r.lines);
+      const seen = contentions + (r.contention ? 1 : 0);
+      // A contention is repeated once; an unknown outcome as often as it takes. Anything else: read the month.
+      if (r.next === "repeat_same_call" && (r.unsure || seen <= 1)) {
+        unsure([...r.lines, CARD_DELETE.repeat], seen);
+        return;
+      }
+      setDeleting(null);
+      setBusy(false);
+      await rereadAfterDelete(at, r.ok ? r.lines : [...r.lines, CARD_DELETE.reread]);
+    } catch {
+      unsure([CARD_DELETE.unknown], contentions);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** «Mandar al chat» after an unknown outcome: Claude calls `delete_services`, the Claude app asks first. */
+  const sendDelete = (flow: Extract<DeleteFlow, { stage: "unsure" }>) => {
+    if (!app || !month || !flow.view.token) return;
+    setBusy(true);
+    app
+      .sendMessage({ role: "user", content: [{ type: "text", text: deleteMessage(month, flow.view.deletes, flow.view.token) }] })
+      .then((r) => (r.isError ? setNotice("El chat no aceptó el mensaje; pídele a Claude que borre los servicios.") : setDeleting({ ...flow, sent: true })))
+      .catch(() => setNotice(LOST))
+      .finally(() => setBusy(false));
+  };
+
+  const deletePanel = (flow: DeleteFlow | null, at: string): ReactNode => {
+    if (!flow || !month) return null;
+    if (flow.stage === "choose") {
+      return (
+        <div className="picker ask" role="alertdialog" aria-label={CARD_DELETE.sheetHead(at)}>
+          <h2>{CARD_DELETE.sheetHead(at)}</h2>
+          {focus && <p className="muted">{CARD_DELETE.sheetFocus}</p>}
+          <p className="muted">{CARD_DELETE.allNote}</p>
+          <div className="actions">
+            <button type="button" className="primary" onClick={() => void checkDeletes({ include: "drafts" }, null)} disabled={busy}>
+              {CARD_DELETE.drafts}
+            </button>
+            <button type="button" onClick={() => void checkDeletes({ include: "all" }, null)} disabled={busy}>
+              {CARD_DELETE.all}
+            </button>
+            <button type="button" onClick={() => setDeleting(null)} disabled={busy}>
+              {CARD_DELETE.no}
+            </button>
+          </div>
+        </div>
+      );
+    }
+    if (flow.stage === "checking") return <p className="muted" role="status">{CARD_DELETE.checking}</p>;
+    const v = flow.view;
+    if (flow.stage === "unsure") {
+      return (
+        <div className="actions">
+          <button type="button" className="primary" onClick={() => void runDelete(flow.service, v, flow.contentions)} disabled={busy}>
+            {CARD_DELETE.again}
+          </button>
+          <button type="button" onClick={() => sendDelete(flow)} disabled={busy}>
+            {flow.sent ? "Enviado al chat · enviar de nuevo" : CARD_DELETE.toChat}
+          </button>
+        </div>
+      );
+    }
+    const can = v.deletes.length > 0 && v.token !== null;
+    return (
+      <div className="picker ask" role="alertdialog" aria-label={can ? CARD_DELETE.confirmHead : CARD_DELETE.nothing}>
+        <h2>{can ? CARD_DELETE.confirmHead : CARD_DELETE.nothing}</h2>
+        {can && (
+          <ul className="notices">
+            {v.deletes.map((d) => (
+              <li key={d.service}>{d.line}</li>
+            ))}
+          </ul>
+        )}
+        {v.kept.length > 0 && (
+          <>
+            <p className="muted">{CARD_DELETE.keptHead}</p>
+            <ul className="notices">
+              {v.kept.map((k, i) => (
+                <li key={i}>
+                  {k.label}: {k.reason}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        {v.publishedSkipped > 0 && <p className="muted">{CARD_DELETE.publishedSkipped(v.publishedSkipped)}</p>}
+        {v.overflow > 0 && <p className="muted">{CARD_DELETE.overflow(v.overflow)}</p>}
+        {can && <p className="muted">{CARD_DELETE.irreversible}</p>}
+        <div className="actions">
+          {can && (
+            <button type="button" className="primary" onClick={() => void runDelete(flow.service, v, 0)} disabled={busy || flow.stage === "running"}>
+              {CARD_DELETE.yes}
+            </button>
+          )}
+          <button type="button" onClick={() => setDeleting(null)} disabled={busy || flow.stage === "running"}>
+            {can ? CARD_DELETE.no : CARD_DELETE.close}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   let props: EditorProps | null = null;
   if (month && check) {
     const parts = saveParts(check.changes, check.maxGroup);
-    const locked = busy || ask !== null || confirming !== null;
+    const locked = busy || ask !== null || confirming !== null || deleting !== null;
+    const deleteService = deleting && deleting.stage !== "choose" ? deleting.service : null;
     const shown = focusedServices(check.board, focus, check.changes.map((c) => c.service));
     const label = (i: number) => {
       if (saved.includes(i)) return parts.length > 1 ? `Parte ${i + 1} guardada` : "Guardado";
@@ -324,6 +521,7 @@ export function useStoredEditor(app: App | null): StoredEditorState {
             </div>
           </div>
         )}
+        {deleting && deleteService === null && deletePanel(deleting, month)}
         <div className="actions">
           {parts.map((_, i) => (
             // A repeat is safe (what already saved answers «ya estaba»); a saved part has nothing left to do.
@@ -346,7 +544,17 @@ export function useStoredEditor(app: App | null): StoredEditorState {
           >
             Descartar cambios
           </button>
+          {frozen && edits.length === 0 && !deleting && (
+            // After a delete whose re-read failed: the only way on is to read the month again.
+            <button type="button" onClick={() => void rereadAfterDelete(month, [])} disabled={busy}>
+              {CARD_DELETE.rereadButton}
+            </button>
+          )}
+          <button type="button" onClick={() => openDelete(null)} disabled={locked || !canDelete}>
+            {CARD_DELETE.month}
+          </button>
         </div>
+        {edits.length > 0 && <p className="muted small">{CARD_DELETE.editsFirst}</p>}
         <p className="foot muted">{CARD_SAVE.foot}</p>
       </>
     );
@@ -360,7 +568,10 @@ export function useStoredEditor(app: App | null): StoredEditorState {
       lines: check.lines,
       pending: edits.length,
       busy,
-      frozen: frozen || confirming !== null,
+      frozen: frozen || confirming !== null || deleting !== null,
+      onDeleteService: (service: string) => openDelete(service),
+      deleteDisabled: locked || !canDelete,
+      servicePanel: deleting && deleteService !== null ? { service: deleteService, node: deletePanel(deleting, month) } : null,
       notice,
       sheet,
       ask,

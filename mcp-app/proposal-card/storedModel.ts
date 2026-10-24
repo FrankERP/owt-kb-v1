@@ -329,3 +329,149 @@ export function savedContext(month: string, ok: boolean, lines: readonly string[
     : `La tarjeta intentó guardar cambios de ${monthName(month)} y no se guardó todo; la tarjeta ya se lo dijo a la persona:`;
   return [head, ...lines].join("\n");
 }
+
+// ── Deleting services from the card (admin parity phase 2, T5) ──────────────
+//
+// «Borrar servicios…» (the whole month) and «Borrar este servicio» call the chat's own read-only
+// `check_service_deletes`, show its lines in the card's confirmation, and «Sí, borrar» passes the
+// check's list and token UNTOUCHED to the app-only `delete_services_app` — the chat's delete, which
+// re-checks everything. The same rule as the save: after a delete starts, an unknown outcome keeps the
+// SAME list frozen for «Borrar de nuevo» (or «Mandar al chat»); anything else reads the month again.
+
+/** One service a delete removes, exactly as the check answered it. */
+export interface DeleteEntry {
+  service: string;
+  baseRev: string;
+  line: string;
+}
+
+export interface DeleteCheckView {
+  ok: boolean;
+  month: string;
+  deletes: DeleteEntry[];
+  token: string | null;
+  kept: Array<{ label: string; reason: string }>;
+  publishedSkipped: number;
+  overflow: number;
+  /** A refusal's words (a failed read), the card's own text otherwise. */
+  lines: string[];
+}
+
+export function deleteCheckViewOf(result: { content?: unknown; structuredContent?: unknown; isError?: boolean } | undefined): DeleteCheckView {
+  const s = isObj(result?.structuredContent) ? (result!.structuredContent as Obj) : {};
+  const ok = !result?.isError && s.ok === true;
+  return {
+    ok,
+    month: str(s.month),
+    deletes: objects(s.deletes)
+      .filter((d) => typeof d.service === "string" && typeof d.baseRev === "string" && typeof d.line === "string")
+      .map((d) => ({ service: str(d.service), baseRev: str(d.baseRev), line: str(d.line) })),
+    token: typeof s.token === "string" ? s.token : null,
+    kept: objects(s.kept).map((k) => ({ label: str(k.label), reason: str(k.reason) })),
+    publishedSkipped: typeof s.publishedSkipped === "number" ? s.publishedSkipped : 0,
+    overflow: typeof s.overflow === "number" ? s.overflow : 0,
+    // Only a refusal's text is shown: an answer's text carries the lines for Claude (the call, the args).
+    lines: ok ? [] : textLines(result?.content).filter((l) => !isArgsLine(l) && !l.startsWith(DELETE_ARGS_LINE_PREFIX)),
+  };
+}
+
+/** Mirrors `DELETE_ARGS_PREFIX` (`app/components/admin/v3Copy.ts`), pinned by `storedCardDelete.test.tsx`. */
+export const DELETE_ARGS_LINE_PREFIX = "Argumentos para delete_services (pásalos tal cual):";
+
+/** What `delete_services_app` answered, as the card acts on it. */
+export interface DeleteResultView {
+  /** False: no structured answer (`runWriteTool`'s own text) — what was deleted is unknown. */
+  structured: boolean;
+  ok: boolean;
+  refused: boolean;
+  next: "repeat_same_call" | "check_again" | null;
+  /** Some service answered «otra edición llegó al mismo tiempo» (contention): one repeat only. */
+  contention: boolean;
+  /** Something may or may not have been deleted («sin confirmar», «pendiente»). */
+  unsure: boolean;
+  lines: string[];
+}
+
+/**
+ * The delete's lines for CLAUDE (what to call next): dropped on the card. Mirrors `repeatSame` and
+ * `recheck` of `V3_STORED_EDITOR_LINES.delete`, pinned by `storedCardDelete.test.tsx`.
+ */
+export const MODEL_ONLY_DELETE_LINES = [
+  "Repite exactamente la misma llamada: lo que ya se borró contesta «ya no existe» y se borra el resto.",
+  "Revisa el mes de nuevo con check_service_deletes antes de volver a borrar.",
+] as const;
+
+/** Tails that name a tool or a call; trimmed on the card (pinned by `storedCardDelete.test.tsx`). */
+export const MODEL_ONLY_DELETE_TAILS = [
+  " Revisa de nuevo con check_service_deletes.",
+  "; repite la misma llamada UNA vez y, si vuelve a pasar, revisa el mes de nuevo",
+  " (repetir la llamada ya no puede avisarles)",
+  " Repite exactamente la misma llamada: lo que ya se borró contesta «ya no existe».",
+] as const;
+
+const deleteForTheCard = (line: string): string => MODEL_ONLY_DELETE_TAILS.reduce((l, tail) => l.split(tail).join(""), line);
+
+export function deleteResultViewOf(result: { content?: unknown; structuredContent?: unknown; isError?: boolean } | undefined): DeleteResultView {
+  const s = isObj(result?.structuredContent) ? (result!.structuredContent as Obj) : null;
+  const statuses = s ? objects(s.services).map((x) => str(x.status)) : [];
+  return {
+    structured: s !== null,
+    ok: s !== null && !result?.isError && s.ok === true,
+    refused: s?.refused === true,
+    next: s?.next === "repeat_same_call" || s?.next === "check_again" ? s.next : null,
+    contention: statuses.includes("notDeletedRepeat"),
+    unsure: statuses.includes("unknown") || statuses.includes("pending"),
+    lines: textLines(result?.content)
+      .filter((l) => !(MODEL_ONLY_DELETE_LINES as readonly string[]).includes(l))
+      .map(deleteForTheCard),
+  };
+}
+
+/** The card's own words around a delete. */
+export const CARD_DELETE = {
+  month: "Borrar servicios…",
+  one: "Borrar este servicio",
+  sheetHead: (month: string) => `¿Qué servicios de ${monthName(month)} borrar?`,
+  sheetFocus: "Se revisa todo el mes, no solo los días que ves.",
+  drafts: "Solo borradores",
+  all: "También publicados",
+  allNote: "Un servicio publicado le avisa por correo a su equipo «Ya no participas».",
+  editsFirst: "Guarda o descarta tus cambios primero.",
+  checking: "Revisando qué se borraría…",
+  confirmHead: "¿Borrar estos servicios?",
+  keptHead: "No se borran:",
+  nothing: "No hay servicios que borrar con esta selección.",
+  publishedSkipped: (n: number) => (n === 1 ? "1 servicio publicado no incluido." : `${n} servicios publicados no incluidos.`),
+  overflow: (n: number) => `Quedan ${n} más: bórralos después de estos (máximo 31 a la vez).`,
+  irreversible: "Esto no se puede deshacer.",
+  yes: "Sí, borrar",
+  no: "Cancelar",
+  close: "Cerrar",
+  again: "Borrar de nuevo",
+  toChat: "Mandar al chat",
+  repeat: "Toca «Borrar de nuevo»: lo que ya se borró dirá «ya no existe».",
+  unknown:
+    "No supe si se borró (o la app no dejó que la tarjeta borrara). Toca «Borrar de nuevo»: lo que ya se borró dirá «ya no existe». " +
+    "Si sigue fallando, usa «Mandar al chat».",
+  reread: "Revisa el mes como quedó antes de borrar otra cosa.",
+  rereadFailed: "No pude volver a leer el mes; la tarjeta sigue bloqueada. Toca «Volver a leer el mes».",
+  rereadButton: "Volver a leer el mes",
+} as const;
+
+/** «Mandar al chat» for a delete: the lines (what the permission prompt shows), then the arguments verbatim. */
+export function deleteMessage(month: string, deletes: readonly DeleteEntry[], token: string): string {
+  return [
+    `Borra estos servicios de ${monthName(month)} con delete_services:`,
+    ...deletes.map((d) => `- ${d.line}`),
+    "Pasa month, deletes y token exactamente así:",
+    JSON.stringify({ month, deletes, token }),
+  ].join("\n");
+}
+
+/** The model's context after a card delete: what happened, so Claude never deletes these again from an older line. */
+export function deletedContext(month: string, ok: boolean, lines: readonly string[]): string {
+  const head = ok
+    ? `La persona borró desde la tarjeta servicios de ${monthName(month)} (ya están borrados; no los borres otra vez):`
+    : `La tarjeta intentó borrar servicios de ${monthName(month)} y no se borró todo; la tarjeta ya se lo dijo a la persona:`;
+  return [head, ...lines].join("\n");
+}
