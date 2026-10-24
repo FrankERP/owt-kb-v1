@@ -10,6 +10,7 @@ import { WORSHIP_AUDIENCE_GROQ_FILTER, WORSHIP_MEMBER_GROQ_FILTER } from "@/app/
 import { COUNTS_FOR_FAIRNESS_GROQ } from "@/app/utils/countsForFairness";
 import { SOLVER_CONFIG_DOC_ID } from "@/app/utils/solverConfigWriteRequest";
 import { THREAD_MESSAGES } from "@/app/utils/proposalMessageRead";
+import { PASTOR_MESSAGE } from "@/app/utils/serviceThread";
 
 export interface BoundQuery {
   query: string;
@@ -610,12 +611,18 @@ export function serviceConversationQuery(roleId: string, threadId: string): Boun
   return {
     query: `{
       "service": *[_type in ["sunday_role", "saturday_role", "special_role"] && _id == $roleId][0]{
-        _id, _type, service_name,
+        _id, _rev, _type, service_name, team_notes,
         "service_date": coalesce(week, date),
         "published": coalesce(published, true),
+        "hasSongs": defined(songs),
         "leads": Lead[defined(@->)]{ "id": @->_id, "name": coalesce(@->alias, @->member_name) }
       },
       "messages": *[_type == "serviceThread" && _id == $threadId][0].${THREAD_MESSAGES},
+      "pastor_message": *[_type == "serviceThread" && _id == $threadId][0].${PASTOR_MESSAGE},
+      "weekendSetlists": *[
+        _type in ["featuredSongs", "saturdarSongs"] &&
+        week == *[_type in ["sunday_role", "saturday_role"] && _id == $roleId][0].week
+      ]{ _id, _rev, _type, team_notes },
       "proposal": *[_type == "setlistProposal" && service_ref._ref == $roleId] | order(_createdAt asc)[0]{
         _id, status,
         ${THREAD_MESSAGES}

@@ -159,6 +159,22 @@ describe("DayCard", () => {
     });
   });
 
+  it("shows the pastor's message to everyone, in its own box ABOVE the team note (ADR-0065, 2026-10-24)", () => {
+    const { container } = mount({
+      pastorMessage: "Efesios 2: por gracia",
+      setlist: { week: "2026-09-13", songs: [song("s1")], team_notes: "Lleguen 8:30" },
+    });
+    const titles = Array.from(container.querySelectorAll("section > p:first-child")).map((p) => p.textContent);
+    expect(titles.indexOf("Mensaje del pastor")).toBeGreaterThan(-1);
+    expect(titles.indexOf("Mensaje del pastor")).toBeLessThan(titles.indexOf("Mensaje para el equipo"));
+    expect(screen.getByText("Efesios 2: por gracia")).toBeTruthy();
+  });
+
+  it("draws no pastor's box when there is none", () => {
+    mount({ pastorMessage: null, setlist: { week: "2026-09-13", songs: [song("s1")], team_notes: "Lleguen 8:30" } });
+    expect(screen.queryByText("Mensaje del pastor")).toBeNull();
+  });
+
   it("gives a hero card ONE Ensayar and drops the inline practice pill", () => {
     mount({ hero: true });
     expect(screen.getAllByRole("button", { name: /Ensayar/ })).toHaveLength(1);

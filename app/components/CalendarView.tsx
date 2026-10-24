@@ -49,6 +49,8 @@ export type ActiveDay = {
   date: string;
   time?: string | null;
   setlist?: Setlist | null;
+  /** The service's «Mensaje del pastor», shown above the team note. */
+  pastorMessage?: string | null;
   leads?: string[];
   instruments?: Array<{ label: string; person: string }>;
   fohTeam?: Array<{ label: string; person: string }>;
@@ -210,6 +212,7 @@ export default function CalendarView({ activeDays, viewMonth, todayStr, photos, 
                 date={d.date}
                 time={d.time}
                 setlist={d.setlist}
+                pastorMessage={d.pastorMessage}
                 leads={d.leads}
                 instruments={d.instruments}
                 fohTeam={d.fohTeam}

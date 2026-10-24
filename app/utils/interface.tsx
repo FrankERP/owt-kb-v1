@@ -124,6 +124,8 @@ export interface SundayRole {
   foh_team: Array<{ role: string; person: string }>;
   BGVs: Array<TeamMember>;
   Chorus: Array<TeamMember>;
+  /** The service's «Mensaje del pastor» (`pastorMessageBodyOf`), on the reads that show it. */
+  pastor_message?: string | null;
 }
 
 export interface SpecialRole {
@@ -136,6 +138,8 @@ export interface SpecialRole {
   format?: string | null;
   songs?: Array<SetlistSong>;
   team_notes?: string;
+  /** The service's «Mensaje del pastor» (`pastorMessageBodyOf`), on the reads that show it. */
+  pastor_message?: string | null;
   Lead?: Array<TeamMember>;
   instruments?: Array<{ instrument: string; person: string }>;
   foh_team?: Array<{ role: string; person: string }>;
@@ -152,6 +156,8 @@ export interface SaturdayRole {
   foh_team: Array<{ role: string; person: string }>;
   BGVs: Array<TeamMember>;
   Chorus: Array<TeamMember>;
+  /** The service's «Mensaje del pastor» (`pastorMessageBodyOf`), on the reads that show it. */
+  pastor_message?: string | null;
 }
 
 export type ProposalStatus = "draft" | "pending" | "approved" | "changes_requested";

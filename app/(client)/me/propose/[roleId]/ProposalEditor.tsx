@@ -82,6 +82,8 @@ interface Props {
    * typically what the pastor shared. Read-only here; merged into the thread by `at`.
    */
   earlierMessages?: ThreadMessage[] | null;
+  /** The service's «Mensaje del pastor» (ADR-0065, 2026-10-24): pinned, read-only. */
+  pastorMessage?: string | null;
 }
 
 // ─── Key options ─────────────────────────────────────────────────────────────
@@ -172,7 +174,7 @@ export function proposalSnapshot(
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function ProposalEditor({ roleDoc, proposal, currentUserId, earlierMessages }: Props) {
+export default function ProposalEditor({ roleDoc, proposal, currentUserId, earlierMessages, pastorMessage }: Props) {
   const router = useRouter();
 
   const [songs, setSongs] = useState<ProposalSong[]>(() => songsFromProposal(proposal));
@@ -573,6 +575,15 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
             Propuesta compartida · editada también por {otherContributors.join(", ")}
           </p>
         </div>
+      )}
+
+      {/* The pastor's message, pinned above everything the lead decides: it is
+          what the set is built around. Admins edit it from the service card. */}
+      {pastorMessage && (
+        <section className="rounded-xl border border-surface-accent-30 bg-accent/5 p-4 space-y-1.5">
+          <h2 className="font-label text-xs uppercase tracking-widest text-accent">Mensaje del pastor</h2>
+          <p className="font-body text-sm text-ink-muted/90 whitespace-pre-wrap">{pastorMessage}</p>
+        </section>
       )}
 
       {/* Stale-reload banner (409: a co-lead changed the shared proposal, or it

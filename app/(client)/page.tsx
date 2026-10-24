@@ -14,6 +14,7 @@ import { myNameFromSession } from "../utils/agenda";
 import { homeGreeting } from "../utils/homeGreeting";
 import { seatPhotos } from "../utils/teamSections";
 import { heroPhotoPosition, heroPhotoSrc, SHEET_TITLE, type HomeHero } from "../utils/homeHero";
+import { pastorMessageBodyOf } from "../utils/serviceThread";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -56,7 +57,8 @@ const ROLE_FIELDS = `_id, week,
   instruments[]{ instrument, "person": coalesce(person->alias, person->member_name), "photo": ${PERSON_PHOTO} },
   foh_team[]{ role, "person": coalesce(person->alias, person->member_name), "photo": ${PERSON_PHOTO} },
   BGVs[]->{ member_name, alias, "photo": ${PHOTO} },
-  Chorus[]->{ member_name, alias, "photo": ${PHOTO} }`;
+  Chorus[]->{ member_name, alias, "photo": ${PHOTO} },
+  "pastor_message": ${pastorMessageBodyOf("^._id")}`;
 
 // One combined GROQ fetch for all weekend data — GROQ params prevent query cache
 // misses. Weekend single-target keys return arrays (no `[0]`); the page picks a
@@ -94,6 +96,7 @@ export default async function Home() {
     foh_team: { role: string; person: string }[];
     BGVs: { member_name: string; alias?: string }[];
     Chorus: { member_name: string; alias?: string }[];
+    pastor_message?: string | null;
   };
 
   const weekend = await operationalClient.fetch<{
@@ -182,6 +185,7 @@ export default async function Home() {
           roleId: sp._id,
           serviceId: sp._id,
           setlist: sp.songs?.length ? { songs: sp.songs as SetlistSong[], week: sp.date, team_notes: sp.team_notes } : undefined,
+          pastorMessage: sp.pastor_message,
           leads: sp.Lead?.map((m) => m.alias || m.member_name) ?? [],
           instruments: sp.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
           fohTeam: sp.foh_team?.map((s) => ({ label: s.role, person: s.person })),
@@ -198,6 +202,7 @@ export default async function Home() {
             date: satSongs?.week ?? satRole?.week,
             serviceId: satRole?._id,
             setlist: satSetlist,
+            pastorMessage: satRole?.pastor_message,
             leads: satRole?.Lead?.map((m) => m.alias || m.member_name) ?? [],
             instruments: satRole?.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
             fohTeam: satRole?.foh_team?.map((s) => ({ label: s.role, person: s.person })),
@@ -215,6 +220,7 @@ export default async function Home() {
             date: sunSongs?.week ?? sunRole?.week,
             serviceId: sunRole?._id,
             setlist: sunSetlist,
+            pastorMessage: sunRole?.pastor_message,
             leads: sunRole?.Lead?.map((m) => m.alias || m.member_name) ?? [],
             instruments: sunRole?.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
             fohTeam: sunRole?.foh_team?.map((s) => ({ label: s.role, person: s.person })),

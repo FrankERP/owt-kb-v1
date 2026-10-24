@@ -27,7 +27,7 @@
  * name.
  */
 export const THREAD_MESSAGES = `messages[]{
-    _key, _type, author_role, kind, body, at,
+    _key, _type, author_role, kind, body, at, edited_at,
     "author": author._ref,
     "author_name": coalesce(author->alias, author->member_name)
   }`;
@@ -43,6 +43,8 @@ export interface ThreadMessageRow {
   kind?: string;
   body?: string;
   at?: string;
+  /** Set when an admin edited their service-thread message (ADR-0065, 2026-10-24). */
+  edited_at?: string | null;
 }
 
 /**
