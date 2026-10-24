@@ -37,6 +37,8 @@ const config: Config = {
 
 				"positive-fg": "rgb(var(--positive-fg-rgb) / <alpha-value>)",
 				"negative-fg": "rgb(var(--negative-fg-rgb) / <alpha-value>)",
+				// The second brand colour: the musical key, and nothing else (ADR-0071).
+				"key-fg": "rgb(var(--key-fg-rgb) / <alpha-value>)",
 
 				// Added in B3 — five values that render with no role in the vocabulary.
 				// The two "deep" surfaces are the DARK halves of pairs whose light halves

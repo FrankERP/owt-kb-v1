@@ -171,6 +171,28 @@ describe("LibraryFilters", () => {
     expect(chips[0].getAttribute("aria-pressed")).toBe("true");
   });
 
+  it("the primary button says how many songs the filters leave, and «Listo» without a count", () => {
+    const withCount = (resultCount?: number) =>
+      render(
+        <MotionProvider>
+          <CueDialogProvider>
+            <LibraryFilters filters={EMPTY} onChange={vi.fn()} tags={TAGS} authors={AUTHORS} keys={KEYS} resultCount={resultCount} />
+          </CueDialogProvider>
+        </MotionProvider>,
+      );
+    withCount(61);
+    openDrawer();
+    expect(screen.getByRole("button", { name: "Ver 61 canciones" })).toBeDefined();
+    cleanup();
+    withCount(1);
+    openDrawer();
+    expect(screen.getByRole("button", { name: "Ver 1 canción" })).toBeDefined();
+    cleanup();
+    withCount();
+    openDrawer();
+    expect(screen.getByRole("button", { name: "Listo" })).toBeDefined();
+  });
+
   it("the count badge on the trigger reads Filtros · 2 for two active filters", () => {
     mount({ ...EMPTY, tags: ["alabanza"], author: "hillsong" });
     expect(screen.getByRole("button", { name: "Filtros · 2" })).toBeDefined();

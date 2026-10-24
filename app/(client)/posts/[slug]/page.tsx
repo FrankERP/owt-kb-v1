@@ -482,7 +482,7 @@ const Page = async ({ params }: Params) => {
                     )}
                   </div>
                   {entry.play_key && (
-                    <span className="shrink-0 rounded-full border border-ink/[0.18] px-2.5 py-1 font-label text-sm font-semibold text-ink">
+                    <span className="shrink-0 rounded-full border border-ink/[0.18] px-2.5 py-1 font-label text-sm font-semibold text-key-fg">
                       {formatKey(entry.play_key)}
                     </span>
                   )}

@@ -670,10 +670,18 @@ importable only under `app/components/ui/**` — see `docs/MOTION.md` and
 ADR-0031.
 
 ## Colour tokens
-Colour lives in **67 base roles + 32 composed tokens** (`app/brand.css` `:root`,
+Colour lives in **68 base roles + 32 composed tokens** (`app/brand.css` `:root`,
 `tailwind.config.ts`). The seven retired `--brand-*` COLOUR variables and their `brand.*`
 Tailwind keys are **gone**; the four non-colour ones (`--brand-radius-*`,
 `--brand-duration-*`) survive.
+- **Rose is the second brand colour, and it means the musical key** (`--key-fg-rgb`,
+  `text-key-fg`; ADR-0071, 2026-10-24). Every other hue already has a job — cyan is
+  navigation, state and action; amber Saturday and warnings; violet specials and info — so the
+  rose has exactly one: the key, wherever the song is the protagonist (`LibraryRow`, the song
+  page's and the sheet's key pills and history pills, `.brand-key-dial`). Never a state, an
+  alert, a button, a link or «tú», and the key stays ink inside a day card, where the 3 px rail
+  already owns the colour. Frank chose it over gold (which blurred into Saturday's amber) and
+  over more cyan (which turns the accent into wallpaper).
 - **Never build a colour by string concatenation.** `` `${hex}55` `` worked on a bare hex;
   a token cannot be appended to, and `rgb(var(--accent-rgb) / 0.2)55` is not a valid
   `<color>` — the browser drops the whole declaration with nothing in the console. Use

@@ -50,6 +50,8 @@ const BASE_ROLES = [
   "warning-fg", "warning-surface", "warning-border",
   "info-fg", "info-surface", "info-border",
   "positive-fg", "negative-fg",
+  // The second brand colour (ADR-0071): rose, for the musical key only.
+  "key-fg",
   // B3 additions — see brand.css for why each exists.
   "warning-surface-deep", "info-surface-deep",
   "surface-overlay", "surface-overlay-deep", "surface-overlay-deepest",
@@ -351,8 +353,12 @@ describe("brand.css rule bodies — B2's invariant, which later slices must not 
     // 42 → 37 (2026-10-23, ADR-0070's Canción pass: the song page's hero is a
     // title on the plain page, so `.brand-song-hero` — border, two gradient
     // stops, the radial glow and the `::before` sheen — is deleted.)
-    expect(all.length).toBe(37);
-    expect(all.filter((o) => o.alpha === "none").length).toBe(4);
+    // 37 → 33 (2026-10-24, ADR-0071: `.brand-key-dial`'s border, colour and two
+    // shadows moved from `--accent-rgb` to the new `--key-fg-rgb`, which this
+    // regex does not count — the key is the second brand colour, not the accent.)
+    expect(all.length).toBe(33);
+    // One of the four alpha-free occurrences was `.brand-key-dial`'s `color`.
+    expect(all.filter((o) => o.alpha === "none").length).toBe(3);
   });
 
   it("every rgb(var(x)) in a body names a TRIPLET — the rgb(rgb(...)) trap", () => {

@@ -151,7 +151,8 @@ describe("SongSheet tempo", () => {
 
     expect(screen.queryByRole("button", { name: /tempo/i })).toBeNull();
     const span = screen.getByText("libre BPM");
-    expect(span.className).toContain("min-h-[44px]");
+    // The same 48 px ring the key and the compás wear (ADR-0070's Biblioteca pass).
+    expect(span.className).toContain("min-h-[48px]");
   });
 
   it("stops the click when the sheet closes", () => {

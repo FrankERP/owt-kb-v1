@@ -14,29 +14,33 @@ import RehearsalPlayer from "./song/RehearsalPlayer";
 import TempoPill from "./song/TempoPill";
 import CueDialog from "./ui/CueDialog";
 import { groupBySections } from "@/app/utils/lyrics";
+import { LYRIC_EYEBROW } from "@/app/utils/lyricMarkers";
+import { SHEET_TITLE } from "@/app/utils/homeHero";
+import { splitSongTitle } from "@/app/utils/songTitle";
+import Button from "./ui/Button";
+import PlayPauseGlyph from "./ui/PlayPauseGlyph";
+
+// The sheet is the song page's system at sheet size (ADR-0070's Biblioteca pass):
+// the original name beside the artist, the key / BPM / compás as 48 px rings, the
+// ONE uppercase on `SHEET_TITLE`, hairline rows for tracks, chord PDFs and the
+// history, and «Ver la página completa» as the last row. The key wears the second
+// brand colour (`text-key-fg`, ADR-0071).
+const RING = "inline-flex min-h-[48px] items-center rounded-full border border-ink/[0.18] px-4 font-body text-base font-semibold text-ink";
+const ROWS = "divide-y divide-ink/[0.10] border-y border-ink/[0.10]";
+const HISTORY_DATE = new Intl.DateTimeFormat("es-ES", { year: "numeric", month: "long", day: "numeric" });
 
 // ─── Portable-text renderer for the sheet (no prose class, tight spacing) ─────
 
 const bodyComponents: PortableTextComponents = {
   block: {
     normal: ({ children }) => (
-      <p className="font-body text-base leading-relaxed">{children}</p>
+      <p className="font-body text-[17px] leading-relaxed text-ink">{children}</p>
     ),
-    h1: ({ children }) => (
-      <p className="font-label text-[11px] uppercase tracking-widest text-accent/70 mt-4 mb-0.5 first:mt-0">
-        {children}
-      </p>
-    ),
-    h2: ({ children }) => (
-      <p className="font-label text-[11px] uppercase tracking-widest text-accent/70 mt-4 mb-0.5 first:mt-0">
-        {children}
-      </p>
-    ),
-    h3: ({ children }) => (
-      <p className="font-label text-[11px] uppercase tracking-widest text-accent/70 mt-4 mb-0.5 first:mt-0">
-        {children}
-      </p>
-    ),
+    // The section labels (Verso, Coro) are the song page's own eyebrow — the one
+    // other uppercase the sheet allows besides its section titles.
+    h1: ({ children }) => <p className={`${LYRIC_EYEBROW} mt-5 mb-1 first:mt-0`}>{children}</p>,
+    h2: ({ children }) => <p className={`${LYRIC_EYEBROW} mt-5 mb-1 first:mt-0`}>{children}</p>,
+    h3: ({ children }) => <p className={`${LYRIC_EYEBROW} mt-5 mb-1 first:mt-0`}>{children}</p>,
   },
   marks: {
     strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
@@ -120,6 +124,9 @@ export default function SongSheet() {
   const hasHistory  = (sheet?.history?.length ?? 0) > 0;
   const hasContent  = hasChords || hasBody;
   const sheetTrack = sheet && player.track?.songSlug === sheet.slug ? player.track : null;
+  // «Alaba (Praise)»: CueDialog's title carries the whole catalogue name (the one
+  // heading, which the sheet's tests pin); the ORIGINAL goes beside the artist.
+  const { original } = splitSongTitle(sheet?.title);
   const activeSetEntry = openSetIdx !== null ? sheet?.history?.[openSetIdx] : undefined;
 
   return (
@@ -134,47 +141,44 @@ export default function SongSheet() {
         onDismiss={closeSheet}
       >
 
-        {/* Meta row — key/BPM/author, moved out of the old hand-rolled header */}
+        {/* Under CueDialog's own title: the original name and the artist, then the
+            key / BPM / compás row — the song page's hero at sheet size. */}
         {sheet && (
-          <div className="px-5 pt-3 flex flex-wrap items-center gap-2">
-            {sheet.author && (
-              <span className="font-body text-sm text-mono-400">{sheet.author}</span>
+          <div className="flex flex-col gap-4 px-5 pt-1">
+            {(original || sheet.author) && (
+              <p className="font-body text-[17px] leading-snug text-ink-muted">
+                {original}
+                {original && sheet.author && <span className="text-ink-dim"> · </span>}
+                {sheet.author}
+              </p>
             )}
-            {/* The key the member will PLAY: opened from a setlist the chart below is
-                already transposed to `sheetPlayKey`, so the chip says that key and the
-                written one beside it as «orig.», the setlist row's own wording. Opened
-                from the library there is no service key and the written key stands. */}
-            {(sheetPlayKey || sheet.key) && (
-              <span className="brand-key-dial px-3 font-display text-sm">
-                {formatKey(sheetPlayKey || sheet.key)}
-              </span>
-            )}
-            {sheetPlayKey && sheet.key && sheetPlayKey !== sheet.key && (
-              <span className="font-label text-[11px] px-1.5 py-0.5 rounded border border-mono-700 bg-mono-800/50 text-mono-500 leading-tight">
-                orig. {formatKey(sheet.key)}
-              </span>
-            )}
-            {/* The sheet's tempo clicks too (F2, ruling 14) — the same pill as the
-                song hero, kept quiet by `enabled` when the sheet is dismissed. */}
-            {bpm !== null ? (
-              <TempoPill bpm={bpm} timeSig={sheet.timeSig ?? null} enabled={isOpen} size="sm" />
-            ) : sheet.bpm ? (
-              <span className="inline-flex min-h-[44px] items-center font-label text-sm px-3 py-1 rounded-full border border-ink-muted/15 text-ink-muted/70">
-                {sheet.bpm} BPM
-              </span>
-            ) : null}
-            {/* Same 44px height as the pill beside them: a row that mixes a tap
-                target with 30px chips reads as two rows of chrome. */}
-            {sheet.timeSig && (
-              <span className="inline-flex min-h-[44px] items-center font-label text-sm px-3 py-1 rounded-full border border-ink-muted/15 text-ink-muted/70">
-                {sheet.timeSig}
-              </span>
-            )}
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* The key the member will PLAY: opened from a setlist the chart below is
+                  already transposed to `sheetPlayKey`, so the pill says that key and the
+                  written one inside it as «orig.», the setlist row's own wording. Opened
+                  from the library there is no service key and the written key stands. */}
+              {(sheetPlayKey || sheet.key) && (
+                <span className="inline-flex min-h-[48px] items-baseline gap-2.5 rounded-full border border-ink/[0.28] px-[18px]">
+                  <span className="font-display text-2xl font-semibold leading-[46px] text-key-fg">{formatKey(sheetPlayKey || sheet.key)}</span>
+                  {sheetPlayKey && sheet.key && sheetPlayKey !== sheet.key && (
+                    <span className="font-body text-[13px] text-ink-dim">orig. {formatKey(sheet.key)}</span>
+                  )}
+                </span>
+              )}
+              {/* The sheet's tempo clicks too (F2, ruling 14) — the same pill as the
+                  song hero, kept quiet by `enabled` when the sheet is dismissed. */}
+              {bpm !== null ? (
+                <TempoPill bpm={bpm} timeSig={sheet.timeSig ?? null} enabled={isOpen} />
+              ) : sheet.bpm ? (
+                <span className={RING}>{sheet.bpm} BPM</span>
+              ) : null}
+              {sheet.timeSig && <span className={RING}>{sheet.timeSig}</span>}
+            </div>
           </div>
         )}
 
         {/* Scrollable body */}
-        <div ref={focusAnchorRef} tabIndex={-1} className="overflow-y-auto flex-1 px-5 py-4 space-y-5">
+        <div ref={focusAnchorRef} tabIndex={-1} className="flex-1 space-y-9 overflow-y-auto px-5 pb-6 pt-7">
           {sheetLoading ? (
             <div className="space-y-3">
               {[...Array(5)].map((_, i) => (
@@ -201,8 +205,8 @@ export default function SongSheet() {
               )}
 
               {(sheet?.rehearsalMixes?.length ?? 0) > 0 && (
-                <div className="space-y-2 pt-1">
-                  <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">Ensayo</p>
+                <div className="space-y-3">
+                  <p className={SHEET_TITLE}>Ensayo</p>
                   <RehearsalPlayer
                     mixes={sheet!.rehearsalMixes!}
                     songId={sheet!._id}
@@ -213,50 +217,45 @@ export default function SongSheet() {
                 </div>
               )}
 
-              {/* Audio tracks */}
+              {/* Audio tracks — hairline rows with the song page's round control: the
+                  LOADED track's button is the accent fill, every other one a ring. */}
               {hasAudio && (
-                <div className="space-y-2 pt-1">
-                  <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">Audio</p>
-                  {sheet.audioTracks!.filter(t => t.audioFileURL).map((track, i) => {
-                    const audioTrack: AudioTrack = {
-                      url: track.audioFileURL,
-                      title: track.title,
-                      tone: track.tone,
-                      songTitle: sheet!.title,
-                      songSlug: sheet!.slug,
-                    };
-                    const isCurrent = player.track?.url === track.audioFileURL;
-                    return (
-                      <button
-                        key={i}
-                        onClick={() => (isCurrent ? togglePlay() : playTrack(audioTrack))}
-                        aria-label={`${isCurrent && player.isPlaying ? "Pausar" : "Reproducir"} ${track.title}`}
-                        className={`brand-library-module w-full flex items-center gap-3 px-4 py-3 transition-colors text-left ${
-                          isCurrent
-                            ? "border-accent/50 bg-accent/10"
-                            : "border-accent-deep/30 hover:border-accent/30 hover:bg-accent/5"
-                        }`}
-                      >
-                        <span className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
-                          isCurrent ? "bg-accent text-surface-base" : "bg-accent-deep/30 text-accent"
-                        }`}>
-                          {isCurrent && player.isPlaying ? <PauseIcon /> : <PlayIcon />}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="font-body text-sm font-semibold truncate">{track.title}</p>
-                          {track.tone && (
-                            <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">{track.tone}</p>
-                          )}
-                        </div>
-                      </button>
-                    );
-                  })}
+                <div className="space-y-3">
+                  <p className={SHEET_TITLE}>Audio</p>
+                  <ul className={ROWS}>
+                    {sheet.audioTracks!.filter(t => t.audioFileURL).map((track, i) => {
+                      const audioTrack: AudioTrack = {
+                        url: track.audioFileURL,
+                        title: track.title,
+                        tone: track.tone,
+                        songTitle: sheet!.title,
+                        songSlug: sheet!.slug,
+                      };
+                      const isCurrent = player.track?.url === track.audioFileURL;
+                      const playing = isCurrent && player.isPlaying;
+                      return (
+                        <li key={i} className="flex min-h-[64px] items-center gap-3.5 py-2">
+                          <Button
+                            variant={isCurrent ? "roundCta" : "round"}
+                            onClick={() => (isCurrent ? togglePlay() : playTrack(audioTrack))}
+                            aria-label={`${playing ? "Pausar" : "Reproducir"} ${track.title}`}
+                          >
+                            <PlayPauseGlyph playing={playing} size={14} />
+                          </Button>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-body text-[17px] font-semibold text-ink">{track.title}</span>
+                            {track.tone && <span className="mt-0.5 block font-body text-sm text-ink-muted">{formatKey(track.tone) || track.tone}</span>}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </div>
               )}
 
               {sheetTrack && (
                 <div
-                  className="sticky bottom-0 -mx-5 border-t border-accent/10 bg-surface-base/95 backdrop-blur-md"
+                  className="sticky bottom-0 -mx-5 border-t border-ink/[0.10] bg-surface-base/95 backdrop-blur-md"
                   style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
                 >
                   <AudioTransport
@@ -274,37 +273,41 @@ export default function SongSheet() {
                 </div>
               )}
 
-              {/* Chord PDFs */}
+              {/* Chord PDFs — «Acordes», one hairline row per file. */}
               {hasPDFs && (
-                <div className="space-y-2 pt-1">
-                  <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">PDFs</p>
-                  {sheet.chordsPDF!.map((pdf, i) => (
-                    <a
-                      key={i}
-                      href={pdf.chordsURL}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="brand-library-module brand-surface-interactive flex items-center gap-3 px-4 py-3"
-                    >
-                      <span className="w-7 h-7 rounded-full bg-accent-deep/30 text-accent flex items-center justify-center shrink-0">
-                        <PDFIcon />
-                      </span>
-                      <span className="font-body text-sm flex-1">
-                        {pdf.title}{pdf.key ? ` — ${formatKey(pdf.key)}` : ""}
-                      </span>
-                      <ExternalLinkIcon size={13} className="shrink-0 text-mono-500" />
-                    </a>
-                  ))}
+                <div className="space-y-3">
+                  <p className={SHEET_TITLE}>Acordes</p>
+                  <ul className={ROWS}>
+                    {sheet.chordsPDF!.map((pdf, i) => (
+                      <li key={i}>
+                        <a
+                          href={pdf.chordsURL}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex min-h-[64px] items-center gap-3.5 py-2 text-ink transition-colors hover:text-accent"
+                        >
+                          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface-raised text-accent">
+                            <PDFIcon />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-body text-[17px] font-semibold">{pdf.title}</span>
+                            <span className="mt-0.5 block font-body text-sm text-ink-muted">PDF{pdf.key ? ` · tono ${formatKey(pdf.key)}` : ""}</span>
+                          </span>
+                          <ExternalLinkIcon size={18} className="shrink-0 text-ink-dim" />
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
 
-              {/* Historial — last 5 times played: key + who led */}
+              {/* Historial — the last times played, the song page's rows: the day in
+                  full, who led under it, the key played as a pill. A row with a stored
+                  set opens the whole set. */}
               {hasHistory && (
-                <div className="space-y-2 pt-1">
-                  <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">
-                    Últimas veces tocada
-                  </p>
-                  <ul className="space-y-2">
+                <div className="space-y-3">
+                  <p className={SHEET_TITLE}>Últimas veces tocada</p>
+                  <ul className={ROWS}>
                     {sheet.history!.map((entry, i) => {
                       const hasSet = (entry.setlist?.length ?? 0) > 0;
                       return (
@@ -313,55 +316,43 @@ export default function SongSheet() {
                             type="button"
                             onClick={() => hasSet && setOpenSetIdx(i)}
                             disabled={!hasSet}
-                            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl border border-accent-deep/30 bg-accent/[0.03] text-left transition-colors ${
-                              hasSet ? "hover:border-accent/40 hover:bg-accent/[0.07] cursor-pointer" : "cursor-default"
+                            className={`flex w-full items-center gap-3.5 py-3.5 text-left transition-colors ${
+                              hasSet ? "cursor-pointer hover:text-accent" : "cursor-default"
                             }`}
                             title={hasSet ? "Ver el set completo" : undefined}
                           >
-                            {/* Date + service */}
-                            <div className="min-w-0 shrink-0">
-                              <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 leading-none mb-1">
-                                {entry._type === "featuredSongs" ? "Domingo" : "Sábado"}
-                              </p>
-                              <p className="font-body text-xs text-mono-300 leading-none whitespace-nowrap">
-                                {formatHistoryDate(entry.week)}
-                              </p>
-                            </div>
-
-                            {/* Leaders */}
-                            <div className="flex-1 min-w-0 flex items-center justify-center gap-1.5 flex-wrap">
-                              {entry.leaders && entry.leaders.length > 0 ? (
-                                entry.leaders.map((lead, j) => (
-                                  <span key={j} className="flex items-center gap-1.5 min-w-0">
-                                    {lead.photo ? (
-                                      <img
-                                        src={lead.photo}
-                                        alt=""
-                                        className="w-5 h-5 rounded-full object-cover border border-accent/25 shrink-0"
-                                      />
-                                    ) : (
-                                      <span className="w-5 h-5 rounded-full bg-accent-deep/50 text-accent flex items-center justify-center text-[10px] font-semibold shrink-0">
-                                        {(lead.name ?? "?").charAt(0).toUpperCase()}
+                            <span className="min-w-0 flex-1">
+                              <span className="block font-body text-[17px] font-semibold leading-snug text-ink">
+                                {entry._type === "featuredSongs" ? "Domingo" : "Sábado"} {formatHistoryDate(entry.week)}
+                              </span>
+                              <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-body text-sm leading-snug text-ink-muted">
+                                {entry.leaders && entry.leaders.length > 0 ? (
+                                  <>
+                                    <span>Lidera</span>
+                                    {entry.leaders.map((lead, j) => (
+                                      <span key={j} className="flex min-w-0 items-center gap-1.5">
+                                        {lead.photo ? (
+                                          <img src={lead.photo} alt="" className="h-5 w-5 shrink-0 rounded-full object-cover" />
+                                        ) : (
+                                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-surface-raised text-[10px] font-semibold text-ink">
+                                            {(lead.name ?? "?").charAt(0).toUpperCase()}
+                                          </span>
+                                        )}
+                                        <span className="truncate text-ink">{lead.name ?? "—"}</span>
                                       </span>
-                                    )}
-                                    <span className="font-body text-xs text-mono-300 truncate">
-                                      {lead.name ?? "—"}
-                                    </span>
-                                  </span>
-                                ))
-                              ) : (
-                                <span className="font-body text-xs text-mono-600 italic">
-                                  Sin líder
-                                </span>
-                              )}
-                            </div>
+                                    ))}
+                                  </>
+                                ) : (
+                                  <span className="italic text-ink-dim">Sin líder</span>
+                                )}
+                              </span>
+                            </span>
 
-                            {/* Key played */}
-                            <span className="font-label text-xs px-2.5 py-1 rounded-full border border-accent/40 text-accent shrink-0">
+                            {/* Key played — the second brand colour (ADR-0071). */}
+                            <span className="shrink-0 rounded-full border border-ink/[0.18] px-2.5 py-1 font-label text-sm font-semibold text-key-fg">
                               {formatKey(entry.play_key || sheet!.key) || "—"}
                             </span>
 
-                            {/* Affordance */}
                             {hasSet && <ChevronIcon />}
                           </button>
                         </li>
@@ -371,14 +362,17 @@ export default function SongSheet() {
                 </div>
               )}
 
-              {/* Full page link */}
+              {/* Full page link — the last row of the sheet. */}
               <Link
                 href={`/posts/${sheet.slug}`}
                 onClick={closeSheet}
-                className="brand-search-console flex w-full items-center justify-center gap-2 py-3 font-label text-xs uppercase tracking-widest text-ink-dim transition-colors hover:border-accent/35 hover:text-accent"
+                className="flex min-h-[60px] items-center justify-between gap-3.5 border-y border-ink/[0.10] font-body text-[17px] font-semibold text-ink transition-colors hover:text-accent"
               >
-                Ver página completa
-                <ExternalLinkIcon size={13} />
+                Ver la página completa
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-ink-dim">
+                  <path d="M5 12h14" />
+                  <path d="M13 6l6 6-6 6" />
+                </svg>
               </Link>
             </>
           ) : sheetError ? (
@@ -487,32 +481,13 @@ function SetlistPopover({
 
 function formatHistoryDate(week: string) {
   // Dates are stored as `date` (YYYY-MM-DD); pin to local noon to avoid UTC day-flip.
-  return new Date(week.slice(0, 10) + "T12:00:00").toLocaleDateString("es-ES", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function PlayIcon() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-      <polygon points="5 3 19 12 5 21 5 3" />
-    </svg>
-  );
-}
-
-function PauseIcon() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-      <rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" />
-    </svg>
-  );
+  // The song page's long form («11 de octubre de 2026»); the popover reuses it.
+  return HISTORY_DATE.format(new Date(week.slice(0, 10) + "T12:00:00"));
 }
 
 function ChevronIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-mono-600 shrink-0">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-ink-dim" aria-hidden="true">
       <polyline points="9 18 15 12 9 6" />
     </svg>
   );
@@ -529,7 +504,7 @@ function CloseIcon() {
 
 function PDFIcon() {
   return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
       <polyline points="14 2 14 8 20 8" />
     </svg>

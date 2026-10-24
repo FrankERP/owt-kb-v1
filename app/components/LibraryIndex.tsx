@@ -11,11 +11,13 @@ import { usePlayer } from "@/app/context/PlayerContext";
 import {
   applyLibraryFilters,
   groupByLetter,
+  isTipoSlug,
   libraryKeys,
   makeLibraryFuse,
   serializeLibraryParams,
   type LibraryFilters as LibraryFiltersState,
 } from "@/app/utils/libraryIndex";
+import { pluralize } from "@/app/utils/libraryCopy";
 import AnimatedList from "./ui/AnimatedList";
 import Button from "./ui/Button";
 import LibraryFilters from "./LibraryFilters";
@@ -178,30 +180,51 @@ export default function LibraryIndex(props: LibraryIndexProps) {
   const set = (next: LibraryFiltersState) => setFilters(next);
   const clear = () => setFilters({ q: "", tags: [], author: "", key: "" });
 
+  // The page's one count line, under the title: songs, themes (every tag that is
+  // not a Tipo and has a song) and artists with a song. `ADR-0070`: the title is the
+  // page's heading in the display face; the counts are its body-type subtitle.
+  const themeCount = useMemo(() => tags.filter((t) => !isTipoSlug(t.slug.current) && (t.postCount ?? 0) > 0).length, [tags]);
+  const artistCount = useMemo(() => authors.filter((a) => (a.postCount ?? 0) > 0).length, [authors]);
+
   return (
-    <div className="mx-auto max-w-7xl px-6 pb-16 pt-8">
-      {/* `min-w-0` on the search box, `size={1}` on the input: a text input's
-          intrinsic minimum is ~20 characters WIDE IN ITS OWN FONT, so at «Máximo»
-          text size the field alone floors at ~320px and shoves «Filtros» off a
-          375pt screen — taking the page into sideways scroll. `min-w-0` is what
-          lets the flex item shrink at all; `size={1}` lowers the intrinsic floor it
-          would otherwise carry, and is belt-and-braces next to the `w-full` on the
-          input rather than a second necessary half. */}
-      <div className="mb-6 flex items-center gap-2">
-        <div className="brand-search-console relative min-w-0 flex-1">
+    <div className="mx-auto max-w-7xl px-6 pb-16 pt-6 md:pt-10">
+      <header className="mb-6 flex flex-col gap-2 md:mb-8">
+        <h1 className="font-display text-[46px] font-semibold leading-[0.98] tracking-[-0.01em] text-ink md:text-[76px] md:leading-[0.95]">
+          Biblioteca
+        </h1>
+        <p className="font-body text-[17px] leading-snug text-ink-muted md:text-xl">
+          {pluralize(posts.length, "canción", "canciones")}
+          <span className="text-ink-dim"> · </span>
+          {pluralize(themeCount, "tema", "temas")}
+          <span className="text-ink-dim"> · </span>
+          {pluralize(artistCount, "artista", "artistas")}
+        </p>
+      </header>
+
+      {/* The search is a hairline, not a boxed console (ADR-0070's Biblioteca pass):
+          on a page that IS a list, a box competes with the rows; a line reads as
+          part of the same sheet. `min-w-0` on the field, `size={1}` on the input: a
+          text input's intrinsic minimum is ~20 characters WIDE IN ITS OWN FONT, so
+          at «Máximo» text size the field alone floors at ~320px and shoves «Filtros»
+          off a 375pt screen — taking the page into sideways scroll. `min-w-0` is
+          what lets the flex item shrink at all; `size={1}` lowers the intrinsic
+          floor it would otherwise carry. */}
+      <div className="mb-5 flex items-center gap-3 border-b border-ink/[0.10]">
+        <label className="relative flex min-w-0 flex-1 items-center gap-3 text-ink-dim focus-within:text-ink-muted">
           <svg
-            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-accent/65"
-            width="15"
-            height="15"
+            className="pointer-events-none shrink-0"
+            width="20"
+            height="20"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
+            aria-hidden="true"
           >
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            <circle cx="11" cy="11" r="7" />
+            <line x1="20" y1="20" x2="16.5" y2="16.5" />
           </svg>
           <input
             type="search"
@@ -209,25 +232,24 @@ export default function LibraryIndex(props: LibraryIndexProps) {
             value={filters.q}
             onChange={(e) => set({ ...filters, q: e.target.value })}
             // A fixed prompt: «Buscar entre 147 canciones» truncated on every phone and
-            // grew with the catalogue. The ONE count on this surface (spec §18) moved to
-            // the results line below, which is empty while idle anyway.
+            // grew with the catalogue. The ONE count on this surface (spec §18) is the
+            // line under the title while idle, the results line once something filters.
             placeholder="Buscar canción o artista"
             aria-label="Buscar canciones por título, artista o tonalidad"
-            className="w-full bg-transparent py-3 pl-10 pr-3 font-label text-[16px] sm:text-sm text-ink placeholder:text-placeholder focus:outline-none"
+            className="w-full min-w-0 bg-transparent py-3.5 font-body text-[16px] text-ink placeholder:text-ink-dim focus:outline-none sm:text-[17px]"
           />
-        </div>
-        <LibraryFilters filters={filters} onChange={set} tags={tags} authors={authors} keys={keys} />
+        </label>
+        <LibraryFilters filters={filters} onChange={set} tags={tags} authors={authors} keys={keys} resultCount={filtered.length} />
       </div>
 
       {/* Always mounted so a screen reader keeps ONE live region to announce
           into — mounting/unmounting it on `active` drops the announcement of
           the very change that flips `active`. Text is empty, not absent, when
-          idle; Limpiar stays conditional since it has nothing to do idle. */}
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <p className="font-label text-[11px] uppercase tracking-widest text-ink-dim" aria-live="polite">
-          {active
-            ? `${filtered.length} ${filtered.length === 1 ? "resultado" : "resultados"}`
-            : `${posts.length} ${posts.length === 1 ? "canción" : "canciones"}`}
+          idle (the title's count line already says how many songs there are);
+          Limpiar stays conditional since it has nothing to do idle. */}
+      <div className={`flex items-center justify-between gap-3 ${active ? "mb-2" : ""}`}>
+        <p className="font-body text-sm text-ink-dim" aria-live="polite">
+          {active ? pluralize(filtered.length, "resultado", "resultados") : ""}
         </p>
         {active && (
           <Button variant="ghost" size="sm" onClick={clear}>
@@ -259,20 +281,23 @@ export default function LibraryIndex(props: LibraryIndexProps) {
           <div className={letters.length > 1 ? "pr-7" : ""}>
             {groups.map((g) => (
               <section key={g.letter || "resultados"} aria-label={g.letter ? `Letra ${g.letter}` : "Resultados"}>
-                {/* A small pill, not a full-width band: on desktop the band read as
-                    a heavy bar with one letter in its corner (Frank, 2026-09-10). The
-                    sticky box is the pill itself, so nothing spans the list. */}
+                {/* The letter in the display face, large and in the accent: it is an
+                    INDEX, not a label, and the accent here is navigation — the same
+                    cyan as the rail's active letter (ADR-0070's Biblioteca pass). Not
+                    a full-width band: on desktop the band read as a heavy bar with
+                    one letter in its corner (Frank, 2026-09-10). The sticky box is the
+                    letter itself, so nothing spans the list. */}
                 {g.letter && (
                   <h2
                     id={`letra-${g.letter}`}
-                    className={`sticky ${UNDER_NAVBAR} z-[1] my-1 inline-flex h-7 min-w-[1.75rem] items-center justify-center rounded-md bg-surface-base/85 px-2 font-display text-base text-accent backdrop-blur-sm`}
+                    className={`sticky ${UNDER_NAVBAR} z-[1] inline-flex min-w-[2.5rem] items-end rounded-br-xl bg-surface-base/90 pb-1.5 pr-3 pt-6 font-display text-[28px] font-semibold leading-none text-accent backdrop-blur-sm md:text-[34px]`}
                   >
                     {g.letter}
                   </h2>
                 )}
                 <AnimatedList
                   as="ul"
-                  className="divide-y divide-ink-dim/[0.06]"
+                  className="divide-y divide-ink/[0.10] border-y border-ink/[0.10]"
                   items={g.posts.map((p) => ({
                     key: p._id,
                     node: <LibraryRow post={p} onQuickActions={onQuickActions} />,
