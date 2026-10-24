@@ -260,6 +260,12 @@ describe("ProposalThread — editing one's own messages (ADR-0065, 2026-10-24)",
     await waitFor(() => expect(onDelete).toHaveBeenCalledWith("m1"));
   });
 
+  it("offers nothing once the service has passed", () => {
+    renderModifiable({ serviceDate: PAST_DATE });
+    expect(screen.queryByText("Editar")).toBeNull();
+    expect(screen.queryByText("Borrar")).toBeNull();
+  });
+
   it("marks an edited message «editado»", () => {
     renderThread({ messages: [msg({ edited_at: "2026-08-20T16:00:00.000Z" })] });
     expect(screen.getByText(/· editado/)).toBeTruthy();

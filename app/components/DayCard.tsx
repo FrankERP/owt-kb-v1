@@ -10,6 +10,7 @@ import { usePlayer } from "@/app/context/PlayerContext";
 import { useSession } from "next-auth/react";
 import { SetlistEditor } from "./admin/SetlistEditor";
 import ServiceMessagesDialog from "./admin/ServiceMessagesDialog";
+import { useRouter } from "next/navigation";
 import { isThreadOpen } from "@/app/utils/proposalThread";
 import CueDialog from "./ui/CueDialog";
 import { themeColour } from "@/app/utils/themeColour";
@@ -406,7 +407,7 @@ export function DayCard({ day, date, time, setlist, pastorMessage, leads, myLead
       />
 
       {canMessage && (
-        <ServiceMessagesDialog
+        <DayCardMessages
           open={messagesOpen}
           roleId={messageRoleId}
           title={`Mensajes · ${day} ${shortDate}`}
@@ -458,6 +459,17 @@ export function DayCard({ day, date, time, setlist, pastorMessage, leads, myLead
  * nothing. Measured only while clamped: once open the paragraph no longer
  * overflows, and the toggle must stay so the reader can fold it back.
  */
+/**
+ * The «Mensajes» dialog as a DayCard opens it: when a save changed what this card
+ * shows (the pastor's message, the team note), the page is refreshed on close so
+ * the card behind it does not keep the old text. Its own component so the router
+ * is only asked for where an admin can open it.
+ */
+function DayCardMessages(props: Omit<React.ComponentProps<typeof ServiceMessagesDialog>, "onChanged">) {
+  const router = useRouter();
+  return <ServiceMessagesDialog {...props} onChanged={() => router.refresh()} />;
+}
+
 function TeamNote({
   text,
   title = "Mensaje para el equipo",

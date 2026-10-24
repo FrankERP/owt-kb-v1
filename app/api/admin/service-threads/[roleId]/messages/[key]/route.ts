@@ -5,7 +5,9 @@ import { writeClient } from "@/sanity/lib/serverClient";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import { serviceError } from "@/app/utils/serviceMutation";
 import { isCanonicalDocumentId } from "@/app/utils/roleWriteRequest";
-import { nowIso } from "@/app/utils/roleWriteOps";
+import { loadCanonicalRole, nowIso } from "@/app/utils/roleWriteOps";
+import { targetFromCanonicalRole } from "@/app/utils/proposalWriteRequest";
+import { isThreadOpen } from "@/app/utils/proposalThread";
 import type { ThreadMessageRow } from "@/app/utils/proposalMessageRead";
 import {
   SERVICE_THREAD_BY_ID_QUERY,
@@ -37,6 +39,9 @@ export const DELETE = deleteHandler;
  * and asserting the thread's `_rev` would refuse an edit whenever anyone appended
  * meanwhile. A message deleted in between makes the edit a no-op, not an error.
  * An edit stamps `edited_at` («editado»); neither notifies anyone.
+ *
+ * Only while the conversation is open (`isThreadOpen`, as on the POST): once the
+ * service has passed, what was said is the record of it.
  */
 async function authorize(
   roleId: string,
@@ -49,6 +54,12 @@ async function authorize(
   const threadId = serviceThreadId(roleId);
   if (!isCanonicalDocumentId(roleId) || !threadId || !isMessageKey(key)) {
     return { error: reject(serviceError("invalid_request", { details: { issues: ["roleId", "key"] } })) };
+  }
+  const lookup = await loadCanonicalRole(roleId);
+  const target = lookup.state === "single" && lookup.role ? targetFromCanonicalRole(lookup.role) : null;
+  if (!target) return { error: reject(serviceError("not_found", { details: { roleId } })) };
+  if (!isThreadOpen({ serviceDate: target.serviceDate })) {
+    return { error: reject(serviceError("invalid_request", { details: { issues: ["thread_closed"] } })) };
   }
   const message = await operationalClient.fetch<{ author?: string | null } | null>(
     `*[_type == "${SERVICE_THREAD_TYPE}" && _id == $threadId][0].messages[_key == $key][0]{ "author": author._ref }`,

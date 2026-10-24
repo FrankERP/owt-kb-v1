@@ -111,8 +111,11 @@ el equipo en la DayCard» (the email still goes to the leads only).
   read (`create` when no thread exists, so a concurrent first message is told, not
   overwritten). The client observes the STAMP, not the `_rev`, so a chat message
   appended meanwhile does not make the admin redo an edit that conflicts with nothing.
-  **Notifies the leads only when it first appears on a published service** — an edit or
-  a clear sends nothing, so fixing a typo never mails anyone again. The DayCard shows it
+  **Notifies the leads only when it appears on an EMPTY field of a published service** —
+  an edit or a clear sends nothing, so fixing a typo never mails anyone again. Exactly
+  that, no more: «Quitar» then «Agregar» mails again (a new message), and one set while
+  the service is unpublished mails nobody, then or at publish (the same rule as the chat;
+  the leads read it on the DayCard and in their editor). The DayCard shows it
   to the whole team (Inicio, Mi perfil, Calendario: `pastorMessageBodyOf`), above
   «Mensaje para el equipo», and the lead's proposal editor pins it at the top.
   The chat composer lost «Es el mensaje del pastor»; `pastor_note` messages already
@@ -122,7 +125,8 @@ el equipo en la DayCard» (the email still goes to the leads only).
   (`loadWeekendSetlistTarget` / `loadSpecialSetlistTarget`, fail closed on duplicates and
   raw drafts), compares the target the dialog loaded (`GET …/messages` → `teamNotes`),
   writes under that `_rev` and heartbeats the weekend lock in the same transaction. It
-  returns the new revision (the transaction id) so the dialog can save again. No setlist
+  returns the new revision (the transaction id) so the dialog can save again; an
+  unchanged text writes nothing and returns the observed target as it was. No setlist
   ⇒ 409 `no_setlist`. A later proposal approval still overwrites the note with the
   proposal's own — the dialog says so.
   **«Mover a mensaje del pastor»** is two client calls, pastor's message FIRST, then an
@@ -134,7 +138,13 @@ el equipo en la DayCard» (the email still goes to the leads only).
   against the caller (403 `not_author`), then writes the one path
   `messages[_key=="<key>"]` with no `ifRevisionId` (the author of a stored message never
   changes, and asserting the thread `_rev` would refuse an edit whenever anyone
-  appended). An edit stamps `edited_at` («editado»); neither notifies.
+  appended). An edit stamps `edited_at` («editado»); neither notifies. Only while the
+  conversation is open (`isThreadOpen`, as the POST): a past service's messages are its
+  record.
+- **The dialog reads afresh on every opening**, and each draft (and the move) carries
+  the stamp or target it was STARTED on, never the one on screen at save time — so a
+  newer save another admin made always answers 409, never a silent overwrite. Closing a
+  DayCard's dialog after a save refreshes the page, so the card shows the new text.
 
 ### Rejected (amendment)
 

@@ -330,6 +330,15 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
     removalOwner: "permanent runtime writer (never removed — editing the team note after publishing)",
   },
   {
+    file: "app/api/admin/service-threads/[roleId]/messages/[key]/route.ts",
+    // The audit's region for both handlers: `PATCH` and `DELETE` are declared
+    // together at the top, so everything below belongs to the later one.
+    operation: "DELETE",
+    reason:
+      "guarded own-message editor (ADR-0065, amended 2026-10-24): PATCH edits and DELETE removes ONE `messages[_key==…]` item of `serviceThread.<roleId>` after checking the caller is its author. `loadCanonicalRole` is read only for the service date (`isThreadOpen`, like the POST); the role itself is never written. No `ifRevisionId` ON PURPOSE — a message's author never changes, and asserting the thread `_rev` would refuse an edit whenever anyone appended",
+    removalOwner: "permanent runtime writer (never removed — editing one's own message)",
+  },
+  {
     file: "app/api/admin/proposals/[id]/route.ts",
     operation: "PATCH",
     reason:

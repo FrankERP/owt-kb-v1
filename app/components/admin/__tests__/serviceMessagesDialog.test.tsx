@@ -240,7 +240,7 @@ describe("ServiceMessagesDialog", () => {
 
     it("on a 409 says another admin changed it and reloads on demand", async () => {
       getBody = conversation({ pastor_message: PASTOR });
-      writeReplies["/pastor-message"] = { status: 409, body: { error: "stale" } };
+      writeReplies["/pastor-message"] = { status: 409, body: { error: "stale_revision" } };
       renderDialog();
       await waitFor(() => expect(screen.getByText("Efesios 2 y Juan 3")).toBeTruthy());
       fireEvent.click(screen.getAllByText("Editar")[0]);
@@ -353,6 +353,73 @@ describe("ServiceMessagesDialog", () => {
       fireEvent.click(screen.getByText("Sí, borrar"));
       await waitFor(() => expect(screen.queryByText("Borrarme")).toBeNull());
       expect(writesTo("/messages/m1")[0][1].method).toBe("DELETE");
+    });
+  });
+
+  describe("review fixes", () => {
+    it("reads afresh on every opening, showing no earlier read meanwhile", async () => {
+      getBody = conversation({ pastor_message: PASTOR });
+      const { rerender } = render(dialog(true));
+      await waitFor(() => expect(screen.getByText("Efesios 2 y Juan 3")).toBeTruthy());
+      let release: (v: unknown) => void = () => {};
+      fetchMock.mockImplementationOnce(() => new Promise((r) => (release = r)));
+      rerender(dialog(false));
+      rerender(dialog(true));
+      // Same service, but the old read is not offered for editing.
+      expect(screen.queryByText("Efesios 2 y Juan 3")).toBeNull();
+      release({ ok: true, status: 200, json: async () => conversation({ pastor_message: { ...PASTOR, body: "Lo nuevo de otro admin", edited_at: "2099-03-02T00:00:00.000Z" } }) });
+      await waitFor(() => expect(screen.getByText("Lo nuevo de otro admin")).toBeTruthy());
+    });
+
+    it("names a duplicate setlist instead of «no setlist», and a blocked save instead of «Recargar»", async () => {
+      getBody = conversation({ teamNotes: { unavailable: "ambiguous" } });
+      const { unmount } = renderDialog();
+      await waitFor(() => expect(screen.getByText(/setlist duplicado o un borrador/)).toBeTruthy());
+      unmount();
+
+      getBody = conversation({ teamNotes: TEAM_TARGET });
+      writeReplies["/team-notes"] = { status: 409, body: { error: "integrity_conflict" } };
+      renderDialog();
+      await waitFor(() => expect(screen.getByText(TEAM_TARGET.text)).toBeTruthy());
+      fireEvent.click(screen.getAllByText("Editar")[0]);
+      fireEvent.click(screen.getByText("Guardar"));
+      await waitFor(() => expect(screen.getByText(/setlist duplicado o un borrador/)).toBeTruthy());
+      expect(screen.queryByText("Recargar")).toBeNull();
+    });
+
+    it("does not promise an email for a move on an unpublished service", async () => {
+      getBody = conversation({ teamNotes: TEAM_TARGET, service: { ...conversation().service, published: false } });
+      renderDialog();
+      await waitFor(() => expect(screen.getByText(TEAM_TARGET.text)).toBeTruthy());
+      fireEvent.click(screen.getByText("Mover a mensaje del pastor"));
+      expect(screen.getByText("¿Moverlo al mensaje del pastor?")).toBeTruthy();
+    });
+
+    it("tells the card on close only when something was saved", async () => {
+      const onChanged = vi.fn();
+      const onClose = vi.fn();
+      const mountWith = () =>
+        render(
+          <CueDialogProvider>
+            <ServiceMessagesDialog open roleId={ROLE_ID} title="Mensajes" viewerId="adm-1" onClose={onClose} onChanged={onChanged} />
+          </CueDialogProvider>,
+        );
+      writeReplies["/pastor-message"] = { status: 200, body: { ok: true, pastor_message: PASTOR } };
+      mountWith();
+      await waitFor(() => expect(screen.getByText("Agregar")).toBeTruthy());
+      fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+      await waitFor(() => expect(onClose).toHaveBeenCalled());
+      expect(onChanged).not.toHaveBeenCalled();
+      cleanup();
+
+      mountWith();
+      await waitFor(() => expect(screen.getByText("Agregar")).toBeTruthy());
+      fireEvent.click(screen.getByText("Agregar"));
+      fireEvent.change(screen.getByLabelText("Mensaje del pastor"), { target: { value: "Efesios 2 y Juan 3" } });
+      fireEvent.click(screen.getByText("Guardar"));
+      await waitFor(() => expect(screen.getByText("Lo guardó Frank")).toBeTruthy());
+      fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+      await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
     });
   });
 });

@@ -86,11 +86,13 @@ async function putHandler(req: NextRequest, { params }: { params: Promise<{ role
   }
 
   let server: ServerTarget;
+  let record: Record<string, unknown> | null;
   let lock: StoredLock | null = null;
   if (target.serviceType === "special") {
     const loaded = await loadSpecialSetlistTarget(roleId, target.serviceDate);
     if (!loaded.ok) return reject(serviceError(loaded.failure.code, { details: loaded.failure.details }));
     server = loaded.target.server;
+    record = loaded.target.record;
   } else {
     const setlistType = target.serviceType === "sunday" ? "featuredSongs" : "saturdarSongs";
     const roleType = target.serviceType === "sunday" ? "sunday_role" : "saturday_role";
@@ -103,6 +105,7 @@ async function putHandler(req: NextRequest, { params }: { params: Promise<{ role
       return reject(serviceError(coordination.failure.code, { details: coordination.failure.details }));
     }
     server = loaded.target.server;
+    record = loaded.target.record;
     lock = coordination.coordination.lock;
   }
 
@@ -112,6 +115,15 @@ async function putHandler(req: NextRequest, { params }: { params: Promise<{ role
   const mismatch = compareObservedTarget({ state: "single", ...observed }, server);
   if (mismatch) {
     return reject(serviceError("stale_revision", { details: { roleId, detail: mismatch } }));
+  }
+
+  // Unchanged: write nothing and hand back the observed target as it is. A
+  // patch that changes nothing need not move `_rev`, and answering with the
+  // transaction id then would leave the dialog asserting a revision that does
+  // not exist — a 409 on its next save.
+  const storedNotes = typeof record?.team_notes === "string" ? record.team_notes : "";
+  if (storedNotes === teamNotes) {
+    return NextResponse.json({ ok: true, teamNotes: teamNotes || null, observed: { id: server.id, rev: server.rev } });
   }
 
   const rev = server.rev;

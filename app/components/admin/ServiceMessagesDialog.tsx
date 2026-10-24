@@ -17,7 +17,7 @@
 //
 // Fetched when it opens, never before: a card on the board costs no read.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import CueDialog from "@/app/components/ui/CueDialog";
 import Button from "@/app/components/ui/Button";
 import Skeleton from "@/app/components/ui/Skeleton";
@@ -42,8 +42,8 @@ interface Conversation {
   };
   messages?: ThreadMessage[] | null;
   pastor_message?: PastorMessageRow | null;
-  /** Where the «Mensaje para el equipo» lives; null = no (single) setlist yet. */
-  teamNotes?: TeamNotesTarget | null;
+  /** Where the «Mensaje para el equipo» lives; null = no setlist yet. */
+  teamNotes?: TeamNotesTarget | { unavailable: "ambiguous" } | null;
   proposal?: { _id: string; status?: string; messages?: ThreadMessage[] | null } | null;
 }
 
@@ -60,8 +60,11 @@ function asThreadMessage(m: StoredMessage, viewerId: string | null): ThreadMessa
 const TEXTAREA =
   "w-full resize-y rounded-lg border border-edge-control bg-transparent px-3 py-2 font-body text-[16px] sm:text-sm transition-colors placeholder:text-placeholder focus:border-accent focus:outline-none";
 
-/** A 409 from either field writer: someone else changed it since it loaded. */
+/** `stale_revision` from either field writer: someone else changed it since it
+ *  loaded, so a reload fixes it. Any OTHER refusal (a duplicate or a raw draft of
+ *  the setlist) is not one a reload clears, and says so instead. */
 class StaleError extends Error {}
+class BlockedError extends Error {}
 
 async function putJson<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
@@ -69,9 +72,25 @@ async function putJson<T>(url: string, body: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (res.status === 409) throw new StaleError("stale");
-  if (!res.ok) throw new Error("save failed");
+  if (!res.ok) {
+    let code: unknown = null;
+    try {
+      code = ((await res.json()) as { error?: unknown } | null)?.error;
+    } catch {
+      // No JSON body: an ordinary failure.
+    }
+    if (code === "stale_revision") throw new StaleError("stale");
+    if (code === "ambiguous_target" || code === "integrity_conflict") throw new BlockedError("blocked");
+    throw new Error("save failed");
+  }
   return res.json();
+}
+
+const BLOCKED_COPY =
+  "Este servicio tiene un setlist duplicado o un borrador sin publicar en Studio; corrígelo ahí antes de editar el mensaje.";
+
+function isTarget(t: Conversation["teamNotes"]): t is TeamNotesTarget {
+  return !!t && "observed" in t;
 }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
@@ -84,6 +103,7 @@ export default function ServiceMessagesDialog({
   title,
   viewerId = null,
   onClose,
+  onChanged,
 }: {
   open: boolean;
   /** The service's role document id. */
@@ -92,8 +112,27 @@ export default function ServiceMessagesDialog({
   title: string;
   viewerId?: string | null;
   onClose: () => void;
+  /** Called on close when a save changed what a service card shows (the DayCard refreshes). */
+  onChanged?: () => void;
 }) {
   const [attempt, setAttempt] = useState(0);
+  // Every OPENING reads afresh: reopening the same service must not show the
+  // previous read as editable while a newer one is in flight — an edit started
+  // on it would carry a stamp the refetch then silently replaces. Adjusted
+  // during render (React's pattern for state derived from a prop edge).
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setAttempt((n) => n + 1);
+  }
+  const changed = useRef(false);
+  function dismiss() {
+    if (changed.current) {
+      changed.current = false;
+      onChanged?.();
+    }
+    onClose();
+  }
   // One read per (service, attempt), and what it answered, tagged with that key.
   // Deriving what to show from the tag — rather than resetting state in the
   // effect — means a dialog reopened on ANOTHER service never paints the previous
@@ -187,7 +226,7 @@ export default function ServiceMessagesDialog({
   const published = data?.service.published !== false;
 
   return (
-    <CueDialog open={open} title={title} label={title} mode="sheet" size="md" onDismiss={onClose}>
+    <CueDialog open={open} title={title} label={title} mode="sheet" size="md" onDismiss={dismiss}>
       <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-6">
         {loading && <Skeleton className="h-32 w-full" rounded="lg" />}
 
@@ -212,7 +251,10 @@ export default function ServiceMessagesDialog({
               url={`${base}/pastor-message`}
               stored={data.pastor_message ?? null}
               published={published}
-              onSaved={(row) => update(roleId, (d) => ({ ...d, pastor_message: row }))}
+              onSaved={(row) => {
+                changed.current = true;
+                update(roleId, (d) => ({ ...d, pastor_message: row }));
+              }}
               onReload={reload}
             />
 
@@ -221,9 +263,16 @@ export default function ServiceMessagesDialog({
               url={`${base}/team-notes`}
               pastorUrl={`${base}/pastor-message`}
               target={data.teamNotes ?? null}
+              published={published}
               hasPastorMessage={!!data.pastor_message?.body}
-              onSaved={(target) => update(roleId, (d) => ({ ...d, teamNotes: target }))}
-              onPastorSaved={(row) => update(roleId, (d) => ({ ...d, pastor_message: row }))}
+              onSaved={(target) => {
+                changed.current = true;
+                update(roleId, (d) => ({ ...d, teamNotes: target }));
+              }}
+              onPastorSaved={(row) => {
+                changed.current = true;
+                update(roleId, (d) => ({ ...d, pastor_message: row }));
+              }}
               onReload={reload}
             />
 
@@ -270,26 +319,25 @@ function PastorMessageSection({
   onReload: () => void;
 }) {
   const current = stored?.body ? stored : null;
-  const [draft, setDraft] = useState<string | null>(null);
+  // The draft carries the stamp of the message it was started on, sent as
+  // `observed`: never the stamp of whatever is on screen at save time.
+  const [draft, setDraft] = useState<{ body: string; observed: string | null } | null>(null);
   const [confirmingClear, setConfirmingClear] = useState(false);
   const [saving, setSaving] = useState(false);
   const [stale, setStale] = useState(false);
   const [error, showError] = useTransientValue<string | null>(null, 6000);
 
-  async function save(body: string) {
+  async function save(body: string, observed: string | null) {
     if (saving) return;
     setSaving(true);
     try {
-      const out = await putJson<{ pastor_message?: PastorMessageRow | null }>(url, {
-        body,
-        observed: pastorMessageStamp(current),
-      });
+      const out = await putJson<{ pastor_message?: PastorMessageRow | null }>(url, { body, observed });
       onSaved(out.pastor_message ?? null);
       setDraft(null);
       setConfirmingClear(false);
     } catch (err) {
       if (err instanceof StaleError) setStale(true);
-      else showError("No se pudo guardar el mensaje del pastor");
+      else showError(err instanceof BlockedError ? BLOCKED_COPY : "No se pudo guardar el mensaje del pastor");
     } finally {
       setSaving(false);
     }
@@ -316,8 +364,8 @@ function PastorMessageSection({
             rows={6}
             maxLength={PROPOSAL_NOTES_MAX}
             placeholder="Pega aquí el mensaje del pastor…"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            value={draft.body}
+            onChange={(e) => setDraft({ ...draft, body: e.target.value })}
             disabled={saving}
           />
           <div className="flex items-center justify-end gap-2">
@@ -328,8 +376,8 @@ function PastorMessageSection({
             <Button
               variant="primary"
               size="sm"
-              onClick={() => save(draft.trim())}
-              disabled={!draft.trim()}
+              onClick={() => save(draft.body.trim(), draft.observed)}
+              disabled={!draft.body.trim()}
               busy={saving}
               busyLabel="Guardando…"
             >
@@ -354,7 +402,13 @@ function PastorMessageSection({
                 <Button variant="ghost" size="sm" onClick={() => setConfirmingClear(false)} disabled={saving}>
                   No
                 </Button>
-                <Button variant="danger" size="sm" onClick={() => save("")} busy={saving} busyLabel="Quitando…">
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => save("", pastorMessageStamp(current))}
+                  busy={saving}
+                  busyLabel="Quitando…"
+                >
                   Sí, quitar
                 </Button>
               </>
@@ -363,7 +417,11 @@ function PastorMessageSection({
                 <Button variant="ghost" size="sm" onClick={() => setConfirmingClear(true)}>
                   Quitar
                 </Button>
-                <Button variant="secondary" size="sm" onClick={() => setDraft(current.body ?? "")}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setDraft({ body: current.body ?? "", observed: pastorMessageStamp(current) })}
+                >
                   Editar
                 </Button>
               </>
@@ -378,7 +436,7 @@ function PastorMessageSection({
               ? "Aún no hay. Al guardarlo, les llega a los líderes por correo y todo el equipo lo ve en la tarjeta."
               : "Aún no hay. Todo el equipo lo verá en la tarjeta cuando se publique el servicio."}
           </p>
-          <Button variant="secondary" size="sm" onClick={() => setDraft("")}>
+          <Button variant="secondary" size="sm" onClick={() => setDraft({ body: "", observed: null })}>
             Agregar
           </Button>
         </div>
@@ -393,6 +451,7 @@ function TeamNotesSection({
   url,
   pastorUrl,
   target,
+  published,
   hasPastorMessage,
   onSaved,
   onPastorSaved,
@@ -400,49 +459,57 @@ function TeamNotesSection({
 }: {
   url: string;
   pastorUrl: string;
-  target: TeamNotesTarget | null;
+  target: Conversation["teamNotes"];
+  published: boolean;
   hasPastorMessage: boolean;
   onSaved: (target: TeamNotesTarget) => void;
   onPastorSaved: (row: PastorMessageRow | null) => void;
   onReload: () => void;
 }) {
-  const [draft, setDraft] = useState<string | null>(null);
-  const [confirmingMove, setConfirmingMove] = useState(false);
+  // Both carry the target they were started on, asserted as `observed`.
+  const [draft, setDraft] = useState<{ text: string; target: TeamNotesTarget } | null>(null);
+  const [confirmingMove, setConfirmingMove] = useState<TeamNotesTarget | null>(null);
   const [saving, setSaving] = useState(false);
   const [stale, setStale] = useState(false);
   const [error, showError] = useTransientValue<string | null>(null, 8000);
 
-  if (!target) {
+  if (!isTarget(target)) {
     return (
       <section className="space-y-2">
         <SectionTitle>Mensaje para el equipo</SectionTitle>
         <p className="font-body text-sm text-mono-500">
-          Este servicio aún no tiene setlist. El mensaje para el equipo llega con la propuesta de los líderes.
+          {target?.unavailable === "ambiguous"
+            ? BLOCKED_COPY
+            : "Este servicio aún no tiene setlist. El mensaje para el equipo llega con la propuesta de los líderes."}
         </p>
       </section>
     );
   }
-  const text = target.text;
+  const loaded = target;
+  const text = loaded.text;
 
-  /** Saves `teamNotes` against the loaded revision; throws on failure. */
-  async function writeNotes(teamNotes: string) {
-    if (!target) throw new Error("no setlist");
+  /** Saves `teamNotes` against the revision `from` was loaded at; throws on failure. */
+  async function writeNotes(teamNotes: string, from: TeamNotesTarget) {
     const out = await putJson<{ teamNotes?: string | null; observed: { id: string; rev: string } }>(url, {
       teamNotes,
-      observed: target.observed,
+      observed: from.observed,
     });
     onSaved({ text: out.teamNotes ?? "", observed: out.observed });
+  }
+
+  function failed(err: unknown, fallback: string) {
+    if (err instanceof StaleError) setStale(true);
+    else showError(err instanceof BlockedError ? BLOCKED_COPY : fallback);
   }
 
   async function save() {
     if (draft === null || saving) return;
     setSaving(true);
     try {
-      await writeNotes(draft.trim());
+      await writeNotes(draft.text.trim(), draft.target);
       setDraft(null);
     } catch (err) {
-      if (err instanceof StaleError) setStale(true);
-      else showError("No se pudo guardar el mensaje para el equipo");
+      failed(err, "No se pudo guardar el mensaje para el equipo");
     } finally {
       setSaving(false);
     }
@@ -454,26 +521,25 @@ function TeamNotesSection({
    * The reverse order could lose the text between the two.
    */
   async function moveToPastor() {
-    if (saving) return;
+    const from = confirmingMove;
+    if (!from || saving) return;
     setSaving(true);
     let pastorSaved = false;
     try {
       const out = await putJson<{ pastor_message?: PastorMessageRow | null }>(pastorUrl, {
-        body: text,
+        body: from.text,
         observed: null,
       });
       onPastorSaved(out.pastor_message ?? null);
       pastorSaved = true;
-      await writeNotes("");
-      setConfirmingMove(false);
+      await writeNotes("", from);
+      setConfirmingMove(null);
     } catch (err) {
       if (pastorSaved) {
-        setConfirmingMove(false);
+        setConfirmingMove(null);
         showError("Ya es el mensaje del pastor, pero no se pudo quitar de aquí. Bórralo con «Editar».");
-      } else if (err instanceof StaleError) {
-        setStale(true);
       } else {
-        showError("No se pudo mover el mensaje");
+        failed(err, "No se pudo mover el mensaje");
       }
     } finally {
       setSaving(false);
@@ -501,8 +567,8 @@ function TeamNotesSection({
             rows={4}
             maxLength={PROPOSAL_NOTES_MAX}
             placeholder="Mensaje para todo el equipo…"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            value={draft.text}
+            onChange={(e) => setDraft({ ...draft, text: e.target.value })}
             disabled={saving}
           />
           <div className="flex items-center justify-end gap-2">
@@ -530,9 +596,11 @@ function TeamNotesSection({
             {confirmingMove ? (
               <>
                 <span className="font-body text-xs text-mono-400">
-                  ¿Moverlo al mensaje del pastor? Les llega a los líderes por correo.
+                  {published
+                    ? "¿Moverlo al mensaje del pastor? Les llega a los líderes por correo."
+                    : "¿Moverlo al mensaje del pastor?"}
                 </span>
-                <Button variant="ghost" size="sm" onClick={() => setConfirmingMove(false)} disabled={saving}>
+                <Button variant="ghost" size="sm" onClick={() => setConfirmingMove(null)} disabled={saving}>
                   No
                 </Button>
                 <Button variant="primary" size="sm" onClick={moveToPastor} busy={saving} busyLabel="Moviendo…">
@@ -544,11 +612,11 @@ function TeamNotesSection({
                 {/* Only into an EMPTY pastor's message: moving onto one would
                     overwrite it. With one already there, edit it directly. */}
                 {text && !hasPastorMessage && (
-                  <Button variant="ghost" size="sm" onClick={() => setConfirmingMove(true)}>
+                  <Button variant="ghost" size="sm" onClick={() => setConfirmingMove(loaded)}>
                     Mover a mensaje del pastor
                   </Button>
                 )}
-                <Button variant="secondary" size="sm" onClick={() => setDraft(text)}>
+                <Button variant="secondary" size="sm" onClick={() => setDraft({ text, target: loaded })}>
                   {text ? "Editar" : "Agregar"}
                 </Button>
               </>

@@ -82,20 +82,21 @@ interface ConversationRead {
 /**
  * Where this service's «Mensaje para el equipo» lives, for the team-notes PUT to
  * assert: a special's role (when it has a setlist), or the ONE weekend setlist
- * document of its type. No setlist, or an ambiguous pair, is `null` — the dialog
- * then shows the note read-only or says there is no setlist yet, and the PUT
- * would refuse the same way.
+ * document of its type. No setlist is `null` (the dialog says there is none yet);
+ * a duplicate pair is `{ unavailable: "ambiguous" }`, so the dialog names the
+ * real reason. The PUT refuses both the same way.
  */
 function teamNotesTarget(
   service: NonNullable<ConversationRead["service"]>,
   weekendSetlists: ConversationRead["weekendSetlists"],
   own: { _rev: string; team_notes?: string | null; hasSongs?: boolean },
-): { text: string; observed: { id: string; rev: string } } | null {
+): { text: string; observed: { id: string; rev: string } } | { unavailable: "ambiguous" } | null {
   if (service._type === "special_role") {
     return own.hasSongs ? { text: own.team_notes ?? "", observed: { id: service._id, rev: own._rev } } : null;
   }
   const type = service._type === "sunday_role" ? "featuredSongs" : "saturdarSongs";
   const rows = (weekendSetlists ?? []).filter((r) => r._type === type);
+  if (rows.length > 1) return { unavailable: "ambiguous" };
   if (rows.length !== 1) return null;
   return { text: rows[0].team_notes ?? "", observed: { id: rows[0]._id, rev: rows[0]._rev } };
 }
@@ -130,8 +131,10 @@ export const POST = withVerificationRunContext(postHandler);
  * beside it, so a kids-only `admin` can post here; tightening both is
  * FrankERP/owt-kb-v1#8.
  *
- * Nothing to revalidate: no ISR page reads this document (the proposal page is
- * `revalidate = 0`, the admin list is an API read).
+ * Nothing to revalidate: no ISR page reads a thread's `messages` (the proposal
+ * page is `revalidate = 0`, the admin list is an API read). Its `pastor_message`
+ * IS read by `/` and `/schedule`, so that field's writer (`…/pastor-message`)
+ * revalidates; this one never touches it.
  */
 async function postHandler(req: NextRequest, { params }: { params: Promise<{ roleId: string }> }) {
   const session = await requireActiveManager();

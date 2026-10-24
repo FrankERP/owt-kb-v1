@@ -334,6 +334,19 @@ describe("PUT /api/admin/service-threads/[roleId]/team-notes", () => {
     expect(await res.json()).toEqual({ ok: true, teamNotes: "Lleguen 8:30", observed: { id: OBSERVED.id, rev: "tx-new" } });
   });
 
+  it("writes nothing for an unchanged note and hands back the observed target", async () => {
+    loadWeekendMock.mockResolvedValueOnce({
+      ok: true,
+      target: { server: { state: "single", ...OBSERVED }, record: { team_notes: "Igual" } },
+    });
+    const res = await teamNotesPut(req({ teamNotes: " Igual ", observed: OBSERVED }), params());
+    expect(await res.json()).toEqual({ ok: true, teamNotes: "Igual", observed: OBSERVED });
+    // Empty stays empty too.
+    loadWeekendMock.mockResolvedValueOnce({ ok: true, target: { server: { state: "single", ...OBSERVED }, record: {} } });
+    expect(await (await teamNotesPut(req({ teamNotes: "", observed: OBSERVED }), params())).json()).toMatchObject({ observed: OBSERVED });
+    expect(committed).toHaveLength(0);
+  });
+
   it("reads a Saturday's setlist as `saturdarSongs`", async () => {
     loadCanonicalRoleMock.mockResolvedValue({ role: role({ _type: "saturday_role", week: "2099-03-07" }), state: "single", draftIds: [] });
     await teamNotesPut(req({ teamNotes: "x", observed: OBSERVED }), params());
@@ -342,6 +355,10 @@ describe("PUT /api/admin/service-threads/[roleId]/team-notes", () => {
   });
 
   it("unsets the note when it is empty", async () => {
+    loadWeekendMock.mockResolvedValueOnce({
+      ok: true,
+      target: { server: { state: "single", ...OBSERVED }, record: { team_notes: "Vieja" } },
+    });
     await teamNotesPut(req({ teamNotes: "", observed: OBSERVED }), params());
     expect(committed[0][0]).toEqual({ kind: "patch", id: OBSERVED.id, ifRevisionId: "s1", unset: ["team_notes"] });
   });
@@ -422,6 +439,15 @@ describe("PATCH|DELETE /api/admin/service-threads/[roleId]/messages/[key]", () =
     expect(committed).toHaveLength(0);
   });
 
+  it("refuses both once the service has passed, like the POST", async () => {
+    loadCanonicalRoleMock.mockResolvedValue({ role: role({ week: "2020-03-08" }), state: "single", draftIds: [] });
+    const res = await messagePatch(req({ body: "x" }), p());
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ details: { issues: ["thread_closed"] } });
+    expect((await messageDelete(req(undefined), p())).status).toBe(400);
+    expect(committed).toHaveLength(0);
+  });
+
   it("refuses an empty edit and a content-editor", async () => {
     expect((await messagePatch(req({ body: "  " }), p())).status).toBe(400);
     requireActiveManagerMock.mockResolvedValueOnce(admin("content-editor"));
@@ -454,20 +480,21 @@ describe("GET …/messages — where the team note lives", () => {
     expect(body.service).toEqual({ _id: ROLE_ID, _type: "sunday_role", service_date: "2099-03-08" });
   });
 
-  it("is null for a weekend with no setlist or a duplicate pair", async () => {
-    for (const weekendSetlists of [
-      [],
-      [
-        { _id: "a", _rev: "1", _type: "featuredSongs" },
-        { _id: "b", _rev: "2", _type: "featuredSongs" },
-      ],
-    ]) {
+  it("is null with no setlist, and names a duplicate pair", async () => {
+    const answer = async (weekendSetlists: unknown[]) => {
       operationalFetch.mockResolvedValueOnce({
         service: { _id: ROLE_ID, _rev: "r1", _type: "sunday_role", service_date: "2099-03-08" },
         weekendSetlists,
       });
-      expect((await (await get()).json()).teamNotes).toBeNull();
-    }
+      return (await (await get()).json()).teamNotes;
+    };
+    expect(await answer([])).toBeNull();
+    expect(
+      await answer([
+        { _id: "a", _rev: "1", _type: "featuredSongs" },
+        { _id: "b", _rev: "2", _type: "featuredSongs" },
+      ]),
+    ).toEqual({ unavailable: "ambiguous" });
   });
 
   it("uses a special's own role, only when it has songs", async () => {

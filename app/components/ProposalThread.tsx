@@ -211,7 +211,9 @@ export default function ProposalThread({
             const mine = !!viewerId && m.author === viewerId;
             const fromAdmin = m.author_role === "admin";
             const fromPastor = m.kind === "pastor_note";
-            const modifiable = !!m._key && !!canModify?.(m) && (!!onEdit || !!onDelete);
+            // Only while the conversation is open, as the routes enforce: once the
+            // service has passed, what was said is the record of it.
+            const modifiable = open && !!m._key && !!canModify?.(m) && (!!onEdit || !!onDelete);
             const editingThis = modifiable && editing?.key === m._key ? editing : null;
             const isConfirming = modifiable && confirmingDelete === m._key;
             return (
