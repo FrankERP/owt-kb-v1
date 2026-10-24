@@ -54,6 +54,16 @@ export default function ScheduleHeader({
   const close = () => setOpen(false);
   const monthName = MONTH_NAMES_ES[Number(anchorMonth.slice(5, 7)) - 1];
   const anchorYear = anchorMonth.slice(0, 4);
+  // «Hoy» (browsing only) is rendered twice and CSS picks one: beside the arrows from
+  // `sm`, where the title row has room, and at the end of the count line on a phone —
+  // next to two 44 px arrows it would push «Septiembre» (194 px in the display face at
+  // 46 px) into an ellipsis, and the month IS the page title.
+  const today = (hidden: string) =>
+    viewMonth ? (
+      <Button href="/schedule" variant="ghost" size="sm" className={hidden}>
+        Hoy
+      </Button>
+    ) : null;
 
   return (
     <>
@@ -61,7 +71,11 @@ export default function ScheduleHeader({
         <div className="flex items-end justify-between gap-3">
           {/* No `truncate` on the `h2` itself: its overflow-hidden would clip the
               button's focus ring. The inner span clips the long label instead. */}
-          <h2 className="min-w-0 font-display text-[46px] font-semibold leading-[0.98] tracking-[-0.01em] text-ink md:text-[76px] md:leading-[0.95]">
+          {/* 46 px on a phone, as Inicio and Biblioteca, but a month name cannot wrap:
+              under 390 px the size follows the viewport (44 px on a 375 pt iPhone, 42 on a
+              360 px Android) so the longest names — «Septiembre», «Noviembre» — still fit
+              beside the arrows with the chevron. Measured, 2026-10-24. */}
+          <h2 className="min-w-0 font-display text-[clamp(40px,11.8vw,46px)] font-semibold leading-[0.98] tracking-[-0.01em] text-ink md:text-[76px] md:leading-[0.95]">
             {/* The month name opens the sheet: an inline button so the heading stays
                 the route's heading. The chevron says it can be pressed. */}
             <button
@@ -73,21 +87,17 @@ export default function ScheduleHeader({
               // `md`), and an accessible name computed from that collapses the space
               // («Septiembre2026»), so the control names itself in full.
               aria-label={monthLabel(anchorMonth)}
-              className="inline-flex max-w-full items-baseline gap-2 rounded-lg transition-colors duration-fast ease-out-brand hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+              className="inline-flex max-w-full items-baseline gap-1.5 rounded-lg transition-colors duration-fast ease-out-brand hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
             >
               <span className="truncate">{monthName}</span>
               {/* The year rides in the heading from `md` (the title row has the room) and
                   in the line below on a phone; the heading's text is the same either way. */}
               <span className="hidden text-ink-dim md:inline"> {anchorYear}</span>
-              <ChevronDownIcon size={18} className="shrink-0 self-center opacity-60" />
+              <ChevronDownIcon size={16} className="shrink-0 self-center opacity-60" />
             </button>
           </h2>
           <div className="flex shrink-0 items-center gap-2 pb-1.5">
-            {viewMonth && (
-              <Button href="/schedule" variant="ghost" size="sm">
-                Hoy
-              </Button>
-            )}
+            {today("hidden sm:inline-flex")}
             <Button href={scheduleHref(addMonths(anchorMonth, -1))} aria-label="Mes anterior" variant="round">
               <ChevronLeftIcon size={18} />
             </Button>
@@ -96,16 +106,19 @@ export default function ScheduleHeader({
             </Button>
           </div>
         </div>
-        <p className="font-body text-[17px] leading-snug text-ink-dim md:text-xl">
-          <span className="md:hidden">{anchorYear} · </span>
-          {counts.services}
-          {counts.mine && (
-            <>
-              {" · "}
-              <span className="text-positive-fg">{counts.mine}</span>
-            </>
-          )}
-        </p>
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="font-body text-[17px] leading-snug text-ink-dim md:text-xl">
+            <span className="md:hidden">{anchorYear} · </span>
+            {counts.services}
+            {counts.mine && (
+              <>
+                {" · "}
+                <span className="text-positive-fg">{counts.mine}</span>
+              </>
+            )}
+          </p>
+          {today("sm:hidden")}
+        </div>
       </div>
 
       <CueDialog open={open} title="Ir a un mes" label="Ir a un mes" mode="sheet" size="sm" onDismiss={close}>

@@ -246,9 +246,14 @@ describe("ScheduleHeader", () => {
     expect(screen.getByRole("link", { name: "Mes siguiente" }).getAttribute("href")).toBe("/schedule?m=2027-01");
   });
 
-  it("offers «Hoy» only in browse mode", () => {
+  it("offers «Hoy» only in browse mode — twice, one per breakpoint, never beside the arrows on a phone", () => {
     mountHeader({ anchorMonth: "2026-12", viewMonth: "2026-12" });
-    expect(screen.getByRole("link", { name: "Hoy" }).getAttribute("href")).toBe("/schedule");
+    const todays = screen.getAllByRole("link", { name: "Hoy" });
+    expect(todays.map((a) => a.getAttribute("href"))).toEqual(["/schedule", "/schedule"]);
+    // The title-row copy is hidden on a phone (it would push «Septiembre» into an
+    // ellipsis); the count-line copy is hidden from `sm`.
+    expect(todays[0].className).toContain("hidden sm:inline-flex");
+    expect(todays[1].className).toContain("sm:hidden");
     cleanup();
     mountHeader({ anchorMonth: "2026-09", viewMonth: null });
     expect(screen.queryByRole("link", { name: "Hoy" })).toBeNull();
@@ -281,7 +286,7 @@ describe("ScheduleHeader", () => {
   it("the arrows are round ring buttons, the month the display-face page title", () => {
     mountHeader({ anchorMonth: "2026-09", viewMonth: null });
     expect(screen.getByRole("link", { name: "Mes anterior" }).className).toContain("rounded-full");
-    expect(screen.getByRole("heading", { level: 2 }).className).toMatch(/font-display text-\[46px\]/);
+    expect(screen.getByRole("heading", { level: 2 }).className).toMatch(/font-display text-\[clamp\(40px,11\.8vw,46px\)\]/);
   });
 
   it("ADR-0067 — the month name opens a sheet of the anchor year's twelve months as `?m=` links, the anchor pressed", () => {

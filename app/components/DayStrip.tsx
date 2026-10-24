@@ -30,7 +30,7 @@ import SwipeStrip from "./ui/SwipeStrip";
 import type { ActiveDay } from "./CalendarView";
 import { addDays, dayCellLabel, mondayOf, weekStripDays } from "../utils/agenda";
 import { haptic } from "../utils/haptics";
-import DayDots, { DAY_CELL_BASE, DAY_CELL_EMPTY, DAY_CELL_LIT, DAY_CELL_TODAY } from "./DayDots";
+import DayDots, { DAY_CELL_BASE, DAY_CELL_EMPTY, DAY_CELL_LIT, DAY_CELL_LIT_PAST, DAY_CELL_TODAY } from "./DayDots";
 
 /** Local-noon render, never a bare `new Date(iso)` — the UTC day-flip rule. */
 const fmt = (iso: string, options: Intl.DateTimeFormatOptions) =>
@@ -103,7 +103,9 @@ export default function DayStrip({
                   void haptic("selection");
                   onPick(d.date);
                 }}
-                className={`${DAY_CELL_BASE} h-10 w-10 text-[22px] ${d.lit ? DAY_CELL_LIT : DAY_CELL_EMPTY} ${d.today ? DAY_CELL_TODAY : ""}`}
+                // A lit day the fetch already passed (a browsed month's, or a week paged
+                // back) reads quieter, the same class the month grid gives it.
+                className={`${DAY_CELL_BASE} h-10 w-10 text-[22px] ${d.lit ? (d.date < todayStr ? DAY_CELL_LIT_PAST : DAY_CELL_LIT) : DAY_CELL_EMPTY} ${d.today ? DAY_CELL_TODAY : ""}`}
               >
                 {d.num}
               </button>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findDuplicates, serviceTone, serviceConflicts, summarizeService, conflictLabel, agendaRows, monthStripDays, weekStripDays, mondayOf, addDays, mySeats, myNameFromSession, dayCellLabel, serviceClock, calendarCounts, calendarCountLine } from "../agenda";
+import { findDuplicates, serviceTone, serviceConflicts, summarizeService, conflictLabel, agendaRows, monthStripDays, weekStripDays, mondayOf, addDays, mySeats, myNameFromSession, dayCellLabel, dayTitle, serviceClock, calendarCounts, calendarCountLine } from "../agenda";
 import type { ActiveDay } from "../../components/CalendarView";
 
 const sun = (date: string, extra: Partial<ActiveDay> = {}): ActiveDay => ({ day: "Domingo", date, leads: ["Jakey", "Marianne"], instruments: [{ label: "Keys", person: "Sofi" }, { label: "Bass", person: "Mkz" }], setlist: { songs: Array(5).fill({ _id: "s", title: "t" }) as never, week: date }, ...extra });
@@ -61,6 +61,10 @@ describe("dayCellLabel", () => {
     expect(dayCellLabel({ date: "2026-09-20", mine: false }, entries)).toBe("domingo, 20 de septiembre, Domingo, Noche de alabanza");
     expect(dayCellLabel({ date: "2026-09-20", mine: true }, entries)).toBe("domingo, 20 de septiembre, Domingo, Noche de alabanza, te toca");
     expect(dayCellLabel({ date: "2026-09-16", mine: false }, [])).toBe("miércoles, 16 de septiembre");
+  });
+  it("dayTitle is the visible form — capitalised, without the locale's comma", () => {
+    expect(dayTitle("2026-10-25")).toBe("Domingo 25 de octubre");
+    expect(dayTitle("2026-09-16")).toBe("Miércoles 16 de septiembre");
   });
 });
 describe("mondayOf / addDays", () => {
@@ -154,17 +158,20 @@ describe("calendarCounts / calendarCountLine", () => {
     "2026-09-06": [sun("2026-09-06", { leads: ["Sofi"] })],
     "2026-09-13": [sun("2026-09-13", { leads: ["Sofi"] })],
     "2026-09-20": [sun("2026-09-20", { leads: ["Ana"] }), { day: "Aniversario", date: "2026-09-20", roleId: "sp1", leads: ["Sofi"] }],
+    "2026-10-04": [sun("2026-10-04")],
   };
-  it("counts the services from today on in the rolling view, and the ones that seat me", () => {
+  it("counts the services from today on, across the whole fetch, in the rolling view", () => {
     // Ana leads the 20th only; Sofi is on Keys in every weekend fixture plus the special.
-    expect(calendarCounts(days, "2026-09-10", "ana", true)).toEqual({ services: 3, mine: 1 });
-    expect(calendarCounts(days, "2026-09-10", "sofi", true)).toEqual({ services: 3, mine: 3 });
+    expect(calendarCounts(days, "2026-09-10", "ana", null)).toEqual({ services: 4, mine: 1 });
+    expect(calendarCounts(days, "2026-09-10", "sofi", null)).toEqual({ services: 4, mine: 4 });
   });
-  it("counts the whole window, past days included, while browsing a month", () => {
-    expect(calendarCounts(days, "2026-09-10", "ana", false)).toEqual({ services: 4, mine: 1 });
+  it("counts the browsed month alone, past days included — the number sits under that month's name", () => {
+    expect(calendarCounts(days, "2026-09-10", "ana", "2026-09")).toEqual({ services: 4, mine: 1 });
+    expect(calendarCounts(days, "2026-09-10", "ana", "2026-10")).toEqual({ services: 1, mine: 0 });
+    expect(calendarCounts(days, "2026-09-10", "sofi", "2026-11")).toEqual({ services: 0, mine: 0 });
   });
   it("seats nobody without a name", () => {
-    expect(calendarCounts(days, "2026-09-10", "", true).mine).toBe(0);
+    expect(calendarCounts(days, "2026-09-10", "", null).mine).toBe(0);
   });
   it("words the line in two parts, the second absent rather than «te toca en 0»", () => {
     expect(calendarCountLine({ services: 8, mine: 3 }, false)).toEqual({ services: "8 servicios por venir", mine: "te toca en 3" });

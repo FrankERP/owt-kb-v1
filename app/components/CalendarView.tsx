@@ -37,12 +37,12 @@
 // props once: a month change is a route push that re-renders this component with new
 // props but does NOT remount it, and without the key the strip would keep showing
 // the week it was on.
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { DayCard } from "./DayCard";
 import { Setlist } from "../utils/interface";
 import { MONTH_NAMES_ES, monthRangeLabel, WINDOW_MONTHS, windowMonths } from "../utils/scheduleMonths";
-import { calendarCountLine, calendarCounts, dayCellLabel, DOW_SHORT, monthStripDays, myNameFromSession, serviceClock, TONE_RAIL, type StripDay } from "../utils/agenda";
+import { calendarCountLine, calendarCounts, dayCellLabel, dayTitle, DOW_SHORT, monthStripDays, myNameFromSession, serviceClock, TONE_RAIL, type StripDay } from "../utils/agenda";
 import { daysUntil, formatCountdown } from "../utils/daysUntil";
 import { SHEET_TITLE } from "../utils/homeHero";
 import AgendaView from "./AgendaView";
@@ -97,16 +97,6 @@ const LEGEND: ReadonlyArray<readonly [string, string]> = [
   ["bg-positive-fg", "Te toca"],
 ];
 
-/** Local-noon render, never a bare `new Date(iso)` — the UTC day-flip rule. */
-const fmt = (iso: string, options: Intl.DateTimeFormatOptions) =>
-  new Date(`${iso}T12:00:00`).toLocaleDateString("es-MX", options);
-
-/** «Domingo 25 de octubre» — es-MX gives the weekday in lowercase; a title starts with a capital. */
-function sheetTitle(iso: string): string {
-  const s = fmt(iso, { weekday: "long", day: "numeric", month: "long" });
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
 // ─── Root component ───────────────────────────────────────────────────────────
 
 export default function CalendarView({ activeDays, viewMonth, todayStr, photos, viewerTypes, viewerName, viewerIsAdmin }: Props) {
@@ -128,7 +118,12 @@ export default function CalendarView({ activeDays, viewMonth, todayStr, photos, 
   const dismiss = useCallback(() => setSelected(null), []);
 
   const anchorMonth = viewMonth ?? todayStr.slice(0, 7);
-  const counts = calendarCountLine(calendarCounts(activeDays, todayStr, myName, !viewMonth), !!viewMonth);
+  // Memoised: the count walks every service, and the view re-renders on each swipe,
+  // pick and mode switch without any of its inputs changing.
+  const counts = useMemo(
+    () => calendarCountLine(calendarCounts(activeDays, todayStr, myName, viewMonth ?? null), !!viewMonth),
+    [activeDays, todayStr, myName, viewMonth],
+  );
 
   const [todayYear, todayMonth] = todayStr.split("-").map(Number);
   const months = viewMonth
@@ -202,6 +197,7 @@ export default function CalendarView({ activeDays, viewMonth, todayStr, photos, 
               todayStr={todayStr}
               onSelect={setSelected}
               emptyMessage={emptyMessage}
+              myName={myName}
             />
           ) : isEmpty ? (
             <p className="py-20 text-center font-body text-base text-ink-muted">{emptyMessage}</p>
@@ -226,7 +222,7 @@ export default function CalendarView({ activeDays, viewMonth, todayStr, photos, 
                   shows two dots, which needs no explaining. Under the months, where
                   the eye arrives after reading them. */}
               <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-2">
-                {LEGEND.map(([dot, label]) => (
+                {LEGEND.filter(([, label]) => label !== "Te toca" || myName).map(([dot, label]) => (
                   <span key={label} className="flex items-center gap-2">
                     <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
                     <span className="font-body text-[13px] text-ink-muted">{label}</span>
@@ -240,7 +236,7 @@ export default function CalendarView({ activeDays, viewMonth, todayStr, photos, 
 
       {/* The day sheet (both modes): the run sheet, titled by the date. */}
       {selected && selectedEntries.length > 0 && (
-        <CueDialog open title={sheetTitle(selected)} label={sheetTitle(selected)} mode="sheet" size="md" onDismiss={dismiss}>
+        <CueDialog open title={dayTitle(selected)} label={dayTitle(selected)} mode="sheet" size="md" onDismiss={dismiss}>
           <div className="max-h-[78svh] space-y-10 overflow-y-auto px-5 pb-8 pt-1 scrollbar-hide">
             {selectedLine && <p className="font-body text-[17px] leading-snug text-ink-dim">{selectedLine}</p>}
             {selectedEntries.map((d, i) => (

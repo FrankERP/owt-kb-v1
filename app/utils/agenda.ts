@@ -160,18 +160,38 @@ export function weekStripDays(mondayIso: string, activeDays: Record<string, Acti
   return Array.from({ length: 7 }, (_, i) => stripDay(addDays(start, i), activeDays, todayStr, myName));
 }
 
-/** What the calendar header counts (the «millones» pass, 2026-10-24): the services the
- *  reader will scroll past, and how many of them seat `myName`. In the rolling view only
- *  days from `todayStr` on count (the fetch starts there anyway); a browsed month counts
- *  its whole window, past days included, because that is what the page shows. */
+/** The visible form of a date — «Domingo 25 de octubre»: the day sheet's title. es-MX
+ *  puts a comma after the weekday («domingo, 25 de octubre») and starts it lowercase;
+ *  the parts are reassembled so the title reads like the rest of the app's dates («el
+ *  domingo 13», «Domingo · 25 oct»). The accessible names (`dayCellLabel`, the agenda
+ *  row) keep the locale's comma — it is a pause a screen reader uses. Local-noon render. */
+export function dayTitle(iso: string): string {
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    new Intl.DateTimeFormat("es-MX", { weekday: "long", day: "numeric", month: "long" })
+      .formatToParts(new Date(`${iso}T12:00:00`))
+      .find((p) => p.type === type)?.value ?? "";
+  const weekday = part("weekday");
+  return `${weekday.charAt(0).toUpperCase()}${weekday.slice(1)} ${part("day")} de ${part("month")}`;
+}
+
+/** What the calendar header counts (the «millones» pass, 2026-10-24), read under the
+ *  month the title names. The rolling view (`viewMonth` null) counts the services from
+ *  `todayStr` on across the whole fetch — «8 servicios por venir» is what the agenda
+ *  below lists. A browsed month counts THAT month only, past days included: the title
+ *  says «Diciembre», so the number under it must be December's, not the three-month
+ *  window's (review, 2026-10-24). `mine` is how many of those seat `myName`. */
 export type CalendarCounts = { services: number; mine: number };
-export function calendarCounts(activeDays: Record<string, ActiveDay[]>, todayStr: string, myName: string, fromToday: boolean): CalendarCounts {
+export function calendarCounts(activeDays: Record<string, ActiveDay[]>, todayStr: string, myName: string, viewMonth: string | null): CalendarCounts {
   let services = 0;
   let mine = 0;
-  for (const row of agendaRows(activeDays)) {
-    if (fromToday && row.date < todayStr) continue;
-    services += 1;
-    if (myName && mySeats(row.entry, myName).length > 0) mine += 1;
+  for (const [date, entries] of Object.entries(activeDays)) {
+    // The same key guard `agendaRows` applies, so the count and the rows below agree.
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+    if (viewMonth ? !date.startsWith(`${viewMonth}-`) : date < todayStr) continue;
+    for (const entry of entries) {
+      services += 1;
+      if (myName && mySeats(entry, myName).length > 0) mine += 1;
+    }
   }
   return { services, mine };
 }

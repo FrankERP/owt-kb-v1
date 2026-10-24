@@ -47,15 +47,21 @@ export default function AgendaView({
   todayStr,
   onSelect,
   emptyMessage,
+  myName: myNameProp,
 }: {
   activeDays: Record<string, ActiveDay[]>;
   /** "today" as the server computed it (CDMX), so the countdown agrees with the fetch. */
   todayStr: string;
   onSelect: (date: string) => void;
   emptyMessage: string;
+  /** Who «tú» is, as `CalendarView` derived it ONCE for the header count, the strip and the
+   *  grid — with the server-known `viewerName` standing in before the client session
+   *  arrives, so the rows never lag a beat behind «te toca en 3» above them. Omitted
+   *  (a host without that fallback), the session alone decides, as `DayCard` does. */
+  myName?: string;
 }) {
   const { data: session } = useSession();
-  const myName = myNameFromSession(session?.user);
+  const myName = myNameProp ?? myNameFromSession(session?.user);
   const rows = agendaRows(activeDays);
 
   if (rows.length === 0) {
