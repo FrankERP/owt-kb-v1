@@ -138,7 +138,7 @@ editor adds three more, seventeen in all, registered after `apply_schedule`
 (see [Editing a proposal](#editing-a-proposal); in production since 2026-10-21, PR #160). Admin
 parity phase 1 adds eight, twenty-five in all: three reads registered after the P1 reads
 (`get_fairness_ledger`, `get_solver_rules`, `get_integrity_queue`) and the saved-month editor's
-five registered last (see [Editing saved services](#editing-saved-services-admin-parity-phase-1);
+five registered last; the card's save twin `save_service_edits_app` (2026-10-23) makes it six, twenty-six in all (see [Editing saved services](#editing-saved-services-admin-parity-phase-1);
 in production since 2026-10-22, PR #167). Every tool is
 registered the same way — one file per tool in `app/mcp/tools/`, exporting a
 `register<Tool>(server, deps?)` function that `registerAllTools` (`app/mcp/toolList.ts`) calls,
@@ -762,7 +762,7 @@ Three tools, in production since 2026-10-21 (PR #160, `main` `2e075190`; live pr
 
 ### Editing saved services (admin parity, phase 1)
 
-Five tools over the services already in `/admin`, plus three reads, in production since 2026-10-22 (PR #167). Plan:
+Five tools over the services already in `/admin`, plus three reads, in production since 2026-10-22 (PR #167); a sixth, the card's save twin, since 2026-10-23. Plan:
 [2026-10-21-owt-mcp-admin-parity-f1.md](superpowers/plans/2026-10-21-owt-mcp-admin-parity-f1.md);
 decisions and the rejected alternatives:
 [ADR-0066](adr/0066-saved-services-are-edited-from-the-chat-as-checked-change-sets.md).
@@ -775,6 +775,7 @@ decisions and the rejected alternatives:
 | `check_service_edits` | the model (and it opens the card) | Edits by name and date («pon a Ana en el BGV del 8»): place, clear, move, exchange, and a special's name and time or «Cuenta para equidad» (`header`); or `copy {from, to}` alone. Answers per changed service the change set `save_service_edits` takes, its lines in words, the groups and the month check. The save's (or copy's) arguments are also the text's last line («Argumentos para …»; one line per save call when a group is over six services, none when it needs the card): the Claude app gives the model only a tool answer's text, never `structuredContent`; the card hides that line. Never forces: a per-seat rule refuses. Read-only |
 | `check_service_edits_app` | the card only (`_meta.ui.visibility: ["app"]`) | The same with members as month tokens, `force` per edit (mints a waiver token for each finding the forced edit creates) and a seat's candidates. Read-only |
 | `save_service_edits` | the model | Writes the change sets as the check answered them, one service at a time through `/admin`'s PATCH writer (`roleEditCommit.ts`), notices queued inline. Destructive |
+| `save_service_edits_app` | the card only (`_meta.ui.visibility: ["app"]`) | The same save (one function), called by the card after its own confirmation (ADR-0066 addendum, 2026-10-23); it logs under its own name. Destructive |
 | `copy_instruments` | the model | One service's instruments onto another through `/admin`'s copy writer, after `check_service_edits` with `copy`. Destructive |
 | `create_service` | the model | One empty, unpublished service (Sunday, Saturday, special or «Noche de alabanza»), as «+ Nuevo servicio» does, through the roles POST's writer. Destructive |
 
@@ -799,8 +800,23 @@ decisions and the rejected alternatives:
   guarantee rests on the host hiding app-only tools.
 - **Time.** Every write races a 45 s hard stop; no group starts after 30 s («pendiente»).
 - **The card** (`mcp-app/proposal-card/useStoredEditor.tsx`) opens on a `check_service_edits`
-  answer with its edits, edits seats like the proposal editor, and «Guardar» sends the change sets
-  to the chat (in parts when a group is too large); it never writes. On a host that takes model
+  answer with its edits and edits seats like the proposal editor. **«Guardar» saves from the card**
+  (2026-10-23, Frank: «¿por qué para guardar a fuerzas tiene que ser un prompt explícito mío?»; plan
+  `docs/superpowers/plans/2026-10-23-owt-mcp-card-saves.md`, ADR-0066 addendum): it opens a
+  confirmation with the part's lines (the changes and every rule forced, exactly what the save
+  compares), and «Sí, guardar» calls `save_service_edits_app` with the part untouched (70 s client
+  timeout). A saved part reads «Guardado»; when every part is saved the card reads the month again from
+  an empty list and keeps the save's report on screen. **After a save starts, the edit list is never
+  replayed:** an unknown outcome (`repeat_same_call`, an answer without structure, a throw) keeps it
+  frozen with «Guardar de nuevo» (safe: «ya estaba») and «Mandar al chat»; a refusal or a save that
+  stopped part way reads the month from the empty list and says what was not saved. Reopening the month
+  after a save opens what is stored. The save's lines written for Claude («Repite exactamente la misma
+  llamada…», «Revisa … con check_service_edits») are not shown on the card. Afterwards the card sets
+  the model's context to what it saved, so Claude does not save it again. Whether the Claude app asks
+  before an app-initiated destructive call is not documented; if it refuses, «Mandar al chat» is the
+  old way, below.
+- **«Mandar al chat»** (the fallback) sends the change sets to the chat (in parts when a group is too
+  large). On a host that takes model
   context (`updateModelContext` with text), the chat message is what a person would write («Guarda mis
   cambios de la tarjeta (2tgeu4):» and the changes in words; Frank, 2026-10-23: the instructions in
   the chat read «raro»). The context holds one rule (save only the key the last message names, never
@@ -821,7 +837,8 @@ decisions and the rejected alternatives:
   adding a new instrument or FOH row, header edits from the card, deleting services.
 - **Proof.** `serviceEditor.test.ts`, `serviceCopy.test.ts` and `createService.test.ts` run the tools
   over an in-memory store with the writers' contracts; `storedMonthCard.test.tsx` runs the card's own
-  sequence into `save_service_edits`.
+  sequence into `save_service_edits`; `storedCardSave.test.tsx` renders the card over the same store
+  and saves through `save_service_edits_app` (confirmation, frozen list, re-read from the empty list).
 
 ### Notification audiences (the write tools)
 
@@ -834,7 +851,7 @@ Confirmed from the code at `963cd736` (P3 plan, § «Notification audiences»):
 | `swap_assignment`, per published role | push «Servicio actualizado» to the members **added** to that role | a `role` notice to the union of before and after assignees, after the window | anything for a draft role |
 | `publish_service` | push «Nuevo servicio asignado» to every current assignee; the consolidated assignment email to the members `sendAssignmentEmailsBatch` itself derives from the service body (`assigneesOf` + `rolesForMember`), reported as that derivation | «Setlist listo» (`debounceMs: 0`) to the participants and the whole worship team (ADR-0054) if there are songs, flushed in the same `after()` | — |
 | `unpublish_service` | — | — | everything; there is no sweep |
-| `save_service_edits`, `copy_instruments`, per published role | push «Servicio actualizado» to the members **added** to that role (in `after()`, as `/admin`) | a `role` notice to the union of before and after assignees, after the window — upserted INLINE and awaited before the next service is written (`queueRoleNoticesNow`), with no layer-2 sweep | anything for a draft role |
+| `save_service_edits` (and its card twin), `copy_instruments`, per published role | push «Servicio actualizado» to the members **added** to that role (in `after()`, as `/admin`) | a `role` notice to the union of before and after assignees, after the window — upserted INLINE and awaited before the next service is written (`queueRoleNoticesNow`), with no layer-2 sweep | anything for a draft role |
 | `create_service` | — | — | everything: it creates an empty draft (`published: false`) |
 
 All of these pass the downstream filters: device tokens and push preferences, `EMAIL_ALLOWLIST`,

@@ -21,6 +21,11 @@ interface BoardProps {
   lines: string[];
   pending: number;
   busy: boolean;
+  /**
+   * The saved-month card after a save started (ADR-0066 addendum): the edit list may already be partly in
+   * the month, so no gesture may extend it until the card re-reads the month from an empty list.
+   */
+  frozen?: boolean;
   /** The last refusal or failure, in the server's words. */
   notice: string | null;
   sheet: { seat: SeatRef; label: string; candidates: Candidate[] | null } | null;
@@ -85,9 +90,9 @@ const sameSeat = (a: SeatRef | null | undefined, service: string, row: string) =
  * An open question holds the board: the overlay it replaced blocked every other tap, and «Cancelar»
  * or «Asignar de todos modos» act on the LAST edit, so a tap elsewhere before answering would make
  * the answer drop or force a different edit than the one asked about. Only the question's own
- * buttons (and «Cerrar») stay live.
+ * buttons (and «Cerrar») stay live. A frozen saved-month list holds it the same way.
  */
-const locked = (p: BoardProps) => p.busy || p.ask !== null;
+const locked = (p: BoardProps) => p.busy || p.ask !== null || p.frozen === true;
 
 function Picker({ p }: { p: EditorProps }) {
   if (!p.sheet) return null;

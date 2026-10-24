@@ -4,7 +4,7 @@
 // `mcp-handler`, stateless, tools registered in `app/mcp/toolList.ts`: `ping`, the seven P1 reads, the three
 // admin-parity reads (fairness ledger, solver rules, integrity queue),
 // the four P3 writes, the two P4 month tools, the proposal editor and the saved-month editor
-// (`check_service_edits`, its card twin, `save_service_edits`, `copy_instruments`), `create_service`,
+// (`check_service_edits` and `save_service_edits`, each with its card twin, `copy_instruments`), `create_service`,
 // plus one resource (the MCP Apps
 // card `solve_month` links to, `app/mcp/apps/proposalCard.ts`). Ungated by the session
 // middleware (`api/mcp(?:/|$)` in `app/utils/routeMatcher.ts`, P0 step 5), so

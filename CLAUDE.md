@@ -257,7 +257,8 @@ looks wrong** — several exist to stop a plausible-looking change.
   (ADR-0066) are change sets judged as diffs by `storedJudge.ts`, written one service at a time
   through `roleEditCommit`; the save sorts first («ya estaba»/«cambió»/«por guardar»), derives move
   groups on the server, compares the prompt's `lines`, and only `check_service_edits_app` (app-only)
-  mints waiver tokens; the card hands «Guardar» to the chat.
+  mints waiver tokens; the card's «Guardar» saves through the app-only twin `save_service_edits_app`
+  (the same function) after its own confirmation, and never replays its edit list once a save starts.
 - **The admin assistant (`/api/admin/chat`, a bubble on every page) is READ-ONLY**: super-admin or
   worship admin, never impersonating; its tools call the MCP read handlers in process, never a write
   tool or the connector; spend is capped per admin per CDMX month in `adminChatUsage.*` (fail

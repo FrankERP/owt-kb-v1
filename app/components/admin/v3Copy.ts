@@ -670,8 +670,9 @@ export const V3_EDITOR_LINES = {
 
 /**
  * The MCP editor over a SAVED month (admin parity phase 1, S2): `check_service_edits`,
- * `check_service_edits_app` and `save_service_edits`. The change lines are what the Claude app's
- * permission prompt shows before anything is written (F4), so they name people and seats in words.
+ * `check_service_edits_app` and `save_service_edits` (with its card twin `save_service_edits_app`). The
+ * change lines are what the Claude app's permission prompt, or the card's own confirmation, shows before
+ * anything is written (F4), so they name people and seats in words.
  */
 /**
  * The argument lines of a saved-month check (ADR-0066): the Claude app hands the model only a tool
