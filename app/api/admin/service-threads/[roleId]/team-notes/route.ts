@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
+import { operationalClient } from "@/sanity/lib/operationalClient";
 import { serviceError } from "@/app/utils/serviceMutation";
 import { isCanonicalDocumentId, sanityConflictKind } from "@/app/utils/roleWriteRequest";
 import { loadCanonicalRole, nowIso, type StoredLock } from "@/app/utils/roleWriteOps";
@@ -86,13 +87,11 @@ async function putHandler(req: NextRequest, { params }: { params: Promise<{ role
   }
 
   let server: ServerTarget;
-  let record: Record<string, unknown> | null;
   let lock: StoredLock | null = null;
   if (target.serviceType === "special") {
     const loaded = await loadSpecialSetlistTarget(roleId, target.serviceDate);
     if (!loaded.ok) return reject(serviceError(loaded.failure.code, { details: loaded.failure.details }));
     server = loaded.target.server;
-    record = loaded.target.record;
   } else {
     const setlistType = target.serviceType === "sunday" ? "featuredSongs" : "saturdarSongs";
     const roleType = target.serviceType === "sunday" ? "sunday_role" : "saturday_role";
@@ -105,7 +104,6 @@ async function putHandler(req: NextRequest, { params }: { params: Promise<{ role
       return reject(serviceError(coordination.failure.code, { details: coordination.failure.details }));
     }
     server = loaded.target.server;
-    record = loaded.target.record;
     lock = coordination.coordination.lock;
   }
 
@@ -121,8 +119,18 @@ async function putHandler(req: NextRequest, { params }: { params: Promise<{ role
   // patch that changes nothing need not move `_rev`, and answering with the
   // transaction id then would leave the dialog asserting a revision that does
   // not exist — a 409 on its next save.
-  const storedNotes = typeof record?.team_notes === "string" ? record.team_notes : "";
-  if (storedNotes === teamNotes) {
+  //
+  // Read HERE, pinned to the revision just compared: the loaders' shared
+  // projections (`SETLIST_PROJECTION`, `ROLE_PROJECTION`) do not carry
+  // `team_notes`, and reading it from them made every note look empty, so
+  // clearing one was taken for "unchanged" and never written (dev, 2026-10-24).
+  // No row = the document moved since: fall through, and the write's
+  // `ifRevisionId` answers 409.
+  const atRev = await operationalClient.fetch<{ notes?: string | null } | null>(
+    `*[_id == $id && _rev == $rev][0]{ "notes": team_notes }`,
+    { id: server.id, rev: server.rev },
+  );
+  if (atRev && (atRev.notes ?? "") === teamNotes) {
     return NextResponse.json({ ok: true, teamNotes: teamNotes || null, observed: { id: server.id, rev: server.rev } });
   }
 
