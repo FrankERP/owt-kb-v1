@@ -78,6 +78,12 @@ export interface DayCardProps {
    * `hero` implies it.
    */
   sheet?: boolean;
+  /**
+   * The hero's one identity line («Domingo · 25 oct · 11:00»). `false` when the
+   * host already names the service — the calendar's day sheet titles itself with
+   * the date (2026-10-24) — so the line is not said twice. Ignored without `hero`.
+   */
+  identity?: boolean;
   /** Rendered inside `DayCardDisclosure`, which already draws the card's ground,
    *  hairline and rail: drop this card's own so there is one card, not two. */
   nested?: boolean;
@@ -109,7 +115,7 @@ export interface DayCardProps {
 /** The neutral the card's quiet chrome (the medley spine) is drawn in. */
 const NEUTRAL = "--ink-dim-rgb";
 
-export function DayCard({ day, date, time, setlist, pastorMessage, leads, myLeadSongs, instruments, fohTeam, bgvs, chorus, roleId, serviceId, isNext, layout = "card", hero = false, sheet: sheetProp = false, nested = false, photos, viewerTypes, viewerName, viewerIsAdmin }: DayCardProps) {
+export function DayCard({ day, date, time, setlist, pastorMessage, leads, myLeadSongs, instruments, fohTeam, bgvs, chorus, roleId, serviceId, isNext, layout = "card", hero = false, sheet: sheetProp = false, identity = true, nested = false, photos, viewerTypes, viewerName, viewerIsAdmin }: DayCardProps) {
   const { openSheet } = usePlayer();
   const { data: session } = useSession();
   const { toast } = useToast();
@@ -297,7 +303,7 @@ export function DayCard({ day, date, time, setlist, pastorMessage, leads, myLead
         {!nested && !sheet && <span aria-hidden className={`absolute inset-y-0 left-0 z-[1] w-[3px] ${TONE_RAIL[tone]}`} />}
         {sheet ? (
           <div className="flex flex-col gap-4 empty:hidden">
-            {hero && (
+            {hero && identity && (
               <p className="font-body text-sm text-ink-muted">
                 {day}{shortDate && ` · ${shortDate}`}{(time || startTime) && <span className="tabular-nums"> · {time || startTime}</span>}
               </p>

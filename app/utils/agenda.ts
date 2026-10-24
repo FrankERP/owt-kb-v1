@@ -3,6 +3,7 @@
 // ⚠ marks can never disagree.
 import type { ActiveDay } from "../components/CalendarView";
 import { plural } from "./plural";
+import { serviceStartTime } from "./calendarFeed";
 
 export type Tone = "sun" | "sat" | "special";
 
@@ -75,6 +76,13 @@ export function summarizeService(e: ActiveDay): string {
   const n = e.setlist?.songs?.length ?? 0;
   if (n) parts.push(plural(n, "canción", "canciones"));
   return parts.length ? parts.join(" · ") : "Sin asignaciones";
+}
+
+/** The clock a row or a day sheet shows beside the service: a weekend at the team's
+ *  standing hour, a special at its own valid `time`, else nothing — the feed's ONE rule
+ *  (`serviceStartTime`), so the agenda, `/me` and the `.ics` never disagree on it. */
+export function serviceClock(e: Pick<ActiveDay, "day" | "roleId" | "time">): string | undefined {
+  return serviceStartTime(e.roleId ? "special" : "weekend", e.day, e.time);
 }
 
 export type AgendaRow = { key: string; date: string; entry: ActiveDay; tone: Tone; conflicts: number; summary: string; monthStart: string | null };
@@ -150,4 +158,29 @@ export function monthStripDays(ym: string, activeDays: Record<string, ActiveDay[
 export function weekStripDays(mondayIso: string, activeDays: Record<string, ActiveDay[]>, todayStr: string, myName = ""): StripDay[] {
   const start = mondayOf(mondayIso);
   return Array.from({ length: 7 }, (_, i) => stripDay(addDays(start, i), activeDays, todayStr, myName));
+}
+
+/** What the calendar header counts (the «millones» pass, 2026-10-24): the services the
+ *  reader will scroll past, and how many of them seat `myName`. In the rolling view only
+ *  days from `todayStr` on count (the fetch starts there anyway); a browsed month counts
+ *  its whole window, past days included, because that is what the page shows. */
+export type CalendarCounts = { services: number; mine: number };
+export function calendarCounts(activeDays: Record<string, ActiveDay[]>, todayStr: string, myName: string, fromToday: boolean): CalendarCounts {
+  let services = 0;
+  let mine = 0;
+  for (const row of agendaRows(activeDays)) {
+    if (fromToday && row.date < todayStr) continue;
+    services += 1;
+    if (myName && mySeats(row.entry, myName).length > 0) mine += 1;
+  }
+  return { services, mine };
+}
+
+/** The header's one line under the month, in two parts so the host can colour the second:
+ *  «8 servicios por venir» (rolling) or «8 servicios» (a browsed window), and «te toca en 3»
+ *  — null when the reader serves in none, so the line never says «te toca en 0». */
+export function calendarCountLine(c: CalendarCounts, browsing: boolean): { services: string; mine: string | null } {
+  const services =
+    c.services === 0 ? (browsing ? "Sin servicios" : "Sin servicios por venir") : `${plural(c.services, "servicio", "servicios")}${browsing ? "" : " por venir"}`;
+  return { services, mine: c.mine > 0 ? `te toca en ${c.mine}` : null };
 }

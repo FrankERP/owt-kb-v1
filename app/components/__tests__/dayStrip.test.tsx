@@ -68,9 +68,11 @@ const ACTIVE: Record<string, ActiveDay[]> = {
   "2026-09-20": [sunday("2026-09-20"), special("2026-09-20")],
 };
 
-/** The day cells, excluding the mocked SwipeStrip's two test triggers. */
+/** The day cells (the round number buttons), excluding the mocked SwipeStrip's two test triggers. */
 const cells = () => screen.getAllByRole("button").filter((b) => !(b as HTMLElement).dataset.testid);
 const cell = (label: string) => cells().find((b) => b.getAttribute("aria-label")?.includes(label))!;
+/** The dots sit UNDER the button, outside it (the «millones» pass), in the cell's wrapper. */
+const dotsOf = (b: HTMLElement) => within(b.parentElement as HTMLElement).queryByTestId("day-dots");
 
 function mountStrip(props: Partial<ComponentProps<typeof DayStrip>> = {}) {
   const onPick = props.onPick ?? vi.fn();
@@ -92,14 +94,16 @@ describe("DayStrip", () => {
   it("renders the seven days of today's week, Monday first", () => {
     mountStrip();
     expect(cells()).toHaveLength(7);
-    expect(cells().map((b) => b.textContent)).toEqual(["Lun7", "Mar8", "Mié9", "Jue10", "Vie11", "Sáb12", "Dom13"]);
+    // The button is the number alone (the round target); the weekday is a label above it.
+    expect(cells().map((b) => b.textContent)).toEqual(["7", "8", "9", "10", "11", "12", "13"]);
+    expect(cells().map((b) => b.parentElement!.firstChild!.textContent)).toEqual(["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]);
     expect(screen.getByText(/^7 – 13 sep/)).toBeTruthy();
   });
 
   it("enables only the days that carry a service", () => {
     mountStrip();
     const enabled = cells().filter((b) => !(b as HTMLButtonElement).disabled);
-    expect(enabled.map((b) => b.textContent)).toEqual(["Sáb12", "Dom13"]);
+    expect(enabled.map((b) => b.textContent)).toEqual(["12", "13"]);
   });
 
   it("marks today with aria-current and the inset ring, service or not", () => {
@@ -107,24 +111,25 @@ describe("DayStrip", () => {
     const current = cells().filter((b) => b.getAttribute("aria-current") === "date");
     expect(current).toHaveLength(1);
     expect(current[0].textContent).toContain("10");
-    expect(current[0].className).toContain("ring-accent/50");
+    expect(current[0].className).toContain("ring-ink/70");
     expect((current[0] as HTMLButtonElement).disabled).toBe(true);
-    expect(cells().filter((b) => b.className.includes("ring-accent/50"))).toHaveLength(1);
+    expect(cells().filter((b) => b.className.includes("ring-ink/70"))).toHaveLength(1);
   });
 
-  it("ADR-0067 — a lit day is a neutral cell with one tone dot per service; an empty day has none", () => {
+  it("ADR-0067 — a lit day is a neutral number with one tone dot per service under it; an empty day has none", () => {
     mountStrip();
     fireEvent.click(screen.getByTestId("swipe-next"));
     const sat = cell("19 de septiembre");
-    expect(sat.className).toContain("bg-surface-card");
-    expect(sat.className).not.toMatch(/bg-warning|text-warning|bg-accent-deep|bg-info/);
-    const satDots = within(sat).getByTestId("day-dots").children;
+    // No fill of any kind (the «millones» pass retired the raised card too): ink text, that's all.
+    expect(sat.className).not.toMatch(/\bbg-/);
+    expect(sat.className).toContain("text-ink");
+    const satDots = dotsOf(sat)!.children;
     expect(satDots).toHaveLength(1);
     expect(satDots[0].className).toContain("bg-warning-fg");
     // Sunday + a special on the 20th: two dots, in `activeDays` order, no corner mark.
-    const both = within(cell("20 de septiembre")).getByTestId("day-dots").children;
+    const both = dotsOf(cell("20 de septiembre"))!.children;
     expect(Array.from(both).map((d) => d.className)).toEqual([expect.stringContaining("bg-accent"), expect.stringContaining("bg-info-fg")]);
-    expect(within(cell("16 de septiembre")).queryByTestId("day-dots")).toBeNull();
+    expect(dotsOf(cell("16 de septiembre"))).toBeNull();
   });
 
   it("reports the ISO date of a picked service day, with one haptic", () => {
@@ -151,7 +156,7 @@ describe("DayStrip", () => {
     const onWeekChange = vi.fn();
     mountStrip({ onWeekChange });
     fireEvent.click(screen.getByTestId("swipe-next"));
-    expect(cells().map((b) => b.textContent)).toEqual(["Lun14", "Mar15", "Mié16", "Jue17", "Vie18", "Sáb19", "Dom20"]);
+    expect(cells().map((b) => b.textContent)).toEqual(["14", "15", "16", "17", "18", "19", "20"]);
     expect(onWeekChange).toHaveBeenCalledWith("2026-09-14");
     expect(push).not.toHaveBeenCalled();
     expect(screen.getByText(/^14 – 20 sep/)).toBeTruthy();
@@ -163,7 +168,7 @@ describe("DayStrip", () => {
     mountStrip();
     fireEvent.click(screen.getByTestId("swipe-prev"));
     fireEvent.click(screen.getByTestId("swipe-prev"));
-    expect(cells().map((b) => b.textContent)).toEqual(["Lun24", "Mar25", "Mié26", "Jue27", "Vie28", "Sáb29", "Dom30"]);
+    expect(cells().map((b) => b.textContent)).toEqual(["24", "25", "26", "27", "28", "29", "30"]);
     expect(screen.getByText(/^24 – 30 ago/)).toBeTruthy();
     expect(cells().every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
   });
@@ -171,18 +176,20 @@ describe("DayStrip", () => {
   it("opens on the week of the first day when the anchor month has no today", () => {
     mountStrip({ anchorMonth: "2026-10" });
     // 1 Oct 2026 is a Thursday, so its week starts Monday 28 September.
-    expect(cells().map((b) => b.textContent)).toEqual(["Lun28", "Mar29", "Mié30", "Jue1", "Vie2", "Sáb3", "Dom4"]);
+    expect(cells().map((b) => b.textContent)).toEqual(["28", "29", "30", "1", "2", "3", "4"]);
   });
 
-  it("F1 — paints the number positive («tú») on the day the signed-in member is seated in, and only that one", () => {
+  it("F1 — adds a green dot («tú») under the day the signed-in member is seated in, and only that one", () => {
     mountStrip({ myName: "ana" }); // matches leads: ["Ana"] on 2026-09-13
-    expect(cell("13 de septiembre").querySelector(".text-positive-fg")!.textContent).toBe("13");
-    expect(cell("12 de septiembre").querySelector(".text-positive-fg")).toBeNull();
+    // The number itself stays ink (the «millones» pass): «tú» is a fourth dot, named by the legend.
+    expect(dotsOf(cell("13 de septiembre"))!.querySelector("[data-mine]")!.className).toContain("bg-positive-fg");
+    expect(cell("13 de septiembre").className).not.toContain("text-positive-fg");
+    expect(dotsOf(cell("12 de septiembre"))!.querySelector("[data-mine]")).toBeNull();
   });
 
   it("marks no day as mine when `myName` is omitted", () => {
     mountStrip();
-    expect(document.querySelector(".text-positive-fg")).toBeNull();
+    expect(document.querySelector("[data-mine]")).toBeNull();
   });
 
   it("F1 — adds «te toca» to a mine cell's label, and only that cell", () => {
@@ -191,13 +198,15 @@ describe("DayStrip", () => {
     expect(cell("12 de septiembre").getAttribute("aria-label")).not.toMatch(/te toca/);
   });
 
-  it("F1 — a day that is today AND mine keeps both marks: the ring on the cell, the positive number, the tone dot", () => {
+  it("F1 — a day that is today AND mine keeps all three marks: the ring on the number, the tone dot, the green dot", () => {
     const withTodayMine: Record<string, ActiveDay[]> = { ...ACTIVE, "2026-09-10": [sunday("2026-09-10")] };
     mountStrip({ myName: "ana", activeDays: withTodayMine });
     const todayMine = cell("10 de septiembre");
-    expect(todayMine.className).toContain("ring-accent/50");
-    expect(todayMine.querySelector(".text-positive-fg")!.textContent).toBe("10");
-    expect(within(todayMine).getByTestId("day-dots").children[0].className).toContain("bg-accent");
+    expect(todayMine.className).toContain("ring-ink/70");
+    const dots = dotsOf(todayMine)!.children;
+    expect(dots).toHaveLength(2);
+    expect(dots[0].className).toContain("bg-accent");
+    expect(dots[1].className).toContain("bg-positive-fg");
     expect((todayMine as HTMLButtonElement).disabled).toBe(false);
   });
 
@@ -205,18 +214,20 @@ describe("DayStrip", () => {
     const withTodayMine: Record<string, ActiveDay[]> = { ...ACTIVE, "2026-09-10": [sunday("2026-09-10")] };
     mountStrip({ myName: "ana", activeDays: withTodayMine });
     for (const b of cells()) {
-      expect(b.children.length).toBeLessThanOrEqual(3);
-      expect(b.querySelector(".absolute")).toBeNull();
+      const wrap = b.parentElement!;
+      expect(wrap.children.length).toBeLessThanOrEqual(3);
+      expect(wrap.querySelector(".absolute")).toBeNull();
     }
   });
 });
 
 /** The header opens a `CueDialog`, so it needs the provider its real host has. */
-function mountHeader(props: ComponentProps<typeof ScheduleHeader>) {
+const COUNTS = { services: "3 servicios por venir", mine: null };
+function mountHeader(props: Omit<ComponentProps<typeof ScheduleHeader>, "counts"> & { counts?: ComponentProps<typeof ScheduleHeader>["counts"] }) {
   return render(
     <MotionProvider>
       <CueDialogProvider>
-        <ScheduleHeader {...props} />
+        <ScheduleHeader counts={COUNTS} {...props} />
       </CueDialogProvider>
     </MotionProvider>,
   );
@@ -254,12 +265,23 @@ describe("ScheduleHeader", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
-  it("sublabels the rolling view «Próximos», and never a browsed month", () => {
-    mountHeader({ anchorMonth: "2026-09", viewMonth: null });
-    expect(screen.getByText("Próximos")).toBeTruthy();
-    cleanup();
-    mountHeader({ anchorMonth: "2026-12", viewMonth: "2026-12" });
+  it("counts the services under the month, «te toca en N» in the app's one green, and no «Próximos» label any more", () => {
+    const { container } = mountHeader({ anchorMonth: "2026-09", viewMonth: null, counts: { services: "8 servicios por venir", mine: "te toca en 3" } });
+    expect(container.textContent).toContain("2026 · 8 servicios por venir · te toca en 3");
+    expect(screen.getByText("te toca en 3").className).toContain("text-positive-fg");
     expect(screen.queryByText("Próximos")).toBeNull();
+    cleanup();
+    // Nobody's seat in the window: the line stops after the count — never «te toca en 0».
+    const second = mountHeader({ anchorMonth: "2026-12", viewMonth: "2026-12", counts: { services: "4 servicios", mine: null } });
+    expect(second.container.textContent).toContain("4 servicios");
+    expect(second.container.textContent).not.toContain("te toca");
+    expect(screen.queryByText("Próximos")).toBeNull();
+  });
+
+  it("the arrows are round ring buttons, the month the display-face page title", () => {
+    mountHeader({ anchorMonth: "2026-09", viewMonth: null });
+    expect(screen.getByRole("link", { name: "Mes anterior" }).className).toContain("rounded-full");
+    expect(screen.getByRole("heading", { level: 2 }).className).toMatch(/font-display text-\[46px\]/);
   });
 
   it("ADR-0067 — the month name opens a sheet of the anchor year's twelve months as `?m=` links, the anchor pressed", () => {

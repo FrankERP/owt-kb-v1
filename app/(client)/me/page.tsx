@@ -11,9 +11,8 @@ import MeHeader from "@/app/components/MeHeader";
 import Button from "@/app/components/ui/Button";
 import AccountList, { AccountLinkRow } from "@/app/components/account/AccountList";
 import DownloadCalendarRow from "@/app/components/account/DownloadCalendarRow";
-import {
-  ArrowRightIcon, CalendarAddIcon, CalendarOffIcon, CheckIcon, ClockIcon, MessageIcon, PlusIcon, SlidersIcon,
-} from "@/app/components/ui/icons";
+import { ArrowRightIcon, CheckIcon, ClockIcon, MessageIcon, PlusIcon } from "@/app/components/ui/icons";
+import { SHEET_TITLE } from "@/app/utils/homeHero";
 import { serviceStartTime } from "@/app/utils/calendarFeed";
 import { UNDER_NAVBAR_SCROLL_MT } from "@/app/utils/navbarHeight";
 import { Setlist, SetlistSong, ProposalStatus } from "@/app/utils/interface";
@@ -436,7 +435,7 @@ export default async function MePage() {
 
     if (!proposal) {
       return (
-        <Button href={`/me/propose/${doc._id}`} variant="secondary" size="sm" className="mt-3 w-full">
+        <Button href={`/me/propose/${doc._id}`} variant="secondary" size="sm" className="mt-4 w-full md:max-w-md">
           <PlusIcon size={12} />
           Proponer setlist
         </Button>
@@ -458,7 +457,7 @@ export default async function MePage() {
 
     return (
       <>
-        <Button href={`/me/propose/${doc._id}`} variant="secondary" size="sm" className="mt-3 w-full">
+        <Button href={`/me/propose/${doc._id}`} variant="secondary" size="sm" className="mt-4 w-full md:max-w-md">
           {STATUS_LABEL[proposal.status]}
           {STATUS_ICON[proposal.status]}
         </Button>
@@ -471,7 +470,7 @@ export default async function MePage() {
     <div>
       {/* `cue={false}`: `MeHeader` already carries the next-service countdown. */}
       <Navbar title={navbarTitle} cue={false} />
-      <div className="mx-auto max-w-4xl px-6 pt-10 pb-16 space-y-12">
+      <div className="mx-auto max-w-4xl space-y-14 px-6 pb-16 pt-8">
         {/* The theme-rollout announcement used to sit here. It was retired on
             2026-09-13 — see ADR-0033. Do not reintroduce it with a client-side
             dismissal. */}
@@ -515,24 +514,30 @@ export default async function MePage() {
             same date on one page; the header owns it, the hero card just shows the
             "Ensayar" action. */}
         {inWorship && heroAssignment && (
-          <div className="space-y-4" {...revealProps(1)}>
-            <div key={heroAssignment.doc._id}>
+          <div className="space-y-14" {...revealProps(1)}>
+            {/* «Próximo» (the «millones» pass, 2026-10-24): the page's sections carry
+                the sheet's small-caps titles, the one uppercase left on it, so the
+                hero reads as the first section of a run sheet, not a card dropped
+                under the header. */}
+            <section key={heroAssignment.doc._id} aria-labelledby="me-proximo">
+              <h2 id="me-proximo" className={`${SHEET_TITLE} mb-5`}>Próximo</h2>
               <DayCard {...cardProps(heroAssignment)} hero />
               {renderProposalCta(heroAssignment.doc)}
-            </div>
+            </section>
             {restAssignments.length > 0 && (
-              <>
-                {/* Visually silent — the collapsed rows read fine without a printed
-                    heading, but a screen reader landing mid-page needs to know it
-                    left the hero and entered the rest of the run sheet. */}
-                <h2 className="sr-only">Después</h2>
-                {restAssignments.map((assignment) => (
-                  <div key={assignment.doc._id}>
-                    <DayCardDisclosure {...cardProps(assignment)} />
-                    {renderProposalCta(assignment.doc)}
-                  </div>
-                ))}
-              </>
+              // «Después»: the other services as hairline rows (`DayCardDisclosure
+              // sheet`, home's own list), each still followed by its proposal CTA.
+              <section aria-labelledby="me-despues">
+                <h2 id="me-despues" className={SHEET_TITLE}>Después</h2>
+                <div className="mt-2 divide-y divide-ink/[0.10] border-y border-ink/[0.10]">
+                  {restAssignments.map((assignment) => (
+                    <div key={assignment.doc._id} className="pb-1">
+                      <DayCardDisclosure {...cardProps(assignment)} sheet />
+                      {renderProposalCta(assignment.doc)}
+                    </div>
+                  ))}
+                </div>
+              </section>
             )}
           </div>
         )}
@@ -540,39 +545,31 @@ export default async function MePage() {
         {/* Oasis Kids — only for members of that ministry */}
         {inKids && (
           <section aria-labelledby="mis-roles-kids" {...revealProps(2)}>
-            <h2
-              id="mis-roles-kids"
-              className="font-display text-center text-xl md:text-2xl font-bold mb-6"
-            >
-              Mis roles en Oasis Kids
-            </h2>
-            <div className="rounded-2xl border border-edge-accent-subtle bg-surface-raised p-5">
-              {kidsAssignments.length === 0 ? (
-                <p className="text-center font-body text-sm text-mono-500">
-                  No tienes domingos asignados en Oasis Kids por ahora.
-                </p>
-              ) : (
-                <ul className="space-y-2">
-                  {kidsAssignments.map(({ day, seats }) => (
-                    <li
-                      key={day}
-                      className="flex flex-wrap items-baseline justify-between gap-2 rounded-lg bg-surface-sunken px-3 py-2"
-                    >
-                      <span className="font-body text-sm capitalize text-ink-muted">
-                        {kidsDayLabel(day)}
-                      </span>
-                      <span className="font-label text-[11px] uppercase tracking-widest text-accent">
-                        {seats.map((seat) => KIDS_SEAT_LABELS[seat]).join(" · ")}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <Button href="/kids" variant="secondary" size="sm" className="mt-4 w-full">
-                Ver Oasis Kids
-                <ArrowRightIcon size={12} />
-              </Button>
-            </div>
+            {/* A section of the same run sheet (the «millones» pass): small-caps
+                title, hairline rows — the day at 17 px, the seats under it. */}
+            <h2 id="mis-roles-kids" className={SHEET_TITLE}>Oasis Kids</h2>
+            {kidsAssignments.length === 0 ? (
+              <p className="mt-3 font-body text-[17px] text-ink-dim">
+                No tienes domingos asignados en Oasis Kids por ahora.
+              </p>
+            ) : (
+              <ul className="mt-2 divide-y divide-ink/[0.10] border-y border-ink/[0.10]">
+                {kidsAssignments.map(({ day, seats }) => (
+                  <li key={day} className="py-4">
+                    <span className="block font-body text-[17px] font-semibold capitalize text-ink">
+                      {kidsDayLabel(day)}
+                    </span>
+                    <span className="block font-body text-sm text-ink-muted">
+                      {seats.map((seat) => KIDS_SEAT_LABELS[seat]).join(" · ")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <Button href="/kids" variant="secondary" size="sm" className="mt-4">
+              Ver Oasis Kids
+              <ArrowRightIcon size={12} />
+            </Button>
           </section>
         )}
 
@@ -592,7 +589,7 @@ export default async function MePage() {
         {/* `#tu-cuenta` is a link target (Ajustes › Calendario's «Descargar una sola
             vez»), so it clears the navbar like every anchored section does. */}
         <section id="tu-cuenta" aria-labelledby="tu-cuenta-title" className={`${UNDER_NAVBAR_SCROLL_MT} space-y-2`} {...revealProps(3)}>
-          <h2 id="tu-cuenta-title" className="ml-1 font-label text-[11px] uppercase tracking-widest text-mono-500">
+          <h2 id="tu-cuenta-title" className={SHEET_TITLE}>
             Tu cuenta
           </h2>
           {!member && (
@@ -612,7 +609,6 @@ export default async function MePage() {
             {member && (
               <AccountLinkRow
                 href="/me/disponibilidad"
-                icon={<CalendarOffIcon size={18} strokeWidth={1.8} />}
                 title="Disponibilidad"
                 status={
                   upcomingUnavailable === 0
@@ -629,14 +625,12 @@ export default async function MePage() {
             {inWorship && (
               <AccountLinkRow
                 href="/me/ajustes#calendario"
-                icon={<CalendarAddIcon size={18} strokeWidth={1.8} />}
                 title="Calendario"
                 status="Suscribirte a tus servicios"
               />
             )}
             <AccountLinkRow
               href="/me/ajustes"
-              icon={<SlidersIcon size={18} strokeWidth={1.8} />}
               title="Ajustes"
               status="Tema, tamaño de texto, perfil"
             />

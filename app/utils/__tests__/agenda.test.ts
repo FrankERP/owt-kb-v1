@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findDuplicates, serviceTone, serviceConflicts, summarizeService, conflictLabel, agendaRows, monthStripDays, weekStripDays, mondayOf, addDays, mySeats, myNameFromSession, dayCellLabel } from "../agenda";
+import { findDuplicates, serviceTone, serviceConflicts, summarizeService, conflictLabel, agendaRows, monthStripDays, weekStripDays, mondayOf, addDays, mySeats, myNameFromSession, dayCellLabel, serviceClock, calendarCounts, calendarCountLine } from "../agenda";
 import type { ActiveDay } from "../../components/CalendarView";
 
 const sun = (date: string, extra: Partial<ActiveDay> = {}): ActiveDay => ({ day: "Domingo", date, leads: ["Jakey", "Marianne"], instruments: [{ label: "Keys", person: "Sofi" }, { label: "Bass", person: "Mkz" }], setlist: { songs: Array(5).fill({ _id: "s", title: "t" }) as never, week: date }, ...extra });
@@ -134,5 +134,43 @@ describe("mySeats", () => {
   it("dedupes a member seated on two instrument seats with the same label", () => {
     const e = sun("2026-09-13", { leads: [], instruments: [{ label: "Keys", person: "Sofi" }, { label: "Keys", person: "Sofi" }] });
     expect(mySeats(e, "sofi")).toEqual(["Keys"]);
+  });
+});
+
+describe("serviceClock", () => {
+  it("gives a weekend the team's standing hour and a special its own time", () => {
+    expect(serviceClock({ day: "Domingo" })).toBe("11:00");
+    expect(serviceClock({ day: "Sábado" })).toBe("18:00");
+    expect(serviceClock({ day: "Noche de alabanza", roleId: "sp1", time: "19:30" })).toBe("19:30");
+  });
+  it("is empty for a special with no valid time — all-day, never a made-up 11:00", () => {
+    expect(serviceClock({ day: "Aniversario", roleId: "sp1" })).toBeUndefined();
+    expect(serviceClock({ day: "Aniversario", roleId: "sp1", time: "pronto" })).toBeUndefined();
+  });
+});
+
+describe("calendarCounts / calendarCountLine", () => {
+  const days = {
+    "2026-09-06": [sun("2026-09-06", { leads: ["Sofi"] })],
+    "2026-09-13": [sun("2026-09-13", { leads: ["Sofi"] })],
+    "2026-09-20": [sun("2026-09-20", { leads: ["Ana"] }), { day: "Aniversario", date: "2026-09-20", roleId: "sp1", leads: ["Sofi"] }],
+  };
+  it("counts the services from today on in the rolling view, and the ones that seat me", () => {
+    // Ana leads the 20th only; Sofi is on Keys in every weekend fixture plus the special.
+    expect(calendarCounts(days, "2026-09-10", "ana", true)).toEqual({ services: 3, mine: 1 });
+    expect(calendarCounts(days, "2026-09-10", "sofi", true)).toEqual({ services: 3, mine: 3 });
+  });
+  it("counts the whole window, past days included, while browsing a month", () => {
+    expect(calendarCounts(days, "2026-09-10", "ana", false)).toEqual({ services: 4, mine: 1 });
+  });
+  it("seats nobody without a name", () => {
+    expect(calendarCounts(days, "2026-09-10", "", true).mine).toBe(0);
+  });
+  it("words the line in two parts, the second absent rather than «te toca en 0»", () => {
+    expect(calendarCountLine({ services: 8, mine: 3 }, false)).toEqual({ services: "8 servicios por venir", mine: "te toca en 3" });
+    expect(calendarCountLine({ services: 1, mine: 1 }, false)).toEqual({ services: "1 servicio por venir", mine: "te toca en 1" });
+    expect(calendarCountLine({ services: 4, mine: 0 }, true)).toEqual({ services: "4 servicios", mine: null });
+    expect(calendarCountLine({ services: 0, mine: 0 }, false)).toEqual({ services: "Sin servicios por venir", mine: null });
+    expect(calendarCountLine({ services: 0, mine: 0 }, true)).toEqual({ services: "Sin servicios", mine: null });
   });
 });

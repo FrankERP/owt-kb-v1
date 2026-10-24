@@ -186,7 +186,7 @@ export default async function SchedulePage({
   return (
     <div>
       <Navbar title="Calendario" />
-      <div className="mx-auto max-w-4xl px-6 pt-10 pb-16">
+      <div className="mx-auto max-w-4xl px-6 pb-16 pt-6">
         {/* No page heading: `ScheduleHeader`'s month IS the route's heading (R2
             Task 4). `todayStr` is the same `today` the fetch above computed —
             in browse mode the fetch's own boundary is the WINDOW, not `today`,
