@@ -52,6 +52,8 @@ const EXPECTED_CALLERS: Record<string, string[]> = {
   // route and `copy_instruments` (S3).
   roleEditCommit: ["app/api/admin/roles/[id]/route.ts", "app/mcp/tools/serviceEditor.ts"],
   copyInstrumentsCommit: ["app/api/admin/roles/copy-instruments/route.ts", "app/mcp/tools/serviceEditor.ts"],
+  // Admin parity phase 2 (T1): the DELETE route and `delete_services`/`delete_services_app`.
+  roleDeleteCommit: ["app/api/admin/roles/[id]/route.ts", "app/mcp/tools/serviceDeletes.ts"],
   roleUnpublishCommit: ["app/api/admin/roles/unpublish/route.ts", "app/mcp/tools/unpublishService.ts"],
   setlistSaveCommit: ["app/api/admin/setlists/route.ts", "app/mcp/tools/editSetlist.ts"],
   // Solver v3 C2 WR-16 / IF2-23: the ONE mutation path of `fairnessMonth`. Its importer
