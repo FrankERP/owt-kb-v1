@@ -302,7 +302,7 @@ to rotate, nothing to configure in GitHub → Settings → Secrets. If a future 
 needs one, it gets an entry in `docs/SECRETS.md` in the same change.
 
 **Not CI: `solver-v3-ops.yml`.** A separate workflow verifies and re-deploys the production
-solver function with keyless Google access (ADR-0072; `docs/SOLVER_AND_INFRA.md` «Verifying a v3
+solver function with keyless Google access (ADR-0073; `docs/SOLVER_AND_INFRA.md` «Verifying a v3
 deploy»). It is operations, not a gate: `gates` does not and must not depend on it, and branch
 protection does not require it. Each of its runs creates a GitHub Deployment record in the
 `solver-verify` or `solver-deploy` environment; that is not an app release. Its shape is pinned by

@@ -478,7 +478,7 @@ describe("A2 handoff allowlist", () => {
         "app/utils/outboxSweep.ts#module",
         "app/utils/serviceMutationSideEffects.ts#module",
         "app/api/admin/proposals/[id]/route.ts#PATCH",
-        "app/api/admin/roles/[id]/route.ts#DELETE",
+        "app/utils/roleDeleteCommit.ts#module",
         "app/utils/roleEditCommit.ts#module",
         "app/utils/copyInstrumentsCommit.ts#module",
         "app/api/admin/roles/publish/route.ts#POST",

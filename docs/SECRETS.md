@@ -457,6 +457,12 @@ rule needs (`mcp-service-waiver|`, bound to the service and its revision) and th
 every pending change set, waiver and token: `save_service_edits` answers «revisa de nuevo» and
 writes nothing, and the next check mints fresh ones. Nothing stored holds them.
 
+**A fourth use: the delete list** (ADR-0072, admin parity phase 2; no new secret or env var). One
+more HMAC under its own label, `mcp-delete-list|`, over the month and the canonical JSON of the whole
+list `check_service_deletes` answered (`deleteListToken`). Rotating the key invalidates every pending
+preview: `delete_services` refuses the call before any delete and answers «revisa de nuevo»; the next
+check mints a fresh token. Nothing stored holds it.
+
 **Blast radius.** Every access and refresh token that environment's routes ever signed stops
 verifying the instant the new key is live — a rotated secret cannot check a token signed under
 the old one, by construction. That is **that one environment's grants only**: on production, every
@@ -636,7 +642,7 @@ secret.
 | Platform | Role |
 |---|---|
 | Vercel Preview + Production | `app/api/admin/solve/route.ts` sends it as the `X-Api-Key` header — to v2 itself, and to v3 through `app/utils/solverV3Upstream.ts` (solver v3 C6; the path production takes since the 2026-10-15 cutover, ADR-0056 — v2's only after a flip-back). The MCP's `solve_month` (P4, in production since 2026-10-20) calls the same `solveV3`, so it sends the same header from `/api/mcp` |
-| GitHub Actions `solver-v3-ops.yml` → `verify` | Reads `owt-solver-api-key:latest` with `owt-gha-verify` (Secret Accessor on this secret only), masks it, and sends it as `X-Api-Key` for the ping and smoke solve (ADR-0072). Nothing is stored in GitHub |
+| GitHub Actions `solver-v3-ops.yml` → `verify` | Reads `owt-solver-api-key:latest` with `owt-gha-verify` (Secret Accessor on this secret only), masks it, and sends it as `X-Api-Key` for the ping and smoke solve (ADR-0073). Nothing is stored in GitHub |
 | Secret Manager `owt-solver-api-key` | Cloud Build deploys each function with `--set-secrets=OWT_SOLVER_API_KEY=owt-solver-api-key:latest`: v2 from `cloudbuild.yaml` (manual: `scripts/deploy-solver-gcf.sh`), v3 from `gcf_v3/cloudbuild.yaml` (manual: a dispatched `deploy` of `solver-v3-ops.yml`, which re-runs that trigger; first creation and last resort: `scripts/deploy-solver-v3-gcf.sh`) |
 
 **Purpose.** The only barrier on each publicly invokable function (`allUsers` holds
@@ -870,7 +876,7 @@ does not use it; it authenticates with its own sign-in.
 ## GitHub Actions → Google (Workload Identity Federation — no secret)
 
 **Needed in: nothing stores a credential.** `.github/workflows/solver-v3-ops.yml` gets a
-short-lived Google token per job by exchanging GitHub's OIDC token (ADR-0072).
+short-lived Google token per job by exchanging GitHub's OIDC token (ADR-0073).
 
 **Status (2026-10-22): designed and merged, NOT yet set up or rehearsed.** Nothing below exists
 in Google Cloud or GitHub until Frank runs the setup script and creates the environments; until
@@ -886,7 +892,7 @@ rehearsal. What it sets up:
   Functions Viewer on `owt-solver-v3`, Secret Accessor on `owt-solver-api-key`) and
   `owt-gha-deploy` (Cloud Build Editor on the project, Service Account User on the deploy
   trigger's account — effectively editor-equivalent, which is why deploy runs need Frank's
-  approval; ADR-0072 says what that approval does and does not guard).
+  approval; ADR-0073 says what that approval does and does not guard).
 - **GitHub** — environments `solver-verify` (deployment branches: `main`) and `solver-deploy`
   (`main`; required reviewer FrankERP; admins cannot bypass), each with the plain **variables**
   `GCP_PROJECT`, `GCP_WIF_PROVIDER` and `GCP_SERVICE_ACCOUNT` (that environment's account). Not

@@ -1,6 +1,6 @@
 # ADR-0066: Saved services are edited from the chat as checked change sets, written one service at a time
 
-**Date:** 2026-10-21 · **Status:** Accepted; amended 2026-10-23 (the card saves, addendum below)
+**Date:** 2026-10-21 · **Status:** Accepted; amended 2026-10-23 (the card saves) and 2026-10-24 (the card deletes, ADR-0072), addenda below
 
 > **Numbering.** Written as 0064 and renumbered to 0066 on 2026-10-21: PR #166 (now ADR-0064) and
 > PR #165 (now ADR-0065) reached `main` first. ADR numbers follow the order records reach `main`.
@@ -179,3 +179,18 @@ a change from the card with «Sí, guardar», and the host let the card call the
 - A card save without its own confirmation: one mistaken tap would write production and email people.
 - Tracking which attempt may have written what, so a refused list could be kept: that is the defect class
   both blocking review rounds found. Frank redoes a refused edit on the month as it is stored.
+
+## Addendum — the card deletes, 2026-10-24
+
+Admin parity phase 2 (ADR-0072; Frank, «También desde la tarjeta»). The card's «Borrar servicios…» (the
+whole month, «Solo borradores» or «También publicados») and each service's «Borrar este servicio» call the
+model-visible, read-only `check_service_deletes` and show its lines in the card's own confirmation
+(«Esto no se puede deshacer.»); «Sí, borrar» calls `delete_services_app`, the SAME function as
+`delete_services`, with the check's list and token untouched. The rules above carry over:
+- Nothing to delete while the card has unsaved edits or a save started («Guarda o descarta tus cambios
+  primero»), so a delete never mixes with an edit list; the board is frozen while it runs.
+- An unknown outcome (a throw, a timeout, «sin confirmar», «pendiente») keeps the SAME list and token
+  for «Borrar de nuevo» or «Mandar al chat»; a contention («repite… UNA vez») allows one «Borrar de nuevo»,
+  then only «Volver a leer el mes»; anything else shows the server's words and re-reads from the empty
+  edit list. A failed re-read keeps the board locked.
+- Lines the server writes for Claude («llama delete_services…», «repite…») never show on the card.

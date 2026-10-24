@@ -1,5 +1,5 @@
 # Operations for the production solver function `owt-solver-v3`, from GitHub Actions instead of
-# a laptop (ADR-0072; plan docs/superpowers/plans/2026-10-22-solver-v3-gha-wif-ops.md).
+# a laptop (ADR-0073; plan docs/superpowers/plans/2026-10-22-solver-v3-gha-wif-ops.md).
 #
 #   verify — after every push to main that touches gcf_v3/ (the Cloud Build trigger deploys those),
 #            or on demand: the function is ACTIVE, the ping answers ok/contract 3/the expected build,

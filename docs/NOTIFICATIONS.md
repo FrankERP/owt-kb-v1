@@ -45,6 +45,14 @@ notices of every service it had already written. Those tools call the shared com
 `queueRoleNoticesNow` and AWAITED before the next service is written, with **no layer-2 sweep** —
 layers 1 and 3 deliver them. `/admin`'s routes keep the deferred path above.
 
+The chat's delete (`delete_services` and its card twin `delete_services_app`; admin parity phase 2,
+ADR-0072) does the same through `deleteRole` (`roleDeleteCommit.ts`): a published service's
+«Ya no participas» notice to each assignee of its pre-commit `beforeSeats` is upserted inline and
+awaited before the next delete; a draft sends nothing. If that upsert fails, the service is already
+gone, so a repeat answers «ya no existe» and can never queue it: the answer names those people
+for Frank to tell himself. The check's line counts them as «se avisa a hasta N personas» with the
+notice builder's own `seatAssignees` («hasta»: `wantsNotification` still drops at flush).
+
 Reading live state at send time rather than storing an "after" snapshot is what
 makes the email never stale, and makes any change that nets out to nothing inside
 the window collapse to silence. **The proposal thread is the one exception to
