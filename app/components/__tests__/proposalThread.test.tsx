@@ -135,7 +135,7 @@ describe("ProposalThread — the composer", () => {
     const box = screen.getByPlaceholderText("Escribe un mensaje…") as HTMLTextAreaElement;
     fireEvent.change(box, { target: { value: "  hola  " } });
     fireEvent.click(screen.getByText("Enviar"));
-    await waitFor(() => expect(onPost).toHaveBeenCalledWith("hola", { pastor: false }));
+    await waitFor(() => expect(onPost).toHaveBeenCalledWith("hola"));
     await waitFor(() => expect(box.value).toBe(""));
   });
 
@@ -180,22 +180,9 @@ describe("ProposalThread — the composer", () => {
 });
 
 describe("ProposalThread — the pastor's message (ADR-0065)", () => {
-  it("offers the box only where asked, and posts with `pastor: true` when ticked", async () => {
-    const { unmount } = renderThread();
+  it("no longer offers «Es el mensaje del pastor»: it has its own box in the dialog", () => {
+    renderThread({ viewerRole: "admin" });
     expect(screen.queryByLabelText("Es el mensaje del pastor")).toBeNull();
-    unmount();
-
-    const { onPost } = renderThread({ viewerRole: "admin", pastorOption: true });
-    const tick = screen.getByLabelText("Es el mensaje del pastor") as HTMLInputElement;
-    fireEvent.click(tick);
-    // A pasted message is long: the composer grows and says what goes in it.
-    const box = screen.getByPlaceholderText("Pega aquí el mensaje del pastor…") as HTMLTextAreaElement;
-    expect(box.rows).toBe(6);
-    fireEvent.change(box, { target: { value: "Hermanos, este domingo: Efesios 2." } });
-    fireEvent.click(screen.getByText("Enviar"));
-    await waitFor(() => expect(onPost).toHaveBeenCalledWith("Hermanos, este domingo: Efesios 2.", { pastor: true }));
-    // Reset with the text, so the next message is not marked by accident.
-    await waitFor(() => expect(tick.checked).toBe(false));
   });
 
   it("labels a pastor's note as the pastor's, naming who relayed it", () => {
@@ -207,5 +194,80 @@ describe("ProposalThread — the pastor's message (ADR-0065)", () => {
     });
     expect(screen.getByText("Mensaje del pastor · vía Frank")).toBeTruthy();
     expect(screen.getByText("Mensaje del pastor")).toBeTruthy();
+  });
+});
+
+describe("ProposalThread — editing one's own messages (ADR-0065, 2026-10-24)", () => {
+  const mine = msg({ _key: "m1", author: "adm-1", author_role: "admin", author_name: "Frank", kind: "admin_change_request", body: "Ensayo a las 9" });
+  const theirs = msg({ _key: "l1", at: "2026-08-21T15:00:00.000Z" });
+
+  function renderModifiable(over: Partial<React.ComponentProps<typeof ProposalThread>> = {}) {
+    const onEdit = vi.fn().mockResolvedValue(undefined);
+    const onDelete = vi.fn().mockResolvedValue(undefined);
+    const utils = renderThread({
+      viewerId: "adm-1",
+      viewerRole: "admin",
+      messages: [mine, theirs],
+      canModify: (m) => m.author === "adm-1",
+      onEdit,
+      onDelete,
+      ...over,
+    });
+    return { onEdit, onDelete, ...utils };
+  }
+
+  it("offers Editar/Borrar only on the messages `canModify` allows", () => {
+    renderModifiable();
+    expect(screen.getAllByText("Editar")).toHaveLength(1);
+    expect(screen.getAllByText("Borrar")).toHaveLength(1);
+  });
+
+  it("offers nothing without the handlers", () => {
+    renderModifiable({ onEdit: undefined, onDelete: undefined });
+    expect(screen.queryByText("Editar")).toBeNull();
+    expect(screen.queryByText("Borrar")).toBeNull();
+  });
+
+  it("edits in place and closes the editor on success", async () => {
+    const { onEdit } = renderModifiable();
+    fireEvent.click(screen.getByText("Editar"));
+    const box = screen.getByLabelText("Editar mensaje") as HTMLTextAreaElement;
+    expect(box.value).toBe("Ensayo a las 9");
+    fireEvent.change(box, { target: { value: "Ensayo a las 10" } });
+    fireEvent.click(screen.getByText("Guardar"));
+    await waitFor(() => expect(onEdit).toHaveBeenCalledWith("m1", "Ensayo a las 10"));
+    await waitFor(() => expect(screen.queryByLabelText("Editar mensaje")).toBeNull());
+  });
+
+  it("keeps the editor and its text when the edit fails", async () => {
+    const onEdit = vi.fn().mockRejectedValue(new Error("nope"));
+    renderModifiable({ onEdit });
+    fireEvent.click(screen.getByText("Editar"));
+    fireEvent.change(screen.getByLabelText("Editar mensaje"), { target: { value: "Ensayo a las 10" } });
+    fireEvent.click(screen.getByText("Guardar"));
+    await waitFor(() => expect(screen.getByText("No se pudo guardar el cambio")).toBeTruthy());
+    expect((screen.getByLabelText("Editar mensaje") as HTMLTextAreaElement).value).toBe("Ensayo a las 10");
+  });
+
+  it("asks before deleting, and deletes only on «Sí, borrar»", async () => {
+    const { onDelete } = renderModifiable();
+    fireEvent.click(screen.getByText("Borrar"));
+    expect(screen.getByText("¿Borrar este mensaje?")).toBeTruthy();
+    fireEvent.click(screen.getByText("No"));
+    expect(onDelete).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText("Borrar"));
+    fireEvent.click(screen.getByText("Sí, borrar"));
+    await waitFor(() => expect(onDelete).toHaveBeenCalledWith("m1"));
+  });
+
+  it("offers nothing once the service has passed", () => {
+    renderModifiable({ serviceDate: PAST_DATE });
+    expect(screen.queryByText("Editar")).toBeNull();
+    expect(screen.queryByText("Borrar")).toBeNull();
+  });
+
+  it("marks an edited message «editado»", () => {
+    renderThread({ messages: [msg({ edited_at: "2026-08-20T16:00:00.000Z" })] });
+    expect(screen.getByText(/· editado/)).toBeTruthy();
   });
 });

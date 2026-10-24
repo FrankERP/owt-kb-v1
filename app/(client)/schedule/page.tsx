@@ -8,6 +8,7 @@ import { indexUniqueByKey, serviceDayKey } from "@/app/utils/serviceReadSelect";
 import { requireWorshipPage } from "@/app/utils/worshipPageGate";
 import { seatPhotos } from "@/app/utils/teamSections";
 import { myNameFromSession } from "@/app/utils/agenda";
+import { pastorMessageBodyOf } from "@/app/utils/serviceThread";
 
 export const metadata: Metadata = {
   title: "Calendario — Oasis Worship Team",
@@ -42,7 +43,8 @@ const ROLE_FIELDS = `_id, week,
   instruments[]{ instrument, "person": coalesce(person->alias, person->member_name), "photo": ${PERSON_PHOTO} },
   foh_team[]{ role, "person": coalesce(person->alias, person->member_name), "photo": ${PERSON_PHOTO} },
   BGVs[]->{ member_name, alias, "photo": ${PHOTO} },
-  Chorus[]->{ member_name, alias, "photo": ${PHOTO} }`;
+  Chorus[]->{ member_name, alias, "photo": ${PHOTO} },
+  "pastor_message": ${pastorMessageBodyOf("^._id")}`;
 
 const SCHEDULE_QUERY = `{
   "sundays":     *[_type == "sunday_role"   && week >= $today && week <= $limit && published != false] | order(week asc)  { ${ROLE_FIELDS} },
@@ -134,6 +136,7 @@ export default async function SchedulePage({
       serviceId: sun._id,
       leads: sun.Lead?.map((m) => m.alias || m.member_name) ?? [],
       setlist: sunSetlistMap.get(dateStr),
+      pastorMessage: sun.pastor_message,
       instruments: sun.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
       fohTeam: sun.foh_team?.map((s) => ({ label: s.role, person: s.person })),
       bgvs: sun.BGVs,
@@ -148,6 +151,7 @@ export default async function SchedulePage({
       serviceId: sat._id,
       leads: sat.Lead?.map((m) => m.alias || m.member_name) ?? [],
       setlist: satSetlistMap.get(dateStr),
+      pastorMessage: sat.pastor_message,
       instruments: sat.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
       fohTeam: sat.foh_team?.map((s) => ({ label: s.role, person: s.person })),
       bgvs: sat.BGVs,
@@ -171,6 +175,7 @@ export default async function SchedulePage({
       serviceId: sp._id,
       leads: sp.Lead?.map((m) => m.alias || m.member_name) ?? [],
       setlist,
+      pastorMessage: sp.pastor_message,
       instruments: sp.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
       fohTeam: sp.foh_team?.map((s) => ({ label: s.role, person: s.person })),
       bgvs: sp.BGVs,
