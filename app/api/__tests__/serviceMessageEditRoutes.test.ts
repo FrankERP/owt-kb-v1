@@ -162,6 +162,8 @@ function conflict(type = "documentRevisionIDDoesNotMatchError") {
 /** What the thread read answers, per test. */
 let storedThread: Record<string, unknown> | null;
 let messageAuthor: string | null;
+/** The team note stored at the asserted revision; `undefined` = the doc moved (no row). */
+let notesAtRev: string | null | undefined;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -170,12 +172,14 @@ beforeEach(() => {
   afterCallbacks.length = 0;
   storedThread = null;
   messageAuthor = "admin-1";
+  notesAtRev = "Nota anterior";
   requireActiveManagerMock.mockResolvedValue(admin());
   loadCanonicalRoleMock.mockResolvedValue({ role: role(), state: "single", draftIds: [] });
   notifyMock.mockResolvedValue(undefined);
   operationalFetch.mockImplementation(async (query: string) => {
     if (query.includes(".messages[_key == $key][0]")) return messageAuthor ? { author: messageAuthor } : null;
     if (query.includes("{ _id, _rev, pastor_message }")) return storedThread;
+    if (query.includes('"notes": team_notes')) return notesAtRev === undefined ? null : { notes: notesAtRev };
     if (query.includes(".pastor_message{")) return { body: "leído", at: "2099-03-01T15:00:00.000Z", author: "admin-1", author_name: "Frank" };
     if (query.includes("_id == $threadId")) return { _id: THREAD_ID, _rev: "t9", messages: [{ _key: "m1", body: "fresco" }] };
     return null;
@@ -335,16 +339,32 @@ describe("PUT /api/admin/service-threads/[roleId]/team-notes", () => {
   });
 
   it("writes nothing for an unchanged note and hands back the observed target", async () => {
-    loadWeekendMock.mockResolvedValueOnce({
-      ok: true,
-      target: { server: { state: "single", ...OBSERVED }, record: { team_notes: "Igual" } },
-    });
+    notesAtRev = "Igual";
     const res = await teamNotesPut(req({ teamNotes: " Igual ", observed: OBSERVED }), params());
     expect(await res.json()).toEqual({ ok: true, teamNotes: "Igual", observed: OBSERVED });
+    // The stored note is read pinned to the revision just compared.
+    const read = operationalFetch.mock.calls.find(([q]) => String(q).includes('"notes": team_notes'));
+    expect(read?.[1]).toEqual({ id: OBSERVED.id, rev: "s1" });
     // Empty stays empty too.
-    loadWeekendMock.mockResolvedValueOnce({ ok: true, target: { server: { state: "single", ...OBSERVED }, record: {} } });
+    notesAtRev = null;
     expect(await (await teamNotesPut(req({ teamNotes: "", observed: OBSERVED }), params())).json()).toMatchObject({ observed: OBSERVED });
     expect(committed).toHaveLength(0);
+  });
+
+  it("clears a note even though the loaders' projections carry no `team_notes` (dev, 2026-10-24)", async () => {
+    // The regression: the "unchanged" check read the loader's record, whose
+    // projection has no `team_notes`, so every note looked empty and clearing
+    // one was skipped as a no-op.
+    loadWeekendMock.mockResolvedValueOnce({ ok: true, target: { server: { state: "single", ...OBSERVED }, record: { _id: OBSERVED.id } } });
+    notesAtRev = "La plática es de la Justicia";
+    await teamNotesPut(req({ teamNotes: "", observed: OBSERVED }), params());
+    expect(committed[0][0]).toEqual({ kind: "patch", id: OBSERVED.id, ifRevisionId: "s1", unset: ["team_notes"] });
+  });
+
+  it("writes (and lets the precondition answer) when the document moved since the compare", async () => {
+    notesAtRev = undefined;
+    commitOutcomes.push(conflict());
+    expect((await teamNotesPut(req({ teamNotes: "Nota anterior", observed: OBSERVED }), params())).status).toBe(409);
   });
 
   it("reads a Saturday's setlist as `saturdarSongs`", async () => {
@@ -355,10 +375,6 @@ describe("PUT /api/admin/service-threads/[roleId]/team-notes", () => {
   });
 
   it("unsets the note when it is empty", async () => {
-    loadWeekendMock.mockResolvedValueOnce({
-      ok: true,
-      target: { server: { state: "single", ...OBSERVED }, record: { team_notes: "Vieja" } },
-    });
     await teamNotesPut(req({ teamNotes: "", observed: OBSERVED }), params());
     expect(committed[0][0]).toEqual({ kind: "patch", id: OBSERVED.id, ifRevisionId: "s1", unset: ["team_notes"] });
   });
