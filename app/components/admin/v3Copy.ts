@@ -884,7 +884,7 @@ export const V3_STORED_EDITOR_LINES = {
     repeatSame: "Repite exactamente la misma llamada: lo que ya se borró contesta «ya no existe» y se borra el resto.",
     recheck: "Revisa el mes de nuevo con check_service_deletes antes de volver a borrar.",
     undo:
-      "Un borrado no se deshace desde el chat: para recuperarlo, planea el servicio otra vez (Auto, o crear el servicio y llenar sus lugares) o restáuralo desde el historial en Studio; su equipo ya recibió «Ya no participas».",
+      "Un borrado no se deshace desde el chat: para recuperarlo, planea el servicio otra vez (Auto, o crear el servicio y llenar sus lugares) o restáuralo desde el historial en Studio (Studio lo guarda 3 días); su equipo ya recibió «Ya no participas».",
   },
 } as const;
 

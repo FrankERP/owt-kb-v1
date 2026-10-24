@@ -391,6 +391,14 @@ export function useStoredEditor(app: App | null): StoredEditorState {
     }
   };
 
+  /** The panel's two delete buttons read the flow from state, so the render never hands `runDelete` anything. */
+  const confirmDelete = () => {
+    if (deleting?.stage === "confirm") void runDelete(deleting.service, deleting.view, 0);
+  };
+  const repeatDelete = () => {
+    if (deleting?.stage === "unsure") void runDelete(deleting.service, deleting.view, deleting.contentions);
+  };
+
   /** «Mandar al chat» after an unknown outcome: Claude calls `delete_services`, the Claude app asks first. */
   const sendDelete = (flow: Extract<DeleteFlow, { stage: "unsure" }>) => {
     if (!app || !month || !flow.view.token) return;
@@ -429,7 +437,7 @@ export function useStoredEditor(app: App | null): StoredEditorState {
     if (flow.stage === "unsure") {
       return (
         <div className="actions">
-          <button type="button" className="primary" onClick={() => void runDelete(flow.service, v, flow.contentions)} disabled={busy}>
+          <button type="button" className="primary" onClick={repeatDelete} disabled={busy}>
             {CARD_DELETE.again}
           </button>
           <button type="button" onClick={() => sendDelete(flow)} disabled={busy}>
@@ -466,7 +474,7 @@ export function useStoredEditor(app: App | null): StoredEditorState {
         {can && <p className="muted">{CARD_DELETE.irreversible}</p>}
         <div className="actions">
           {can && (
-            <button type="button" className="primary" onClick={() => void runDelete(flow.service, v, 0)} disabled={busy || flow.stage === "running"}>
+            <button type="button" className="primary" onClick={confirmDelete} disabled={busy || flow.stage === "running"}>
               {CARD_DELETE.yes}
             </button>
           )}

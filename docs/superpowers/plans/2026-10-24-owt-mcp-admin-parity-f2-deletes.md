@@ -1,9 +1,10 @@
 # OWT MCP — admin parity, phase 2: deleting services from the chat (plan)
 
-**Status:** PLAN, not built. APPROVED by adversarial review 2026-10-24 (rounds 5 and 6 on the same
-bytes, `9e00f5d5…c2a`; log: `2026-10-24-owt-mcp-admin-parity-f2-deletes-review-log.md`, which lists
-the post-approval edits as un-reviewed). Frank decided Q1 and Q2 (§5). Next: Frank's go-ahead to
-build.
+**Status:** BUILT 2026-10-24 on Frank's «Sí, constrúyela» (03:10Z); ADR-0072. APPROVED by
+adversarial review 2026-10-24 (rounds 5 and 6 on the same bytes, `9e00f5d5…c2a`; log:
+`2026-10-24-owt-mcp-admin-parity-f2-deletes-review-log.md`, which lists the post-approval edits as
+un-reviewed). Frank decided Q1 and Q2 (§5). D10's history retention, checked: 3 days (Sanity Free
+plan). Next: release and the live proof (§6).
 **Requirement (Frank, 2026-10-21 15:48Z, verbatim):** «Quiero poder hacer todo lo que hago en la
 página como admin, pero desde el chat». Phase 2 of the Claude Doc «Todo el admin desde el chat»:
 «Borrar un servicio o limpiar un mes. […] primero el chat te muestra exactamente qué se va a borrar.

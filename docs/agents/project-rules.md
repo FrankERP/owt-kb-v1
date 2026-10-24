@@ -426,15 +426,24 @@ several exist precisely to stop a plausible-looking change.
   note into a refused call. Put guidance that depends on an answer (repeat, check again) in the
   answer, which is never stale, not in the description. ADR-0069; tests in `mcpRoute.test.ts`
   («the tool list's version»).
-- **The eight admin write paths (setlists PUT, roles create, roles PATCH, copy-instruments, swap,
-  publish-ready, unpublish, the fairness PUT) delegate everything after authorization to `app/utils/*Commit.ts`;
+- **The nine admin write paths (setlists PUT, roles create, roles PATCH, roles DELETE, copy-instruments,
+  swap, publish-ready, unpublish, the fairness PUT) delegate everything after authorization to `app/utils/*Commit.ts`;
   `serviceCommitCallers.test.ts` pins their callers and `publishVerdict`'s; MCP writes go only
   through them; `/api/mcp` buffers SSE so a tool finishes inside the handler.** The MCP's
   `apply_schedule` (P4 on v3, ADR-0061) calls two of them: `createRole` (`roleCreateCommit.ts`, each
   draft, always `published: false`) and `commitFairnessMonths` (the month records, first). It runs
   `runV3ConfirmAttempt` itself, and `solve_month` runs `planV3Month`, which composes the planner's
   own v3 functions: never re-implement either on the server; `monthToolParity.test.tsx` pins
-  byte-identical solve bodies against `MonthGenerator`.
+  byte-identical solve bodies against `MonthGenerator`. The DELETE route's body is `deleteRole`
+  (`roleDeleteCommit.ts`, admin parity phase 2, ADR-0072): the route passes `notices: "deferred"`
+  (`after()`), `delete_services` and its card twin `"inline"` (awaited). A chat delete runs only with
+  the list and token `check_service_deletes` minted (HMAC over the month and the whole list, label
+  `mcp-delete-list|`); the save re-reads and re-renders every line, and a changed `_rev`, a changed
+  line, a past service (before today in CDMX — `/admin` only) or an id outside the month refuses the
+  whole call before any delete. Both tools render lines from ONE strict read (`loadRolesForDelete`):
+  never the dereferenced admin read, and never a reader that turns a malformed answer into `[]`
+  (every service would look «ya no existe»). The line's N is `seatAssignees(normalizeStoredSeats())`,
+  the notice builder's own audience (`deleteLines.test.ts`). Only contention is told to repeat, once.
 - **The MCP proposal editor: the server judges, the card only shows** (ADR-0062). The card
   (`mcp-app/proposal-card/`) holds a list of edits, never a board; every check and save replays the
   whole list from the stored proposal through the planner's own gate. Only `editorBoard.ts` calls

@@ -457,6 +457,12 @@ rule needs (`mcp-service-waiver|`, bound to the service and its revision) and th
 every pending change set, waiver and token: `save_service_edits` answers «revisa de nuevo» and
 writes nothing, and the next check mints fresh ones. Nothing stored holds them.
 
+**A fourth use: the delete list** (ADR-0072, admin parity phase 2; no new secret or env var). One
+more HMAC under its own label, `mcp-delete-list|`, over the month and the canonical JSON of the whole
+list `check_service_deletes` answered (`deleteListToken`). Rotating the key invalidates every pending
+preview: `delete_services` refuses the call before any delete and answers «revisa de nuevo»; the next
+check mints a fresh token. Nothing stored holds it.
+
 **Blast radius.** Every access and refresh token that environment's routes ever signed stops
 verifying the instant the new key is live — a rotated secret cannot check a token signed under
 the old one, by construction. That is **that one environment's grants only**: on production, every
