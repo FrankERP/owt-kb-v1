@@ -435,7 +435,7 @@ several exist precisely to stop a plausible-looking change.
   `runV3ConfirmAttempt` itself, and `solve_month` runs `planV3Month`, which composes the planner's
   own v3 functions: never re-implement either on the server; `monthToolParity.test.tsx` pins
   byte-identical solve bodies against `MonthGenerator`. The DELETE route's body is `deleteRole`
-  (`roleDeleteCommit.ts`, admin parity phase 2, ADR-0072): the route passes `notices: "deferred"`
+  (`roleDeleteCommit.ts`, admin parity phase 2, ADR-0072): the route uses the default `notices: "deferred"`
   (`after()`), `delete_services` and its card twin `"inline"` (awaited). A chat delete runs only with
   the list and token `check_service_deletes` minted (HMAC over the month and the whole list, label
   `mcp-delete-list|`); the save re-reads and re-renders every line, and a changed `_rev`, a changed

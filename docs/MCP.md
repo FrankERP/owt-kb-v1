@@ -856,7 +856,7 @@ decisions and the rejected alternatives:
 
 | Tool | Who calls it | What it does |
 |---|---|---|
-| `check_service_deletes` | the model, and the card | `{month, include?: "drafts" \| "all", services?}`: the list of what a delete would remove, one line per service («sábado 7 nov · borrador», «domingo 8 nov · publicado: se avisa a hasta 9 personas», a special «… · especial»), what it keeps and why (already past, has a setlist / proposal / songs / another document pointing at it, a Studio draft, unreadable), and a token over the whole list. Drafts only unless `include: "all"`; an id in `services` selects that service, published or not. At most 31 lines; more answers «quedan N». The `delete_services` arguments are the text's last line («Argumentos para delete_services (pásalos tal cual): …»). Read-only; no card `resourceUri` (a check from the chat never opens the card) |
+| `check_service_deletes` | the model, and the card | `{month, include?: "drafts" \| "all", services?}`: the list of what a delete would remove, one line per service («sábado 7 nov · borrador», «domingo 8 nov · publicado: se avisa a hasta 9 personas», a special «… · especial»), what it keeps and why (already past, has a setlist / proposal / songs / another document pointing at it, a Studio draft, unreadable, a name too long for the list), and a token over the whole list. Drafts only unless `include: "all"`; an id in `services` selects that service, published or not. At most 31 lines; more answers «quedan N». The `delete_services` arguments are the text's last line («Argumentos para delete_services (pásalos tal cual): …»). Read-only; no card `resourceUri` (a check from the chat never opens the card) |
 | `delete_services` | the model | `{month, deletes: [{service, baseRev, line}], token}`, exactly as the check answered. Deletes one service at a time through `deleteRole`, «Ya no participas» queued inline for a published one. Destructive |
 | `delete_services_app` | the card only (`_meta.ui.visibility: ["app"]`) | The same function, after the card's own confirmation; it logs under its own name. Destructive |
 
@@ -893,7 +893,7 @@ decisions and the rejected alternatives:
   restore it from its history in Studio, which the Sanity Free plan keeps **3 days**
   (sanity.io/docs/history-experience). A restored role comes back without the weekend lock and
   creation receipt its delete retired (`/admin` bootstraps the lock on its next save), and its people
-  were already told «Ya no participas».
+  still get «Ya no participas» (the answer says so only when a published delete queued notices).
 - **Proof.** `serviceDeletes.test.ts` runs the three tools over an in-memory store with the writer's
   contract; `deleteLines.test.ts` pins N to the notice builder's audience; `roleWriteRoutes.test.ts`
   pins the route and the commit to identical transactions; `storedCardDelete.test.tsx` renders the

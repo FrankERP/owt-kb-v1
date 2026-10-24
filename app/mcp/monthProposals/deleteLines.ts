@@ -27,6 +27,8 @@ const D = V3_STORED_EDITOR_LINES.delete;
 
 /** At most this many services in one delete (as `MAX_CHANGES`). */
 export const MAX_DELETES = 31;
+/** `delete_services` refuses a longer `line`, so the check never lists one (a special's name has no cap). */
+export const MAX_DELETE_LINE = 200;
 
 export interface DeleteEntry {
   service: string;
@@ -195,6 +197,7 @@ export function finishDeleteSelection(
     }
     const line = deleteLine(d.role);
     if (!line) kept.push({ label, reason: D.kept.invalid, order: d });
+    else if (line.length > MAX_DELETE_LINE) kept.push({ label, reason: D.kept.too_long, order: d });
     else deletable.push({ service: d.role._id, baseRev: d.role._rev, line, order: d });
   }
   deletable.sort((a, b) => byDatedRole(a.order, b.order));

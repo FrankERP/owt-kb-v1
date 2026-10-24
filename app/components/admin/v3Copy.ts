@@ -822,6 +822,7 @@ export const V3_STORED_EDITOR_LINES = {
       duplicate: "hay más de un documento para ese servicio: corrígelo en /admin o en Studio",
       invalid: "sus datos no cuadran (revisa la cola de integridad)",
       inventory: "no pude revisar de qué depende (revisa la cola de integridad)",
+      too_long: "su nombre es demasiado largo para la lista: acórtalo en /admin",
     },
     dependency: {
       setlist: "setlist",
@@ -884,7 +885,9 @@ export const V3_STORED_EDITOR_LINES = {
     repeatSame: "Repite exactamente la misma llamada: lo que ya se borró contesta «ya no existe» y se borra el resto.",
     recheck: "Revisa el mes de nuevo con check_service_deletes antes de volver a borrar.",
     undo:
-      "Un borrado no se deshace desde el chat: para recuperarlo, planea el servicio otra vez (Auto, o crear el servicio y llenar sus lugares) o restáuralo desde el historial en Studio (Studio lo guarda 3 días); su equipo ya recibió «Ya no participas».",
+      "Un borrado no se deshace desde el chat: para recuperarlo, planea el servicio otra vez (Auto, o crear el servicio y llenar sus lugares) o restáuralo desde el historial en Studio (Studio lo guarda 3 días).",
+    /** Only after a published delete whose notices were queued: they are debounced, not yet sent. */
+    undoTeam: "Su equipo recibirá «Ya no participas» aunque lo recuperes.",
   },
 } as const;
 

@@ -15,12 +15,13 @@ import {
   SAVE_START_CUTOFF_MS,
 } from "../serviceEditor";
 import {
+  DELETE_SERVICES_INPUT,
   checkServiceDeletesResult,
   deleteServicesResult,
   type DeleteServicesArgs,
   type ServiceDeleteDeps,
 } from "../serviceDeletes";
-import { DELETE_ARGS_PREFIX } from "@/app/components/admin/v3Copy";
+import { DELETE_ARGS_PREFIX, V3_STORED_EDITOR_LINES } from "@/app/components/admin/v3Copy";
 
 const sc = (out: CallToolResult) => out.structuredContent as Record<string, unknown>;
 const ref = (id: string, key = id) => ({ _key: key, _type: "reference", _ref: id });
@@ -227,6 +228,17 @@ describe("check_service_deletes", () => {
     expect(textOf(out)).toContain("Quedan 2 más");
   });
 
+  it("a special whose line would pass the save's 200-character cap is kept, so the rest stay deletable", async () => {
+    const many = Array.from({ length: 12 }, (_, i) => ref(`m-${i}`));
+    const w = world([...NOV(), special("sp-long", "2026-11-20", "N".repeat(190), { published: true, Lead: many })]);
+    const out = await check(w, { month: "2026-11", include: "all" });
+    expect((sc(out).deletes as Array<{ service: string }>).map((d) => d.service)).not.toContain("sp-long");
+    expect(textOf(out)).toContain(V3_STORED_EDITOR_LINES.delete.kept.too_long);
+    const args = argsFromText(out);
+    expect(DELETE_SERVICES_INPUT.safeParse(args).success).toBe(true);
+    expect((await del(w, args)).isError).toBeFalsy();
+  });
+
   it("nothing to delete: no token and no argument line", async () => {
     const w = world([sunday("sun-8", "2026-11-08", { published: true })]);
     const out = await check(w, { month: "2026-11" });
@@ -369,6 +381,20 @@ describe("delete_services", () => {
       );
       expect(w.deleteRole).toHaveBeenCalledTimes(4);
     }
+  });
+
+  it("«su equipo recibirá «Ya no participas»» only when a published delete queued its notices", async () => {
+    const team = V3_STORED_EDITOR_LINES.delete.undoTeam;
+    const all = world(NOV());
+    expect(textOf(await del(all, argsFromText(await check(all, { month: "2026-11", include: "all" }))))).toContain(team);
+    const drafts = world(NOV());
+    const draftsOut = await del(drafts, argsFromText(await check(drafts, { month: "2026-11" })));
+    expect(textOf(draftsOut)).toContain("Un borrado no se deshace desde el chat");
+    expect(textOf(draftsOut)).not.toContain(team);
+    const failed = world(NOV());
+    const failedArgs = argsFromText(await check(failed, { month: "2026-11", include: "all" }));
+    failed.noticeFails.add("sun-8");
+    expect(textOf(await del(failed, failedArgs))).not.toContain(team);
   });
 
   it("bootstrap_completed_reload → «revisa de nuevo», never «repite»", async () => {

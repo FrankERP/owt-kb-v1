@@ -29,7 +29,7 @@ rounds 5 and 6; Frank chose «También desde la tarjeta» and «Solo de hoy en a
 ## Decision
 
 - **One writer.** The DELETE route's body after authorization moved verbatim into
-  `app/utils/roleDeleteCommit.ts` (`deleteRole`); the route (`notices: "deferred"`) and the MCP
+  `app/utils/roleDeleteCommit.ts` (`deleteRole`); the route (the default, `notices: "deferred"`) and the MCP
   (`notices: "inline"`, `queueRoleNoticesNow` awaited) call it. Nine admin write paths
   (`serviceCommitCallers.test.ts`); a route-vs-commit parity test pins identical transactions.
 - **Preview, then the echoed list.** `check_service_deletes` (read-only) answers one line per
@@ -86,7 +86,15 @@ rounds 5 and 6; Frank chose «También desde la tarjeta» and «Solo de hoy en a
   answers «revisa de nuevo»).
 - A wrong delete is recovered by planning the service again or restoring it from Studio's history
   within 3 days; a restored role comes back without its lock and receipt (`/admin` bootstraps the
-  lock on its next save), and its people were already told «Ya no participas».
+  lock on its next save), and its people are still told «Ya no participas» (debounced, already queued).
 - Rotating `MCP_OAUTH_SECRET` invalidates every pending preview (`docs/SECRETS.md`).
 - The card twin rests on the host hiding app-only tools from the model (ADR-0062 Q1 (1)), as
   `save_service_edits_app` does.
+- A token does not expire and is not bound to who asked: an old check's arguments stay valid while
+  every `_rev` is unchanged and no service has passed. Deliberate — the `_rev` binding already makes
+  the list mean what the prompt shows, and only a super-admin principal reaches the tool.
+- A line over the save's 200 characters (a special's name has no cap) is kept with «su nombre es
+  demasiado largo», so one long name cannot block the month's other deletes.
+- `deleteRole`'s dependency and receipt reads are the route's own, non-strict (`run`/`runRaw` turn a
+  malformed answer into `[]`); the chat inherits that from `/admin` unchanged. Making them strict is a
+  change to `/admin`'s writer too, left for its own delivery.

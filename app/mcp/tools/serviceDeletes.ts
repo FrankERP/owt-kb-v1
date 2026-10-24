@@ -41,6 +41,7 @@ import { memberTokenKey, type MemberTokenKey } from "../monthProposals/memberTok
 import { canonicalJson, deleteListToken, sameMac } from "../monthProposals/changeSetTokens";
 import {
   MAX_DELETES,
+  MAX_DELETE_LINE,
   byDatedRole,
   classifyDeleteOutcome,
   datedRole,
@@ -60,6 +61,8 @@ const D = V3_STORED_EDITOR_LINES.delete;
 
 /** Dependency inventories a check reads at once (each is five queries). */
 export const CHECK_CONCURRENCY = 4;
+/** The member-name read before the deletes: past this the answer says «a N personas». */
+export const NAMES_READ_MS = 5_000;
 
 // ── Wire schemas ─────────────────────────────────────────────────────────────
 
@@ -76,7 +79,7 @@ export const CHECK_SERVICE_DELETES_INPUT = z
   })
   .strict();
 
-const DELETE = z.object({ service: SERVICE, baseRev: z.string().min(1).max(64), line: z.string().min(1).max(200) }).strict();
+const DELETE = z.object({ service: SERVICE, baseRev: z.string().min(1).max(64), line: z.string().min(1).max(MAX_DELETE_LINE) }).strict();
 
 export const DELETE_SERVICES_INPUT = z
   .object({ month: MONTH, deletes: z.array(DELETE).min(1).max(MAX_DELETES), token: z.string().max(64) })
@@ -337,7 +340,8 @@ export async function deleteServicesResult(
       let names: Map<string, string> | null = null;
       if (audienceIds.length) {
         try {
-          const raced = await beforeStop(deps.memberNames(audienceIds), SAVE_HARD_STOP_MS - elapsed());
+          // Capped: the names only improve a failure line, and must not eat the deletes' time.
+          const raced = await beforeStop(deps.memberNames(audienceIds), Math.min(NAMES_READ_MS, SAVE_HARD_STOP_MS - elapsed()));
           if (!raced.late) names = raced.value;
         } catch {
           console.error("[mcp-service-deletes] member names read failed");
@@ -437,12 +441,14 @@ export async function deleteServicesResult(
       };
       const ordered = [...ids.filter((id) => !byId.has(id)), ...toDelete.map((t) => t.entry.service)];
       const anyDeleted = all.some((s) => s.kind === "deleted");
+      const anyNotified = all.some((s) => s.kind === "deleted" && s.notified === true);
       const lines = [
         D.head,
         ...ordered.map((id) => D.line(labels.get(id) ?? byId.get(id)?.label ?? D.unknownService, text(id, status.get(id) ?? { kind: "pending" }))),
         ...(repeat ? [D.repeatSame] : []),
         ...(recheck ? [D.recheck] : []),
         ...(anyDeleted ? [D.undo] : []),
+        ...(anyNotified ? [D.undoTeam] : []),
       ];
       const failed = all.some((s) => s.kind !== "deleted" && s.kind !== "gone");
       return answer(failed, lines, {
