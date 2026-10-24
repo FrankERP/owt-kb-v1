@@ -11,13 +11,13 @@ import { usePlayer } from "@/app/context/PlayerContext";
 import {
   applyLibraryFilters,
   groupByLetter,
-  isTipoSlug,
   libraryKeys,
+  libraryThemes,
   makeLibraryFuse,
   serializeLibraryParams,
   type LibraryFilters as LibraryFiltersState,
 } from "@/app/utils/libraryIndex";
-import { pluralize } from "@/app/utils/libraryCopy";
+import { plural } from "@/app/utils/plural";
 import AnimatedList from "./ui/AnimatedList";
 import Button from "./ui/Button";
 import LibraryFilters from "./LibraryFilters";
@@ -183,7 +183,7 @@ export default function LibraryIndex(props: LibraryIndexProps) {
   // The page's one count line, under the title: songs, themes (every tag that is
   // not a Tipo and has a song) and artists with a song. `ADR-0070`: the title is the
   // page's heading in the display face; the counts are its body-type subtitle.
-  const themeCount = useMemo(() => tags.filter((t) => !isTipoSlug(t.slug.current) && (t.postCount ?? 0) > 0).length, [tags]);
+  const themeCount = useMemo(() => libraryThemes(tags).length, [tags]);
   const artistCount = useMemo(() => authors.filter((a) => (a.postCount ?? 0) > 0).length, [authors]);
 
   return (
@@ -193,11 +193,11 @@ export default function LibraryIndex(props: LibraryIndexProps) {
           Biblioteca
         </h1>
         <p className="font-body text-[17px] leading-snug text-ink-muted md:text-xl">
-          {pluralize(posts.length, "canción", "canciones")}
+          {plural(posts.length, "canción", "canciones")}
           <span className="text-ink-dim"> · </span>
-          {pluralize(themeCount, "tema", "temas")}
+          {plural(themeCount, "tema", "temas")}
           <span className="text-ink-dim"> · </span>
-          {pluralize(artistCount, "artista", "artistas")}
+          {plural(artistCount, "artista", "artistas")}
         </p>
       </header>
 
@@ -249,7 +249,7 @@ export default function LibraryIndex(props: LibraryIndexProps) {
           Limpiar stays conditional since it has nothing to do idle. */}
       <div className={`flex items-center justify-between gap-3 ${active ? "mb-2" : ""}`}>
         <p className="font-body text-sm text-ink-dim" aria-live="polite">
-          {active ? pluralize(filtered.length, "resultado", "resultados") : ""}
+          {active ? plural(filtered.length, "resultado", "resultados") : ""}
         </p>
         {active && (
           <Button variant="ghost" size="sm" onClick={clear}>

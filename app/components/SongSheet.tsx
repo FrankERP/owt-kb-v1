@@ -17,6 +17,7 @@ import { groupBySections } from "@/app/utils/lyrics";
 import { LYRIC_EYEBROW } from "@/app/utils/lyricMarkers";
 import { SHEET_TITLE } from "@/app/utils/homeHero";
 import { splitSongTitle } from "@/app/utils/songTitle";
+import { formatHistoryDate } from "@/app/utils/historyDate";
 import Button from "./ui/Button";
 import PlayPauseGlyph from "./ui/PlayPauseGlyph";
 
@@ -27,7 +28,6 @@ import PlayPauseGlyph from "./ui/PlayPauseGlyph";
 // brand colour (`text-key-fg`, ADR-0071).
 const RING = "inline-flex min-h-[48px] items-center rounded-full border border-ink/[0.18] px-4 font-body text-base font-semibold text-ink";
 const ROWS = "divide-y divide-ink/[0.10] border-y border-ink/[0.10]";
-const HISTORY_DATE = new Intl.DateTimeFormat("es-ES", { year: "numeric", month: "long", day: "numeric" });
 
 // ─── Portable-text renderer for the sheet (no prose class, tight spacing) ─────
 
@@ -124,16 +124,18 @@ export default function SongSheet() {
   const hasHistory  = (sheet?.history?.length ?? 0) > 0;
   const hasContent  = hasChords || hasBody;
   const sheetTrack = sheet && player.track?.songSlug === sheet.slug ? player.track : null;
-  // «Alaba (Praise)»: CueDialog's title carries the whole catalogue name (the one
-  // heading, which the sheet's tests pin); the ORIGINAL goes beside the artist.
-  const { original } = splitSongTitle(sheet?.title);
+  // «Alaba (Praise)»: the Spanish name is CueDialog's title (the one heading, which
+  // the sheet's tests pin); the ORIGINAL goes beside the artist, as on the song page.
+  const { main, original } = splitSongTitle(sheet?.title);
   const activeSetEntry = openSetIdx !== null ? sheet?.history?.[openSetIdx] : undefined;
 
   return (
     <>
       <CueDialog
         open={isOpen}
-        title={sheet?.title ?? "Canción"}
+        // The Spanish name alone, as the song page heads (ADR-0070): the catalogue
+        // string would repeat the original a line above the «original · artista» line.
+        title={sheet ? main || sheet.title : "Canción"}
         label={sheet?.title ? `Canción: ${sheet.title}` : "Detalle de canción"}
         mode="sheet"
         size="lg"
@@ -141,7 +143,7 @@ export default function SongSheet() {
         onDismiss={closeSheet}
       >
 
-        {/* Under CueDialog's own title: the original name and the artist, then the
+        {/* Under CueDialog's own title (the Spanish name): the original name and the artist, then the
             key / BPM / compás row — the song page's hero at sheet size. */}
         {sheet && (
           <div className="flex flex-col gap-4 px-5 pt-1">
@@ -317,7 +319,7 @@ export default function SongSheet() {
                             onClick={() => hasSet && setOpenSetIdx(i)}
                             disabled={!hasSet}
                             className={`flex w-full items-center gap-3.5 py-3.5 text-left transition-colors ${
-                              hasSet ? "cursor-pointer hover:text-accent" : "cursor-default"
+                              hasSet ? "cursor-pointer hover:bg-accent/[0.055]" : "cursor-default"
                             }`}
                             title={hasSet ? "Ver el set completo" : undefined}
                           >
@@ -477,12 +479,6 @@ function SetlistPopover({
       </div>
     </CueDialog>
   );
-}
-
-function formatHistoryDate(week: string) {
-  // Dates are stored as `date` (YYYY-MM-DD); pin to local noon to avoid UTC day-flip.
-  // The song page's long form («11 de octubre de 2026»); the popover reuses it.
-  return HISTORY_DATE.format(new Date(week.slice(0, 10) + "T12:00:00"));
 }
 
 function ChevronIcon() {

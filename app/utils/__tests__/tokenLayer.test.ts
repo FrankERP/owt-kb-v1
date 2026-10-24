@@ -340,7 +340,7 @@ describe("brand.css rule bodies — B2's invariant, which later slices must not 
     // --skeleton-sweep) referenced with a bare `var(--name)` in the rule body,
     // not `rgb(var(--role-rgb) / a)` — the same shape as --warning-glow. The
     // OCCURRENCE regex only matches the latter, so the pin stays put.
-    const all = occurrences(bodies).filter((o) => /^--(accent|ink|surface|warning|info|positive|negative)/.test(o.name));
+    const all = occurrences(bodies).filter((o) => /^--(accent|ink|surface|warning|info|positive|negative|key)/.test(o.name));
     // 69 → 70 (R4 Task 3: .brand-tempo-pill's beat ring borrows --accent-rgb).
     // 70 → 62 (R5 Task 1, ADR-0035: `.brand-admin-shell` spent five of these
     // — border, two backgrounds, an inset highlight, and the `::before` wash —
@@ -353,12 +353,13 @@ describe("brand.css rule bodies — B2's invariant, which later slices must not 
     // 42 → 37 (2026-10-23, ADR-0070's Canción pass: the song page's hero is a
     // title on the plain page, so `.brand-song-hero` — border, two gradient
     // stops, the radial glow and the `::before` sheen — is deleted.)
-    // 37 → 33 (2026-10-24, ADR-0071: `.brand-key-dial`'s border, colour and two
-    // shadows moved from `--accent-rgb` to the new `--key-fg-rgb`, which this
-    // regex does not count — the key is the second brand colour, not the accent.)
-    expect(all.length).toBe(33);
-    // One of the four alpha-free occurrences was `.brand-key-dial`'s `color`.
-    expect(all.filter((o) => o.alpha === "none").length).toBe(3);
+    // 37 → 37 (2026-10-24, ADR-0071: `.brand-key-dial`'s border, colour and two
+    // shadows moved from `--accent-rgb` to the new `--key-fg-rgb`, which the regex
+    // above counts too — the second brand colour is pinned like the first, so a
+    // repaint of the dial back to the accent, or a fifth key occurrence, moves it.)
+    expect(all.length).toBe(37);
+    // One of the four alpha-free occurrences is `.brand-key-dial`'s `color`.
+    expect(all.filter((o) => o.alpha === "none").length).toBe(4);
   });
 
   it("every rgb(var(x)) in a body names a TRIPLET — the rgb(rgb(...)) trap", () => {

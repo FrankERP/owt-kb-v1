@@ -33,6 +33,7 @@ import { serviceStartTime } from "@/app/utils/calendarFeed";
 import { normalizeText } from "@/app/utils/normalizeText";
 import { myNameFromSession, mySeats, serviceTone, TONE_RAIL } from "@/app/utils/agenda";
 import { joinNames } from "@/app/utils/homeGreeting";
+import { plural } from "@/app/utils/plural";
 
 /**
  * `sheet` (ADR-0070): home's «Después» list — a hairline row in the page's own
@@ -59,7 +60,7 @@ export default function DayCardDisclosure({ sheet = false, ...props }: DayCardPr
   const songs = props.setlist?.songs?.length ?? 0;
   const summary = [
     ...(props.leads?.length ? [`Lead ${joinNames(props.leads)}`] : []),
-    ...(songs ? [`${songs} ${songs === 1 ? "canción" : "canciones"}`] : []),
+    ...(songs ? [plural(songs, "canción", "canciones")] : []),
   ].join(" · ");
 
   // The same `downloadICS` as `DownloadCalendarRow` on `/me`, for the ONE service

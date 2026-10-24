@@ -13,8 +13,8 @@
 //   active state: `stop()` clears it, on the second tap, on a hidden tab, and on
 //   unmount. `tempoPill.test.tsx` asserts the timer count is zero in all three.
 //
-// It is the ONE tempo control: the song hero (`size="md"`) and the `SongSheet`
-// meta row (`size="sm"`) render this same pill, and `metronome.ts` keeps only one
+// It is the ONE tempo control: the song hero and the `SongSheet`'s hero row
+// render this same pill, and `metronome.ts` keeps only one
 // of them sounding at a time (F2, ruling 15) — the pill that loses the floor
 // un-presses through `onStop`. `enabled={false}` (the closed sheet, ruling 16)
 // stops it without waiting for an unmount.
@@ -28,28 +28,23 @@ import { haptic } from "@/app/utils/haptics";
 import { beatsPerBar, tempoPeriodMs } from "@/app/utils/practice";
 import { createMetronome, type Metronome } from "./metronome";
 
-// Two chromes, one component (F2, ruling 14): "md" is the song hero's 48 px
-// ring in body text (ADR-0070), "sm" the smaller outlined pill the
-// `SongSheet`'s meta row already drew as static text. Only the chrome differs — the ring, the click and the label are
-// the same pill in both. Each size declares its ONE `min-h` (48 / 44 px): two
-// arbitrary `min-h` values on one element are ordered by Tailwind's emission,
-// not by the class string.
-const CHROME = {
-  md: "min-h-[48px] gap-2 rounded-full border border-ink/[0.18] px-4 font-body text-base font-semibold text-ink transition-[color,border-color,transform] aria-pressed:border-accent/60",
-  sm: "min-h-[44px] rounded-full border border-ink-muted/15 px-3 py-1 font-label text-sm text-ink-muted/70 transition-[color,border-color,transform] aria-pressed:border-accent/60",
-} as const;
+// ONE chrome since ADR-0070's Biblioteca pass: the 48 px ring in body text the
+// key and the compás wear, on the song hero and on the sheet alike (the sheet's
+// smaller label-face pill went with its old meta row, so `size` is gone). ONE
+// `min-h` on the element: two arbitrary `min-h` values would be ordered by
+// Tailwind's emission, not by the class string.
+const CHROME =
+  "min-h-[48px] gap-2 rounded-full border border-ink/[0.18] px-4 font-body text-base font-semibold text-ink transition-[color,border-color,transform] aria-pressed:border-accent/60";
 
 export default function TempoPill({
   bpm,
   timeSig,
   enabled = true,
-  size = "md",
 }: {
   bpm: number;
   timeSig?: string | null;
   /** Flips false when the surface holding the pill is dismissed but kept mounted (`SongSheet`). */
   enabled?: boolean;
-  size?: "sm" | "md";
 }) {
   const [active, setActive] = useState(false);
   const metronome = useRef<Metronome | null>(null);
@@ -117,11 +112,10 @@ export default function TempoPill({
       // [data-active="true"], and the attribute is the state.
       data-active={active || undefined}
       style={{ "--tempo-period": `${tempoPeriodMs(bpm)}ms` } as React.CSSProperties}
-      className={`brand-tempo-pill relative flex items-center duration-fast ease-out-brand active:translate-y-px active:scale-[0.985] aria-pressed:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base ${CHROME[size]}`}
+      className={`brand-tempo-pill relative flex items-center duration-fast ease-out-brand active:translate-y-px active:scale-[0.985] aria-pressed:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base ${CHROME}`}
     >
-      {/* The dot says «this one ticks» (the hero pill only): the sheet's small
-          pill keeps its text-only chrome. */}
-      {size === "md" && <span aria-hidden="true" className="h-2 w-2 rounded-full bg-accent" />}
+      {/* The dot says «this one ticks». */}
+      <span aria-hidden="true" className="h-2 w-2 rounded-full bg-accent" />
       {bpm} BPM
     </button>
   );

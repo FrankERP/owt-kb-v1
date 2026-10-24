@@ -10,10 +10,10 @@
 import { useMemo, useState } from "react";
 import { formatKey } from "@/app/utils/formatKey";
 import type { Tag, Author } from "@/app/utils/interface";
-import { TIPO_SLUGS, isTipoSlug, type LibraryFilters as F } from "@/app/utils/libraryIndex";
+import { TIPO_SLUGS, isTipoSlug, libraryThemes, type LibraryFilters as F } from "@/app/utils/libraryIndex";
 import { normalizeText } from "@/app/utils/normalizeText";
 import { SHEET_TITLE } from "@/app/utils/homeHero";
-import { pluralize } from "@/app/utils/libraryCopy";
+import { plural } from "@/app/utils/plural";
 import CueDialog from "./ui/CueDialog";
 import SegmentedControl from "./ui/SegmentedControl";
 import Select from "./ui/Select";
@@ -75,13 +75,13 @@ export default function LibraryFilters({
   keys: string[];
   /** How many songs the current filters leave — the primary button says it
    *  («Ver 61 canciones»), so the drawer answers its own question before it closes. */
-  resultCount?: number;
+  resultCount: number;
 }) {
   const [open, setOpen] = useState(false);
   const [themeQ, setThemeQ] = useState("");
   const [artistQ, setArtistQ] = useState("");
   const tipo = (TIPO_SLUGS.find((s) => filters.tags.includes(s)) ?? null) as Tipo | null;
-  const themes = useMemo(() => tags.filter((t) => !isTipoSlug(t.slug.current) && (t.postCount ?? 0) > 0), [tags]);
+  const themes = useMemo(() => libraryThemes(tags), [tags]);
   const max = Math.max(1, ...themes.map((t) => t.postCount ?? 0));
   const count = filters.tags.length + (filters.author ? 1 : 0) + (filters.key ? 1 : 0);
 
@@ -119,15 +119,16 @@ export default function LibraryFilters({
 
   return (
     <>
-      {/* A round pill on the search line, pressed-looking once a filter is active. */}
+      {/* A round pill on the search line, armed once a filter is active. `disclosure`,
+          not `pill`: this opens a sheet, so it must not carry `aria-pressed`. */}
       <Button
-        variant="pill"
+        variant="disclosure"
         size="lg"
         active={count > 0}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen(true)}
-        className={`shrink-0 gap-2 ${count > 0 ? "" : "border-ink/[0.18] text-ink"}`}
+        className="shrink-0 gap-2"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M4 6h10M18 6h2M4 12h3M11 12h9M4 18h12M20 18h0" />
@@ -184,9 +185,9 @@ export default function LibraryFilters({
           <div className="flex items-center justify-between gap-3 border-t border-ink/[0.10] pt-5">
             <Button variant="ghost" onClick={() => onChange({ ...filters, tags: [], author: "", key: "" })}>Limpiar filtros</Button>
             {/* The primary says what it will show, not «Listo»: the drawer answers its
-                own question before it closes. Without a count it is the plain close. */}
+                own question before it closes. */}
             <Button variant="cta" onClick={() => setOpen(false)}>
-              {resultCount === undefined ? "Listo" : `Ver ${pluralize(resultCount, "canción", "canciones")}`}
+              {`Ver ${plural(resultCount, "canción", "canciones")}`}
             </Button>
           </div>
         </div>

@@ -38,6 +38,7 @@ import { splitSongTitle } from "@/app/utils/songTitle";
 import { SHEET_TITLE } from "@/app/utils/homeHero";
 import { ExternalLinkIcon } from "@/app/components/ui/icons";
 import { Fragment } from "react";
+import { formatHistoryDate } from "@/app/utils/historyDate";
 
 interface Params {
   params: Promise<{ slug: string }>;
@@ -169,8 +170,6 @@ const SIDE = `${SECTION_SCROLL} mb-14 lg:col-start-2`;
 // sitting in the right half beside an empty 34rem (~15 songs have no lyrics).
 const STACKED = `${SECTION_SCROLL} mb-14`;
 const LYRIC = `${SECTION_SCROLL} mb-14 lg:col-start-1 lg:row-start-1 lg:row-span-6`;
-
-const HISTORY_DATE = new Intl.DateTimeFormat("es-ES", { year: "numeric", month: "long", day: "numeric" });
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -465,7 +464,7 @@ const Page = async ({ params }: Params) => {
                   <div className="min-w-0 flex-1">
                     <p className="font-body text-[17px] font-semibold leading-snug text-ink">
                       {entry._type === "featuredSongs" ? "Domingo" : "Sábado"}{" "}
-                      {HISTORY_DATE.format(new Date(entry.week.slice(0, 10) + "T12:00:00"))}
+                      {formatHistoryDate(entry.week)}
                     </p>
                     {entry.pairedSongs?.length > 0 && (
                       <p className="mt-0.5 font-body text-sm leading-snug text-ink-muted">
