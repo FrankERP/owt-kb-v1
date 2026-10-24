@@ -8,12 +8,13 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 303,
+    "literalRows": 305,
     "filesScanned": 526,
-    "filesWithColour": 56,
+    "filesWithColour": 57,
     "byCategory": {
       "2": 2,
       "4": 62,
+      "5": 2,
       "8": 87,
       "9": 10,
       "11": 8,
@@ -21,7 +22,7 @@
     },
     "byDisposition": {
       "B": 110,
-      "exempt": 58,
+      "exempt": 60,
       "keep": 225,
       "C": 5,
       "D": 13
@@ -3670,6 +3671,30 @@
       "line": 32,
       "disposition": "exempt",
       "reason": "The email palette is deliberately light. CLAUDE.md records five failed attempts to hold a dark palette against Outlook for Mac."
+    },
+    {
+      "file": "app/utils/themeColour.ts",
+      "category": 5,
+      "categoryName": "rgb-hsl-literal",
+      "value": "rgb(${r} ${g} ${b} / ${alpha})",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 69,
+      "disposition": "exempt",
+      "reason": "resolvedThemeColour: a token's triplet resolved for a canvas fillStyle, which cannot read var()"
+    },
+    {
+      "file": "app/utils/themeColour.ts",
+      "category": 5,
+      "categoryName": "rgb-hsl-literal",
+      "value": "rgb(${r} ${g} ${b})",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 69,
+      "disposition": "exempt",
+      "reason": "resolvedThemeColour: a token's triplet resolved for a canvas fillStyle, which cannot read var()"
     }
   ],
   "compositing": [

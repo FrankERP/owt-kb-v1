@@ -4,12 +4,15 @@
 // peaks from abletonnl's manifest, spec §5) drawn as bars, the `active` spans
 // painted in the accent so a member sees where their part sounds, and the
 // playhead. One canvas per row; it redraws on resize, progress or theme
-// change. Colours come from `themeColour` — a canvas cannot read Tailwind
-// classes, and a concatenated hex is the failure `themeColour` exists to
-// prevent. Seeking is a click (fraction of width) or ←/→ (5 %).
+// change. Colours come from `resolvedThemeColour` — a canvas cannot read
+// Tailwind classes, and it cannot read `var()` either: `themeColour`'s
+// `rgb(var(--accent-rgb) / a)` is invalid as a `fillStyle`, the context keeps
+// its default black, and the wave shipped black (2026-10-23). The triplets are
+// resolved from the canvas's computed style on every draw, so a theme change
+// repaints with the next tick. Seeking is a click (fraction of width) or ←/→ (5 %).
 import { useCallback, useEffect, useRef } from "react";
 import { isActiveAt, seekFractionAt, seekStep, waveformBars } from "@/app/utils/rehearsalMixes";
-import { themeColour } from "@/app/utils/themeColour";
+import { resolvedThemeColour } from "@/app/utils/themeColour";
 
 const BAR_W = 2;
 const GAP = 1;
@@ -42,6 +45,11 @@ export default function Waveform({
     if (!ctx) return;
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, w, h);
+    const accent = (a?: number) => resolvedThemeColour(canvas, "--accent-rgb", a);
+    const rest = resolvedThemeColour(canvas, "--mono-400-rgb", 0.45);
+    // No resolvable token (a detached canvas, a test) → draw nothing rather than
+    // a wave in whatever colour the context happened to hold.
+    if (!accent() || !rest) return;
     const bars = Math.max(1, Math.floor(w / (BAR_W + GAP)));
     const values = waveformBars(peaks, bars);
     const playedUntil = progress * w;
@@ -50,22 +58,18 @@ export default function Waveform({
       const seconds = duration > 0 ? ((i + 0.5) / bars) * duration : -1;
       const on = seconds >= 0 && isActiveAt(active, seconds);
       const played = x <= playedUntil;
-      // The PLAYED part reads in the accent, as the members' mock drew it
-      // (design pass, 2026-10-23): grey played bars made the loaded row look
-      // idle. The accent spans stay the brightest, and ahead of the playhead
-      // they alone carry colour — «where my part sounds» still reads at a glance.
-      ctx.fillStyle = played
-        ? themeColour("--accent-rgb", on ? 1 : 0.6)
-        : on
-          ? themeColour("--accent-rgb", 0.4)
-          : themeColour("--mono-400-rgb", 0.35);
+      // Grey ahead of the playhead, the accent behind it — the wave «se va
+      // pintando cian» (Frank, 2026-10-23). The accent spans stay the
+      // brightest, and ahead of the playhead they alone carry colour, so
+      // «where my part sounds» still reads at a glance.
+      ctx.fillStyle = (played ? accent(on ? 1 : 0.6) : on ? accent(0.4) : rest) as string;
       const bh = Math.max(2, values[i] * (h - 2));
       ctx.fillRect(x, (h - bh) / 2, BAR_W, bh);
     }
     // playhead — only once playback has started; an idle row at progress 0
     // should show no line at x=0.
     if (progress > 0) {
-      ctx.fillStyle = themeColour("--accent-rgb");
+      ctx.fillStyle = accent() as string;
       ctx.fillRect(Math.min(w - 1, playedUntil), 0, 1, h);
     }
   }, [peaks, active, duration, progress]);
