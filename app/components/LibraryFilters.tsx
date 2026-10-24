@@ -10,8 +10,10 @@
 import { useMemo, useState } from "react";
 import { formatKey } from "@/app/utils/formatKey";
 import type { Tag, Author } from "@/app/utils/interface";
-import { TIPO_SLUGS, isTipoSlug, type LibraryFilters as F } from "@/app/utils/libraryIndex";
+import { TIPO_SLUGS, isTipoSlug, libraryThemes, type LibraryFilters as F } from "@/app/utils/libraryIndex";
 import { normalizeText } from "@/app/utils/normalizeText";
+import { SHEET_TITLE } from "@/app/utils/homeHero";
+import { plural } from "@/app/utils/plural";
 import CueDialog from "./ui/CueDialog";
 import SegmentedControl from "./ui/SegmentedControl";
 import Select from "./ui/Select";
@@ -27,36 +29,59 @@ const ARTIST_PREVIEW = 12;
  *  and names the rest instead of rendering them all. */
 const ARTIST_QUERY_CAP = 24;
 
-const EYEBROW = "mb-2 font-label text-[11px] uppercase tracking-widest text-ink-dim";
+// The drawer's section titles are the run sheet's (`SHEET_TITLE`, ADR-0070): the
+// ONE uppercase on the surface, 12 px Jura, tracked and muted.
+const EYEBROW = `mb-3 ${SHEET_TITLE}`;
 // Chip size follows count, in three steps — the same scale for themes and artists.
 const chipSize = (w: number) => (w > 0.66 ? "text-sm px-3 py-1.5" : w > 0.33 ? "text-xs px-2.5 py-1" : "text-[11px] px-2 py-0.5");
 
 // 16 px on a phone, the design's size from `sm` up (F3): WebKit auto-zooms any
 // focused control under 16 px and never zooms back, which pushed the tab bar off
 // screen on the simulator. `inputFontSize.test.ts` is the guard.
-/** The shared search box over a chip cloud. `brand-search-console` chrome, same
- *  as the page's own console, so the drawer reads as part of the same surface. */
+/** The shared search box over a chip cloud: a hairline with a glass, the page's
+ *  own search line (ADR-0070's Biblioteca pass), so the drawer reads as part of
+ *  the same sheet. */
 function ChipSearch({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
-    <div className="brand-search-console mb-2">
+    <label className="mb-3 flex items-center gap-2.5 border-b border-ink/[0.10] text-ink-dim focus-within:text-ink-muted">
+      <svg className="shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="7" />
+        <line x1="20" y1="20" x2="16.5" y2="16.5" />
+      </svg>
       <input
         type="search"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         aria-label={label}
         placeholder={label}
-        className="w-full bg-transparent px-3 py-2 font-label text-[16px] sm:text-xs text-ink placeholder:text-placeholder focus:outline-none"
+        className="w-full min-w-0 bg-transparent py-2.5 font-body text-[16px] text-ink placeholder:text-ink-dim focus:outline-none sm:text-sm"
       />
-    </div>
+    </label>
   );
 }
 
-export default function LibraryFilters({ filters, onChange, tags, authors, keys }: { filters: F; onChange: (f: F) => void; tags: Tag[]; authors: Author[]; keys: string[] }) {
+export default function LibraryFilters({
+  filters,
+  onChange,
+  tags,
+  authors,
+  keys,
+  resultCount,
+}: {
+  filters: F;
+  onChange: (f: F) => void;
+  tags: Tag[];
+  authors: Author[];
+  keys: string[];
+  /** How many songs the current filters leave — the primary button says it
+   *  («Ver 61 canciones»), so the drawer answers its own question before it closes. */
+  resultCount: number;
+}) {
   const [open, setOpen] = useState(false);
   const [themeQ, setThemeQ] = useState("");
   const [artistQ, setArtistQ] = useState("");
   const tipo = (TIPO_SLUGS.find((s) => filters.tags.includes(s)) ?? null) as Tipo | null;
-  const themes = useMemo(() => tags.filter((t) => !isTipoSlug(t.slug.current) && (t.postCount ?? 0) > 0), [tags]);
+  const themes = useMemo(() => libraryThemes(tags), [tags]);
   const max = Math.max(1, ...themes.map((t) => t.postCount ?? 0));
   const count = filters.tags.length + (filters.author ? 1 : 0) + (filters.key ? 1 : 0);
 
@@ -94,11 +119,27 @@ export default function LibraryFilters({ filters, onChange, tags, authors, keys 
 
   return (
     <>
-      <Button variant="secondary" size="lg" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)} className="shrink-0">
+      {/* A round pill on the search line, armed once a filter is active. `disclosure`,
+          not `pill`: this opens a sheet, so it must not carry `aria-pressed`. */}
+      <Button
+        variant="disclosure"
+        size="lg"
+        active={count > 0}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen(true)}
+        className="shrink-0 gap-2"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M4 6h10M18 6h2M4 12h3M11 12h9M4 18h12M20 18h0" />
+          <circle cx="16" cy="6" r="2" />
+          <circle cx="9" cy="12" r="2" />
+          <circle cx="18" cy="18" r="2" />
+        </svg>
         Filtros{count > 0 ? ` · ${count}` : ""}
       </Button>
       <CueDialog open={open} mode="sheet" size="md" title="Filtros" label="Filtros" onDismiss={() => setOpen(false)}>
-        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-5">
+        <div className="min-h-0 flex-1 space-y-8 overflow-y-auto p-5">
           <section>
             <p className={EYEBROW}>Tipo</p>
             {/* Four tiles must fit a 390 px sheet: small size, full width, equal shares. No count badges — they read as alerts. */}
@@ -141,9 +182,13 @@ export default function LibraryFilters({ filters, onChange, tags, authors, keys 
               {keys.map((k) => <option key={k} value={k}>{formatKey(k)}</option>)}
             </Select>
           </div>
-          <div className="flex justify-between">
+          <div className="flex items-center justify-between gap-3 border-t border-ink/[0.10] pt-5">
             <Button variant="ghost" onClick={() => onChange({ ...filters, tags: [], author: "", key: "" })}>Limpiar filtros</Button>
-            <Button variant="primary" onClick={() => setOpen(false)}>Listo</Button>
+            {/* The primary says what it will show, not «Listo»: the drawer answers its
+                own question before it closes. */}
+            <Button variant="cta" onClick={() => setOpen(false)}>
+              {`Ver ${plural(resultCount, "canción", "canciones")}`}
+            </Button>
           </div>
         </div>
       </CueDialog>

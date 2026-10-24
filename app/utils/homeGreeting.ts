@@ -13,6 +13,7 @@ import { mySeats } from "./agenda";
 import { daysUntil } from "./daysUntil";
 import { compareServiceTime } from "./serviceTime";
 import { serviceStartTime } from "./calendarFeed";
+import { plural } from "./plural";
 
 export type GreetingService = {
   day: string;
@@ -94,7 +95,7 @@ export function homeGreeting(
     ...(weekend ? [serviceStartTime("weekend", mine.day, null)!] : []),
     // «hoy»/«mañana» are already the heading's own word.
     ...(days >= 2 ? [`en ${days} días`] : []),
-    ...(songs ? [`${songs} ${songs === 1 ? "canción" : "canciones"}`] : []),
+    ...(songs ? [plural(songs, "canción", "canciones")] : []),
   ].join(" · ");
 
   return { hello, lead, day, sub };

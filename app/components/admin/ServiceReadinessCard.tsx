@@ -61,6 +61,7 @@ import {
 import type { ServiceSourceStates } from "./serviceReadiness";
 import type { RevealProps } from "@/app/utils/reveal";
 import { themeColour } from "@/app/utils/themeColour";
+import { plural } from "@/app/utils/plural";
 
 /** The medley spine's token: neutral, as on the member-facing `DayCard` (ADR-0059). */
 const NEUTRAL = "--ink-dim-rgb";
@@ -494,7 +495,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
               <SectionHead
                 label={
                   songs.length > 0
-                    ? `Setlist · ${preview.songCount} ${preview.songCount === 1 ? "canción" : "canciones"}`
+                    ? `Setlist · ${plural(preview.songCount, "canción", "canciones")}`
                     : "Setlist"
                 }
               />

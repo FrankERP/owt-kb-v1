@@ -120,6 +120,19 @@ describe("SongSheet head", () => {
     expect(head).toBeTruthy();
     expect(head!.textContent).toContain(BASE.title);
   });
+
+  it("heads with the Spanish name alone; the original joins the line under it", () => {
+    sheet = { ...BASE, title: "Cordero y León (Lion and The Lamb)" };
+    render(
+      <CueDialogProvider>
+        <SongSheet />
+      </CueDialogProvider>,
+    );
+    const headings = document.querySelectorAll("h2");
+    expect(headings.length).toBe(1);
+    expect(headings[0].textContent).toBe("Cordero y León");
+    expect(screen.getByText(/Lion and The Lamb/).textContent).toContain(BASE.author!);
+  });
 });
 
 describe("SongSheet tempo", () => {
@@ -151,7 +164,8 @@ describe("SongSheet tempo", () => {
 
     expect(screen.queryByRole("button", { name: /tempo/i })).toBeNull();
     const span = screen.getByText("libre BPM");
-    expect(span.className).toContain("min-h-[44px]");
+    // The same 48 px ring the key and the compás wear (ADR-0070's Biblioteca pass).
+    expect(span.className).toContain("min-h-[48px]");
   });
 
   it("stops the click when the sheet closes", () => {

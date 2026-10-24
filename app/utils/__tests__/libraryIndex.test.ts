@@ -2,8 +2,9 @@ import { describe, it, expect } from "vitest";
 import {
   parseLibraryParams, serializeLibraryParams, applyLibraryFilters, groupByLetter, libraryKeys, TIPO_SLUGS,
   searchPosts, makeLibraryFuse,
+  libraryThemes,
 } from "../libraryIndex";
-import type { Post } from "../interface";
+import type { Post, Tag } from "../interface";
 
 const tag = (slug: string) => ({ _id: `t-${slug}`, name: slug, slug: { current: slug } });
 const post = (title: string, extra: Partial<Post> = {}): Post =>
@@ -107,5 +108,14 @@ describe("libraryKeys / TIPO_SLUGS", () => {
   });
   it("pins the three Tipo slugs", () => {
     expect(TIPO_SLUGS).toEqual(["up-beat", "down-beat", "transition"]);
+  });
+});
+
+describe("libraryThemes", () => {
+  const tag = (slug: string, postCount: number): Tag => ({ _id: slug, name: slug, slug: { current: slug }, postCount });
+  it("is every non-Tipo tag with at least one song — the ONE definition the drawer and the count line share", () => {
+    const tags = [tag("alabanza", 10), tag("up-beat", 8), tag("down-beat", 4), tag("vacio", 0), tag("adoracion", 3)];
+    expect(libraryThemes(tags).map((t) => t.slug.current)).toEqual(["alabanza", "adoracion"]);
+    expect(libraryThemes([])).toEqual([]);
   });
 });

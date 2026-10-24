@@ -30,7 +30,7 @@
 import Link from "next/link";
 import type { ComponentPropsWithoutRef, ReactNode, Ref } from "react";
 
-export type ButtonVariant = "primary" | "cta" | "secondary" | "ghost" | "danger" | "icon" | "pill" | "round" | "roundCta";
+export type ButtonVariant = "primary" | "cta" | "secondary" | "ghost" | "danger" | "icon" | "pill" | "round" | "roundCta" | "disclosure";
 export type ButtonSize = "sm" | "md" | "lg";
 /** The pill's pressed colour — `accent` (the default) or the availability tone. */
 export type PillTone = "accent" | "availability";
@@ -61,6 +61,14 @@ const VARIANT: Record<ButtonVariant, string> = {
   // that differs. Fixed size and no padding, so they take no `size` classes.
   round: "rounded-full h-11 w-11 shrink-0 p-0 border border-ink/[0.28] text-ink hover:border-accent hover:text-accent",
   roundCta: "rounded-full h-11 w-11 shrink-0 p-0 bg-accent text-surface-base shadow-lg shadow-accent/20 hover:bg-accent/85",
+  // A round ink pill that OPENS something (Biblioteca's «Filtros · 2» sheet) and
+  // can look ARMED. Not `pill`: that one is a toggle and carries `aria-pressed`,
+  // which on a control with `aria-haspopup`/`aria-expanded` reads «pressed,
+  // collapsed». The armed look keys on `data-active` instead, and its colour
+  // pair lives here, never in a caller's `className` (the PILL_TONE reason).
+  disclosure:
+    "rounded-full border border-ink/[0.18] text-ink hover:border-accent hover:text-accent " +
+    "data-[active=true]:border-accent data-[active=true]:text-accent data-[active=true]:bg-accent/10",
 };
 
 // The pressed triplet lives entirely in PILL_TONE, never in VARIANT.pill —
@@ -176,6 +184,7 @@ export default function Button(props: ButtonProps) {
       className={cls}
       aria-busy={busy || undefined}
       aria-pressed={variant === "pill" ? active : undefined}
+      data-active={variant === "disclosure" && active ? "true" : undefined}
       disabled={disabled || busy}
       {...rest}
     >

@@ -73,7 +73,7 @@ const page = () => LIGHT.get("surface-base")!;
  */
 const FOREGROUND_ON_PAGE = [
   "accent", "ink", "ink-muted", "ink-dim",
-  "warning-fg", "info-fg", "positive-fg", "negative-fg",
+  "warning-fg", "info-fg", "positive-fg", "negative-fg", "key-fg",
   "mono-200", "mono-300", "mono-400", "mono-500", "mono-600", "mono-700",
   "negative-faint", "negative-soft", "negative-muted",
   "warning-faint", "warning-soft", "warning-strong",
@@ -384,11 +384,8 @@ describe("alpha-modified text roles still clear AA, in both themes", () => {
    */
   const DECORATIVE = new Set<string>([
     // Not text. WCAG 1.4.11 applies at 3:1, not 1.4.3 at 4.5.
-    "accent/65@app/components/LibraryIndex.tsx",
-    //   an <svg> search glyph on /biblioteca's console (R1). Measured against
-    //   surface-sunken, its worst ground in either theme: 3.38, so 1.4.11 at 3:1
-    //   governs it, and the icon guard below already measures accent/65 — this
-    //   site adds no new role/alpha pair to it.
+    //   (/biblioteca's console glyph, `accent/65`, left this list on 2026-10-24: the
+    //   search is a hairline line whose glass inherits `text-ink-dim` — ADR-0070.)
     "mono-600/50@app/(client)/me/propose/[roleId]/ProposalEditor.tsx",
     "accent/50@app/(client)/me/propose/[roleId]/ProposalEditor.tsx",
     //   the proposal editor's medley toggle, linked/unlinked — ProposalEditor's
