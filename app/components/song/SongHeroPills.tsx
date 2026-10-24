@@ -110,16 +110,11 @@ export default function SongHeroPills({
               // uppercases its options (CALENDARIO / LISTA) and a flat then reads
               // "EB", which is not a note. The accessible name is `ariaLabel`, so
               // wrapping the visible text costs nothing.
-              label: (
-                <span className="normal-case">
-                  {formatKey(n)}
-                  {mixRoots.has(rootIndex(n)) && (
-                    // The mark for "there is a mix in this key" — a dot under the
-                    // note, sized to read on a phone and not to widen the pill.
-                    <span aria-hidden className="absolute left-1/2 top-[calc(100%-5px)] h-1 w-1 -translate-x-1/2 rounded-full bg-accent" />
-                  )}
-                </span>
-              ),
+              label: <span className="normal-case">{formatKey(n)}</span>,
+              // "There is a mix in this key": the control draws the dot at the
+              // pill's bottom edge (`mark`) — placed from inside the label it sat
+              // on the glyph.
+              mark: mixRoots.has(rootIndex(n)),
               // Enharmonic, not textual: a song written in Db is in C#, and the
               // hint belongs on the pill that sounds the same, not the one spelled
               // the same.

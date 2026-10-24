@@ -64,6 +64,9 @@ mixes in more than one key, ChordPro chart or not, and a key that has a mix carr
 (`mixTones` prop; `aria-label` says «con mix de ensayo»). `RehearsalPlayer` reads the
 sounding key from `TransposeProvider` and shows `mixesForKey` — the rows in that key, or
 the NEAREST key's rows with a caption saying so («No hay mix en B — se muestra Ab»).
+The keys a song has mixes in are also a picker above the rows («Tono del mix», the same seat as the
+hero dial), so a member switches key from the mixes themselves. Row names drop Ableton's track
+number («12-Keys 1» shows as «Keys 1»; the stored name and the sort keep it).
 Turning the dial while a row plays carries the same track into the new key at the same
 position; a paused row stays paused. Outside a provider (the gallery fixture) every key's
 rows show.

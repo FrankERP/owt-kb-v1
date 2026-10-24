@@ -18,6 +18,8 @@ import { useTransposeOptional } from "./TransposeProvider";
 import Waveform from "./Waveform";
 import SeekBar from "./SeekBar";
 import { formatKey } from "@/app/utils/formatKey";
+import { semitonesBetween } from "@/app/utils/transpose";
+import SegmentedControl from "@/app/components/ui/SegmentedControl";
 import { formatClock } from "@/app/utils/formatClock";
 
 export default function RehearsalPlayer({
@@ -126,12 +128,29 @@ export default function RehearsalPlayer({
 
   return (
     <div className="space-y-6">
-      {tones.length > 1 && shared?.soundingKey && selection.tone && (
-        <p className="font-body text-sm text-ink-muted" aria-live="polite">
-          {selection.exact
-            ? <>Tono {formatKey(selection.tone)} · hay mixes en {tones.map(formatKey).join(", ")}</>
-            : <>No hay mix en {formatKey(shared?.soundingKey)} — se muestra {formatKey(selection.tone)} · hay mixes en {tones.map(formatKey).join(", ")}</>}
-        </p>
+      {/* The keys a song has mixes in, as the picker they already were in the
+          hero (Frank, 2026-10-24: «no hay forma de cambiar de tono en la vista de
+          ensayo»). It writes the SAME seat the hero dial writes, so the chart and
+          the hero follow; pressed = the key whose rows are shown. */}
+      {tones.length > 1 && shared?.soundingKey && shared.nativeKey && selection.tone && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <p className="font-body text-sm text-ink-muted" aria-live="polite">
+            {selection.exact
+              ? <>Tono {formatKey(selection.tone)} · mixes en</>
+              : <>No hay mix en {formatKey(shared.soundingKey)} — se muestra {formatKey(selection.tone)} · mixes en</>}
+          </p>
+          <SegmentedControl
+            size="sm"
+            label="Tono del mix"
+            value={selection.tone}
+            onChange={(k) => shared.setSemitones(semitonesBetween(shared.nativeKey!, k))}
+            options={tones.map((t) => ({
+              value: t,
+              label: <span className="normal-case">{formatKey(t)}</span>,
+              ariaLabel: formatKey(t),
+            }))}
+          />
+        </div>
       )}
       {groups.map((g) => (
         <div key={g.family} className="space-y-1.5">

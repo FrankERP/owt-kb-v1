@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { INSTRUMENT_SEAT_OPTIONS } from "@/sanity/schemas/instrumentSeats";
 import type { RehearsalMix } from "@/app/utils/interface";
 import {
-  FAMILY_ORDER, SEAT_TO_FAMILY, SEEK_STEP, groupMixes, isActiveAt, mixLabel, mixTones, mixesForKey, preselectMix, seekFractionAt, seekStep, waveformBars,
+  FAMILY_ORDER, SEAT_TO_FAMILY, SEEK_STEP, groupMixes, isActiveAt, mixLabel, mixTones, mixesForKey, preselectMix, seekFractionAt, seekStep, trackDisplayName, waveformBars,
 } from "../rehearsalMixes";
 
 const mix = (over: Partial<RehearsalMix>): RehearsalMix => ({
@@ -47,6 +47,20 @@ describe("mixLabel", () => {
   it("names Full in Spanish and UP mixes by their track", () => {
     expect(mixLabel(full)).toBe("Banda completa");
     expect(mixLabel(eg1)).toBe("EG 1");
+  });
+
+  it("drops Ableton's track number from the label, never from the data", () => {
+    expect(trackDisplayName("12-Keys 1")).toBe("Keys 1");
+    expect(trackDisplayName("7-Drums")).toBe("Drums");
+    expect(trackDisplayName("03 Bass")).toBe("Bass");
+    expect(trackDisplayName("9.Vox")).toBe("Vox");
+    expect(trackDisplayName("EG 1")).toBe("EG 1");
+    // A name that is ONLY a number keeps it — an empty label helps nobody.
+    expect(trackDisplayName("12")).toBe("12");
+    expect(mixLabel(mix({ kind: "up", track: "12-Keys 1" }))).toBe("Keys 1");
+    // The group still sorts by the raw track, so the session's order survives.
+    const sorted = groupMixes([mix({ _key: "k2", track: "13-Keys 2", family: "keys" }), mix({ _key: "k1", track: "12-Keys 1", family: "keys" })]);
+    expect(sorted[0].mixes.map((m) => m._key)).toEqual(["k1", "k2"]);
   });
 });
 
