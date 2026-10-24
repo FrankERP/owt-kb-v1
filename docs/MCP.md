@@ -839,6 +839,9 @@ decisions and the rejected alternatives:
   over an in-memory store with the writers' contracts; `storedMonthCard.test.tsx` runs the card's own
   sequence into `save_service_edits`; `storedCardSave.test.tsx` renders the card over the same store
   and saves through `save_service_edits_app` (confirmation, frozen list, re-read from the empty list).
+  **Live proof passed 2026-10-24 00:16Z** (production, `bf7516bf`): Frank put himself back in EG on
+  Sun 29 Nov 2026 from the card, «Guardar» → «Sí, guardar», and the Claude app let the card call the
+  app-only save.
 
 ### Notification audiences (the write tools)
 
