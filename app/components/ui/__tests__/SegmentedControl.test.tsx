@@ -157,6 +157,30 @@ describe("SegmentedControl", () => {
     expect(pending.textContent).toContain("3");
   });
 
+  it("draws `mark` at the pill's bottom edge, outside the label span", () => {
+    // Placed from inside the label the dot sat ON the glyph: the label is a
+    // `relative` span the height of its text (the hero's key drawer, 2026-10-24).
+    render(
+      <MotionProvider>
+        <SegmentedControl
+          label="Transponer a"
+          value="G"
+          onChange={() => {}}
+          options={[
+            { value: "G", label: "G", mark: true },
+            { value: "A", label: "A" },
+          ]}
+        />
+      </MotionProvider>,
+    );
+    const g = screen.getByRole("radio", { name: "G" });
+    const dot = g.querySelector(".rounded-full.bg-accent") as HTMLElement;
+    expect(dot).not.toBeNull();
+    expect(dot.className).toContain("bottom-[3px]");
+    expect(dot.parentElement).toBe(g);
+    expect(screen.getByRole("radio", { name: "A" }).querySelector(".bg-accent")).toBeNull();
+  });
+
   // Five Propuestas filters at 390px measured 563px, and the PAGE scrolled
   // 197px sideways (ADR-0035: /admin has no page-level horizontal scroll). A
   // joined `filled` bar cannot wrap, so it scrolls inside itself instead, and

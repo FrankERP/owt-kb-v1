@@ -35,8 +35,20 @@ export const SEAT_TO_FAMILY: Record<string, string> = {
 /** The fields grouping and labelling read — the queue route's slim mixes satisfy it too. */
 type MixShape = Pick<RehearsalMix, "kind" | "family" | "track" | "tone">;
 
+/**
+ * Ableton numbers its tracks and the manifest keeps the name verbatim
+ * («12-Keys 1», «7-Drums»). The number is the session's track order — it still
+ * sorts a group (`groupMixes` compares the raw `track`) — but it is noise on a
+ * row (Frank, 2026-10-24), so the label drops a leading number and its
+ * separator. The stored `track` is never rewritten.
+ */
+export function trackDisplayName(track: string): string {
+  const stripped = track.replace(/^\d{1,3}\s*[-–_.]?\s*/, "").trim();
+  return stripped.length > 0 ? stripped : track;
+}
+
 export function mixLabel(mix: Pick<RehearsalMix, "kind" | "track">): string {
-  return mix.kind === "full" ? FAMILY_LABEL.full : (mix.track ?? "Pista");
+  return mix.kind === "full" ? FAMILY_LABEL.full : mix.track ? trackDisplayName(mix.track) : "Pista";
 }
 
 const collator = new Intl.Collator("es", { numeric: true, sensitivity: "base" });

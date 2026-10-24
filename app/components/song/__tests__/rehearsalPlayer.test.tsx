@@ -8,6 +8,10 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { RehearsalMix } from "@/app/utils/interface";
 import RehearsalPlayer from "../RehearsalPlayer";
 import { TransposeProvider, useTransposeOptional } from "../TransposeProvider";
+import { MotionProvider } from "../../ui/MotionProvider";
+import { installMotionTestEnv } from "../../ui/__tests__/motionTestSetup";
+
+installMotionTestEnv();
 
 function Dial({ to }: { to: number }) {
   const t = useTransposeOptional();
@@ -188,20 +192,37 @@ describe("RehearsalPlayer", () => {
       mix({ _key: "eg1-ab", track: "EG 1", family: "electric", tone: "Ab" }),
     ];
     const inKey = (semis: number) => render(
-      <TransposeProvider nativeKey="G">
-        <Dial to={semis} />
-        <RehearsalPlayer {...props} mixes={twoKeys} preselect={["EG"]} />
-      </TransposeProvider>,
+      <MotionProvider>
+        <TransposeProvider nativeKey="G">
+          <Dial to={semis} />
+          <RehearsalPlayer {...props} mixes={twoKeys} preselect={["EG"]} />
+        </TransposeProvider>
+      </MotionProvider>,
     );
 
     it("shows the sounding key's rows only, says which keys exist, and preselects inside them", () => {
       const { getByRole, queryByRole, getByText } = inKey(1);
       expect(getByRole("listitem", { name: "EG 1" }).getAttribute("aria-current")).toBe("true");
       expect(queryByRole("listitem", { name: "Bass" })).toBeTruthy();
-      expect(getByText(/Tono G · hay mixes en G, A♭/)).toBeTruthy();
+      expect(getByText(/Tono G · mixes en/)).toBeTruthy();
       fireEvent.click(getByRole("button", { name: "dial 1" }));
       expect(queryByRole("listitem", { name: "Bass" })).toBeNull();
       expect(getByRole("listitem", { name: "EG 1" }).getAttribute("aria-current")).toBe("true");
+      fireEvent.click(getByRole("button", { name: "Reproducir EG 1" }));
+      expect(playTrack).toHaveBeenCalledWith(expect.objectContaining({ url: "/api/audio/post-1/eg1-ab", tone: "Ab" }));
+    });
+
+    it("the caption's keys ARE the picker: pressing one transposes the shared seat", () => {
+      // Frank, 2026-10-24: «no hay forma de cambiar de tono en la vista de
+      // ensayo». The keys a song has mixes in are radios on the same seat the
+      // hero dial writes — the rows switch, and the hero would follow.
+      const { getByRole, queryByRole } = inKey(1);
+      const group = getByRole("radiogroup", { name: "Tono del mix" });
+      expect(group.querySelectorAll("[role=radio]")).toHaveLength(2);
+      expect(getByRole("radio", { name: "G" }).getAttribute("aria-checked")).toBe("true");
+      fireEvent.click(getByRole("radio", { name: "A♭" }));
+      expect(getByRole("radio", { name: "A♭" }).getAttribute("aria-checked")).toBe("true");
+      expect(queryByRole("listitem", { name: "Bass" })).toBeNull();
       fireEvent.click(getByRole("button", { name: "Reproducir EG 1" }));
       expect(playTrack).toHaveBeenCalledWith(expect.objectContaining({ url: "/api/audio/post-1/eg1-ab", tone: "Ab" }));
     });
