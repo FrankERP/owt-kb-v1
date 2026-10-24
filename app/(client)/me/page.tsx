@@ -25,6 +25,7 @@ import { paintsDayCard } from "@/app/utils/paintsDayCard";
 import { seatPhotos } from "@/app/utils/teamSections";
 import { myNameFromSession } from "@/app/utils/agenda";
 import { compareServiceTime } from "@/app/utils/serviceTime";
+import { pastorMessageBodyOf } from "@/app/utils/serviceThread";
 import { revealProps } from "@/app/utils/reveal";
 import { horizon } from "./queries";
 import { KIDS_SEATS, KIDS_SEAT_LABELS, type KidsSeat } from "@/app/utils/kidsTypes";
@@ -159,6 +160,7 @@ export default async function MePage() {
           foh_team[] { role, "person": coalesce(person->alias, person->member_name), "photo": coalesce(person->profilePhoto.asset->url, person->googlePhotoUrl) },
           BGVs[]-> { member_name, alias, "photo": coalesce(profilePhoto.asset->url, googlePhotoUrl) },
           Chorus[]-> { member_name, alias, "photo": coalesce(profilePhoto.asset->url, googlePhotoUrl) },
+          "pastor_message": ${pastorMessageBodyOf("^._id")},
           "setlistCandidates": *[_type == "featuredSongs" && week == ^.week] {
             songs[] {
               play_key,
@@ -182,6 +184,7 @@ export default async function MePage() {
           foh_team[] { role, "person": coalesce(person->alias, person->member_name), "photo": coalesce(person->profilePhoto.asset->url, person->googlePhotoUrl) },
           BGVs[]-> { member_name, alias, "photo": coalesce(profilePhoto.asset->url, googlePhotoUrl) },
           Chorus[]-> { member_name, alias, "photo": coalesce(profilePhoto.asset->url, googlePhotoUrl) },
+          "pastor_message": ${pastorMessageBodyOf("^._id")},
           "setlistCandidates": *[_type == "saturdarSongs" && week == ^.week] {
             songs[] {
               play_key,
@@ -205,6 +208,7 @@ export default async function MePage() {
           foh_team[] { role, "person": coalesce(person->alias, person->member_name), "photo": coalesce(person->profilePhoto.asset->url, person->googlePhotoUrl) },
           BGVs[]-> { member_name, alias, "photo": coalesce(profilePhoto.asset->url, googlePhotoUrl) },
           Chorus[]-> { member_name, alias, "photo": coalesce(profilePhoto.asset->url, googlePhotoUrl) },
+          "pastor_message": ${pastorMessageBodyOf("^._id")},
           songs[] {
             play_key,
             medley_tag,
@@ -295,6 +299,7 @@ export default async function MePage() {
     songs?: SetlistSong[];
     myLeadSongs?: { title?: string }[] | null;
     team_notes?: string;
+    pastor_message?: string | null;
   };
 
   // Fail closed on an ambiguous weekend setlist target: a duplicate canonical
@@ -352,6 +357,7 @@ export default async function MePage() {
     roleId: day !== "Domingo" && day !== "Sábado" ? doc._id : undefined,
     serviceId: doc._id,
     setlist: doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: dateKey, team_notes: doc.team_notes } : undefined),
+    pastorMessage: doc.pastor_message,
     leads: doc.Lead?.map((m) => m.alias || m.member_name),
     instruments: doc.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
     fohTeam: doc.foh_team?.map((s) => ({ label: s.role, person: s.person })),

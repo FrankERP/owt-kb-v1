@@ -8,12 +8,12 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 305,
-    "filesScanned": 526,
-    "filesWithColour": 57,
+    "literalRows": 307,
+    "filesScanned": 530,
+    "filesWithColour": 58,
     "byCategory": {
       "2": 2,
-      "4": 62,
+      "4": 64,
       "5": 2,
       "8": 87,
       "9": 10,
@@ -23,7 +23,7 @@
     "byDisposition": {
       "B": 110,
       "exempt": 60,
-      "keep": 225,
+      "keep": 227,
       "C": 5,
       "D": 13
     },
@@ -212,7 +212,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 417,
+      "line": 423,
       "disposition": "B",
       "reason": null
     },
@@ -224,7 +224,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 543,
+      "line": 545,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -236,7 +236,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 934,
+      "line": 945,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -248,7 +248,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1025,
+      "line": 1036,
       "disposition": "B",
       "reason": null
     },
@@ -260,7 +260,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1034,
+      "line": 1045,
       "disposition": "B",
       "reason": null
     },
@@ -284,7 +284,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 310,
+      "line": 316,
       "disposition": "B",
       "reason": null
     },
@@ -296,7 +296,7 @@
       "alpha": null,
       "utility": "to",
       "carrier": null,
-      "line": 293,
+      "line": 299,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2521,6 +2521,18 @@
       "reason": "Already theme-agnostic"
     },
     {
+      "file": "app/components/admin/ServiceMessagesDialog.tsx",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "bg-transparent",
+      "alpha": null,
+      "utility": "bg",
+      "carrier": null,
+      "line": 61,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
       "file": "app/components/admin/ServiceReadinessCard.tsx",
       "category": 4,
       "categoryName": "colour-keyword",
@@ -2996,7 +3008,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 289,
+      "line": 295,
       "disposition": "B",
       "reason": null
     },
@@ -3008,7 +3020,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 289,
+      "line": 295,
       "disposition": "B",
       "reason": null
     },
@@ -3020,7 +3032,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 566,
+      "line": 587,
       "disposition": "B",
       "reason": null
     },
@@ -3032,7 +3044,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 575,
+      "line": 596,
       "disposition": "B",
       "reason": null
     },
@@ -3296,7 +3308,19 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 208,
+      "line": 237,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/ProposalThread.tsx",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "bg-transparent",
+      "alpha": null,
+      "utility": "bg",
+      "carrier": null,
+      "line": 329,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },

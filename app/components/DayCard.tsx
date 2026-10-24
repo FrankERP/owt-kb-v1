@@ -10,6 +10,7 @@ import { usePlayer } from "@/app/context/PlayerContext";
 import { useSession } from "next-auth/react";
 import { SetlistEditor } from "./admin/SetlistEditor";
 import ServiceMessagesDialog from "./admin/ServiceMessagesDialog";
+import { useRouter } from "next/navigation";
 import { isThreadOpen } from "@/app/utils/proposalThread";
 import CueDialog from "./ui/CueDialog";
 import { themeColour } from "@/app/utils/themeColour";
@@ -37,6 +38,11 @@ export interface DayCardProps {
   /** "HH:mm" for a same-day set; rendered after the date. Display only. */
   time?: string | null;
   setlist?: Setlist | null;
+  /**
+   * The service's «Mensaje del pastor» (ADR-0065, 2026-10-24): one text per
+   * service, set by an admin, shown to the whole team above the team note.
+   */
+  pastorMessage?: string | null;
   leads?: string[];
   /** Titles of the songs the viewing member leads (worship nights). */
   myLeadSongs?: string[];
@@ -103,7 +109,7 @@ export interface DayCardProps {
 /** The neutral the card's quiet chrome (the medley spine) is drawn in. */
 const NEUTRAL = "--ink-dim-rgb";
 
-export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instruments, fohTeam, bgvs, chorus, roleId, serviceId, isNext, layout = "card", hero = false, sheet: sheetProp = false, nested = false, photos, viewerTypes, viewerName, viewerIsAdmin }: DayCardProps) {
+export function DayCard({ day, date, time, setlist, pastorMessage, leads, myLeadSongs, instruments, fohTeam, bgvs, chorus, roleId, serviceId, isNext, layout = "card", hero = false, sheet: sheetProp = false, nested = false, photos, viewerTypes, viewerName, viewerIsAdmin }: DayCardProps) {
   const { openSheet } = usePlayer();
   const { data: session } = useSession();
   const { toast } = useToast();
@@ -209,6 +215,7 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
       {/* Keyed by the text: `CalendarView` keys its cards by index, so the
           same instance can be handed another day's note — which must arrive
           folded, not inheriting the «Leer todo» the reader opened before. */}
+      {pastorMessage && <TeamNote key={pastorMessage} title="Mensaje del pastor" pastor text={pastorMessage} />}
       {setlist?.team_notes && <TeamNote key={setlist.team_notes} text={setlist.team_notes} />}
 
       {/* Setlist */}
@@ -400,7 +407,7 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
       />
 
       {canMessage && (
-        <ServiceMessagesDialog
+        <DayCardMessages
           open={messagesOpen}
           roleId={messageRoleId}
           title={`Mensajes · ${day} ${shortDate}`}
@@ -452,7 +459,27 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
  * nothing. Measured only while clamped: once open the paragraph no longer
  * overflows, and the toggle must stay so the reader can fold it back.
  */
-function TeamNote({ text }: { text: string }) {
+/**
+ * The «Mensajes» dialog as a DayCard opens it: when a save changed what this card
+ * shows (the pastor's message, the team note), the page is refreshed on close so
+ * the card behind it does not keep the old text. Its own component so the router
+ * is only asked for where an admin can open it.
+ */
+function DayCardMessages(props: Omit<React.ComponentProps<typeof ServiceMessagesDialog>, "onChanged">) {
+  const router = useRouter();
+  return <ServiceMessagesDialog {...props} onChanged={() => router.refresh()} />;
+}
+
+function TeamNote({
+  text,
+  title = "Mensaje para el equipo",
+  pastor = false,
+}: {
+  text: string;
+  title?: string;
+  /** The pastor's message: the same fold, an accent edge so it reads as the pastor's. */
+  pastor?: boolean;
+}) {
   const id = useId();
   const [expanded, setExpanded] = useState(false);
   const [overflows, setOverflows] = useState(false);
@@ -477,8 +504,14 @@ function TeamNote({ text }: { text: string }) {
     };
   }, [expanded, text]);
   return (
-    <section className="rounded-lg border border-ink/[0.08] bg-surface-lift/[0.03] px-4 py-3">
-      <p className="font-label text-[11px] uppercase tracking-widest text-mono-400 mb-1">Mensaje para el equipo</p>
+    <section
+      className={
+        pastor
+          ? "rounded-lg border border-surface-accent-30 bg-accent/5 px-4 py-3"
+          : "rounded-lg border border-ink/[0.08] bg-surface-lift/[0.03] px-4 py-3"
+      }
+    >
+      <p className={`font-label text-[11px] uppercase tracking-widest mb-1 ${pastor ? "text-accent" : "text-mono-400"}`}>{title}</p>
       <p ref={ref} id={id} className={`font-body text-sm text-ink-muted/90 whitespace-pre-wrap${expanded ? "" : " line-clamp-3"}`}>
         {text}
       </p>
