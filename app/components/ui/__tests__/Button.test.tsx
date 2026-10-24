@@ -48,6 +48,25 @@ describe("Button", () => {
     expect(buttonClass("round", "lg")).not.toContain("bg-accent");
   });
 
+  it("disclosure is a round ink pill that arms through data-active, never aria-pressed", () => {
+    render(
+      <Button variant="disclosure" active aria-haspopup="dialog" aria-expanded={false}>
+        Filtros · 2
+      </Button>,
+    );
+    const b = screen.getByRole("button", { name: "Filtros · 2" });
+    expect(b.className).toContain("rounded-full");
+    expect(b.className).toContain("border-ink/[0.18]");
+    expect(b.className).toContain("data-[active=true]:border-accent");
+    expect(b.getAttribute("data-active")).toBe("true");
+    // A disclosure is not a toggle: `aria-pressed` beside `aria-expanded` would
+    // announce «pressed, collapsed».
+    expect(b.hasAttribute("aria-pressed")).toBe(false);
+    cleanup();
+    render(<Button variant="disclosure" active={false}>Filtros</Button>);
+    expect(screen.getByRole("button").hasAttribute("data-active")).toBe(false);
+  });
+
   it("size lg is the 44 px touch target", () => {
     render(<Button size="lg">Publicar</Button>);
     expect(screen.getByRole("button").className).toContain("min-h-[44px]");

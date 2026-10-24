@@ -2,6 +2,7 @@
 // duplicate detection lives here so the agenda's conflict flag and the card's
 // ⚠ marks can never disagree.
 import type { ActiveDay } from "../components/CalendarView";
+import { plural } from "./plural";
 
 export type Tone = "sun" | "sat" | "special";
 
@@ -72,7 +73,7 @@ export function summarizeService(e: ActiveDay): string {
   if (e.leads?.length) parts.push(`Lead ${e.leads.join(", ")}`);
   for (const s of (e.instruments ?? []).filter((s) => s.person)) parts.push(`${s.label} ${s.person}`);
   const n = e.setlist?.songs?.length ?? 0;
-  if (n) parts.push(`${n} ${n === 1 ? "canción" : "canciones"}`);
+  if (n) parts.push(plural(n, "canción", "canciones"));
   return parts.length ? parts.join(" · ") : "Sin asignaciones";
 }
 

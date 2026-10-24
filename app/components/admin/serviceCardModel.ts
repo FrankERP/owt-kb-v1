@@ -85,6 +85,7 @@ import {
 import type { IntegrityIssueTarget, ProposalHandoffInput } from "./proposalHandoff";
 import { unreadyMessage } from "./serviceSourceState";
 import { isServiceTime } from "@/app/utils/serviceTime";
+import { plural } from "@/app/utils/plural";
 
 function nonEmptyString(v: unknown): v is string {
   return typeof v === "string" && v.length > 0;
@@ -1058,8 +1059,6 @@ export function commandSummaryCounters(input: {
   }
   return counters;
 }
-
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /**
  * The Spanish command line that replaces the plain count header. `próximos` is

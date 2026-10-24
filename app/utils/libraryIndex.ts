@@ -4,7 +4,7 @@
 // ≤2 chars → accent-folded substring, prefix first; 3+ → Fuse, prefix first.
 // Both branches read the ARTIST (legacy `author` + `authors[]` names) — see artistOf.
 import Fuse, { IFuseOptions } from "fuse.js";
-import type { Post } from "./interface";
+import type { Post, Tag } from "./interface";
 import { normalizeText } from "./normalizeText";
 
 export const TIPO_SLUGS = ["up-beat", "down-beat", "transition"] as const;
@@ -88,6 +88,13 @@ export function searchPosts(posts: Post[], q: string, fuse: Fuse<IndexedPost> = 
 const byTitle = (a: Post, b: Post) => normalizeText(a.title).localeCompare(normalizeText(b.title));
 
 export const isTipoSlug = (slug: string) => (TIPO_SLUGS as readonly string[]).includes(slug);
+
+/** The themes the drawer offers and the title line counts: every tag that is not a
+ *  Tipo and has at least one song. ONE definition, so «43 temas» under the title and
+ *  the chip cloud can never disagree on what a theme is. */
+export function libraryThemes(tags: Tag[]): Tag[] {
+  return tags.filter((t) => !isTipoSlug(t.slug.current) && (t.postCount ?? 0) > 0);
+}
 const hasTag = (p: Post, slug: string) => (p.tags ?? []).some((t) => t.slug?.current === slug);
 
 // A query orders by relevance, so it runs FIRST over the WHOLE catalogue (using

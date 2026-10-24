@@ -308,8 +308,9 @@ each one owns, and its rules) and `docs/UTILITIES_AND_COMPONENTS.md`. Most are "
   `app/components/ui/**` (`docs/MOTION.md`, ADR-0031).
 
 ## Colour tokens
-**67 base roles + 32 composed tokens** (`app/brand.css` `:root`, `tailwind.config.ts`); the
-retired `--brand-*` colour variables are gone. **Never build a colour by string
+**68 base roles + 32 composed tokens** (`app/brand.css` `:root`, `tailwind.config.ts`); the
+retired `--brand-*` colour variables are gone. **Rose (`key-fg`) is the second brand colour and
+means the musical KEY only** — never a state, button or link; ink inside a day card (ADR-0071). **Never build a colour by string
 concatenation** — use `themeColour(rgbVar, alpha?)`. **`var()` is not substituted in SVG
 presentation attributes** — set `color` on an ancestor and inherit `currentColor`. **Composed
 tokens bake their own alpha** — no opacity modifier (a lint clause bans it). **Collapsing a
