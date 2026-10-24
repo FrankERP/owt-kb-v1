@@ -37,7 +37,7 @@ function mount(filters: F = EMPTY, onChange = vi.fn()) {
   render(
     <MotionProvider>
       <CueDialogProvider>
-        <LibraryFilters filters={filters} onChange={onChange} tags={TAGS} authors={AUTHORS} keys={KEYS} />
+        <LibraryFilters filters={filters} onChange={onChange} tags={TAGS} authors={AUTHORS} keys={KEYS} resultCount={61} />
       </CueDialogProvider>
     </MotionProvider>,
   );
@@ -160,7 +160,7 @@ describe("LibraryFilters", () => {
     render(
       <MotionProvider>
         <CueDialogProvider>
-          <LibraryFilters filters={{ ...EMPTY, author: leastBusy.slug.current }} onChange={vi.fn()} tags={TAGS} authors={authors} keys={KEYS} />
+          <LibraryFilters filters={{ ...EMPTY, author: leastBusy.slug.current }} onChange={vi.fn()} tags={TAGS} authors={authors} keys={KEYS} resultCount={61} />
         </CueDialogProvider>
       </MotionProvider>,
     );
@@ -169,6 +169,24 @@ describe("LibraryFilters", () => {
     const chips = screen.getAllByRole("button", { name: /^Artista \d/ });
     expect(chips[0].textContent).toContain(leastBusy.name);
     expect(chips[0].getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("the primary button says how many songs the filters leave", () => {
+    const withCount = (resultCount: number) =>
+      render(
+        <MotionProvider>
+          <CueDialogProvider>
+            <LibraryFilters filters={EMPTY} onChange={vi.fn()} tags={TAGS} authors={AUTHORS} keys={KEYS} resultCount={resultCount} />
+          </CueDialogProvider>
+        </MotionProvider>,
+      );
+    withCount(61);
+    openDrawer();
+    expect(screen.getByRole("button", { name: "Ver 61 canciones" })).toBeDefined();
+    cleanup();
+    withCount(1);
+    openDrawer();
+    expect(screen.getByRole("button", { name: "Ver 1 canción" })).toBeDefined();
   });
 
   it("the count badge on the trigger reads Filtros · 2 for two active filters", () => {

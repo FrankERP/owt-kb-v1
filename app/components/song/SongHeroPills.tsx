@@ -85,7 +85,7 @@ export default function SongHeroPills({
               keyLabel={keyLabel}
             />
           ) : (
-            <span className="inline-flex min-h-[48px] items-center rounded-full border border-ink/[0.28] px-[18px] font-display text-2xl font-semibold text-ink">{formatKey(keyLabel)}</span>
+            <span className="inline-flex min-h-[48px] items-center rounded-full border border-ink/[0.28] px-[18px] font-display text-2xl font-semibold text-key-fg">{formatKey(keyLabel)}</span>
           ))}
         {bpm ? (
           <TempoPill bpm={bpm} timeSig={timeSig} />

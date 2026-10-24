@@ -143,8 +143,10 @@ describe("rows of unbreakable Spanish words wrap instead of running off the phon
     // grows with the text and shoved «Filtros» off the screen. `min-w-0` is the
     // half that does the work; `size={1}` lowers the floor it shrinks against and
     // is belt-and-braces beside the input's `w-full`.
+    // The field is a hairline <label> since ADR-0070's Biblioteca pass, no longer
+    // the boxed console; the shrink contract is the same.
     const src = read("app/components/LibraryIndex.tsx");
-    expect(src).toMatch(/brand-search-console relative min-w-0 flex-1/);
+    expect(src).toMatch(/<label className="relative flex min-w-0 flex-1 items-center/);
     expect(src).toMatch(/\n\s+size=\{1\}\n/);
   });
 });

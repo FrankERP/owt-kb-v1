@@ -54,6 +54,34 @@ afterEach(() => {
 });
 
 describe("LibraryRow", () => {
+  it("splits «Nombre (Original)» like the song page and sets the key in the second brand colour (ADR-0071)", () => {
+    const { container } = render(
+      <MotionProvider>
+        <LibraryRow post={{ ...post, title: "Alaba (Praise)", tags: [{ _id: "t1", name: "Adoración", slug: { current: "adoracion" } }] } as unknown as Post} />
+      </MotionProvider>,
+    );
+    const row = screen.getByRole("button", { name: "Alaba (Praise), Oasis, tonalidad G" });
+    // The Spanish name is the title; the original joins the artist on the line under it.
+    expect(row.textContent).toContain("Alaba");
+    expect(row.textContent).toContain("Praise · Oasis");
+    expect(row.textContent).toContain("72 BPM");
+    expect(row.textContent).toContain("#Adoración");
+    const key = container.querySelector(".font-display");
+    expect(key?.textContent).toBe("G");
+    expect(key?.className).toContain("text-key-fg");
+  });
+
+  it("a song without a key shows a muted dash, never the rose", () => {
+    const { container } = render(
+      <MotionProvider>
+        <LibraryRow post={{ ...post, key: "" } as unknown as Post} />
+      </MotionProvider>,
+    );
+    const key = container.querySelector(".font-display");
+    expect(key?.textContent).toBe("—");
+    expect(key?.className).not.toContain("text-key-fg");
+  });
+
   it("a tap still opens the song sheet and reports no long press", () => {
     mount();
     fireEvent.click(screen.getByRole("button", { name: /Canción s1/ }));
