@@ -57,10 +57,15 @@ describe("LibraryIndex", () => {
     expect(screen.getAllByRole("listitem")).toHaveLength(2);
   });
 
-  it("carries the ONE count of the surface in the results line, never in the placeholder", () => {
+  it("carries the ONE count of the surface under the title, never in the placeholder (ADR-0070)", () => {
     mount();
     expect(screen.getByPlaceholderText("Buscar canción o artista")).toBeDefined();
-    expect(screen.getByText("2 canciones")).toBeDefined();
+    expect(screen.getByRole("heading", { level: 1, name: "Biblioteca" })).toBeDefined();
+    // Songs · themes · artists on one line; the results line stays EMPTY while idle.
+    expect(
+      screen.getByText((_, el) => el?.tagName === "P" && /^2 canciones · \d+ temas? · \d+ artistas?$/.test(el.textContent ?? "")),
+    ).toBeDefined();
+    expect(screen.queryByText(/resultados?$/)).toBeNull();
   });
 
   it("narrows to the matching row on a query, and offers Limpiar", () => {

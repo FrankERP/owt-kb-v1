@@ -37,7 +37,7 @@ export default function KeyDial({
       aria-controls={controls}
       aria-label={`Tonalidad ${soundingKey}. Transponer`}
       data-open={open}
-      className="inline-flex min-h-[48px] select-none items-center justify-center gap-2 rounded-full border border-ink/[0.28] pl-[18px] pr-4 font-display text-2xl font-semibold text-ink transition-[transform,box-shadow] duration-fast ease-out-brand active:translate-y-px active:scale-[0.985] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base data-[open=true]:shadow-[0_0_0_2px_rgb(var(--accent-rgb)/0.35)]"
+      className="inline-flex min-h-[48px] select-none items-center justify-center gap-2 rounded-full border border-ink/[0.28] pl-[18px] pr-4 font-display text-2xl font-semibold text-key-fg transition-[transform,box-shadow] duration-fast ease-out-brand active:translate-y-px active:scale-[0.985] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base data-[open=true]:shadow-[0_0_0_2px_rgb(var(--accent-rgb)/0.35)]"
     >
       <NumberRoll value={formatKey(soundingKey)} />
       <svg
@@ -50,7 +50,8 @@ export default function KeyDial({
         strokeLinecap="round"
         strokeLinejoin="round"
         aria-hidden="true"
-        className={`transition-transform duration-fast ease-out-brand ${open ? "rotate-180" : ""}`}
+        // The chevron stays ink: only the KEY wears the second brand colour (ADR-0071).
+        className={`text-ink-dim transition-transform duration-fast ease-out-brand ${open ? "rotate-180" : ""}`}
       >
         <path d="m6 9 6 6 6-6" />
       </svg>

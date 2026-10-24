@@ -93,6 +93,15 @@
   --positive-fg-rgb: 55 245 138;
   --negative-fg-rgb: 248 113 113;
 
+  /* ---- The second brand colour (2026-10-24, ADR-0071) --------------------
+     Rose, with ONE job: the musical KEY wherever the song is the protagonist —
+     the library row's glyph, the song page's and the sheet's key pill, the
+     history pills, `.brand-key-dial`. Never a state, an alert or «tú» (those
+     stay cyan/amber/violet/green/red), and the key stays ink inside a day card,
+     where the day already owns the colour. Frank, 2026-10-24: «no quisiera
+     desperdiciar el cyan, pero tampoco monocromático». */
+  --key-fg-rgb: 227 155 198;
+
   /* ---- Five roles the vocabulary did not name, added in B3 ---------------
      Found by sweeping ALL 1,628 B rows for hex values with no role, rather than
      discovering them one batch at a time — the same closure-by-construction rule
@@ -532,6 +541,7 @@
   --info-border-rgb: 124 58 237;          /* #7c3aed  <- dark 91 33 182 */
   --positive-fg-rgb: 15 107 52;           /* #0f6b34  <- dark 55 245 138 */
   --negative-fg-rgb: 161 27 27;           /* #a11b1b  <- dark 248 113 113 */
+  --key-fg-rgb: 163 63 117;               /* #a33f75  <- dark 227 155 198 (5.6:1 on the light page) */
   --warning-surface-deep-rgb: 252 231 191;/* #fce7bf  <- dark 28 8 0 */
   --info-surface-deep-rgb: 225 213 250;   /* #e1d5fa  <- dark 30 10 60 */
   --surface-overlay-rgb: 255 255 255;     /* #ffffff  <- dark 0 22 46 */
@@ -881,13 +891,14 @@ html.has-bottom-nav .audio-player { padding-bottom: 0; }
   height: 2.4rem;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgb(var(--accent-rgb) / 0.32);
+  /* The key's colour is the second brand colour (ADR-0071), not the accent. */
+  border: 1px solid rgb(var(--key-fg-rgb) / 0.32);
   border-radius: 9px;
-  color: rgb(var(--accent-rgb));
+  color: rgb(var(--key-fg-rgb));
   background: rgb(var(--surface-base-rgb) / 0.62);
   box-shadow:
-    inset 0 0 12px rgb(var(--accent-rgb) / 0.07),
-    0 0 18px rgb(var(--accent-rgb) / 0.055);
+    inset 0 0 12px rgb(var(--key-fg-rgb) / 0.07),
+    0 0 18px rgb(var(--key-fg-rgb) / 0.055);
 }
 
 /* The tempo pill's beat ring (R4, spec §12.7). A pseudo-element that scales and

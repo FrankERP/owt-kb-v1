@@ -16,6 +16,7 @@ import Skeleton, { SkeletonGroup } from "../ui/Skeleton";
 import { useToast } from "../ui/Toast";
 import { writeErrorMessage } from "@/app/utils/writeError";
 import { normalizeText } from "@/app/utils/normalizeText";
+import { plural } from "@/app/utils/plural";
 
 /** Tags a phone shows on a song row before folding the rest into «+N». */
 const PHONE_TAGS = 2;
@@ -212,7 +213,7 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
           <h1 className="font-display text-2xl uppercase tracking-wide">Canciones</h1>
           {!loading && (
             <p className="font-label text-xs uppercase tracking-widest text-mono-500 mt-0.5">
-              {songs.length} {songs.length === 1 ? "canción" : "canciones"}
+              {plural(songs.length, "canción", "canciones")}
             </p>
           )}
         </div>

@@ -140,23 +140,16 @@ describe("TempoPill", () => {
     expect(haptic).not.toHaveBeenCalled();
   });
 
-  it("renders the sheet's chrome at size sm, the hero's at md", () => {
-    const { getByRole, rerender } = render(<TempoPill bpm={120} timeSig="4/4" size="sm" />);
+  it("wears the hero's 48 px ring — the ONE chrome, on the song page and the sheet alike", () => {
+    const { getByRole } = render(<TempoPill bpm={120} timeSig="4/4" />);
     const pill = getByRole("button");
 
-    // Same ring, same 44px target, different skin.
+    // The same ring as the key and the time signature (ADR-0070): body face,
+    // sentence case, no console skin, and no second `min-h` from a retired size.
     expect(pill.className).toContain("brand-tempo-pill");
-    expect(pill.className).toContain("min-h-[44px]");
-    expect(pill.className).toContain("rounded-full");
-    expect(pill.className).toContain("border-ink-muted/15");
-    expect(pill.className).toContain("text-ink-muted/70");
     expect(pill.className).toContain("aria-pressed:border-accent/60");
-    expect(pill.className).not.toContain("brand-search-console");
-
-    // The hero (md) wears the same 48 px ring as the key and the time signature
-    // (ADR-0070): body face, sentence case, no console skin.
-    rerender(<TempoPill bpm={120} timeSig="4/4" />);
     expect(pill.className).toContain("min-h-[48px]");
+    expect(pill.className).not.toContain("min-h-[44px]");
     expect(pill.className).toContain("rounded-full");
     expect(pill.className).toContain("border-ink/[0.18]");
     expect(pill.className).toContain("font-body");

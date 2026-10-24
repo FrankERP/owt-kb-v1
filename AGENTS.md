@@ -43,7 +43,7 @@ rule changes, change both; if they disagree, this file wins.
   then run the suite with `.venv/bin/python` (the system `python` is 3.13 and refuses global
   installs). Keys reach a session only as network secrets the proxy injects (`docs/SECRETS.md`),
   never as readable variables. The long form lists what still needs the Mac. The solver is
-  verified/re-deployed via `solver-v3-ops.yml` (ADR-0071): ask Frank before dispatching `deploy`;
+  verified/re-deployed via `solver-v3-ops.yml` (ADR-0072): ask Frank before dispatching `deploy`;
   **never approve, reject or bypass a pending deployment**, nor change its environments or the WIF
   setup without his OK — the session acts as `FrankERP`, so this rule is the only gate.
 - **On the Mac — worktrees only when two things must be in flight at once** (`Agent` with
@@ -311,8 +311,9 @@ each one owns, and its rules) and `docs/UTILITIES_AND_COMPONENTS.md`. Most are "
   `app/components/ui/**` (`docs/MOTION.md`, ADR-0031).
 
 ## Colour tokens
-**67 base roles + 32 composed tokens** (`app/brand.css` `:root`, `tailwind.config.ts`); the
-retired `--brand-*` colour variables are gone. **Never build a colour by string
+**68 base roles + 32 composed tokens** (`app/brand.css` `:root`, `tailwind.config.ts`); the
+retired `--brand-*` colour variables are gone. **Rose (`key-fg`) is the second brand colour and
+means the musical KEY only** — never a state, button or link; ink inside a day card (ADR-0071). **Never build a colour by string
 concatenation** — use `themeColour(rgbVar, alpha?)`. **`var()` is not substituted in SVG
 presentation attributes** — set `color` on an ancestor and inherit `currentColor`. **Composed
 tokens bake their own alpha** — no opacity modifier (a lint clause bans it). **Collapsing a

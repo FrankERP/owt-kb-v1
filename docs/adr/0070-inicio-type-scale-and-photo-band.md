@@ -99,4 +99,15 @@ pill; «Equipo» is the small-caps title, «Banda» is 17 px sentence case; a sh
   mirror the new hero, and `.brand-song-hero` (the painted band) is deleted from `brand.css`
   (`tokenLayer.test.ts` 42 → 37 occurrences). Tests: `keyDial`, `tempoPill`, `rehearsalPlayer`,
   `seekBar`, `songTitle`, `formatClock`, `lyricMarkers` (the gallery fixture mirrors the new wrapper).
+- **Biblioteca and the song sheet took it third (2026-10-24, same thread):** «Biblioteca» is the
+  page's display-face title over one count line, the search is a hairline line beside a round
+  «Filtros» pill, the letter headings are the display face in the accent (an index, not a label),
+  the rows are hairlines with the key glyph on the left, and the drawer's primary says «Ver N
+  canciones». The sheet mirrors the song page's hero (key / BPM / compás rings under CueDialog's
+  own title), `SHEET_TITLE` sections over hairline rows («Ensayo», «Audio», «Acordes», «Últimas
+  veces tocada») and «Ver la página completa» as its last row. This pass also brought the second
+  brand colour: Frank saw the neutral mock as «casi todo blanco y negro» and chose rose for the
+  musical key (ADR-0071) — the library row's glyph, the song page's and the sheet's key pills,
+  `.brand-key-dial`. Tests: `libraryIndex`, `libraryRow`, `libraryFilters`, `songSheet`,
+  `tokenLayer` (37 → 33), `brandCss` (99 → 100), `lightContrast`.
 - Undoing it means re-adding the eyebrows and frames the mock removed; the tests above will say so.
