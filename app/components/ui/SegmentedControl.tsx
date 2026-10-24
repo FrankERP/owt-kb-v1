@@ -21,6 +21,13 @@ export type SegmentedOption<V extends string> = {
   ariaLabel?: string;
   /** A count badge drawn at the option's corner (Propuestas → Pendientes). */
   badge?: number;
+  /**
+   * A dot at the pill's bottom edge («there is a rehearsal mix in this key»).
+   * Drawn by the control, not inside `label`: the label sits in a `relative`
+   * span the height of its text, so an absolute dot placed from inside it lands
+   * ON the glyph (2026-10-24).
+   */
+  mark?: boolean;
   /** aria-busy on that option while a write is in flight (ThemeControl). */
   busy?: boolean;
 };
@@ -151,6 +158,9 @@ export default function SegmentedControl<V extends string>({
               />
             )}
             <span className="relative">{o.label}</span>
+            {o.mark && (
+              <span aria-hidden className="absolute bottom-[3px] left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-accent" />
+            )}
             {o.busy && <span className="sr-only"> — guardando</span>}
             {typeof o.badge === "number" && o.badge > 0 && (
               <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-recency-fg text-[10px] font-bold text-scrim">
