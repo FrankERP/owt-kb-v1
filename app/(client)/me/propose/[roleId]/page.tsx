@@ -5,7 +5,7 @@ import { operationalClient } from "@/sanity/lib/operationalClient";
 import Navbar from "@/app/components/Navbar";
 import ProposalEditor from "./ProposalEditor";
 import { pickUnique, serviceDayKey } from "@/app/utils/serviceReadSelect";
-import { SERVICE_THREAD_BY_ID_QUERY, serviceThreadId } from "@/app/utils/serviceThread";
+import { SERVICE_THREAD_BY_ID_QUERY, serviceThreadId, type PastorMessageRow } from "@/app/utils/serviceThread";
 import type { ThreadMessageRow } from "@/app/utils/proposalMessageRead";
 
 export const revalidate = 0;
@@ -59,18 +59,19 @@ async function getSharedProposal(roleId: string) {
   );
 }
 
-// What admins wrote to this service's leads from its card (ADR-0065) — typically
-// what the pastor shared. Read for every visit, proposal or not: the lead needs
-// it most BEFORE choosing songs, and once the proposal exists it is part of the
-// same conversation.
-async function getServiceThreadMessages(roleId: string): Promise<ThreadMessageRow[]> {
+// What admins wrote to this service's leads from its card (ADR-0065) — the
+// conversation and the pastor's message. Read for every visit, proposal or not:
+// the lead needs it most BEFORE choosing songs, and once the proposal exists it
+// is part of the same conversation.
+async function getServiceThread(
+  roleId: string,
+): Promise<{ messages: ThreadMessageRow[]; pastorMessage: string | null }> {
   const threadId = serviceThreadId(roleId);
-  if (!threadId) return [];
-  const thread = await operationalClient.fetch<{ messages?: ThreadMessageRow[] | null } | null>(
-    SERVICE_THREAD_BY_ID_QUERY,
-    { threadId },
-  );
-  return thread?.messages ?? [];
+  if (!threadId) return { messages: [], pastorMessage: null };
+  const thread = await operationalClient.fetch<
+    { messages?: ThreadMessageRow[] | null; pastor_message?: PastorMessageRow | null } | null
+  >(SERVICE_THREAD_BY_ID_QUERY, { threadId });
+  return { messages: thread?.messages ?? [], pastorMessage: thread?.pastor_message?.body || null };
 }
 
 export default async function ProposePage({
@@ -90,9 +91,9 @@ export default async function ProposePage({
   const roleDoc = await getRoleDoc(roleId, leadId);
   if (!roleDoc) notFound();
 
-  const [shared, earlierMessages] = await Promise.all([
+  const [shared, thread] = await Promise.all([
     getSharedProposal(roleId),
-    getServiceThreadMessages(roleId),
+    getServiceThread(roleId),
   ]);
 
   const serviceType: ServiceType =
@@ -120,7 +121,8 @@ export default async function ProposePage({
             service_date: serviceDate,
           }}
           proposal={shared ?? null}
-          earlierMessages={earlierMessages}
+          earlierMessages={thread.messages}
+          pastorMessage={thread.pastorMessage}
           currentUserId={leadId}
         />
       </div>

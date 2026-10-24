@@ -55,9 +55,49 @@ async function getHandler(_req: NextRequest, { params }: { params: Promise<{ rol
     return reject(serviceError("invalid_request", { details: { issues: ["roleId"] } }));
   }
   const bound = serviceConversationQuery(roleId, threadId);
-  const data = await operationalClient.fetch<{ service?: unknown } | null>(bound.query, bound.params);
+  const data = await operationalClient.fetch<ConversationRead | null>(bound.query, bound.params);
   if (!data?.service) return reject(serviceError("not_found", { details: { roleId } }));
-  return NextResponse.json(data);
+  const { weekendSetlists, service, ...rest } = data;
+  const { _rev, team_notes, hasSongs, ...publicService } = service;
+  return NextResponse.json({
+    ...rest,
+    service: publicService,
+    teamNotes: teamNotesTarget(service, weekendSetlists, { _rev, team_notes, hasSongs }),
+  });
+}
+
+interface ConversationRead {
+  service: {
+    _id: string;
+    _rev: string;
+    _type: string;
+    team_notes?: string | null;
+    hasSongs?: boolean;
+    [k: string]: unknown;
+  } | null;
+  weekendSetlists?: Array<{ _id: string; _rev: string; _type: string; team_notes?: string | null }> | null;
+  [k: string]: unknown;
+}
+
+/**
+ * Where this service's «Mensaje para el equipo» lives, for the team-notes PUT to
+ * assert: a special's role (when it has a setlist), or the ONE weekend setlist
+ * document of its type. No setlist, or an ambiguous pair, is `null` — the dialog
+ * then shows the note read-only or says there is no setlist yet, and the PUT
+ * would refuse the same way.
+ */
+function teamNotesTarget(
+  service: NonNullable<ConversationRead["service"]>,
+  weekendSetlists: ConversationRead["weekendSetlists"],
+  own: { _rev: string; team_notes?: string | null; hasSongs?: boolean },
+): { text: string; observed: { id: string; rev: string } } | null {
+  if (service._type === "special_role") {
+    return own.hasSongs ? { text: own.team_notes ?? "", observed: { id: service._id, rev: own._rev } } : null;
+  }
+  const type = service._type === "sunday_role" ? "featuredSongs" : "saturdarSongs";
+  const rows = (weekendSetlists ?? []).filter((r) => r._type === type);
+  if (rows.length !== 1) return null;
+  return { text: rows[0].team_notes ?? "", observed: { id: rows[0]._id, rev: rows[0]._rev } };
 }
 
 // Declared BEFORE the handler, like the proposal message routes:
@@ -79,9 +119,8 @@ export const POST = withVerificationRunContext(postHandler);
  *    `createIfNotExists` + `setIfMissing` + `append` in one transaction is what
  *    makes the first message and every later one the same write.
  *  - **`isThreadOpen` is enforced here**, not only in the UI.
- *  - **`kind`** is `pastor_note` when the admin marks it «Es el mensaje del
- *    pastor» (`{ pastor: true }`), else `admin_change_request`, the admin kind the
- *    proposal messages route uses too.
+ *  - **`kind`** is `admin_change_request`, the admin kind the proposal messages
+ *    route uses too. The pastor's message has its own writer (`…/pastor-message`).
  *
  * Written here even when a proposal exists: one writer and one notification
  * rule behind the card's button, never a choice decided by a race with the
@@ -119,13 +158,6 @@ async function postHandler(req: NextRequest, { params }: { params: Promise<{ rol
   if (!parsed.ok) {
     return reject(serviceError("invalid_request", { details: { issues: parsed.issues } }));
   }
-  // «Es el mensaje del pastor»: what the pastor sent, relayed by this admin. Absent
-  // = an ordinary admin message; anything but a boolean is refused, not coerced.
-  const pastorFlag = (raw as Record<string, unknown>).pastor;
-  if (pastorFlag !== undefined && typeof pastorFlag !== "boolean") {
-    return reject(serviceError("invalid_request", { details: { issues: ["pastor"] } }));
-  }
-  const pastor = pastorFlag === true;
 
   const lookup = await loadCanonicalRole(roleId);
   if (lookup.state === "none" || !lookup.role) {
@@ -154,10 +186,11 @@ async function postHandler(req: NextRequest, { params }: { params: Promise<{ rol
 
   const message = buildProposalMessage({
     authorId: adminId,
-    // WHO spoke is the admin who relayed it; WHAT it is, a pastor's note — the
-    // kind the enum reserved for exactly this (`pastor_note`).
     authorRole: "admin",
-    kind: pastor ? "pastor_note" : "admin_change_request",
+    // The pastor's message is no longer a chat message (it is the thread's ONE
+    // `pastor_message`, `…/pastor-message`); `pastor_note` items posted before
+    // 2026-10-24 still render with their label.
+    kind: "admin_change_request",
     body: parsed.value.body,
     now: nowIso(),
     key: nextKey(),
@@ -214,7 +247,6 @@ async function postHandler(req: NextRequest, { params }: { params: Promise<{ rol
             serviceDate: target.serviceDate,
             identity: serviceIdentity(role),
             body: message.body,
-            pastor,
           }),
         ),
       ),

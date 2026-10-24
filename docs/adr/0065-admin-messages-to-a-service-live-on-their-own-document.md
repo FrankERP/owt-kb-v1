@@ -1,6 +1,6 @@
 # ADR-0065: Admin messages to a service live on their own document
 
-**Date:** 2026-10-21 · **Status:** Accepted
+**Date:** 2026-10-21 · **Status:** Accepted · **Amended:** 2026-10-24 (editing, and the pastor's message as one field)
 
 ## Context
 
@@ -34,7 +34,7 @@ A second, small document holds what admins write about a service:
   dialog always writes here, even after the leads created a proposal: one place for the
   card's messages, one notification rule, and the proposal's readers show it anyway.
   (The proposal card in Propuestas keeps its own composer, which writes to the proposal.)
-- **The pastor's message:** «Es el mensaje del pastor» in the composer sends
+- **The pastor's message** (superseded 2026-10-24, see the amendment below): «Es el mensaje del pastor» in the composer sent
   `{ pastor: true }`; the message's `kind` is `pastor_note` (reserved in the enum for
   this), its `author` stays the admin who pasted it. The thread labels it «Mensaje del
   pastor · vía Frank»; the push and the email say «Mensaje del pastor». Pasted as text,
@@ -92,3 +92,66 @@ A second, small document holds what admins write about a service:
 - An admin message from the card emails the leads; the same text written in the
   proposal card's composer only pushes. Deliberate (the card is where a new topic
   starts), and named in `docs/NOTIFICATIONS.md`.
+
+## Amendment 2026-10-24: edit after publishing; the pastor's message is one field
+
+Frank: «poder editar los mensajes una vez que ya están publicados. Por ejemplo, un
+miembro del equipo puso en "Mensaje para el equipo" el que en realidad es el mensaje del
+pastor y me gustaría cambiarlo pero no puedo hacerlo desde la página, tendría que hacerlo
+desde Sanity Studio». Then, on «¿Quién ve el mensaje del pastor de cada servicio?»: «Todo
+el equipo en la DayCard» (the email still goes to the leads only).
+
+`ServiceMessagesDialog` now has three parts, each with its own writer:
+
+- **Mensaje del pastor — ONE per service, a field, not a chat message.**
+  `serviceThread.<roleId>.pastor_message` `{ body, author, at, edited_at }`, written by
+  `PUT /api/admin/service-threads/[roleId]/pastor-message` (set, edit, or clear with an
+  empty body). The client sends the stamp it saw (`edited_at ?? at`, or null); a
+  different stored stamp is a 409, and the write asserts the thread `_rev` the route
+  read (`create` when no thread exists, so a concurrent first message is told, not
+  overwritten). The client observes the STAMP, not the `_rev`, so a chat message
+  appended meanwhile does not make the admin redo an edit that conflicts with nothing.
+  **Notifies the leads only when it first appears on a published service** — an edit or
+  a clear sends nothing, so fixing a typo never mails anyone again. The DayCard shows it
+  to the whole team (Inicio, Mi perfil, Calendario: `pastorMessageBodyOf`), above
+  «Mensaje para el equipo», and the lead's proposal editor pins it at the top.
+  The chat composer lost «Es el mensaje del pastor»; `pastor_note` messages already
+  posted keep their label.
+- **Mensaje para el equipo — editable after publishing.** `PUT …/team-notes` writes ONLY
+  the live setlist's `team_notes`: it resolves the target exactly as the setlist PUT does
+  (`loadWeekendSetlistTarget` / `loadSpecialSetlistTarget`, fail closed on duplicates and
+  raw drafts), compares the target the dialog loaded (`GET …/messages` → `teamNotes`),
+  writes under that `_rev` and heartbeats the weekend lock in the same transaction. It
+  returns the new revision (the transaction id) so the dialog can save again. No setlist
+  ⇒ 409 `no_setlist`. A later proposal approval still overwrites the note with the
+  proposal's own — the dialog says so.
+  **«Mover a mensaje del pastor»** is two client calls, pastor's message FIRST, then an
+  empty team note: if the second fails, the text is in both places and the admin is told
+  to clear it by hand — nothing is lost. Offered only while there is no pastor's message
+  (moving onto one would overwrite it).
+- **Conversación con los líderes — an admin edits or deletes only their OWN messages on
+  the service thread.** `PATCH|DELETE …/messages/[key]` checks the stored `author._ref`
+  against the caller (403 `not_author`), then writes the one path
+  `messages[_key=="<key>"]` with no `ifRevisionId` (the author of a stored message never
+  changes, and asserting the thread `_rev` would refuse an edit whenever anyone
+  appended). An edit stamps `edited_at` («editado»); neither notifies.
+
+### Rejected (amendment)
+
+- **Keep the pastor's message as a marked chat message and make chat messages
+  editable.** Several «pastor» messages per service, scattered in a conversation, with
+  no single one to put on the DayCard — and every correction would read as a new
+  message.
+- **Store the pastor's message on the role.** Same reason as the thread itself: every
+  role writer asserts the role `_rev`.
+- **Edit the team note through the setlist PUT.** It replaces the whole song list and
+  notifies the team («Ya están las canciones»); a note fix must do neither.
+- **Re-notify on every pastor's-message edit.** A typo fix would mail the leads again;
+  the DayCard always shows the current text.
+- **One transaction for the move.** The pastor's message lives on `serviceThread`, the
+  note on the setlist or the role: a multi-document transaction over a guarded setlist
+  writer is a critical contract (CLAUDE.md §Review policy) for a two-step move whose
+  worst failure is a duplicate the admin can see and clear.
+- **Editing lead messages, or the proposal's own messages, from the dialog.** The
+  proposal thread belongs to the lead ↔ admin conversation and its writers; an admin
+  rewriting what a lead said is not something Frank asked for.

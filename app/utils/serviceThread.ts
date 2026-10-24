@@ -11,6 +11,10 @@
 // proposal (of any status), and readiness reads a draft proposal as "Revisar
 // propuesta". A message must not change either.
 //
+// It also holds the service's ONE «Mensaje del pastor» (`pastor_message`, since
+// 2026-10-24): a single editable text, not a chat message, shown to the whole
+// team on the DayCard and pinned above the leads' proposal.
+//
 // Pure: no Sanity client, no I/O. Its readers (the card's dialog, the proposal
 // card, the lead's editor) render it with the proposal's own thread, ordered by `at`.
 
@@ -40,8 +44,38 @@ export function serviceThreadMessagesOf(roleExpr: string): string {
   return `*[_type == "${SERVICE_THREAD_TYPE}" && _id == "${SERVICE_THREAD_TYPE}." + ${roleExpr}][0].${THREAD_MESSAGES}`;
 }
 
+/**
+ * The pastor's message as the surfaces read it: the text, when it was set and
+ * last edited, and who did it (name joined at read time, like a message).
+ */
+export const PASTOR_MESSAGE = `pastor_message{
+    body, at, edited_at,
+    "author": author._ref,
+    "author_name": coalesce(author->alias, author->member_name)
+  }`;
+
+/** The shape `PASTOR_MESSAGE` projects. */
+export interface PastorMessageRow {
+  body?: string;
+  at?: string;
+  edited_at?: string | null;
+  author?: string | null;
+  author_name?: string | null;
+}
+
+/**
+ * The pastor's message TEXT of the service whose role id is `roleExpr`, for a
+ * member-facing projection (the DayCard's readers). `null` when there is none.
+ *
+ *     `"pastor_message": ${pastorMessageBodyOf("^._id")}`
+ */
+export function pastorMessageBodyOf(roleExpr: string): string {
+  return `*[_type == "${SERVICE_THREAD_TYPE}" && _id == "${SERVICE_THREAD_TYPE}." + ${roleExpr}][0].pastor_message.body`;
+}
+
 /** The thread of one service by `$threadId`, for the lead's editor. */
 export const SERVICE_THREAD_BY_ID_QUERY = `*[_type == "${SERVICE_THREAD_TYPE}" && _id == $threadId][0]{
   _id, _rev,
-  ${THREAD_MESSAGES}
+  ${THREAD_MESSAGES},
+  ${PASTOR_MESSAGE}
 }`;

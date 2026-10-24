@@ -316,6 +316,20 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
     removalOwner: "permanent runtime writer (never removed — the conversation before a proposal exists)",
   },
   {
+    file: "app/api/admin/service-threads/[roleId]/pastor-message/route.ts",
+    operation: "PUT",
+    reason:
+      "guarded pastor's-message writer (ADR-0065, amended 2026-10-24): resolves the role through `loadCanonicalRole` only to read its date, publish state and Lead seat, then sets or unsets `serviceThread.<roleId>.pastor_message` — never the role, never a proposal. The admin's observed stamp is compared first and the write asserts the thread `_rev` it read (`create` when there is none, so a concurrent thread is told)",
+    removalOwner: "permanent runtime writer (never removed — the pastor's message)",
+  },
+  {
+    file: "app/api/admin/service-threads/[roleId]/team-notes/route.ts",
+    operation: "PUT",
+    reason:
+      "guarded team-note writer (ADR-0065, amended 2026-10-24): resolves the live setlist target exactly as the setlist PUT does (`loadWeekendSetlistTarget`/`loadSpecialSetlistTarget`, fail closed on duplicates and raw drafts), compares the observed target, and writes ONLY `team_notes` under that `_rev`, heartbeating the weekend lock in the same transaction. Deliberately not the setlist PUT: it replaces no songs and notifies nobody",
+    removalOwner: "permanent runtime writer (never removed — editing the team note after publishing)",
+  },
+  {
     file: "app/api/admin/proposals/[id]/route.ts",
     operation: "PATCH",
     reason:
