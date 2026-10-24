@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findDuplicates, serviceTone, serviceConflicts, summarizeService, conflictLabel, agendaRows, monthStripDays, weekStripDays, mondayOf, addDays, mySeats, myNameFromSession, dayCellLabel } from "../agenda";
+import { findDuplicates, serviceTone, serviceConflicts, summarizeService, conflictLabel, agendaRows, monthStripDays, weekStripDays, mondayOf, addDays, mySeats, myNameFromSession, dayCellLabel, dayTitle, serviceClock, calendarCounts, calendarCountLine } from "../agenda";
 import type { ActiveDay } from "../../components/CalendarView";
 
 const sun = (date: string, extra: Partial<ActiveDay> = {}): ActiveDay => ({ day: "Domingo", date, leads: ["Jakey", "Marianne"], instruments: [{ label: "Keys", person: "Sofi" }, { label: "Bass", person: "Mkz" }], setlist: { songs: Array(5).fill({ _id: "s", title: "t" }) as never, week: date }, ...extra });
@@ -61,6 +61,10 @@ describe("dayCellLabel", () => {
     expect(dayCellLabel({ date: "2026-09-20", mine: false }, entries)).toBe("domingo, 20 de septiembre, Domingo, Noche de alabanza");
     expect(dayCellLabel({ date: "2026-09-20", mine: true }, entries)).toBe("domingo, 20 de septiembre, Domingo, Noche de alabanza, te toca");
     expect(dayCellLabel({ date: "2026-09-16", mine: false }, [])).toBe("miércoles, 16 de septiembre");
+  });
+  it("dayTitle is the visible form — capitalised, without the locale's comma", () => {
+    expect(dayTitle("2026-10-25")).toBe("Domingo 25 de octubre");
+    expect(dayTitle("2026-09-16")).toBe("Miércoles 16 de septiembre");
   });
 });
 describe("mondayOf / addDays", () => {
@@ -134,5 +138,46 @@ describe("mySeats", () => {
   it("dedupes a member seated on two instrument seats with the same label", () => {
     const e = sun("2026-09-13", { leads: [], instruments: [{ label: "Keys", person: "Sofi" }, { label: "Keys", person: "Sofi" }] });
     expect(mySeats(e, "sofi")).toEqual(["Keys"]);
+  });
+});
+
+describe("serviceClock", () => {
+  it("gives a weekend the team's standing hour and a special its own time", () => {
+    expect(serviceClock({ day: "Domingo" })).toBe("11:00");
+    expect(serviceClock({ day: "Sábado" })).toBe("18:00");
+    expect(serviceClock({ day: "Noche de alabanza", roleId: "sp1", time: "19:30" })).toBe("19:30");
+  });
+  it("is empty for a special with no valid time — all-day, never a made-up 11:00", () => {
+    expect(serviceClock({ day: "Aniversario", roleId: "sp1" })).toBeUndefined();
+    expect(serviceClock({ day: "Aniversario", roleId: "sp1", time: "pronto" })).toBeUndefined();
+  });
+});
+
+describe("calendarCounts / calendarCountLine", () => {
+  const days = {
+    "2026-09-06": [sun("2026-09-06", { leads: ["Sofi"] })],
+    "2026-09-13": [sun("2026-09-13", { leads: ["Sofi"] })],
+    "2026-09-20": [sun("2026-09-20", { leads: ["Ana"] }), { day: "Aniversario", date: "2026-09-20", roleId: "sp1", leads: ["Sofi"] }],
+    "2026-10-04": [sun("2026-10-04")],
+  };
+  it("counts the services from today on, across the whole fetch, in the rolling view", () => {
+    // Ana leads the 20th only; Sofi is on Keys in every weekend fixture plus the special.
+    expect(calendarCounts(days, "2026-09-10", "ana", null)).toEqual({ services: 4, mine: 1 });
+    expect(calendarCounts(days, "2026-09-10", "sofi", null)).toEqual({ services: 4, mine: 4 });
+  });
+  it("counts the browsed month alone, past days included — the number sits under that month's name", () => {
+    expect(calendarCounts(days, "2026-09-10", "ana", "2026-09")).toEqual({ services: 4, mine: 1 });
+    expect(calendarCounts(days, "2026-09-10", "ana", "2026-10")).toEqual({ services: 1, mine: 0 });
+    expect(calendarCounts(days, "2026-09-10", "sofi", "2026-11")).toEqual({ services: 0, mine: 0 });
+  });
+  it("seats nobody without a name", () => {
+    expect(calendarCounts(days, "2026-09-10", "", null).mine).toBe(0);
+  });
+  it("words the line in two parts, the second absent rather than «te toca en 0»", () => {
+    expect(calendarCountLine({ services: 8, mine: 3 }, false)).toEqual({ services: "8 servicios por venir", mine: "te toca en 3" });
+    expect(calendarCountLine({ services: 1, mine: 1 }, false)).toEqual({ services: "1 servicio por venir", mine: "te toca en 1" });
+    expect(calendarCountLine({ services: 4, mine: 0 }, true)).toEqual({ services: "4 servicios", mine: null });
+    expect(calendarCountLine({ services: 0, mine: 0 }, false)).toEqual({ services: "Sin servicios por venir", mine: null });
+    expect(calendarCountLine({ services: 0, mine: 0 }, true)).toEqual({ services: "Sin servicios", mine: null });
   });
 });
