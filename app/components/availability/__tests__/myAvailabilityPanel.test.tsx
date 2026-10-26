@@ -100,12 +100,12 @@ describe("MyAvailabilityPanel — one surface (R3 F3)", () => {
     fireEvent.click(mark);
     const done = screen.getByRole("button", { name: "Listo" });
     expect(done.getAttribute("aria-pressed")).toBe("true");
-    expect(months.style.touchAction).toBe("none");
-    expect(screen.getByText(/Arrastra sobre los días/)).toBeTruthy();
+    expect(months.style.touchAction).toBe("pan-y");
+    expect(screen.getByText(/Mantén presionado y arrastra/)).toBeTruthy();
     fireEvent.click(done);
     expect(screen.getByRole("button", { name: "Marcar días" })).toBeTruthy();
     // One hint line in both states, so the flip never shifts the months.
-    expect(screen.queryByText(/Arrastra sobre los días/)).toBeNull();
+    expect(screen.queryByText(/Mantén presionado y arrastra/)).toBeNull();
     expect(screen.getByText(/Toca «Marcar días»/)).toBeTruthy();
   });
 

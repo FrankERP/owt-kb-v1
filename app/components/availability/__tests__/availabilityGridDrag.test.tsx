@@ -21,11 +21,11 @@
 // grid can ask once the pointer is captured by the container.
 
 import { useState } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { installMotionTestEnv } from "@/app/components/ui/__tests__/motionTestSetup";
 import { MotionProvider } from "@/app/components/ui/MotionProvider";
-import AvailabilityGrid from "../AvailabilityGrid";
+import AvailabilityGrid, { HOLD_MS } from "../AvailabilityGrid";
 import MarkDaysButton from "../MarkDaysButton";
 import type { Availability } from "../useAvailability";
 
@@ -242,7 +242,7 @@ describe("AvailabilityGrid — drag-select", () => {
     enterMode();
     const done = screen.getByRole("button", { name: "Listo" });
     expect(done.getAttribute("aria-pressed")).toBe("true");
-    expect(months.style.touchAction).toBe("none");
+    expect(months.style.touchAction).toBe("pan-y");
     // While selecting, the shell's pull-to-refresh must not claim the same finger.
     expect(months.hasAttribute("data-pull-ignore")).toBe(true);
 
@@ -490,5 +490,74 @@ describe("AvailabilityGrid — drag-select", () => {
     fireEvent.pointerUp(months, { pointerId: 1 });
     expect(applyRangeMock).not.toHaveBeenCalled();
     expect(openNoteMock).not.toHaveBeenCalled();
+  });
+
+  // ── Touch: a hold is a drag, a lift is a tap, a move is the page's scroll ──
+  //
+  // Frank, 2026-10-26: with `touch-action: none` every swipe over the months
+  // was a range, and the page could only be scrolled from the gutter. A touch
+  // now waits `HOLD_MS` before it owns the gesture.
+  const TOUCH = { ...DOWN, pointerType: "touch" } as const;
+
+  it("a touch that lifts before the hold is a one-day tap", () => {
+    const months = renderGrid();
+    enterMode();
+    over(cell("2026-09-12"));
+    fireEvent.pointerDown(months, { ...TOUCH, clientX: 10, clientY: 200 });
+    // Nothing is pending yet: the finger could still be about to scroll.
+    expect(cell("2026-09-12").className).not.toContain("ring-availability-strong/50");
+    fireEvent.pointerUp(months, { pointerId: 1, pointerType: "touch", clientX: 10, clientY: 200 });
+    expect(applyRangeMock.mock.calls).toEqual([["2026-09-12", "2026-09-12", true]]);
+    expect(openNoteMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("a touch that moves before the hold is the page's scroll: no drag, and the cancel commits nothing", () => {
+    const months = renderGrid();
+    enterMode();
+    over(cell("2026-09-12"));
+    fireEvent.pointerDown(months, { ...TOUCH, clientX: 10, clientY: 200 });
+    over(cell("2026-09-19"));
+    fireEvent.pointerMove(months, { ...MOVE, pointerType: "touch", clientX: 10, clientY: 240 });
+    expect(cell("2026-09-19").className).not.toContain("ring-availability-strong/50");
+    // The browser took the touch for the scroll.
+    fireEvent.pointerCancel(months, { pointerId: 1, pointerType: "touch" });
+    act(() => { vi.advanceTimersByTime(HOLD_MS + 50); });
+    expect(applyRangeMock).not.toHaveBeenCalled();
+    expect(openNoteMock).not.toHaveBeenCalled();
+    expect(document.querySelector("[data-shadow]")).toBeNull();
+  });
+
+  it("a touch that stays put for the hold arms the drag, which then follows the finger", () => {
+    const months = renderGrid();
+    enterMode();
+    over(cell("2026-09-12"));
+    fireEvent.pointerDown(months, { ...TOUCH, clientX: 10, clientY: 200 });
+    act(() => { vi.advanceTimersByTime(HOLD_MS + 50); });
+    expect(cell("2026-09-12").className).toContain("ring-availability-strong/50");
+
+    over(cell("2026-09-14"));
+    fireEvent.pointerMove(months, { ...MOVE, pointerType: "touch", clientX: 10, clientY: 240 });
+    expect(cell("2026-09-13").className).toContain("ring-availability-strong/50");
+    expect(cell("2026-09-14").className).toContain("ring-availability-strong/50");
+
+    fireEvent.pointerUp(months, { pointerId: 1, pointerType: "touch", clientX: 10, clientY: 240 });
+    expect(applyRangeMock.mock.calls).toEqual([["2026-09-12", "2026-09-14", true]]);
+  });
+
+  it("the months allow the page's vertical pan while selecting, and a live drag cancels it", () => {
+    const months = renderGrid();
+    enterMode();
+    expect(months.style.touchAction).toBe("pan-y");
+    // Before any drag, a touchmove is left to the browser.
+    const idle = new TouchEvent("touchmove", { cancelable: true, bubbles: true });
+    months.dispatchEvent(idle);
+    expect(idle.defaultPrevented).toBe(false);
+    // Once the hold has armed a drag, the same event is cancelled.
+    over(cell("2026-09-12"));
+    fireEvent.pointerDown(months, { ...TOUCH, clientX: 10, clientY: 200 });
+    act(() => { vi.advanceTimersByTime(HOLD_MS + 50); });
+    const live = new TouchEvent("touchmove", { cancelable: true, bubbles: true });
+    months.dispatchEvent(live);
+    expect(live.defaultPrevented).toBe(true);
   });
 });

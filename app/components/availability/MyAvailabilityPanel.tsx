@@ -42,7 +42,7 @@
 // separate explanatory sentence on the page: the count is the one fact a
 // member checks, and it is live (the hook's `upcomingCount` follows every
 // edit), which is why the line lives here and not in the Server Component.
-// The mode hint («Toca «Marcar días»…» ⇄ «Arrastra sobre los días…») moved
+// The mode hint («Toca «Marcar días»…» ⇄ «Toca un día… Mantén presionado…») moved
 // here from the grid for the same reason the mode did: it reads under the
 // button that flips it. «Repetir…» is a ghost beside the primary, and its
 // panel a hairline block rather than a tinted card.
@@ -161,7 +161,7 @@ export default function MyAvailabilityPanel({ initialRev, initialDates, services
             under the finger that is about to drag on them. */}
         <p className="mt-3 font-body text-[15px] leading-snug text-ink-muted">
           {selecting
-            ? "Arrastra sobre los días que no puedes. Suelta para escribir la razón."
+            ? "Toca un día para marcarlo. Mantén presionado y arrastra para marcar varios."
             : "Toca «Marcar días» para marcar o editar los días que no puedes."}
         </p>
 
