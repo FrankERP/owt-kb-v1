@@ -106,14 +106,17 @@ describe("AgendaView", () => {
     ]);
   });
 
-  it("reads the day and its short date, with the service's summary under it", () => {
+  it("leads with the day number, then «Domingo · 11:00» and the service's summary under it", () => {
     mountAgenda();
     const row = rows()[0];
-    // jsdom's ICU renders es-MX `weekday: short` as "dom." and `month: short` as
-    // "sept."; only the day number is stable across ICU builds, so the words are
-    // matched loosely (the uppercase is CSS, invisible to textContent).
-    expect(row.textContent).toMatch(/dom.*13.*sep/i);
+    // The number first (the display face, like the library's key), the day word as the
+    // title, the clock by the feed's one rule (`serviceClock`: a Sunday at 11:00).
+    expect(within(row).getByText("13").className).toContain("font-display");
+    expect(within(row).getByText("Domingo")).toBeTruthy();
+    expect(within(row).getByText("11:00")).toBeTruthy();
     expect(within(row).getByText("Lead Ana, Beto · Keys Sofi · 2 canciones")).toBeTruthy();
+    // A Saturday row at the standing 18:00.
+    expect(within(rows()[1]).getByText("18:00")).toBeTruthy();
   });
 
   it("names the day, the long date, the countdown and the summary in the row's label", () => {
@@ -192,13 +195,15 @@ describe("AgendaView", () => {
     expect(rows()[0].getAttribute("aria-label")).not.toMatch(/conflicto/);
   });
 
-  it("names a special service after its date — Sábado/Domingo rows don't repeat the day word", () => {
-    mountAgenda({ "2026-09-13": [special("2026-09-13")] });
+  it("titles a special row with its own name and no day word; a Sunday row says «Domingo» once", () => {
+    mountAgenda({ "2026-09-13": [special("2026-09-13", { time: "19:30" })] });
     expect(within(rows()[0]).getByText("Noche de alabanza")).toBeTruthy();
-    // A regular Sunday/Saturday row carries no second name — the day word already said it.
+    expect(within(rows()[0]).queryByText("Domingo")).toBeNull();
+    // A special's clock is its own `time`; a weekend's is the standing hour.
+    expect(within(rows()[0]).getByText("19:30")).toBeTruthy();
     cleanup();
     mountAgenda({ "2026-09-13": [sunday("2026-09-13")] });
-    expect(within(rows()[0]).queryByText("Domingo")).toBeNull();
+    expect(within(rows()[0]).getAllByText("Domingo")).toHaveLength(1);
   });
 
   it("F1 — pills «Tú · Keys» for the row where the signed-in member is seated", () => {
@@ -323,13 +328,15 @@ describe("CalendarView host", () => {
     // The grid's today cell (the strip has one too, without `aspect-square`). After the
     // pick the day sheet opens and the page behind it goes inert, so the cell is read
     // from the DOM rather than by role.
-    const gridToday = () => document.querySelector<HTMLButtonElement>('button.aspect-square[aria-current="date"]')!;
-    expect(gridToday().className).toContain("ring-accent/50");
+    // (The grid's circle is `h-9`; the strip's is `h-10`.)
+    const gridToday = () => document.querySelector<HTMLButtonElement>('button.h-9[aria-current="date"]')!;
+    expect(gridToday().className).toContain("ring-ink/70");
     fireEvent.click(gridToday());
-    expect(screen.getByRole("dialog", { name: "Detalle del día" })).toBeTruthy();
+    // The sheet is titled by the date now, not «Detalle del día».
+    expect(screen.getByRole("dialog", { name: /jueves.*10.*septiembre/i })).toBeTruthy();
     expect(gridToday().className).toContain("bg-accent");
     expect(gridToday().className).toContain("ring-surface-base/70");
-    expect(gridToday().className).not.toContain("ring-accent/50");
+    expect(gridToday().className).not.toContain("ring-ink/70");
   });
 
   it("retires «Lista» — the mode is Agenda or Mes", () => {
@@ -338,11 +345,24 @@ describe("CalendarView host", () => {
     expect(screen.queryByRole("radio", { name: "Calendario" })).toBeNull();
   });
 
-  it("opens the day sheet with the full card when a row is picked", () => {
+  it("opens the day sheet — titled by the date, the clock under it, the run sheet with «Ensayar» — when a row is picked", () => {
     mountHost();
     fireEvent.click(rows()[0]);
-    const dialog = screen.getByRole("dialog", { name: "Detalle del día" });
-    expect(within(dialog).getByRole("heading", { level: 3 }).textContent).toMatch(/Domingo/);
+    // The same run sheet Inicio opens on (`DayCard hero`), not the default card with its
+    // own uppercase header inside a sheet called «Detalle del día».
+    const dialog = screen.getByRole("dialog", { name: /domingo.*13.*septiembre/i });
+    expect(within(dialog).getByText("11:00")).toBeTruthy();
+    expect(within(dialog).getByText("Setlist")).toBeTruthy();
+    expect(within(dialog).getByText(/Ensayar el setlist/)).toBeTruthy();
+    // One service on the day: the sheet's line names it, so the card's own identity
+    // line («Domingo · 13 sep · 11:00») is not said twice.
+    expect(within(dialog).queryByText(/Domingo · 13/)).toBeNull();
+  });
+
+  it("switches to Mes: the legend names the green dot too", () => {
+    mountHost();
+    fireEvent.click(screen.getByRole("radio", { name: "Mes" }));
+    expect(screen.getByText("Te toca")).toBeTruthy();
   });
 
   it("brings the agenda along when the strip pages to another week", () => {

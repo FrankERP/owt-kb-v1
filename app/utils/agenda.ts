@@ -3,6 +3,7 @@
 // ⚠ marks can never disagree.
 import type { ActiveDay } from "../components/CalendarView";
 import { plural } from "./plural";
+import { serviceStartTime } from "./calendarFeed";
 
 export type Tone = "sun" | "sat" | "special";
 
@@ -75,6 +76,13 @@ export function summarizeService(e: ActiveDay): string {
   const n = e.setlist?.songs?.length ?? 0;
   if (n) parts.push(plural(n, "canción", "canciones"));
   return parts.length ? parts.join(" · ") : "Sin asignaciones";
+}
+
+/** The clock a row or a day sheet shows beside the service: a weekend at the team's
+ *  standing hour, a special at its own valid `time`, else nothing — the feed's ONE rule
+ *  (`serviceStartTime`), so the agenda, `/me` and the `.ics` never disagree on it. */
+export function serviceClock(e: Pick<ActiveDay, "day" | "roleId" | "time">): string | undefined {
+  return serviceStartTime(e.roleId ? "special" : "weekend", e.day, e.time);
 }
 
 export type AgendaRow = { key: string; date: string; entry: ActiveDay; tone: Tone; conflicts: number; summary: string; monthStart: string | null };
@@ -150,4 +158,49 @@ export function monthStripDays(ym: string, activeDays: Record<string, ActiveDay[
 export function weekStripDays(mondayIso: string, activeDays: Record<string, ActiveDay[]>, todayStr: string, myName = ""): StripDay[] {
   const start = mondayOf(mondayIso);
   return Array.from({ length: 7 }, (_, i) => stripDay(addDays(start, i), activeDays, todayStr, myName));
+}
+
+/** The visible form of a date — «Domingo 25 de octubre»: the day sheet's title. es-MX
+ *  puts a comma after the weekday («domingo, 25 de octubre») and starts it lowercase;
+ *  the parts are reassembled so the title reads like the rest of the app's dates («el
+ *  domingo 13», «Domingo · 25 oct»). The accessible names (`dayCellLabel`, the agenda
+ *  row) keep the locale's comma — it is a pause a screen reader uses. Local-noon render. */
+export function dayTitle(iso: string): string {
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    new Intl.DateTimeFormat("es-MX", { weekday: "long", day: "numeric", month: "long" })
+      .formatToParts(new Date(`${iso}T12:00:00`))
+      .find((p) => p.type === type)?.value ?? "";
+  const weekday = part("weekday");
+  return `${weekday.charAt(0).toUpperCase()}${weekday.slice(1)} ${part("day")} de ${part("month")}`;
+}
+
+/** What the calendar header counts (the «millones» pass, 2026-10-24), read under the
+ *  month the title names. The rolling view (`viewMonth` null) counts the services from
+ *  `todayStr` on across the whole fetch — «8 servicios por venir» is what the agenda
+ *  below lists. A browsed month counts THAT month only, past days included: the title
+ *  says «Diciembre», so the number under it must be December's, not the three-month
+ *  window's (review, 2026-10-24). `mine` is how many of those seat `myName`. */
+export type CalendarCounts = { services: number; mine: number };
+export function calendarCounts(activeDays: Record<string, ActiveDay[]>, todayStr: string, myName: string, viewMonth: string | null): CalendarCounts {
+  let services = 0;
+  let mine = 0;
+  for (const [date, entries] of Object.entries(activeDays)) {
+    // The same key guard `agendaRows` applies, so the count and the rows below agree.
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+    if (viewMonth ? !date.startsWith(`${viewMonth}-`) : date < todayStr) continue;
+    for (const entry of entries) {
+      services += 1;
+      if (myName && mySeats(entry, myName).length > 0) mine += 1;
+    }
+  }
+  return { services, mine };
+}
+
+/** The header's one line under the month, in two parts so the host can colour the second:
+ *  «8 servicios por venir» (rolling) or «8 servicios» (a browsed window), and «te toca en 3»
+ *  — null when the reader serves in none, so the line never says «te toca en 0». */
+export function calendarCountLine(c: CalendarCounts, browsing: boolean): { services: string; mine: string | null } {
+  const services =
+    c.services === 0 ? (browsing ? "Sin servicios" : "Sin servicios por venir") : `${plural(c.services, "servicio", "servicios")}${browsing ? "" : " por venir"}`;
+  return { services, mine: c.mine > 0 ? `te toca en ${c.mine}` : null };
 }

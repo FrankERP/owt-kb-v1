@@ -61,6 +61,18 @@ not look like the app.
   on a whole cell has no dot, and scaling the cell shifts seven columns. The keyframes
   are removed rather than left orphaned.
 
+## Update 2026-10-24 — the «millones» pass
+
+The type pass that reached the calendar kept the decision and changed the cell's
+dress: a lit day is no longer a raised `surface-card` cell but the number alone, in
+the display face, inside a round target, with the dots UNDER the circle (outside it,
+so a fill never recolours them — `onFill` is gone); today is an inset INK ring, not
+an accent one, since the accent now means only the selected day; and the day the
+signed-in member serves adds a fourth, green dot (`DayDots mine`) instead of
+painting its number positive — «tú» looked like a second kind of day, and as a dot it
+can be named in the legend («Te toca»). `DayStrip` and `MonthGrid` still share the one
+set of classes (`DAY_CELL_*`).
+
 ## Consequences
 
 Re-tinting a cell brings back the alert-coloured Saturday the audit found; adding a
