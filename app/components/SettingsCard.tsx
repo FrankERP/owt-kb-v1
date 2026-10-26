@@ -39,7 +39,7 @@ type Props = ComponentPropsWithoutRef<"section"> & {
 };
 
 /** The one vertical rhythm between sections, in both columns. */
-export const SETTINGS_COLUMN_CLASS = "space-y-12";
+const SETTINGS_COLUMN_CLASS = "space-y-12";
 
 export default function SettingsCard({ member, calendarFeed, className = "", ...rest }: Props) {
   return (

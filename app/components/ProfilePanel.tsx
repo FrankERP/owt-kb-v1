@@ -8,6 +8,7 @@ import CueDialogStatus from "./ui/CueDialogStatus";
 import EmailPrefToggles, { EMAIL_PREF_ROWS, resolveEmailPrefs } from "./ui/EmailPrefToggles";
 import Skeleton from "./ui/Skeleton";
 import { useToast } from "./ui/Toast";
+import { HAIRLINE_INPUT_CLASS, HAIRLINE_LABEL_CLASS } from "./ui/hairlineField";
 import { SHEET_TITLE } from "@/app/utils/homeHero";
 import { roleLabel } from "@/app/utils/roleLabel";
 
@@ -35,13 +36,11 @@ export interface MemberProfile {
   notifPrefs?: Record<string, unknown>;
 }
 
-// A hairline field: the label in the sheet's small caps above, the value at
-// 17 px, a rule under it. Never under 16 px on a phone: WebKit auto-zooms any
-// focused control smaller than that and never zooms back, which pushed the tab
-// bar off screen on the simulator (F3). `inputFontSize.test.ts` is the guard.
-const inputCls =
-  "w-full rounded-none border-0 border-b border-ink/[0.18] bg-transparent px-0 pb-2 pt-1 font-body text-[17px] text-ink placeholder:text-placeholder transition-colors focus:border-accent focus:outline-none";
-const labelCls = "font-label text-[11px] uppercase tracking-[0.12em] text-ink-muted";
+// The hairline field (`ui/hairlineField.ts`): never under 16 px on a phone —
+// WebKit auto-zooms a smaller focused control and never zooms back, which
+// pushed the tab bar off screen on the simulator (F3).
+const inputCls = HAIRLINE_INPUT_CLASS;
+const labelCls = HAIRLINE_LABEL_CLASS;
 
 function Avatar({
   name, photoUrl, size = "md", onClick, uploading,
@@ -123,6 +122,10 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
   // five switches ON for a member receiving nothing.
   const [emailPrefs, setEmailPrefs] = useState(() => resolveEmailPrefs(initialMember.notifPrefs));
   const [savingPrefField, setSavingPrefField] = useState<string | null>(null);
+  // Its own status line, under the switches it belongs to: «Correos» is two
+  // sections below «Perfil», a screen away on a phone, so a failed switch must
+  // not report above the Alias field.
+  const [prefStatus, setPrefStatus] = useState<{ tone: "error" | "pending"; message: string } | null>(null);
 
   // Re-seed the form when the PERSON changes — keyed on `_id`, not on the object.
   //
@@ -230,7 +233,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
     const label = EMAIL_PREF_ROWS.find((r) => r.field === field)?.label ?? "Correos";
     setEmailPrefs((p) => ({ ...p, [field]: next }));   // optimistic
     setSavingPrefField(field);
-    setPanelStatus({ tone: "pending", message: "Guardando preferencia…" });
+    setPrefStatus({ tone: "pending", message: "Guardando preferencia…" });
     try {
       const res = await fetch("/api/me/notif-prefs", {
         method: "PATCH",
@@ -238,15 +241,15 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
         body: JSON.stringify({ [field]: next }),
       });
       if (res.ok) {
-        setPanelStatus(null);
+        setPrefStatus(null);
         showToast(`${label}: correos ${next ? "activados" : "desactivados"}.`);
       } else {
         setEmailPrefs((p) => ({ ...p, [field]: !next }));   // revert on failure
-        setPanelStatus({ tone: "error", message: "Error al guardar la preferencia." });
+        setPrefStatus({ tone: "error", message: "Error al guardar la preferencia." });
       }
     } catch {
       setEmailPrefs((p) => ({ ...p, [field]: !next }));     // revert on network error too
-      setPanelStatus({ tone: "error", message: "Error al guardar la preferencia." });
+      setPrefStatus({ tone: "error", message: "Error al guardar la preferencia." });
     } finally {
       setSavingPrefField(null);
     }
@@ -258,10 +261,14 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
     .filter(Boolean)
     .join(" · ");
 
+  // Closing the sheet abandons what was typed: the old sheet unmounted the
+  // whole form, so a reopened one must not come back pre-filled with a password
+  // the member never confirmed.
   function closePw() {
     if (savingPw) return;
     setPwOpen(false);
     setPwError(null);
+    setCurrentPw(""); setNewPw(""); setConfirmPw("");
   }
 
   return (
@@ -356,6 +363,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
           busyField={savingPrefField}
           layout="list"
         />
+        {prefStatus && <CueDialogStatus tone={prefStatus.tone}>{prefStatus.message}</CueDialogStatus>}
       </section>
 
       {/* The password form, in a sheet: the one edit whose three fields are not

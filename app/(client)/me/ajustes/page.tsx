@@ -7,6 +7,7 @@ import Button from "@/app/components/ui/Button";
 import { ArrowLeftIcon } from "@/app/components/ui/icons";
 import SettingsCard from "@/app/components/SettingsCard";
 import { revealProps } from "@/app/utils/reveal";
+import { PAGE_TITLE } from "@/app/utils/homeHero";
 import { MEMBER_PROFILE_QUERY } from "../queries";
 import { loadCalendarFeedState } from "@/app/utils/calendarFeedState";
 
@@ -67,7 +68,7 @@ export default async function AjustesPage() {
           </Button>
           {/* The page title in the display face and a lede naming the six
               sections (the «millones» pass, 2026-10-26). */}
-          <h1 className="mt-3 font-display text-[46px] font-semibold leading-[0.98] tracking-[-0.01em] text-ink md:text-[76px] md:leading-[0.95]">
+          <h1 className={`${PAGE_TITLE} mt-3`}>
             Ajustes
           </h1>
           <p className="mt-3 font-body text-[17px] leading-snug text-ink-dim md:text-xl">

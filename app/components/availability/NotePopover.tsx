@@ -26,6 +26,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Button from "@/app/components/ui/Button";
+import { HAIRLINE_INPUT_CLASS } from "@/app/components/ui/hairlineField";
 import { fmtDayLabel, rangeLabel } from "./dragSelect";
 
 // `fmtDayLabel` lives in `dragSelect.ts` — that module needs it for `rangeLabel`
@@ -202,7 +203,7 @@ export default function NotePopover({
           value={notes.get(days[0]) ?? ""}
           onChange={e => days.forEach(d => setNote(d, e.target.value))}
           onKeyDown={e => { if (e.key === "Enter") close(); }}
-          className="w-full rounded-none border-0 border-b border-ink/[0.18] bg-transparent px-0 pb-2 pt-1 font-body text-[17px] text-ink placeholder:text-placeholder focus:border-accent focus:outline-none"
+          className={HAIRLINE_INPUT_CLASS}
         />
 
         <div className="flex items-center justify-between gap-2 pt-1">

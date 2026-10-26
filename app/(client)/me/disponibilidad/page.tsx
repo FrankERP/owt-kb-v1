@@ -9,6 +9,7 @@ import { ArrowLeftIcon } from "@/app/components/ui/icons";
 import MyAvailabilityPanel from "@/app/components/availability/MyAvailabilityPanel";
 import { serviceDayKey } from "@/app/utils/serviceReadSelect";
 import { revealProps } from "@/app/utils/reveal";
+import { PAGE_TITLE } from "@/app/utils/homeHero";
 import type { Tone } from "@/app/utils/agenda";
 import { MEMBER_AVAILABILITY_QUERY, SERVICE_DATES_QUERY, horizon } from "../queries";
 
@@ -83,7 +84,7 @@ export default async function DisponibilidadPage() {
           {/* The page title in the display face (the «millones» pass, 2026-10-26),
               the scale every member screen now shares. The lede under it is the
               panel's first line: it carries the live count of marked days. */}
-          <h1 className="mt-3 font-display text-[46px] font-semibold leading-[0.98] tracking-[-0.01em] text-ink md:text-[76px] md:leading-[0.95]">
+          <h1 className={`${PAGE_TITLE} mt-3`}>
             Disponibilidad
           </h1>
         </div>

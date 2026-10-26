@@ -8,12 +8,12 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 308,
-    "filesScanned": 536,
+    "literalRows": 307,
+    "filesScanned": 537,
     "filesWithColour": 58,
     "byCategory": {
       "2": 2,
-      "4": 65,
+      "4": 64,
       "5": 2,
       "8": 85,
       "9": 10,
@@ -23,7 +23,7 @@
     "byDisposition": {
       "B": 110,
       "exempt": 60,
-      "keep": 221,
+      "keep": 220,
       "C": 5,
       "D": 13
     },
@@ -2821,18 +2821,6 @@
       "reason": null
     },
     {
-      "file": "app/components/availability/NotePopover.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "bg-transparent",
-      "alpha": null,
-      "utility": "bg",
-      "carrier": null,
-      "line": 205,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
       "file": "app/components/BottomNavBar.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
@@ -3200,7 +3188,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 239,
+      "line": 240,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3212,7 +3200,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 220,
+      "line": 221,
       "disposition": "B",
       "reason": null
     },
@@ -3304,23 +3292,11 @@
       "file": "app/components/ProfilePanel.tsx",
       "category": 4,
       "categoryName": "colour-keyword",
-      "value": "bg-transparent",
-      "alpha": null,
-      "utility": "bg",
-      "carrier": null,
-      "line": 43,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/ProfilePanel.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
       "value": "stroke-white",
       "alpha": null,
       "utility": "stroke",
       "carrier": null,
-      "line": 71,
+      "line": 70,
       "disposition": "C",
       "reason": null
     },
@@ -3501,6 +3477,18 @@
       "utility": "bg",
       "carrier": null,
       "line": 39,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/ui/hairlineField.ts",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "bg-transparent",
+      "alpha": null,
+      "utility": "bg",
+      "carrier": null,
+      "line": 9,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },

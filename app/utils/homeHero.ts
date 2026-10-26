@@ -12,6 +12,14 @@
  */
 export const SHEET_TITLE = "font-label text-xs uppercase tracking-[0.22em] text-surface-ink-l70-d50";
 
+/**
+ * The page title of a member screen in the display face (the «millones» pass):
+ * 46 px on a phone, 76 px from `md`, tight leading, sentence case. Biblioteca,
+ * Disponibilidad and Ajustes share it; `MeHeader` (a name, `break-words`) and
+ * `ScheduleHeader` (a month name clamped to the viewport) carry their own.
+ */
+export const PAGE_TITLE = "font-display text-[46px] font-semibold leading-[0.98] tracking-[-0.01em] text-ink md:text-[76px] md:leading-[0.95]";
+
 /** Sanity's crop: the fraction (0–1) cut from each edge of the uncropped asset. */
 export type HeroCrop = { top?: number | null; bottom?: number | null; left?: number | null; right?: number | null } | null | undefined;
 

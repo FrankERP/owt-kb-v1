@@ -95,7 +95,7 @@ const LEGEND: ReadonlyArray<readonly [string, string]> = [
 /** A day the member cannot serve: a faint availability fill inside a thin ring. The
  *  `bg-availability-fg/` prefix is what `availabilityCalendarConflict.test.tsx` reads. */
 const CELL_UNAVAILABLE = "bg-availability-fg/15 text-availability-soft ring-1 ring-inset ring-availability-fg/60";
-/** The same day while its note is open: lit, so the sheet reads as anchored to it. */
+/** The same day while its note is open: lit, so the sheet reads as anchored to it (today reads the same). */
 const CELL_NOTE_OPEN = "bg-availability-fg/40 text-availability-faint ring-2 ring-inset ring-availability-strong";
 
 const TOTAL_MONTHS = 12;
@@ -196,7 +196,7 @@ export default function AvailabilityGrid({ state, selecting, services = {}, open
     const container = containerRef.current;
     const el =
       pendingNote.days
-        .map(d => container?.querySelector<HTMLElement>(`[data-iso="${d}"]`))
+        .map(d => container?.querySelector<HTMLElement>(`button[data-iso="${d}"]`))
         .find(Boolean) ?? container;
     if (el) {
       // jsdom has no `scrollIntoView`, and neither does every embedded webview.
@@ -350,7 +350,9 @@ export default function AvailabilityGrid({ state, selecting, services = {}, open
             // (`dragSelect` still refuses a non-solid one, as defence in depth).
             // The one tile that keeps a card's padding, radius and shadow: it has
             // to read as a sheet sliding up OVER the month under it.
-            ? `absolute inset-x-0 bottom-0 rounded-2xl bg-surface-base p-3 shadow-2xl shadow-elevation/60${
+            // No side padding: its seven columns must sit exactly over the
+            // host's, or a finger over a host column lands between two of its.
+            ? `absolute inset-x-0 bottom-0 rounded-2xl bg-surface-base pt-3 shadow-2xl shadow-elevation/60${
                 shadow >= 1 ? "" : " pointer-events-none"
               }`
             // A month is a text block, not a card (the «millones» pass): the
@@ -383,20 +385,31 @@ export default function AvailabilityGrid({ state, selecting, services = {}, open
             // The circle is the Calendario's (`DAY_CELL_BASE`): the number in the
             // display face, round, with the service dots UNDER it so a fill never
             // recolours them. Here every future day is a target, so it reads in
-            // ink; a past day is dim and `disabled`.
+            // ink; a past day is dim and `disabled`. Each branch names its own
+            // ring, so today's can never fight a fill's (two `ring-*` colours on
+            // one element are decided by emission order, not by the day): today
+            // is the ink ring on a plain day and the strong availability ring
+            // on a marked, pending or open one — a ring «whatever the day
+            // carries», as the Calendario keeps it.
+            const todayStrong = isToday ? "ring-2 ring-inset ring-availability-strong" : "";
             const cls = `${DAY_CELL_BASE} h-10 w-10 text-lg sm:h-9 sm:w-9 ${
               isPast
                 ? "text-mono-500 cursor-default"
                 : isPending
-                ? `bg-availability-fg/25 text-availability-soft ring-inset ring-availability-strong/50 ${iso === pendingDays[0] ? "ring-2" : "ring-1"}`
+                ? `bg-availability-fg/25 text-availability-soft ${todayStrong || `ring-inset ring-availability-strong/50 ${iso === pendingDays[0] ? "ring-2" : "ring-1"}`}`
                 : isPopoverOpen
                 ? CELL_NOTE_OPEN
                 : unavailable
-                ? `${CELL_UNAVAILABLE}${selecting ? " hover:bg-availability-fg/25" : ""}`
+                ? `${todayStrong ? `bg-availability-fg/15 text-availability-soft ${todayStrong}` : CELL_UNAVAILABLE}${selecting ? " hover:bg-availability-fg/25" : ""}`
                 : `text-ink${selecting ? " hover:text-accent" : ""}${isToday ? ` ${DAY_CELL_TODAY}` : ""}`
             }`;
             return (
-              <div key={iso} className="flex min-h-[44px] flex-col items-center gap-0.5">
+              // `data-iso` on the WRAPPER too: the whole cell — the gap beside
+              // the circle, the dots row — resolves to its day under a finger,
+              // not only the 40 px circle (`isoFromPoint` walks up to the
+              // nearest `[data-iso]`). The button keeps its own so the tests
+              // and the note anchor still find the control.
+              <div key={iso} data-iso={iso} className="flex min-h-[44px] flex-col items-center gap-0.5">
                 <button
                   type="button"
                   // No `onClick` at all, in any mode: inside «Marcar días» a
