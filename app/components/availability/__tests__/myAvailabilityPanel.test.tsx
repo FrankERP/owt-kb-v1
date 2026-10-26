@@ -85,7 +85,8 @@ describe("MyAvailabilityPanel — one surface (R3 F3)", () => {
         <MyAvailabilityPanel initialRev="rev-1" initialDates={["2026-09-20", "2026-10-04"]} initialNotes={[]} />
       </MotionProvider>,
     );
-    expect(screen.getByText(/2 fechas marcadas como no disponible/)).toBeTruthy();
+    // The lede's live count (the «millones» pass): «2 días marcados · el viernes es ensayo».
+    expect(screen.getByText(/2 días marcados/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Guardar" })).toBeNull();
     expect(document.querySelector("[data-availability-save-bar]")).toBeNull();
   });

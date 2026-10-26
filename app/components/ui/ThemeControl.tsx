@@ -6,9 +6,13 @@ import { useSession } from "next-auth/react";
 import { useThemePref } from "@/app/components/ThemeBootstrap";
 import type { ThemePref } from "@/app/utils/themePref";
 import SegmentedControl from "@/app/components/ui/SegmentedControl";
+import { SHEET_TITLE } from "@/app/utils/homeHero";
 
+// «Dispositivo», not «Seguir sistema» (the «millones» pass, 2026-10-26): the
+// three options share one full-width bar now, and the long label wrapped its
+// third at «Máximo» text size; the one-word label says the same thing.
 const OPTIONS: ReadonlyArray<{ value: ThemePref; label: string }> = [
-  { value: "system", label: "Seguir sistema" },
+  { value: "system", label: "Dispositivo" },
   { value: "dark", label: "Oscuro" },
   { value: "light", label: "Claro" },
 ];
@@ -33,7 +37,7 @@ const OPTIONS: ReadonlyArray<{ value: ThemePref; label: string }> = [
  * `resolvedTheme` — which is "dark" for an explicit-Dark member and an unset one
  * alike, and would therefore make the third state unrepresentable.
  */
-export default function ThemeControl({ bare = false }: { bare?: boolean } = {}) {
+export default function ThemeControl() {
   const { pref, loaded, setPref } = useThemePref();
   const { setTheme } = useTheme();
   const { data } = useSession();
@@ -77,24 +81,30 @@ export default function ThemeControl({ bare = false }: { bare?: boolean } = {}) 
     }
   }
 
+  // A section in the page's own type (the «millones» pass): small-caps title,
+  // a 15 px hint, the house bar filled and full width — no card around it.
   return (
-    <section id="tema" className={bare ? "p-5" : "rounded-2xl border border-surface-accent-20 p-5"}>
-      <h3 id="tema-h" className={`font-display text-lg font-bold ${bare ? "" : "mb-1"}`}>Tema</h3>
-      <p className="font-body text-sm text-mono-500 dark:text-mono-400 mb-4">
+    <section id="tema" className="space-y-4">
+      <h2 id="tema-h" className={SHEET_TITLE}>Tema</h2>
+      <p className="font-body text-[15px] leading-snug text-ink-muted">
         Por defecto la app sigue el modo de tu teléfono. Tu elección te sigue en
         todos tus dispositivos.
       </p>
       {/* A radiogroup, not three toggles — SegmentedControl owns the semantics.
           `loaded` still gates everything: before the projection lands nothing is
-          selected (`value={null}`). "Not known yet" is not "follows the system". */}
+          selected (`value={null}`). "Not known yet" is not "follows the system".
+          `filled` options are `shrink-0` by design, so the three grow through the
+          child selector (the `CalendarFeedPanel` precedent). */}
       <SegmentedControl
         labelledBy="tema-h"
         value={loaded ? (pref ?? "system") : null}
         onChange={(v) => void choose(v)}
         options={OPTIONS.map((o) => ({ value: o.value, label: o.label, busy: saving === o.value }))}
+        tone="filled"
+        className="w-full [&>button]:flex-1"
       />
       {error && (
-        <p role="alert" className="font-body text-sm mt-3 text-negative-fg">
+        <p role="alert" className="font-body text-sm text-negative-fg">
           {error}
         </p>
       )}

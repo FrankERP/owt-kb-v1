@@ -35,6 +35,17 @@
 //   flight), clearing the phone tab bar through `--bottom-nav-h` like the
 //   other fixed-bottom surfaces (`bottomNavOffsetSync.test.ts`). A save error
 //   reads in the same bar, next to the button that can retry it.
+//
+// The «millones» pass (2026-10-26) made the panel's first line the page's LEDE
+// — «5 días marcados · el viernes es ensayo», 17 px under the display title —
+// in place of an uppercase tracked eyebrow in the availability colour and a
+// separate explanatory sentence on the page: the count is the one fact a
+// member checks, and it is live (the hook's `upcomingCount` follows every
+// edit), which is why the line lives here and not in the Server Component.
+// The mode hint («Toca «Marcar días»…» ⇄ «Arrastra sobre los días…») moved
+// here from the grid for the same reason the mode did: it reads under the
+// button that flips it. «Repetir…» is a ghost beside the primary, and its
+// panel a hairline block rather than a tinted card.
 
 import { useRef, useState } from "react";
 import AvailabilityGrid from "./AvailabilityGrid";
@@ -45,18 +56,20 @@ import Select from "@/app/components/ui/Select";
 import { useToast } from "@/app/components/ui/Toast";
 import NotePopover, { popoverPosition, type NoteAnchor } from "./NotePopover";
 import { useAvailability } from "./useAvailability";
+import type { Tone } from "@/app/utils/agenda";
 
 interface Props {
   /** The revision this page was rendered at — the save's `ifRevisionId` guard. */
   initialRev: string;
   initialDates: string[];
-  serviceDates?: string[];
+  /** The services per day, in the agenda's tone vocabulary (the grid's dots). */
+  services?: Record<string, Tone[]>;
   initialNotes?: { date: string; note: string }[];
 }
 
 const WEEKDAYS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
-export default function MyAvailabilityPanel({ initialRev, initialDates, serviceDates = [], initialNotes = [] }: Props) {
+export default function MyAvailabilityPanel({ initialRev, initialDates, services = {}, initialNotes = [] }: Props) {
   const { toast } = useToast();
 
   const [popover, setPopover] = useState<NoteAnchor | null>(null);
@@ -112,22 +125,30 @@ export default function MyAvailabilityPanel({ initialRev, initialDates, serviceD
   }
 
   return (
-    <div className="space-y-4">
-      {upcomingCount > 0 && (
-        <p className="font-label text-[11px] uppercase tracking-widest text-availability-strong">
-          {upcomingCount} fecha{upcomingCount !== 1 ? "s" : ""} marcada{upcomingCount !== 1 ? "s" : ""} como no disponible
-        </p>
-      )}
+    <div>
+      {/* The lede: the live count in the availability colour, then the one
+          standing fact about the week. */}
+      <p className="font-body text-[17px] leading-snug text-ink-dim md:text-xl">
+        <span className="text-availability-soft">
+          {upcomingCount === 0
+            ? "Sin días marcados"
+            : `${upcomingCount} día${upcomingCount === 1 ? "" : "s"} marcado${upcomingCount === 1 ? "" : "s"}`}
+        </span>
+        {" · el viernes es ensayo"}
+      </p>
 
-      {/* The actions, and the recurring panel one of them opens. They share a
-          wrapper so the panel is not a child of `space-y-4`: a closed Collapse is
-          a zero-height child, but the 16px gap around it would still be reserved. */}
-      <div>
+      {/* The actions, the mode hint, and the recurring panel one of them opens.
+          They share a wrapper so the panel is not a spaced child: a closed
+          Collapse is a zero-height child, but a gap around it would still be
+          reserved. */}
+      <div className="mt-6">
         <div className="flex items-center gap-2.5">
-          {/* The primary action first and widest: a member comes here to mark
-              days. «Repetir…» keeps its natural width beside it. */}
-          <MarkDaysButton selecting={selecting} onToggle={toggleSelecting} className="flex-1 sm:flex-none" />
+          {/* The primary action first: a member comes here to mark days.
+              «Repetir…» is the quiet one beside it. */}
+          <MarkDaysButton selecting={selecting} onToggle={toggleSelecting} />
           <Button
+            variant="ghost"
+            size="lg"
             onClick={toggleRecur}
             aria-expanded={recurOpen}
             aria-controls="availability-recur"
@@ -136,10 +157,18 @@ export default function MyAvailabilityPanel({ initialRev, initialDates, serviceD
           </Button>
         </div>
 
-        {/* Recurring pattern */}
-        <Collapse open={recurOpen} id="availability-recur" className="mt-4 rounded-xl border border-accent/20 bg-accent/[0.04] p-4 space-y-3">
-          <p className="font-label text-[11px] uppercase tracking-widest text-accent/70">
-            Marcar un día recurrente como no disponible
+        {/* One line in both states, so arming the mode never shifts the months
+            under the finger that is about to drag on them. */}
+        <p className="mt-3 font-body text-[15px] leading-snug text-ink-muted">
+          {selecting
+            ? "Arrastra sobre los días que no puedes. Suelta para escribir la razón."
+            : "Toca «Marcar días» para marcar o editar los días que no puedes."}
+        </p>
+
+        {/* Recurring pattern: a hairline block in the page's own type. */}
+        <Collapse open={recurOpen} id="availability-recur" className="mt-4 space-y-3 border-t border-ink/[0.10] pt-4">
+          <p className="font-body text-[15px] leading-snug text-ink-muted">
+            Marca un día de la semana como no disponible durante los próximos 12 meses.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <Select aria-label="Día de la semana" value={recurDow} onChange={e => setRecurDow(Number(e.target.value))}>
@@ -150,26 +179,27 @@ export default function MyAvailabilityPanel({ initialRev, initialDates, serviceD
               <option value={2} className="bg-surface-base">Cada 2 semanas</option>
               <option value={4} className="bg-surface-base">Cada 4 semanas</option>
             </Select>
-            <Button variant="primary" onClick={() => applySeries(true)}>Marcar</Button>
-            <Button onClick={() => applySeries(false)}>Quitar serie</Button>
+            <Button variant="secondary" onClick={() => applySeries(true)}>Marcar</Button>
+            <Button variant="ghost" onClick={() => applySeries(false)}>Quitar serie</Button>
           </div>
-          <p className="font-body text-xs text-mono-500">
-            <span className="text-mono-400">Marcar</span> agrega o <span className="text-mono-400">Quitar serie</span> borra ese día durante los próximos 12 meses. Puedes ajustar días sueltos después; recuerda <span className="text-mono-400">Guardar</span>.
+          <p className="font-body text-sm text-ink-muted">
+            <span className="text-ink-dim">Marcar</span> agrega o <span className="text-ink-dim">Quitar serie</span> borra ese día. Puedes ajustar días sueltos después; recuerda <span className="text-ink-dim">Guardar</span>.
           </p>
         </Collapse>
       </div>
 
       {/* The grid: the one surface that marks a date (F3). Mounted, never behind a
-          disclosure — this page exists to show it. It goes last so «Guardar» and
-          the notices stay above the three month tiles, where they were. */}
-      <AvailabilityGrid
-        state={state}
-        selecting={selecting}
-        serviceDates={serviceDates}
-        openNote={openNote}
-        closeNote={closeNote}
-        noteIso={popover?.iso ?? null}
-      />
+          disclosure — this page exists to show it. */}
+      <div className="mt-9">
+        <AvailabilityGrid
+          state={state}
+          selecting={selecting}
+          services={services}
+          openNote={openNote}
+          closeNote={closeNote}
+          noteIso={popover?.iso ?? null}
+        />
+      </div>
 
       <NotePopover
         popover={popover}
@@ -194,9 +224,9 @@ export default function MyAvailabilityPanel({ initialRev, initialDates, serviceD
       {(dirty || saving || conflict) && (
         <div
           data-availability-save-bar=""
-          className="sticky bottom-[var(--bottom-nav-h,0px)] z-20 -mx-6 flex items-center gap-3 border-t border-accent/15 bg-surface-base px-6 py-3 pr-[calc(1.5rem+var(--assistant-fab-w,0px))]"
+          className="sticky bottom-[var(--bottom-nav-h,0px)] z-20 -mx-6 mt-8 flex items-center gap-3 border-t border-ink/[0.10] bg-surface-base px-6 py-3 pr-[calc(1.5rem+var(--assistant-fab-w,0px))]"
         >
-          <p role="status" className="min-w-0 flex-1 font-body text-sm text-mono-500">
+          <p role="status" className="min-w-0 flex-1 font-body text-[15px] text-ink-muted">
             {conflict ? (
               <span className="text-negative-fg">{conflict}</span>
             ) : saveError ? (

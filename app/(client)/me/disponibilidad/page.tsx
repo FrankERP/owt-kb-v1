@@ -9,6 +9,8 @@ import { ArrowLeftIcon } from "@/app/components/ui/icons";
 import MyAvailabilityPanel from "@/app/components/availability/MyAvailabilityPanel";
 import { serviceDayKey } from "@/app/utils/serviceReadSelect";
 import { revealProps } from "@/app/utils/reveal";
+import { PAGE_TITLE } from "@/app/utils/homeHero";
+import type { Tone } from "@/app/utils/agenda";
 import { MEMBER_AVAILABILITY_QUERY, SERVICE_DATES_QUERY, horizon } from "../queries";
 
 // The calendar, alone (R3 F3). `/me` used to hold four ways to say the same
@@ -53,20 +55,25 @@ export default async function DisponibilidadPage() {
       unavailableDates?: string[] | null;
       unavailabilityNotes?: { date: string; note: string }[] | null;
     } | null>(MEMBER_AVAILABILITY_QUERY, { id: sanityId }),
-    operationalClient.fetch<string[]>(SERVICE_DATES_QUERY, { today, limit }),
+    operationalClient.fetch<{ date: string; tone: Tone }[]>(SERVICE_DATES_QUERY, { today, limit }),
   ]);
 
-  // Only well-formed calendar days reach the grid's date math.
-  const calendarServiceDates = (Array.isArray(serviceDates) ? serviceDates : [])
-    .map((d) => serviceDayKey(d))
-    .filter((d): d is string => d !== null);
+  // Only well-formed calendar days reach the grid's date math, grouped per day
+  // in the agenda's tone vocabulary — the grid draws them with the Calendario's
+  // own `DayDots`, so a Sunday with a special shows two dots here too.
+  const services: Record<string, Tone[]> = {};
+  for (const row of Array.isArray(serviceDates) ? serviceDates : []) {
+    const day = serviceDayKey(row?.date);
+    if (!day) continue;
+    (services[day] ??= []).push(row.tone);
+  }
 
   const navbarTitle = member?.alias?.trim() || "Disponibilidad";
 
   return (
     <div>
       <Navbar title={navbarTitle} />
-      <div className="mx-auto max-w-4xl px-6 pt-10 pb-16 space-y-8">
+      <div className="mx-auto max-w-4xl px-6 pt-10 pb-16">
         <div {...revealProps(0)}>
           {/* Back to the page this came from, not to wherever history points:
               `/me` is the parent of this route and the only place that links here. */}
@@ -74,15 +81,12 @@ export default async function DisponibilidadPage() {
             <ArrowLeftIcon size={13} />
             Mi semana
           </Button>
-          <h1 className="font-display text-2xl uppercase tracking-wide mt-2">
+          {/* The page title in the display face (the «millones» pass, 2026-10-26),
+              the scale every member screen now shares. The lede under it is the
+              panel's first line: it carries the live count of marked days. */}
+          <h1 className={`${PAGE_TITLE} mt-3`}>
             Disponibilidad
           </h1>
-          {/* A sentence, not an eyebrow (design pass C, 2026-10-22): the line
-              explains what to do here, and an uppercase tracked label is for
-              naming a section, not for reading. */}
-          <p className="font-body text-sm text-mono-500 mt-1">
-            Marca los días en que no puedes. El viernes es ensayo.
-          </p>
         </div>
 
         {/* A null read is not an empty state — every signed-in member has a
@@ -90,19 +94,19 @@ export default async function DisponibilidadPage() {
             than anywhere: without `_rev` the calendar would accept edits and then
             400 on every save, so the honest answer is to say so and show none. */}
         {member ? (
-          <div {...revealProps(1)}>
+          <div className="mt-3" {...revealProps(1)}>
             <MyAvailabilityPanel
               initialRev={member._rev}
               initialDates={member.unavailableDates ?? []}
               initialNotes={member.unavailabilityNotes ?? []}
-              serviceDates={calendarServiceDates}
+              services={services}
             />
           </div>
         ) : (
           // No live-region role: this is server-rendered and present at first
           // paint, so nothing is being INSERTED for a live region to announce.
           <section
-            className="rounded-xl border border-negative-strong/30 bg-negative-surface-deepest/35 px-5 py-8 text-center"
+            className="mt-8 rounded-xl border border-negative-strong/30 bg-negative-surface-deepest/35 px-5 py-8 text-center"
             {...revealProps(1)}
           >
             <h2 className="font-display text-lg uppercase text-negative-fg">No pudimos cargar tu perfil</h2>

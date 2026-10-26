@@ -3,6 +3,7 @@
 // The /biblioteca client index (spec §12.2, §18): search console, A–Z sections of
 // rows, and the letter rail. All filtering is client-side over one fetched
 // catalogue — the URL only mirrors the state so a view is shareable.
+import { PAGE_TITLE } from "@/app/utils/homeHero";
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { UNDER_NAVBAR_SCROLL_MT } from "@/app/utils/navbarHeight";
 import { usePathname } from "next/navigation";
@@ -189,7 +190,7 @@ export default function LibraryIndex(props: LibraryIndexProps) {
   return (
     <div className="mx-auto max-w-7xl px-6 pb-16 pt-6 md:pt-10">
       <header className="mb-6 flex flex-col gap-2 md:mb-8">
-        <h1 className="font-display text-[46px] font-semibold leading-[0.98] tracking-[-0.01em] text-ink md:text-[76px] md:leading-[0.95]">
+        <h1 className={PAGE_TITLE}>
           Biblioteca
         </h1>
         <p className="font-body text-[17px] leading-snug text-ink-muted md:text-xl">

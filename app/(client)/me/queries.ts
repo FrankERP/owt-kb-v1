@@ -23,8 +23,11 @@ export const MEMBER_AVAILABILITY_QUERY = `*[_type == "teamMembers" && _id == $id
     }`;
 
 /**
- * Every published service day in the horizon, as a flat array of ISO dates — the
- * dots the calendar draws under a day ("there is a service that day").
+ * Every published service day in the horizon, as `{ date, tone }` rows in the
+ * agenda's tone vocabulary (`Tone` in `agenda.ts`: Sunday, Saturday, special) —
+ * the dots the availability calendar draws under a day, one per service, in the
+ * Calendario's own colours (the «millones» pass, 2026-10-26; it was a flat array
+ * of dates and one accent dot).
  *
  * `published != false` is the worship draft-gating rule: these three types
  * predate the field, so an ABSENT `published` must read as visible.
@@ -33,9 +36,9 @@ export const MEMBER_AVAILABILITY_QUERY = `*[_type == "teamMembers" && _id == $id
  * still see that the team has a service that day.
  */
 export const SERVICE_DATES_QUERY = `[
-        ...*[_type == "sunday_role"   && week >= $today && week <= $limit && published != false].week,
-        ...*[_type == "saturday_role" && week >= $today && week <= $limit && published != false].week,
-        ...*[_type == "special_role"  && date >= $today && date <= $limit && published != false].date,
+        ...*[_type == "sunday_role"   && week >= $today && week <= $limit && published != false]{ "date": week, "tone": "sun" },
+        ...*[_type == "saturday_role" && week >= $today && week <= $limit && published != false]{ "date": week, "tone": "sat" },
+        ...*[_type == "special_role"  && date >= $today && date <= $limit && published != false]{ date, "tone": "special" },
       ]`;
 
 /**

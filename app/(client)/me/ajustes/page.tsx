@@ -7,6 +7,7 @@ import Button from "@/app/components/ui/Button";
 import { ArrowLeftIcon } from "@/app/components/ui/icons";
 import SettingsCard from "@/app/components/SettingsCard";
 import { revealProps } from "@/app/utils/reveal";
+import { PAGE_TITLE } from "@/app/utils/homeHero";
 import { MEMBER_PROFILE_QUERY } from "../queries";
 import { loadCalendarFeedState } from "@/app/utils/calendarFeedState";
 
@@ -58,16 +59,21 @@ export default async function AjustesPage() {
   return (
     <div>
       <Navbar title={member?.alias?.trim() || "Ajustes"} />
-      <div className="mx-auto max-w-4xl px-6 pt-10 pb-16 space-y-8">
+      <div className="mx-auto max-w-4xl px-6 pt-10 pb-16">
         <div {...revealProps(0)}>
           {/* Back to the page this hangs off, not to wherever history points. */}
           <Button variant="ghost" size="sm" href="/me">
             <ArrowLeftIcon size={13} />
             Mi semana
           </Button>
-          <h1 className="font-display text-2xl uppercase tracking-wide mt-2">
+          {/* The page title in the display face and a lede naming the six
+              sections (the «millones» pass, 2026-10-26). */}
+          <h1 className={`${PAGE_TITLE} mt-3`}>
             Ajustes
           </h1>
+          <p className="mt-3 font-body text-[17px] leading-snug text-ink-dim md:text-xl">
+            Tema, tamaño del texto, calendario y perfil.
+          </p>
         </div>
 
         {/* A null read is not an empty state — every signed-in member has a
@@ -76,14 +82,14 @@ export default async function AjustesPage() {
             /api/me/theme and reports its own write failure. Only Perfil goes,
             because it has nothing to edit. */}
         {member ? (
-          <SettingsCard member={member} calendarFeed={calendarFeed} {...revealProps(1)} />
+          <SettingsCard member={member} calendarFeed={calendarFeed} className="mt-11" {...revealProps(1)} />
         ) : (
           <>
             {/* No live-region role: this is server-rendered and present at first
                 paint, so nothing is being INSERTED for a live region to
                 announce. The heading carries the message. */}
             <section
-              className="rounded-xl border border-negative-strong/30 bg-negative-surface-deepest/35 px-5 py-8 text-center"
+              className="mt-8 rounded-xl border border-negative-strong/30 bg-negative-surface-deepest/35 px-5 py-8 text-center"
               {...revealProps(1)}
             >
               <h2 className="font-display text-lg uppercase text-negative-fg">No pudimos cargar tu perfil</h2>
@@ -92,7 +98,7 @@ export default async function AjustesPage() {
                 Recarga la página; si sigue igual, avísale a un administrador.
               </p>
             </section>
-            <SettingsCard member={null} calendarFeed={calendarFeed} {...revealProps(2)} />
+            <SettingsCard member={null} calendarFeed={calendarFeed} className="mt-11" {...revealProps(2)} />
           </>
         )}
       </div>
