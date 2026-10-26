@@ -352,6 +352,16 @@ export const SERVICE_EDITOR_TOOL_NAMES = [
 export const SERVICE_EDITOR_WRITE_NAMES = ["save_service_edits", "save_service_edits_app", "copy_instruments", "create_service"];
 
 /**
+ * Admin parity phase 2: deleting saved services, after `create_service`. Never called here: the check
+ * only reads but needs a month's services, and the other two DELETE production services.
+ * `delete_services_app` is app-only (the card calls it).
+ */
+export const SERVICE_DELETE_TOOL_NAMES = ["check_service_deletes", "delete_services", "delete_services_app"];
+
+/** The deletes: destructive, like every write (I14). */
+export const SERVICE_DELETE_WRITE_NAMES = ["delete_services", "delete_services_app"];
+
+/**
  * Admin parity phase 1: three reads after the P1 reads (`/admin`'s Equidad, rules and integrity
  * queue). Read-only, so the smoke may call them, but it does not need to.
  */
@@ -372,6 +382,7 @@ export const EXPECTED_TOOLS = [
   ...MONTH_TOOL_NAMES,
   ...EDITOR_TOOL_NAMES,
   ...SERVICE_EDITOR_TOOL_NAMES,
+  ...SERVICE_DELETE_TOOL_NAMES,
 ];
 
 /** What `ping` and every read tool declare (spec I14). */
@@ -397,7 +408,7 @@ export const SOLVE_MONTH_ANNOTATIONS = Object.freeze({
 export function expectedAnnotations(name) {
   // A saved version is a private record like solve_month's; the check only reads.
   if (name === "solve_month" || name === "save_proposal_edits" || name === "revise_proposal") return SOLVE_MONTH_ANNOTATIONS;
-  return WRITE_TOOL_NAMES.includes(name) || name === "apply_schedule" || SERVICE_EDITOR_WRITE_NAMES.includes(name) ? WRITE_ANNOTATIONS : READ_ONLY_ANNOTATIONS;
+  return WRITE_TOOL_NAMES.includes(name) || name === "apply_schedule" || SERVICE_EDITOR_WRITE_NAMES.includes(name) || SERVICE_DELETE_WRITE_NAMES.includes(name) ? WRITE_ANNOTATIONS : READ_ONLY_ANNOTATIONS;
 }
 
 /**
@@ -499,7 +510,8 @@ export function toolCallRequest(name, args, id = 1) {
     WRITE_TOOL_NAMES.includes(name) ||
     MONTH_TOOL_NAMES.includes(name) ||
     EDITOR_TOOL_NAMES.includes(name) ||
-    SERVICE_EDITOR_TOOL_NAMES.includes(name)
+    SERVICE_EDITOR_TOOL_NAMES.includes(name) ||
+    SERVICE_DELETE_TOOL_NAMES.includes(name)
   ) {
     throw new Error(`refusing to call the write tool "${name}": the dev smoke never calls a write tool (DV1)`);
   }

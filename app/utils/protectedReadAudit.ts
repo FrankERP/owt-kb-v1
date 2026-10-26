@@ -239,10 +239,10 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
     removalOwner: "permanent runtime writer (never removed — the shared write-op surface)",
   },
   {
-    file: "app/api/admin/roles/[id]/route.ts",
-    operation: "DELETE",
+    file: "app/utils/roleDeleteCommit.ts",
+    operation: "module",
     reason:
-      "guarded role delete: refuses dependent setlist/proposal history, then one transaction vacates the owned weekend lock, retires the creation receipt and deletes the role under its observed revision (A2 §2). It names no protected type literal — the type comes from the stored document — so it is detected by the loader it resolves through",
+      "guarded role delete: refuses dependent setlist/proposal history, then one transaction vacates the owned weekend lock, retires the creation receipt and deletes the role under its observed revision (A2 §2). It names no protected type literal — the type comes from the stored document — so it is detected by the loader it resolves through. The domain body of `DELETE /api/admin/roles/[id]`, moved here so the MCP deletes call the same writer (admin parity phase 2); the route keeps only authorization and its parse, and `serviceCommitCallers.test.ts` pins who may import this module",
     removalOwner: "permanent runtime writer (never removed — the delete surface itself)",
   },
   {

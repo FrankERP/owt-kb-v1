@@ -681,6 +681,7 @@ export const V3_EDITOR_LINES = {
  */
 export const SAVE_ARGS_PREFIX = "Argumentos para save_service_edits (pásalos tal cual):";
 export const COPY_ARGS_PREFIX = "Argumentos para copy_instruments (pásalos tal cual):";
+export const DELETE_ARGS_PREFIX = "Argumentos para delete_services (pásalos tal cual):";
 
 export const V3_STORED_EDITOR_LINES = {
   // The change lines (F4)
@@ -806,6 +807,87 @@ export const V3_STORED_EDITOR_LINES = {
     badTime: "La hora debe ser HH:mm.",
     onlySpecial: "Solo un servicio especial lleva nombre, hora o formato de Noche de alabanza.",
     retired: "Este mismo servicio se creó y se borró varias veces desde el chat; créalo en /admin.",
+  },
+  // Delete services (admin parity phase 2). A line names ONE service and what its delete does; the
+  // check and the save render it from the same stored role (`deleteLines.ts`), so the prompt shows it.
+  delete: {
+    special: " · especial",
+    draft: " · borrador",
+    published: (n: number) => (n === 0 ? " · publicado, sin equipo" : ` · publicado: se avisa a hasta ${n} ${n === 1 ? "persona" : "personas"}`),
+    kept: {
+      past: "ya pasó: bórralo en /admin",
+      not_in_month: "no es de este mes",
+      not_found: "no existe (quizá ya se borró)",
+      studio_draft: "tiene un borrador de Studio encima: descártalo o publícalo en Studio",
+      duplicate: "hay más de un documento para ese servicio: corrígelo en /admin o en Studio",
+      invalid: "sus datos no cuadran (revisa la cola de integridad)",
+      inventory: "no pude revisar de qué depende (revisa la cola de integridad)",
+      too_long: "su nombre es demasiado largo para la lista: acórtalo en /admin",
+    },
+    dependency: {
+      setlist: "setlist",
+      proposal: "una propuesta",
+      songs: "canciones",
+      reference: "otro documento que lo menciona",
+    },
+    hasDependencies: (what: readonly string[]) => `tiene ${joinEs(what)}; un servicio con historial no se borra (tampoco en /admin)`,
+    keptLine: (label: string, reason: string) => `${label}: ${reason}.`,
+    unknownService: "un servicio que no encuentro",
+    publishedSkipped: (n: number) =>
+      `${n === 1 ? "1 servicio publicado no incluido" : `${n} servicios publicados no incluidos`}: para borrarlos también, pide include "all" (avisa por correo a su equipo).`,
+    checkHead: (n: number) => (n === 1 ? "Se borraría 1 servicio:" : `Se borrarían ${n} servicios:`),
+    keptHead: "No se borran:",
+    nothing: "No hay servicios que borrar con esta selección.",
+    overflow: (n: number) => `Quedan ${n} más: revisa de nuevo después de borrar estos (máximo 31 por llamada).`,
+    /** Model only: the card shows its own next step. */
+    callHint:
+      "Para borrar, enséñale esta lista a la persona y llama delete_services con los argumentos de la línea «Argumentos para delete_services», tal cual. Cuando la app pida permiso, que lo apruebe solo esta vez (nunca «Siempre permitir» para borrar).",
+    args: (json: string) => `${DELETE_ARGS_PREFIX} ${json}`,
+    readFailed: `No pude leer el mes. ${NO_WRITE_THIS_CALL} Vuelve a intentarlo.`,
+    checkLate: "No pude revisar todo el mes a tiempo; pide menos servicios (services con sus ids).",
+    tooManyIds: "Pide como máximo 31 servicios por revisión.",
+    // The save
+    duplicate: `La lista nombra un servicio dos veces. ${NO_WRITE_THIS_CALL}`,
+    notTheChecked: `Esta lista no es la que se revisó (se agregó, quitó o cambió algo). ${NO_WRITE_THIS_CALL} Revisa de nuevo con check_service_deletes.`,
+    notInMonth: (label: string) => `${label} no es de este mes. ${NO_WRITE_THIS_CALL}`,
+    ambiguous: (label: string) => `${label}: hay más de un documento para ese servicio; corrígelo en /admin o en Studio. ${NO_WRITE_THIS_CALL}`,
+    changed: (services: readonly string[]) =>
+      `${joinEs(services)} ${services.length === 1 ? "cambió" : "cambiaron"} desde que lo revisaste. ${NO_WRITE_THIS_CALL} Revisa de nuevo con check_service_deletes.`,
+    past: (services: readonly string[]) => `${joinEs(services)} ya ${services.length === 1 ? "pasó" : "pasaron"}: desde el chat no se borra un servicio pasado; hazlo en /admin. ${NO_WRITE_THIS_CALL}`,
+    lineChanged: (label: string) => `La línea de ${label} no es la que el servidor escribe ahora. ${NO_WRITE_THIS_CALL} Revisa de nuevo con check_service_deletes.`,
+    allGone: "Ninguno de esos servicios existe ya (ya se borraron); no se borró nada en esta llamada.",
+    head: "Resultado del borrado:",
+    line: (label: string, status: string) => `${label}: ${status}.`,
+    status: {
+      gone: "ya no existe",
+      deleted: "borrado",
+      deletedNotified: "borrado (avisos por correo en cola)",
+      deletedNotNotified: (who: string) => `borrado, pero no se pudo avisar a ${who}: avísales tú (repetir la llamada ya no puede avisarles)`,
+      unknown: "sin confirmar",
+      unknownNotify: (who: string) => `sin confirmar (si se borró, quizá no se avisó a ${who})`,
+      pending: "pendiente (no se empezó)",
+      notDeleted: (why: string) => `no se borró: ${why}`,
+      notDeletedRepeat: "no se borró: otra edición llegó al mismo tiempo; repite la misma llamada UNA vez y, si vuelve a pasar, revisa el mes de nuevo",
+      notDeletedRecheck: (why: string) => `no se borró: ${why}; revisa el mes de nuevo`,
+    },
+    people: (names: readonly string[]) => joinEs(names),
+    peopleCount: (n: number) => (n === 1 ? "1 persona" : `${n} personas`),
+    reason: {
+      role_has_dependencies: "ahora tiene setlist o propuesta",
+      dependency_conflict: "otro documento depende de él",
+      integrity_conflict: "sus datos no cuadran (revisa la cola de integridad)",
+      ambiguous_target: "hay más de un documento para ese servicio",
+      invalid_request: "la petición no es válida",
+      forbidden: "no está permitido",
+      stale_revision: "alguien lo cambió mientras se borraba",
+      bootstrap_completed_reload: "su documento se acaba de reparar",
+    } as Record<string, string>,
+    repeatSame: "Repite exactamente la misma llamada: lo que ya se borró contesta «ya no existe» y se borra el resto.",
+    recheck: "Revisa el mes de nuevo con check_service_deletes antes de volver a borrar.",
+    undo:
+      "Un borrado no se deshace desde el chat: para recuperarlo, planea el servicio otra vez (Auto, o crear el servicio y llenar sus lugares) o restáuralo desde el historial en Studio (Studio lo guarda 3 días).",
+    /** Only after a published delete whose notices were queued: they are debounced, not yet sent. */
+    undoTeam: "Su equipo recibirá «Ya no participas» aunque lo recuperes.",
   },
 } as const;
 

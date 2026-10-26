@@ -23,6 +23,7 @@ import { registerApplySchedule } from "./tools/applySchedule";
 import { registerProposalEditor } from "./tools/proposalEditor";
 import { registerServiceEditor } from "./tools/serviceEditor";
 import { registerCreateService } from "./tools/createService";
+import { registerServiceDeletes } from "./tools/serviceDeletes";
 import { registerProposalCard } from "./apps/proposalCard";
 import { toolListDigest } from "./toolListVersion";
 
@@ -55,6 +56,8 @@ export function registerAllTools(server: McpServer, deps: { version: string }): 
   // /admin's own writers) and create_service (through the roles POST's).
   registerServiceEditor(server);
   registerCreateService(server);
+  // Admin parity phase 2: deleting saved services, through /admin's own DELETE writer.
+  registerServiceDeletes(server);
   // The card (MCP Apps), at a URI that carries its build's digest. Fixed per deployment, like the tools.
   registerProposalCard(server);
 }

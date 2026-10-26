@@ -13,6 +13,10 @@ import "server-only";
 //   · the change-set MAC (F3): "mcp-service-change|" + the canonical JSON of {service, baseRev,
 //     target, diff} as they cross the wire. A «ya estaba» service's base is gone, so its signed diff
 //     is the only record of what it changed — the save trusts it for grouping only because of this.
+//   · the delete-list token (admin parity phase 2, D2): "mcp-delete-list|" + YYYY-MM + "|" + the
+//     canonical JSON of the WHOLE `deletes` list a check answered, in its order, each line NFC
+//     (`canonicalDeleteList`). `delete_services` refuses any list it was not minted for — a subset,
+//     one more service, a published one under a drafts-only check — so the call repeats the preview.
 //
 // Rotating the secret invalidates every pending change set and token: the next save answers
 // «revisa de nuevo» (`docs/SECRETS.md`).
@@ -21,9 +25,11 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { findingKeyText, type FindingKey } from "./proposalDocument";
 import { memberTokens, type MemberTokens } from "./memberTokens";
+import { canonicalDeleteList, type DeleteEntry } from "./deleteLines";
 
 const WAIVER_LABEL = "mcp-service-waiver|";
 const CHANGE_LABEL = "mcp-service-change|";
+const DELETE_LIST_LABEL = "mcp-delete-list|";
 export const WAIVER_TOKEN_RE = /^[A-Za-z0-9_-]{22}$/;
 export const CHANGE_MAC_RE = /^[A-Za-z0-9_-]{43}$/;
 
@@ -62,4 +68,11 @@ export function sameMac(given: string, expected: string): boolean {
   const a = Buffer.from(given);
   const b = Buffer.from(expected);
   return a.length === b.length && timingSafeEqual(a, b);
+}
+
+export function deleteListToken(key: Uint8Array, month: string, deletes: readonly DeleteEntry[]): string {
+  return createHmac("sha256", key)
+    .update(`${DELETE_LIST_LABEL}${month}|${canonicalJson(canonicalDeleteList(deletes))}`, "utf8")
+    .digest()
+    .toString("base64url");
 }

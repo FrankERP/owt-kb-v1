@@ -139,7 +139,9 @@ editor adds three more, seventeen in all, registered after `apply_schedule`
 parity phase 1 adds eight, twenty-five in all: three reads registered after the P1 reads
 (`get_fairness_ledger`, `get_solver_rules`, `get_integrity_queue`) and the saved-month editor's
 five registered last; the card's save twin `save_service_edits_app` (2026-10-23) makes it six, twenty-six in all (see [Editing saved services](#editing-saved-services-admin-parity-phase-1);
-in production since 2026-10-22, PR #167). Every tool is
+in production since 2026-10-22, PR #167). Admin parity phase 2 adds three, twenty-nine in all,
+registered after `create_service`: `check_service_deletes`, `delete_services` and the card's
+`delete_services_app` (see [Deleting saved services](#deleting-saved-services-admin-parity-phase-2)). Every tool is
 registered the same way — one file per tool in `app/mcp/tools/`, exporting a
 `register<Tool>(server, deps?)` function that `registerAllTools` (`app/mcp/toolList.ts`) calls,
 the writes after the reads; `app/api/mcp/route.ts` runs it inside its handler init. Every
@@ -834,7 +836,8 @@ decisions and the rejected alternatives:
   cuadra» from them. With `focus`, `edits` may be empty: the call only opens the card. What is
   checked and saved is always the whole month.
 - **Not in phase 1:** moving a service to another date, legacy services `/admin` bootstraps on save,
-  adding a new instrument or FOH row, header edits from the card, deleting services.
+  adding a new instrument or FOH row, header edits from the card. Deleting services is phase 2
+  ([below](#deleting-saved-services-admin-parity-phase-2)).
 - **Proof.** `serviceEditor.test.ts`, `serviceCopy.test.ts` and `createService.test.ts` run the tools
   over an in-memory store with the writers' contracts; `storedMonthCard.test.tsx` runs the card's own
   sequence into `save_service_edits`; `storedCardSave.test.tsx` renders the card over the same store
@@ -842,6 +845,59 @@ decisions and the rejected alternatives:
   **Live proof passed 2026-10-24 00:16Z** (production, `bf7516bf`): Frank put himself back in EG on
   Sun 29 Nov 2026 from the card, «Guardar» → «Sí, guardar», and the Claude app let the card call the
   app-only save.
+
+### Deleting saved services (admin parity, phase 2)
+
+Three tools that delete services from `/admin` the way its card delete and «Limpiar mes» do, through
+the same writer (`app/utils/roleDeleteCommit.ts`, which the DELETE route now calls too). Plan:
+[2026-10-24-owt-mcp-admin-parity-f2-deletes.md](superpowers/plans/2026-10-24-owt-mcp-admin-parity-f2-deletes.md);
+decisions and the rejected alternatives:
+[ADR-0072](adr/0072-saved-services-are-deleted-from-the-chat-by-an-echoed-list.md).
+
+| Tool | Who calls it | What it does |
+|---|---|---|
+| `check_service_deletes` | the model, and the card | `{month, include?: "drafts" \| "all", services?}`: the list of what a delete would remove, one line per service («sábado 7 nov · borrador», «domingo 8 nov · publicado: se avisa a hasta 9 personas», a special «… · especial»), what it keeps and why (already past, has a setlist / proposal / songs / another document pointing at it, a Studio draft, unreadable, a name too long for the list), and a token over the whole list. Drafts only unless `include: "all"`; an id in `services` selects that service, published or not. At most 31 lines; more answers «quedan N». The `delete_services` arguments are the text's last line («Argumentos para delete_services (pásalos tal cual): …»). Read-only; no card `resourceUri` (a check from the chat never opens the card) |
+| `delete_services` | the model | `{month, deletes: [{service, baseRev, line}], token}`, exactly as the check answered. Deletes one service at a time through `deleteRole`, «Ya no participas» queued inline for a published one. Destructive |
+| `delete_services_app` | the card only (`_meta.ui.visibility: ["app"]`) | The same function, after the card's own confirmation; it logs under its own name. Destructive |
+
+- **The permission prompt shows the list.** The lines are plain sentences so the Claude app's prompt
+  for `delete_services` shows exactly what goes. **Never choose «Siempre permitir» for
+  `delete_services`**: it removes that prompt for every later call, and the server cannot tell
+  whether anyone read the list. The tool description and the check's answer say the same.
+- **The call must repeat the list.** The token is an HMAC over the month and the whole list
+  (`changeSetTokens.ts` `deleteListToken`, label `mcp-delete-list|`): a subset, an added service or an
+  edited line is refused before any delete. The save re-reads every service and re-renders its line;
+  a changed `_rev`, a changed line, a past service or an id outside the month refuses the WHOLE call.
+  A service already gone answers «ya no existe», so a repeat after «sin confirmar» or «pendiente»
+  finishes the rest.
+- **What is never deleted from the chat:** a service before today in CDMX (Frank: «Solo de hoy en
+  adelante»; `/admin` keeps it, ADR-0055 balances), and anything `/admin`'s writer refuses — a
+  service with a setlist, a proposal, a special's songs, or any document referencing it. There is no
+  cascade.
+- **Outcomes.** «Borrado» (published: «avisos en cola»; a failed inline notice answers «borrado, pero
+  no se pudo avisar a: …» with the names, because a repeat can no longer tell them); a proven
+  refusal → «no se borró» and the rest go on; contention with the service unchanged → «repite la misma
+  llamada UNA vez»; a moved service → «revisa de nuevo»; anything unknown → «sin confirmar» and the
+  run stops. Phase 1's 45 s hard stop and 30 s start cut-off apply.
+- **A legacy weekend service** (no lock yet) takes two rounds: the first delete bootstraps its lock,
+  deletes nothing and answers «revisa de nuevo»; the next check and delete remove it.
+- **The card** (saved-month mode): «Borrar servicios…» in the footer (the whole month, even when the
+  card was opened on a few days; «Solo borradores» or «También publicados») and «Borrar este
+  servicio» on each service. Both show the check's lines in the card's own confirmation («Esto no se
+  puede deshacer.»), and «Sí, borrar» calls `delete_services_app` with the list and token untouched.
+  Disabled while there are unsaved edits («Guarda o descarta tus cambios primero»). An unknown outcome
+  keeps the same list for «Borrar de nuevo» or «Mandar al chat»; a contention allows one «Borrar de
+  nuevo»; anything else re-reads the month («Volver a leer el mes» if that fails). The rules are the
+  ADR-0066 addendum's.
+- **Undo.** None from the chat. Plan the service again (Auto, or `create_service` and the seats) or
+  restore it from its history in Studio, which the Sanity Free plan keeps **3 days**
+  (sanity.io/docs/history-experience). A restored role comes back without the weekend lock and
+  creation receipt its delete retired (`/admin` bootstraps the lock on its next save), and its people
+  still get «Ya no participas» (the answer says so only when a published delete queued notices).
+- **Proof.** `serviceDeletes.test.ts` runs the three tools over an in-memory store with the writer's
+  contract; `deleteLines.test.ts` pins N to the notice builder's audience; `roleWriteRoutes.test.ts`
+  pins the route and the commit to identical transactions; `storedCardDelete.test.tsx` renders the
+  card's delete.
 
 ### Notification audiences (the write tools)
 
@@ -856,6 +912,7 @@ Confirmed from the code at `963cd736` (P3 plan, § «Notification audiences»):
 | `unpublish_service` | — | — | everything; there is no sweep |
 | `save_service_edits` (and its card twin), `copy_instruments`, per published role | push «Servicio actualizado» to the members **added** to that role (in `after()`, as `/admin`) | a `role` notice to the union of before and after assignees, after the window — upserted INLINE and awaited before the next service is written (`queueRoleNoticesNow`), with no layer-2 sweep | anything for a draft role |
 | `create_service` | — | — | everything: it creates an empty draft (`published: false`) |
+| `delete_services` (and its card twin), per published role | — | a `role` notice («Ya no participas») to every assignee of the deleted service, upserted INLINE and awaited before the next delete (`queueRoleNoticesNow`), with no layer-2 sweep | anything for a draft role |
 
 All of these pass the downstream filters: device tokens and push preferences, `EMAIL_ALLOWLIST`,
 and `wantsNotification`. Any outbox upsert through the deferred path also triggers the derated
