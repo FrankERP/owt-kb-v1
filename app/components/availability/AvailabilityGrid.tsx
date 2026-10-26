@@ -8,13 +8,25 @@
 // It owns paging AND the selection gesture (R3 F2); the MODE itself is the
 // host's since design pass C (2026-10-22): `selecting` arrives as a prop, armed
 // by the host's `MarkDaysButton` («Marcar días» ⇄ «Listo»), and this file only
-// reacts to it. While it is on, the months are a drag surface, a drag marks the whole span at once, and the
-// next month fades in as a "shadow" OVERLAY — an absolutely positioned tile
-// INSIDE the last visible month's bounds, reading as a card sliding up over its
-// last rows — when the finger nears the bottom of the page. No auto-scroll
-// during the gesture (the page never moves under the finger), and no long-press
-// anywhere (the mode is a button, so a slow tap can never arm a selection by
-// accident). Reaching the host tile's bottom LATCHES the overlay solid for the
+// reacts to it. While it is on, a TAP marks one day, and a drag marks the whole
+// span at once; the next month fades in as a "shadow" OVERLAY — an absolutely
+// positioned tile INSIDE the last visible month's bounds, reading as a card
+// sliding up over its last rows — when the finger nears the bottom of the page.
+// No auto-scroll during the gesture (the page never moves under the finger).
+//
+// ON A TOUCH SCREEN THE DRAG STARTS WITH A PRESS-AND-HOLD (Frank, 2026-10-26:
+// «no se puede deslizar muy bien salvo en los bordes cuando estás escogiendo
+// fechas, porque si deslizas seleccionas varias fechas»). The months used to be
+// `touch-action: none` while the mode was on, so EVERY swipe over them was a
+// range and the only way to scroll was the gutter. Now the container allows
+// `pan-y`: a finger that moves at once is a scroll, which the browser keeps (it
+// cancels our pointer); a finger that stays put for `HOLD_MS` arms the drag
+// (haptic), and from then on a non-passive `touchmove` listener cancels the
+// page's scroll so the span, not the page, follows the finger. A mouse has no
+// scroll to protect and drags from the first move, as before. The old rule
+// «no long-press anywhere» was about ARMING THE MODE by accident; the mode is
+// still the button, and a hold inside it only ever starts a drag the member
+// then finishes by lifting over a day. Reaching the host tile's bottom LATCHES the overlay solid for the
 // rest of that drag, because the overlay's own cells stop short of that bottom
 // edge (padding and border): without the latch there is no finger position that
 // is both over a next-month day AND past the threshold that makes it
@@ -78,6 +90,17 @@ interface Drag {
   pointerId: number;
 }
 
+/** A touch that has gone down on a day and is waiting to become a tap, a drag or a scroll. */
+interface Hold {
+  iso: string;
+  pointerId: number;
+  x: number;
+  y: number;
+  timer: ReturnType<typeof setTimeout>;
+  /** The container, so the hold can capture the pointer once it arms. */
+  target: HTMLDivElement;
+}
+
 const MONTHS_ES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
@@ -100,6 +123,11 @@ const CELL_NOTE_OPEN = "bg-availability-fg/40 text-availability-faint ring-2 rin
 
 const TOTAL_MONTHS = 12;
 const PAGE_SIZE    = 3;
+
+/** How long a touch must stay put before it becomes a drag rather than a scroll. */
+export const HOLD_MS = 300;
+/** Movement before the hold fires that makes the touch a scroll (or a shaky tap), in px. */
+const HOLD_SLOP = 10;
 
 function isoDate(year: number, month: number, day: number): string {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -134,6 +162,9 @@ export default function AvailabilityGrid({ state, selecting, services = {}, open
   // un-latched, a finger could never be over a solid next-month cell. Latched,
   // it reaches the bottom once and then moves back up into the days.
   const solidRef     = useRef(false);
+  // The pending touch (see the header): cleared by movement, a lift, a cancel,
+  // or the timer that turns it into a drag.
+  const holdRef      = useRef<Hold | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const lastTileRef  = useRef<HTMLDivElement | null>(null);
   // The note the release asked for, opened from an effect rather than inline:
@@ -217,10 +248,57 @@ export default function AvailabilityGrid({ state, selecting, services = {}, open
   useEffect(() => {
     if (prevSelecting.current === selecting) return;
     prevSelecting.current = selecting;
+    clearHold();
     setDragNow(null);
     solidRef.current = false;
     setShadow(0);
   }, [selecting]);
+
+  // While the mode is on, a NON-PASSIVE `touchmove` on the months: once a drag
+  // is live it cancels the page's scroll, so the span follows the finger. Only
+  // then — before the hold fires, and on every touch that never arms, the
+  // browser keeps its scroll. React's own `onTouchMove` is passive, which is
+  // why this is a native listener (the `PullToRefresh` precedent). Scoped to
+  // the container and to the mode, so the rest of the app keeps its scroll
+  // fast path.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!selecting || !el) return;
+    const onTouchMove = (e: TouchEvent) => {
+      if (dragRef.current && e.cancelable) e.preventDefault();
+    };
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    return () => el.removeEventListener("touchmove", onTouchMove);
+  }, [selecting]);
+
+  // A hold that never armed must not fire after the grid is gone.
+  useEffect(() => () => clearHold(), []);
+
+  function clearHold() {
+    const hold = holdRef.current;
+    if (!hold) return;
+    clearTimeout(hold.timer);
+    holdRef.current = null;
+  }
+
+  /** Start the drag at `iso`, owning the pointer from here on. */
+  function armDrag(iso: string, pointerId: number, target: HTMLDivElement) {
+    // A lost pointerup must not carry the latch into the next drag.
+    solidRef.current = false;
+    // Capture, so the rest of the gesture arrives here even as the finger leaves
+    // the cell it started on. That is also why `isoFromPoint` exists: with the
+    // pointer captured, the event target stops telling us which day is under it.
+    try {
+      if (typeof target.setPointerCapture === "function") {
+        target.setPointerCapture(pointerId);
+      }
+    } catch {
+      // jsdom has no pointer capture, and a device can refuse it. The gesture
+      // still works through `elementFromPoint`; capture only keeps it smooth.
+    }
+    setDragNow({ anchor: iso, current: iso, pointerId });
+    void haptic("medium");
+  }
 
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     // One finger owns the gesture. A second touch arrives as a non-primary
@@ -228,25 +306,37 @@ export default function AvailabilityGrid({ state, selecting, services = {}, open
     if (!selecting || !e.isPrimary || e.button !== 0) return;
     const iso = isoFromPoint(e.clientX, e.clientY);
     if (!iso || iso < todayIso) return;
-    // A lost pointerup must not carry the latch into the next drag.
-    solidRef.current = false;
-    // Capture, so the rest of the gesture arrives here even as the finger leaves
-    // the cell it started on. That is also why `isoFromPoint` exists: with the
-    // pointer captured, the event target stops telling us which day is under it.
-    try {
-      if (typeof e.currentTarget.setPointerCapture === "function") {
-        e.currentTarget.setPointerCapture(e.pointerId);
-      }
-    } catch {
-      // jsdom has no pointer capture, and a device can refuse it. The gesture
-      // still works through `elementFromPoint`; capture only keeps it smooth.
+    clearHold();
+    if (e.pointerType === "touch" || e.pointerType === "pen") {
+      // A touch waits: still for `HOLD_MS` → a drag; moved → the browser's
+      // scroll; lifted → a one-day tap. No `preventDefault` here — that would
+      // not stop the scroll anyway, and the `touchmove` listener above does the
+      // job once (and only once) the drag is live.
+      const target = e.currentTarget;
+      const pointerId = e.pointerId;
+      holdRef.current = {
+        iso, pointerId, x: e.clientX, y: e.clientY, target,
+        timer: setTimeout(() => {
+          if (holdRef.current?.pointerId !== pointerId) return;
+          holdRef.current = null;
+          armDrag(iso, pointerId, target);
+        }, HOLD_MS),
+      };
+      return;
     }
-    setDragNow({ anchor: iso, current: iso, pointerId: e.pointerId });
-    void haptic("medium");
+    armDrag(iso, e.pointerId, e.currentTarget);
     e.preventDefault();
   }
 
   function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const hold = holdRef.current;
+    if (hold && e.pointerId === hold.pointerId) {
+      // Moving before the hold fires is a scroll (the browser is already
+      // panning and will cancel this pointer) or a wobbly tap; either way it is
+      // not a drag, and the day under the finger at the lift still counts.
+      if (Math.hypot(e.clientX - hold.x, e.clientY - hold.y) > HOLD_SLOP) clearHold();
+      return;
+    }
     const live = dragRef.current;
     if (!live || e.pointerId !== live.pointerId) return;
     const iso = isoFromPoint(e.clientX, e.clientY);
@@ -278,7 +368,24 @@ export default function AvailabilityGrid({ state, selecting, services = {}, open
     }
   }
 
+  /** Mark `anchor`..`end` and open the span's note — the end of a drag, or a whole tap. */
+  function commit(anchor: string, end: string) {
+    const days = isoRange(anchor, end, todayIso);
+    if (!days.length) return;
+    applyRange(days[0], days[days.length - 1], true);
+    // Ending inside the shadow month means the member meant to go there.
+    if (shadowMonthFirstIso && end >= shadowMonthFirstIso) setPage(page + 1);
+    setPendingNote({ iso: days[0], days });
+  }
+
   function onPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    const hold = holdRef.current;
+    if (hold && e.pointerId === hold.pointerId) {
+      // Lifted before the hold fired, without moving: a TAP on one day.
+      clearHold();
+      commit(hold.iso, hold.iso);
+      return;
+    }
     const live = dragRef.current;
     // A second finger lifting must not end — or commit — the first one's drag.
     if (live && e.pointerId !== live.pointerId) return;
@@ -288,14 +395,7 @@ export default function AvailabilityGrid({ state, selecting, services = {}, open
       // read from the drag that just ended, not from what is on screen after.
       // The release's own point wins over the last rendered `current`, which may
       // be a frame stale — a tap-then-lift with no move in between has none.
-      const end = isoFromPoint(e.clientX, e.clientY) ?? live.current;
-      const days = isoRange(live.anchor, end, todayIso);
-      if (days.length) {
-        applyRange(days[0], days[days.length - 1], true);
-        // Ending inside the shadow month means the member meant to go there.
-        if (shadowMonthFirstIso && end >= shadowMonthFirstIso) setPage(page + 1);
-        setPendingNote({ iso: days[0], days });
-      }
+      commit(live.anchor, isoFromPoint(e.clientX, e.clientY) ?? live.current);
     }
     setDragNow(null);
     solidRef.current = false;
@@ -303,6 +403,9 @@ export default function AvailabilityGrid({ state, selecting, services = {}, open
   }
 
   function onPointerCancel(e: React.PointerEvent<HTMLDivElement>) {
+    const hold = holdRef.current;
+    // The browser took the touch for a scroll: no tap, no drag.
+    if (hold && e.pointerId === hold.pointerId) { clearHold(); return; }
     const live = dragRef.current;
     if (live && e.pointerId !== live.pointerId) return;
     releaseCapture(e);
@@ -314,6 +417,7 @@ export default function AvailabilityGrid({ state, selecting, services = {}, open
   function goTo(next: number) {
     closeNote();
     // Paging mid-drag ends the drag without committing.
+    clearHold();
     setDragNow(null);
     solidRef.current = false;
     setShadow(0);
@@ -467,10 +571,11 @@ export default function AvailabilityGrid({ state, selecting, services = {}, open
         </Button>
       </div>
 
-      {/* Calendar grid. While selecting, the container owns the gesture: no page
-          scroll under the finger, no text selection, no iOS callout menu — and
-          no pull-to-refresh either, which reads `data-pull-ignore` on the way
-          up from the touch target. */}
+      {/* Calendar grid. While selecting, the container owns the gesture once a
+          hold has armed it (see the header): `pan-y` keeps the page's vertical
+          scroll for a finger that moves at once, no text selection, no iOS
+          callout menu — and no pull-to-refresh, which reads `data-pull-ignore`
+          on the way up from the touch target. */}
       <div
         id="availability-months"
         ref={containerRef}
@@ -478,7 +583,7 @@ export default function AvailabilityGrid({ state, selecting, services = {}, open
         className="grid grid-cols-1 gap-y-8 sm:grid-cols-3 sm:gap-x-8"
         style={
           selecting
-            ? { touchAction: "none", userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }
+            ? { touchAction: "pan-y", userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }
             : undefined
         }
         onContextMenu={selecting ? (e => e.preventDefault()) : undefined}
