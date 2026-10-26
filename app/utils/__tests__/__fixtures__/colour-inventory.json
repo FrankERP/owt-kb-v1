@@ -8,20 +8,20 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 310,
-    "filesScanned": 535,
+    "literalRows": 307,
+    "filesScanned": 537,
     "filesWithColour": 58,
     "byCategory": {
       "2": 2,
       "4": 64,
       "5": 2,
-      "8": 88,
+      "8": 85,
       "9": 10,
       "11": 8,
       "12": 136
     },
     "byDisposition": {
-      "B": 113,
+      "B": 110,
       "exempt": 60,
       "keep": 220,
       "C": 5,
@@ -32,7 +32,7 @@
     "compositingClassNameOccurrences": 33,
     "compositingRuleBodies": 52,
     "lightCounterpartClasses": 13,
-    "pairs": 5,
+    "pairs": 3,
     "pairsDifferingInAlpha": 0
   },
   "literalRows": [
@@ -2252,7 +2252,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 216,
+      "line": 209,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2264,7 +2264,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 1001,
+      "line": 994,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2276,7 +2276,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 252,
+      "line": 245,
       "disposition": "B",
       "reason": null
     },
@@ -2288,7 +2288,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 251,
+      "line": 244,
       "disposition": "B",
       "reason": null
     },
@@ -2300,7 +2300,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 993,
+      "line": 986,
       "disposition": "B",
       "reason": null
     },
@@ -2312,7 +2312,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1239,
+      "line": 1232,
       "disposition": "B",
       "reason": null
     },
@@ -2324,7 +2324,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1248,
+      "line": 1241,
       "disposition": "B",
       "reason": null
     },
@@ -2336,7 +2336,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1258,
+      "line": 1251,
       "disposition": "B",
       "reason": null
     },
@@ -2348,7 +2348,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1269,
+      "line": 1262,
       "disposition": "B",
       "reason": null
     },
@@ -2360,7 +2360,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1280,
+      "line": 1273,
       "disposition": "B",
       "reason": null
     },
@@ -2372,7 +2372,7 @@
       "alpha": null,
       "utility": "stroke",
       "carrier": null,
-      "line": 255,
+      "line": 248,
       "disposition": "C",
       "reason": null
     },
@@ -2384,7 +2384,7 @@
       "alpha": null,
       "utility": "text",
       "carrier": null,
-      "line": 250,
+      "line": 243,
       "disposition": "C",
       "reason": null
     },
@@ -2821,30 +2821,6 @@
       "reason": null
     },
     {
-      "file": "app/components/availability/NotePopover.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 193,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/availability/NotePopover.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 216,
-      "disposition": "B",
-      "reason": null
-    },
-    {
       "file": "app/components/BottomNavBar.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
@@ -3212,7 +3188,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 239,
+      "line": 240,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3224,7 +3200,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 220,
+      "line": 221,
       "disposition": "B",
       "reason": null
     },
@@ -3316,35 +3292,11 @@
       "file": "app/components/ProfilePanel.tsx",
       "category": 4,
       "categoryName": "colour-keyword",
-      "value": "bg-transparent",
-      "alpha": null,
-      "utility": "bg",
-      "carrier": null,
-      "line": 26,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/ProfilePanel.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 268,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/ProfilePanel.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
       "value": "stroke-white",
       "alpha": null,
       "utility": "stroke",
       "carrier": null,
-      "line": 53,
+      "line": 70,
       "disposition": "C",
       "reason": null
     },
@@ -3525,6 +3477,18 @@
       "utility": "bg",
       "carrier": null,
       "line": 39,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/ui/hairlineField.ts",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "bg-transparent",
+      "alpha": null,
+      "utility": "bg",
+      "carrier": null,
+      "line": 9,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -4698,29 +4662,11 @@
       "alphaDiffers": false
     },
     {
-      "file": "app/components/TextSizeControl.tsx",
-      "utility": "text",
-      "light": "mono-500",
-      "lightAlpha": null,
-      "dark": "mono-400",
-      "darkAlpha": null,
-      "alphaDiffers": false
-    },
-    {
       "file": "app/components/ui/Switch.tsx",
       "utility": "bg",
       "light": "mono-300",
       "lightAlpha": null,
       "dark": "mono-600",
-      "darkAlpha": null,
-      "alphaDiffers": false
-    },
-    {
-      "file": "app/components/ui/ThemeControl.tsx",
-      "utility": "text",
-      "light": "mono-500",
-      "lightAlpha": null,
-      "dark": "mono-400",
       "darkAlpha": null,
       "alphaDiffers": false
     }

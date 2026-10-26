@@ -8,13 +8,25 @@
 // It owns paging AND the selection gesture (R3 F2); the MODE itself is the
 // host's since design pass C (2026-10-22): `selecting` arrives as a prop, armed
 // by the host's `MarkDaysButton` («Marcar días» ⇄ «Listo»), and this file only
-// reacts to it. While it is on, the months are a drag surface, a drag marks the whole span at once, and the
-// next month fades in as a "shadow" OVERLAY — an absolutely positioned tile
-// INSIDE the last visible month's bounds, reading as a card sliding up over its
-// last rows — when the finger nears the bottom of the page. No auto-scroll
-// during the gesture (the page never moves under the finger), and no long-press
-// anywhere (the mode is a button, so a slow tap can never arm a selection by
-// accident). Reaching the host tile's bottom LATCHES the overlay solid for the
+// reacts to it. While it is on, a TAP marks one day, and a drag marks the whole
+// span at once; the next month fades in as a "shadow" OVERLAY — an absolutely
+// positioned tile INSIDE the last visible month's bounds, reading as a card
+// sliding up over its last rows — when the finger nears the bottom of the page.
+// No auto-scroll during the gesture (the page never moves under the finger).
+//
+// ON A TOUCH SCREEN THE DRAG STARTS WITH A PRESS-AND-HOLD (Frank, 2026-10-26:
+// «no se puede deslizar muy bien salvo en los bordes cuando estás escogiendo
+// fechas, porque si deslizas seleccionas varias fechas»). The months used to be
+// `touch-action: none` while the mode was on, so EVERY swipe over them was a
+// range and the only way to scroll was the gutter. Now the container allows
+// `pan-y`: a finger that moves at once is a scroll, which the browser keeps (it
+// cancels our pointer); a finger that stays put for `HOLD_MS` arms the drag
+// (haptic), and from then on a non-passive `touchmove` listener cancels the
+// page's scroll so the span, not the page, follows the finger. A mouse has no
+// scroll to protect and drags from the first move, as before. The old rule
+// «no long-press anywhere» was about ARMING THE MODE by accident; the mode is
+// still the button, and a hold inside it only ever starts a drag the member
+// then finishes by lifting over a day. Reaching the host tile's bottom LATCHES the overlay solid for the
 // rest of that drag, because the overlay's own cells stop short of that bottom
 // edge (padding and border): without the latch there is no finger position that
 // is both over a next-month day AND past the threshold that makes it
@@ -48,17 +60,21 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Button from "@/app/components/ui/Button";
+import DayDots, { DAY_CELL_BASE, DAY_CELL_TODAY } from "@/app/components/DayDots";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/app/components/ui/icons";
 import type { Availability } from "@/app/components/availability/useAvailability";
 import { fmtDayLabel, isoFromPoint, isoRange, shadowOpacity } from "@/app/components/availability/dragSelect";
+import { DOW_SHORT, TONE_RAIL, type Tone } from "@/app/utils/agenda";
 import { haptic } from "@/app/utils/haptics";
+import { SHEET_TITLE } from "@/app/utils/homeHero";
 
 interface Props {
   /** The one `useAvailability` instance the panel shares between its surfaces. */
   state: Availability;
   /** The selection mode, held by the host («Marcar días» ⇄ «Listo»). */
   selecting: boolean;
-  serviceDates?: string[];
+  /** The services on each day, in the agenda's tone vocabulary — one `DayDots` row per day, the Calendario's. */
+  services?: Record<string, Tone[]>;
   /** Open the panel's note popover, anchored to a cell. `isos` = the whole dragged range. */
   openNote: (iso: string, anchor: HTMLElement, isos?: string[]) => void;
   /** Paging unmounts every day button, so the popover must close before it moves. */
@@ -74,14 +90,44 @@ interface Drag {
   pointerId: number;
 }
 
+/** A touch that has gone down on a day and is waiting to become a tap, a drag or a scroll. */
+interface Hold {
+  iso: string;
+  pointerId: number;
+  x: number;
+  y: number;
+  timer: ReturnType<typeof setTimeout>;
+  /** The container, so the hold can capture the pointer once it arms. */
+  target: HTMLDivElement;
+}
+
 const MONTHS_ES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
-const DAYS_ES = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sá", "Do"];
+/** Monday-first rotation of the agenda's weekday labels — the Calendario's own row. */
+const DAY_HEADERS = [...DOW_SHORT.slice(1), DOW_SHORT[0]];
+
+/** The legend's dots, in the order the week runs, plus the availability swatch. */
+const LEGEND: ReadonlyArray<readonly [string, string]> = [
+  [TONE_RAIL.sat, "Sábado"],
+  [TONE_RAIL.sun, "Domingo"],
+  [TONE_RAIL.special, "Especial"],
+];
+
+/** A day the member cannot serve: a faint availability fill inside a thin ring. The
+ *  `bg-availability-fg/` prefix is what `availabilityCalendarConflict.test.tsx` reads. */
+const CELL_UNAVAILABLE = "bg-availability-fg/15 text-availability-soft ring-1 ring-inset ring-availability-fg/60";
+/** The same day while its note is open: lit, so the sheet reads as anchored to it (today reads the same). */
+const CELL_NOTE_OPEN = "bg-availability-fg/40 text-availability-faint ring-2 ring-inset ring-availability-strong";
 
 const TOTAL_MONTHS = 12;
 const PAGE_SIZE    = 3;
+
+/** How long a touch must stay put before it becomes a drag rather than a scroll. */
+export const HOLD_MS = 300;
+/** Movement before the hold fires that makes the touch a scroll (or a shaky tap), in px. */
+const HOLD_SLOP = 10;
 
 function isoDate(year: number, month: number, day: number): string {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -96,8 +142,7 @@ function buildCalendar(year: number, month: number): (string | null)[] {
   return cells;
 }
 
-export default function AvailabilityGrid({ state, selecting, serviceDates = [], openNote, closeNote, noteIso = null }: Props) {
-  const serviceSet = new Set(serviceDates);
+export default function AvailabilityGrid({ state, selecting, services = {}, openNote, closeNote, noteIso = null }: Props) {
   const [page, setPage] = useState(0);
 
   // The selection gesture. `drag` is the live span (anchor = where the finger
@@ -117,6 +162,9 @@ export default function AvailabilityGrid({ state, selecting, serviceDates = [], 
   // un-latched, a finger could never be over a solid next-month cell. Latched,
   // it reaches the bottom once and then moves back up into the days.
   const solidRef     = useRef(false);
+  // The pending touch (see the header): cleared by movement, a lift, a cancel,
+  // or the timer that turns it into a drag.
+  const holdRef      = useRef<Hold | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const lastTileRef  = useRef<HTMLDivElement | null>(null);
   // The note the release asked for, opened from an effect rather than inline:
@@ -179,7 +227,7 @@ export default function AvailabilityGrid({ state, selecting, serviceDates = [], 
     const container = containerRef.current;
     const el =
       pendingNote.days
-        .map(d => container?.querySelector<HTMLElement>(`[data-iso="${d}"]`))
+        .map(d => container?.querySelector<HTMLElement>(`button[data-iso="${d}"]`))
         .find(Boolean) ?? container;
     if (el) {
       // jsdom has no `scrollIntoView`, and neither does every embedded webview.
@@ -200,10 +248,57 @@ export default function AvailabilityGrid({ state, selecting, serviceDates = [], 
   useEffect(() => {
     if (prevSelecting.current === selecting) return;
     prevSelecting.current = selecting;
+    clearHold();
     setDragNow(null);
     solidRef.current = false;
     setShadow(0);
   }, [selecting]);
+
+  // While the mode is on, a NON-PASSIVE `touchmove` on the months: once a drag
+  // is live it cancels the page's scroll, so the span follows the finger. Only
+  // then — before the hold fires, and on every touch that never arms, the
+  // browser keeps its scroll. React's own `onTouchMove` is passive, which is
+  // why this is a native listener (the `PullToRefresh` precedent). Scoped to
+  // the container and to the mode, so the rest of the app keeps its scroll
+  // fast path.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!selecting || !el) return;
+    const onTouchMove = (e: TouchEvent) => {
+      if (dragRef.current && e.cancelable) e.preventDefault();
+    };
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    return () => el.removeEventListener("touchmove", onTouchMove);
+  }, [selecting]);
+
+  // A hold that never armed must not fire after the grid is gone.
+  useEffect(() => () => clearHold(), []);
+
+  function clearHold() {
+    const hold = holdRef.current;
+    if (!hold) return;
+    clearTimeout(hold.timer);
+    holdRef.current = null;
+  }
+
+  /** Start the drag at `iso`, owning the pointer from here on. */
+  function armDrag(iso: string, pointerId: number, target: HTMLDivElement) {
+    // A lost pointerup must not carry the latch into the next drag.
+    solidRef.current = false;
+    // Capture, so the rest of the gesture arrives here even as the finger leaves
+    // the cell it started on. That is also why `isoFromPoint` exists: with the
+    // pointer captured, the event target stops telling us which day is under it.
+    try {
+      if (typeof target.setPointerCapture === "function") {
+        target.setPointerCapture(pointerId);
+      }
+    } catch {
+      // jsdom has no pointer capture, and a device can refuse it. The gesture
+      // still works through `elementFromPoint`; capture only keeps it smooth.
+    }
+    setDragNow({ anchor: iso, current: iso, pointerId });
+    void haptic("medium");
+  }
 
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     // One finger owns the gesture. A second touch arrives as a non-primary
@@ -211,25 +306,37 @@ export default function AvailabilityGrid({ state, selecting, serviceDates = [], 
     if (!selecting || !e.isPrimary || e.button !== 0) return;
     const iso = isoFromPoint(e.clientX, e.clientY);
     if (!iso || iso < todayIso) return;
-    // A lost pointerup must not carry the latch into the next drag.
-    solidRef.current = false;
-    // Capture, so the rest of the gesture arrives here even as the finger leaves
-    // the cell it started on. That is also why `isoFromPoint` exists: with the
-    // pointer captured, the event target stops telling us which day is under it.
-    try {
-      if (typeof e.currentTarget.setPointerCapture === "function") {
-        e.currentTarget.setPointerCapture(e.pointerId);
-      }
-    } catch {
-      // jsdom has no pointer capture, and a device can refuse it. The gesture
-      // still works through `elementFromPoint`; capture only keeps it smooth.
+    clearHold();
+    if (e.pointerType === "touch" || e.pointerType === "pen") {
+      // A touch waits: still for `HOLD_MS` → a drag; moved → the browser's
+      // scroll; lifted → a one-day tap. No `preventDefault` here — that would
+      // not stop the scroll anyway, and the `touchmove` listener above does the
+      // job once (and only once) the drag is live.
+      const target = e.currentTarget;
+      const pointerId = e.pointerId;
+      holdRef.current = {
+        iso, pointerId, x: e.clientX, y: e.clientY, target,
+        timer: setTimeout(() => {
+          if (holdRef.current?.pointerId !== pointerId) return;
+          holdRef.current = null;
+          armDrag(iso, pointerId, target);
+        }, HOLD_MS),
+      };
+      return;
     }
-    setDragNow({ anchor: iso, current: iso, pointerId: e.pointerId });
-    void haptic("medium");
+    armDrag(iso, e.pointerId, e.currentTarget);
     e.preventDefault();
   }
 
   function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const hold = holdRef.current;
+    if (hold && e.pointerId === hold.pointerId) {
+      // Moving before the hold fires is a scroll (the browser is already
+      // panning and will cancel this pointer) or a wobbly tap; either way it is
+      // not a drag, and the day under the finger at the lift still counts.
+      if (Math.hypot(e.clientX - hold.x, e.clientY - hold.y) > HOLD_SLOP) clearHold();
+      return;
+    }
     const live = dragRef.current;
     if (!live || e.pointerId !== live.pointerId) return;
     const iso = isoFromPoint(e.clientX, e.clientY);
@@ -261,7 +368,24 @@ export default function AvailabilityGrid({ state, selecting, serviceDates = [], 
     }
   }
 
+  /** Mark `anchor`..`end` and open the span's note — the end of a drag, or a whole tap. */
+  function commit(anchor: string, end: string) {
+    const days = isoRange(anchor, end, todayIso);
+    if (!days.length) return;
+    applyRange(days[0], days[days.length - 1], true);
+    // Ending inside the shadow month means the member meant to go there.
+    if (shadowMonthFirstIso && end >= shadowMonthFirstIso) setPage(page + 1);
+    setPendingNote({ iso: days[0], days });
+  }
+
   function onPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    const hold = holdRef.current;
+    if (hold && e.pointerId === hold.pointerId) {
+      // Lifted before the hold fired, without moving: a TAP on one day.
+      clearHold();
+      commit(hold.iso, hold.iso);
+      return;
+    }
     const live = dragRef.current;
     // A second finger lifting must not end — or commit — the first one's drag.
     if (live && e.pointerId !== live.pointerId) return;
@@ -271,14 +395,7 @@ export default function AvailabilityGrid({ state, selecting, serviceDates = [], 
       // read from the drag that just ended, not from what is on screen after.
       // The release's own point wins over the last rendered `current`, which may
       // be a frame stale — a tap-then-lift with no move in between has none.
-      const end = isoFromPoint(e.clientX, e.clientY) ?? live.current;
-      const days = isoRange(live.anchor, end, todayIso);
-      if (days.length) {
-        applyRange(days[0], days[days.length - 1], true);
-        // Ending inside the shadow month means the member meant to go there.
-        if (shadowMonthFirstIso && end >= shadowMonthFirstIso) setPage(page + 1);
-        setPendingNote({ iso: days[0], days });
-      }
+      commit(live.anchor, isoFromPoint(e.clientX, e.clientY) ?? live.current);
     }
     setDragNow(null);
     solidRef.current = false;
@@ -286,6 +403,9 @@ export default function AvailabilityGrid({ state, selecting, serviceDates = [], 
   }
 
   function onPointerCancel(e: React.PointerEvent<HTMLDivElement>) {
+    const hold = holdRef.current;
+    // The browser took the touch for a scroll: no tap, no drag.
+    if (hold && e.pointerId === hold.pointerId) { clearHold(); return; }
     const live = dragRef.current;
     if (live && e.pointerId !== live.pointerId) return;
     releaseCapture(e);
@@ -297,6 +417,7 @@ export default function AvailabilityGrid({ state, selecting, serviceDates = [], 
   function goTo(next: number) {
     closeNote();
     // Paging mid-drag ends the drag without committing.
+    clearHold();
     setDragNow(null);
     solidRef.current = false;
     setShadow(0);
@@ -323,7 +444,7 @@ export default function AvailabilityGrid({ state, selecting, serviceDates = [], 
         data-solid={isShadow ? (shadow >= 1 ? "true" : "false") : undefined}
         aria-hidden={isShadow ? "true" : undefined}
         style={isShadow ? { opacity: shadow } : undefined}
-        className={`rounded-xl border border-accent/15 p-3 ${
+        className={
           isShadow
             // The overlay: an opaque card pinned to the bottom of its host tile,
             // covering its last rows as it solidifies. INERT until it is solid —
@@ -331,67 +452,95 @@ export default function AvailabilityGrid({ state, selecting, serviceDates = [], 
             // un-resolvable move there would leave the release committing a stale
             // end. Once solid it takes the pointer and its own days resolve
             // (`dragSelect` still refuses a non-solid one, as defence in depth).
-            ? `absolute inset-x-0 bottom-0 bg-surface-base shadow-2xl shadow-elevation/60${
+            // The one tile that keeps a card's padding, radius and shadow: it has
+            // to read as a sheet sliding up OVER the month under it.
+            // No side padding: its seven columns must sit exactly over the
+            // host's, or a finger over a host column lands between two of its.
+            ? `absolute inset-x-0 bottom-0 rounded-2xl bg-surface-base pt-3 shadow-2xl shadow-elevation/60${
                 shadow >= 1 ? "" : " pointer-events-none"
               }`
-            : "bg-accent/[0.04]"
-        }${isLast ? " relative" : ""}`}
+            // A month is a text block, not a card (the «millones» pass): the
+            // section title, the weekday row and the circles, on the page itself.
+            : `min-w-0${isLast ? " relative" : ""}`
+        }
       >
-        <p className="font-label text-[11px] uppercase tracking-widest text-accent/70 mb-2 text-center">
+        {/* The month is a section title — the sheet's small caps the Calendario
+            uses — not a tracked eyebrow in the accent colour. */}
+        <h3 className={`${SHEET_TITLE} mb-4`}>
           {MONTHS_ES[month - 1]} {year}
-        </p>
-        <div className="grid grid-cols-7 gap-0.5 mb-1">
-          {DAYS_ES.map(d => (
-            <div key={d} className="font-label text-[10px] uppercase tracking-widest text-mono-400 text-center py-0.5">
+        </h3>
+        <div className="grid grid-cols-7 gap-y-1">
+          {DAY_HEADERS.map(d => (
+            <div key={d} className="pb-2 text-center font-label text-[11px] uppercase tracking-[0.12em] text-mono-500">
               {d}
             </div>
           ))}
-        </div>
-        <div className="grid grid-cols-7 gap-0.5">
           {cells.map((iso, i) => {
             if (!iso) return <div key={i} />;
             const isPast      = iso < todayIso;
             const unavailable = dates.has(iso);
             const isPopoverOpen = noteIso === iso;
-            const hasService  = serviceSet.has(iso);
+            const tones       = services[iso] ?? [];
+            const hasService  = tones.length > 0;
             const hasNote     = unavailable && notes.has(iso) && !!notes.get(iso)?.trim();
             const isPending   = pendingSet.has(iso);
+            const isToday     = iso === todayIso;
             const dayNum      = new Date(iso + "T12:00:00").getDate();
+            // The circle is the Calendario's (`DAY_CELL_BASE`): the number in the
+            // display face, round, with the service dots UNDER it so a fill never
+            // recolours them. Here every future day is a target, so it reads in
+            // ink; a past day is dim and `disabled`. Each branch names its own
+            // ring, so today's can never fight a fill's (two `ring-*` colours on
+            // one element are decided by emission order, not by the day): today
+            // is the ink ring on a plain day and the strong availability ring
+            // on a marked, pending or open one — a ring «whatever the day
+            // carries», as the Calendario keeps it.
+            const todayStrong = isToday ? "ring-2 ring-inset ring-availability-strong" : "";
+            const cls = `${DAY_CELL_BASE} h-10 w-10 text-lg sm:h-9 sm:w-9 ${
+              isPast
+                ? "text-mono-500 cursor-default"
+                : isPending
+                ? `bg-availability-fg/25 text-availability-soft ${todayStrong || `ring-inset ring-availability-strong/50 ${iso === pendingDays[0] ? "ring-2" : "ring-1"}`}`
+                : isPopoverOpen
+                ? CELL_NOTE_OPEN
+                : unavailable
+                ? `${todayStrong ? `bg-availability-fg/15 text-availability-soft ${todayStrong}` : CELL_UNAVAILABLE}${selecting ? " hover:bg-availability-fg/25" : ""}`
+                : `text-ink${selecting ? " hover:text-accent" : ""}${isToday ? ` ${DAY_CELL_TODAY}` : ""}`
+            }`;
             return (
-              <button
-                key={iso}
-                type="button"
-                // No `onClick` at all, in any mode: inside «Marcar días» a
-                // tap is a one-day drag through `onPointerDown`/`onPointerUp`
-                // below, which already marks the day and opens its note; outside
-                // it the cell is read-only, `aria-disabled` and un-tabbable.
-                disabled={isPast}
-                aria-disabled={!selecting ? "true" : undefined}
-                tabIndex={isShadow || !selecting ? -1 : undefined}
-                // Every cell, past ones included — `isoRange` is what drops the
-                // past, so the drag can cross them without losing the finger.
-                data-iso={iso}
-                aria-label={`${fmtDayLabel(iso)}${unavailable ? ", no disponible" : ""}${hasService ? ", hay servicio" : ""}${hasNote ? ", con nota" : ""}`}
-                className={`relative rounded text-center font-body text-xs transition-colors min-h-[44px] sm:min-h-0 sm:py-1 sm:pb-2 ${
-                  isPast
-                    ? "text-mono-700 cursor-default"
-                    : isPending
-                    ? `bg-availability-fg/20 text-availability-soft ring-availability-strong/50 ${iso === pendingDays[0] ? "ring-2" : "ring-1"}`
-                    : isPopoverOpen
-                    ? "bg-availability-fg/50 text-availability-faint border border-availability-strong ring-1 ring-availability-strong/40"
-                    : unavailable
-                    ? `bg-availability-fg/30 text-availability-soft border border-availability-fg/50${selecting ? " hover:bg-availability-fg/40" : ""}`
-                    : `text-mono-300${selecting ? " hover:bg-accent/10 hover:text-accent" : ""}`
-                }`}
-              >
-                {dayNum}
-                {hasService && (
-                  <span className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${unavailable ? "bg-availability-strong/60" : isPast ? "bg-mono-600" : "bg-accent/70"}`} />
-                )}
-                {hasNote && (
-                  <span className="absolute top-0.5 right-0.5 w-1 h-1 rounded-full bg-surface-lift/50" />
-                )}
-              </button>
+              // `data-iso` on the WRAPPER too: the whole cell — the gap beside
+              // the circle, the dots row — resolves to its day under a finger,
+              // not only the 40 px circle (`isoFromPoint` walks up to the
+              // nearest `[data-iso]`). The button keeps its own so the tests
+              // and the note anchor still find the control.
+              <div key={iso} data-iso={iso} className="flex min-h-[44px] flex-col items-center gap-0.5">
+                <button
+                  type="button"
+                  // No `onClick` at all, in any mode: inside «Marcar días» a
+                  // tap is a one-day drag through `onPointerDown`/`onPointerUp`
+                  // below, which already marks the day and opens its note; outside
+                  // it the cell is read-only, `aria-disabled` and un-tabbable.
+                  disabled={isPast}
+                  aria-disabled={!selecting ? "true" : undefined}
+                  aria-current={isToday ? "date" : undefined}
+                  tabIndex={isShadow || !selecting ? -1 : undefined}
+                  // Every cell, past ones included — `isoRange` is what drops the
+                  // past, so the drag can cross them without losing the finger.
+                  data-iso={iso}
+                  aria-label={`${fmtDayLabel(iso)}${unavailable ? ", no disponible" : ""}${hasService ? ", hay servicio" : ""}${hasNote ? ", con nota" : ""}`}
+                  className={cls}
+                >
+                  {dayNum}
+                  {hasNote && (
+                    <span className="absolute right-1 top-1 h-1 w-1 rounded-full bg-availability-strong" />
+                  )}
+                </button>
+                {/* A fixed-height row whether or not the day has a service, so
+                    the weeks stay even. */}
+                <span className="flex h-[5px] items-center">
+                  {hasService && <DayDots tones={tones} />}
+                </span>
+              </div>
             );
           })}
         </div>
@@ -402,48 +551,39 @@ export default function AvailabilityGrid({ state, selecting, serviceDates = [], 
   }
 
   return (
-    <div className="space-y-4">
-      {/* One line in both states, so arming the mode never shifts the months
-          under the finger that is about to drag on them. */}
-      <p className="font-body text-sm text-mono-500">
-        {selecting
-          ? "Arrastra sobre los días que no puedes. Suelta para escribir la razón."
-          : "Toca «Marcar días» para marcar o editar los días que no puedes."}
-      </p>
-
-      {/* Navigation: two icon buttons around the range heading (design pass C,
-          2026-10-22). They used to be the words «Anterior»/«Siguiente», which
-          with «SEPTIEMBRE» made three unbreakable words that floored at ~450px
-          on a 375pt phone at «Máximo» text size — a member reported «Siguiente»
-          off the right edge, and the row had to wrap to survive. Two 44px icons
-          leave the heading the width it needs; `min-w-0` lets it wrap, not
-          push. The labels live on `aria-label`. */}
-      <div className="flex items-center justify-between gap-2">
-        <Button variant="icon" size="lg" onClick={() => goTo(page - 1)} disabled={!canPrev} aria-label="Anterior">
-          <ChevronLeftIcon size={16} />
+    <div className="space-y-8">
+      {/* Navigation: two round ring arrows around the range heading (the words
+          «Anterior»/«Siguiente» they replaced in design pass C, 2026-10-22, made
+          three unbreakable words with «SEPTIEMBRE» that floored at ~450px on a
+          375pt phone at «Máximo» text size — `textZoomLayout.test.ts`). The
+          labels live on `aria-label`; `min-w-0` lets the heading wrap, not push. */}
+      <div className="flex items-center justify-between gap-3">
+        <Button variant="round" onClick={() => goTo(page - 1)} disabled={!canPrev} aria-label="Anterior">
+          <ChevronLeftIcon size={18} />
         </Button>
 
-        <span className="min-w-0 flex-1 text-center font-label text-[11px] uppercase tracking-widest text-mono-500">
+        <span className={`${SHEET_TITLE} min-w-0 flex-1 text-center`}>
           {rangeHeading}
         </span>
 
-        <Button variant="icon" size="lg" onClick={() => goTo(page + 1)} disabled={!canNext} aria-label="Siguiente">
-          <ChevronRightIcon size={16} />
+        <Button variant="round" onClick={() => goTo(page + 1)} disabled={!canNext} aria-label="Siguiente">
+          <ChevronRightIcon size={18} />
         </Button>
       </div>
 
-      {/* Calendar grid. While selecting, the container owns the gesture: no page
-          scroll under the finger, no text selection, no iOS callout menu — and
-          no pull-to-refresh either, which reads `data-pull-ignore` on the way
-          up from the touch target. */}
+      {/* Calendar grid. While selecting, the container owns the gesture once a
+          hold has armed it (see the header): `pan-y` keeps the page's vertical
+          scroll for a finger that moves at once, no text selection, no iOS
+          callout menu — and no pull-to-refresh, which reads `data-pull-ignore`
+          on the way up from the touch target. */}
       <div
         id="availability-months"
         ref={containerRef}
         data-pull-ignore={selecting ? "" : undefined}
-        className="grid grid-cols-1 sm:grid-cols-3 gap-4"
+        className="grid grid-cols-1 gap-y-8 sm:grid-cols-3 sm:gap-x-8"
         style={
           selecting
-            ? { touchAction: "none", userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }
+            ? { touchAction: "pan-y", userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }
             : undefined
         }
         onContextMenu={selecting ? (e => e.preventDefault()) : undefined}
@@ -459,20 +599,34 @@ export default function AvailabilityGrid({ state, selecting, serviceDates = [], 
       </div>
 
       {/* Page dots */}
-      <div className="flex justify-center gap-1.5 pt-1">
+      <div className="flex justify-center gap-1.5">
         {Array.from({ length: totalPages }).map((_, i) => (
           <button
             key={i}
             type="button"
             onClick={() => goTo(i)}
-            className={`w-1.5 h-1.5 rounded-full transition-colors ${
+            className={`h-1.5 w-1.5 rounded-full transition-colors ${
               i === page ? "bg-accent" : "bg-accent-deep/50 hover:bg-accent-deep"
             }`}
             aria-label={`Página ${i + 1}`}
           />
         ))}
       </div>
+
+      {/* The legend, last: the swatch for a marked day and the Calendario's dots,
+          each a dot and a word (ADR-0067). */}
+      <p className="flex flex-wrap items-center gap-x-5 gap-y-2 font-body text-[13px] text-ink-muted">
+        <span className="inline-flex items-center gap-2">
+          <span aria-hidden className="inline-block h-3 w-3 rounded-full bg-availability-fg/15 ring-1 ring-inset ring-availability-fg/60" />
+          No puedo
+        </span>
+        {LEGEND.map(([dot, label]) => (
+          <span key={label} className="inline-flex items-center gap-2">
+            <span aria-hidden className={`inline-block h-1.5 w-1.5 rounded-full ${dot}`} />
+            {label}
+          </span>
+        ))}
+      </p>
     </div>
   );
 }
-

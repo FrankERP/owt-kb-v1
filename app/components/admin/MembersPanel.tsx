@@ -35,7 +35,7 @@ import {
 import { interpretMemberDeleteResponse } from "@/app/utils/memberDelete";
 import { DEFAULT_INSTRUMENT_SEATS } from "./seatModel";
 
-type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
+import { ROLE_LABEL, type OWTRole } from "@/app/utils/roleLabel";
 
 interface Member {
   _id: string;
@@ -199,13 +199,6 @@ const ROLE_BADGE: Record<OWTRole, string> = {
   "admin":          "bg-badge-azure-deep/15 text-badge-azure-fg border border-badge-azure-deep/30",
   "content-editor": "bg-badge-violet-deep/15 text-badge-violet-fg border border-badge-violet-deep/30",
   "member":         "bg-mono-500/15 text-mono-400 border border-mono-500/30",
-};
-
-const ROLE_LABEL: Record<OWTRole, string> = {
-  "super-admin":    "Super Admin",
-  "admin":          "Admin",
-  "content-editor": "Editor",
-  "member":         "Miembro",
 };
 
 // ─── Shared input style ────────────────────────────────────────────────────────
