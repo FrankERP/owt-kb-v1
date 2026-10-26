@@ -49,12 +49,13 @@ describe("popoverPosition", () => {
   it("flips above a day near the bottom, where it would otherwise be off-screen", () => {
     const { y, above } = popoverPosition({ top: 800, bottom: 844, left: 40 }, VIEWPORT_W, VIEWPORT_H);
     expect(above).toBe(true);
-    expect(y).toBe(800 - 160 - 6);
+    // 176 = the sheet's laid-out height (the «millones» pass widened and deepened it).
+    expect(y).toBe(800 - 176 - 6);
   });
 
   it("keeps the popover on screen at both edges", () => {
     // Far right: clamped to the viewport width less the popover width.
-    expect(popoverPosition({ top: 0, bottom: 44, left: 380 }, VIEWPORT_W, VIEWPORT_H).x).toBe(390 - 272);
+    expect(popoverPosition({ top: 0, bottom: 44, left: 380 }, VIEWPORT_W, VIEWPORT_H).x).toBe(390 - 300);
     // Viewport narrower than the popover: the right clamp alone would go
     // negative and push it off the LEFT edge instead.
     expect(popoverPosition({ top: 0, bottom: 44, left: 10 }, 240, VIEWPORT_H).x).toBe(8);
@@ -62,7 +63,7 @@ describe("popoverPosition", () => {
 
   it("never goes off the TOP when it flips above a day in a short viewport", () => {
     // A phone with the keyboard up: there is no room below, so it flips above —
-    // and 160px above a day in the first row is a negative offset.
+    // and 176px above a day in the first row is a negative offset.
     const { y, above } = popoverPosition({ top: 40, bottom: 84, left: 40 }, VIEWPORT_W, 200);
     expect(above).toBe(true);
     expect(y).toBe(8);
@@ -146,7 +147,7 @@ describe("NotePopover — a range popover edits every day at once", () => {
 
   it("titles the popover with the range label", () => {
     renderRange();
-    expect(screen.getByText("del 12 al 14 de septiembre")).not.toBeNull();
+    expect(screen.getByText("Del 12 al 14 de septiembre")).not.toBeNull();
   });
 
   it("portals to document.body — not into the reveal host's transformed container", () => {
@@ -156,7 +157,7 @@ describe("NotePopover — a range popover edits every day at once", () => {
     // A portal is the escape: the panel must render on `document.body`, never as
     // a descendant of whatever RTL mounted it into.
     const { container } = renderRange();
-    const panel = screen.getByText("del 12 al 14 de septiembre").closest("div")!;
+    const panel = screen.getByText("Del 12 al 14 de septiembre").closest("div")!;
     expect(container.contains(panel)).toBe(false);
     expect(document.body.contains(panel)).toBe(true);
   });

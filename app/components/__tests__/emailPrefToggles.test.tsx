@@ -135,16 +135,17 @@ const baseMember = {
   hasPassword: true,
 };
 
+// The switches and the identity fields render INLINE since the «millones» pass
+// (2026-10-26) — there is no «Editar perfil» sheet to open first. The name stays:
+// it is still "the profile, ready to edit".
 function openProfile(notifPrefs: Record<string, unknown> | undefined, role = baseMember.role) {
-  const utils = render(
+  return render(
     <ToastProvider>
       <CueDialogProvider>
         <ProfilePanel initialMember={{ ...baseMember, role, notifPrefs }} />
       </CueDialogProvider>
     </ToastProvider>,
   );
-  act(() => { fireEvent.click(utils.getByRole("button", { name: /Editar perfil/i })); });
-  return utils;
 }
 
 describe("ProfilePanel notification section", () => {
@@ -216,11 +217,13 @@ describe("ProfilePanel notification section", () => {
 // edit their profile. The keyboard closes after one key press.»
 //
 // The cause was in `CueDialog`, not here: its entry-focus effect listed
-// `onDismiss` among its dependencies, and this panel passes an inline arrow, so
+// `onDismiss` among its dependencies, and this panel passed an inline arrow, so
 // every keystroke re-ran the effect and pulled focus to the dialog's first
 // control. `CueDialog.test.tsx` guards the primitive. This guards the REPORTED
 // path end to end, because that is the one a member walks and the one whose
-// breakage nobody noticed for a month of gates being green.
+// breakage nobody noticed for a month of gates being green. The identity fields
+// are inline now; the password fields are the ones still inside a `CueDialog`,
+// so the same typing check runs there too.
 describe("ProfilePanel identity fields accept typing", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({}) })));
@@ -249,5 +252,17 @@ describe("ProfilePanel identity fields accept typing", () => {
     act(() => { fireEvent.change(email, { target: { value: "ab" } }); });
     expect(document.activeElement).toBe(email);
     expect(email.value).toBe("ab");
+  });
+
+  it("keeps the caret in «Nueva contraseña» inside the password sheet", () => {
+    const { getByLabelText, getByRole } = openProfile({});
+    act(() => { fireEvent.click(getByRole("button", { name: /Cambiar contraseña/i })); });
+    const pw = getByLabelText("Nueva contraseña") as HTMLInputElement;
+    act(() => pw.focus());
+    for (const char of ["s", "e", "c", "r"]) {
+      act(() => { fireEvent.change(pw, { target: { value: pw.value + char } }); });
+      expect(document.activeElement, "focus left the password field mid-word").toBe(pw);
+    }
+    expect(pw.value).toBe("secr");
   });
 });

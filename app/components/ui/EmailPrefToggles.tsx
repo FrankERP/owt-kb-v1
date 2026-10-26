@@ -103,6 +103,7 @@ export default function EmailPrefToggles({
   showHints = true,
   busyField = null,
   disabled = false,
+  layout = "compact",
 }: {
   values: EmailPrefValues;
   onToggle: (field: string, next: boolean) => void;
@@ -118,18 +119,30 @@ export default function EmailPrefToggles({
   /** Field whose save is in flight (that one switch is disabled). */
   busyField?: string | null;
   disabled?: boolean;
+  /**
+   * `compact` (the default) is the admin form's stack of small rows; `list` is the
+   * member's own «Correos» section (the «millones» pass, 2026-10-26): hairline
+   * rows, a 17 px label and a 14 px hint, the page's own list vocabulary
+   * (`AccountList`). Same switches, same resolution — only the row changes.
+   */
+  layout?: "compact" | "list";
 }) {
+  const list = layout === "list";
   return (
-    <div className="space-y-3">
+    <div className={list ? "divide-y divide-ink/[0.10] border-y border-ink/[0.10]" : "space-y-3"}>
       {visibleEmailPrefRows(memberRole).map((row) => {
         // No fallback here: `values` is a complete EmailPrefValues, resolved once
         // by `wantsNotification` before it ever reaches this component.
         const on = values[row.field];
         return (
-          <div key={row.field} className="flex items-center justify-between gap-4">
+          <div key={row.field} className={`flex items-center justify-between gap-4${list ? " py-4" : ""}`}>
             <div className="min-w-0">
-              <p className="font-body text-sm">{row.label}</p>
-              {showHints && <p className="font-body text-xs text-mono-500 mt-0.5">{row.hint}</p>}
+              <p className={list ? "font-body text-[17px] font-semibold text-ink" : "font-body text-sm"}>{row.label}</p>
+              {showHints && (
+                <p className={list ? "font-body text-sm leading-snug text-ink-muted" : "font-body text-xs text-mono-500 mt-0.5"}>
+                  {row.hint}
+                </p>
+              )}
             </div>
             <Switch
               aria-label={row.label}

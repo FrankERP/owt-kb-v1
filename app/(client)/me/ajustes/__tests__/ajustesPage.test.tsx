@@ -94,7 +94,6 @@ describe("/me/ajustes", () => {
     expect(html).toContain('id="ajustes"');
     expect(html).toContain('id="tema"');
     expect(html).toContain("Tamaño de texto");
-    expect(html).toContain("Perfil");
     expect(html).toContain("PERFIL");
     // No worship copy anywhere: this page answers "my settings", not "my week".
     expect(html).not.toContain("Sin servicios asignados próximamente");

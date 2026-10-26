@@ -118,11 +118,12 @@ describe("rows of unbreakable Spanish words wrap instead of running off the phon
     // The words «Anterior»/«Siguiente» used to sit beside «SEPTIEMBRE» — three
     // unbreakable words that floored at ~450px at «Máximo» text size, measured
     // on a 375pt phone — and the row needed `flex-wrap` to survive. Since
-    // 2026-10-22 the arrows are 44px icon buttons (labels on `aria-label`), so
-    // the only word left is the heading's, and `min-w-0` lets it wrap.
+    // 2026-10-22 the arrows are 44px icon buttons (labels on `aria-label`) —
+    // the round `Button` ring since the «millones» pass, 2026-10-26 — so the
+    // only word left is the heading's, and `min-w-0` lets it wrap.
     const src = read("app/components/availability/AvailabilityGrid.tsx");
     expect(src).toMatch(/min-w-0 flex-1 text-center/);
-    expect(src.match(/variant="icon" size="lg"/g) ?? [], "BOTH arrows").toHaveLength(2);
+    expect(src.match(/variant="round"/g) ?? [], "BOTH arrows").toHaveLength(2);
     expect(src).toMatch(/aria-label="Anterior"/);
     expect(src).toMatch(/aria-label="Siguiente"/);
     expect(src, "the words are gone from the row").not.toMatch(/>\s*Anterior\s*</);

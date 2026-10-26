@@ -48,17 +48,21 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Button from "@/app/components/ui/Button";
+import DayDots, { DAY_CELL_BASE, DAY_CELL_TODAY } from "@/app/components/DayDots";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/app/components/ui/icons";
 import type { Availability } from "@/app/components/availability/useAvailability";
 import { fmtDayLabel, isoFromPoint, isoRange, shadowOpacity } from "@/app/components/availability/dragSelect";
+import { DOW_SHORT, TONE_RAIL, type Tone } from "@/app/utils/agenda";
 import { haptic } from "@/app/utils/haptics";
+import { SHEET_TITLE } from "@/app/utils/homeHero";
 
 interface Props {
   /** The one `useAvailability` instance the panel shares between its surfaces. */
   state: Availability;
   /** The selection mode, held by the host («Marcar días» ⇄ «Listo»). */
   selecting: boolean;
-  serviceDates?: string[];
+  /** The services on each day, in the agenda's tone vocabulary — one `DayDots` row per day, the Calendario's. */
+  services?: Record<string, Tone[]>;
   /** Open the panel's note popover, anchored to a cell. `isos` = the whole dragged range. */
   openNote: (iso: string, anchor: HTMLElement, isos?: string[]) => void;
   /** Paging unmounts every day button, so the popover must close before it moves. */
@@ -78,7 +82,21 @@ const MONTHS_ES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
-const DAYS_ES = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sá", "Do"];
+/** Monday-first rotation of the agenda's weekday labels — the Calendario's own row. */
+const DAY_HEADERS = [...DOW_SHORT.slice(1), DOW_SHORT[0]];
+
+/** The legend's dots, in the order the week runs, plus the availability swatch. */
+const LEGEND: ReadonlyArray<readonly [string, string]> = [
+  [TONE_RAIL.sat, "Sábado"],
+  [TONE_RAIL.sun, "Domingo"],
+  [TONE_RAIL.special, "Especial"],
+];
+
+/** A day the member cannot serve: a faint availability fill inside a thin ring. The
+ *  `bg-availability-fg/` prefix is what `availabilityCalendarConflict.test.tsx` reads. */
+const CELL_UNAVAILABLE = "bg-availability-fg/15 text-availability-soft ring-1 ring-inset ring-availability-fg/60";
+/** The same day while its note is open: lit, so the sheet reads as anchored to it. */
+const CELL_NOTE_OPEN = "bg-availability-fg/40 text-availability-faint ring-2 ring-inset ring-availability-strong";
 
 const TOTAL_MONTHS = 12;
 const PAGE_SIZE    = 3;
@@ -96,8 +114,7 @@ function buildCalendar(year: number, month: number): (string | null)[] {
   return cells;
 }
 
-export default function AvailabilityGrid({ state, selecting, serviceDates = [], openNote, closeNote, noteIso = null }: Props) {
-  const serviceSet = new Set(serviceDates);
+export default function AvailabilityGrid({ state, selecting, services = {}, openNote, closeNote, noteIso = null }: Props) {
   const [page, setPage] = useState(0);
 
   // The selection gesture. `drag` is the live span (anchor = where the finger
@@ -323,7 +340,7 @@ export default function AvailabilityGrid({ state, selecting, serviceDates = [], 
         data-solid={isShadow ? (shadow >= 1 ? "true" : "false") : undefined}
         aria-hidden={isShadow ? "true" : undefined}
         style={isShadow ? { opacity: shadow } : undefined}
-        className={`rounded-xl border border-accent/15 p-3 ${
+        className={
           isShadow
             // The overlay: an opaque card pinned to the bottom of its host tile,
             // covering its last rows as it solidifies. INERT until it is solid —
@@ -331,67 +348,82 @@ export default function AvailabilityGrid({ state, selecting, serviceDates = [], 
             // un-resolvable move there would leave the release committing a stale
             // end. Once solid it takes the pointer and its own days resolve
             // (`dragSelect` still refuses a non-solid one, as defence in depth).
-            ? `absolute inset-x-0 bottom-0 bg-surface-base shadow-2xl shadow-elevation/60${
+            // The one tile that keeps a card's padding, radius and shadow: it has
+            // to read as a sheet sliding up OVER the month under it.
+            ? `absolute inset-x-0 bottom-0 rounded-2xl bg-surface-base p-3 shadow-2xl shadow-elevation/60${
                 shadow >= 1 ? "" : " pointer-events-none"
               }`
-            : "bg-accent/[0.04]"
-        }${isLast ? " relative" : ""}`}
+            // A month is a text block, not a card (the «millones» pass): the
+            // section title, the weekday row and the circles, on the page itself.
+            : `min-w-0${isLast ? " relative" : ""}`
+        }
       >
-        <p className="font-label text-[11px] uppercase tracking-widest text-accent/70 mb-2 text-center">
+        {/* The month is a section title — the sheet's small caps the Calendario
+            uses — not a tracked eyebrow in the accent colour. */}
+        <h3 className={`${SHEET_TITLE} mb-4`}>
           {MONTHS_ES[month - 1]} {year}
-        </p>
-        <div className="grid grid-cols-7 gap-0.5 mb-1">
-          {DAYS_ES.map(d => (
-            <div key={d} className="font-label text-[10px] uppercase tracking-widest text-mono-400 text-center py-0.5">
+        </h3>
+        <div className="grid grid-cols-7 gap-y-1">
+          {DAY_HEADERS.map(d => (
+            <div key={d} className="pb-2 text-center font-label text-[11px] uppercase tracking-[0.12em] text-mono-500">
               {d}
             </div>
           ))}
-        </div>
-        <div className="grid grid-cols-7 gap-0.5">
           {cells.map((iso, i) => {
             if (!iso) return <div key={i} />;
             const isPast      = iso < todayIso;
             const unavailable = dates.has(iso);
             const isPopoverOpen = noteIso === iso;
-            const hasService  = serviceSet.has(iso);
+            const tones       = services[iso] ?? [];
+            const hasService  = tones.length > 0;
             const hasNote     = unavailable && notes.has(iso) && !!notes.get(iso)?.trim();
             const isPending   = pendingSet.has(iso);
+            const isToday     = iso === todayIso;
             const dayNum      = new Date(iso + "T12:00:00").getDate();
+            // The circle is the Calendario's (`DAY_CELL_BASE`): the number in the
+            // display face, round, with the service dots UNDER it so a fill never
+            // recolours them. Here every future day is a target, so it reads in
+            // ink; a past day is dim and `disabled`.
+            const cls = `${DAY_CELL_BASE} h-10 w-10 text-lg sm:h-9 sm:w-9 ${
+              isPast
+                ? "text-mono-500 cursor-default"
+                : isPending
+                ? `bg-availability-fg/25 text-availability-soft ring-inset ring-availability-strong/50 ${iso === pendingDays[0] ? "ring-2" : "ring-1"}`
+                : isPopoverOpen
+                ? CELL_NOTE_OPEN
+                : unavailable
+                ? `${CELL_UNAVAILABLE}${selecting ? " hover:bg-availability-fg/25" : ""}`
+                : `text-ink${selecting ? " hover:text-accent" : ""}${isToday ? ` ${DAY_CELL_TODAY}` : ""}`
+            }`;
             return (
-              <button
-                key={iso}
-                type="button"
-                // No `onClick` at all, in any mode: inside «Marcar días» a
-                // tap is a one-day drag through `onPointerDown`/`onPointerUp`
-                // below, which already marks the day and opens its note; outside
-                // it the cell is read-only, `aria-disabled` and un-tabbable.
-                disabled={isPast}
-                aria-disabled={!selecting ? "true" : undefined}
-                tabIndex={isShadow || !selecting ? -1 : undefined}
-                // Every cell, past ones included — `isoRange` is what drops the
-                // past, so the drag can cross them without losing the finger.
-                data-iso={iso}
-                aria-label={`${fmtDayLabel(iso)}${unavailable ? ", no disponible" : ""}${hasService ? ", hay servicio" : ""}${hasNote ? ", con nota" : ""}`}
-                className={`relative rounded text-center font-body text-xs transition-colors min-h-[44px] sm:min-h-0 sm:py-1 sm:pb-2 ${
-                  isPast
-                    ? "text-mono-700 cursor-default"
-                    : isPending
-                    ? `bg-availability-fg/20 text-availability-soft ring-availability-strong/50 ${iso === pendingDays[0] ? "ring-2" : "ring-1"}`
-                    : isPopoverOpen
-                    ? "bg-availability-fg/50 text-availability-faint border border-availability-strong ring-1 ring-availability-strong/40"
-                    : unavailable
-                    ? `bg-availability-fg/30 text-availability-soft border border-availability-fg/50${selecting ? " hover:bg-availability-fg/40" : ""}`
-                    : `text-mono-300${selecting ? " hover:bg-accent/10 hover:text-accent" : ""}`
-                }`}
-              >
-                {dayNum}
-                {hasService && (
-                  <span className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${unavailable ? "bg-availability-strong/60" : isPast ? "bg-mono-600" : "bg-accent/70"}`} />
-                )}
-                {hasNote && (
-                  <span className="absolute top-0.5 right-0.5 w-1 h-1 rounded-full bg-surface-lift/50" />
-                )}
-              </button>
+              <div key={iso} className="flex min-h-[44px] flex-col items-center gap-0.5">
+                <button
+                  type="button"
+                  // No `onClick` at all, in any mode: inside «Marcar días» a
+                  // tap is a one-day drag through `onPointerDown`/`onPointerUp`
+                  // below, which already marks the day and opens its note; outside
+                  // it the cell is read-only, `aria-disabled` and un-tabbable.
+                  disabled={isPast}
+                  aria-disabled={!selecting ? "true" : undefined}
+                  aria-current={isToday ? "date" : undefined}
+                  tabIndex={isShadow || !selecting ? -1 : undefined}
+                  // Every cell, past ones included — `isoRange` is what drops the
+                  // past, so the drag can cross them without losing the finger.
+                  data-iso={iso}
+                  aria-label={`${fmtDayLabel(iso)}${unavailable ? ", no disponible" : ""}${hasService ? ", hay servicio" : ""}${hasNote ? ", con nota" : ""}`}
+                  className={cls}
+                >
+                  {dayNum}
+                  {hasNote && (
+                    <span className="absolute right-1 top-1 h-1 w-1 rounded-full bg-availability-strong" />
+                  )}
+                </button>
+                {/* A fixed-height row whether or not the day has a service, so
+                    the weeks stay even. */}
+                <span className="flex h-[5px] items-center">
+                  {hasService && <DayDots tones={tones} />}
+                </span>
+              </div>
             );
           })}
         </div>
@@ -402,33 +434,23 @@ export default function AvailabilityGrid({ state, selecting, serviceDates = [], 
   }
 
   return (
-    <div className="space-y-4">
-      {/* One line in both states, so arming the mode never shifts the months
-          under the finger that is about to drag on them. */}
-      <p className="font-body text-sm text-mono-500">
-        {selecting
-          ? "Arrastra sobre los días que no puedes. Suelta para escribir la razón."
-          : "Toca «Marcar días» para marcar o editar los días que no puedes."}
-      </p>
-
-      {/* Navigation: two icon buttons around the range heading (design pass C,
-          2026-10-22). They used to be the words «Anterior»/«Siguiente», which
-          with «SEPTIEMBRE» made three unbreakable words that floored at ~450px
-          on a 375pt phone at «Máximo» text size — a member reported «Siguiente»
-          off the right edge, and the row had to wrap to survive. Two 44px icons
-          leave the heading the width it needs; `min-w-0` lets it wrap, not
-          push. The labels live on `aria-label`. */}
-      <div className="flex items-center justify-between gap-2">
-        <Button variant="icon" size="lg" onClick={() => goTo(page - 1)} disabled={!canPrev} aria-label="Anterior">
-          <ChevronLeftIcon size={16} />
+    <div className="space-y-8">
+      {/* Navigation: two round ring arrows around the range heading (the words
+          «Anterior»/«Siguiente» they replaced in design pass C, 2026-10-22, made
+          three unbreakable words with «SEPTIEMBRE» that floored at ~450px on a
+          375pt phone at «Máximo» text size — `textZoomLayout.test.ts`). The
+          labels live on `aria-label`; `min-w-0` lets the heading wrap, not push. */}
+      <div className="flex items-center justify-between gap-3">
+        <Button variant="round" onClick={() => goTo(page - 1)} disabled={!canPrev} aria-label="Anterior">
+          <ChevronLeftIcon size={18} />
         </Button>
 
-        <span className="min-w-0 flex-1 text-center font-label text-[11px] uppercase tracking-widest text-mono-500">
+        <span className={`${SHEET_TITLE} min-w-0 flex-1 text-center`}>
           {rangeHeading}
         </span>
 
-        <Button variant="icon" size="lg" onClick={() => goTo(page + 1)} disabled={!canNext} aria-label="Siguiente">
-          <ChevronRightIcon size={16} />
+        <Button variant="round" onClick={() => goTo(page + 1)} disabled={!canNext} aria-label="Siguiente">
+          <ChevronRightIcon size={18} />
         </Button>
       </div>
 
@@ -440,7 +462,7 @@ export default function AvailabilityGrid({ state, selecting, serviceDates = [], 
         id="availability-months"
         ref={containerRef}
         data-pull-ignore={selecting ? "" : undefined}
-        className="grid grid-cols-1 sm:grid-cols-3 gap-4"
+        className="grid grid-cols-1 gap-y-8 sm:grid-cols-3 sm:gap-x-8"
         style={
           selecting
             ? { touchAction: "none", userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }
@@ -459,20 +481,34 @@ export default function AvailabilityGrid({ state, selecting, serviceDates = [], 
       </div>
 
       {/* Page dots */}
-      <div className="flex justify-center gap-1.5 pt-1">
+      <div className="flex justify-center gap-1.5">
         {Array.from({ length: totalPages }).map((_, i) => (
           <button
             key={i}
             type="button"
             onClick={() => goTo(i)}
-            className={`w-1.5 h-1.5 rounded-full transition-colors ${
+            className={`h-1.5 w-1.5 rounded-full transition-colors ${
               i === page ? "bg-accent" : "bg-accent-deep/50 hover:bg-accent-deep"
             }`}
             aria-label={`Página ${i + 1}`}
           />
         ))}
       </div>
+
+      {/* The legend, last: the swatch for a marked day and the Calendario's dots,
+          each a dot and a word (ADR-0067). */}
+      <p className="flex flex-wrap items-center gap-x-5 gap-y-2 font-body text-[13px] text-ink-muted">
+        <span className="inline-flex items-center gap-2">
+          <span aria-hidden className="inline-block h-3 w-3 rounded-full bg-availability-fg/15 ring-1 ring-inset ring-availability-fg/60" />
+          No puedo
+        </span>
+        {LEGEND.map(([dot, label]) => (
+          <span key={label} className="inline-flex items-center gap-2">
+            <span aria-hidden className={`inline-block h-1.5 w-1.5 rounded-full ${dot}`} />
+            {label}
+          </span>
+        ))}
+      </p>
     </div>
   );
 }
-

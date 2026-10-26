@@ -1,12 +1,28 @@
 "use client";
 
 import { useState, useRef, useEffect, useId } from "react";
+import { ACCOUNT_ROW_CLASS, AccountRowBody } from "./account/AccountList";
 import Button from "./ui/Button";
 import CueDialog from "./ui/CueDialog";
 import CueDialogStatus from "./ui/CueDialogStatus";
 import EmailPrefToggles, { EMAIL_PREF_ROWS, resolveEmailPrefs } from "./ui/EmailPrefToggles";
 import Skeleton from "./ui/Skeleton";
 import { useToast } from "./ui/Toast";
+import { SHEET_TITLE } from "@/app/utils/homeHero";
+import { roleLabel } from "@/app/utils/roleLabel";
+
+// The member's own profile on `/me/ajustes`: three sections in the page's own
+// type (the «millones» pass, 2026-10-26) — Perfil (photo, name, alias and email
+// as hairline fields, «Guardar perfil»), Contraseña (one row that opens a sheet
+// with the password form) and Correos (the five switches as hairline rows). It
+// used to be a compact card whose «Editar perfil» opened a sheet holding all of
+// it: a member changing one switch went through a dialog to reach it, and the
+// sheet put three password fields in front of everyone, every time. Only the
+// password keeps a sheet now, because it is the one edit with a form that is
+// not worth a screen's height when nobody is changing it.
+//
+// Rendered as a FRAGMENT of sections, so `SettingsCard` can stack them in its
+// right column with the same rhythm as the left one.
 
 export interface MemberProfile {
   _id: string;
@@ -19,11 +35,13 @@ export interface MemberProfile {
   notifPrefs?: Record<string, unknown>;
 }
 
-// 16 px on a phone, the design's size from `sm` up (F3): WebKit auto-zooms any
-// focused control under 16 px and never zooms back, which pushed the tab bar off
-// screen on the simulator. `inputFontSize.test.ts` is the guard.
+// A hairline field: the label in the sheet's small caps above, the value at
+// 17 px, a rule under it. Never under 16 px on a phone: WebKit auto-zooms any
+// focused control smaller than that and never zooms back, which pushed the tab
+// bar off screen on the simulator (F3). `inputFontSize.test.ts` is the guard.
 const inputCls =
-  "w-full px-3 py-2 rounded-lg border border-accent/20 bg-transparent font-body text-[16px] sm:text-sm focus:outline-none focus:border-accent transition-colors";
+  "w-full rounded-none border-0 border-b border-ink/[0.18] bg-transparent px-0 pb-2 pt-1 font-body text-[17px] text-ink placeholder:text-placeholder transition-colors focus:border-accent focus:outline-none";
+const labelCls = "font-label text-[11px] uppercase tracking-[0.12em] text-ink-muted";
 
 function Avatar({
   name, photoUrl, size = "md", onClick, uploading,
@@ -32,7 +50,7 @@ function Avatar({
   onClick?: () => void; uploading?: boolean;
 }) {
   const initials = name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
-  const dim = size === "sm" ? "w-10 h-10" : size === "lg" ? "w-20 h-20" : "w-12 h-12";
+  const dim = size === "sm" ? "w-10 h-10" : size === "lg" ? "h-[72px] w-[72px]" : "w-12 h-12";
   const textSize = size === "lg" ? "text-2xl" : "text-sm";
 
   const inner = (
@@ -73,17 +91,11 @@ function Avatar({
   );
 }
 
-export default function ProfilePanel({
-  initialMember,
-  bare = false,
-}: {
-  initialMember: MemberProfile;
-  /** Drops the compact card's own border/background/padding when a parent (SettingsCard) already owns that chrome. */
-  bare?: boolean;
-}) {
+export default function ProfilePanel({ initialMember }: { initialMember: MemberProfile }) {
   const [member, setMember]   = useState(initialMember);
-  const [open, setOpen]       = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
+  // The password sheet, and the row that opens it (focus returns there).
+  const [pwOpen, setPwOpen]   = useState(false);
+  const pwRowRef = useRef<HTMLButtonElement>(null);
   const ids = useId();
   const fid = (name: string) => `${ids}-${name}`;
   const { toast } = useToast();
@@ -201,6 +213,7 @@ export default function ProfilePanel({
       if (res.ok) {
         setCurrentPw(""); setNewPw(""); setConfirmPw("");
         setMember((m) => ({ ...m, hasPassword: true }));
+        setPwOpen(false);
         showToast("Contraseña actualizada.");
       } else {
         const { error } = await res.json().catch(() => ({ error: "Error al actualizar contraseña." }));
@@ -240,157 +253,156 @@ export default function ProfilePanel({
   };
 
   const displayName = member.alias?.trim() || member.member_name;
+  // «Frank Rocha · Super Admin», or just the role when the alias is the name.
+  const roleLine = [member.alias?.trim() ? member.member_name : null, roleLabel(member.role)]
+    .filter(Boolean)
+    .join(" · ");
+
+  function closePw() {
+    if (savingPw) return;
+    setPwOpen(false);
+    setPwError(null);
+  }
 
   return (
     <>
-      {/* ── Compact profile card ─────────────────────────────────────────── */}
-      <div
-        className={
-          bare
-            ? "flex items-center gap-4"
-            : "flex items-center gap-4 px-5 py-4 rounded-2xl border border-edge-accent-subtle bg-accent/5"
-        }
-      >
-
-        <Avatar name={displayName} photoUrl={member.photoUrl} size="sm" />
-        <div className="flex-1 min-w-0">
-          <p className="font-display text-base leading-tight truncate">{displayName}</p>
-          {member.alias?.trim() && (
-            <p className="font-body text-xs text-accent/70 truncate">{member.member_name}</p>
-          )}
-          <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mt-0.5">{member.role}</p>
+      {/* ── Perfil ─────────────────────────────────────────────────────────── */}
+      <section className="space-y-5">
+        <h2 className={SHEET_TITLE}>Perfil</h2>
+        <div className="flex items-center gap-4">
+          <Avatar
+            name={displayName}
+            photoUrl={member.photoUrl}
+            size="lg"
+            onClick={() => photoInputRef.current?.click()}
+            uploading={uploadingPhoto}
+          />
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-body text-xl font-semibold text-ink">{displayName}</p>
+            <p className="truncate font-body text-sm text-ink-muted">{roleLine}</p>
+          </div>
         </div>
-        <button
-          ref={triggerRef}
-          onClick={() => setOpen(true)}
-          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-accent/20 font-label text-[11px] uppercase tracking-widest text-mono-400 hover:border-accent hover:text-accent transition-colors"
-        >
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-          </svg>
-          Editar perfil
-        </button>
-      </div>
+        <input ref={photoInputRef} type="file" accept="image/*" className="sr-only" onChange={handlePhotoChange} />
+        <div>
+          <Button
+            variant="ghost"
+            size="lg"
+            className="-ml-4"
+            onClick={() => photoInputRef.current?.click()}
+            busy={uploadingPhoto}
+            busyLabel="Subiendo foto…"
+          >
+            Cambiar foto
+          </Button>
+        </div>
 
+        {panelStatus && <CueDialogStatus tone={panelStatus.tone}>{panelStatus.message}</CueDialogStatus>}
+
+        <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); void handleSaveProfile(); }}>
+          <div className="space-y-1">
+            <label htmlFor={fid("alias")} className={labelCls}>Alias</label>
+            <input
+              id={fid("alias")}
+              className={inputCls}
+              value={alias}
+              onChange={(e) => setAlias(e.target.value)}
+              placeholder="Nombre corto o apodo (opcional)"
+            />
+          </div>
+          <div className="space-y-1">
+            <label htmlFor={fid("email")} className={labelCls}>Email</label>
+            <input
+              id={fid("email")}
+              className={inputCls}
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="correo@ejemplo.com"
+            />
+          </div>
+          <div>
+            <Button type="submit" variant="secondary" size="lg" busy={savingProfile} busyLabel="Guardando…">
+              Guardar perfil
+            </Button>
+          </div>
+        </form>
+      </section>
+
+      {/* ── Contraseña ─────────────────────────────────────────────────────── */}
+      <section className="space-y-4">
+        <h2 className={SHEET_TITLE}>Contraseña</h2>
+        <div className="border-y border-ink/[0.10]">
+          <button ref={pwRowRef} type="button" onClick={() => setPwOpen(true)} className={ACCOUNT_ROW_CLASS}>
+            <AccountRowBody
+              title={member.hasPassword ? "Cambiar contraseña" : "Establecer contraseña"}
+              status={
+                member.hasPassword
+                  ? "Para entrar con tu correo. Tu sesión actual no se cierra."
+                  : "Para entrar con tu correo además de Google."
+              }
+            />
+          </button>
+        </div>
+      </section>
+
+      {/* ── Correos ────────────────────────────────────────────────────────── */}
+      <section className="space-y-4">
+        <h2 className={SHEET_TITLE}>Correos</h2>
+        <p className="font-body text-[15px] leading-snug text-ink-muted">Elige qué avisos quieres recibir por correo.</p>
+        <EmailPrefToggles
+          values={emailPrefs}
+          onToggle={handleToggleEmailPref}
+          memberRole={member.role}
+          busyField={savingPrefField}
+          layout="list"
+        />
+      </section>
+
+      {/* The password form, in a sheet: the one edit whose three fields are not
+          worth a screen's height when nobody is changing them. Focus rules are
+          `CueDialog`'s own (entry focus on the presence edge — ADR-0034). */}
       <CueDialog
-        open={open}
-        title="Editar perfil"
-        label="Editar perfil"
-        restoreFocusRef={triggerRef}
+        open={pwOpen}
+        title={member.hasPassword ? "Cambiar contraseña" : "Establecer contraseña"}
+        label="Contraseña"
+        restoreFocusRef={pwRowRef}
         mode="sheet"
         size="sm"
-        onDismiss={() => setOpen(false)}
+        onDismiss={closePw}
       >
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
-          <div className="mb-6 flex items-center gap-4">
-            <Avatar
-              name={displayName}
-              photoUrl={member.photoUrl}
-              size="lg"
-              onClick={() => photoInputRef.current?.click()}
-              uploading={uploadingPhoto}
-            />
-            <div className="min-w-0">
-              <p className="font-body text-xs text-accent/70 truncate">{displayName}</p>
-              <p className="font-label text-[10px] uppercase tracking-widest text-mono-500">{member.role}</p>
+        <form
+          className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-6"
+          onSubmit={(e) => { e.preventDefault(); void handleSavePassword(); }}
+        >
+          <p className="font-body text-[15px] leading-snug text-ink-muted">
+            {member.hasPassword
+              ? "Actualiza tu contraseña de acceso por correo."
+              : "Establece una contraseña para iniciar sesión con tu correo además de Google."}
+          </p>
+          {pwError && <CueDialogStatus tone="error">{pwError}</CueDialogStatus>}
+          {member.hasPassword && (
+            <div className="space-y-1">
+              <label htmlFor={fid("current-pw")} className={labelCls}>Contraseña actual</label>
+              <input id={fid("current-pw")} autoComplete="current-password" className={inputCls} type="password" value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} placeholder="••••••••" />
             </div>
+          )}
+          <div className="space-y-1">
+            <label htmlFor={fid("new-pw")} className={labelCls}>Nueva contraseña</label>
+            <input id={fid("new-pw")} autoComplete="new-password" className={inputCls} type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="Mín. 8 caracteres" />
           </div>
-
-          <input ref={photoInputRef} type="file" accept="image/*" className="sr-only" onChange={handlePhotoChange} />
-          {panelStatus && <div className="mb-6"><CueDialogStatus tone={panelStatus.tone}>{panelStatus.message}</CueDialogStatus></div>}
-
-          <div className="space-y-8">
-          {/* Identity */}
-          <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); void handleSaveProfile(); }}>
-            <h3 className="font-label text-[11px] uppercase tracking-widest text-mono-500">Identidad</h3>
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <label htmlFor={fid("alias")} className="font-label text-xs uppercase tracking-widest text-mono-500">Alias</label>
-                <input
-                  id={fid("alias")}
-                  className={inputCls}
-                  value={alias}
-                  onChange={(e) => setAlias(e.target.value)}
-                  placeholder="Nombre corto o apodo (opcional)"
-                />
-              </div>
-              <div className="space-y-1">
-                <label htmlFor={fid("email")} className="font-label text-xs uppercase tracking-widest text-mono-500">Email</label>
-                <input
-                  id={fid("email")}
-                  className={inputCls}
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="correo@ejemplo.com"
-                />
-              </div>
-            </div>
-            <Button
-              type="submit"
-              variant="primary"
-              busy={savingProfile}
-              busyLabel="Guardando…"
-              className="w-full"
-            >
-              Guardar cambios
+          <div className="space-y-1">
+            <label htmlFor={fid("confirm-pw")} className={labelCls}>Confirmar contraseña</label>
+            <input id={fid("confirm-pw")} autoComplete="new-password" className={inputCls} type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} placeholder="Repetir contraseña" />
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="ghost" size="lg" onClick={closePw} disabled={savingPw}>
+              Cancelar
             </Button>
-          </form>
-
-          {/* Password */}
-          <form className="space-y-4 border-t border-accent/10 pt-6" onSubmit={(e) => { e.preventDefault(); void handleSavePassword(); }}>
-            <div>
-              <h3 className="font-label text-[11px] uppercase tracking-widest text-mono-500">Contraseña</h3>
-              <p className="font-body text-xs text-mono-500 mt-1">
-                {member.hasPassword
-                  ? "Actualiza tu contraseña de acceso por email."
-                  : "Establece una contraseña para iniciar sesión con email además de Google."}
-              </p>
-            </div>
-            {pwError && (
-              <p role="alert" className="text-sm text-negative-fg bg-negative-surface-deep/20 border border-negative-surface rounded-lg px-3 py-2">{pwError}</p>
-            )}
-            <div className="space-y-3">
-              {member.hasPassword && (
-                <div className="space-y-1">
-                  <label htmlFor={fid("current-pw")} className="font-label text-xs uppercase tracking-widest text-mono-500">Contraseña actual</label>
-                  <input id={fid("current-pw")} autoComplete="current-password" className={inputCls} type="password" value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} placeholder="••••••••" />
-                </div>
-              )}
-              <div className="space-y-1">
-                <label htmlFor={fid("new-pw")} className="font-label text-xs uppercase tracking-widest text-mono-500">Nueva contraseña</label>
-                <input id={fid("new-pw")} autoComplete="new-password" className={inputCls} type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="Mín. 8 caracteres" />
-              </div>
-              <div className="space-y-1">
-                <label htmlFor={fid("confirm-pw")} className="font-label text-xs uppercase tracking-widest text-mono-500">Confirmar contraseña</label>
-                <input id={fid("confirm-pw")} autoComplete="new-password" className={inputCls} type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} placeholder="Repetir contraseña" />
-              </div>
-            </div>
-            <button
-              type="submit"
-              disabled={savingPw || !newPw}
-              className="w-full py-2.5 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
-            >
-              {savingPw ? "Guardando…" : member.hasPassword ? "Actualizar contraseña" : "Establecer contraseña"}
-            </button>
-          </form>
-
-          {/* Notifications */}
-          <section className="space-y-4 border-t border-accent/10 pt-6">
-            <div>
-              <h3 className="font-label text-[11px] uppercase tracking-widest text-mono-500">Correos</h3>
-              <p className="font-body text-xs text-mono-500 mt-1">Elige qué avisos quieres recibir por correo.</p>
-            </div>
-            <EmailPrefToggles
-              values={emailPrefs}
-              onToggle={handleToggleEmailPref}
-              memberRole={member.role}
-              busyField={savingPrefField}
-            />
-          </section>
+            <Button type="submit" variant="primary" size="lg" disabled={!newPw} busy={savingPw} busyLabel="Guardando…">
+              {member.hasPassword ? "Actualizar contraseña" : "Establecer contraseña"}
+            </Button>
           </div>
-        </div>
+        </form>
       </CueDialog>
     </>
   );
