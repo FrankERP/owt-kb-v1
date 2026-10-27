@@ -24,6 +24,7 @@ import { registerProposalEditor } from "./tools/proposalEditor";
 import { registerServiceEditor } from "./tools/serviceEditor";
 import { registerCreateService } from "./tools/createService";
 import { registerServiceDeletes } from "./tools/serviceDeletes";
+import { registerServiceMessages } from "./tools/serviceMessages";
 import { registerProposalCard } from "./apps/proposalCard";
 import { toolListDigest } from "./toolListVersion";
 
@@ -58,6 +59,8 @@ export function registerAllTools(server: McpServer, deps: { version: string }): 
   registerCreateService(server);
   // Admin parity phase 2: deleting saved services, through /admin's own DELETE writer.
   registerServiceDeletes(server);
+  // Admin parity phase 3: a service's messages (thread, pastor message, team message).
+  registerServiceMessages(server);
   // The card (MCP Apps), at a URI that carries its build's digest. Fixed per deployment, like the tools.
   registerProposalCard(server);
 }

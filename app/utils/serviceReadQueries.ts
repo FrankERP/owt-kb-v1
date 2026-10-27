@@ -611,7 +611,7 @@ export function serviceConversationQuery(roleId: string, threadId: string): Boun
   return {
     query: `{
       "service": *[_type in ["sunday_role", "saturday_role", "special_role"] && _id == $roleId][0]{
-        _id, _rev, _type, service_name, team_notes,
+        _id, _rev, _type, service_name, time, team_notes,
         "service_date": coalesce(week, date),
         "published": coalesce(published, true),
         "hasSongs": defined(songs),
