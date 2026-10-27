@@ -274,6 +274,24 @@ describe("the Servicios board", () => {
   // `Button` carries `disabled:pointer-events-none`, so a `title` on a disabled
   // control can never be summoned: the tooltip the admin needs most was the one
   // the markup guaranteed they would never see. The reason is a LINE now.
+  it("keeps «Publicar listos» on the toolbar at zero: disabled, with its reason, never hidden", async () => {
+    // 2026-10-22 hid it at zero (its press used to open an empty plan); on
+    // 10-27 Frank read the missing button as a bug. Both fixture drafts are
+    // blocked (no team, no setlist), so the count is 0 and the line says why.
+    const { container } = mount();
+    await waitFor(() => expect(container.querySelectorAll("[data-card-id]").length).toBe(2));
+
+    const publish = screen.getByRole("button", { name: "Publicar listos (0)" }) as HTMLButtonElement;
+    expect(publish.disabled).toBe(true);
+    expect(publish.className.split(/\s+/)).toEqual(expect.arrayContaining(["hidden", "sm:inline-flex"]));
+    const reasons = [...container.querySelectorAll("p.text-ink-dim")].map((p) => p.textContent ?? "");
+    expect(reasons).toEqual([expect.stringMatching(/^Publicar listos: ningún borrador .*2 bloqueados/)]);
+    // The phone menu carries the same item, disabled the same way.
+    fireEvent.click(screen.getByRole("button", { name: "Más acciones de servicios" }));
+    const item = screen.getByRole("menuitem", { name: "Publicar listos (0)" });
+    expect(item.getAttribute("aria-disabled") ?? String((item as HTMLButtonElement).disabled)).toBe("true");
+  });
+
   it("says why the toolbar is closed, in the layout rather than in a title", async () => {
     vi.unstubAllGlobals();
     vi.stubGlobal(
