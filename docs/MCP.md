@@ -864,6 +864,13 @@ decisions and the rejected alternatives:
   for `delete_services` shows exactly what goes. **Never choose «Siempre permitir» for
   `delete_services`**: it removes that prompt for every later call, and the server cannot tell
   whether anyone read the list. The tool description and the check's answer say the same.
+  **Observed live (2026-10-27, production): the prompt did not appear.** The first chat delete
+  (four throwaway specials in March 2027, the model-visible «Borrar servicios», not the card twin)
+  ran with NO prompt, although claude.ai's per-tool setting for `delete_services` (Ajustes ›
+  Conectores › OWT Backstage) was already «Necesita aprobación». Whether the app took Frank's own
+  «bórralas» as the approval is not known from here. So the app's prompt is NOT a gate this
+  connector can count on. What held was the chat: it showed the check's list and waited for Frank
+  to say «bórralas». Frank accepted that as the confirmation (over making chat deletes card-only).
 - **The call must repeat the list.** The token is an HMAC over the month and the whole list
   (`changeSetTokens.ts` `deleteListToken`, label `mcp-delete-list|`): a subset, an added service or an
   edited line is refused before any delete. The save re-reads every service and re-renders its line;
