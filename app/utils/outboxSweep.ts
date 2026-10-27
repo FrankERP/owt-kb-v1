@@ -399,14 +399,18 @@ let roleReadCache = new Map<string, Record<string, unknown> | null>();
 async function fetchRole(notice: StoredNotice): Promise<Record<string, unknown> | null> {
   if (!notice.roleId || !notice.roleType) return null;
   const key = `${notice.roleType}:${notice.roleId}`;
-  const memo = roleReadCache.get(key);
+  // The memo current when this read STARTED: under Fluid compute another sweep on this
+  // instance may swap in its own while the read is in flight, and an older read must not
+  // land in the newer sweep's memo (ADR-0074).
+  const cache = roleReadCache;
+  const memo = cache.get(key);
   if (memo !== undefined) return memo;
   const row = await operationalClient.fetch<Record<string, unknown> | null>(ROLE_QUERY, {
     roleType: notice.roleType,
     roleId: notice.roleId,
   });
   const value = isObj(row) ? row : null;
-  roleReadCache.set(key, value);
+  cache.set(key, value);
   return value;
 }
 

@@ -270,7 +270,12 @@ ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Be
   HTTP 422 as a valid business response.
 - **Local dev:** if `OWT_SOLVER_URL` is unset, spawns `gcf/owt_solver_v2.py --json-mode`
   (python from `OWT_SOLVER_PYTHON`, default a local miniforge `owt-roles` env), SIGKILL after
-  120s.
+  120s. **Only under `next dev`:** a production build (`NODE_ENV === "production"`, so also a local
+  `next start`) answers `OWT_SOLVER_URL is not set` (422, `transport_error`) instead, and v3's
+  `solveV3` answers `not_configured`. The gate is a build-time constant so the bundler drops the
+  spawn; left in, its `process.cwd()` script path made the file tracer pack the whole repository
+  into `/api/admin/solve` and `/api/mcp` (57–59 MB each, 2026-10-27). Guard:
+  `functionTraceGuard.test.ts`.
 - Every `ok: false` from a solve is answered with a 422 (the auth and body checks answer 403 and
   400 before any solve). The ones the route makes when it could not get the solver's answer carry
   `transport_error: true` (see Input / output); the solver's own never do. Guard:

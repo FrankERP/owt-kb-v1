@@ -56,6 +56,22 @@ const EXPECTED_CALLERS: Record<string, string[]> = {
   roleDeleteCommit: ["app/api/admin/roles/[id]/route.ts", "app/mcp/tools/serviceDeletes.ts"],
   roleUnpublishCommit: ["app/api/admin/roles/unpublish/route.ts", "app/mcp/tools/unpublishService.ts"],
   setlistSaveCommit: ["app/api/admin/setlists/route.ts", "app/mcp/tools/editSetlist.ts"],
+  // Admin parity phase 3: the four service-conversation routes (ADR-0065) and the MCP message tools.
+  serviceThreadCommit: [
+    "app/api/admin/service-threads/[roleId]/messages/[key]/route.ts",
+    "app/api/admin/service-threads/[roleId]/messages/route.ts",
+    "app/api/admin/service-threads/[roleId]/pastor-message/route.ts",
+    "app/api/admin/service-threads/[roleId]/team-notes/route.ts",
+    "app/mcp/tools/serviceMessages.ts",
+  ],
+  // Admin parity phase 3 (S4): the four Kids write routes and the MCP Kids tools.
+  kidsCommit: [
+    "app/api/kids/members/[id]/availability/route.ts",
+    "app/api/kids/pairs/[id]/route.ts",
+    "app/api/kids/pairs/route.ts",
+    "app/api/kids/schedules/route.ts",
+    "app/mcp/tools/kids.ts",
+  ],
   // Solver v3 C2 WR-16 / IF2-23: the ONE mutation path of `fairnessMonth`. Its importer
   // list grows only by a reviewed edit here — C2 adds `fairnessMonthCommit.ts` and
   // `fairnessLedgerRead.ts`; C4 adds its CLI file and its `scripts/lib` core.

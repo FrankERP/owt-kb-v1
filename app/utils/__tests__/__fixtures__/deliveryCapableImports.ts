@@ -33,4 +33,8 @@ export const DELIVERY_CAPABLE_IMPORTS: readonly string[] = [
   "copyInstrumentsCommit",
   // Admin parity phase 2 (T1): the delete writer, extracted from its route.
   "roleDeleteCommit",
+  // Admin parity phase 3: the service conversation's writers (ADR-0065).
+  "serviceThreadCommit",
+  // Admin parity phase 3 (S4): Oasis Kids' writers, extracted from the `/api/kids/*` routes.
+  "kidsCommit",
 ];

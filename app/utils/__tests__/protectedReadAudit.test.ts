@@ -404,8 +404,8 @@ export async function PATCH() {
       operation: "PATCH",
     });
     expect(DEFENSIVE_TYPE_REJECTION_GUARDS[1]).toMatchObject({
-      file: "app/api/kids/pairs/[id]/route.ts",
-      operation: "PATCH",
+      file: "app/utils/kidsCommit.ts",
+      operation: "module",
     });
     // A2 never removes it.
     expect(DEFENSIVE_TYPE_REJECTION_GUARDS[0].removalOwner).not.toBe("A2");
@@ -472,7 +472,7 @@ describe("A2 handoff allowlist", () => {
     expect(A2_HANDOFF_ALLOWLIST).toEqual([]);
   });
 
-  it("licenses the eighteen permanent runtime writers for WRITES ONLY, never reads", () => {
+  it("licenses the nineteen permanent runtime writers for WRITES ONLY, never reads", () => {
     expect(PROTECTED_RUNTIME_WRITERS.map((e) => `${e.file}#${e.operation}`).sort()).toEqual(
       [
         "app/utils/outboxSweep.ts#module",
@@ -493,10 +493,7 @@ describe("A2 handoff allowlist", () => {
         "app/api/me/proposals/route.ts#POST",
         "app/api/me/proposals/[id]/messages/route.ts#POST",
         "app/api/admin/proposals/[id]/messages/route.ts#POST",
-        "app/api/admin/service-threads/[roleId]/messages/route.ts#POST",
-        "app/api/admin/service-threads/[roleId]/pastor-message/route.ts#PUT",
-        "app/api/admin/service-threads/[roleId]/team-notes/route.ts#PUT",
-        "app/api/admin/service-threads/[roleId]/messages/[key]/route.ts#DELETE",
+        "app/utils/serviceThreadCommit.ts#module",
       ].sort(),
     );
     // Nothing removes a writer: item 12 must never be "satisfied" by moving reads here.

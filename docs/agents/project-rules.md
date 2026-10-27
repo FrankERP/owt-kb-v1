@@ -198,6 +198,20 @@ disagree, `CLAUDE.md` wins and this file is the one to fix.
   after the flip) and remove it afterwards: unset, dev follows `SOLVER_ENGINE`, so a flip-back
   reaches dev and production alike. Whatever engine it selects, dev writes the production dataset.
   Production and `verify/service-readiness` ignore it by code. See `docs/SECRETS.md`.
+- **Functions run on Fluid compute, in `iad1`** (`vercel.json` `"fluid": true` and
+  `"regions": ["iad1"]`, ADR-0074, since 2026-10-27). One warm instance serves concurrent requests, so module-level state is shared
+  between them: a cache keyed by member or document is fine (the access cache, the MCP grant store, the
+  SMTP pool and the outbox memo were audited; the memo now writes where its read started), per-request data in module scope is a cross-request leak. The region
+  stays `iad1` although the Sanity dataset is in Belgium (`gcp-eu-w1`): moving next to the data
+  makes every request from Mexico City ~95 ms slower to reach, and only pays on pages with several
+  sequential reads. Measure before moving it; the arithmetic is in the ADR.
+- **A server module that spawns a process gates the spawn on `NODE_ENV === "production"`.** The
+  local solver paths (`app/api/admin/solve/route.ts`, `app/utils/solverV3Upstream.ts`) spawn
+  Python with a `process.cwd()` path the file tracer cannot resolve, so it packed the whole
+  repository (docs, screenshots, `ios/`, `android/`) into `/api/mcp` and `/api/admin/solve`:
+  57–59 MB each, most of every deployment's Function Storage. `turbopackIgnore` comments did not
+  stop it; the build-time constant does, because the bundler drops the branch. Guard:
+  `functionTraceGuard.test.ts` (CI does not run `next build`, which only warns).
 
 ## Decision records
 When a choice rejects a real alternative and the reason won't be obvious from
@@ -251,7 +265,8 @@ several exist precisely to stop a plausible-looking change.
   `app/**` must carry `published == true`, manager-only ones included, because a
   fairness clock asking "did this pair serve?" needs the same answer the members got
   (ADR-0022). Two reads are exempt and both are editors of drafts —
-  `api/kids/schedules/route.ts` and the planner page's `"schedules"` projection.
+  `utils/kidsScheduleReads.ts` (the planner's month read, shared by its GET and the MCP
+  `get_kids_month` since 2026-10-27) and the planner page's `"schedules"` projection.
   `draftGatingCoverage.test.ts` enforces this, so a new manager-facing kids read that
   omits the filter fails the suite rather than shipping.
 - **Sanity array-of-object writes need a `_key` per item.**
@@ -444,6 +459,17 @@ several exist precisely to stop a plausible-looking change.
   never the dereferenced admin read, and never a reader that turns a malformed answer into `[]`
   (every service would look «ya no existe»). The line's N is `seatAssignees(normalizeStoredSeats())`,
   the notice builder's own audience (`deleteLines.test.ts`). Only contention is told to repeat, once.
+  A service's conversation (ADR-0065: the leads' thread, «Mensaje del pastor», «Mensaje para el
+  equipo») has its writers in `serviceThreadCommit.ts` (admin parity phase 3, ADR-0073): the four
+  `/api/admin/service-threads/[roleId]/*` routes and the MCP conversation tools
+  (`app/mcp/tools/serviceMessages.ts`) both call them, so a chat message reaches the leads exactly as
+  `/admin`'s does. The acting member is the session's on `/admin` and the bearer's (`principalOf`) in
+  the chat, never an argument; no principal refuses before any read.
+  Oasis Kids' writers (one Sunday, the pair roster, a volunteer's absences) live in `kidsCommit.ts`
+  (admin parity phase 3, S4): the four `/api/kids/*` writes and the MCP Kids tools
+  (`app/mcp/tools/kids.ts`) both call them; the generator's inputs and seed search are
+  `proposeKidsMonth` (`kidsMonthPlan.ts`), and the month's draft-seeing read is
+  `kidsScheduleReads.ts` (ADR-0022, amended). Kids notifies nobody from either surface.
 - **The MCP proposal editor: the server judges, the card only shows** (ADR-0062). The card
   (`mcp-app/proposal-card/`) holds a list of edits, never a board; every check and save replays the
   whole list from the stored proposal through the planner's own gate. Only `editorBoard.ts` calls

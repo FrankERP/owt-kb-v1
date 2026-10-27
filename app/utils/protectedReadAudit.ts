@@ -309,34 +309,11 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
     removalOwner: "permanent runtime writer (never removed — the admin side of the thread)",
   },
   {
-    file: "app/api/admin/service-threads/[roleId]/messages/route.ts",
-    operation: "POST",
+    file: "app/utils/serviceThreadCommit.ts",
+    operation: "module",
     reason:
-      "guarded pre-proposal thread writer (ADR-0065): resolves the role through `loadCanonicalRole` only to read its date and Lead seat, then appends one message to `serviceThread.<roleId>` — never to the role itself, and never to a proposal. `createIfNotExists` + `setIfMissing` + `append` carry no `ifRevisionId` ON PURPOSE — two admins posting at once must both land — and the entry exists to say so out loud",
-    removalOwner: "permanent runtime writer (never removed — the conversation before a proposal exists)",
-  },
-  {
-    file: "app/api/admin/service-threads/[roleId]/pastor-message/route.ts",
-    operation: "PUT",
-    reason:
-      "guarded pastor's-message writer (ADR-0065, amended 2026-10-24): resolves the role through `loadCanonicalRole` only to read its date, publish state and Lead seat, then sets or unsets `serviceThread.<roleId>.pastor_message` — never the role, never a proposal. The admin's observed stamp is compared first and the write asserts the thread `_rev` it read (`create` when there is none, so a concurrent thread is told)",
-    removalOwner: "permanent runtime writer (never removed — the pastor's message)",
-  },
-  {
-    file: "app/api/admin/service-threads/[roleId]/team-notes/route.ts",
-    operation: "PUT",
-    reason:
-      "guarded team-note writer (ADR-0065, amended 2026-10-24): resolves the live setlist target exactly as the setlist PUT does (`loadWeekendSetlistTarget`/`loadSpecialSetlistTarget`, fail closed on duplicates and raw drafts), compares the observed target, and writes ONLY `team_notes` under that `_rev`, heartbeating the weekend lock in the same transaction. Deliberately not the setlist PUT: it replaces no songs and notifies nobody",
-    removalOwner: "permanent runtime writer (never removed — editing the team note after publishing)",
-  },
-  {
-    file: "app/api/admin/service-threads/[roleId]/messages/[key]/route.ts",
-    // The audit's region for both handlers: `PATCH` and `DELETE` are declared
-    // together at the top, so everything below belongs to the later one.
-    operation: "DELETE",
-    reason:
-      "guarded own-message editor (ADR-0065, amended 2026-10-24): PATCH edits and DELETE removes ONE `messages[_key==…]` item of `serviceThread.<roleId>` after checking the caller is its author. `loadCanonicalRole` is read only for the service date (`isThreadOpen`, like the POST); the role itself is never written. No `ifRevisionId` ON PURPOSE — a message's author never changes, and asserting the thread `_rev` would refuse an edit whenever anyone appended",
-    removalOwner: "permanent runtime writer (never removed — editing one's own message)",
+      "the service conversation's guarded writers (ADR-0065, amended 2026-10-24), moved here from the four `/api/admin/service-threads/[roleId]/…` routes so the MCP message tools call the same code (admin parity phase 3); the routes keep only authorization and their JSON parse, and `serviceCommitCallers.test.ts` pins who may import this module. (1) message append: resolves the role through `loadCanonicalRole` only to read its date and Lead seat, then appends one message to `serviceThread.<roleId>` — never to the role, never to a proposal; `createIfNotExists` + `setIfMissing` + `append` carry no `ifRevisionId` ON PURPOSE (two admins posting at once must both land). (2) own-message edit/delete: ONE `messages[_key==…]` item after checking the caller is its author; no `ifRevisionId` ON PURPOSE (a message's author never changes). (3) pastor's message: compares the admin's observed stamp, then sets or unsets `pastor_message` asserting the thread `_rev` it read (`create` when there is none, so a concurrent thread is told). (4) team note: resolves the live setlist target exactly as the setlist PUT does (fail closed on duplicates and raw drafts), compares the observed target, and writes ONLY `team_notes` under that `_rev`, heartbeating the weekend lock in the same transaction; replaces no songs and notifies nobody",
+    removalOwner: "permanent runtime writer (never removed — the service conversation)",
   },
   {
     file: "app/api/admin/proposals/[id]/route.ts",
@@ -555,10 +532,10 @@ export const DEFENSIVE_TYPE_REJECTION_GUARDS: readonly AuditExemption[] = [
     removalOwner: "song-content editor refactor (never A2)",
   },
   {
-    file: "app/api/kids/pairs/[id]/route.ts",
-    operation: "PATCH",
+    file: "app/utils/kidsCommit.ts",
+    operation: "module",
     reason:
-      "`*[_id == $id][0]{ _type }` ownership guard on the kids pair editor: the id comes from the path, so without it a Kids manager — a role that must reach no worship data at all — could rename any document with a `name` field (author, tag, role) by id; projects only _type and 404s anything that is not a kidsPair",
+      "`*[_id == $id][0]{ _type }` ownership guard on the kids pair editor (`patchKidsPair`, called by the pair PATCH route and the MCP `save_kids_pair`): the id comes from the caller, so without it a Kids manager — a role that must reach no worship data at all — could rename any document with a `name` field (author, tag, role) by id; projects only _type and 404s anything that is not a kidsPair",
     removalOwner: "kids ministry routes (never A2)",
   },
 ];
