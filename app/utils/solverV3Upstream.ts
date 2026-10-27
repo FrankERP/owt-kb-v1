@@ -78,6 +78,11 @@ async function callRemote(url: string, body: unknown, env: Env, fetchImpl: Fetch
 
 /** C5 §11.1: one request on stdin, one response on stdout, exit 0 even for `ok:false`. */
 function callLocal(body: unknown, env: Env, timeoutMs: number): Promise<V3UpstreamResult> {
+  // Never in a production build. `NODE_ENV` is a build-time constant there, so the bundler
+  // drops the spawn below; left in, its `process.cwd()` script path makes the file tracer
+  // pack the whole repository (docs, screenshots, ios/, android/: ~55 MB) into every
+  // function that reaches this module. Vercel never gets here anyway (`solveV3` refuses).
+  if (process.env.NODE_ENV === "production") return Promise.resolve(transport("not_configured"));
   return new Promise((resolve) => {
     const scriptPath = path.join(process.cwd(), "gcf_v3", "owt_solver_v3.py");
     const python = env.OWT_SOLVER_PYTHON

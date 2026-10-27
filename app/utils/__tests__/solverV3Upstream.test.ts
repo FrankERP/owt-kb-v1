@@ -104,6 +104,17 @@ describe("solveV3 — no URL (RT-3)", () => {
     expect(h.spawn).not.toHaveBeenCalled();
   });
 
+  it("a production build never spawns, even off Vercel (the bundler drops the spawn and its whole-repo trace)", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    try {
+      const out = await solveV3(body, {}, vi.fn());
+      expect(JSON.parse(out.text).transport).toBe("not_configured");
+      expect(h.spawn).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("off Vercel runs the local v3 entry point and classifies its stdout the same way", async () => {
     const child = fakeChild();
     const pending = solveV3(body, {}, vi.fn());

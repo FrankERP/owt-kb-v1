@@ -493,7 +493,7 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   effective engine (`resolveSolverEngine`); a body of the other contract (`contract: 3` under v2, or
   anything else under v3) answers `409 { ok: false, error: "solver_version_mismatch", engine }`
   before any other check. Under v3 a `contract: 3` body goes to `OWT_SOLVER_V3_URL` with `X-Api-Key`
-  (or, off Vercel, `gcf_v3/owt_solver_v3.py --json-mode`), aborted at 55 s: a success is forwarded
+  (or, off Vercel and only under `next dev`, `gcf_v3/owt_solver_v3.py --json-mode`; a production build answers `not_configured` instead of spawning), aborted at 55 s: a success is forwarded
   verbatim (200); the solver's coded failure (`ok: false, contract: 3, engine: "v3", code`) at any
   status is forwarded as 422; everything else is `{ ok: false, transport_error: true, transport }`
   (422) with `transport` ∈ `timeout`, `unreachable`, `http_status`, `not_json`, `not_configured`,
