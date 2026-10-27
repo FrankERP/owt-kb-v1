@@ -208,6 +208,20 @@ disagree, `CLAUDE.md` wins and this file is the one to fix.
   after the flip) and remove it afterwards: unset, dev follows `SOLVER_ENGINE`, so a flip-back
   reaches dev and production alike. Whatever engine it selects, dev writes the production dataset.
   Production and `verify/service-readiness` ignore it by code. See `docs/SECRETS.md`.
+- **Functions run on Fluid compute, in `iad1`** (`vercel.json` `"fluid": true` and
+  `"regions": ["iad1"]`, ADR-0075, since 2026-10-27). One warm instance serves concurrent requests, so module-level state is shared
+  between them: a cache keyed by member or document is fine (the access cache, the MCP grant store, the
+  SMTP pool and the outbox memo were audited; the memo now writes where its read started), per-request data in module scope is a cross-request leak. The region
+  stays `iad1` although the Sanity dataset is in Belgium (`gcp-eu-w1`): moving next to the data
+  makes every request from Mexico City ~95 ms slower to reach, and only pays on pages with several
+  sequential reads. Measure before moving it; the arithmetic is in the ADR.
+- **A server module that spawns a process gates the spawn on `NODE_ENV === "production"`.** The
+  local solver paths (`app/api/admin/solve/route.ts`, `app/utils/solverV3Upstream.ts`) spawn
+  Python with a `process.cwd()` path the file tracer cannot resolve, so it packed the whole
+  repository (docs, screenshots, `ios/`, `android/`) into `/api/mcp` and `/api/admin/solve`:
+  57–59 MB each, most of every deployment's Function Storage. `turbopackIgnore` comments did not
+  stop it; the build-time constant does, because the bundler drops the branch. Guard:
+  `functionTraceGuard.test.ts` (CI does not run `next build`, which only warns).
 
 ## Decision records
 When a choice rejects a real alternative and the reason won't be obvious from

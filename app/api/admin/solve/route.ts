@@ -107,7 +107,7 @@ async function callRemoteSolver(config: SolveRequest): Promise<SolveResponse> {
       ...(apiKey ? { "X-Api-Key": apiKey } : {}),
     },
     body: JSON.stringify(config),
-    // Vercel serverless functions have a 10s default; solver can take up to ~30s
+    // The route's own `maxDuration` (60 s) bounds the wait; the solver can take ~30 s,
     // so we rely on the GCF's own 120s timeout — no fetch timeout needed here.
   });
 
@@ -120,6 +120,12 @@ async function callRemoteSolver(config: SolveRequest): Promise<SolveResponse> {
 // ── Development path: spawn local Python subprocess ───────────────────────────
 
 function callLocalSolver(config: SolveRequest): Promise<SolveResponse> {
+  // Development only. In a production build `NODE_ENV` is a constant, so the bundler drops
+  // the spawn below; left in, its `process.cwd()` path makes the file tracer pack the whole
+  // repository (~55 MB) into this function and /api/mcp. Vercel always sets OWT_SOLVER_URL.
+  if (process.env.NODE_ENV === "production") {
+    return Promise.resolve({ ok: false, error: "OWT_SOLVER_URL is not set", transport_error: true });
+  }
   return new Promise((resolve) => {
     const scriptPath = path.join(process.cwd(), "gcf", "owt_solver_v2.py");
     const python = process.env.OWT_SOLVER_PYTHON

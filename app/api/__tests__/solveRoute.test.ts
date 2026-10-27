@@ -91,6 +91,15 @@ describe("the remote solver (OWT_SOLVER_URL)", () => {
 describe("the local solver (no OWT_SOLVER_URL)", () => {
   beforeEach(() => { vi.stubEnv("OWT_SOLVER_URL", ""); });
 
+  it("a production build never spawns: the route's own failure (the bundler drops the spawn and its whole-repo trace)", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    expect(await call()).toEqual({
+      status: 422,
+      body: { ok: false, error: "OWT_SOLVER_URL is not set", transport_error: true },
+    });
+    expect(h.spawn).not.toHaveBeenCalled();
+  });
+
   it("a timeout is the route's own failure", async () => {
     vi.useFakeTimers();
     const child = fakeChild();
