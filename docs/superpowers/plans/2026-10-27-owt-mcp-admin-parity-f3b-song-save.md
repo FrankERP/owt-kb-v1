@@ -1,6 +1,6 @@
 # OWT MCP — admin parity, phase 3, slice S3: creating and editing songs from the chat (plan)
 
-**Status:** DRAFT for adversarial review (critical tier); rounds 1 and 3 fixed (round 2 approved an earlier text), churn cap reached, round 4 awaits Frank. Parent plan:
+**Status:** DRAFT for adversarial review (critical tier). Parent plan:
 `2026-10-27-owt-mcp-admin-parity-f3.md` (Frank's «Sí, con Kids ahora», 2026-10-27 19:12Z; D6–D9 are
 this slice's starting decisions and are refined here). Nothing of this slice is built. Review
 approval is not authorization to implement; the build follows the release order in CLAUDE.md.
