@@ -120,6 +120,10 @@ the budget goes there, once.
 - **`preview` writes to the real Sanity dataset** — a rehearsal of the UI, never a dry run of data.
 - **`OWT_SOLVER_ENGINE` on Preview is for rehearsals only and normally unset** (branch-scoped to
   `preview` while set; Production and `verify/service-readiness` ignore it). See `docs/SECRETS.md`.
+- **Functions run on Fluid compute in `iad1`** (`vercel.json`, ADR-0073): concurrent requests share
+  one instance, so module-level state must be safe to share. Sanity lives in Europe; read the ADR
+  before moving the region. A server module that spawns a process gates it on
+  `NODE_ENV === "production"` or the tracer packs the whole repo (`functionTraceGuard.test.ts`).
 - **Preview email reaches one address only because `EMAIL_REDIRECT_TO` is set** on Preview
   (since 2026-07-24): a publish on dev does not notify the team, and clearing that variable
   makes preview mail the whole team. Check `vercel env ls preview`. Production has no redirect.
