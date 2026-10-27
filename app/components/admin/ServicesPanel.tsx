@@ -96,6 +96,7 @@ import Button from "../ui/Button";
 import Menu, { MenuItem } from "../ui/Menu";
 import Skeleton, { SkeletonGroup } from "../ui/Skeleton";
 import { revealProps } from "@/app/utils/reveal";
+import { plural } from "@/app/utils/plural";
 import { upcomingMonthPills } from "./monthPills";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -997,14 +998,28 @@ export default function ServicesPanel({
   // The one reason the toolbar shows, in the buttons' own order. A `title` on a
   // `disabled` house Button is unreachable (`disabled:pointer-events-none`), so
   // the closed gate has to say why in the layout rather than on hover.
+  //
+  // «Publicar listos» at ZERO is a disabled button, not a hidden one (Frank,
+  // 2026-10-27: a button that vanished read as a bug). Its zero-reason goes
+  // LAST, after every real gate: a closed «Generar mes» is the sentence an admin
+  // needs, and «ningún borrador listo» is what the summary line already says.
+  const nothingToPublish =
+    counters.readyToPublish === 0
+      ? {
+          enabled: false,
+          reason:
+            counters.blockedDrafts > 0
+              ? `Publicar listos: ningún borrador pasa la verificación todavía (${plural(counters.blockedDrafts, "bloqueado", "bloqueados")}).`
+              : "Publicar listos: no hay borradores en esta vista.",
+        }
+      : null;
   const toolbarGateReason =
     [
-      // The same condition that renders «Publicar listos»: a reason for a
-      // button that is not on the toolbar would pre-empt the reason of one that is.
       counters.readyToPublish > 0 ? publishGate : null,
       generateGate,
       editTeamGate,
       copyMode ? null : createGate,
+      nothingToPublish,
     ].find((g): g is NonNullable<typeof g> => !!g && !g.enabled && !!g.reason)?.reason ?? null;
   const changeDateGate    = gate("changeServiceDate");
   const participationGate = gate("participationSidebar");
@@ -1188,20 +1203,20 @@ export default function ServicesPanel({
             which is the accepted trade for one toolbar rather than two.
           */}
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            {/* Only when there is something to publish: «Publicar listos (0)» was a
-                button whose press opened an empty plan. Every ready draft still
-                has the card's own rule-13 «Publicar». */}
-            {counters.readyToPublish > 0 && (
-              <Button
-                variant="secondary"
-                size="lg"
-                disabled={!publishGate.enabled}
-                onClick={() => openPublishPlan(visibleCards)}
-                className="hidden sm:inline-flex"
-              >
-                Publicar listos ({counters.readyToPublish})
-              </Button>
-            )}
+            {/* Always on the toolbar, DISABLED at zero: between 2026-10-22 and
+                10-27 it was hidden at zero (its press used to open an empty plan)
+                and Frank reported it as gone. Disabled, it says what it waits
+                for through the reason line below. Every ready draft still has
+                the card's own rule-13 «Publicar». */}
+            <Button
+              variant="secondary"
+              size="lg"
+              disabled={!publishGate.enabled || counters.readyToPublish === 0}
+              onClick={() => openPublishPlan(visibleCards)}
+              className="hidden sm:inline-flex"
+            >
+              Publicar listos ({counters.readyToPublish})
+            </Button>
             <Button
               ref={generatorTriggerRef}
               variant="secondary"
@@ -1243,11 +1258,9 @@ export default function ServicesPanel({
                 </Button>
               }
             >
-              {counters.readyToPublish > 0 && (
-                <MenuItem disabled={!publishGate.enabled} onSelect={() => openPublishPlan(visibleCards)}>
-                  Publicar listos ({counters.readyToPublish})
-                </MenuItem>
-              )}
+              <MenuItem disabled={!publishGate.enabled || counters.readyToPublish === 0} onSelect={() => openPublishPlan(visibleCards)}>
+                Publicar listos ({counters.readyToPublish})
+              </MenuItem>
               <MenuItem disabled={!generateGate.enabled} onSelect={() => openGenerator("menu")}>
                 Generar mes
               </MenuItem>
