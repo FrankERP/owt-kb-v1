@@ -1,7 +1,9 @@
 # OWT MCP — admin parity, phase 3: proposals, messages, songs (and Kids) from the chat (plan)
 
-**Status:** DRAFT 2026-10-27, waiting for Frank's «sí» (Q1–Q2, §5). Nothing is built. Frank's summary
-(Spanish): Claude Doc https://claude.ai/artifact/SYwRUWHqFjXpkGLwppwm92.
+**Status:** APPROVED IN SCOPE by Frank 2026-10-27 19:12Z («Sí, con Kids ahora»: Q1 = Kids NOW, Q2 = yes);
+nothing built. The critical slice S1 is detailed and reviewed in
+`2026-10-27-owt-mcp-admin-parity-f3a-proposal-review.md`; S3 (song save) gets its own slice plan before 3b.
+Frank's summary (Spanish): Claude Doc https://claude.ai/artifact/SYwRUWHqFjXpkGLwppwm92.
 **Requirement (Frank, 2026-10-21 15:48Z, verbatim):** «Quiero poder hacer todo lo que hago en la
 página como admin, pero desde el chat». Phase 3 of the Claude Doc «Todo el admin desde el chat»:
 «Contestar y aprobar propuestas, editar canciones, y la rotación de Kids». Table rows: Propuestas
@@ -92,7 +94,7 @@ DELETES stay in phase 4.
 | D9 | `get_song` gains the lyrics text and chart contents behind `{full: true}`. | A new read tool. | The chat must quote the passage it replaces. |
 | D10 | Release in parts: 3a proposals + messages, 3b songs, 3c Kids (if Q1). Each its own PR, preview, prod and live proof. | One release. | Smaller reviews, and what works ships without waiting. |
 | D11 | Tool names say «setlist» (`review_setlist_proposal`), never bare «proposal». | Reuse «proposal». | `revise_proposal` already means a solver month proposal; the model must not mix them. |
-| D12 | Kids: wait for the multi-ministry work (recommended, Q1). | Build it now on today's Kids model. | The multi-ministry plan makes Kids the first adopter of the generic model, so tools built now would be rebuilt; Kids has never saved a month, so nobody is waiting. |
+| D12 | Kids: build now on today's Kids model (Frank, Q1, against the recommendation to wait). | Wait for the multi-ministry generic model. | Frank's call 2026-10-27 19:12Z. The tools call `kidsCommit` only, so a later move to the generic model changes that module and its readers, not the chat contract. |
 
 ## 4. Tasks (per release)
 
@@ -116,14 +118,12 @@ DELETES stay in phase 4.
    one passage occurrence, unknown tag, other charts kept, `_key` per item.
 8. Tools: `check_song_edits`, `save_song_edits`, `create_song`; `get_song {full}`.
 
-**3c — Kids (only if Q1 says now):** `kidsCommit.ts` + reads and writes listed in §1.4.
+**3c — Kids (Q1: now):** `kidsCommit.ts` + reads and writes listed in §1.4.
 
 ## 5. Questions for Frank
 
-- **Q1. Kids: now or with the multi-ministry work?** Recommended: with the multi-ministry work
-  (D12).
-- **Q2. The plan as a whole** (D1–D11), including adding messages, which did not exist when the
-  inventory was written.
+- **Q1. Kids: now or with the multi-ministry work?** Frank: NOW (19:12Z).
+- **Q2. The plan as a whole**, messages included: Frank: yes (19:12Z).
 
 ## 6. Release and proof
 
