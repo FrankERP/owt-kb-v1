@@ -96,6 +96,7 @@ import Button from "../ui/Button";
 import Menu, { MenuItem } from "../ui/Menu";
 import Skeleton, { SkeletonGroup } from "../ui/Skeleton";
 import { revealProps } from "@/app/utils/reveal";
+import { plural } from "@/app/utils/plural";
 import { upcomingMonthPills } from "./monthPills";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -910,6 +911,9 @@ export default function ServicesPanel({
     : `${selectedMonths.size} meses`;
 
   const counters = commandSummaryCounters({ all: cards, visible: visibleCards });
+  /** What the toolbar's publish button submits: the visible cards whose date has not gone. */
+  const toolbarPublishCards = useMemo(() => visibleCards.filter((c) => !c.isPast), [visibleCards]);
+  const toolbarPlan = useMemo(() => buildPublishConfirmation(toolbarPublishCards), [toolbarPublishCards]);
   const summaryLine = commandSummarySegments(counters).join(" · ");
   /** The toolbar's «Editar mes»: the one selected month, else the current one. */
   const openMonthEditor1 = (opener: "toolbar" | "menu" = "toolbar") =>
@@ -997,14 +1001,45 @@ export default function ServicesPanel({
   // The one reason the toolbar shows, in the buttons' own order. A `title` on a
   // `disabled` house Button is unreachable (`disabled:pointer-events-none`), so
   // the closed gate has to say why in the layout rather than on hover.
+  //
+  // The toolbar's publish button opens the plan whenever EITHER of its two
+  // commits could publish something: «Publicar N» (ready drafts) or «Publicar
+  // todos (M)» (drafts blocked only by a missing setlist or an active proposal).
+  // Between 2026-10-22 and 10-27 it rendered only while a draft was READY, which
+  // cut off «Publicar todos» exactly in the month-start state it exists for —
+  // teams assigned, no setlist yet — and Frank reported the feature as gone.
+  // With nothing ready the button is NAMED after the commit it will offer, and
+  // when neither could publish it stays, disabled, with its reason LAST in the
+  // reason order: a closed «Generar mes» is the sentence an admin needs first.
+  //
+  // The button's state and label are read from the PLAN it opens
+  // (`buildPublishConfirmation`, the modal's one selection), never from a
+  // second predicate that could disagree with it; and that plan is built over
+  // the UPCOMING visible cards only — a past month's drafts are never announced
+  // in bulk (the card's own actions remain for a past draft).
+  const readyCount = toolbarPlan.selected.length;
+  const overrideOnlyCount = readyCount === 0 ? toolbarPlan.overrideAll.length : 0;
+  const canOpenPublishPlan = readyCount > 0 || overrideOnlyCount > 0;
+  const publishButtonLabel = overrideOnlyCount > 0 ? `Publicar todos (${overrideOnlyCount})` : `Publicar listos (${readyCount})`;
+  const blockedUpcomingDrafts = toolbarPublishCards.filter(
+    (c) => c.readiness.publishState === "draft" && !c.readiness.isReadyToPublish,
+  ).length;
+  // The line only when there ARE drafts and none can go: an all-published board
+  // has nothing to explain beyond the disabled «(0)».
+  const nothingToPublish: CardGate | null =
+    canOpenPublishPlan || blockedUpcomingDrafts === 0
+      ? null
+      : {
+          enabled: false,
+          reason: `Publicar: ningún borrador se puede publicar todavía — ${plural(blockedUpcomingDrafts, "necesita", "necesitan")} revisión (sin equipo, conflicto o datos).`,
+        };
   const toolbarGateReason =
     [
-      // The same condition that renders «Publicar listos»: a reason for a
-      // button that is not on the toolbar would pre-empt the reason of one that is.
-      counters.readyToPublish > 0 ? publishGate : null,
+      canOpenPublishPlan ? publishGate : null,
       generateGate,
       editTeamGate,
       copyMode ? null : createGate,
+      nothingToPublish,
     ].find((g): g is NonNullable<typeof g> => !!g && !g.enabled && !!g.reason)?.reason ?? null;
   const changeDateGate    = gate("changeServiceDate");
   const participationGate = gate("participationSidebar");
@@ -1188,20 +1223,20 @@ export default function ServicesPanel({
             which is the accepted trade for one toolbar rather than two.
           */}
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            {/* Only when there is something to publish: «Publicar listos (0)» was a
-                button whose press opened an empty plan. Every ready draft still
-                has the card's own rule-13 «Publicar». */}
-            {counters.readyToPublish > 0 && (
-              <Button
-                variant="secondary"
-                size="lg"
-                disabled={!publishGate.enabled}
-                onClick={() => openPublishPlan(visibleCards)}
-                className="hidden sm:inline-flex"
-              >
-                Publicar listos ({counters.readyToPublish})
-              </Button>
-            )}
+            {/* Always on the toolbar (see `canOpenPublishPlan` above): «Publicar
+                listos (N)» with ready drafts, «Publicar todos (M)» when only the
+                bulk override has something to publish, disabled with its reason
+                when neither does. Every ready draft still has the card's own
+                rule-13 «Publicar». */}
+            <Button
+              variant="secondary"
+              size="lg"
+              disabled={!publishGate.enabled || !canOpenPublishPlan}
+              onClick={() => openPublishPlan(toolbarPublishCards)}
+              className="hidden sm:inline-flex"
+            >
+              {publishButtonLabel}
+            </Button>
             <Button
               ref={generatorTriggerRef}
               variant="secondary"
@@ -1243,11 +1278,9 @@ export default function ServicesPanel({
                 </Button>
               }
             >
-              {counters.readyToPublish > 0 && (
-                <MenuItem disabled={!publishGate.enabled} onSelect={() => openPublishPlan(visibleCards)}>
-                  Publicar listos ({counters.readyToPublish})
-                </MenuItem>
-              )}
+              <MenuItem disabled={!publishGate.enabled || !canOpenPublishPlan} onSelect={() => openPublishPlan(toolbarPublishCards)}>
+                {publishButtonLabel}
+              </MenuItem>
               <MenuItem disabled={!generateGate.enabled} onSelect={() => openGenerator("menu")}>
                 Generar mes
               </MenuItem>
