@@ -81,7 +81,11 @@ rounds 5 and 6; Frank chose «También desde la tarjeta» and «Solo de hoy en a
 ## Consequences
 
 - What the server cannot enforce is that Frank READ the prompt. The tool description, `docs/MCP.md`
-  and the check's answer say: never «Siempre permitir» for `delete_services`.
+  and the check's answer say: never «Siempre permitir» for `delete_services`. Live, 2026-10-27: the
+  first chat delete ran with no prompt, because claude.ai's per-tool setting for the connector's
+  write tools was already «Permitir siempre» and a new tool inherits it. Frank chose to set
+  `delete_services` to «Necesita aprobación» (over making chat deletes card-only, or accepting the
+  chat's own list-and-wait); `docs/MCP.md` records it.
 - A legacy weekend service with no lock takes two rounds (the first delete bootstraps the lock and
   answers «revisa de nuevo»).
 - A wrong delete is recovered by planning the service again or restoring it from Studio's history

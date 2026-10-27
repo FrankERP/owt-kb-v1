@@ -864,6 +864,13 @@ decisions and the rejected alternatives:
   for `delete_services` shows exactly what goes. **Never choose «Siempre permitir» for
   `delete_services`**: it removes that prompt for every later call, and the server cannot tell
   whether anyone read the list. The tool description and the check's answer say the same.
+  **Observed live (2026-10-27, production):** the first chat delete (four throwaway specials in March
+  2027) ran with NO prompt. The prompt is not the server's: claude.ai keeps a per-tool setting on
+  each connector (Ajustes › Conectores › OWT Backstage: «Permitir siempre», «Necesita aprobación» or
+  «Bloqueada», also per category such as write/delete tools), and a new tool takes its category's
+  setting, which on Frank's account was «Permitir siempre». Frank chose to set `delete_services` to
+  «Necesita aprobación» and leave the rest as they were. On an account where it is «Permitir
+  siempre», the only gate left is the chat showing the check's list and waiting to be told.
 - **The call must repeat the list.** The token is an HMAC over the month and the whole list
   (`changeSetTokens.ts` `deleteListToken`, label `mcp-delete-list|`): a subset, an added service or an
   edited line is refused before any delete. The save re-reads every service and re-renders its line;
