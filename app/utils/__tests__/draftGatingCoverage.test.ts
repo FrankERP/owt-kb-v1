@@ -112,11 +112,13 @@ const MAY_SEE_DRAFTS: Record<string, string> = {
  * Kids reads that legitimately see unpublished Sundays, keyed by FILE.
  */
 const KIDS_MAY_SEE_DRAFTS: Record<string, string> = {
-  "api/kids/schedules/route.ts":
-    "The planner's own data source and its writer, both behind " +
-    "`requireMinistryManager('kids')`. The GET backs the editing grid, which must " +
-    "show drafts or the planner cannot show the work it exists to do; the PUT must " +
-    "read a draft in order to publish it. CAVEAT, and it is why this exemption " +
+  "utils/kidsScheduleReads.ts":
+    "The planner's month read, behind a Kids manager on both of its callers: the " +
+    "schedules GET (`requireMinistryManager('kids')`) and the MCP `get_kids_month` " +
+    "(the connector's super-admin bearer). It backs the editing grid, which must " +
+    "show drafts or the planner cannot show the work it exists to do (admin parity " +
+    "phase 3 moved it out of the route so the chat reads the same rows; ADR-0022, " +
+    "amended). CAVEAT, and it is why this exemption " +
     "looked safer than it was: `KidsPlanner.loadMonth` ALSO refills its history " +
     "state from this GET, so the fairness clock passes through an exempt endpoint. " +
     "The client re-filters on `published` at its `useMemo` (ADR-0022). Anything " +
@@ -382,7 +384,7 @@ describe("unpublished kids Sundays stay out of members' views AND out of the clo
     // the generator will not pick, and neither surface can show the disagreement.
     const clocks = [
       "(client)/kids/admin/page.tsx",
-      "api/kids/generate/route.ts",
+      "utils/kidsMonthPlan.ts",
     ].map((rel) => {
       const src = stripComments(readFileSync(path.join(APP_DIR, rel), "utf8"));
       const groups = filterGroups(src).filter(

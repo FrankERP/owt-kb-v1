@@ -532,10 +532,10 @@ export const DEFENSIVE_TYPE_REJECTION_GUARDS: readonly AuditExemption[] = [
     removalOwner: "song-content editor refactor (never A2)",
   },
   {
-    file: "app/api/kids/pairs/[id]/route.ts",
-    operation: "PATCH",
+    file: "app/utils/kidsCommit.ts",
+    operation: "module",
     reason:
-      "`*[_id == $id][0]{ _type }` ownership guard on the kids pair editor: the id comes from the path, so without it a Kids manager — a role that must reach no worship data at all — could rename any document with a `name` field (author, tag, role) by id; projects only _type and 404s anything that is not a kidsPair",
+      "`*[_id == $id][0]{ _type }` ownership guard on the kids pair editor (`patchKidsPair`, called by the pair PATCH route and the MCP `save_kids_pair`): the id comes from the caller, so without it a Kids manager — a role that must reach no worship data at all — could rename any document with a `name` field (author, tag, role) by id; projects only _type and 404s anything that is not a kidsPair",
     removalOwner: "kids ministry routes (never A2)",
   },
 ];
