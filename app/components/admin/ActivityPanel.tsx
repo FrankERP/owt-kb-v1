@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { PAGE_TITLE } from "@/app/utils/homeHero";
 import Collapse from "@/app/components/ui/Collapse";
 import Button from "@/app/components/ui/Button";
 import NumberRoll from "@/app/components/ui/NumberRoll";
@@ -149,6 +150,7 @@ export default function ActivityPanel() {
 
   return (
     <div className="space-y-6">
+      <h1 className={PAGE_TITLE}>Actividad</h1>
       {/* Summary stats */}
       <div className="grid grid-cols-3 gap-3">
         {[

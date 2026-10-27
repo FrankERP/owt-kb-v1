@@ -1,5 +1,6 @@
 "use client";
 
+import { PAGE_LEDE, PAGE_TITLE } from "@/app/utils/homeHero";
 import { useState, useEffect, useCallback } from "react";
 import type { PortableTextBody } from "@/app/utils/interface";
 import {
@@ -210,9 +211,9 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-2xl uppercase tracking-wide">Canciones</h1>
+          <h1 className={PAGE_TITLE}>Canciones</h1>
           {!loading && (
-            <p className="font-label text-xs uppercase tracking-widest text-mono-500 mt-0.5">
+            <p className={`mt-2 ${PAGE_LEDE}`}>
               {plural(songs.length, "canción", "canciones")}
             </p>
           )}

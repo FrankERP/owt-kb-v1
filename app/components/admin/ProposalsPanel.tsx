@@ -1,5 +1,6 @@
 "use client";
 
+import { PAGE_LEDE, PAGE_TITLE } from "@/app/utils/homeHero";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/app/components/ui/Toast";
 import Button from "@/app/components/ui/Button";
@@ -673,9 +674,9 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
       {/* The heading every other tab has (Servicios, Disponibilidad, Canciones,
           Miembros): the title, then the counts that explain the filter below. */}
       <div>
-        <h1 className="font-display text-2xl uppercase tracking-wide">Propuestas</h1>
+        <h1 className={PAGE_TITLE}>Propuestas</h1>
         {!loading && !error && (
-          <p className="mt-0.5 font-label text-xs uppercase tracking-widest text-mono-500">
+          <p className={`mt-2 ${PAGE_LEDE}`}>
             {`${pendingCount} ${pendingCount === 1 ? "pendiente" : "pendientes"} · ${reviewCount} en revisión · ${approvedCount} ${approvedCount === 1 ? "aprobada" : "aprobadas"}`}
           </p>
         )}
