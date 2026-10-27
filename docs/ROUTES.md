@@ -45,7 +45,7 @@ Legend: **S** = server component (async unless noted; e.g. the Studio page is sy
 | `/` | `(client)/page.tsx` | S | Worship | **Dynamic, per member** (`requireWorshipPage`, ADR-0020) | Home. Opens on the member's own line («Hola, Frank / Te toca el sábado …», `homeGreeting`), then this weekend's Sat/Sun/special services: the next one in full, the rest as summary rows. Never make it static: the greeting, the open team sections and the «tú» marks are per viewer. |
 | `/schedule` | `(client)/schedule/page.tsx` | S | Worship | ISR 60s | Upcoming services. Agenda (one row per service) is the default view, `Mes` the month grid; `?m=YYYY-MM` browses one month per header-arrow press, still fetching a `WINDOW_MONTHS`-wide window (default: rolling today → +95 days). |
 | `/biblioteca` | `(client)/biblioteca/page.tsx` | S | Worship | ISR 60s fetch, dynamic by `searchParams` | The song library (R1): one fetch (catalogue + tags + authors), A–Z index with a search console, letter rail and a filter drawer (Tipo, tema, artista, tonalidad). `?q=`/`?tag=`/`?author=` seed initial state; the index mirrors its own state back into the URL without a round-trip. |
-| `/posts/[slug]` | `(client)/posts/[slug]/page.tsx` | S | Worship | **SSG** 3600s + `generateStaticParams` | Song practice surface: lyrics/chords with a transposer, tap tempo, lyrics autoscroll, audio, tutorials, references, play history. `notFound()` for unknown slugs. Hero order since design pass E (2026-10-22): title, author, the pills, then the tags as quiet text links (they led the hero as boxed chips above the title). |
+| `/posts/[slug]` | `(client)/posts/[slug]/page.tsx` | S | Worship | **Dynamic, per member** (`requireWorshipPage`, ADR-0020); no `generateStaticParams` since 2026-10-27 | Song practice surface: lyrics/chords with a transposer, tap tempo, lyrics autoscroll, audio, tutorials, references, play history. `notFound()` for unknown slugs. Hero order since design pass E (2026-10-22): title, author, the pills, then the tags as quiet text links (they led the hero as boxed chips above the title). |
 | `/me` | `(client)/me/page.tsx` | S | Member | ISR 60s | "Mi semana" (R3 F3): the identity header (next service + seat + countdown, or the next Kids Sunday), upcoming assignments and proposal CTAs, the Kids block, and ONE link line to `/me/disponibilidad` carrying the count of upcoming marked dates. No calendar and no settings — both are their own pages now. |
 | `/me/disponibilidad` | `(client)/me/disponibilidad/page.tsx` | S | Member (**ministry-neutral**) | ISR 60s | The availability calendar, alone (R3 F3): `MyAvailabilityPanel` with the month grid always open, «Seleccionar fechas», «Repetir…» and the per-day note. A kids-only volunteer reaches it. |
 | `/me/ajustes` | `(client)/me/ajustes/page.tsx` | S | Member (**ministry-neutral**) | dynamic (session read; `revalidate = 60` is inert) — per-member signed calendar URLs depend on it | Ajustes, alone (R3 F3): the one `SettingsCard` — Tema, Tamaño de texto, Perfil, Calendario (the member's signed calendar-feed links, ADR-0057; worship members only). Reached from the avatar menu («Ajustes») and from `ThemeAnnouncement` on `/me` (`#tema`). |
@@ -63,7 +63,7 @@ open**, deliberately, because it is prerendered and reads nothing. "Worship" mea
 calls `requireWorshipPage()` on top of the session (ministry-scoped, see the enforcement table).
 
 ### Dynamic segments
-- `posts/[slug]` → `post.slug.current` (has `generateStaticParams()`).
+- `posts/[slug]` → `post.slug.current` (no `generateStaticParams()` since 2026-10-27; dynamic, ADR-0020).
 - `me/propose/[roleId]` → a role doc `_id` where the current user is in `Lead[]`; else `notFound()`.
 - `studio/[[...tool]]` → optional catch-all for Studio's internal router.
 
@@ -99,10 +99,12 @@ into the library, permanent (308) so bookmarks and the old nav keep working.
 - **`/biblioteca`** — one combined query: the catalogue (former home `POSTS_QUERY`, plus author
   refs), tags with counts (former `/tag` query) and authors with counts (former `/author`
   query). Filtering is client-side, so one cached fetch serves every `?q=`/`?tag=`/`?author=`.
-- **`/me`** — `requireActiveSession()`, then the member read (`serverClient`: `_id`,
-  `member_name`, `alias`, `memberType`, `unavailableDates`, `photoUrl`) and, for a worship
-  member only, the assignments + shared proposals (`operationalClient`/`serverClient`); uses
-  `describeContributors`.
+- **`/me`** — `requireActiveSession()` and the cached `getMemberAccess`, then ONE `Promise.all`:
+  the member read (`serverClient`: `_id`, `member_name`, `alias`, `memberType`,
+  `unavailableDates`, `photoUrl`), for a worship member the assignments + shared proposals
+  (`operationalClient`), for a kids member `KIDS_ME_QUERY` (`operationalClient`,
+  `published == true`); uses `describeContributors`. Sent together because each read crosses
+  the Atlantic (ADR-0075).
 - **`/me/disponibilidad`** — `requireActiveSession()`, then `Promise.all` of
   `MEMBER_AVAILABILITY_QUERY` (`serverClient` — `_rev` is the save precondition) and
   `SERVICE_DATES_QUERY` over `horizon()` (`operationalClient`). Both in
@@ -111,7 +113,10 @@ into the library, permanent (308) so bookmarks and the old nav keep working.
   (`serverClient`) — the fields `ProfilePanel` edits — and `loadCalendarFeedState` (the member's
   `calendarFeed.<id>` generation, tokened, to sign the «Calendario» links; nothing secret reaches
   the client but the member's own URLs).
-- **`/posts/[slug]`** — full `post` projection + last-3 past plays (bounded `week < today`).
+- **`/posts/[slug]`** — full `post` projection + last-3 past plays (bounded `week < today`),
+  both keyed by the slug and started before `requireWorshipPage` settles (the gate is still
+  awaited first, so its redirect wins); then the member's instruments only when the song has
+  rehearsal mixes. ADR-0075.
 - **`/admin`** — only `requireActiveManager()`; panels fetch client-side.
 
 Two clients: `client` (CDN read, `useCdn:false`) for cacheable page data; `serverClient` (read
@@ -177,7 +182,7 @@ See [UTILITIES_AND_COMPONENTS.md](UTILITIES_AND_COMPONENTS.md) for the full comp
 | File | Setting |
 |------|---------|
 | `/`, `/schedule`, `/biblioteca`, `/me`, `/me/disponibilidad`, `/me/ajustes` | `export const revalidate = 60` |
-| `/posts/[slug]` | `revalidate = 3600` + `generateStaticParams()` |
+| `/posts/[slug]` | `revalidate = 3600` (bounds the fetch cache; the page is dynamic, ADR-0020) |
 | `/me/propose/[roleId]` | `revalidate = 0` (always dynamic) |
 | `/studio/[[...tool]]` | `export const dynamic = 'force-static'` |
 | `/admin`, `/auth/*` | none (implicitly dynamic / client) |

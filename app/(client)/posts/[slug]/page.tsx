@@ -60,8 +60,10 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 }
 
 async function getPost(slug: string) {
+  // `order(_id asc)` before `[0]`, here and in `getSongHistory`: both resolve the song
+  // by its slug on their own, so a duplicate slug must pick the same document twice.
   const query = `
-    *[_type == "post" && slug.current == $slug][0] {
+    *[_type == "post" && slug.current == $slug] | order(_id asc)[0] {
       _id,
       title,
       author,
@@ -92,7 +94,7 @@ async function getPost(slug: string) {
       },
       chords[]{ _key, key, content },
     }`;
-  return await client.fetch(query, { slug });
+  return await client.fetch<Post | null>(query, { slug });
 }
 
 interface SongHistoryEntry {
@@ -102,7 +104,7 @@ interface SongHistoryEntry {
   pairedSongs: Array<{ title: string; slug: { current: string }; play_key?: string }>;
 }
 
-async function getSongHistory(songId: string): Promise<SongHistoryEntry[]> {
+async function getSongHistory(slug: string): Promise<SongHistoryEntry[]> {
   // "Última vez tocada" must reflect PAST plays only. Bound to week < today
   // (America/Mexico_City): a future or this-week setlist has not been played
   // yet — without this bound it would show as the last play with a future date,
@@ -114,18 +116,25 @@ async function getSongHistory(songId: string): Promise<SongHistoryEntry[]> {
   // never counts as a play. Over-fetch, then canonicalize by target: a duplicate
   // week (ambiguous target) contributes NO rows rather than a false or
   // double-counted play, and only then take the three most recent.
+  //
+  // Keyed by the SLUG, not the song's id, so it runs alongside `getPost` instead of
+  // after it: every read crosses the Atlantic (Sanity is in Belgium, the functions
+  // in iad1 — ADR-0075). `^._id` is the song inside the setlist filter, `^.^._id`
+  // inside a setlist's `songs[]`.
   const query = `
-    *[_type in ["featuredSongs", "saturdarSongs"] && references($songId) && week < $today] | order(week desc)[0..19] {
-      week,
-      _type,
-      "play_key": songs[song._ref == $songId][0].play_key,
-      "pairedSongs": songs[song._ref != $songId][] {
-        "title": song->title,
-        "slug": song->slug,
-        play_key,
-      },
-    }`;
-  const rows = await operationalClient.fetch<SongHistoryEntry[]>(query, { songId, today });
+    *[_type == "post" && slug.current == $slug] | order(_id asc)[0] {
+      "rows": *[_type in ["featuredSongs", "saturdarSongs"] && references(^._id) && week < $today] | order(week desc)[0..19] {
+        week,
+        _type,
+        "play_key": songs[song._ref == ^.^._id][0].play_key,
+        "pairedSongs": songs[song._ref != ^.^._id][] {
+          "title": song->title,
+          "slug": song->slug,
+          play_key,
+        },
+      }
+    }.rows`;
+  const rows = (await operationalClient.fetch<SongHistoryEntry[] | null>(query, { slug, today })) ?? [];
   return canonicalizePlayHistory(rows, playHistoryTargetKey)
     .filter((entry) => serviceDayKey(entry.week) !== null)
     .slice(0, 3)
@@ -141,10 +150,9 @@ async function getSongHistory(songId: string): Promise<SongHistoryEntry[]> {
 
 export const revalidate = 3600;
 
-export async function generateStaticParams() {
-  const slugs: string[] = await client.fetch(`*[_type == "post" && defined(slug.current)].slug.current`);
-  return slugs.map((slug) => ({ slug }));
-}
+// No `generateStaticParams`: `requireWorshipPage` makes this page dynamic (ADR-0020),
+// so the build's prerender of every slug only bailed out — and since the song and its
+// history are read before the gate settles, each attempt would spend two Sanity reads.
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
@@ -175,16 +183,22 @@ const LYRIC = `${SECTION_SCROLL} mb-14 lg:col-start-1 lg:row-start-1 lg:row-span
 
 const Page = async ({ params }: Params) => {
   const { slug } = await params;
+  // One round trip for the gate, the song and its history, not three in a row:
+  // each read crosses the Atlantic (ADR-0075). The reads start first but the gate is
+  // awaited first, so its redirect always wins, even over a failed read (the `catch`
+  // only keeps that failure from going unhandled while the gate decides). A visitor
+  // the gate turns away — a kids-only member, a disabled one — costs two reads that
+  // render nothing.
+  const reads = Promise.all([getPost(slug), getSongHistory(slug)]);
+  reads.catch(() => {});
   const session = await requireWorshipPage(`/posts/${slug}`);
-  const post: Post = await getPost(slug);
+  const [post, history] = await reads;
 
   if (!post) notFound();
 
   // «Cordero y León (Lion and The Lamb)»: the Spanish name is the title, the
   // original joins the authors' line (ADR-0070).
   const title = splitSongTitle(post.title);
-
-  const history = await getSongHistory(post._id);
 
   // Preselection only (spec §8.2): the viewer's declared instruments pick which
   // rehearsal row is highlighted. Plain data — this stays a Server Component.
