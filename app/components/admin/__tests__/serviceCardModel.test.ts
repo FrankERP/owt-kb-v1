@@ -346,6 +346,9 @@ describe("command summary", () => {
     const counters = commandSummaryCounters({ all: visible, visible });
     expect(counters.readyToPublish).toBe(1);
     expect(counters.blockedDrafts).toBe(4);
+    // «Publicar todos» alone reaches the missing setlist and the pending
+    // proposal; never the availability conflict or the broken record.
+    expect(counters.overridableDrafts).toBe(2);
     expect(counters.publishedReady).toBe(1);
     expect(counters.conflicts).toBe(1);
     expect(counters.pendingProposals).toBe(1);
@@ -362,6 +365,7 @@ describe("command summary", () => {
       upcoming: 6,
       past: 0,
       readyToPublish: 2,
+      overridableDrafts: 0,
       publishedReady: 0,
       conflicts: 1,
       pendingProposals: 1,
@@ -378,6 +382,7 @@ describe("command summary", () => {
       upcoming: 0,
       past: 0,
       readyToPublish: 0,
+      overridableDrafts: 0,
       publishedReady: 0,
       conflicts: 0,
       pendingProposals: 0,
