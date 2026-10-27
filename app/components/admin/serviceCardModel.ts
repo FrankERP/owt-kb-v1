@@ -174,15 +174,6 @@ export type SwapSource =
 
 export const dn = (m: MemberOption) => m.alias?.trim() || m.member_name;
 
-/**
- * Rough rendered width of an instrument/FOH pill (label chip + name), in
- * char-widths, so pills can be sorted narrow→wide. Names/labels at or below the
- * CSS min-width floor count as equal; an emoji suffix adds a bit of width.
- */
-export const pillWidth = (label: string, value: string) =>
-  Math.max(label.length, 4) +
-  Math.max([...value].length + (/\p{Extended_Pictographic}/u.test(value) ? 2 : 0), 4);
-
 // ── Identity labels + colours ────────────────────────────────────────────────
 //
 // Purple is reserved for special-service identity ONLY; readiness tone never uses

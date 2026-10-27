@@ -376,6 +376,7 @@ export function ParticipationSidebar({
             saturdays={saturdays.get(r.id) ?? 0}
             selected={selectedId === r.id}
             onSelect={onSelect}
+            board={placement === "board"}
           />
         ))}
         {idle.length > 0 && (
@@ -416,7 +417,7 @@ function caption(r: MemberParticipation, view: View, includeSpecials: boolean, s
   return parts.filter(([n]) => n > 0).map(([n, label]) => `${n} ${label}`).join(" · ");
 }
 
-function Row({ r, max, average, view, includeSpecials, saturdays, selected, onSelect }: {
+function Row({ r, max, average, view, includeSpecials, saturdays, selected, onSelect, board }: {
   r: MemberParticipation;
   max: number;
   average: number | null;
@@ -425,19 +426,23 @@ function Row({ r, max, average, view, includeSpecials, saturdays, selected, onSe
   saturdays: number;
   selected: boolean;
   onSelect?: (id: string | null) => void;
+  /** On the Servicios board the row is a hairline of the «millones» pass (15 px name, display-face count); the planner keeps its compact row. */
+  board?: boolean;
 }) {
   const value = view === "voces" ? r.total : r.instrWeeks + r.fohWeeks;
   const barW = Math.round((value / max) * BAR_W);
   const u = value > 0 ? barW / value : 0;
   const seg = (n: number, c: string) => n > 0
     ? <span style={{ display: "inline-block", height: 8, width: Math.round(n * u), background: c }} /> : null;
-  const nameClass = "block max-w-full truncate text-left font-body text-[15px] font-semibold text-ink";
+  const nameClass = board
+    ? "block max-w-full truncate text-left font-body text-[15px] font-semibold text-ink"
+    : "block max-w-full truncate text-left text-[13px] font-medium text-ink-muted";
 
   return (
     <div
       data-member-row={r.id}
       data-selected={selected ? "true" : undefined}
-      className={`flex items-center gap-2.5 py-2 border-b border-ink/[0.08] ${selected ? "bg-accent/10" : ""}`}
+      className={`flex items-center gap-2.5 ${board ? "py-2 border-b border-ink/[0.08]" : "py-1 border-b border-accent/10"} ${selected ? "bg-accent/10" : ""}`}
     >
       <div className="flex-1 min-w-0">
         {onSelect ? (
@@ -472,7 +477,7 @@ function Row({ r, max, average, view, includeSpecials, saturdays, selected, onSe
           )}
         </div>
       </div>
-      <div className="font-display text-[22px] font-semibold text-ink-muted min-w-[24px] text-right">
+      <div className={`${board ? "font-display text-[22px] font-semibold" : "text-xl font-medium"} text-ink-muted min-w-[24px] text-right`}>
         <NumberRoll value={value} />
       </div>
     </div>

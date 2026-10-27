@@ -127,6 +127,9 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
   const readiness = card.readiness;
 
   const identity = cardIdentity(card, props.todayIso);
+  // The state line's colour comes from the model's tone, not a second reading of
+  // `publishState`: `cardIdentity` is where «Borrador»/«Publicado» is decided.
+  const stateWarn = identity.publication.tone === "warn";
   const preview = cardPreview(role);
   const issueLines = serviceIssueLines({ readiness, sources: props.sources });
   const action = servicePrimaryActionProps(readiness, routeGate(props));
@@ -227,11 +230,11 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
               )}
               <span
                 data-card-state={isDraft ? "draft" : "published"}
-                className={`inline-flex items-center gap-1.5 font-body text-sm ${isDraft ? "text-warning-strong" : "text-positive-strong"}`}
+                className={`inline-flex items-center gap-1.5 font-body text-sm ${stateWarn ? "text-warning-strong" : "text-positive-strong"}`}
               >
                 <span
                   aria-hidden="true"
-                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${isDraft ? "border border-warning-fg" : "bg-positive-fg"}`}
+                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${stateWarn ? "border border-warning-fg" : "bg-positive-fg"}`}
                 />
                 {identity.publication.text}
               </span>
@@ -720,7 +723,10 @@ function TeamRow({
   conflictNote?: string;
 }) {
   return (
-    <span title={isConflict && conflictNote ? conflictNote : undefined} className="whitespace-nowrap">
+    // No `whitespace-nowrap`: the band is running text under `CARD_STYLE.longText`,
+    // and a long seat («Guitarra eléctrica» + a long alias) must break rather than
+    // push the card past a 320 px viewport (ADR-0035: /admin never scrolls sideways).
+    <span title={isConflict && conflictNote ? conflictNote : undefined}>
       <span className={isConflict ? "text-negative-fg" : undefined}>{label}</span>{" "}
       <span className={`font-semibold ${isConflict ? "text-negative-fg" : "text-ink"}`}>
         {isConflict && <span aria-hidden="true">⚠ </span>}

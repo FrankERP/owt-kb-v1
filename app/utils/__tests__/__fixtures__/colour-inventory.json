@@ -2156,7 +2156,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 223,
+      "line": 225,
       "disposition": "B",
       "reason": null
     },
@@ -2540,7 +2540,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 711,
+      "line": 702,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2588,7 +2588,7 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 787,
+      "line": 793,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2600,7 +2600,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 806,
+      "line": 812,
       "disposition": "B",
       "reason": null
     },
@@ -2612,7 +2612,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 796,
+      "line": 802,
       "disposition": "B",
       "reason": null
     },
@@ -2624,7 +2624,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 816,
+      "line": 822,
       "disposition": "B",
       "reason": null
     },
@@ -2636,7 +2636,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 826,
+      "line": 832,
       "disposition": "B",
       "reason": null
     },
@@ -2648,7 +2648,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 837,
+      "line": 843,
       "disposition": "B",
       "reason": null
     },
@@ -2660,7 +2660,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 846,
+      "line": 852,
       "disposition": "B",
       "reason": null
     },
@@ -2672,7 +2672,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 855,
+      "line": 861,
       "disposition": "B",
       "reason": null
     },
@@ -2696,7 +2696,7 @@
       "alpha": null,
       "utility": "border",
       "carrier": null,
-      "line": 1961,
+      "line": 1953,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },

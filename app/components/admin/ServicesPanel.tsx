@@ -908,7 +908,7 @@ export default function ServicesPanel({
 
   const monthLabel =
     selectedMonths.size === 0 ? "Próximos"
-    : selectedMonths.size === 1 ? fmtYM([...selectedMonths][0])
+    : selectedMonths.size === 1 ? formatMonthTab([...selectedMonths][0], currentYM)
     : `${selectedMonths.size} meses`;
 
   const counters = commandSummaryCounters({ all: cards, visible: visibleCards });
@@ -1351,7 +1351,7 @@ export default function ServicesPanel({
           <div className="flex flex-wrap items-end gap-x-5 border-b border-ink/[0.10]">
             <MonthTab label="Próximos" selected={selectedMonths.size === 0} onClick={() => setSelectedMonths(new Set())} />
             {futureMonths.map(ym => (
-              <MonthTab key={ym} label={fmtYM(ym)} selected={selectedMonths.has(ym)} onClick={() => toggleMonth(ym)} />
+              <MonthTab key={ym} label={formatMonthTab(ym, currentYM)} selected={selectedMonths.has(ym)} onClick={() => toggleMonth(ym)} />
             ))}
             {pastMonths.length > 0 && (
               <button
@@ -1388,7 +1388,7 @@ export default function ServicesPanel({
           {pastMonths.length > 0 && (
             <Collapse id="services-past-months" open={showPastMonths} className="mt-1 flex flex-wrap items-end gap-x-5">
               {pastMonths.map(ym => (
-                <MonthTab key={ym} label={fmtYM(ym)} selected={selectedMonths.has(ym)} onClick={() => toggleMonth(ym)} past />
+                <MonthTab key={ym} label={formatMonthTab(ym, currentYM)} selected={selectedMonths.has(ym)} onClick={() => toggleMonth(ym)} past />
               ))}
             </Collapse>
           )}
@@ -1921,14 +1921,6 @@ function PublicationFooter({
 }
 
 // ─── Tiny helpers ─────────────────────────────────────────────────────────────
-
-function fmtYM(ym: string) {
-  return formatMonthTab(ym, todayYM());
-}
-
-function todayYM() {
-  return new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" }).slice(0, 7);
-}
 
 /**
  * One month tab's shared box: a 44 px text tab with a 2 px underline that sits ON
