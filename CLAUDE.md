@@ -120,7 +120,7 @@ the budget goes there, once.
 - **`preview` writes to the real Sanity dataset** — a rehearsal of the UI, never a dry run of data.
 - **`OWT_SOLVER_ENGINE` on Preview is for rehearsals only and normally unset** (branch-scoped to
   `preview` while set; Production and `verify/service-readiness` ignore it). See `docs/SECRETS.md`.
-- **Functions run on Fluid compute in `iad1`**, both pinned in `vercel.json` (ADR-0075): concurrent requests share
+- **Functions run on Fluid compute in `iad1`**, both pinned in `vercel.json` (ADR-0074): concurrent requests share
   one instance, so module-level state must be safe to share. Sanity lives in Europe; read the ADR
   before moving the region. A server module that spawns a process gates it on
   `NODE_ENV === "production"` or the tracer packs the whole repo (`functionTraceGuard.test.ts`).
