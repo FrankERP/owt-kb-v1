@@ -86,7 +86,7 @@ disagree, `CLAUDE.md` wins and this file is the one to fix.
   set up as network secrets, the canonical copy of the adversarial-plan-review skill and the
   agent definitions under `~/.claude/agents/`. Google-side secret rotations go through Google
   Cloud Shell in the browser, not a laptop. **The production solver is verified and re-deployed
-  from GitHub Actions** (`.github/workflows/solver-v3-ops.yml`, keyless, ADR-0073): `verify` runs
+  from GitHub Actions** (`.github/workflows/solver-v3-ops.yml`, keyless, ADR-0074): `verify` runs
   by itself after every `gcf_v3/**` merge; a session dispatches `verify` (or, after Frank says
   yes in the thread, `deploy`) with the GitHub connector's `actions_run_trigger` and reads the
   result with `get_job_logs`. If the session's token cannot dispatch, Frank runs it from
@@ -454,6 +454,12 @@ several exist precisely to stop a plausible-looking change.
   never the dereferenced admin read, and never a reader that turns a malformed answer into `[]`
   (every service would look «ya no existe»). The line's N is `seatAssignees(normalizeStoredSeats())`,
   the notice builder's own audience (`deleteLines.test.ts`). Only contention is told to repeat, once.
+  A service's conversation (ADR-0065: the leads' thread, «Mensaje del pastor», «Mensaje para el
+  equipo») has its writers in `serviceThreadCommit.ts` (admin parity phase 3, ADR-0073): the four
+  `/api/admin/service-threads/[roleId]/*` routes and the MCP conversation tools
+  (`app/mcp/tools/serviceMessages.ts`) both call them, so a chat message reaches the leads exactly as
+  `/admin`'s does. The acting member is the session's on `/admin` and the bearer's (`principalOf`) in
+  the chat, never an argument; no principal refuses before any read.
 - **The MCP proposal editor: the server judges, the card only shows** (ADR-0062). The card
   (`mcp-app/proposal-card/`) holds a list of edits, never a board; every check and save replays the
   whole list from the stored proposal through the planner's own gate. Only `editorBoard.ts` calls

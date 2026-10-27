@@ -43,7 +43,7 @@ rule changes, change both; if they disagree, this file wins.
   then run the suite with `.venv/bin/python` (the system `python` is 3.13 and refuses global
   installs). Keys reach a session only as network secrets the proxy injects (`docs/SECRETS.md`),
   never as readable variables. The long form lists what still needs the Mac. The solver is
-  verified/re-deployed via `solver-v3-ops.yml` (ADR-0073): ask Frank before dispatching `deploy`;
+  verified/re-deployed via `solver-v3-ops.yml` (ADR-0074): ask Frank before dispatching `deploy`;
   **never approve, reject or bypass a pending deployment**, nor change its environments or the WIF
   setup without his OK — the session acts as `FrankERP`, so this rule is the only gate.
 - **On the Mac — worktrees only when two things must be in flight at once** (`Agent` with
@@ -252,7 +252,9 @@ looks wrong** — several exist to stop a plausible-looking change.
   authorization to `app/utils/*Commit.ts`; MCP writes go only through them (`apply_schedule`: roles
   create + fairness PUT, ADR-0061; the saved-month editor: PATCH, copy, create, ADR-0066;
   `delete_services`: DELETE, only with the check's echoed list and token, never a past service,
-  ADR-0072; `serviceCommitCallers.test.ts`); `/api/mcp` buffers SSE so a tool finishes in the handler.
+  ADR-0072; `serviceCommitCallers.test.ts`). The service conversation's writers live in
+  `serviceThreadCommit.ts` too, called by its four routes and the MCP conversation tools (ADR-0073);
+  `/api/mcp` buffers SSE so a tool finishes in the handler.
 - **The MCP proposal editor: the server judges, the card only shows** (ADR-0062). Every check and
   save replays the whole edit list through the planner's gate in `editorBoard.ts` only; a saved edit
   is a NEW `mcpProposal` (base `supersededBy` in the same transaction), never a mutated payload;

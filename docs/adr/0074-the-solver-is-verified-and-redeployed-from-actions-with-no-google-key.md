@@ -1,9 +1,11 @@
-# ADR-0073: The solver is verified and re-deployed from GitHub Actions with no Google key
+# ADR-0074: The solver is verified and re-deployed from GitHub Actions with no Google key
 
 **Date:** 2026-10-22 · **Status:** Accepted
 
 > **Numbering.** Renumbered 0072 → 0073 on `preview` 2026-10-24: admin parity phase 2's ADR-0072
 > reaches `main` first (ADR numbers follow the order records reach `main`).
+> Renumbered 0073 → 0074 on `preview` 2026-10-27: admin parity phase 3's ADR-0073 (a service's
+> messages from the chat) reaches `main` first.
 
 ## Context
 

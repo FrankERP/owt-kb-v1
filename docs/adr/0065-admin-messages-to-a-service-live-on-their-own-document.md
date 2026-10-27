@@ -103,6 +103,9 @@ el equipo en la DayCard» (the email still goes to the leads only).
 
 `ServiceMessagesDialog` now has three parts, each with its own writer:
 
+> Since 2026-10-27 the writers below live in `app/utils/serviceThreadCommit.ts`; the routes call it,
+> and so do the MCP conversation tools ([ADR-0073](0073-a-services-messages-are-written-from-the-chat-through-the-service-thread-writer.md)).
+
 - **Mensaje del pastor — ONE per service, a field, not a chat message.**
   `serviceThread.<roleId>.pastor_message` `{ body, author, at, edited_at }`, written by
   `PUT /api/admin/service-threads/[roleId]/pastor-message` (set, edit, or clear with an

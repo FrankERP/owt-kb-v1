@@ -79,3 +79,39 @@ export const SERVICE_THREAD_BY_ID_QUERY = `*[_type == "${SERVICE_THREAD_TYPE}" &
   ${THREAD_MESSAGES},
   ${PASTOR_MESSAGE}
 }`;
+
+/** What `serviceConversationQuery` (`serviceReadQueries.ts`) reads: the admin GET's and the MCP read's one shape. */
+export interface ConversationRead {
+  service: {
+    _id: string;
+    _rev: string;
+    _type: string;
+    team_notes?: string | null;
+    hasSongs?: boolean;
+    [k: string]: unknown;
+  } | null;
+  weekendSetlists?: Array<{ _id: string; _rev: string; _type: string; team_notes?: string | null }> | null;
+  [k: string]: unknown;
+}
+
+/**
+ * Where this service's «Mensaje para el equipo» lives, for the team-notes PUT to
+ * assert: a special's role (when it has a setlist), or the ONE weekend setlist
+ * document of its type. No setlist is `null` (the dialog says there is none yet);
+ * a duplicate pair is `{ unavailable: "ambiguous" }`, so the dialog names the
+ * real reason. The PUT refuses both the same way.
+ */
+export function teamNotesTarget(
+  service: NonNullable<ConversationRead["service"]>,
+  weekendSetlists: ConversationRead["weekendSetlists"],
+  own: { _rev: string; team_notes?: string | null; hasSongs?: boolean },
+): { text: string; observed: { id: string; rev: string } } | { unavailable: "ambiguous" } | null {
+  if (service._type === "special_role") {
+    return own.hasSongs ? { text: own.team_notes ?? "", observed: { id: service._id, rev: own._rev } } : null;
+  }
+  const type = service._type === "sunday_role" ? "featuredSongs" : "saturdarSongs";
+  const rows = (weekendSetlists ?? []).filter((r) => r._type === type);
+  if (rows.length > 1) return { unavailable: "ambiguous" };
+  if (rows.length !== 1) return null;
+  return { text: rows[0].team_notes ?? "", observed: { id: rows[0]._id, rev: rows[0]._rev } };
+}
