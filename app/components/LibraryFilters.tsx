@@ -124,7 +124,7 @@ export default function LibraryFilters({
             <ChipSearch label="Buscar tema" value={themeQ} onChange={setThemeQ} />
             <div className="flex flex-wrap gap-1.5">
               {shownThemes.map((t) => (
-                <Button key={t._id} variant="pill" size="sm" active={filters.tags.includes(t.slug.current)} onClick={() => toggleTag(t.slug.current)} className={`normal-case tracking-normal ${chipSize((t.postCount ?? 0) / max)}`}>#{t.name} <span className="text-ink-dim">{t.postCount}</span></Button>
+                <Button key={t._id} variant="pill" size="sm" active={filters.tags.includes(t.slug.current)} onClick={() => toggleTag(t.slug.current)} className={chipSize((t.postCount ?? 0) / max)}>#{t.name} <span className="text-ink-dim">{t.postCount}</span></Button>
               ))}
             </div>
             {shownThemes.length === 0 && <p className="font-label text-xs text-ink-dim">Sin temas que coincidan</p>}
@@ -134,7 +134,7 @@ export default function LibraryFilters({
             <ChipSearch label="Buscar artista" value={artistQ} onChange={setArtistQ} />
             <div className="flex flex-wrap gap-1.5">
               {shownArtists.map((a) => (
-                <Button key={a._id} variant="pill" size="sm" active={filters.author === a.slug.current} onClick={() => pickArtist(a.slug.current)} className={`normal-case tracking-normal ${chipSize((a.postCount ?? 0) / artistMax)}`}>{a.name}{(a.postCount ?? 0) > 0 && <span className="text-ink-dim">{a.postCount}</span>}</Button>
+                <Button key={a._id} variant="pill" size="sm" active={filters.author === a.slug.current} onClick={() => pickArtist(a.slug.current)} className={chipSize((a.postCount ?? 0) / artistMax)}>{a.name}{(a.postCount ?? 0) > 0 && <span className="text-ink-dim">{a.postCount}</span>}</Button>
               ))}
             </div>
             {shownArtists.length === 0 && <p className="font-label text-xs text-ink-dim">Sin artistas que coincidan</p>}

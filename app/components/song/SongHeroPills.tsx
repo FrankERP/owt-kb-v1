@@ -106,9 +106,10 @@ export default function SongHeroPills({
             onChange={(k) => shared?.setSemitones(semitonesBetween(nativeKey!, k))}
             options={DISPLAY_NOTES.map((n) => ({
               value: n,
-              // `normal-case` on the label, not on the group: `SegmentedControl`
-              // uppercases its options (CALENDARIO / LISTA) and a flat then reads
-              // "EB", which is not a note. The accessible name is `ariaLabel`, so
+              // `normal-case` on the label, as a guard: `SegmentedControl` is
+              // sentence case since 2026-10-27, but an uppercased option turns a
+              // flat into "EB", which is not a note, so the label pins its own
+              // case (`keyDial.test.tsx`). The accessible name is `ariaLabel`, so
               // wrapping the visible text costs nothing.
               label: <span className="normal-case">{formatKey(n)}</span>,
               // "There is a mix in this key": the control draws the dot at the

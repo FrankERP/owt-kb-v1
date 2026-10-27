@@ -2321,7 +2321,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
               <button
                 type="button"
                 onClick={forcePendingMove}
-                className="min-h-[44px] flex-1 rounded-lg border border-warning-fg/40 px-3 font-label text-xs uppercase tracking-widest text-warning-strong hover:bg-warning-fg/10"
+                className="min-h-[44px] flex-1 rounded-lg border border-warning-fg/40 px-3 font-body font-semibold leading-tight text-sm text-warning-strong hover:bg-warning-fg/10"
               >
                 Mover de todos modos
               </button>
@@ -2374,7 +2374,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
               <button
                 type="button"
                 onClick={confirmPendingCopy}
-                className="min-h-[44px] flex-1 rounded-lg border border-warning-fg/40 px-3 font-label text-xs uppercase tracking-widest text-warning-strong hover:bg-warning-fg/10"
+                className="min-h-[44px] flex-1 rounded-lg border border-warning-fg/40 px-3 font-body font-semibold leading-tight text-sm text-warning-strong hover:bg-warning-fg/10"
               >
                 Copiar de todos modos
               </button>
