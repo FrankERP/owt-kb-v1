@@ -68,7 +68,9 @@ Any future module-level state must be safe for concurrent requests on one instan
 ## Follow-up (2026-10-27)
 
 Released to production the same day (PR #205, 93ed813e). The first request on the new
-deployment answered `/api/auth/session` in 0.50 s, against 1.2–1.4 s cold before. The read
+deployment answered `/api/auth/session` in 0.50 s, against 1.2–1.4 s cold before; after 35
+idle minutes the first request took 0.52 s, and 12 follow-ups had a median of 0.21 s (two
+outliers near 0.9 s). No runtime errors in the first 35 minutes. The read
 waterfalls were collapsed next (PR #208): the song page sends the gate, the song and its play
 history together (the history is keyed by the slug), so it waits on two rounds of reads
 instead of four, and only one when the song has no rehearsal mixes; `/me` sends its profile,
