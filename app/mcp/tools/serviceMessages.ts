@@ -25,6 +25,7 @@ import { teamNotesTarget, type ConversationRead } from "@/app/utils/serviceThrea
 import type { ThreadMessageRow } from "@/app/utils/proposalMessageRead";
 import type { PastorMessageRow } from "@/app/utils/serviceThread";
 import { PROPOSAL_NOTES_MAX } from "@/app/utils/proposalNotesLimit";
+import { PROPOSAL_MESSAGES_MAX } from "@/app/utils/proposalMessageWrite";
 import {
   deleteServiceThreadMessage,
   editServiceThreadMessage,
@@ -46,6 +47,13 @@ const NOT_FOUND = "No existe un servicio con ese id.";
 const KEY_MESSAGE = "key no es la clave de un mensaje; usa la de get_service_messages.";
 const NOT_AUTHOR = "Solo puedes editar o borrar tus propios mensajes (los que get_service_messages marca mine: true).";
 const ONE_OF = "Indica body para editar el mensaje o delete: true para borrarlo, no los dos.";
+const MESSAGE_GONE = "Ese mensaje ya no existe; vuelve a leer con get_service_messages.";
+const THREAD_CLOSED =
+  "La conversación de este servicio ya cerró (su fecha ya pasó): no se puede escribir, editar ni borrar.";
+const THREAD_FULL = `La conversación llegó al máximo de ${PROPOSAL_MESSAGES_MAX} mensajes.`;
+const CHANGED = "La conversación cambió desde que la leíste; vuelve a leer con get_service_messages antes de reintentar.";
+const SETLIST_CHANGED = "El setlist cambió desde que lo leíste; vuelve a leer con get_service_messages antes de reintentar.";
+const NO_SETLIST = "Este servicio ya no tiene setlist, así que no hay mensaje para el equipo que cambiar.";
 
 /** Said on every write: what makes a message Frank's and not the model's. */
 const CONFIRM_RULE =
@@ -77,17 +85,22 @@ function labelOf(service: NonNullable<ConversationRead["service"]>): string {
   return serviceLabel({ date, roleType: service._type, ...identity });
 }
 
-/** The service's leads by name; `except` leaves out the writer, whom the writers never notify. */
-function leadNames(service: NonNullable<ConversationRead["service"]>, except: string | null = null): string[] {
-  const leads = Array.isArray(service.leads) ? (service.leads as { id?: unknown; name?: unknown }[]) : [];
-  return leads
-    .filter((l) => !except || l?.id !== except)
-    .map((l) => (typeof l?.name === "string" && l.name.trim() ? l.name.trim() : "un líder sin nombre"));
+function leadNames(service: NonNullable<ConversationRead["service"]>): string[] {
+  const leads = Array.isArray(service.leads) ? (service.leads as { name?: unknown }[]) : [];
+  return leads.map((l) => (typeof l?.name === "string" && l.name.trim() ? l.name.trim() : "un líder sin nombre"));
 }
 
-/** Who a notifying write told: the leads other than the writer, «según sus preferencias». */
-function toldLine(service: NonNullable<ConversationRead["service"]>, writer: string): string {
-  const leads = leadNames(service, writer);
+/**
+ * Who a notifying write told: the leads the WRITER registered the notice for (`effects.leadIds`, read
+ * by the writer itself), minus the writer, named from this tool's own read; «según sus preferencias».
+ */
+function toldLine(service: NonNullable<ConversationRead["service"]>, writer: string, leadIds: readonly string[]): string {
+  const ids = new Set(leadIds.filter((id) => id !== writer));
+  const named = Array.isArray(service.leads) ? (service.leads as { id?: unknown; name?: unknown }[]) : [];
+  const leads = [...ids].map((id) => {
+    const row = named.find((l) => l?.id === id);
+    return typeof row?.name === "string" && row.name.trim() ? row.name.trim() : "un líder";
+  });
   return leads.length
     ? `Aviso push y correo en camino a ${joinEs(leads)} (según sus preferencias).`
     : "El servicio no tiene otros líderes asignados: nadie recibe aviso.";
@@ -96,6 +109,38 @@ function toldLine(service: NonNullable<ConversationRead["service"]>, writer: str
 function joinEs(names: readonly string[]): string {
   if (names.length <= 1) return names[0] ?? "";
   return `${names.slice(0, -1).join(", ")} y ${names[names.length - 1]}`;
+}
+
+/**
+ * The writer's refusals that `refusalFor`'s service-write wording would get wrong for a conversation
+ * (it would say the SERVICE is missing, or point at get_service, which has no conversation stamps).
+ * Everything else falls through to `refusalFor`.
+ */
+function conversationRefusal(outcome: { status: number; body: unknown }): CallToolResult {
+  const body = (outcome.body ?? {}) as { error?: unknown; code?: unknown; details?: { key?: unknown; issues?: unknown; detail?: unknown } };
+  const issues = Array.isArray(body.details?.issues) ? (body.details!.issues as unknown[]) : [];
+  if (outcome.status === 403 && body.code === "not_author") return admissionRefusal("invalid_request", "not_author", NOT_AUTHOR);
+  if (body.error === "not_found" && body.details?.key !== undefined) {
+    return admissionRefusal("not_found", "message", MESSAGE_GONE);
+  }
+  if (body.error === "invalid_request" && issues.includes("thread_closed")) {
+    return admissionRefusal("invalid_request", "thread_closed", THREAD_CLOSED);
+  }
+  if (body.error === "invalid_request" && issues.includes("messages_full")) {
+    return admissionRefusal("invalid_request", "messages_full", THREAD_FULL);
+  }
+  if (body.error === "stale_revision") {
+    return admissionRefusal(
+      "stale_revision",
+      typeof body.details?.detail === "string" ? body.details.detail : "changed",
+      body.details?.detail === "no_setlist"
+        ? NO_SETLIST
+        : (body.details as { roleId?: unknown } | undefined)?.roleId !== undefined
+          ? SETLIST_CHANGED
+          : CHANGED,
+    );
+  }
+  return refusalFor(outcome as Parameters<typeof refusalFor>[0]);
 }
 
 function noPrincipal(): CallToolResult {
@@ -199,11 +244,11 @@ export async function sendServiceMessageResult(
     const outcome = await callDomain(() =>
       postServiceThreadMessage(args.serviceId, { body: args.body }, { id: principal.sub, name }),
     );
-    if (!outcome.ok) return refusalFor(outcome);
+    if (!outcome.ok) return conversationRefusal(outcome);
 
     const label = labelOf(service);
     const told = outcome.effects.notified
-      ? toldLine(service, principal.sub)
+      ? toldLine(service, principal.sub, outcome.effects.leadIds)
       : "El servicio es borrador: nadie recibe aviso; los líderes lo verán cuando se publique.";
     return done([`Mensaje enviado en ${label}.`, told], {
       serviceId: args.serviceId,
@@ -249,13 +294,7 @@ export async function editServiceMessageResult(
         ? deleteServiceThreadMessage(args.serviceId, args.key, actor)
         : editServiceThreadMessage(args.serviceId, args.key, { body: args.body }, actor),
     );
-    if (!outcome.ok) {
-      const body = outcome.body as { code?: unknown };
-      if (outcome.status === 403 && body.code === "not_author") {
-        return admissionRefusal("invalid_request", "not_author", NOT_AUTHOR);
-      }
-      return refusalFor(outcome);
-    }
+    if (!outcome.ok) return conversationRefusal(outcome);
     return done([deleting ? "Mensaje borrado." : "Mensaje editado.", "No se avisó a nadie."], {
       serviceId: args.serviceId,
       key: args.key,
@@ -293,10 +332,10 @@ export async function setPastorMessageResult(
     const outcome = await callDomain(() =>
       setPastorMessage(args.serviceId, { body: args.body, observed: args.observed }, { id: principal.sub, name }),
     );
-    if (!outcome.ok) return refusalFor(outcome);
+    if (!outcome.ok) return conversationRefusal(outcome);
 
     const label = labelOf(service);
-    const { change, notified } = outcome.effects;
+    const { change, notified, leadIds } = outcome.effects;
     const what =
       change === "set"
         ? `Mensaje del pastor puesto en ${label}.`
@@ -305,7 +344,7 @@ export async function setPastorMessageResult(
           : change === "clear"
             ? `Mensaje del pastor quitado de ${label}.`
             : `${label} no tenía mensaje del pastor: no se escribió nada.`;
-    const told = notified ? toldLine(service, principal.sub) : "No se avisó a nadie.";
+    const told = notified ? toldLine(service, principal.sub, leadIds) : "No se avisó a nadie.";
     return done([what, told], { serviceId: args.serviceId, change, notified });
   }, FAILURE_COPY);
 }
@@ -339,7 +378,7 @@ export async function setTeamMessageResult(
     const outcome = await callDomain(() =>
       saveTeamNotes(args.serviceId, { teamNotes: args.text, observed: args.observed }),
     );
-    if (!outcome.ok) return refusalFor(outcome);
+    if (!outcome.ok) return conversationRefusal(outcome);
     const { written, teamNotes } = outcome.effects;
     const what = !written
       ? "El mensaje para el equipo ya decía eso: no se escribió nada."

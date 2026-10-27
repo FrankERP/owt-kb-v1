@@ -104,8 +104,10 @@ DELETES stay in phase 4.
    tests stay green unchanged).
 2. Extract `serviceThreadCommit.ts` (messages POST/PATCH/DELETE,
    pastor PUT, team-notes PUT).
-3. Tools: `review_setlist_proposal`, `get_service_conversation` (read), `send_service_message`,
-   `edit_service_message`, `delete_service_message`, `set_pastor_message`, `set_team_message`.
+3. Tools: `check_setlist_proposal_review` + `review_setlist_proposal` (S1 plan), `get_service_messages`
+   (read), `send_service_message`, `edit_service_message` (edit, or `delete: true`), `set_pastor_message`,
+   `set_team_message`. **As built (2026-10-27):** 3a ships in two PRs — the messages first (ADR-0073),
+   the proposal decision once its S1 plan clears review — so finished work does not wait.
    Deferred notices as in `/admin` (`after()`), SSE buffered as today.
 4. Pins: `serviceCommitCallers.test.ts`, the protected-write audit, the tool list digest.
 5. Tests: each tool's refusals (stale rev, closed thread, full thread, not author, wrong status),

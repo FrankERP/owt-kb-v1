@@ -297,7 +297,7 @@ async function threadAfterWrite(threadId: string): Promise<CommitOutcome<{ threa
   }
 }
 
-/** Edit the body of the actor's own message. The body is parsed BEFORE authorization, as the route did. */
+/** Edit the body of the actor's own message. The body is parsed BEFORE the author check, as the route did. */
 export async function editServiceThreadMessage(
   roleId: string,
   key: string,
@@ -341,6 +341,8 @@ export interface PastorMessageEffects {
   change: "set" | "edit" | "clear" | "none";
   /** Whether the leads' push + email was registered: only a message that APPEARS on a published service. */
   notified: boolean;
+  /** The leads the notice was registered for (the author is left out at send); `[]` when not notified. */
+  leadIds: string[];
 }
 
 /**
@@ -416,7 +418,7 @@ export async function setPastorMessage(
 
   if (!next && !before) {
     // Clearing what is not there: nothing to write.
-    return { ok: true, status: 200, body: { ok: true, pastor_message: null }, effects: { change: "none", notified: false } };
+    return { ok: true, status: 200, body: { ok: true, pastor_message: null }, effects: { change: "none", notified: false, leadIds: [] } };
   }
 
   try {
@@ -445,8 +447,8 @@ export async function setPastorMessage(
   // Only a message that APPEARS notifies, and only on a published service (its
   // leads cannot open the proposal page while it is a draft).
   const notified = !!next && !before && role.published !== false;
+  const leadIds = notified ? canonicalLeadRefs(role) : [];
   if (notified && next) {
-    const leadIds = canonicalLeadRefs(role);
     const authorName = actor.name;
     attemptSync("pastor message notify register", () =>
       after(() =>
@@ -485,7 +487,7 @@ export async function setPastorMessage(
       // `undefined` (read failed) → the client keeps what it sent.
       pastor_message: fresh === undefined ? (next ? { ...next, author: adminId } : null) : (fresh ?? null),
     },
-    effects: { change: !next ? "clear" : before ? "edit" : "set", notified },
+    effects: { change: !next ? "clear" : before ? "edit" : "set", notified, leadIds: [...leadIds] },
   };
 }
 

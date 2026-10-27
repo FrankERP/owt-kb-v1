@@ -445,7 +445,7 @@ several exist precisely to stop a plausible-looking change.
   (every service would look «ya no existe»). The line's N is `seatAssignees(normalizeStoredSeats())`,
   the notice builder's own audience (`deleteLines.test.ts`). Only contention is told to repeat, once.
   A service's conversation (ADR-0065: the leads' thread, «Mensaje del pastor», «Mensaje para el
-  equipo») has its writers in `serviceThreadCommit.ts` (admin parity phase 3): the four
+  equipo») has its writers in `serviceThreadCommit.ts` (admin parity phase 3, ADR-0073): the four
   `/api/admin/service-threads/[roleId]/*` routes and the MCP conversation tools
   (`app/mcp/tools/serviceMessages.ts`) both call them, so a chat message reaches the leads exactly as
   `/admin`'s does. The acting member is the session's on `/admin` and the bearer's (`principalOf`) in

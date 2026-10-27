@@ -914,8 +914,9 @@ decisions and the rejected alternatives:
 What `/admin`'s «Mensajes del servicio» dialog does (ADR-0065), from the chat, through the same
 writers: the four `/api/admin/service-threads/[roleId]/*` routes now authorize and call
 `app/utils/serviceThreadCommit.ts`, and so do the tools (`app/mcp/tools/serviceMessages.ts`). The
-acting member is the bearer's (`principalOf(ctx).sub`), never an argument; no principal refuses
-before any read. The name the leads' email shows is that member's `alias`, else `member_name`.
+acting member is the bearer's (`principalOf(ctx).sub`), never an argument; a write with no
+principal refuses before any read (the read only loses `mine`). Decision record:
+[ADR-0073](adr/0073-a-services-messages-are-written-from-the-chat-through-the-service-thread-writer.md). The name the leads' email shows is that member's `alias`, else `member_name`.
 
 | Tool | Arguments | What it does |
 |---|---|---|

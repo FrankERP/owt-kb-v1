@@ -29,6 +29,7 @@ vi.mock("@/app/utils/serviceThreadCommit", () => ({
 }));
 
 import type { CallToolResult } from "@modelcontextprotocol/server";
+import { serviceError } from "@/app/utils/serviceMutation";
 import { PRINCIPAL, textOf } from "./monthToolFixtures";
 import {
   EDIT_SERVICE_MESSAGE_INPUT,
@@ -158,10 +159,23 @@ describe("send_service_message", () => {
     expect(textOf(out)).not.toContain("No se escribió nada");
   });
 
-  it("passes the writer's refusal through", async () => {
-    h.postServiceThreadMessage.mockResolvedValue({ ok: false, status: 409, body: { error: "thread_closed" } });
-    const out = await sendServiceMessageResult({ serviceId: ROLE, body: "Hola" }, PRINCIPAL);
-    expect(out.isError).toBe(true);
+  // The writer's real refusal shapes (`serviceError(...)`, as `serviceThreadCommit.ts` builds them).
+  const refused = (e: ReturnType<typeof serviceError>) => ({ ok: false, status: e.status, body: e.body });
+
+  it("words a closed thread, a full thread and a moved thread for a person, never as a service problem", async () => {
+    const cases: [ReturnType<typeof serviceError>, string][] = [
+      [serviceError("invalid_request", { details: { issues: ["thread_closed"] } }), "ya cerró"],
+      [serviceError("invalid_request", { details: { issues: ["messages_full"] } }), "máximo de 200 mensajes"],
+      [serviceError("stale_revision", { details: { id: "serviceThread.x" } }), "vuelve a leer con get_service_messages"],
+    ];
+    for (const [error, words] of cases) {
+      h.postServiceThreadMessage.mockResolvedValueOnce(refused(error));
+      const out = await sendServiceMessageResult({ serviceId: ROLE, body: "Hola" }, PRINCIPAL);
+      expect(out.isError, words).toBe(true);
+      expect(textOf(out), words).toContain(words);
+      expect(textOf(out), words).toContain("No se escribió nada");
+      expect(textOf(out), words).not.toContain("get_service ");
+    }
   });
 });
 
@@ -195,6 +209,13 @@ describe("edit_service_message", () => {
     expect(textOf(out)).toContain("tus propios mensajes");
   });
 
+  it("a message deleted meanwhile is «ya no existe», not a missing service", async () => {
+    h.editServiceThreadMessage.mockResolvedValue({ ok: false, ...(({ status, body }) => ({ status, body }))(serviceError("not_found", { details: { key: KEY } })) });
+    const out = await editServiceMessageResult({ serviceId: ROLE, key: KEY, body: "x" }, PRINCIPAL);
+    expect(textOf(out)).toContain("Ese mensaje ya no existe");
+    expect(textOf(out)).not.toContain("list_services");
+  });
+
   it("refuses a malformed key by schema", () => {
     expect(EDIT_SERVICE_MESSAGE_INPUT.safeParse({ serviceId: ROLE, key: "no es una clave!", body: "x" }).success).toBe(false);
   });
@@ -202,17 +223,26 @@ describe("edit_service_message", () => {
 
 describe("set_pastor_message", () => {
   it("the first appearance names the leads told; an edit tells nobody", async () => {
-    h.setPastorMessage.mockResolvedValueOnce({ ok: true, status: 200, body: { ok: true }, effects: { change: "set", notified: true } });
+    h.setPastorMessage.mockResolvedValueOnce({ ok: true, status: 200, body: { ok: true }, effects: { change: "set", notified: true, leadIds: ["m-ana", "m-bruno"] } });
     const set = await setPastorMessageResult({ serviceId: ROLE, body: "Oremos", observed: null }, PRINCIPAL);
     expect(h.setPastorMessage).toHaveBeenCalledWith(ROLE, { body: "Oremos", observed: null }, { id: PRINCIPAL.sub, name: "Frank" });
     expect(textOf(set)).toContain("Ana y Bruno");
-    h.setPastorMessage.mockResolvedValueOnce({ ok: true, status: 200, body: { ok: true }, effects: { change: "edit", notified: false } });
+    h.setPastorMessage.mockResolvedValueOnce({ ok: true, status: 200, body: { ok: true }, effects: { change: "edit", notified: false, leadIds: [] } });
     const edit = await setPastorMessageResult({ serviceId: ROLE, body: "Oremos más", observed: "stamp" }, PRINCIPAL);
     expect(textOf(edit)).toContain("No se avisó a nadie");
   });
 });
 
 describe("set_team_message", () => {
+  it("a moved pastor message or a gone setlist says to re-read the conversation, never get_service", async () => {
+    h.setPastorMessage.mockResolvedValueOnce({ ok: false, ...(({ status, body }) => ({ status, body }))(serviceError("stale_revision", { details: { id: "t", detail: "pastor_message_moved" } })) });
+    const moved = await setPastorMessageResult({ serviceId: ROLE, body: "x", observed: null }, PRINCIPAL);
+    expect(textOf(moved)).toContain("get_service_messages");
+    h.saveTeamNotes.mockResolvedValueOnce({ ok: false, ...(({ status, body }) => ({ status, body }))(serviceError("stale_revision", { details: { roleId: ROLE, detail: "no_setlist" } })) });
+    const gone = await setTeamMessageResult({ serviceId: ROLE, text: "x", observed: { id: ROLE, rev: "r" } }, PRINCIPAL);
+    expect(textOf(gone)).toContain("ya no tiene setlist");
+  });
+
   it("passes the observation through unchanged and says when nothing changed", async () => {
     h.saveTeamNotes.mockResolvedValue({
       ok: true,
