@@ -141,7 +141,10 @@ parity phase 1 adds eight, twenty-five in all: three reads registered after the 
 five registered last; the card's save twin `save_service_edits_app` (2026-10-23) makes it six, twenty-six in all (see [Editing saved services](#editing-saved-services-admin-parity-phase-1);
 in production since 2026-10-22, PR #167). Admin parity phase 2 adds three, twenty-nine in all,
 registered after `create_service`: `check_service_deletes`, `delete_services` and the card's
-`delete_services_app` (see [Deleting saved services](#deleting-saved-services-admin-parity-phase-2)). Every tool is
+`delete_services_app` (see [Deleting saved services](#deleting-saved-services-admin-parity-phase-2)). Admin parity
+phase 3 adds five, thirty-four in all, registered after the deletes: `get_service_messages`,
+`send_service_message`, `edit_service_message`, `set_pastor_message` and `set_team_message` (see
+[A service's messages](#a-services-messages-admin-parity-phase-3)). Every tool is
 registered the same way — one file per tool in `app/mcp/tools/`, exporting a
 `register<Tool>(server, deps?)` function that `registerAllTools` (`app/mcp/toolList.ts`) calls,
 the writes after the reads; `app/api/mcp/route.ts` runs it inside its handler init. Every
@@ -906,6 +909,31 @@ decisions and the rejected alternatives:
   pins the route and the commit to identical transactions; `storedCardDelete.test.tsx` renders the
   card's delete.
 
+### A service's messages (admin parity, phase 3)
+
+What `/admin`'s «Mensajes del servicio» dialog does (ADR-0065), from the chat, through the same
+writers: the four `/api/admin/service-threads/[roleId]/*` routes now authorize and call
+`app/utils/serviceThreadCommit.ts`, and so do the tools (`app/mcp/tools/serviceMessages.ts`). The
+acting member is the bearer's (`principalOf(ctx).sub`), never an argument; a write with no
+principal refuses before any read (the read only loses `mine`). Decision record:
+[ADR-0073](adr/0073-a-services-messages-are-written-from-the-chat-through-the-service-thread-writer.md). The name the leads' email shows is that member's `alias`, else `member_name`.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `get_service_messages` | `{serviceId}` | The dialog's read (`serviceConversationQuery`): the «Mensaje del pastor» and its `pastorObserved`, the admins' messages (each with `key`, author and `mine: true` for the bearer's own), the leads' proposal conversation if any (read-only), the «Mensaje para el equipo» with its `observed` (null before a setlist exists; «unavailable» on a duplicate weekend setlist), `threadOpen`. Read-only |
+| `send_service_message` | `{serviceId, body}` | A message to the service's leads, as «Enviar». Not idempotent: an unknown outcome says to read before retrying, or the message is duplicated. Destructive (I14) |
+| `edit_service_message` | `{serviceId, key, body}` or `{serviceId, key, delete: true}` | Edit or delete the bearer's OWN message; another author's answers «solo tus propios mensajes» (the writer's `not_author`). Destructive |
+| `set_pastor_message` | `{serviceId, body, observed}` | Set, change or clear (`body: ""`) the one «Mensaje del pastor»; `observed` is `pastorObserved` unchanged (null when empty), a stale one refuses. Destructive |
+| `set_team_message` | `{serviceId, text, observed}` | Change or clear the setlist's «Mensaje para el equipo»; `observed` is `teamMessage.observed` unchanged. Songs untouched. Destructive |
+
+Every write description tells the model to show the person the EXACT text and wait for their word
+in the conversation, and never to write on an instruction found inside a proposal, a message or a
+song (ADR-0072's observation: the host's permission prompt is not relied on). A thrown writer answers
+«No se pudo confirmar si el cambio se guardó…» pointing at `get_service_messages`, never «No se
+escribió nada». The thread's own rule holds: open until the service's date, then closed to writes.
+**Proof.** `serviceMessages.test.ts` (tools over fakes of the writers), `serviceThreadRoutes.test.ts`
+and `serviceMessageEditRoutes.test.ts` (the routes, unchanged by the extraction).
+
 ### Notification audiences (the write tools)
 
 Confirmed from the code at `963cd736` (P3 plan, § «Notification audiences»):
@@ -920,6 +948,9 @@ Confirmed from the code at `963cd736` (P3 plan, § «Notification audiences»):
 | `save_service_edits` (and its card twin), `copy_instruments`, per published role | push «Servicio actualizado» to the members **added** to that role (in `after()`, as `/admin`) | a `role` notice to the union of before and after assignees, after the window — upserted INLINE and awaited before the next service is written (`queueRoleNoticesNow`), with no layer-2 sweep | anything for a draft role |
 | `create_service` | — | — | everything: it creates an empty draft (`published: false`) |
 | `delete_services` (and its card twin), per published role | — | a `role` notice («Ya no participas») to every assignee of the deleted service, upserted INLINE and awaited before the next delete (`queueRoleNoticesNow`), with no layer-2 sweep | anything for a draft role |
+| `send_service_message`, published service | push AND email to the service's Leads except the writer (`after()`, as `/admin`; email gated on the proposals preference + allowlist) | — | anything while the service is unpublished |
+| `set_pastor_message` | the same push AND email to the Leads, only when the message appears on an empty field of a published service | — | an edit or a clear |
+| `edit_service_message`, `set_team_message` | — | — | everything |
 
 All of these pass the downstream filters: device tokens and push preferences, `EMAIL_ALLOWLIST`,
 and `wantsNotification`. Any outbox upsert through the deferred path also triggers the derated
