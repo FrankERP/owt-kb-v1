@@ -404,8 +404,8 @@ export async function PATCH() {
       operation: "PATCH",
     });
     expect(DEFENSIVE_TYPE_REJECTION_GUARDS[1]).toMatchObject({
-      file: "app/api/kids/pairs/[id]/route.ts",
-      operation: "PATCH",
+      file: "app/utils/kidsCommit.ts",
+      operation: "module",
     });
     // A2 never removes it.
     expect(DEFENSIVE_TYPE_REJECTION_GUARDS[0].removalOwner).not.toBe("A2");
