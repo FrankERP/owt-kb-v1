@@ -733,13 +733,13 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
                   aria-label={`Tono de ${song.title}: ${shownKey}`}
                   onClick={(e) => { e.stopPropagation(); setKeyPickerIdx(keyPickerIdx === idx ? null : idx); }}
                   onMouseDown={e => e.stopPropagation()}
-                  className="min-w-[2.75rem] normal-case"
+                  className="min-w-[2.75rem]"
                 >
                   {shownKey}
                 </Button>
                 {keyPickerIdx === idx && (
-                  // 15.5rem: four `sm` pills of «C♯m» width (padding, border, 0.1em
-                  // tracking) plus gaps and padding — the pill keeps its own padding.
+                  // 15.5rem: four `sm` pills of «C♯m» width (padding, border) plus
+                  // gaps and padding — the pill keeps its own padding.
                   <div className="absolute right-0 top-full mt-1.5 z-30 bg-surface-overlay-deepest border border-accent/20 rounded-xl shadow-2xl p-2.5 w-[15.5rem]">
                     <div className="grid grid-cols-4 gap-1" role="group" aria-label={`Elegir tono de ${song.title}`}>
                       {keyOptionsFor(song).map(k => (
@@ -749,7 +749,6 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
                           size="sm"
                           active={k === song.play_key}
                           onClick={() => setPlayKey(idx, k)}
-                          className="normal-case"
                         >
                           {formatKey(k)}
                         </Button>

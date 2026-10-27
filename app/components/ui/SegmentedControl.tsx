@@ -47,9 +47,12 @@ export type SegmentedControlProps<V extends string> = {
   className?: string;
 };
 
+// Sentence case in the body face since 2026-10-27, with `Button` (its header
+// comment has the why); the sizes grew with the case (11/13 px uppercase →
+// 13/14 px) and `leading-tight` keeps the option the height it was.
 const SIZE = {
-  sm: "px-3 py-1.5 text-[11px]",
-  md: "px-4 py-2 text-xs",
+  sm: "px-3 py-1.5 text-[13px]",
+  md: "px-4 py-2 text-[14px]",
 } as const;
 
 // `filled` is a joined bar, so its options cannot wrap the way `outline`'s
@@ -145,7 +148,7 @@ export default function SegmentedControl<V extends string>({
             tabIndex={tabStop ? 0 : -1}
             onClick={() => select(i)}
             onKeyDown={(e) => onKeyDown(e, i)}
-            className={`relative select-none font-label uppercase tracking-widest transition-colors duration-fast ease-out-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base ${SIZE[size]} ${OPTION[tone]} ${o.busy ? "opacity-60" : ""}`}
+            className={`relative select-none font-body font-semibold leading-tight transition-colors duration-fast ease-out-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base ${SIZE[size]} ${OPTION[tone]} ${o.busy ? "opacity-60" : ""}`}
           >
             {checked && (
               <m.span

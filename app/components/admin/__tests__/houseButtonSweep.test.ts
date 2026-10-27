@@ -27,7 +27,7 @@ const BASELINE: Record<string, number> = {
   "PlannerGrid.tsx": 8,
   "MonthCalendar.tsx": 1,
   // The Admin pass (2026-10-27): `MonthTab` and «Roles previos» (text tabs under
-  // the page title — the house pill is a label-styled uppercase control) plus the
+  // the page title — a text tab with an underline, not a pill) plus the
   // four the panel already had, and `ServiceReviewFlag` (an amber blocker that
   // must never hover to the cyan «go»).
   "ServicesPanel.tsx": 6,

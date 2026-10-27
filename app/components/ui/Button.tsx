@@ -20,6 +20,16 @@
 // `className` is for additive utilities only — never to override padding, radius, or
 // colour. Pick a variant or size instead.
 //
+// Sentence case in the BODY face since 2026-10-27 (Frank: «cambialos», the Admin pass of
+// ADR-0070). Until then the button was a label-styled control — Jura, uppercase,
+// `tracking-widest` — and every screen of the «millones» pass had to override it
+// (`normal-case tracking-normal font-body` on a dozen pills). The mocks set every
+// action in the body face at 600, so that is the base now; Jura stays for LABELS
+// (`SHEET_TITLE`, field labels, menu rows, toasts), which is where small caps belong.
+// Sizes went up with the case — 11/13/13 px uppercase read as 13/15/16 px sentence
+// case — and `leading-tight` keeps the box the height it was, so no adopter's row
+// grew. `normal-case`/`tracking-normal` in a caller's `className` is now a no-op.
+//
 // A disabled button normally takes no pointer events (no hover paint, no press).
 // With a `title` it keeps them: the title is the REASON it is disabled («Faltan
 // propuestas», «Coro no está disponible en servicios de sábado»), and
@@ -38,7 +48,7 @@ export type PillTone = "accent" | "availability";
 export type IconTone = "danger";
 
 const BASE =
-  "inline-flex items-center justify-center gap-2 select-none font-label uppercase tracking-widest " +
+  "inline-flex items-center justify-center gap-2 select-none font-body font-semibold leading-tight " +
   "transition-[color,background-color,border-color,transform,box-shadow] duration-fast ease-out-brand " +
   "active:translate-y-px active:scale-[0.985] " +
   "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base " +
@@ -93,9 +103,9 @@ const ICON_TONE: Record<IconTone, string> = {
 };
 
 const SIZE: Record<ButtonSize, string> = {
-  sm: "text-[11px] px-3 py-1",
-  md: "text-xs px-4 py-2",
-  lg: "text-xs px-4 min-h-[44px]",
+  sm: "text-[13px] px-3 py-1",
+  md: "text-sm px-4 py-2",
+  lg: "text-[16px] px-4 min-h-[44px]",
 };
 
 export function buttonClass(

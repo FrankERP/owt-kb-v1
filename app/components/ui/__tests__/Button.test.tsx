@@ -17,6 +17,23 @@ describe("Button", () => {
     expect(b.className).toContain("active:translate-y-px");
   });
 
+  it("is sentence case in the body face, never a label-styled control (2026-10-27)", () => {
+    // Frank: «cambialos». The three sizes grew with the case; `leading-tight`
+    // keeps the box the height it was, so no adopter's row changed.
+    for (const size of ["sm", "md", "lg"] as const) {
+      const cls = buttonClass("secondary", size);
+      expect(cls).toContain("font-body");
+      expect(cls).toContain("font-semibold");
+      expect(cls).toContain("leading-tight");
+      expect(cls).not.toMatch(/\buppercase\b/);
+      expect(cls).not.toContain("tracking-widest");
+      expect(cls).not.toContain("font-label");
+    }
+    expect(buttonClass("secondary", "sm")).toContain("text-[13px]");
+    expect(buttonClass("secondary", "md")).toContain("text-sm");
+    expect(buttonClass("secondary", "lg")).toContain("text-[16px]");
+  });
+
   it.each([
     ["primary", "bg-surface-accent-solid"],
     ["ghost", "text-mono-500"],
