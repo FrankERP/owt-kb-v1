@@ -199,7 +199,7 @@ disagree, `CLAUDE.md` wins and this file is the one to fix.
   reaches dev and production alike. Whatever engine it selects, dev writes the production dataset.
   Production and `verify/service-readiness` ignore it by code. See `docs/SECRETS.md`.
 - **Functions run on Fluid compute, in `iad1`** (`vercel.json` `"fluid": true` and
-  `"regions": ["iad1"]`, ADR-0073, since 2026-10-27). One warm instance serves concurrent requests, so module-level state is shared
+  `"regions": ["iad1"]`, ADR-0074, since 2026-10-27). One warm instance serves concurrent requests, so module-level state is shared
   between them: a cache keyed by member or document is fine (the access cache, the MCP grant store, the
   SMTP pool and the outbox memo were audited; the memo now writes where its read started), per-request data in module scope is a cross-request leak. The region
   stays `iad1` although the Sanity dataset is in Belgium (`gcp-eu-w1`): moving next to the data
@@ -458,6 +458,12 @@ several exist precisely to stop a plausible-looking change.
   never the dereferenced admin read, and never a reader that turns a malformed answer into `[]`
   (every service would look «ya no existe»). The line's N is `seatAssignees(normalizeStoredSeats())`,
   the notice builder's own audience (`deleteLines.test.ts`). Only contention is told to repeat, once.
+  A service's conversation (ADR-0065: the leads' thread, «Mensaje del pastor», «Mensaje para el
+  equipo») has its writers in `serviceThreadCommit.ts` (admin parity phase 3, ADR-0073): the four
+  `/api/admin/service-threads/[roleId]/*` routes and the MCP conversation tools
+  (`app/mcp/tools/serviceMessages.ts`) both call them, so a chat message reaches the leads exactly as
+  `/admin`'s does. The acting member is the session's on `/admin` and the bearer's (`principalOf`) in
+  the chat, never an argument; no principal refuses before any read.
 - **The MCP proposal editor: the server judges, the card only shows** (ADR-0062). The card
   (`mcp-app/proposal-card/`) holds a list of edits, never a board; every check and save replays the
   whole list from the stored proposal through the planner's own gate. Only `editorBoard.ts` calls

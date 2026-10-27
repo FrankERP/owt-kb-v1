@@ -120,7 +120,7 @@ the budget goes there, once.
 - **`preview` writes to the real Sanity dataset** — a rehearsal of the UI, never a dry run of data.
 - **`OWT_SOLVER_ENGINE` on Preview is for rehearsals only and normally unset** (branch-scoped to
   `preview` while set; Production and `verify/service-readiness` ignore it). See `docs/SECRETS.md`.
-- **Functions run on Fluid compute in `iad1`**, both pinned in `vercel.json` (ADR-0073): concurrent requests share
+- **Functions run on Fluid compute in `iad1`**, both pinned in `vercel.json` (ADR-0074): concurrent requests share
   one instance, so module-level state must be safe to share. Sanity lives in Europe; read the ADR
   before moving the region. A server module that spawns a process gates it on
   `NODE_ENV === "production"` or the tracer packs the whole repo (`functionTraceGuard.test.ts`).
@@ -253,7 +253,9 @@ looks wrong** — several exist to stop a plausible-looking change.
   authorization to `app/utils/*Commit.ts`; MCP writes go only through them (`apply_schedule`: roles
   create + fairness PUT, ADR-0061; the saved-month editor: PATCH, copy, create, ADR-0066;
   `delete_services`: DELETE, only with the check's echoed list and token, never a past service,
-  ADR-0072; `serviceCommitCallers.test.ts`); `/api/mcp` buffers SSE so a tool finishes in the handler.
+  ADR-0072; `serviceCommitCallers.test.ts`). The service conversation's writers live in
+  `serviceThreadCommit.ts` too, called by its four routes and the MCP conversation tools (ADR-0073);
+  `/api/mcp` buffers SSE so a tool finishes in the handler.
 - **The MCP proposal editor: the server judges, the card only shows** (ADR-0062). Every check and
   save replays the whole edit list through the planner's gate in `editorBoard.ts` only; a saved edit
   is a NEW `mcpProposal` (base `supersededBy` in the same transaction), never a mutated payload;

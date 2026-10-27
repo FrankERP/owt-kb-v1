@@ -77,6 +77,7 @@ import {
   EDITOR_TOOL_NAMES,
   SERVICE_EDITOR_TOOL_NAMES,
   SERVICE_DELETE_TOOL_NAMES,
+  SERVICE_MESSAGE_TOOL_NAMES,
   SOLVE_MONTH_ANNOTATIONS,
 } from "../mcp-dev-smoke.mjs";
 
@@ -408,10 +409,10 @@ describe("checkToolList", () => {
   /** A tools/list result exactly as the P3 route registers it. */
   const solve = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
   const annotationsOf = (name: string) =>
-    name === "solve_month" || name === "save_proposal_edits" || name === "revise_proposal" ? solve : WRITE_TOOL_NAMES.includes(name) || name === "apply_schedule" || ["save_service_edits", "save_service_edits_app", "copy_instruments", "create_service", "delete_services", "delete_services_app"].includes(name) ? destructive : readOnly;
+    name === "solve_month" || name === "save_proposal_edits" || name === "revise_proposal" ? solve : WRITE_TOOL_NAMES.includes(name) || name === "apply_schedule" || ["save_service_edits", "save_service_edits_app", "copy_instruments", "create_service", "delete_services", "delete_services_app", "send_service_message", "edit_service_message", "set_pastor_message", "set_team_message"].includes(name) ? destructive : readOnly;
   const registered = () => EXPECTED_TOOLS.map((name) => ({ name, annotations: annotationsOf(name) }));
 
-  it("pins twenty-nine tools: ping, the seven reads, the three admin reads, the four writes, the two month tools, the three proposal-editor tools, the six saved-month editor tools, then the three delete tools, in registration order", () => {
+  it("pins thirty-four tools: ping, the seven reads, the three admin reads, the four writes, the two month tools, the three proposal-editor tools, the six saved-month editor tools, the three delete tools, then the five conversation tools, in registration order", () => {
     expect(EXPECTED_TOOLS).toEqual([
       "ping",
       "get_service",
@@ -442,6 +443,11 @@ describe("checkToolList", () => {
       "check_service_deletes",
       "delete_services",
       "delete_services_app",
+      "get_service_messages",
+      "send_service_message",
+      "edit_service_message",
+      "set_pastor_message",
+      "set_team_message",
     ]);
     expect(ADMIN_READ_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(8, 11));
     expect(WRITE_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(11, 15));
@@ -449,6 +455,7 @@ describe("checkToolList", () => {
     expect(EDITOR_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(17, 20));
     expect(SERVICE_EDITOR_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(20, 26));
     expect(SERVICE_DELETE_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(26, 29));
+    expect(SERVICE_MESSAGE_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(29, 34));
   });
 
   it("per-tool annotations: every read read-only, every write destructive (I14), solve_month and the two editor saves writing only their record", () => {
@@ -460,7 +467,7 @@ describe("checkToolList", () => {
     }
   });
 
-  it("accepts the exact twenty-nine names, in order, each with its own annotations", () => {
+  it("accepts the exact thirty-four names, in order, each with its own annotations", () => {
     expect(checkToolList(registered())).toEqual({ ok: true });
   });
 
@@ -535,13 +542,14 @@ describe("toolCallRequest — DV1: the dev smoke never calls a write tool", () =
   const SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../mcp-dev-smoke.mjs");
   const code = stripComments(readFileSync(SCRIPT, "utf8"));
 
-  it("refuses each of the four write tools, the two month tools, the editor tools and the delete tools by name, in any argument shape", () => {
+  it("refuses each of the four write tools, the two month tools, the editor tools, the delete tools and the conversation tools by name, in any argument shape", () => {
     expect(WRITE_TOOL_NAMES).toHaveLength(4);
     expect(MONTH_TOOL_NAMES).toHaveLength(2);
     expect(EDITOR_TOOL_NAMES).toHaveLength(3);
     expect(SERVICE_EDITOR_TOOL_NAMES).toHaveLength(6);
     expect(SERVICE_DELETE_TOOL_NAMES).toHaveLength(3);
-    for (const name of [...WRITE_TOOL_NAMES, ...MONTH_TOOL_NAMES, ...EDITOR_TOOL_NAMES, ...SERVICE_EDITOR_TOOL_NAMES, ...SERVICE_DELETE_TOOL_NAMES]) {
+    expect(SERVICE_MESSAGE_TOOL_NAMES).toHaveLength(5);
+    for (const name of [...WRITE_TOOL_NAMES, ...MONTH_TOOL_NAMES, ...EDITOR_TOOL_NAMES, ...SERVICE_EDITOR_TOOL_NAMES, ...SERVICE_DELETE_TOOL_NAMES, ...SERVICE_MESSAGE_TOOL_NAMES]) {
       expect(() => toolCallRequest(name, {}), name).toThrow(/DV1/);
       expect(() => toolCallRequest(name, { serviceId: "role-1", rev: "rev-1" }, 9), name).toThrow(/DV1/);
     }
@@ -566,13 +574,13 @@ describe("toolCallRequest — DV1: the dev smoke never calls a write tool", () =
   });
 
   it("classifies every registered tool: callable or a write (month and editor tools included), never both, nothing left over", () => {
-    const writes = [...WRITE_TOOL_NAMES, ...MONTH_TOOL_NAMES, ...EDITOR_TOOL_NAMES, ...SERVICE_EDITOR_TOOL_NAMES, ...SERVICE_DELETE_TOOL_NAMES];
+    const writes = [...WRITE_TOOL_NAMES, ...MONTH_TOOL_NAMES, ...EDITOR_TOOL_NAMES, ...SERVICE_EDITOR_TOOL_NAMES, ...SERVICE_DELETE_TOOL_NAMES, ...SERVICE_MESSAGE_TOOL_NAMES];
     expect(CALLABLE_TOOLS.filter((name) => writes.includes(name))).toEqual([]);
     expect([...CALLABLE_TOOLS, ...writes].sort()).toEqual([...EXPECTED_TOOLS].sort());
   });
 
   it("the --reads pass has no arguments for a write tool or a month tool either", () => {
-    for (const name of [...WRITE_TOOL_NAMES, ...MONTH_TOOL_NAMES, ...EDITOR_TOOL_NAMES, ...SERVICE_EDITOR_TOOL_NAMES, ...SERVICE_DELETE_TOOL_NAMES]) expect(() => readCheckArguments(name, {}), name).toThrow();
+    for (const name of [...WRITE_TOOL_NAMES, ...MONTH_TOOL_NAMES, ...EDITOR_TOOL_NAMES, ...SERVICE_EDITOR_TOOL_NAMES, ...SERVICE_DELETE_TOOL_NAMES, ...SERVICE_MESSAGE_TOOL_NAMES]) expect(() => readCheckArguments(name, {}), name).toThrow();
   });
 
   it("is the ONLY place the script builds a tools/call: one \"tools/call\" quoted literal, shared via TOOLS_CALL_METHOD", () => {
