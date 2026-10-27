@@ -36,6 +36,9 @@ import {
   type MinistryId,
 } from "@/app/ministries";
 import { interpretMemberDeleteResponse } from "@/app/utils/memberDelete";
+import { MEMBER_TYPES as MEMBER_TYPE_IDS, type MemberType } from "@/app/utils/memberTypes";
+import FiltersPill from "../ui/FiltersPill";
+import SearchLine from "../ui/SearchLine";
 import { DEFAULT_INSTRUMENT_SEATS } from "./seatModel";
 
 import { ROLE_LABEL, type OWTRole } from "@/app/utils/roleLabel";
@@ -93,20 +96,20 @@ interface MemberFormData {
 // The table's own abbreviations — deliberately not `MEMBER_TYPE_LABEL`'s full
 // words (`app/utils/memberTypes.ts`): this is a dense list, not the member's
 // own profile, where there is room to spell "Líder Domingo" out.
-/** The row's words for a Tipo — full words since the Admin pass turned the chips into a line of text. */
-const TYPE_ABBR: Record<string, string> = {
+/**
+ * The row's words for a Tipo: full words since the Admin pass turned the chips
+ * into a line of text, with the two leader types kept short («Líder Dom») so
+ * «Voz · Líder Dom · Guitarra» fits a phone row. Keyed on `MemberType`, so a
+ * Tipo added to `memberTypes.ts` fails to compile here instead of going
+ * silently unlabelled; the Filtros sheet lists `MEMBER_TYPES` with these words.
+ */
+const TYPE_ABBR: Record<MemberType, string> = {
   voz: "Voz", instrumento: "Instrumento", foh: "FOH",
   sunday_lead: "Líder Dom", saturday_lead: "Líder Sáb", support: "Soporte",
 };
+const typeWord = (t: string) => (t in TYPE_ABBR ? TYPE_ABBR[t as MemberType] : t);
 
-const TYPE_OPTIONS: { value: string; label: string }[] = [
-  { value: "voz",           label: "Voz"         },
-  { value: "instrumento",   label: "Instrumento" },
-  { value: "foh",           label: "FOH"         },
-  { value: "sunday_lead",   label: "Líder Dom"   },
-  { value: "saturday_lead", label: "Líder Sáb"   },
-  { value: "support",       label: "Soporte"     },
-];
+const TYPE_OPTIONS = MEMBER_TYPE_IDS.map((value) => ({ value, label: TYPE_ABBR[value] }));
 
 type SortDir  = "asc" | "desc";
 
@@ -961,54 +964,14 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
         {/* Row 1: the search as a hairline beside the «Filtros» pill (ADR-0070's
             Biblioteca pattern): Tipo, Rol and Orden live in the sheet. */}
         <div className="flex items-center gap-3">
-          <label className="flex min-w-0 flex-1 items-center gap-2.5 border-b border-ink/[0.10] text-ink-dim focus-within:text-ink-muted">
-            <svg
-              className="shrink-0"
-              width="18" height="18" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <circle cx="11" cy="11" r="7" /><line x1="20" y1="20" x2="16.5" y2="16.5" />
-            </svg>
-            {/* 16px on the phone: anything smaller makes iOS Safari zoom the page
-                on focus. `inputFontSize.test.ts` excludes `admin/` by path, so this
-                is the convention holding rather than the guard. */}
-            <input
-              type="search"
-              className="w-full min-w-0 bg-transparent py-2.5 font-body text-[16px] text-ink placeholder:text-ink-dim focus:outline-none sm:text-sm"
-              placeholder="Buscar por nombre, alias o email…"
-              aria-label="Buscar miembros"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-            {query && (
-              <Button
-                variant="icon"
-                size="lg"
-                aria-label="Limpiar búsqueda"
-                onClick={() => setQuery("")}
-                className="shrink-0 text-lg normal-case leading-none tracking-normal"
-              >
-                ×
-              </Button>
-            )}
-          </label>
-          {/* `disclosure`, not `pill`: it opens a sheet, so no `aria-pressed`. */}
-          <Button
-            variant="disclosure"
-            size="lg"
-            active={activeFilters > 0}
-            aria-haspopup="dialog"
-            aria-expanded={filtersOpen}
-            onClick={() => setFiltersOpen(true)}
-            className="shrink-0 gap-2"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M4 6h10M18 6h2M4 12h3M11 12h9M4 18h12M20 18h0" />
-              <circle cx="16" cy="6" r="2" /><circle cx="9" cy="12" r="2" /><circle cx="18" cy="18" r="2" />
-            </svg>
-            Filtros{activeFilters > 0 ? ` · ${activeFilters}` : ""}
-          </Button>
+          <SearchLine
+            label="Buscar miembros"
+            placeholder="Buscar por nombre, alias o email…"
+            value={query}
+            onChange={setQuery}
+            className="flex-1"
+          />
+          <FiltersPill count={activeFilters} open={filtersOpen} onClick={() => setFiltersOpen(true)} />
         </div>
       </div>
 
@@ -1053,7 +1016,9 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
           <div className="flex items-center justify-between gap-3 border-t border-ink/[0.10] pt-5">
             <Button variant="ghost" onClick={() => { setTypeFilter(""); setRoleFilter(""); setSortDir("asc"); }}>Limpiar filtros</Button>
             <Button variant="cta" onClick={() => setFiltersOpen(false)}>
-              {`Ver ${plural(filteredMembers.length, "miembro", "miembros")}`}
+              {/* What the FILTERS show — without the search box's own narrowing, which
+                  the sheet does not touch. */}
+              {`Ver ${plural(categoryFiltered.length, "miembro", "miembros")}`}
             </Button>
           </div>
         </div>
@@ -1096,7 +1061,7 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
               <div className="border-t border-ink/[0.10]">
                 {g.rows.map((m) => {
                   const facts = [
-                    ...(m.memberType ?? []).map((t) => TYPE_ABBR[t] ?? t),
+                    ...(m.memberType ?? []).map(typeWord),
                     ...(m.instruments ?? []),
                   ];
                   return (
@@ -1120,9 +1085,11 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
                             <span className="hidden truncate font-body text-sm text-ink-muted sm:inline">{m.member_name}</span>
                           )}
                         </div>
-                        <p className="mt-1 truncate font-body text-sm leading-tight text-ink-muted">
+                        {/* No Tipo and no instrument: the line exists only from `md`, where the
+                            email fills it — a phone row must not carry an empty 14 px line. */}
+                        <p className={`mt-1 truncate font-body text-sm leading-tight text-ink-muted ${facts.length > 0 ? "" : "hidden md:block"}`}>
                           {facts.join(" · ")}
-                          <span className={facts.length > 0 ? "hidden md:inline" : "hidden md:inline"}>
+                          <span className="hidden md:inline">
                             {facts.length > 0 && <span className="text-ink-dim"> · </span>}
                             {m.email}
                           </span>

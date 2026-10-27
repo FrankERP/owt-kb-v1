@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import Button from "@/app/components/ui/Button";
 import SegmentedControl from "@/app/components/ui/SegmentedControl";
 import { NoteIcon } from "@/app/components/ui/icons";
-import { formatDateRun } from "./adminRowCopy";
+import { dateRunParts } from "./adminRowCopy";
 import Skeleton, { SkeletonGroup } from "@/app/components/ui/Skeleton";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -287,8 +287,7 @@ export default function AvailabilityPanel() {
                   const notes = futureDates
                     .map(d => ({ date: d, note: noteMap.get(d)?.trim() ?? "" }))
                     .filter(n => n.note);
-                  const conflicting = futureDates.filter(d => conflicts.some(c => c.member._id === m._id && c.role.date === d));
-                  const clear = futureDates.filter(d => !conflicting.includes(d));
+                  const conflicting = new Set(futureDates.filter(d => conflicts.some(c => c.member._id === m._id && c.role.date === d)));
                   return (
                     <li
                       key={m._id}
@@ -297,11 +296,12 @@ export default function AvailabilityPanel() {
                     >
                       <span className="w-full font-body text-[17px] font-semibold text-ink sm:w-[140px] sm:shrink-0 sm:truncate">{dn(m)}</span>
                       <span className="min-w-0 flex-1 font-body text-[15px] text-ink-muted [overflow-wrap:anywhere]">
-                        {conflicting.length > 0 && (
-                          <span className="font-semibold text-negative-fg">{formatDateRun(conflicting, currentYear)}</span>
+                        {/* One run in date order; a conflicting day is red where it falls. */}
+                        {dateRunParts(futureDates, currentYear).map((part, i) =>
+                          part.iso && conflicting.has(part.iso)
+                            ? <span key={i} className="font-semibold text-negative-fg">{part.text}</span>
+                            : <span key={i}>{part.text}</span>,
                         )}
-                        {conflicting.length > 0 && clear.length > 0 && "; "}
-                        {clear.length > 0 && formatDateRun(clear, currentYear)}
                         {notes.map(n => (
                           <span key={n.date} className="ml-2.5 inline-flex items-center gap-1.5 text-ink-dim">
                             <NoteIcon size={14} className="shrink-0" />

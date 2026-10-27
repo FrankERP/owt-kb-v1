@@ -18,6 +18,8 @@ import CueDialog from "./ui/CueDialog";
 import SegmentedControl from "./ui/SegmentedControl";
 import Select from "./ui/Select";
 import Button from "./ui/Button";
+import FiltersPill from "./ui/FiltersPill";
+import SearchLine from "./ui/SearchLine";
 
 type Tipo = (typeof TIPO_SLUGS)[number];
 const TIPO_LABEL: Record<Tipo, string> = { "up-beat": "Up beat", "down-beat": "Down beat", transition: "Transición" };
@@ -38,26 +40,10 @@ const chipSize = (w: number) => (w > 0.66 ? "text-sm px-3 py-1.5" : w > 0.33 ? "
 // 16 px on a phone, the design's size from `sm` up (F3): WebKit auto-zooms any
 // focused control under 16 px and never zooms back, which pushed the tab bar off
 // screen on the simulator. `inputFontSize.test.ts` is the guard.
-/** The shared search box over a chip cloud: a hairline with a glass, the page's
- *  own search line (ADR-0070's Biblioteca pass), so the drawer reads as part of
- *  the same sheet. */
+/** The search box over a chip cloud: the shared hairline (`SearchLine`), so the
+ *  drawer reads as part of the same sheet as the page's own search line. */
 function ChipSearch({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  return (
-    <label className="mb-3 flex items-center gap-2.5 border-b border-ink/[0.10] text-ink-dim focus-within:text-ink-muted">
-      <svg className="shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <circle cx="11" cy="11" r="7" />
-        <line x1="20" y1="20" x2="16.5" y2="16.5" />
-      </svg>
-      <input
-        type="search"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        aria-label={label}
-        placeholder={label}
-        className="w-full min-w-0 bg-transparent py-2.5 font-body text-[16px] text-ink placeholder:text-ink-dim focus:outline-none sm:text-sm"
-      />
-    </label>
-  );
+  return <SearchLine label={label} value={value} onChange={onChange} className="mb-3" />;
 }
 
 export default function LibraryFilters({
@@ -119,25 +105,8 @@ export default function LibraryFilters({
 
   return (
     <>
-      {/* A round pill on the search line, armed once a filter is active. `disclosure`,
-          not `pill`: this opens a sheet, so it must not carry `aria-pressed`. */}
-      <Button
-        variant="disclosure"
-        size="lg"
-        active={count > 0}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        onClick={() => setOpen(true)}
-        className="shrink-0 gap-2"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M4 6h10M18 6h2M4 12h3M11 12h9M4 18h12M20 18h0" />
-          <circle cx="16" cy="6" r="2" />
-          <circle cx="9" cy="12" r="2" />
-          <circle cx="18" cy="18" r="2" />
-        </svg>
-        Filtros{count > 0 ? ` · ${count}` : ""}
-      </Button>
+      {/* The round pill on the search line, armed once a filter is active. */}
+      <FiltersPill count={count} open={open} onClick={() => setOpen(true)} />
       <CueDialog open={open} mode="sheet" size="md" title="Filtros" label="Filtros" onDismiss={() => setOpen(false)}>
         <div className="min-h-0 flex-1 space-y-8 overflow-y-auto p-5">
           <section>

@@ -23,6 +23,7 @@ import {
   widenStepsForTargets,
 } from "./proposalListView";
 import { serviceTodayIso } from "./serviceReadiness";
+import { UNDER_NAVBAR_SCROLL_MT } from "@/app/utils/navbarHeight";
 import { PROPOSAL_STATUS_WORD, dayBlock, proposalSublineMiddle } from "./adminRowCopy";
 
 /** The four stored statuses, from the shared handoff contract. */
@@ -200,7 +201,7 @@ function ProposalCard({
       tabIndex={-1}
       aria-current={highlighted ? "true" : undefined}
       data-proposal-row=""
-      className={`min-w-0 border-b border-ink/[0.10] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+      className={`min-w-0 border-b border-ink/[0.10] ${UNDER_NAVBAR_SCROLL_MT} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
         highlighted ? "bg-accent/[0.06]" : ""
       }`}
     >
@@ -525,7 +526,10 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
     const el = cardRefs.current.get(id);
     if (!el) return;
     scrollTargetRef.current = null;
-    el.scrollIntoView({ block: "center", behavior: prefersReducedMotion() ? "auto" : "smooth" });
+    // `start`, not `center`: a folded row opens in the same commit, so centring
+    // would measure its 72 px header and leave the body it reveals off screen.
+    // The row's `UNDER_NAVBAR_SCROLL_MT` keeps the header out from under the bar.
+    el.scrollIntoView({ block: "start", behavior: prefersReducedMotion() ? "auto" : "smooth" });
     el.focus({ preventScroll: true });
   }, [highlightIds, filter, proposals, windowSteps]);
 
@@ -768,7 +772,7 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
         </div>
       )}
 
-      {!loading && !error && (
+      {!loading && !error && visible.length > 0 && (
         <div className="border-t border-ink/[0.10]">
           {visible.map(p => (
             <ProposalCard

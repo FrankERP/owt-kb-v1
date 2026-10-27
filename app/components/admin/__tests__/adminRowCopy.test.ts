@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PROPOSAL_STATUS_WORD, dayBlock, formatDateRun, joinEs, proposalSublineMiddle } from "../adminRowCopy";
+import { PROPOSAL_STATUS_WORD, dateRunParts, dayBlock, formatDateRun, joinEs, proposalSublineMiddle } from "../adminRowCopy";
 
 describe("adminRowCopy — the hairline rows' Spanish", () => {
   it("joinEs reads a list the Spanish way", () => {
@@ -20,6 +20,18 @@ describe("adminRowCopy — the hairline rows' Spanish", () => {
     expect(formatDateRun(["2026-11-14", "2026-11-15", "2026-12-24"], 2026)).toBe("14 y 15 de noviembre; 24 de diciembre");
     expect(formatDateRun(["2027-01-03"], 2026)).toBe("3 de enero de 2027");
     expect(formatDateRun([], 2026)).toBe("");
+  });
+
+  it("dateRunParts keeps the order and tags each day with its date, so one day can be coloured", () => {
+    expect(dateRunParts(["2026-11-20", "2026-11-21", "2026-12-24"], 2026)).toEqual([
+      { text: "20", iso: "2026-11-20" },
+      { text: " y " },
+      { text: "21", iso: "2026-11-21" },
+      { text: " de noviembre" },
+      { text: "; " },
+      { text: "24", iso: "2026-12-24" },
+      { text: " de diciembre" },
+    ]);
   });
 
   it("proposalSublineMiddle names the co-leads and the count; the status has one word each", () => {

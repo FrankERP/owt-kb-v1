@@ -8,22 +8,22 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 312,
-    "filesScanned": 537,
-    "filesWithColour": 60,
+    "literalRows": 309,
+    "filesScanned": 539,
+    "filesWithColour": 61,
     "byCategory": {
       "2": 2,
-      "4": 67,
+      "4": 66,
       "5": 2,
-      "8": 87,
+      "8": 85,
       "9": 10,
       "11": 8,
       "12": 136
     },
     "byDisposition": {
-      "B": 112,
+      "B": 110,
       "exempt": 60,
-      "keep": 222,
+      "keep": 221,
       "C": 5,
       "D": 13
     },
@@ -2252,19 +2252,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 235,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/admin/MembersPanel.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "bg-transparent",
-      "alpha": null,
-      "utility": "bg",
-      "carrier": null,
-      "line": 978,
+      "line": 238,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2276,7 +2264,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 271,
+      "line": 274,
       "disposition": "B",
       "reason": null
     },
@@ -2288,7 +2276,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 270,
+      "line": 273,
       "disposition": "B",
       "reason": null
     },
@@ -2300,7 +2288,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 968,
+      "line": 1252,
       "disposition": "B",
       "reason": null
     },
@@ -2312,7 +2300,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1006,
+      "line": 1261,
       "disposition": "B",
       "reason": null
     },
@@ -2324,7 +2312,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1285,
+      "line": 1271,
       "disposition": "B",
       "reason": null
     },
@@ -2336,7 +2324,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1294,
+      "line": 1282,
       "disposition": "B",
       "reason": null
     },
@@ -2348,31 +2336,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1304,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/MembersPanel.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 1315,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/MembersPanel.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 1326,
+      "line": 1293,
       "disposition": "B",
       "reason": null
     },
@@ -2384,7 +2348,7 @@
       "alpha": null,
       "utility": "stroke",
       "carrier": null,
-      "line": 274,
+      "line": 277,
       "disposition": "C",
       "reason": null
     },
@@ -2396,7 +2360,7 @@
       "alpha": null,
       "utility": "text",
       "carrier": null,
-      "line": 269,
+      "line": 272,
       "disposition": "C",
       "reason": null
     },
@@ -2528,7 +2492,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 187,
+      "line": 194,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2540,7 +2504,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 225,
+      "line": 232,
       "disposition": "B",
       "reason": null
     },
@@ -3205,42 +3169,6 @@
       "reason": null
     },
     {
-      "file": "app/components/LibraryFilters.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "bg-transparent",
-      "alpha": null,
-      "utility": "bg",
-      "carrier": null,
-      "line": 57,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/LibraryFilters.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 47,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/LibraryFilters.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 133,
-      "disposition": "B",
-      "reason": null
-    },
-    {
       "file": "app/components/LibraryIndex.tsx",
       "category": 4,
       "categoryName": "colour-keyword",
@@ -3541,6 +3469,18 @@
       "reason": "Already theme-agnostic"
     },
     {
+      "file": "app/components/ui/FiltersPill.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 31,
+      "disposition": "B",
+      "reason": null
+    },
+    {
       "file": "app/components/ui/hairlineField.ts",
       "category": 4,
       "categoryName": "colour-keyword",
@@ -3585,6 +3525,30 @@
       "utility": null,
       "carrier": "fill",
       "line": 33,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/ui/SearchLine.tsx",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "bg-transparent",
+      "alpha": null,
+      "utility": "bg",
+      "carrier": null,
+      "line": 36,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/ui/SearchLine.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 25,
       "disposition": "B",
       "reason": null
     },
