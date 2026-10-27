@@ -401,7 +401,7 @@ async function fetchRole(notice: StoredNotice): Promise<Record<string, unknown> 
   const key = `${notice.roleType}:${notice.roleId}`;
   // The memo current when this read STARTED: under Fluid compute another sweep on this
   // instance may swap in its own while the read is in flight, and an older read must not
-  // land in the newer sweep's memo (ADR-0075).
+  // land in the newer sweep's memo (ADR-0074).
   const cache = roleReadCache;
   const memo = cache.get(key);
   if (memo !== undefined) return memo;
