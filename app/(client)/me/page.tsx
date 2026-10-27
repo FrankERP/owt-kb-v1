@@ -90,6 +90,14 @@ export default async function MePage() {
 
   const { sanityId } = session.user;
 
+  // Ministry membership decides which halves of this page exist at all, so it is
+  // resolved BEFORE the reads: a kids-only member must not even query worship.
+  // `getMemberAccess` is the 30s-TTL entry `requireActiveSession` already filled,
+  // so both checks are free.
+  const { ministries } = await getMemberAccess(sanityId);
+  const inWorship = ministries.includes("worship");
+  const inKids = ministries.includes("kids");
+
   // What this page still needs, and nothing else. `unavailableDates` survives the
   // F3 split for ONE reason: the count on the link to `/me/disponibilidad`. The
   // profile fields (`email`, `role`, `notifPrefs`, `hasPassword`) went with the
@@ -98,7 +106,7 @@ export default async function MePage() {
   // Tipo chips. `_rev` is not here either — the save precondition belongs to the
   // page that renders the calendar, and carrying a revision this page never
   // writes with would only invite a future editor to write with it.
-  const member = await serverClient.fetch<{
+  const memberRead = serverClient.fetch<{
     _id: string;
     member_name: string;
     alias?: string;
@@ -124,14 +132,6 @@ export default async function MePage() {
     $id in foh_team[].person._ref
   )`;
 
-  // Ministry membership decides which halves of this page exist at all, so it is
-  // resolved BEFORE the reads: a kids-only member must not even query worship.
-  // `getMemberAccess` is the 30s-TTL entry `requireActiveSession` already filled,
-  // so both checks are free.
-  const { ministries } = await getMemberAccess(sanityId);
-  const inWorship = ministries.includes("worship");
-  const inKids = ministries.includes("kids");
-
   // Both reads below touch protected service types, so they go through the
   // canonical (published-perspective) client — a `drafts.*` overlay is never a
   // member's assignment, proposal, or calendar date. The member's OWN profile
@@ -144,7 +144,11 @@ export default async function MePage() {
   // §5.1: worship surfaces are "none"), so querying and discarding would be pure
   // cost. The calendar's service-date read left with the calendar (F3); it lives
   // on `/me/disponibilidad`, which is where its ministry-neutrality is recorded.
-  const [data, proposals] = await Promise.all([
+  //
+  // Every read on this page goes out at once — the profile, both worship reads and
+  // the kids read — because each one crosses the Atlantic (ADR-0074).
+  const [member, data, proposals, kidsRows] = await Promise.all([
+    memberRead,
     inWorship ? operationalClient.fetch(
       `{
         "sundays": *[_type == "sunday_role" && week >= $today && week <= $limit && published != false && ${memberFilter}] | order(week asc) {
@@ -234,13 +238,12 @@ export default async function MePage() {
       }`,
       { id: sanityId, today }
     ) : [],
+    // Oasis Kids: only for members whose ministries include it, so a worship-only
+    // member pays no query and sees nothing new.
+    inKids
+      ? operationalClient.fetch<KidsMeRow[]>(KIDS_ME_QUERY, { today, id: sanityId })
+      : ([] as KidsMeRow[]),
   ]);
-
-  // Oasis Kids: only for members whose ministries include it, so a worship-only
-  // member pays no query and sees nothing new.
-  const kidsRows = inKids
-    ? await operationalClient.fetch<KidsMeRow[]>(KIDS_ME_QUERY, { today, id: sanityId })
-    : [];
   const kidsAssignments = (Array.isArray(kidsRows) ? kidsRows : [])
     .map((row) => {
       const day = serviceDayKey(row?.date);

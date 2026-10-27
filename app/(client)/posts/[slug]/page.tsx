@@ -102,7 +102,7 @@ interface SongHistoryEntry {
   pairedSongs: Array<{ title: string; slug: { current: string }; play_key?: string }>;
 }
 
-async function getSongHistory(songId: string): Promise<SongHistoryEntry[]> {
+async function getSongHistory(slug: string): Promise<SongHistoryEntry[]> {
   // "Última vez tocada" must reflect PAST plays only. Bound to week < today
   // (America/Mexico_City): a future or this-week setlist has not been played
   // yet — without this bound it would show as the last play with a future date,
@@ -114,18 +114,25 @@ async function getSongHistory(songId: string): Promise<SongHistoryEntry[]> {
   // never counts as a play. Over-fetch, then canonicalize by target: a duplicate
   // week (ambiguous target) contributes NO rows rather than a false or
   // double-counted play, and only then take the three most recent.
+  //
+  // Keyed by the SLUG, not the song's id, so it runs alongside `getPost` instead of
+  // after it: every read crosses the Atlantic (Sanity is in Belgium, the functions
+  // in iad1 — ADR-0074). `^._id` is the song inside the setlist filter, `^.^._id`
+  // inside a setlist's `songs[]`.
   const query = `
-    *[_type in ["featuredSongs", "saturdarSongs"] && references($songId) && week < $today] | order(week desc)[0..19] {
-      week,
-      _type,
-      "play_key": songs[song._ref == $songId][0].play_key,
-      "pairedSongs": songs[song._ref != $songId][] {
-        "title": song->title,
-        "slug": song->slug,
-        play_key,
-      },
-    }`;
-  const rows = await operationalClient.fetch<SongHistoryEntry[]>(query, { songId, today });
+    *[_type == "post" && slug.current == $slug][0] {
+      "rows": *[_type in ["featuredSongs", "saturdarSongs"] && references(^._id) && week < $today] | order(week desc)[0..19] {
+        week,
+        _type,
+        "play_key": songs[song._ref == ^.^._id][0].play_key,
+        "pairedSongs": songs[song._ref != ^.^._id][] {
+          "title": song->title,
+          "slug": song->slug,
+          play_key,
+        },
+      }
+    }.rows`;
+  const rows = (await operationalClient.fetch<SongHistoryEntry[] | null>(query, { slug, today })) ?? [];
   return canonicalizePlayHistory(rows, playHistoryTargetKey)
     .filter((entry) => serviceDayKey(entry.week) !== null)
     .slice(0, 3)
@@ -175,16 +182,20 @@ const LYRIC = `${SECTION_SCROLL} mb-14 lg:col-start-1 lg:row-start-1 lg:row-span
 
 const Page = async ({ params }: Params) => {
   const { slug } = await params;
-  const session = await requireWorshipPage(`/posts/${slug}`);
-  const post: Post = await getPost(slug);
+  // One round trip for the gate, the song and its history, not three in a row:
+  // each read crosses the Atlantic (ADR-0074). A redirect from the gate still wins
+  // — it rejects the whole `Promise.all` — and the reads it overtook render nothing.
+  const [session, post, history] = await Promise.all([
+    requireWorshipPage(`/posts/${slug}`),
+    getPost(slug) as Promise<Post | null>,
+    getSongHistory(slug),
+  ]);
 
   if (!post) notFound();
 
   // «Cordero y León (Lion and The Lamb)»: the Spanish name is the title, the
   // original joins the authors' line (ADR-0070).
   const title = splitSongTitle(post.title);
-
-  const history = await getSongHistory(post._id);
 
   // Preselection only (spec §8.2): the viewer's declared instruments pick which
   // rehearsal row is highlighted. Plain data — this stays a Server Component.
