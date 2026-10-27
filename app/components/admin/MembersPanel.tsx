@@ -983,18 +983,18 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
           <section>
             <p className={`mb-3 ${SHEET_TITLE}`}>Tipo</p>
             <div className="flex flex-wrap gap-1.5" role="group" aria-label="Tipo">
-              <Button variant="pill" size="sm" active={typeFilter === ""} onClick={() => setTypeFilter("")} className="normal-case tracking-normal text-sm px-3 py-1.5">Todos</Button>
+              <Button variant="pill" size="md" active={typeFilter === ""} onClick={() => setTypeFilter("")}>Todos</Button>
               {TYPE_OPTIONS.map((o) => (
-                <Button key={o.value} variant="pill" size="sm" active={typeFilter === o.value} onClick={() => setTypeFilter(o.value)} className="normal-case tracking-normal text-sm px-3 py-1.5">{o.label}</Button>
+                <Button key={o.value} variant="pill" size="md" active={typeFilter === o.value} onClick={() => setTypeFilter(o.value)}>{o.label}</Button>
               ))}
             </div>
           </section>
           <section>
             <p className={`mb-3 ${SHEET_TITLE}`}>Rol</p>
             <div className="flex flex-wrap gap-1.5" role="group" aria-label="Rol">
-              <Button variant="pill" size="sm" active={roleFilter === ""} onClick={() => setRoleFilter("")} className="normal-case tracking-normal text-sm px-3 py-1.5">Todos</Button>
+              <Button variant="pill" size="md" active={roleFilter === ""} onClick={() => setRoleFilter("")}>Todos</Button>
               {ROLES.map((r) => (
-                <Button key={r.value} variant="pill" size="sm" active={roleFilter === r.value} onClick={() => setRoleFilter(r.value)} className="normal-case tracking-normal text-sm px-3 py-1.5">{r.label}</Button>
+                <Button key={r.value} variant="pill" size="md" active={roleFilter === r.value} onClick={() => setRoleFilter(r.value)}>{r.label}</Button>
               ))}
             </div>
           </section>

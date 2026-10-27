@@ -752,7 +752,7 @@ function MemberChip({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-full border px-2 py-0.5 font-label text-[11px] uppercase tracking-widest transition-[color,background-color,border-color,transform,box-shadow] duration-base ease-out-brand ${
+      className={`rounded-full border px-2 py-0.5 font-body font-semibold leading-tight text-xs transition-[color,background-color,border-color,transform,box-shadow] duration-base ease-out-brand ${
         isSource
           ? "scale-105 border-accent bg-accent/30 text-accent ring-1 ring-accent/50"
           : onClick

@@ -137,4 +137,16 @@ pill; «Equipo» is the small-caps title, «Banda» is 17 px sentence case; a sh
   Spanish run («20, 21 y 22 de noviembre», `adminRowCopy.ts`). The availability matrix, Generar mes, Editar
   mes and Editar servicio are untouched. Tests: `adminRowCopy`, `groupMembersByLetter`,
   `proposalsPanelHandoff`, `proposalsPanelThread`, `membersPanelMenu`, `availabilityPanelFailure`.
+- **The house controls went sentence case (2026-10-27, same thread, Frank: «cambialos»).** `Button` and
+  `SegmentedControl` were label-styled — Jura, uppercase, `tracking-widest` — and every screen of this
+  pass overrode them (`normal-case tracking-normal font-body` on a dozen pills) because the mocks set
+  every action in the body face at 600. That is the base now: body face, semibold, sentence case, sizes
+  up with the case on the theme's own steps (11/13/13 px → xs 13 / sm 15 / sm 15 for `Button`, 11/13 →
+  xs/sm for the control) and `leading-tight` so no adopter's row grew. The ~40 bare `<button>`s that
+  mirrored the old face (dialog footers, rule-form links, the song FAB, the banner's «Salir») carry
+  the same three utilities, so nothing shouts beside a house control. Small caps stay where they are
+  LABELS — `SHEET_TITLE`, field labels, `Menu` rows, toasts — and the CARD titles keep their uppercase
+  (the standing rule above is untouched: it was about titles, not actions). Guards: `Button.test.tsx`
+  and `SegmentedControl.test.tsx` refuse `uppercase`/`font-label` on the base. The theme-gallery VR
+  baselines are stale until recaptured on a Mac (`e2e/theme-gallery/README.md`).
 - Undoing it means re-adding the eyebrows and frames the mock removed; the tests above will say so.
