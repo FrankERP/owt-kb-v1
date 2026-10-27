@@ -1,10 +1,12 @@
 "use client";
 
+import { PAGE_LEDE, PAGE_TITLE, SHEET_TITLE } from "@/app/utils/homeHero";
 import { useState, useEffect, useCallback, useRef } from "react";
 
 import Button from "@/app/components/ui/Button";
 import SegmentedControl from "@/app/components/ui/SegmentedControl";
 import { NoteIcon } from "@/app/components/ui/icons";
+import { dateRunParts } from "./adminRowCopy";
 import Skeleton, { SkeletonGroup } from "@/app/components/ui/Skeleton";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -109,6 +111,7 @@ export default function AvailabilityPanel() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const today = new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
+  const currentYear = Number(today.slice(0, 4));
   const upcoming = roles
     .filter(r => r.date >= today)
     .sort((a, b) => a.date.localeCompare(b.date))
@@ -184,7 +187,7 @@ export default function AvailabilityPanel() {
     return (
       <div className="space-y-5">
         <div>
-          <h1 className="font-display text-2xl uppercase tracking-wide">Disponibilidad</h1>
+          <h1 className={PAGE_TITLE}>Disponibilidad</h1>
         </div>
         <div role="alert" className="rounded-xl border border-negative-strong/30 bg-negative-surface-deepest/35 px-5 py-8 text-center">
           <p className="font-display text-lg uppercase text-negative-fg">Sin datos</p>
@@ -203,11 +206,11 @@ export default function AvailabilityPanel() {
       {/* Header + view toggle */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="font-display text-2xl uppercase tracking-wide">Disponibilidad</h1>
-          <p className="font-label text-xs uppercase tracking-widest text-mono-500 mt-0.5">
+          <h1 className={PAGE_TITLE}>Disponibilidad</h1>
+          <p className={`mt-2 ${PAGE_LEDE}`}>
             {conflicts.length > 0
-              ? `${conflicts.length} conflicto${conflicts.length !== 1 ? "s" : ""} detectado${conflicts.length !== 1 ? "s" : ""}`
-              : "Sin conflictos en próximos servicios"}
+              ? <><span className="text-negative-fg">{`${conflicts.length} conflicto${conflicts.length !== 1 ? "s" : ""}`}</span>{" en los próximos servicios"}</>
+              : <><span className="text-positive-strong">Sin conflictos</span>{" en los próximos servicios"}</>}
           </p>
         </div>
         <SegmentedControl
@@ -223,108 +226,93 @@ export default function AvailabilityPanel() {
         />
       </div>
 
-      {/* ── Conflicts view ── */}
+      {/* ── Conflicts view: hairline rows (ADR-0070, the Admin pass PR B) ── */}
       {viewMode === "conflicts" && (
-        <div className="space-y-4">
+        <div className="space-y-8">
           {conflicts.length === 0 ? (
-            <div className="rounded-xl border border-positive-deep/25 bg-positive-deep/5 px-5 py-8 text-center">
-              <p className="font-display text-lg uppercase text-positive-strong">Todo bien</p>
-              <p className="font-body text-sm text-mono-500 mt-1">
-                Ningún miembro asignado tiene fechas marcadas como no disponible.
-              </p>
-            </div>
+            <p className="font-body text-[15px] text-ink-dim">
+              Nadie asignado tiene marcada una fecha en la que le toca servir.
+            </p>
           ) : (
-            <>
-              <p className="font-body text-sm text-mono-500">
-                Los siguientes miembros están asignados a servicios en fechas que marcaron como no disponibles.
-                Puedes ignorarlo o usar el panel de Servicios para reasignarlos.
+            <div className="space-y-3">
+              <p className="font-body text-[15px] text-ink-dim">
+                Están asignados en fechas que marcaron como no disponibles. Reasígnalos desde Servicios, o déjalo así a propósito.
               </p>
-              <div className="space-y-2">
+              <ul className="border-t border-ink/[0.10]">
                 {conflicts.map(({ role, member }, i) => {
-                  const note = member.unavailabilityNotes?.find(n => n.date === role.date)?.note;
+                  const note = member.unavailabilityNotes?.find(n => n.date === role.date)?.note?.trim();
                   return (
-                    <div
+                    <li
                       key={i}
-                      className="flex items-start gap-3 px-4 py-3 rounded-xl border border-negative-strong/25 bg-negative-strong/5"
+                      data-availability-conflict=""
+                      className="flex min-h-[64px] flex-wrap items-center gap-x-4 gap-y-1 border-b border-ink/[0.10] py-2.5 sm:flex-nowrap"
                     >
-                      <span className="w-2 h-2 rounded-full bg-negative-strong shrink-0 mt-1.5" />
-                      <div className="flex-1 min-w-0">
-                        <div>
-                          <span className="font-body text-sm font-semibold">{dn(member)}</span>
-                          <span className="font-body text-sm text-mono-400"> marcó </span>
-                          <span className="font-label text-xs uppercase tracking-widest text-negative-fg">
-                            {fmtDate(role.date)}
-                          </span>
-                          <span className="font-body text-sm text-mono-400"> como no disponible</span>
-                        </div>
+                      <span className="w-full font-body text-[17px] font-semibold text-ink sm:w-[140px] sm:shrink-0 sm:truncate">{dn(member)}</span>
+                      <span className="min-w-0 flex-1 font-body text-[15px] text-ink-muted [overflow-wrap:anywhere]">
+                        {"marcó "}
+                        <span className="font-semibold text-negative-fg">{fmtDate(role.date)}</span>
+                        {" como no disponible"}
                         {note && (
-                          <p className="font-body text-xs italic text-mono-500 mt-0.5">&quot;{note}&quot;</p>
+                          <span className="ml-2.5 inline-flex items-center gap-1.5 text-ink-dim">
+                            <NoteIcon size={14} className="shrink-0" />
+                            {note}
+                          </span>
                         )}
-                      </div>
-                      <span className={`font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full shrink-0 mt-0.5 ${SERVICE_COLOR[role._type]}`}>
+                      </span>
+                      <span className="shrink-0 font-body text-sm text-ink-dim">
                         {role.service_name || SERVICE_LABEL[role._type]}
                       </span>
-                    </div>
+                    </li>
                   );
                 })}
-              </div>
-            </>
+              </ul>
+            </div>
           )}
 
-          {/* Upcoming unavailabilities (not necessarily conflicting) */}
+          {/* Upcoming unavailabilities (not necessarily conflicting): one row per
+              member, the dates as one Spanish run («20, 21 y 22 de noviembre»),
+              a conflicting date in red, each note after a glyph. */}
           {membersWithUnavail.length > 0 && (
-            <div className="space-y-3 pt-2">
-              <h2 className="font-label text-xs uppercase tracking-widest text-mono-500">
+            <div className="space-y-3">
+              <h2 className={SHEET_TITLE}>
                 No disponible en próximas fechas
               </h2>
-              <div className="space-y-1.5">
+              <ul className="border-t border-ink/[0.10]">
                 {membersWithUnavail.map(m => {
                   const futureDates = (m.unavailableDates ?? [])
                     .filter(d => d >= today)
                     .sort()
                     .slice(0, 6);
                   const noteMap = new Map((m.unavailabilityNotes ?? []).map(n => [n.date, n.note]));
-                  const datesWithNotes = futureDates.filter(d => noteMap.get(d)?.trim());
+                  const notes = futureDates
+                    .map(d => ({ date: d, note: noteMap.get(d)?.trim() ?? "" }))
+                    .filter(n => n.note);
+                  const conflicting = new Set(futureDates.filter(d => conflicts.some(c => c.member._id === m._id && c.role.date === d)));
                   return (
-                    <div key={m._id} className="flex flex-col gap-1.5 px-4 py-2.5 rounded-xl border border-warning-fg/20 bg-warning-fg/5">
-                      <div className="flex items-center gap-3">
-                        <span className="w-2 h-2 rounded-full bg-warning-fg shrink-0" />
-                        <span className="font-body text-sm font-semibold min-w-[100px]">{dn(m)}</span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {futureDates.map(d => {
-                            // Trimmed, like `datesWithNotes` below: a blank note draws no marker.
-                            const note = noteMap.get(d)?.trim();
-                            const isConflict = conflicts.some(c => c.member._id === m._id && c.role.date === d);
-                            return (
-                              <span
-                                key={d}
-                                className={`font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full ${
-                                  isConflict
-                                    ? "bg-negative-strong/20 text-negative-fg border border-negative-strong/30"
-                                    : "bg-warning-fg/15 text-warning-strong border border-warning-fg/25"
-                                }`}
-                              >
-                                {fmtDate(d)}
-                                {note && <NoteIcon size={10} className="ml-1 inline-block align-[-1px]" />}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      </div>
-                      {datesWithNotes.length > 0 && (
-                        <div className="pl-5 space-y-0.5">
-                          {datesWithNotes.map(d => (
-                            <p key={d} className="font-body text-xs italic text-mono-500 leading-snug">
-                              <span className="not-italic font-label uppercase tracking-widest text-warning-strong">{fmtDate(d)}:</span>{" "}
-                              &quot;{noteMap.get(d)}&quot;
-                            </p>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                    <li
+                      key={m._id}
+                      data-availability-row=""
+                      className="flex min-h-[64px] flex-wrap items-center gap-x-4 gap-y-1 border-b border-ink/[0.10] py-2.5 sm:flex-nowrap"
+                    >
+                      <span className="w-full font-body text-[17px] font-semibold text-ink sm:w-[140px] sm:shrink-0 sm:truncate">{dn(m)}</span>
+                      <span className="min-w-0 flex-1 font-body text-[15px] text-ink-muted [overflow-wrap:anywhere]">
+                        {/* One run in date order; a conflicting day is red where it falls. */}
+                        {dateRunParts(futureDates, currentYear).map((part, i) =>
+                          part.iso && conflicting.has(part.iso)
+                            ? <span key={i} className="font-semibold text-negative-fg">{part.text}</span>
+                            : <span key={i}>{part.text}</span>,
+                        )}
+                        {notes.map(n => (
+                          <span key={n.date} className="ml-2.5 inline-flex items-center gap-1.5 text-ink-dim">
+                            <NoteIcon size={14} className="shrink-0" />
+                            {notes.length > 1 ? `${fmtDate(n.date)}: ${n.note}` : n.note}
+                          </span>
+                        ))}
+                      </span>
+                    </li>
                   );
                 })}
-              </div>
+              </ul>
             </div>
           )}
         </div>

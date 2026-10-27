@@ -11,6 +11,9 @@
 // touch gets the same affordance, and the kill switch asks before it fires
 // (decision O).
 
+import { PAGE_LEDE, PAGE_TITLE, SHEET_TITLE } from "@/app/utils/homeHero";
+import { normalizeText } from "@/app/utils/normalizeText";
+import { plural } from "@/app/utils/plural";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -33,6 +36,9 @@ import {
   type MinistryId,
 } from "@/app/ministries";
 import { interpretMemberDeleteResponse } from "@/app/utils/memberDelete";
+import { MEMBER_TYPES as MEMBER_TYPE_IDS, type MemberType } from "@/app/utils/memberTypes";
+import FiltersPill from "../ui/FiltersPill";
+import SearchLine from "../ui/SearchLine";
 import { DEFAULT_INSTRUMENT_SEATS } from "./seatModel";
 
 import { ROLE_LABEL, type OWTRole } from "@/app/utils/roleLabel";
@@ -90,13 +96,43 @@ interface MemberFormData {
 // The table's own abbreviations — deliberately not `MEMBER_TYPE_LABEL`'s full
 // words (`app/utils/memberTypes.ts`): this is a dense list, not the member's
 // own profile, where there is room to spell "Líder Domingo" out.
-const TYPE_ABBR: Record<string, string> = {
-  voz: "Voz", instrumento: "Instr.", foh: "FOH",
+/**
+ * The row's words for a Tipo: full words since the Admin pass turned the chips
+ * into a line of text, with the two leader types kept short («Líder Dom») so
+ * «Voz · Líder Dom · Guitarra» fits a phone row. Keyed on `MemberType`, so a
+ * Tipo added to `memberTypes.ts` fails to compile here instead of going
+ * silently unlabelled; the Filtros sheet lists `MEMBER_TYPES` with these words.
+ */
+const TYPE_ABBR: Record<MemberType, string> = {
+  voz: "Voz", instrumento: "Instrumento", foh: "FOH",
   sunday_lead: "Líder Dom", saturday_lead: "Líder Sáb", support: "Soporte",
 };
+const typeWord = (t: string) => (t in TYPE_ABBR ? TYPE_ABBR[t as MemberType] : t);
 
-type FilterKey = "type" | "role";
+const TYPE_OPTIONS = MEMBER_TYPE_IDS.map((value) => ({ value, label: TYPE_ABBR[value] }));
+
 type SortDir  = "asc" | "desc";
+
+/**
+ * The list by letter of the shown name, like Biblioteca (ADR-0070): the letter
+ * follows `sortDir`, the rows keep the order the caller sorted them in. A query
+ * orders by relevance, so the caller passes one unlettered group then.
+ */
+export function groupMembersByLetter<T extends { member_name: string; alias?: string }>(
+  rows: T[],
+  sortDir: SortDir,
+): { letter: string; rows: T[] }[] {
+  const map = new Map<string, T[]>();
+  for (const m of rows) {
+    const c = normalizeText(m.alias?.trim() || m.member_name).trim().charAt(0).toUpperCase();
+    const letter = /[A-Z]/.test(c) ? c : "#";
+    (map.get(letter) ?? map.set(letter, []).get(letter)!).push(m);
+  }
+  const letters = [...map.keys()].filter((l) => l !== "#").sort();
+  if (sortDir === "desc") letters.reverse();
+  if (map.has("#")) letters.push("#");
+  return letters.map((letter) => ({ letter, rows: map.get(letter)! }));
+}
 
 /** Which ministry's people the Miembros list is showing. */
 export type MinistryScope = MinistryId | "all";
@@ -194,13 +230,6 @@ const ROLES: { value: OWTRole; label: string }[] = [
   { value: "member",      label: "Miembro" },
 ];
 
-const ROLE_BADGE: Record<OWTRole, string> = {
-  "super-admin":    "bg-accent/15 text-accent border border-accent/30",
-  "admin":          "bg-badge-azure-deep/15 text-badge-azure-fg border border-badge-azure-deep/30",
-  "content-editor": "bg-badge-violet-deep/15 text-badge-violet-fg border border-badge-violet-deep/30",
-  "member":         "bg-mono-500/15 text-mono-400 border border-mono-500/30",
-};
-
 // ─── Shared input style ────────────────────────────────────────────────────────
 // 16px on the phone: anything smaller makes iOS Safari zoom the page on focus.
 // `inputFontSize.test.ts` excludes `admin/` by path, so this is the convention
@@ -234,7 +263,7 @@ function Avatar({
         <img src={photoUrl} alt={name} className="w-full h-full object-cover" />
       ) : (
         <div className="w-full h-full bg-surface-accent-l100-d10 text-on-fill flex items-center justify-center">
-          <span className="font-label text-xs text-accent">{initials}</span>
+          <span className="font-label text-sm text-accent">{initials}</span>
         </div>
       )}
       {onClick && (
@@ -261,7 +290,7 @@ function Avatar({
         type="button"
         onClick={onClick}
         title="Cambiar foto"
-        className="relative w-9 h-9 rounded-full overflow-hidden shrink-0 group/avatar cursor-pointer"
+        className="relative w-11 h-11 rounded-full overflow-hidden shrink-0 group/avatar cursor-pointer"
       >
         {inner}
       </button>
@@ -269,7 +298,7 @@ function Avatar({
   }
 
   return (
-    <div className="relative w-9 h-9 rounded-full overflow-hidden shrink-0">
+    <div className="relative w-11 h-11 rounded-full overflow-hidden shrink-0">
       {inner}
     </div>
   );
@@ -608,9 +637,12 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
   const { toast } = useToast();
   const showToast = useCallback((msg: string) => toast({ message: msg }), [toast]);
   const [query, setQuery]           = useState("");
-  const [filterKey, setFilterKey]   = useState<FilterKey>("type");
-  const [filterValue, setFilterValue] = useState("");
+  // Tipo and Rol filter together now (the Admin pass): both live in the
+  // «Filtros» sheet, so a key picker choosing ONE of them is gone.
+  const [typeFilter, setTypeFilter] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
   const [sortDir, setSortDir]       = useState<SortDir>("asc");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   // Frank sees the whole church here; "Alabanza" is the view he actually works in.
   const [ministryScope, setMinistryScope] = useState<MinistryScope>("worship");
   const [uploadingPhoto, setUploadingPhoto] = useState<string | null>(null);
@@ -645,12 +677,11 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
 
   // Category filter — independent of the search query.
   const categoryFiltered = useMemo(() => {
-    const base = ministry.scoped;
-    if (!filterValue) return base;
-    return filterKey === "type"
-      ? base.filter((m) => m.memberType?.includes(filterValue))
-      : base.filter((m) => m.role === filterValue);
-  }, [ministry, filterKey, filterValue]);
+    let base = ministry.scoped;
+    if (typeFilter) base = base.filter((m) => m.memberType?.includes(typeFilter));
+    if (roleFilter) base = base.filter((m) => m.role === roleFilter);
+    return base;
+  }, [ministry, typeFilter, roleFilter]);
 
   // Build the Fuse index only when the filtered set changes — NOT on every
   // keystroke. Typing then just re-runs .search() against the existing index.
@@ -675,6 +706,13 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
       return sortDir === "asc" ? na.localeCompare(nb, "es") : nb.localeCompare(na, "es");
     });
   }, [categoryFiltered, fuse, query, sortDir]);
+
+  // A query orders by relevance, so the letters only exist while idle.
+  const groups = useMemo(
+    () => (query.trim() ? [{ letter: "", rows: filteredMembers }] : groupMembersByLetter(filteredMembers, sortDir)),
+    [filteredMembers, query, sortDir],
+  );
+  const activeFilters = (typeFilter ? 1 : 0) + (roleFilter ? 1 : 0) + (sortDir === "desc" ? 1 : 0);
 
   const openModal = (kind: ModalKind, member?: Member) => {
     setModalError(null);
@@ -892,21 +930,21 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-2xl uppercase tracking-wide">Miembros</h1>
+          <h1 className={PAGE_TITLE}>Miembros</h1>
           {!loading && (
-            <p className="font-label text-xs uppercase tracking-widest text-mono-500 mt-0.5">
+            <p className={`mt-2 ${PAGE_LEDE}`}>
               {/* `filterValue` is in here deliberately: with scope "Todos", no query
                   and a type/role filter active, the heading used to read "57 miembros"
                   above a list of 5 — a silently shortened list is how someone concludes
                   a member was deleted. Any narrowing input must make the count honest. */}
-              {(query.trim() || filterValue || ministryScope !== "all") && filteredMembers.length !== members.length
+              {(query.trim() || typeFilter || roleFilter || ministryScope !== "all") && filteredMembers.length !== members.length
                 ? `${filteredMembers.length} de ${members.length} ${members.length === 1 ? "miembro" : "miembros"}`
                 : `${members.length} ${members.length === 1 ? "miembro" : "miembros"}`
               }
             </p>
           )}
         </div>
-        <Button variant="primary" onClick={() => openModal("add")}>
+        <Button variant="primary" size="lg" onClick={() => openModal("add")}>
           <PlusIcon size={14} />
           Agregar
         </Button>
@@ -923,93 +961,68 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
           onChange={setMinistryScope}
         />
 
-        {/* Row 1: filter key + filter value + sort direction */}
-        <div className="flex gap-2 flex-wrap">
-          <SegmentedControl
-            label="Filtrar por"
-            tone="filled"
-            // brand-search-console deliberately wins over the primitive's filled chrome
-            // so the control matches the search input beside it.
-            className="brand-search-console shrink-0"
-            value={filterKey}
-            onChange={(k) => { setFilterKey(k); setFilterValue(""); }}
-            options={[
-              { value: "type", label: "Tipo" },
-              { value: "role", label: "Rol" },
-            ]}
-          />
-
-          {/* Filter value dropdown */}
-          <Select
-            aria-label={filterKey === "type" ? "Tipo" : "Rol"}
-            // Below `sm` the dropdown is its own full line under the two segmented
-            // controls (bloque 5): the row wrapped wherever it ran out, with the
-            // dropdown squeezed between them.
-            className="order-last min-w-[120px] basis-full sm:order-none sm:flex-1"
-            value={filterValue}
-            onChange={(e) => setFilterValue(e.target.value)}
-          >
-            <option value="">{filterKey === "type" ? "Todos los tipos" : "Todos los roles"}</option>
-            {filterKey === "type"
-              ? [
-                  { value: "voz",           label: "Voz"         },
-                  { value: "instrumento",   label: "Instrumento" },
-                  { value: "foh",           label: "FOH"         },
-                  { value: "sunday_lead",   label: "Líder Dom"   },
-                  { value: "saturday_lead", label: "Líder Sáb"   },
-                  { value: "support",       label: "Soporte"     },
-                ].map((o) => <option key={o.value} value={o.value}>{o.label}</option>)
-              : ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)
-            }
-          </Select>
-
-          <SegmentedControl
-            label="Orden"
-            tone="filled"
-            // brand-search-console deliberately wins over the primitive's filled chrome
-            // so the control matches the search input beside it.
-            className="brand-search-console shrink-0"
-            value={sortDir}
-            onChange={setSortDir}
-            options={[
-              { value: "asc", label: "A→Z" },
-              { value: "desc", label: "Z→A" },
-            ]}
-          />
-        </div>
-
-        {/* Row 2: search */}
-        <div className="brand-search-console relative">
-          <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-mono-500 pointer-events-none"
-            width="14" height="14" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-          >
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          {/* 16px on the phone: anything smaller makes iOS Safari zoom the page
-              on focus. `inputFontSize.test.ts` excludes `admin/` by path, so this
-              is the convention holding rather than the guard. */}
-          <input
-            className="w-full bg-transparent py-2.5 pl-9 pr-8 font-body text-[16px] sm:text-sm placeholder:text-placeholder focus:outline-none"
+        {/* Row 1: the search as a hairline beside the «Filtros» pill (ADR-0070's
+            Biblioteca pattern): Tipo, Rol and Orden live in the sheet. */}
+        <div className="flex items-center gap-3">
+          <SearchLine
+            label="Buscar miembros"
             placeholder="Buscar por nombre, alias o email…"
-            aria-label="Buscar miembros"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={setQuery}
+            className="flex-1"
           />
-          {query && (
-            <Button
-              variant="icon"
-              size="lg"
-              aria-label="Limpiar búsqueda"
-              onClick={() => setQuery("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-lg normal-case leading-none tracking-normal"
-            >
-              ×
-            </Button>
-          )}
+          <FiltersPill count={activeFilters} open={filtersOpen} onClick={() => setFiltersOpen(true)} />
         </div>
       </div>
+
+      {/* The filter sheet: Tipo and Rol as pills with a «Todos» each (a pill does
+          fire on re-press, but «Todos» reads clearer than "tap it again"), Orden
+          as the house segmented control. The primary says what it will show. */}
+      <CueDialog open={filtersOpen} mode="sheet" size="md" title="Filtros" label="Filtros" onDismiss={() => setFiltersOpen(false)}>
+        <div className="min-h-0 flex-1 space-y-8 overflow-y-auto p-5">
+          <section>
+            <p className={`mb-3 ${SHEET_TITLE}`}>Tipo</p>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Tipo">
+              <Button variant="pill" size="sm" active={typeFilter === ""} onClick={() => setTypeFilter("")} className="normal-case tracking-normal text-sm px-3 py-1.5">Todos</Button>
+              {TYPE_OPTIONS.map((o) => (
+                <Button key={o.value} variant="pill" size="sm" active={typeFilter === o.value} onClick={() => setTypeFilter(o.value)} className="normal-case tracking-normal text-sm px-3 py-1.5">{o.label}</Button>
+              ))}
+            </div>
+          </section>
+          <section>
+            <p className={`mb-3 ${SHEET_TITLE}`}>Rol</p>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Rol">
+              <Button variant="pill" size="sm" active={roleFilter === ""} onClick={() => setRoleFilter("")} className="normal-case tracking-normal text-sm px-3 py-1.5">Todos</Button>
+              {ROLES.map((r) => (
+                <Button key={r.value} variant="pill" size="sm" active={roleFilter === r.value} onClick={() => setRoleFilter(r.value)} className="normal-case tracking-normal text-sm px-3 py-1.5">{r.label}</Button>
+              ))}
+            </div>
+          </section>
+          <section>
+            <p className={`mb-3 ${SHEET_TITLE}`}>Orden</p>
+            <SegmentedControl
+              label="Orden"
+              tone="filled"
+              size="sm"
+              className="w-fit"
+              value={sortDir}
+              onChange={setSortDir}
+              options={[
+                { value: "asc", label: "A→Z" },
+                { value: "desc", label: "Z→A" },
+              ]}
+            />
+          </section>
+          <div className="flex items-center justify-between gap-3 border-t border-ink/[0.10] pt-5">
+            <Button variant="ghost" onClick={() => { setTypeFilter(""); setRoleFilter(""); setSortDir("asc"); }}>Limpiar filtros</Button>
+            <Button variant="cta" onClick={() => setFiltersOpen(false)}>
+              {/* What the FILTERS show — without the search box's own narrowing, which
+                  the sheet does not touch. */}
+              {`Ver ${plural(categoryFiltered.length, "miembro", "miembros")}`}
+            </Button>
+          </div>
+        </div>
+      </CueDialog>
 
       {/* States */}
       {loading && (
@@ -1024,127 +1037,134 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
         <p className="text-sm text-negative-fg bg-negative-surface-deep/20 border border-negative-surface rounded-xl px-4 py-3">{error}</p>
       )}
 
-      {/* Members list */}
+      {/* Members list: letter sections over hairline rows (ADR-0070, the Admin
+          pass PR B). The letter is the display face, muted — an index, not a
+          label; the row is photo, alias at 17 px, «Voz · Líder Dom» at 14 px, the
+          role as a muted word («Sin acceso» in red) and ONE menu. */}
       {!loading && !error && (
-        <div className="space-y-2">
+        <div>
           {members.length === 0 && (
-            <p className="font-body text-sm text-mono-500 text-center py-12">No hay miembros todavía.</p>
+            <p className="font-body text-[15px] text-ink-dim py-12">No hay miembros todavía.</p>
           )}
           {members.length > 0 && filteredMembers.length === 0 && (
-            <p className="font-body text-sm text-mono-500 text-center py-12">
+            <p className="font-body text-[15px] text-ink-dim py-12">
               {query.trim() ? <>Sin resultados para &ldquo;{query}&rdquo;</> : "Sin resultados"}
             </p>
           )}
-          {filteredMembers.map((m) => (
-            <div
-              key={m._id}
-              // `:hover` moves the border colour and the shadow; its `background` is a
-              // GRADIENT (background-image), which does not interpolate, so listing
-              // background-color would animate nothing and say otherwise.
-              className="brand-member-row group flex items-center gap-4 rounded-xl px-4 py-3 transition-[box-shadow,border-color] duration-base ease-out-brand"
-            >
-              <Avatar
-                name={displayName(m)}
-                photoUrl={m.photoUrl}
-                uploading={uploadingPhoto === m._id}
-                onClick={() => handlePhotoClick(m._id)}
-              />
-
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-baseline gap-2 flex-wrap">
-                  {m.alias?.trim()
-                    ? <p className="font-display text-base leading-tight truncate">{m.alias.trim()}</p>
-                    : <p className="font-body text-sm font-semibold truncate">{m.member_name}</p>
-                  }
-                  {m.alias?.trim() && (
-                    <span className="font-body text-sm text-accent/70 truncate">{m.member_name}</span>
-                  )}
-                </div>
-                <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                  <p className="font-body text-sm text-surface-ink-l50-d35 truncate">{m.email}</p>
-                  {(m.memberType ?? []).map(t => (
-                    <span key={t} className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-accent/10 text-mono-400 border border-accent/15">
-                      {TYPE_ABBR[t] ?? t}
-                    </span>
-                  ))}
-                  {(m.instruments ?? []).map(i => (
-                    <span key={`instr-${i}`} className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-mono-500/10 text-mono-400 border border-mono-500/20">
-                      {i}
-                    </span>
-                  ))}
-                  {/* The chip is the row's only statement about access now that the
-                      kill switch lives in the menu — it stays. */}
-                  {m.disabled === true && (
-                    <span className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-negative-strong/15 text-negative-fg border border-negative-strong/30">
-                      Sin acceso
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Role badge */}
-              <span className={`hidden sm:inline-flex font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full ${ROLE_BADGE[m.role ?? "member"]}`}>
-                {ROLE_LABEL[m.role ?? "member"]}
-              </span>
-
-              {/* Password indicator */}
-              <span
-                title={m.hasPassword ? "Tiene contraseña" : "Sin contraseña"}
-                className={`w-2 h-2 rounded-full shrink-0 ${m.hasPassword ? "bg-positive-deep" : "bg-mono-600"}`}
-              />
-
-              {/* Actions — ONE menu per row (R5 ruling 6). The four hover-only icon
-                  buttons are gone: nothing on this row depends on hover, so a phone
-                  reaches every action the desktop does. */}
-              <Menu
-                label={`Acciones de ${displayName(m)}`}
-                align="end"
-                trigger={
-                  <Button variant="icon" size="lg" aria-label={`Acciones de ${displayName(m)}`}>
-                    <span aria-hidden="true" className="text-base leading-none">⋯</span>
-                  </Button>
-                }
-              >
-                <MenuItem icon={<PencilIcon />} onSelect={() => openModal("edit", m)}>
-                  Editar
-                </MenuItem>
-                <MenuItem icon={<KeyIcon />} onSelect={() => openModal("password", m)}>
-                  Contraseña
-                </MenuItem>
-                {role === "super-admin" && (
-                  <>
-                    <MenuItem icon={<MaskIcon />} onSelect={() => handleImpersonate(m._id)}>
-                      Ver como este miembro
-                    </MenuItem>
-                    <MenuSeparator />
-                    <MenuItem
-                      icon={<BanIcon />}
-                      danger={m.disabled !== true}
-                      // `submitting` covers a second pick while the previous
-                      // access write is still in flight — the confirm's own
-                      // button is `busy`, and this is the path that has none.
-                      disabled={submitting}
-                      onSelect={() =>
-                        m.disabled === true ? handleDisableAccess(m._id, false) : openConfirm(m)
-                      }
+          {groups.map((g) => (
+            <section key={g.letter || "resultados"} aria-label={g.letter ? `Letra ${g.letter}` : "Resultados"}>
+              {g.letter && (
+                <h2 className="pb-1.5 pt-7 font-display text-[28px] font-semibold leading-none text-ink-dim md:text-[34px]">
+                  {g.letter}
+                </h2>
+              )}
+              <div className="border-t border-ink/[0.10]">
+                {g.rows.map((m) => {
+                  const facts = [
+                    ...(m.memberType ?? []).map(typeWord),
+                    ...(m.instruments ?? []),
+                  ];
+                  return (
+                    <div
+                      key={m._id}
+                      data-member-row=""
+                      className="flex min-h-[68px] items-center gap-3.5 border-b border-ink/[0.10] py-2.5"
                     >
-                      {m.disabled === true ? "Habilitar acceso" : "Deshabilitar acceso"}
-                    </MenuItem>
-                    <MenuItem icon={<TrashIcon />} danger disabled={submitting} onSelect={() => openModal("delete", m)}>
-                      Eliminar
-                    </MenuItem>
-                  </>
-                )}
-              </Menu>
-            </div>
+                      <Avatar
+                        name={displayName(m)}
+                        photoUrl={m.photoUrl}
+                        uploading={uploadingPhoto === m._id}
+                        onClick={() => handlePhotoClick(m._id)}
+                      />
+
+                      {/* Info */}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-baseline gap-2">
+                          <p className="truncate font-body text-[17px] font-semibold leading-tight text-ink">{displayName(m)}</p>
+                          {m.alias?.trim() && (
+                            <span className="hidden truncate font-body text-sm text-ink-muted sm:inline">{m.member_name}</span>
+                          )}
+                        </div>
+                        {/* No Tipo and no instrument: the line exists only from `md`, where the
+                            email fills it — a phone row must not carry an empty 14 px line. */}
+                        <p className={`mt-1 truncate font-body text-sm leading-tight text-ink-muted ${facts.length > 0 ? "" : "hidden md:block"}`}>
+                          {facts.join(" · ")}
+                          <span className="hidden md:inline">
+                            {facts.length > 0 && <span className="text-ink-dim"> · </span>}
+                            {m.email}
+                          </span>
+                        </p>
+                      </div>
+
+                      {/* Access or role, as a word. «Sin acceso» is the row's only statement
+                          about access now that the kill switch lives in the menu — it stays. */}
+                      {m.disabled === true ? (
+                        <span className="shrink-0 font-body text-sm text-negative-fg">Sin acceso</span>
+                      ) : (m.role ?? "member") !== "member" ? (
+                        <span className="hidden shrink-0 font-body text-sm text-ink-muted sm:inline">{ROLE_LABEL[m.role ?? "member"]}</span>
+                      ) : null}
+
+                      {/* Password indicator */}
+                      <span
+                        title={m.hasPassword ? "Tiene contraseña" : "Sin contraseña"}
+                        className={`w-2 h-2 rounded-full shrink-0 ${m.hasPassword ? "bg-positive-deep" : "bg-mono-600"}`}
+                      />
+
+                      {/* Actions — ONE menu per row (R5 ruling 6). The four hover-only icon
+                          buttons are gone: nothing on this row depends on hover, so a phone
+                          reaches every action the desktop does. */}
+                      <Menu
+                        label={`Acciones de ${displayName(m)}`}
+                        align="end"
+                        trigger={
+                          <Button variant="icon" size="lg" aria-label={`Acciones de ${displayName(m)}`}>
+                            <span aria-hidden="true" className="text-base leading-none">⋯</span>
+                          </Button>
+                        }
+                      >
+                        <MenuItem icon={<PencilIcon />} onSelect={() => openModal("edit", m)}>
+                          Editar
+                        </MenuItem>
+                        <MenuItem icon={<KeyIcon />} onSelect={() => openModal("password", m)}>
+                          Contraseña
+                        </MenuItem>
+                        {role === "super-admin" && (
+                          <>
+                            <MenuItem icon={<MaskIcon />} onSelect={() => handleImpersonate(m._id)}>
+                              Ver como este miembro
+                            </MenuItem>
+                            <MenuSeparator />
+                            <MenuItem
+                              icon={<BanIcon />}
+                              danger={m.disabled !== true}
+                              // `submitting` covers a second pick while the previous
+                              // access write is still in flight — the confirm's own
+                              // button is `busy`, and this is the path that has none.
+                              disabled={submitting}
+                              onSelect={() =>
+                                m.disabled === true ? handleDisableAccess(m._id, false) : openConfirm(m)
+                              }
+                            >
+                              {m.disabled === true ? "Habilitar acceso" : "Deshabilitar acceso"}
+                            </MenuItem>
+                            <MenuItem icon={<TrashIcon />} danger disabled={submitting} onSelect={() => openModal("delete", m)}>
+                              Eliminar
+                            </MenuItem>
+                          </>
+                        )}
+                      </Menu>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
           ))}
         </div>
       )}
 
       {/* Legend */}
       {!loading && members.length > 0 && (
-        <p className="font-label text-[11px] uppercase tracking-widest text-mono-600 flex items-center gap-2">
+        <p className="flex items-center gap-2 font-body text-xs text-ink-dim">
           <span className="w-2 h-2 rounded-full bg-positive-deep inline-block" /> Con contraseña
           <span className="w-2 h-2 rounded-full bg-mono-600 inline-block ml-2" /> Solo SSO
         </p>

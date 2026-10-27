@@ -292,7 +292,7 @@ each one owns, and its rules) and `docs/UTILITIES_AND_COMPONENTS.md`. Most are "
 - **UI — never hand-roll these:** `Button` (the only button; `tone`, never a `hover:` pair in
   `className`), `CueDialog` (every dialog; `<CueDialog open={x}>`, never a literal `open` —
   `cueDialogMount.test.ts`), `Menu`, `Select`, `DateField`, `Switch`, `Checkbox` (never a bare
-  `<select>`/`<input type="checkbox|date|month">`), `SegmentedControl`, `Collapse`,
+  `<select>`/`<input type="checkbox|date|month">`), `SegmentedControl`, `FiltersPill` + `SearchLine` (a filter sheet's opener and the hairline search), `Collapse`,
   `Presence`, `Skeleton`/`SkeletonGroup`, `AnimatedList`, `SlidingIndicator`, `NumberRoll`,
   `SwipeStrip`, `useToast` (fixed stack) vs `useTransientValue` (inline flash) — not
   interchangeable, `useLongPress`, `QuickActions`, `PullToRefresh` (mounted once),

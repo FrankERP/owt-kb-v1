@@ -97,7 +97,8 @@ import Menu, { MenuItem } from "../ui/Menu";
 import Skeleton, { SkeletonGroup } from "../ui/Skeleton";
 import { revealProps } from "@/app/utils/reveal";
 import { plural } from "@/app/utils/plural";
-import { upcomingMonthPills } from "./monthPills";
+import { formatMonthTab, upcomingMonthPills } from "./monthPills";
+import { PAGE_LEDE, PAGE_TITLE } from "@/app/utils/homeHero";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 //
@@ -907,14 +908,14 @@ export default function ServicesPanel({
 
   const monthLabel =
     selectedMonths.size === 0 ? "Próximos"
-    : selectedMonths.size === 1 ? fmtYM([...selectedMonths][0])
+    : selectedMonths.size === 1 ? formatMonthTab([...selectedMonths][0], currentYM)
     : `${selectedMonths.size} meses`;
 
   const counters = commandSummaryCounters({ all: cards, visible: visibleCards });
   /** What the toolbar's publish button submits: the visible cards whose date has not gone. */
   const toolbarPublishCards = useMemo(() => visibleCards.filter((c) => !c.isPast), [visibleCards]);
   const toolbarPlan = useMemo(() => buildPublishConfirmation(toolbarPublishCards), [toolbarPublishCards]);
-  const summaryLine = commandSummarySegments(counters).join(" · ");
+  const summarySegments = commandSummarySegments(counters);
   /** The toolbar's «Editar mes»: the one selected month, else the current one. */
   const openMonthEditor1 = (opener: "toolbar" | "menu" = "toolbar") =>
     openMonthEditor(selectedMonths.size === 1 ? [...selectedMonths][0] : currentYM, undefined, false, { kind: opener });
@@ -1188,11 +1189,17 @@ export default function ServicesPanel({
       {/* Command summary — replaces the plain count header */}
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="font-display text-2xl uppercase tracking-wide">Servicios</h1>
+          {/* The tab IS the page title (phase 5 of the «millones» pass): the display
+              face at 46/76 px, and under it the counts as a 17 px lede with the
+              first one — what is coming — in ink. */}
+          <h1 className={PAGE_TITLE}>Servicios</h1>
           {view !== "loading" && (
             <>
-              <p className={`mt-0.5 font-label text-xs uppercase tracking-widest text-mono-500 ${CARD_STYLE.longText}`}>
-                {summaryLine}
+              <p className={`mt-2 ${PAGE_LEDE} ${CARD_STYLE.longText}`}>
+                <span className="text-ink">{summarySegments[0]}</span>
+                {summarySegments.slice(1).map((segment) => (
+                  <span key={segment}> · {segment}</span>
+                ))}
               </p>
               {/*
                 The global integrity state is NOT written here. `IntegrityQueuePanel`
@@ -1341,23 +1348,22 @@ export default function ServicesPanel({
         // Not `space-y-2`: a closed Collapse is still a child, so the gap would
         // be reserved. The Collapse's own content carries it (`mt-2`).
         <div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-label text-[11px] uppercase tracking-widest text-mono-600 shrink-0">Mes:</span>
-            <MonthPill label="Próximos" selected={selectedMonths.size === 0} onClick={() => setSelectedMonths(new Set())} />
+          <div className="flex flex-wrap items-end gap-x-5 border-b border-ink/[0.10]">
+            <MonthTab label="Próximos" selected={selectedMonths.size === 0} onClick={() => setSelectedMonths(new Set())} />
             {futureMonths.map(ym => (
-              <MonthPill key={ym} label={fmtYM(ym)} selected={selectedMonths.has(ym)} onClick={() => toggleMonth(ym)} />
+              <MonthTab key={ym} label={formatMonthTab(ym, currentYM)} selected={selectedMonths.has(ym)} onClick={() => toggleMonth(ym)} />
             ))}
             {pastMonths.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
+              <button
+                type="button"
                 onClick={() => setShowPastMonths(v => !v)}
                 aria-expanded={showPastMonths}
                 aria-controls="services-past-months"
+                className={`${MONTH_TAB} border-transparent text-ink-muted hover:text-ink`}
               >
                 Roles previos
-                <span className={`transition-transform duration-base ${showPastMonths ? "rotate-180" : ""}`}>▾</span>
-              </Button>
+                <span aria-hidden="true" className={`transition-transform duration-base ${showPastMonths ? "rotate-180" : ""}`}>▾</span>
+              </button>
             )}
             {/*
               The filter decides what full screen shows — «Próximos», one month,
@@ -1366,9 +1372,9 @@ export default function ServicesPanel({
               reaches `ServicesOverview`.
             */}
             <Button
-              variant="secondary"
+              variant="ghost"
               size="sm"
-              className="ml-auto hidden sm:inline-flex"
+              className="ml-auto mb-2 hidden sm:inline-flex"
               data-services-overview-opener=""
               onClick={() => setOverviewOpen(true)}
               // Not disabled by an EMPTY filter: a reload that empties it while
@@ -1380,9 +1386,9 @@ export default function ServicesPanel({
             </Button>
           </div>
           {pastMonths.length > 0 && (
-            <Collapse id="services-past-months" open={showPastMonths} className="mt-2 flex items-center gap-2 flex-wrap pl-12">
+            <Collapse id="services-past-months" open={showPastMonths} className="mt-1 flex flex-wrap items-end gap-x-5">
               {pastMonths.map(ym => (
-                <MonthPill key={ym} label={fmtYM(ym)} selected={selectedMonths.has(ym)} onClick={() => toggleMonth(ym)} past />
+                <MonthTab key={ym} label={formatMonthTab(ym, currentYM)} selected={selectedMonths.has(ym)} onClick={() => toggleMonth(ym)} past />
               ))}
             </Collapse>
           )}
@@ -1916,31 +1922,39 @@ function PublicationFooter({
 
 // ─── Tiny helpers ─────────────────────────────────────────────────────────────
 
-function fmtYM(ym: string) {
-  return new Date(ym + "-01T12:00:00").toLocaleDateString("es-MX", { month: "short", year: "2-digit" });
-}
+/**
+ * One month tab's shared box: a 44 px text tab with a 2 px underline that sits ON
+ * the strip's hairline (`-mb-px`), 15 px sentence case like the Control Room's
+ * own tabs. A RAW `<button>` for the same reason `AdminRail`'s items are (the
+ * documented exception): these filter the board rather than act, each carries
+ * `aria-pressed` and a selected look that reads as a chosen section, and the house
+ * `Button` is uppercase by construction.
+ */
+const MONTH_TAB =
+  "-mb-px inline-flex min-h-[44px] select-none items-center gap-1 border-b-2 px-0.5 font-body text-[15px] " +
+  "transition-[color,border-color] duration-fast ease-out-brand " +
+  "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base";
 
 /**
- * One month filter. The selection is MULTI-select: `aria-pressed` per pill (the
- * `pill` variant styles the pressed state), never a one-of-N `SegmentedControl`.
- * `past` only dims an unpressed pill, and it dims it with OPACITY rather than a
- * second `border-…`/`text-…`: `Button` documents `className` as additive
- * utilities only, and a colour override beside the variant's own left the winner
- * to Tailwind's emission order — the pill variant's `border-surface-accent-30`
- * outranked `border-accent/10` and the "past" treatment was invisible. Opacity
- * touches nothing the variant sets, so it always lands.
+ * One month filter (phase 5 of the «millones» pass: text tabs, no pills). The
+ * selection is MULTI-select — `aria-pressed` per tab, never a one-of-N
+ * `SegmentedControl`. A selected tab is ink with an ink underline; `past` only
+ * dims an unselected one.
  */
-function MonthPill({ label, selected, onClick, past }: { label: string; selected: boolean; onClick: () => void; past?: boolean }) {
+function MonthTab({ label, selected, onClick, past }: { label: string; selected: boolean; onClick: () => void; past?: boolean }) {
   return (
-    <Button
-      variant="pill"
-      size="sm"
-      active={selected}
+    <button
+      type="button"
+      aria-pressed={selected}
       onClick={onClick}
-      className={!selected && past ? "opacity-60" : ""}
+      className={`${MONTH_TAB} ${
+        selected
+          ? "border-ink font-semibold text-ink"
+          : `border-transparent hover:text-ink ${past ? "text-ink-dim" : "text-ink-muted"}`
+      }`}
     >
       {label}
-    </Button>
+    </button>
   );
 }
 

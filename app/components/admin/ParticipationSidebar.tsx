@@ -3,6 +3,7 @@
 import { useId, useMemo, useState, useSyncExternalStore } from "react";
 import { computeParticipation, type ParticipantRole, type MemberParticipation } from "@/app/utils/computeParticipation";
 import { themeColour } from "@/app/utils/themeColour";
+import { SHEET_TITLE } from "@/app/utils/homeHero";
 import SegmentedControl from "@/app/components/ui/SegmentedControl";
 import Switch from "@/app/components/ui/Switch";
 import NumberRoll from "@/app/components/ui/NumberRoll";
@@ -101,6 +102,14 @@ function useIncludeSpecials(): [boolean, (next: boolean) => void] {
 // half below differs by caller — and `participationAlongside.test.tsx` derives
 // the planner column's width floor from THIS string's padding and border.
 const ASIDE_BASE = "rounded-xl border border-accent/20 bg-surface-ink-l40-d100-base p-3 self-start";
+/**
+ * The Servicios board's box: none (phase 5 of the «millones» pass, 2026-10-27).
+ * There the chart is the board's first column with a section title, hairline
+ * rows and whitespace, like every member screen before it; the planner keeps
+ * `ASIDE_BASE`, whose padding and border `participationAlongside.test.tsx`
+ * derives the planner column's floor from.
+ */
+const BOARD_BASE = "self-start";
 
 /**
  * The planner's placement: `PlannerGrid`'s left column (or stacked under the day
@@ -267,7 +276,7 @@ export function ParticipationSidebar({
     : [["Instr", COLORS.instr], ["FOH", COLORS.foh]];
 
   return (
-    <aside className={`${ASIDE_BASE} ${placement === "board" ? BOARD_PLACEMENT : DEFAULT_PLACEMENT}`}>
+    <aside className={`${placement === "board" ? BOARD_BASE : ASIDE_BASE} ${placement === "board" ? BOARD_PLACEMENT : DEFAULT_PLACEMENT}`}>
       {/*
         The header is a COLUMN, not a row. That is still load-bearing for the
         gutter placement, not styling.
@@ -295,8 +304,8 @@ export function ParticipationSidebar({
         is deliberately below it because this rail is narrow.
       */}
       <div data-rail-header className="mb-1">
-        <p className="font-label text-xs uppercase tracking-widest text-accent">Participaciones</p>
-        <p className="text-xs text-mono-500">{monthLabel}</p>
+        <p className={SHEET_TITLE}>Participaciones</p>
+        <p className="mt-1 font-body text-sm text-ink-dim">{monthLabel}</p>
         <SegmentedControl
           label="Ver participaciones por"
           size="sm"
@@ -332,7 +341,7 @@ export function ParticipationSidebar({
         </label>
       </div>
 
-      <div className="flex flex-wrap gap-x-3 gap-y-1 py-2 border-b border-accent/15 mb-1">
+      <div className="flex flex-wrap gap-x-3 gap-y-1 py-2 border-b border-ink/[0.10] mb-1">
         {legend.map(([l, c]) => (
           <span key={l} className="text-xs text-mono-500 inline-flex items-center gap-1">
             <span style={{ width: 9, height: 9, borderRadius: 2, background: c, display: "inline-block" }} />{l}
@@ -367,6 +376,7 @@ export function ParticipationSidebar({
             saturdays={saturdays.get(r.id) ?? 0}
             selected={selectedId === r.id}
             onSelect={onSelect}
+            board={placement === "board"}
           />
         ))}
         {idle.length > 0 && (
@@ -407,7 +417,7 @@ function caption(r: MemberParticipation, view: View, includeSpecials: boolean, s
   return parts.filter(([n]) => n > 0).map(([n, label]) => `${n} ${label}`).join(" · ");
 }
 
-function Row({ r, max, average, view, includeSpecials, saturdays, selected, onSelect }: {
+function Row({ r, max, average, view, includeSpecials, saturdays, selected, onSelect, board }: {
   r: MemberParticipation;
   max: number;
   average: number | null;
@@ -416,19 +426,23 @@ function Row({ r, max, average, view, includeSpecials, saturdays, selected, onSe
   saturdays: number;
   selected: boolean;
   onSelect?: (id: string | null) => void;
+  /** On the Servicios board the row is a hairline of the «millones» pass (15 px name, display-face count); the planner keeps its compact row. */
+  board?: boolean;
 }) {
   const value = view === "voces" ? r.total : r.instrWeeks + r.fohWeeks;
   const barW = Math.round((value / max) * BAR_W);
   const u = value > 0 ? barW / value : 0;
   const seg = (n: number, c: string) => n > 0
     ? <span style={{ display: "inline-block", height: 8, width: Math.round(n * u), background: c }} /> : null;
-  const nameClass = "block max-w-full truncate text-left text-[13px] font-medium text-ink-muted";
+  const nameClass = board
+    ? "block max-w-full truncate text-left font-body text-[15px] font-semibold text-ink"
+    : "block max-w-full truncate text-left text-[13px] font-medium text-ink-muted";
 
   return (
     <div
       data-member-row={r.id}
       data-selected={selected ? "true" : undefined}
-      className={`flex items-center gap-2.5 py-1 border-b border-accent/10 ${selected ? "bg-accent/10" : ""}`}
+      className={`flex items-center gap-2.5 ${board ? "py-2 border-b border-ink/[0.08]" : "py-1 border-b border-accent/10"} ${selected ? "bg-accent/10" : ""}`}
     >
       <div className="flex-1 min-w-0">
         {onSelect ? (
@@ -463,7 +477,7 @@ function Row({ r, max, average, view, includeSpecials, saturdays, selected, onSe
           )}
         </div>
       </div>
-      <div className="text-xl font-medium text-ink-muted min-w-[24px] text-right">
+      <div className={`${board ? "font-display text-[22px] font-semibold" : "text-xl font-medium"} text-ink-muted min-w-[24px] text-right`}>
         <NumberRoll value={value} />
       </div>
     </div>

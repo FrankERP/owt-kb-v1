@@ -110,4 +110,31 @@ pill; «Equipo» is the small-caps title, «Banda» is 17 px sentence case; a sh
   musical key (ADR-0071) — the library row's glyph, the song page's and the sheet's key pills,
   `.brand-key-dial`. Tests: `libraryIndex`, `libraryRow`, `libraryFilters`, `songSheet`,
   `tokenLayer` (37 → 33), `brandCss` (99 → 100), `lightContrast`.
+- **Calendario (PR #199) and Disponibilidad / Ajustes / Mi perfil (PR #200) followed on 2026-10-25/26**
+  (same thread; the calendar's own decisions are ADR-0067).
+- **The Control Room took it on 2026-10-27 (same thread, PR A of the Admin pass):** the TAB is the
+  page's title — every panel's `h1` is `PAGE_TITLE` and its count line the new `PAGE_LEDE` (17 px
+  body, `app/utils/homeHero.ts`) — and «Control Room» becomes the rail's `SHEET_TITLE` (a small
+  label over the strip below `lg`), with sentence-case rail items at 15 px. Servicios: the month
+  multi-select is text tabs (`MonthTab` / `formatMonthTab`) instead of pills, the integrity panel's
+  clean shape is one 14 px line behind a green dot, the cards keep their uppercase title (Frank's
+  standing rule) but say their state as a dot + word instead of a chip, print instruments as running
+  text instead of chips, and show a REVIEW action as a small amber flag in the icon cluster
+  (`ServiceReviewFlag`) — Frank rejected the big «Revisar datos» button on an incomplete draft («un
+  pequeño ícono en alguna esquina»). Participaciones stays the desktop board's first column, unboxed
+  (`BOARD_BASE`): he asked why the mock had dropped it. `ReadinessBadge` is deleted. Generar mes,
+  Editar mes and Editar servicio are untouched; Propuestas, Miembros and Disponibilidad as hairline
+  rows are PR B. Tests: `servicesBoard`, `ServiceReadinessCard`, `participationAlongside`,
+  `useIntegrityQueue`, `adminPanelsPolish`, `serviceCardModel`, `servicesOverview`.
+- **PR B of the Admin pass (2026-10-27, same thread): Propuestas, Miembros and Disponibilidad as hairline
+  rows.** A proposal is a row with the day in the display face, «Domingo 1 de noviembre» at 17 px and
+  «Propuesta de Gaby · 4 canciones · Pendiente» at 14 px, folding its setlist, message, thread and actions
+  under a chevron (what needs review opens on arrival, history stays folded); Miembros is letter sections
+  (the letter in the display face, muted) over rows of photo, alias, «Voz · Líder Dom» and the role as a
+  muted word («Sin acceso» in red), its Tipo / Rol / Orden filters in a «Filtros» sheet behind the
+  round pill Biblioteca uses, the search a hairline; Disponibilidad says its verdict in the lede («Sin
+  conflictos» green) and lists conflicts and upcoming unavailability as rows with the dates as one
+  Spanish run («20, 21 y 22 de noviembre», `adminRowCopy.ts`). The availability matrix, Generar mes, Editar
+  mes and Editar servicio are untouched. Tests: `adminRowCopy`, `groupMembersByLetter`,
+  `proposalsPanelHandoff`, `proposalsPanelThread`, `membersPanelMenu`, `availabilityPanelFailure`.
 - Undoing it means re-adding the eyebrows and frames the mock removed; the tests above will say so.
