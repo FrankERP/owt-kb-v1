@@ -532,6 +532,21 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
 - **`PROPOSAL_NOTES_MAX`** ([proposalNotesLimit.ts](../app/utils/proposalNotesLimit.ts)) — 4000
   chars per message. A leaf so both the client and the pure write path can read it.
 
+### Oasis Kids planner (shared by `/api/kids/*` and the MCP Kids tools, admin parity phase 3)
+- **`kidsCommit.ts`** ([kidsCommit.ts](../app/utils/kidsCommit.ts)) — the ONLY Kids writers, after
+  authorization (ADR-0043 shape, `CommitOutcome`): `saveKidsSunday(raw)` (one Sunday, WHOLE: an
+  omitted seat is cleared; one seat per pair, room seats take their own room's active pairs),
+  `createKidsPair(raw)` (201), `patchKidsPair(id, raw)` (`_type` guard first, field by field) and
+  `setKidsAvailability(id, raw)` (`_rev` mandatory, `ifRevisionId`, 409 with the fresh lists).
+  `KIDS_ERROR` names every refusal string the routes always answered with.
+- **`proposeKidsMonth(month, seed, exclude)`** ([kidsMonthPlan.ts](../app/utils/kidsMonthPlan.ts)) —
+  «Generar mes»: the reads (active pairs, absences, 16 published prior Sundays, the worship roster
+  for warnings) and the seed search over `planKidsMonth`. Read-only. Also `readKidsSeed`,
+  `sundaysOfMonth` (UTC-noon), `MAX_SEED`/`MAX_SEED_ATTEMPTS`.
+- **`readKidsMonthSchedules(month)`** ([kidsScheduleReads.ts](../app/utils/kidsScheduleReads.ts)) —
+  the planner's month, drafts included: the ONE file ADR-0022 lets read `kidsSchedule` drafts.
+  `PUBLISHED_PERSPECTIVE` is what every Kids planner read passes (`serverClient` is raw otherwise).
+
 ### Auth & access (also see [AUTH_AND_SECURITY.md](AUTH_AND_SECURITY.md))
 - **`getMemberAccess(sanityId)`**, **`isMemberActive(sanityId)`** ([memberAccess.ts](../app/utils/memberAccess.ts))
   — 30s-TTL live access/role snapshot.

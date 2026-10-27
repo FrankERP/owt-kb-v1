@@ -118,19 +118,28 @@ const volunteerName = (m: KidsVolunteerRow | undefined) =>
 
 type Found<T> = { ok: true; value: T } | { ok: false; result: CallToolResult };
 
-/** One pair by id or by name (without accents or case); else a refusal naming the pairs. */
-function findPair(roster: KidsRoster, wanted: string, writes: boolean): Found<KidsPairRow> {
+/** How a name is compared: no accents, no case, no edge spaces (a Studio name may carry one). */
+const nameKey = (s: string | null | undefined) => normalizeText(s ?? "").trim();
+
+/**
+ * One pair by id or by name (without accents, case or edge spaces); else a refusal naming the
+ * pairs. `preferActive` (a seat): when a name matches one active pair and retired ones, it is the
+ * active one — a retired pair can never be seated, so the name is not ambiguous there.
+ */
+function findPair(roster: KidsRoster, wanted: string, writes: boolean, preferActive = false): Found<KidsPairRow> {
   const byId = roster.pairs.find((p) => p.id === wanted);
   if (byId) return { ok: true, value: byId };
-  const key = normalizeText(wanted);
-  const matches = roster.pairs.filter((p) => normalizeText(p.name ?? "") === key);
+  const key = nameKey(wanted);
+  const named = roster.pairs.filter((p) => nameKey(p.name) === key);
+  const active = named.filter((p) => p.active);
+  const matches = preferActive && active.length === 1 ? active : named;
   if (matches.length === 1) return { ok: true, value: matches[0]! };
   const list = roster.pairs.map((p) => `${pairName(p)} (${p.room ? ROOM_LABEL[p.room] : "sin salón"}${p.active ? "" : ", retirada"})`);
   const text =
     matches.length === 0
       ? `No hay una pareja llamada «${wanted}». Parejas: ${list.join("; ") || "ninguna"}.`
       : `Hay ${matches.length} parejas llamadas «${wanted}»; usa su id. ` +
-        `Candidatas: ${matches.map((p) => `${p.id} (${ROOM_LABEL[p.room as KidsRoom] ?? "sin salón"})`).join("; ")}.`;
+        `Candidatas: ${matches.map((p) => `${p.id} (${ROOM_LABEL[p.room as KidsRoom] ?? "sin salón"}${p.active ? "" : ", retirada"})`).join("; ")}.`;
   return {
     ok: false,
     result: writes
@@ -143,10 +152,8 @@ function findPair(roster: KidsRoster, wanted: string, writes: boolean): Found<Ki
 function findVolunteer(roster: KidsRoster, wanted: string): Found<KidsVolunteerRow> {
   const byId = roster.volunteers.find((m) => m._id === wanted);
   if (byId) return { ok: true, value: byId };
-  const key = normalizeText(wanted);
-  const matches = roster.volunteers.filter(
-    (m) => normalizeText(m.member_name ?? "") === key || normalizeText(m.alias ?? "") === key,
-  );
+  const key = nameKey(wanted);
+  const matches = roster.volunteers.filter((m) => nameKey(m.member_name) === key || nameKey(m.alias) === key);
   if (matches.length === 1) return { ok: true, value: matches[0]! };
   const text =
     matches.length === 0
@@ -173,6 +180,13 @@ function seatsView(roster: KidsRoster, seats: Partial<Record<KidsSeat, string>>)
     const id = seats[seat];
     out[seat] = id ? pairName(roster.pairs.find((p) => p.id === id)) : null;
   }
+  return out;
+}
+
+/** The pair id per seat, beside `seatsView`'s names, so a proposal can be saved by id. */
+function seatIds(seats: Partial<Record<KidsSeat, string>>) {
+  const out: Record<string, string | null> = {};
+  for (const seat of KIDS_SEATS) out[seat] = seats[seat] ?? null;
   return out;
 }
 
@@ -226,6 +240,7 @@ export async function getKidsMonthResult(args: z.infer<typeof GET_KIDS_MONTH_INP
           saved: !!row,
           published: row ? row.published : false,
           seats: seatsView(roster, row?.seats ?? {}),
+          pairIds: seatIds(row?.seats ?? {}),
         };
       }),
       pairs: roster.pairs.map((p) => pairView(roster, p)),
@@ -267,7 +282,7 @@ export async function generateKidsMonthResult(
     ]);
     return successResult({
       month: args.month,
-      proposal: plan.proposal.map((s) => ({ date: s.date, seats: seatsView(roster, s.seats) })),
+      proposal: plan.proposal.map((s) => ({ date: s.date, seats: seatsView(roster, s.seats), pairIds: seatIds(s.seats) })),
       warnings: plan.warnings.map((w) => ({
         date: w.date,
         seat: KIDS_SEAT_LABELS[w.seat],
@@ -306,7 +321,8 @@ export const SAVE_KIDS_SUNDAYS_DESCRIPTION =
   "una pareja activa (o su id): los salones (chiquitos, medianos, grandes) solo los cubre una pareja de ese salón; " +
   "enseñanza, cualquiera; una pareja no puede tener dos lugares el mismo domingo. Un domingo nuevo se guarda como " +
   "borrador (los voluntarios no lo ven). Manda published: true o false SOLO si la persona pidió publicar o quitar la " +
-  "publicación; sin published se queda como estaba. Hasta " + MAX_SUNDAYS + " domingos por llamada; se guardan uno " +
+  "publicación; sin published se queda como estaba. Si un domingo ya está publicado (get_kids_month), el cambio lo " +
+  "ven los voluntarios de inmediato, sin aviso: díselo a la persona antes de guardar. Hasta " + MAX_SUNDAYS + " domingos por llamada; se guardan uno " +
   "por uno y, si uno se rechaza, los anteriores ya quedaron guardados (la respuesta dice cuáles). " + NO_NOTICE +
   " " + CONFIRM_RULE + " " + REREAD_RULE;
 
@@ -329,15 +345,21 @@ export async function saveKidsSundaysResult(
     }
 
     // Every Sunday resolved and checked BEFORE the first write: a predictable refusal never
-    // lands halfway. The writer re-checks all of it (it is the authority).
-    const roster = await loadKidsRoster();
+    // lands halfway. The writer re-checks all of it (it is the authority). The months' saved
+    // Sundays are read too, so the answer can say when a change lands on a PUBLISHED Sunday
+    // (the volunteers see it at once, and nobody is told).
+    const months = [...new Set(dates.map((d) => d.slice(0, 7)))];
+    const [roster, existing] = await Promise.all([
+      loadKidsRoster(),
+      Promise.all(months.map((m) => readKidsMonthSchedules(m))).then((rows) => rows.flat()),
+    ]);
     const resolved: { date: string; seats: Partial<Record<KidsSeat, string>>; published?: boolean }[] = [];
     for (const sunday of args.sundays) {
       const seats: Partial<Record<KidsSeat, string>> = {};
       for (const seat of KIDS_SEATS) {
         const wanted = sunday.seats[seat];
         if (!wanted) continue;
-        const found = findPair(roster, wanted, true);
+        const found = findPair(roster, wanted, true, true);
         if (!found.ok) return found.result;
         const pair = found.value;
         if (!pair.active) {
@@ -358,26 +380,38 @@ export async function saveKidsSundaysResult(
       resolved.push({ date: sunday.date, seats, ...(sunday.published !== undefined ? { published: sunday.published } : {}) });
     }
 
-    const saved: { date: string; seats: Record<string, string | null>; published?: boolean }[] = [];
+    const saved: { date: string; seats: Record<string, string | null>; published: boolean }[] = [];
+    const partial = (failed: string, reason: string, unknown: boolean) =>
+      refusalResult(
+        `Se guardaron ${saved.map((s) => s.date).join(", ")}. ${failed} ${unknown ? "quedó sin confirmar" : "NO se guardó"}: ${reason} ` +
+          "Los domingos que seguían no se guardaron.",
+        { refused: true, code: "partial", detail: unknown ? "unknown_outcome" : "kids_writer", saved: saved.map((s) => s.date), failed },
+      );
     for (const sunday of resolved) {
-      const outcome = await callDomain(() => saveKidsSunday(sunday));
+      let outcome: Awaited<ReturnType<typeof saveKidsSunday>>;
+      try {
+        outcome = await callDomain(() => saveKidsSunday(sunday));
+      } catch (err) {
+        // The first Sunday's throw is the runner's own unknown-outcome text; after that, the
+        // Sundays already saved are certain and must be said.
+        if (saved.length === 0) throw err;
+        console.error("[mcp-write] save_kids_sundays: a later Sunday failed after the domain call");
+        return partial(sunday.date, "vuelve a leer el mes con get_kids_month antes de reintentar.", true);
+      }
       if (!outcome.ok) {
         if (saved.length === 0) return writerRefusal(outcome);
         // Not «No se escribió nada.»: the Sundays before this one ARE saved.
         const reason = (WRITER_COPY as Record<string, string>)[String((outcome.body as { error?: unknown }).error)] ??
           "El planificador de Kids lo rechazó.";
-        return refusalResult(
-          `Se guardaron ${saved.map((s) => s.date).join(", ")}. ${sunday.date} NO se guardó: ${reason} ` +
-            "Los domingos que seguían tampoco se guardaron.",
-          { refused: true, code: "partial", detail: "kids_writer", saved: saved.map((s) => s.date), failed: sunday.date },
-        );
+        return partial(sunday.date, reason, false);
       }
-      const view = seatsView(roster, outcome.effects.seats);
-      saved.push({ date: sunday.date, seats: view, ...(outcome.effects.published !== undefined ? { published: outcome.effects.published } : {}) });
+      // Without `published` the writer leaves the flag as stored; a new Sunday is a draft.
+      const published = outcome.effects.published ?? existing.find((row) => row.date === sunday.date)?.published ?? false;
+      saved.push({ date: sunday.date, seats: seatsView(roster, outcome.effects.seats), published });
     }
 
     const lines = saved.map((s) => {
-      const state = s.published === true ? " (publicado)" : s.published === false ? " (borrador)" : "";
+      const state = s.published ? " (PUBLICADO: los voluntarios ya lo ven)" : " (borrador: los voluntarios no lo ven)";
       return `${s.date}${state}: ${seatsLine(s.seats)}.`;
     });
     return done([`Guardé ${saved.length === 1 ? "1 domingo" : `${saved.length} domingos`} de Kids.`, ...lines, NO_NOTICE], {
@@ -439,7 +473,7 @@ export async function saveKidsPairResult(
         return admissionRefusal("invalid_request", "create_retired", "Una pareja nueva nace activa; no mandes active: false al crearla.");
       }
       const name = args.name.trim();
-      if (roster.pairs.some((p) => normalizeText(p.name ?? "") === normalizeText(name))) {
+      if (roster.pairs.some((p) => nameKey(p.name) === nameKey(name))) {
         return admissionRefusal(
           "invalid_request",
           "duplicate_name",
@@ -462,7 +496,7 @@ export async function saveKidsPairResult(
     const patch: Record<string, unknown> = {};
     if (args.name !== undefined) {
       const name = args.name.trim();
-      if (roster.pairs.some((p) => p.id !== pair.id && normalizeText(p.name ?? "") === normalizeText(name))) {
+      if (roster.pairs.some((p) => p.id !== pair.id && nameKey(p.name) === nameKey(name))) {
         return admissionRefusal("invalid_request", "duplicate_name", `Ya hay otra pareja llamada «${name}».`);
       }
       patch.name = name;

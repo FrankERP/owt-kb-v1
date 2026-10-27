@@ -19,6 +19,7 @@ import { sanityConflictKind } from "@/app/utils/roleWriteRequest";
 import { normalizeMinistries } from "@/app/ministries";
 import { KIDS_ROOMS, KIDS_SEATS, type KidsRoom, type KidsSeat } from "@/app/utils/kidsTypes";
 import type { CommitOutcome } from "@/app/utils/commitOutcome";
+import { PUBLISHED_PERSPECTIVE } from "@/app/utils/kidsScheduleReads";
 
 /** Every refusal these writers answer with, as the routes always worded it. */
 export const KIDS_ERROR = {
@@ -110,6 +111,8 @@ export async function saveKidsSunday(raw: unknown): Promise<CommitOutcome<KidsSu
     const pairs = await serverClient.fetch<{ _id: string; room: KidsRoom; active: boolean }[]>(
       `*[_type == "kidsPair" && _id in $ids]{ _id, room, "active": coalesce(active, true) }`,
       { ids: chosen },
+      // A Studio draft's `drafts.<id>` is never a seatable pair (kidsScheduleReads.ts).
+      PUBLISHED_PERSPECTIVE,
     );
     const byId = new Map((pairs ?? []).map((p) => [p._id, p]));
     for (const [seat, pairId] of Object.entries(requested) as [KidsSeat, string][]) {

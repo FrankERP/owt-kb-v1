@@ -10,6 +10,7 @@
 import { serverClient } from "@/sanity/lib/serverClient";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import { assignedMemberRefsQuery } from "@/app/utils/notifyTargets";
+import { PUBLISHED_PERSPECTIVE } from "@/app/utils/kidsScheduleReads";
 import { planKidsMonth, proposalFingerprint } from "@/app/utils/kidsRotation";
 import {
   KIDS_SEATS,
@@ -114,11 +115,15 @@ export async function proposeKidsMonth(
       `*[_type == "kidsPair" && coalesce(active, true) == true] | order(name asc) {
         "id": _id, name, room, "memberIds": coalesce(members[]._ref, [])
       }`,
+      {},
+      PUBLISHED_PERSPECTIVE,
     ),
     serverClient.fetch<{ _id: string; unavailableDates: string[] }[]>(
       `*[_type == "teamMembers" && "kids" in ministries] {
         _id, "unavailableDates": coalesce(unavailableDates, [])
       }`,
+      {},
+      PUBLISHED_PERSPECTIVE,
     ),
     // Prior Sundays only — the month being planned is regenerated from scratch,
     // so its own saved rows must not seed their successors' fairness clock.
@@ -151,6 +156,7 @@ export async function proposeKidsMonth(
         "grandes": grandes._ref
       }`,
       { firstSunday },
+      PUBLISHED_PERSPECTIVE,
     ),
   ]);
 

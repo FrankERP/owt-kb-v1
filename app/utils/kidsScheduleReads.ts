@@ -15,6 +15,15 @@ import { KIDS_SEATS, type KidsSeat } from "@/app/utils/kidsTypes";
 export const KIDS_MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 /**
+ * `serverClient` sets no perspective, so at this repo's `apiVersion` a tokened read is
+ * RAW and returns a Studio draft (`drafts.<id>`) beside its published document: a
+ * second row for one Sunday, or a ghost pair the planner could seat by its draft id.
+ * Every Kids planner read and the writer's pair check ask for `published` explicitly
+ * (ADR-0022's «perspective» note, resolved 2026-10-27).
+ */
+export const PUBLISHED_PERSPECTIVE = { perspective: "published" } as const;
+
+/**
  * Seat references are projected RAW (`._ref`), not dereferenced: the planner
  * needs the pair id it will send back, and the pair roster is fetched once
  * alongside. `published` is coalesced, not compared: in GROQ `null == true` is
@@ -52,10 +61,11 @@ export async function readKidsMonthSchedules(month: string): Promise<KidsMonthSc
   // `<= YYYY-MM-31` covers every real day of the month while excluding the next
   // month's first — which is exactly what the repo's timezone invariant asks for
   // (`new Date(iso)` here would drift a day either way).
-  const rows = await serverClient.fetch<ScheduleRow[]>(SCHEDULES_QUERY, {
-    from: `${month}-01`,
-    to: `${month}-31`,
-  });
+  const rows = await serverClient.fetch<ScheduleRow[]>(
+    SCHEDULES_QUERY,
+    { from: `${month}-01`, to: `${month}-31` },
+    PUBLISHED_PERSPECTIVE,
+  );
 
   return (rows ?? []).map((row) => {
     const seats: Partial<Record<KidsSeat, string>> = {};

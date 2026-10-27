@@ -2,9 +2,11 @@
 // phase 3, S4): every pair (retired ones included, for names and history) and every Kids
 // volunteer with their absences and the revision a write must assert. The same projections
 // as the planner's `GET /api/kids/pairs` and `GET /api/kids/members`, on `operationalClient`
-// as every MCP Sanity read (`mcpSanityClients.test.ts`). Neither type is a protected type,
-// and nothing here reads `kidsSchedule` — the month's Sundays come from
-// `app/utils/kidsScheduleReads.ts`, the one module allowed to read their drafts (ADR-0022).
+// (published perspective) as every read written under app/mcp (`mcpSanityClients.test.ts`).
+// Neither type is a protected type, and nothing here reads `kidsSchedule` — the month's Sundays
+// and the proposal come from the planner's own modules (`kidsScheduleReads.ts`, the one module
+// allowed to read their drafts, ADR-0022; `kidsMonthPlan.ts`), which read on `serverClient` with
+// `PUBLISHED_PERSPECTIVE`.
 //
 // `"kids" in ministries` needs no `!defined(ministries)` arm: absent or empty normalizes to
 // worship-only (`normalizeMinistries`), never to kids.

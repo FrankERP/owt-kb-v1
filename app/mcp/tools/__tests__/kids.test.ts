@@ -100,11 +100,17 @@ describe("get_kids_month", () => {
     const body = sc(out);
     const sundays = body.sundays as { date: string; saved: boolean; published: boolean; seats: Record<string, string | null> }[];
     expect(sundays.map((s) => s.date)).toEqual(["2026-11-01", "2026-11-08", "2026-11-15", "2026-11-22", "2026-11-29"]);
-    expect(sundays[1]).toEqual({
+    expect(sundays[1]).toMatchObject({
       date: "2026-11-08",
       saved: true,
       published: false,
       seats: { ensenanza: null, chiquitos: "Ana y Luis", medianos: null, grandes: "Sofía y Beto" },
+    });
+    expect((sundays[1] as unknown as { pairIds: Record<string, string | null> }).pairIds).toEqual({
+      ensenanza: null,
+      chiquitos: "p-chi",
+      medianos: null,
+      grandes: "p-gra",
     });
     expect(sundays[0].saved).toBe(false);
     expect(body.absences).toEqual([{ name: "Ana", dates: [{ date: "2026-11-08", note: "viaje" }] }]);
@@ -170,6 +176,46 @@ describe("save_kids_sundays", () => {
     expect(h.saveKidsSunday).toHaveBeenCalledWith({ date: "2026-11-01", seats: { ensenanza: "p-med", chiquitos: "p-chi" } });
     expect(textOf(out)).toContain("Enseñanza: Mara y Toño, RG Chiquitos: Ana y Luis, RG Medianos: vacío, RG Grandes: vacío");
     expect(textOf(out)).toContain("Kids no avisa a nadie");
+  });
+
+  it("says when a change lands on a Sunday that is already PUBLISHED (the volunteers see it, nobody is told)", async () => {
+    h.readKidsMonthSchedules.mockResolvedValue([{ date: "2026-11-08", seats: {}, published: true }]);
+    const out = await saveKidsSundaysResult(
+      { sundays: [{ date: "2026-11-01", seats: {} }, { date: "2026-11-08", seats: { chiquitos: "Ana y Luis" } }] },
+      PRINCIPAL,
+    );
+    expect(h.readKidsMonthSchedules).toHaveBeenCalledWith("2026-11");
+    expect(textOf(out)).toContain("2026-11-01 (borrador: los voluntarios no lo ven)");
+    expect(textOf(out)).toContain("2026-11-08 (PUBLICADO: los voluntarios ya lo ven)");
+  });
+
+  it("seats the active pair when a retired one shares its name, and ignores edge spaces in a stored name", async () => {
+    h.loadKidsRoster.mockResolvedValue({
+      ...ROSTER,
+      pairs: [
+        { id: "p-chi", name: "Ana y Luis ", room: "chiquitos", active: true, memberIds: [] },
+        { id: "p-chi-old", name: "Ana y Luis", room: "chiquitos", active: false, memberIds: [] },
+      ],
+    });
+    await saveKidsSundaysResult({ sundays: [{ date: "2026-11-01", seats: { chiquitos: "ana y luis" } }] }, PRINCIPAL);
+    expect(h.saveKidsSunday).toHaveBeenCalledWith({ date: "2026-11-01", seats: { chiquitos: "p-chi" } });
+  });
+
+  it("names the Sundays already saved when a later one throws after the domain call", async () => {
+    h.saveKidsSunday
+      .mockImplementationOnce(async (raw: { date: string; seats: Record<string, string> }) => ({
+        ok: true,
+        status: 200,
+        body: {},
+        effects: { date: raw.date, seats: raw.seats },
+      }))
+      .mockRejectedValueOnce(new Error("network"));
+    const out = await saveKidsSundaysResult(
+      { sundays: [{ date: "2026-11-01", seats: {} }, { date: "2026-11-08", seats: {} }] },
+      PRINCIPAL,
+    );
+    expect(textOf(out)).toContain("Se guardaron 2026-11-01. 2026-11-08 quedó sin confirmar");
+    expect(sc(out)).toMatchObject({ code: "partial", detail: "unknown_outcome", saved: ["2026-11-01"] });
   });
 
   it("passes published only when it was given", async () => {

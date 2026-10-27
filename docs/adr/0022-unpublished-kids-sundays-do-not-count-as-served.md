@@ -149,3 +149,9 @@ The generator's history read moved with the generator into `app/utils/kidsMonthP
 writer creates the document if missing and patches it by its deterministic id, reading
 no `kidsSchedule` at all. The exemption always rested on the GET alone.
 
+The «perspective» gap named above is closed in the same change: every Kids planner read
+(the month read, the generator's three reads, the pairs and members GETs, and the writer's
+pair check) now passes `perspective: "published"` (`PUBLISHED_PERSPECTIVE`), so a Studio draft
+overlay is neither a second row for a Sunday, nor a second pair the planner could seat by its
+draft id, nor history the clock counts twice. Found by the merge-range review of S4.
+

@@ -950,9 +950,9 @@ case) or id; a name matching nothing or several is refused with the list. Writes
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `get_kids_month` | `{month}` | Every Sunday of the month (saved or not, draft or published, each seat's pair by name), every pair (room, active, its two volunteers), the Kids volunteers, and that month's absences. Read-only |
+| `get_kids_month` | `{month}` | Every Sunday of the month (saved or not, draft or published, each seat's pair by name and `pairIds` beside it), every pair (room, active, its two volunteers), the Kids volunteers, and that month's absences. Read-only |
 | `generate_kids_month` | `{month, seed?, exclude?}` | «Generar mes»: the same planner over the same inputs; `seed`/`fingerprint`/`exhausted` for «otra opción». Saves nothing. Read-only |
-| `save_kids_sundays` | `{sundays: [{date, seats, published?}]}` (≤ 6) | Each Sunday WHOLE, as the planner's PUT: an omitted seat is cleared. Every Sunday is resolved and checked (a Sunday, a known active pair, its own room, one seat per pair) before the first write; a writer refusal after that answers which Sundays were saved (not «No se escribió nada»). `published` only when the person asked. Destructive (I14) |
+| `save_kids_sundays` | `{sundays: [{date, seats, published?}]}` (≤ 6) | Each Sunday WHOLE, as the planner's PUT: an omitted seat is cleared. Every Sunday is resolved and checked (a Sunday, a known active pair, its own room, one seat per pair) before the first write; a writer refusal after that answers which Sundays were saved (not «No se escribió nada»). `published` only when the person asked; the answer marks each Sunday «PUBLICADO» or «borrador», so a change to a Sunday the volunteers already see is never silent. Destructive (I14) |
 | `save_kids_pair` | `{pair?, name?, room?, members?, active?}` | No `pair` creates (name, room, two volunteers; a name already used is refused so names stay unambiguous); with `pair` changes only the given fields; `active: false` retires. Destructive |
 | `set_kids_absences` | `{member, add?: [{date, note?}], remove?: [date]}` | By PARTS on the volunteer's fresh `_rev`: the dates nobody mentioned are carried over. The same list `/me` (and worship availability) writes; a lost race answers «cambiaron mientras tanto». Destructive |
 
