@@ -153,7 +153,7 @@ bugs — respect it.
 | `/schedule` | ISR `revalidate = 60` | Upcoming services; `?m=` month browse. |
 | `/biblioteca` | ISR `revalidate = 60` fetch, dynamic by `searchParams` | R1: the song library — A–Z index of rows with a search console, letter rail and filter drawer (Tipo, tema, artista, tonalidad). One cached fetch (catalogue + tags + authors) serves every `?q=`/`?tag=`/`?author=`/`?key=`; filtering is client-side, so `searchParams` makes the page dynamic without invalidating the fetch cache. |
 | `/me` | ISR `revalidate = 60` | Member's assignments/profile (session-scoped data fetched fresh via `serverClient`). |
-| `/posts/[slug]` | **SSG** `revalidate = 3600` + `generateStaticParams()` | All song pages prebuilt. |
+| `/posts/[slug]` | **Dynamic** (`requireWorshipPage`, ADR-0020; its `revalidate = 3600` only bounds the fetch cache) | No `generateStaticParams` since 2026-10-27: the build's prerender of every slug only bailed out, and would now spend two Sanity reads per song (the song and its history start before the gate settles, ADR-0074). |
 | `/me/propose/[roleId]` | `revalidate = 0` | Always dynamic (proposal editing). |
 | `/admin` | dynamic | Session-gated; data fetched client-side from `/api/admin/*`. |
 | `/studio` | `dynamic = 'force-static'` | Sanity Studio SPA. |
@@ -466,7 +466,7 @@ owt-kb-v1/
 │  │  ├─ admin/              # /admin dashboard (manager-gated)
 │  │  ├─ auth/               # signin, not-a-member
 │  │  ├─ author/, tag/       # indexes + [slug] filtered song lists
-│  │  ├─ posts/[slug]/       # song detail (SSG)
+│  │  ├─ posts/[slug]/       # song detail (dynamic)
 │  │  ├─ me/                 # member profile + propose/[roleId] proposal editor
 │  │  ├─ schedule/           # upcoming services calendar
 │  │  ├─ layout.tsx, globals.css, loading.tsx, error.tsx

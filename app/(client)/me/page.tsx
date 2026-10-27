@@ -132,11 +132,11 @@ export default async function MePage() {
     $id in foh_team[].person._ref
   )`;
 
-  // Both reads below touch protected service types, so they go through the
-  // canonical (published-perspective) client — a `drafts.*` overlay is never a
-  // member's assignment, proposal, or calendar date. The member's OWN profile
-  // read above stays on `serverClient`: it needs the read token and `teamMembers`
-  // is not a protected service type. Weekend setlists are fetched as arrays and
+  // The two worship reads in the `Promise.all` below touch protected service types,
+  // so they go through the canonical (published-perspective) client — a `drafts.*`
+  // overlay is never a member's assignment, proposal, or calendar date. The member's
+  // OWN profile read above stays on `serverClient`: it needs the read token and
+  // `teamMembers` is not a protected service type. Weekend setlists are fetched as arrays and
   // collapsed with `pickUnique` below, never `[0]`.
   //
   // Both are WORSHIP reads and are skipped entirely for a member who is not in

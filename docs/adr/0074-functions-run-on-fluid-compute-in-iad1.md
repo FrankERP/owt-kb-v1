@@ -69,8 +69,9 @@ Any future module-level state must be safe for concurrent requests on one instan
 
 Released to production the same day (PR #205, 93ed813e). The first request on the new
 deployment answered `/api/auth/session` in 0.50 s, against 1.2–1.4 s cold before. The read
-waterfalls were collapsed next (PR B): the song page sends the gate, the song and its play
+waterfalls were collapsed next (PR #208): the song page sends the gate, the song and its play
 history together (the history is keyed by the slug), so it waits on two rounds of reads
 instead of four, and only one when the song has no rehearsal mixes; `/me` sends its profile,
-worship and kids reads together after the cached ministry check, one round instead of three.
+worship and kids reads together after the cached ministry check, one round instead of up to
+three.
 The region question is measured against that state.

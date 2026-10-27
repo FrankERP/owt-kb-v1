@@ -60,8 +60,10 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 }
 
 async function getPost(slug: string) {
+  // `order(_id asc)` before `[0]`, here and in `getSongHistory`: both resolve the song
+  // by its slug on their own, so a duplicate slug must pick the same document twice.
   const query = `
-    *[_type == "post" && slug.current == $slug][0] {
+    *[_type == "post" && slug.current == $slug] | order(_id asc)[0] {
       _id,
       title,
       author,
@@ -92,7 +94,7 @@ async function getPost(slug: string) {
       },
       chords[]{ _key, key, content },
     }`;
-  return await client.fetch(query, { slug });
+  return await client.fetch<Post | null>(query, { slug });
 }
 
 interface SongHistoryEntry {
@@ -120,7 +122,7 @@ async function getSongHistory(slug: string): Promise<SongHistoryEntry[]> {
   // in iad1 — ADR-0074). `^._id` is the song inside the setlist filter, `^.^._id`
   // inside a setlist's `songs[]`.
   const query = `
-    *[_type == "post" && slug.current == $slug][0] {
+    *[_type == "post" && slug.current == $slug] | order(_id asc)[0] {
       "rows": *[_type in ["featuredSongs", "saturdarSongs"] && references(^._id) && week < $today] | order(week desc)[0..19] {
         week,
         _type,
@@ -148,10 +150,9 @@ async function getSongHistory(slug: string): Promise<SongHistoryEntry[]> {
 
 export const revalidate = 3600;
 
-export async function generateStaticParams() {
-  const slugs: string[] = await client.fetch(`*[_type == "post" && defined(slug.current)].slug.current`);
-  return slugs.map((slug) => ({ slug }));
-}
+// No `generateStaticParams`: `requireWorshipPage` makes this page dynamic (ADR-0020),
+// so the build's prerender of every slug only bailed out — and since the song and its
+// history are read before the gate settles, each attempt would spend two Sanity reads.
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
@@ -183,13 +184,15 @@ const LYRIC = `${SECTION_SCROLL} mb-14 lg:col-start-1 lg:row-start-1 lg:row-span
 const Page = async ({ params }: Params) => {
   const { slug } = await params;
   // One round trip for the gate, the song and its history, not three in a row:
-  // each read crosses the Atlantic (ADR-0074). A redirect from the gate still wins
-  // — it rejects the whole `Promise.all` — and the reads it overtook render nothing.
-  const [session, post, history] = await Promise.all([
-    requireWorshipPage(`/posts/${slug}`),
-    getPost(slug) as Promise<Post | null>,
-    getSongHistory(slug),
-  ]);
+  // each read crosses the Atlantic (ADR-0074). The reads start first but the gate is
+  // awaited first, so its redirect always wins, even over a failed read (the `catch`
+  // only keeps that failure from going unhandled while the gate decides). A visitor
+  // the gate turns away — a kids-only member, a disabled one — costs two reads that
+  // render nothing.
+  const reads = Promise.all([getPost(slug), getSongHistory(slug)]);
+  reads.catch(() => {});
+  const session = await requireWorshipPage(`/posts/${slug}`);
+  const [post, history] = await reads;
 
   if (!post) notFound();
 
