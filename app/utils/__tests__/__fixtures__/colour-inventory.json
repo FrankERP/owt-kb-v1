@@ -8,28 +8,28 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 311,
-    "filesScanned": 536,
+    "literalRows": 312,
+    "filesScanned": 537,
     "filesWithColour": 60,
     "byCategory": {
       "2": 2,
       "4": 67,
       "5": 2,
-      "8": 86,
+      "8": 87,
       "9": 10,
       "11": 8,
       "12": 136
     },
     "byDisposition": {
-      "B": 111,
+      "B": 112,
       "exempt": 60,
-      "keep": 223,
+      "keep": 222,
       "C": 5,
       "D": 13
     },
     "compositingClasses": 22,
     "compositingSelectorOccurrences": 60,
-    "compositingClassNameOccurrences": 33,
+    "compositingClassNameOccurrences": 29,
     "compositingRuleBodies": 52,
     "lightCounterpartClasses": 13,
     "pairs": 3,
@@ -2252,7 +2252,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 210,
+      "line": 235,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2264,7 +2264,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 995,
+      "line": 978,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2276,7 +2276,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 246,
+      "line": 271,
       "disposition": "B",
       "reason": null
     },
@@ -2288,7 +2288,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 245,
+      "line": 270,
       "disposition": "B",
       "reason": null
     },
@@ -2300,7 +2300,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 987,
+      "line": 968,
       "disposition": "B",
       "reason": null
     },
@@ -2312,7 +2312,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1233,
+      "line": 1006,
       "disposition": "B",
       "reason": null
     },
@@ -2324,7 +2324,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1242,
+      "line": 1285,
       "disposition": "B",
       "reason": null
     },
@@ -2336,7 +2336,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1252,
+      "line": 1294,
       "disposition": "B",
       "reason": null
     },
@@ -2348,7 +2348,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1263,
+      "line": 1304,
       "disposition": "B",
       "reason": null
     },
@@ -2360,7 +2360,19 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1274,
+      "line": 1315,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/admin/MembersPanel.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 1326,
       "disposition": "B",
       "reason": null
     },
@@ -2372,7 +2384,7 @@
       "alpha": null,
       "utility": "stroke",
       "carrier": null,
-      "line": 249,
+      "line": 274,
       "disposition": "C",
       "reason": null
     },
@@ -2384,7 +2396,7 @@
       "alpha": null,
       "utility": "text",
       "carrier": null,
-      "line": 244,
+      "line": 269,
       "disposition": "C",
       "reason": null
     },
@@ -2516,7 +2528,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 186,
+      "line": 187,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2528,7 +2540,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 341,
+      "line": 225,
       "disposition": "B",
       "reason": null
     },
@@ -4077,16 +4089,8 @@
     {
       "file": "app/components/admin/MembersPanel.tsx",
       "kind": "className",
-      "class": "member-row",
-      "count": 1,
-      "disposition": "keep",
-      "reason": "Usage site of a compositing class"
-    },
-    {
-      "file": "app/components/admin/MembersPanel.tsx",
-      "kind": "className",
       "class": "search-console",
-      "count": 5,
+      "count": 2,
       "disposition": "keep",
       "reason": "Usage site of a compositing class"
     },
