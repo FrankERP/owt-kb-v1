@@ -165,13 +165,17 @@ export default function IntegrityQueuePanel({
       <div data-integrity-compact={checking ? "checking" : "clean"} className="min-w-0">
         {/* The live region is the summary span alone: the title and the button
             are siblings, so a reload never re-announces the whole line. */}
-        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-body text-xs text-mono-400">
-          <span aria-hidden="true" className={checking ? "text-mono-500" : "text-positive-strong"}>
-            {checking ? "…" : "✓"}
-          </span>
-          <span className="font-label uppercase tracking-widest text-mono-500">{INTEGRITY_QUEUE_TITLE}</span>
+        {/* A dot and a sentence in 14 px (phase 5 of the «millones» pass): green
+            once proven, hollow while the first load is still in flight. The title
+            is for the screen reader only — the sentence says it. */}
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-body text-sm text-ink-dim">
+          <span
+            aria-hidden="true"
+            className={`h-1.5 w-1.5 shrink-0 rounded-full ${checking ? "border border-ink-dim" : "bg-positive-fg"}`}
+          />
+          <span className="sr-only">{INTEGRITY_QUEUE_TITLE}</span>
           <span role="status" data-integrity-summary="">
-            {checking ? "comprobando" : INTEGRITY_CLEAN_SUMMARY.toLowerCase()}
+            {checking ? "Comprobando los datos" : INTEGRITY_CLEAN_SUMMARY}
           </span>
           {!checking && (
             <Button variant="ghost" size="sm" onClick={reload} busy={loading} busyLabel="Recargando…" className="-my-1">

@@ -26,6 +26,12 @@ const BASELINE: Record<string, number> = {
   "MonthGenerator.tsx": 26,
   "PlannerGrid.tsx": 8,
   "MonthCalendar.tsx": 1,
+  // The Admin pass (2026-10-27): `MonthTab` and «Roles previos» (text tabs under
+  // the page title — the house pill is a label-styled uppercase control) plus the
+  // four the panel already had, and `ServiceReviewFlag` (an amber blocker that
+  // must never hover to the cyan «go»).
+  "ServicesPanel.tsx": 6,
+  "ServicePrimaryAction.tsx": 1,
 };
 
 function handRolledButtons(file: string): number {
@@ -41,7 +47,7 @@ function handRolledButtons(file: string): number {
   return (code.match(/^\s*<button(?=[\s>]|$)/gm) ?? []).length;
 }
 
-describe("Generar / Editar mes use the house Button (bloque 7)", () => {
+describe("Generar / Editar mes and the Servicios board use the house Button (bloque 7)", () => {
   for (const [file, expected] of Object.entries(BASELINE)) {
     it(`${file} keeps exactly ${expected} deliberate hand-rolled <button>s`, () => {
       expect(handRolledButtons(file)).toBe(expected);

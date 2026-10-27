@@ -33,7 +33,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import ServicePrimaryAction from "../ServicePrimaryAction";
+import ServicePrimaryAction, { ServiceReviewFlag } from "../ServicePrimaryAction";
+import { formatMonthTab } from "../monthPills";
 import { BOARD_STICKY, ParticipationSidebar } from "../ParticipationSidebar";
 import ServicesPanel from "../ServicesPanel";
 import { ToastProvider } from "../../ui/Toast";
@@ -49,6 +50,8 @@ afterEach(() => {
 // Two months ahead of any plausible "today", so the default «Próximos» filter
 // shows both and the month pills have something to multi-select.
 const YEAR = new Date().getFullYear() + 1;
+/** The board's own «today», for the month tabs' labels (the year shows only when it differs). */
+const currentYM = () => new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" }).slice(0, 7);
 const MONTH_A = `${YEAR}-03`;
 const MONTH_B = `${YEAR}-04`;
 
@@ -254,8 +257,7 @@ describe("the Servicios board", () => {
     const { container } = mount();
     await waitFor(() => expect(container.querySelectorAll("[data-card-id]").length).toBe(2));
 
-    const monthLabel = (ym: string) =>
-      new Date(ym + "-01T12:00:00").toLocaleDateString("es-MX", { month: "short", year: "2-digit" });
+    const monthLabel = (ym: string) => formatMonthTab(ym, currentYM());
 
     const first = screen.getByRole("button", { name: monthLabel(MONTH_A) });
     const second = screen.getByRole("button", { name: monthLabel(MONTH_B) });
@@ -372,7 +374,7 @@ describe("the Servicios board", () => {
     // Only a past role: «Próximos» is empty, so open the past months and pick it.
     fireEvent.click(await screen.findByRole("button", { name: /Roles previos/ }));
     // The pill wears the panel's own label («mar 25»), beside the upcoming months'.
-    const pastLabel = new Date(`${pastDate}T12:00:00`).toLocaleDateString("es-MX", { month: "short", year: "2-digit" });
+    const pastLabel = formatMonthTab(pastDate.slice(0, 7), currentYM());
     fireEvent.click(screen.getByRole("button", { name: pastLabel, pressed: false }));
     await waitFor(() => expect(document.querySelectorAll("[data-card-id]").length).toBe(1));
 
@@ -400,7 +402,7 @@ describe("the Servicios board", () => {
     expect(closed.disabled).toBe(true);
     expect(closed.getAttribute("title")).toBeNull();
     // Exactly one line, the first closed gate's reason.
-    const reasons = [...container.querySelectorAll("p.text-ink-dim")].map((p) => p.textContent ?? "");
+    const reasons = [...container.querySelectorAll("p.text-right.text-ink-dim")].map((p) => p.textContent ?? "");
     expect(reasons).toHaveLength(1);
     expect(reasons[0].length).toBeGreaterThan(0);
     // No chart from partial membership — and the fallback sits where the chart
@@ -573,22 +575,35 @@ describe("the card's one primary action", () => {
   // blocker must not look like the cyan "go" control beside it. `data-tone`
   // exists so this is readable in the DOM rather than by matching a class string
   // against `Button`'s private VARIANT table.
-  it("wears the danger tone for a review/conflict kind", () => {
+  it("wears the danger tone for a review/conflict kind, as the corner flag", () => {
+    // Since phase 5 of the «millones» pass a blocker is `ServiceReviewFlag`: an
+    // icon control named by the label, with the danger tone in the DOM and the
+    // reason (or the label) on its title — never the cyan «go» beside it.
+    const onAction = vi.fn();
     const { rerender } = render(
-      <ServicePrimaryAction
+      <ServiceReviewFlag
         action={{ ...ACTION, kind: "review_data", label: "Revisar datos" }}
-        onAction={vi.fn()}
+        onAction={onAction}
       />,
     );
-    expect(screen.getByRole("button", { name: "Revisar datos" }).getAttribute("data-tone")).toBe("danger");
+    const flag = screen.getByRole("button", { name: "Revisar datos" });
+    expect(flag.getAttribute("data-tone")).toBe("danger");
+    expect(flag.getAttribute("data-action-rule")).toBe("9");
+    expect(flag.getAttribute("title")).toBe("Revisar datos");
+    fireEvent.click(flag);
+    expect(onAction).toHaveBeenCalledTimes(1);
 
+    const reason = "Faltan los miembros. Usa «Reintentar carga».";
     rerender(
-      <ServicePrimaryAction
-        action={{ ...ACTION, kind: "resolve_conflict", label: "Resolver conflicto" }}
-        onAction={vi.fn()}
+      <ServiceReviewFlag
+        action={{ ...ACTION, kind: "resolve_conflict", label: "Resolver conflicto", disabled: true, reason }}
+        onAction={onAction}
       />,
     );
-    expect(screen.getByRole("button", { name: "Resolver conflicto" }).getAttribute("data-tone")).toBe("danger");
+    const disabled = screen.getByRole("button", { name: "Resolver conflicto" }) as HTMLButtonElement;
+    expect(disabled.getAttribute("data-tone")).toBe("danger");
+    expect(disabled.disabled).toBe(true);
+    expect(disabled.getAttribute("title")).toBe(reason);
   });
 
   it("wears the primary tone for a publish kind", () => {

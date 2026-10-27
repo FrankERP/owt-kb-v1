@@ -261,8 +261,9 @@ describe("Integridad de datos", () => {
     );
     const line = container.querySelector('[data-integrity-compact="clean"]') as HTMLElement;
     expect(line).not.toBeNull();
+    // The title is for the screen reader (`sr-only`); the sentence is the line.
     expect(line.textContent).toContain("Integridad de datos");
-    expect(line.textContent).toContain("sin problemas de integridad");
+    expect(line.textContent).toContain("Sin problemas de integridad");
     expect(container.querySelector("section")).toBeNull();
     expect(screen.queryByRole("button", { name: /expanded|▸/ })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Recargar" }));
@@ -279,7 +280,7 @@ describe("Integridad de datos", () => {
     );
     const line = container.querySelector('[data-integrity-compact="checking"]') as HTMLElement;
     expect(line).not.toBeNull();
-    expect(line.textContent).toContain("comprobando");
+    expect(line.textContent).toContain("Comprobando los datos");
     expect(container.querySelector("section")).toBeNull();
     expect(screen.queryByText("?")).toBeNull();
     // Nothing to reload while everything is already in flight.
@@ -298,9 +299,9 @@ describe("Integridad de datos", () => {
     );
     const line = container.querySelector('[data-integrity-compact="clean"]') as HTMLElement;
     expect(line).not.toBeNull();
-    expect(line.textContent).toContain("sin problemas de integridad");
+    expect(line.textContent).toContain("Sin problemas de integridad");
     expect(line.textContent).not.toContain("incompleto");
-    expect(line.textContent).not.toContain("comprobando");
+    expect(line.textContent).not.toContain("Comprobando");
     const reload = screen.getByRole("button", { name: "Recargando…" });
     expect(reload.getAttribute("aria-busy")).toBe("true");
     expect((reload as HTMLButtonElement).disabled).toBe(true);
@@ -325,7 +326,7 @@ describe("Integridad de datos", () => {
       </MotionProvider>,
     );
     const status = container.querySelector('[data-integrity-compact="clean"] [role="status"]') as HTMLElement;
-    expect(status.textContent).toBe("sin problemas de integridad");
+    expect(status.textContent).toBe("Sin problemas de integridad");
     expect(status.querySelector("button")).toBeNull();
     expect(container.querySelector("#integrity-queue-title")).toBeNull();
   });
