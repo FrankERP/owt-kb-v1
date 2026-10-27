@@ -341,6 +341,48 @@ describe("the Servicios board", () => {
     expect(screen.getByRole("button", { name: "Publicar todos (2)", hidden: false })).toBeTruthy();
   });
 
+  it("never offers a bulk publish for a past month, however publishable its drafts look", async () => {
+    // Review finding on the 2026-10-27 fix: a staffed, setlist-less draft of a
+    // month that has gone would otherwise count for «Publicar todos» and email
+    // people about a date that is over.
+    vi.unstubAllGlobals();
+    const ana = { _id: "m1", member_name: "Ana", _key: "k1" };
+    const pastDate = `${new Date().getFullYear() - 1}-03-01`;
+    const past = { ...role("role-past", pastDate), leads: [ana] };
+    const target = {
+      targetKey: `${past._type}:${past.date}`, type: past._type, canonicalCount: 1, canonicalIds: [past._id],
+      canonicalState: "single", publicState: "single", memberVisibleCount: 0, draftIds: [],
+      records: [{ id: past._id, rev: past._rev, type: past._type, serviceDate: past.date, published: false, assignedRefs: ["m1"], members: [], danglingRefs: [] }],
+      expectsLock: true,
+      lock: { id: `roleTarget.${past._type}.${past.date}`, rev: "lock-past", state: "claimed", roleId: past._id, generation: 1 },
+      lockIssues: [],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => ({
+        ok: true,
+        json: async () =>
+          url === SOURCE_ENDPOINTS.roles ? [past]
+          : url === SOURCE_ENDPOINTS.members ? [ana]
+          : url === SOURCE_ENDPOINTS.roleTargets ? { targets: [target], recordIssues: [], lockIssues: [] }
+          : (PAYLOAD[url] ?? {}),
+      })),
+    );
+    mount();
+    // Only a past role: «Próximos» is empty, so open the past months and pick it.
+    fireEvent.click(await screen.findByRole("button", { name: /Roles previos/ }));
+    // The pill wears the panel's own label («mar 25»), beside the upcoming months'.
+    const pastLabel = new Date(`${pastDate}T12:00:00`).toLocaleDateString("es-MX", { month: "short", year: "2-digit" });
+    fireEvent.click(screen.getByRole("button", { name: pastLabel, pressed: false }));
+    await waitFor(() => expect(document.querySelectorAll("[data-card-id]").length).toBe(1));
+
+    const publish = screen.getByRole("button", { name: "Publicar listos (0)" }) as HTMLButtonElement;
+    expect(publish.disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: /Publicar todos/ })).toBeNull();
+    // And no «needs review» line either: a past draft is not waiting on anything.
+    expect(document.querySelector("p.text-right.text-ink-dim")).toBeNull();
+  });
+
   it("says why the toolbar is closed, in the layout rather than in a title", async () => {
     vi.unstubAllGlobals();
     vi.stubGlobal(
