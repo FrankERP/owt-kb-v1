@@ -1,6 +1,6 @@
 # Multi-ministry — phase 1, PRs 2 and 3: the access model (plan)
 
-**Status:** PLANNED 2026-10-27; in adversarial review (log: `2026-10-27-multi-ministry-phase1-access-review-log.md`). ADR-0075. Parent plan:
+**Status:** APPROVED 2026-10-27 (two fresh `APPROVED` in a row on digest `35091708…e449`, rounds 3 and 4; log: `2026-10-27-multi-ministry-phase1-access-review-log.md`). §8 was added after approval and is NOT reviewed. ADR-0075. Parent plan:
 `2026-10-27-multi-ministry-phase1.md`. Approval of this plan is not authorization to implement.
 **Requirement (Frank, verbatim):** 2026-10-26 20:26Z «Puedes ayudarme a planear cómo convertiríamos
 esto en una app que pueda servirle a varios ministerios sin agregar ruido entre sí? Algo como planning
@@ -265,3 +265,39 @@ PR 3: `jovenes` into `ASSIGNABLE_MINISTRY_IDS` and the Studio `ministries` optio
 Each: the five CI gates, one fresh code review before `main`, a scoped re-review if a fix closes a HIGH
 finding. CLAUDE.md's invariants gain the two rules of §6.1 and §4.2 in PR 2, and the docs
 (`UTILITIES_AND_COMPONENTS.md`, `docs/agents/project-rules.md`) the new functions.
+
+## 8. Post-approval amendments (from rounds 3–4's non-blocking notes; NOT reviewed)
+
+Everything above this section is the approved text, except the status line. These amend it; where
+they conflict, this section wins. The code review of PRs 2 and 3 covers them.
+
+1. **Tests that change on purpose, beyond §5's list:** `memberAccess.test.ts`'s whole-object
+   `toEqual` assertions (lines 44, 58, 67, 89) gain `ministryRoles: []`. §5's «a PATCH without the new
+   fields behaves exactly as today» means: except the worship-role rule and its stored read with
+   `ifRevisionId`/409. The `serverClient` mocks of `membersMinistries.test.ts`, `notifPrefsRoute` and
+   `memberInstruments` route tests gain the `fetch` that read needs.
+2. **§4.2 covers every way old code comes back**: a git revert, a Vercel instant rollback, or promoting
+   a deployment older than PR 2. The CLAUDE.md invariant says so.
+3. **The form shows the server's error text** (`body.error`) on create and edit, so the 400 «Un rol de
+   Alabanza…» and the 409 «…recarga» reach Frank instead of the generic «Error al actualizar.».
+4. **Unticking Jóvenes removes its `ministryRoles` item** in the form's submit (else the validator's
+   «each item's ministry is in `ministries`» answers 400 and nobody could leave Jóvenes). Form test.
+5. **`MINISTRY_SCOPES` shows `jovenes` only to the super-admin** (`$all`), so a worship admin's
+   Miembros does not gain a «Jóvenes» scope tab. (Today Miembros is a super-admin-only tab,
+   `adminTabs.ts:15`; this keeps it so if that changes.)
+6. **`levelIn`/`groupsIn` for a non-member** return `null` and `[]` (not `"member"`), and for the
+   super-admin answer from their entry like anyone else; phase 3's group guards add the super-admin
+   bypass explicitly, as `isMinistryMember` does.
+7. **PR 3 stop condition:** its read-only count of `admin`/`content-editor` members whose ministries
+   (absent or empty = worship) lack worship must be 0 before the Studio `role` validation ships, or
+   Studio publishes for those people would be blocked. Non-zero → Frank decides first.
+8. **§4.0's `managesMinistries` count** is a sanity check, not part of the divergence (no guard reads a
+   stored `"worship"` there); a non-zero result is reported, not a stop.
+9. **Mixed window** (PR 3 on dev, PR 2 in production): production's form answers 400 «Invalid
+   ministry» on a ministries edit of someone who holds `jovenes`. Fails safe; it ends when PR 3 reaches
+   production, which follows its dev check.
+10. **PR 3's visual check is Frank's**, on dev, because only the super-admin sees Miembros; saving there
+    is a real registration (the dataset is production's). The bot cannot see the block.
+11. **Studio `ministryRoles` items** carry `_type` (the array's object type name) as well as `_key`, so
+    the Studio never flags them as invalid items; the validator ignores `_type` and `_key` on read and
+    the form strips both before sending.

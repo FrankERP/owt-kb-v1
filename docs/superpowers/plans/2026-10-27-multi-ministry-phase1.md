@@ -1,8 +1,9 @@
 # Multi-ministry — phase 1: invisible foundations (plan)
 
 **Status:** PLANNED 2026-10-27 on Frank's «Dale» (23:20Z). ADR-0075. PR 1 (this file, the ADR, the
-glossary) in review. The access slice (PRs 2 and 3) is a critical contract and has its own plan and
-adversarial review: `2026-10-27-multi-ministry-phase1-access.md`.
+glossary) in review. The access slice (PRs 2 and 3) is a critical contract with its own plan,
+`2026-10-27-multi-ministry-phase1-access.md`, APPROVED in adversarial review on 2026-10-27 (four rounds,
+Frank's go-ahead after the churn cap; `…-access-review-log.md`).
 **Requirement (Frank, 2026-10-26 20:26Z, verbatim):** «Puedes ayudarme a planear cómo convertiríamos
 esto en una app que pueda servirle a varios ministerios sin agregar ruido entre sí? Algo como planning
 center por ejemplo». Phase 1 of the Claude Doc «Backstage para varios ministerios»
