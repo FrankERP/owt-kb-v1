@@ -209,7 +209,7 @@ disagree, `CLAUDE.md` wins and this file is the one to fix.
   reaches dev and production alike. Whatever engine it selects, dev writes the production dataset.
   Production and `verify/service-readiness` ignore it by code. See `docs/SECRETS.md`.
 - **Functions run on Fluid compute, in `iad1`** (`vercel.json` `"fluid": true` and
-  `"regions": ["iad1"]`, ADR-0074, since 2026-10-27). One warm instance serves concurrent requests, so module-level state is shared
+  `"regions": ["iad1"]`, ADR-0075, since 2026-10-27). One warm instance serves concurrent requests, so module-level state is shared
   between them: a cache keyed by member or document is fine (the access cache, the MCP grant store, the
   SMTP pool and the outbox memo were audited; the memo now writes where its read started), per-request data in module scope is a cross-request leak. The region
   stays `iad1` although the Sanity dataset is in Belgium (`gcp-eu-w1`): moving next to the data
