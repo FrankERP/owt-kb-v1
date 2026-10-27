@@ -262,7 +262,7 @@ export function SongForm({
                 return (
                   <div key={author._id} className="flex items-center gap-3 px-3 py-2 hover:bg-accent/5 transition-colors">
                     <button type="button" onClick={() => toggleAuthor(author._id)} className="flex-1 flex items-center gap-2 text-left">
-                      <span className={`font-label text-[11px] uppercase tracking-widest ${active ? "text-accent" : "text-mono-400"}`}>
+                      <span className={`font-body font-semibold leading-tight text-xs ${active ? "text-accent" : "text-mono-400"}`}>
                         {author.name}
                       </span>
                     </button>
@@ -377,7 +377,7 @@ export function SongForm({
           <button
             type="button"
             onClick={addRefLink}
-            className="font-label text-[11px] uppercase tracking-widest text-accent hover:text-accent/70 transition-colors"
+            className="font-body font-semibold leading-tight text-xs text-accent hover:text-accent/70 transition-colors"
           >
             + Agregar
           </button>
@@ -432,7 +432,7 @@ export function SongForm({
                 return (
                   <div key={tag._id} className="flex items-center gap-3 px-3 py-2 hover:bg-accent/5 transition-colors">
                     <button type="button" onClick={() => toggleTag(tag._id)} className="flex-1 flex items-center gap-2 text-left">
-                      <span className={`font-label text-[11px] uppercase tracking-widest ${active ? "text-accent" : "text-mono-400"}`}>
+                      <span className={`font-body font-semibold leading-tight text-xs ${active ? "text-accent" : "text-mono-400"}`}>
                         #{tag.name}
                       </span>
                     </button>
@@ -471,14 +471,14 @@ export function SongForm({
         <button
           type="button"
           onClick={onClose}
-          className="flex-1 py-2.5 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors"
+          className="flex-1 py-2.5 rounded-lg border border-surface-accent-30 font-body font-semibold leading-tight text-sm hover:border-accent dark:hover:border-surface-accent-30 transition-colors"
         >
           Cancelar
         </button>
         <button
           type="submit"
           disabled={loading}
-          className="flex-1 py-2.5 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+          className="flex-1 py-2.5 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-body font-semibold leading-tight text-sm transition-colors disabled:opacity-50"
         >
           {loading ? "Guardando..." : "Guardar"}
         </button>

@@ -236,7 +236,7 @@ export function DayCard({ day, date, time, setlist, pastorMessage, leads, myLead
               {canEdit && date && (
                 <button
                   onClick={() => setEditSetlist(true)}
-                  className="flex items-center gap-1 font-label text-[11px] uppercase tracking-widest text-mono-500 hover:text-accent transition-colors"
+                  className="flex items-center gap-1 font-body font-semibold leading-tight text-xs text-mono-500 hover:text-accent transition-colors"
                 >
                   <PencilIcon />
                   Editar

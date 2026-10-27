@@ -48,11 +48,12 @@ export type SegmentedControlProps<V extends string> = {
 };
 
 // Sentence case in the body face since 2026-10-27, with `Button` (its header
-// comment has the why); the sizes grew with the case (11/13 px uppercase →
-// 13/14 px) and `leading-tight` keeps the option the height it was.
+// comment has the why); the sizes grew with the case to `Button`'s own steps
+// (11/13 px uppercase → xs 13 / sm 15, so a control beside a Button of the same
+// size matches it) and `leading-tight` keeps the option the height it was.
 const SIZE = {
-  sm: "px-3 py-1.5 text-[13px]",
-  md: "px-4 py-2 text-[14px]",
+  sm: "px-3 py-1.5 text-xs",
+  md: "px-4 py-2 text-sm",
 } as const;
 
 // `filled` is a joined bar, so its options cannot wrap the way `outline`'s

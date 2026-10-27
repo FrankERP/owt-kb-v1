@@ -1879,7 +1879,7 @@ function PublicationFooter({
         type="button"
         onClick={onClose}
         disabled={loading}
-        className="min-h-[44px] flex-1 rounded-lg border border-surface-accent-30 px-3 font-label text-xs uppercase tracking-widest transition-colors hover:border-accent dark:hover:border-surface-accent-30 disabled:opacity-50"
+        className="min-h-[44px] flex-1 rounded-lg border border-surface-accent-30 px-3 font-body font-semibold leading-tight text-sm transition-colors hover:border-accent dark:hover:border-surface-accent-30 disabled:opacity-50"
       >
         Cancelar
       </button>
@@ -1888,7 +1888,7 @@ function PublicationFooter({
           type="button"
           onClick={onVerify}
           disabled={loading}
-          className="min-h-[44px] flex-1 rounded-lg border border-warning-fg/50 bg-warning-fg/10 px-3 font-label text-xs uppercase tracking-widest text-warning-faint transition-colors hover:bg-warning-fg/20 disabled:opacity-50"
+          className="min-h-[44px] flex-1 rounded-lg border border-warning-fg/50 bg-warning-fg/10 px-3 font-body font-semibold leading-tight text-sm text-warning-faint transition-colors hover:bg-warning-fg/20 disabled:opacity-50"
         >
           {loading ? "Verificando..." : "Verificar resultado"}
         </button>
@@ -1897,7 +1897,7 @@ function PublicationFooter({
           type="button"
           onClick={onConfirm}
           disabled={loading || disabled}
-          className={`min-h-[44px] flex-1 rounded-lg px-3 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50 ${
+          className={`min-h-[44px] flex-1 rounded-lg px-3 font-body font-semibold leading-tight text-sm transition-colors disabled:opacity-50 ${
             danger
               ? "bg-availability-deep/70 hover:bg-availability-deep"
               : "bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30"
@@ -1911,7 +1911,7 @@ function PublicationFooter({
           type="button"
           onClick={secondary.onClick}
           disabled={loading || secondary.disabled}
-          className="min-h-[44px] flex-1 rounded-lg border border-warning-fg/50 bg-warning-fg/10 px-3 font-label text-xs uppercase tracking-widest text-warning-faint transition-colors hover:bg-warning-fg/20 disabled:opacity-50"
+          className="min-h-[44px] flex-1 rounded-lg border border-warning-fg/50 bg-warning-fg/10 px-3 font-body font-semibold leading-tight text-sm text-warning-faint transition-colors hover:bg-warning-fg/20 disabled:opacity-50"
         >
           {loading ? "Guardando..." : secondary.label}
         </button>
@@ -1928,7 +1928,9 @@ function PublicationFooter({
  * own tabs. A RAW `<button>` for the same reason `AdminRail`'s items are (the
  * documented exception): these filter the board rather than act, each carries
  * `aria-pressed` and a selected look that reads as a chosen section, and the house
- * `Button` is uppercase by construction.
+ * `Button` is a padded, centred pill or box by construction — a text tab with an
+ * underline and no padding is not one of its variants, and `className` may not
+ * take padding or radius away (its header). It carries the same face.
  */
 const MONTH_TAB =
   "-mb-px inline-flex min-h-[44px] select-none items-center gap-1 border-b-2 px-0.5 font-body text-[15px] " +

@@ -738,9 +738,11 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
                   {shownKey}
                 </Button>
                 {keyPickerIdx === idx && (
-                  // 15.5rem: four `sm` pills of «C♯m» width (padding, border) plus
-                  // gaps and padding — the pill keeps its own padding.
-                  <div className="absolute right-0 top-full mt-1.5 z-30 bg-surface-overlay-deepest border border-accent/20 rounded-xl shadow-2xl p-2.5 w-[15.5rem]">
+                  // 17rem: four `sm` pills of «C♯m» at 13 px semibold (about 28 px
+                  // of glyphs, 24 px padding, 2 px border — 54 px) in 1fr tracks of
+                  // 58 px after the grid's gaps and the popover's padding, with slack
+                  // for «G♭m». 15.5rem fitted the old 11 px tracked uppercase pills.
+                  <div className="absolute right-0 top-full mt-1.5 z-30 bg-surface-overlay-deepest border border-accent/20 rounded-xl shadow-2xl p-2.5 w-[17rem]">
                     <div className="grid grid-cols-4 gap-1" role="group" aria-label={`Elegir tono de ${song.title}`}>
                       {keyOptionsFor(song).map(k => (
                         <Button

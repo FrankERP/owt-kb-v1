@@ -29,9 +29,10 @@ describe("Button", () => {
       expect(cls).not.toContain("tracking-widest");
       expect(cls).not.toContain("font-label");
     }
-    expect(buttonClass("secondary", "sm")).toContain("text-[13px]");
+    // The theme's own steps (xs = 13 px, sm = 15 px), never a pixel literal.
+    expect(buttonClass("secondary", "sm")).toContain("text-xs");
     expect(buttonClass("secondary", "md")).toContain("text-sm");
-    expect(buttonClass("secondary", "lg")).toContain("text-[16px]");
+    expect(buttonClass("secondary", "lg")).toContain("text-sm");
   });
 
   it.each([

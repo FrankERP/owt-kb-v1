@@ -26,9 +26,12 @@
 // (`normal-case tracking-normal font-body` on a dozen pills). The mocks set every
 // action in the body face at 600, so that is the base now; Jura stays for LABELS
 // (`SHEET_TITLE`, field labels, menu rows, toasts), which is where small caps belong.
-// Sizes went up with the case — 11/13/13 px uppercase read as 13/15/16 px sentence
-// case — and `leading-tight` keeps the box the height it was, so no adopter's row
-// grew. `normal-case`/`tracking-normal` in a caller's `className` is now a no-op.
+// Sizes went up with the case — 11/13/13 px uppercase read as 13/15/15 px sentence
+// case, the theme's own `xs`/`sm` steps so a scale change moves them too — and
+// `leading-tight` keeps the box the height it was, so no adopter's row grew.
+// `normal-case`/`tracking-normal` in a caller's `className` is now a no-op.
+// Bare `<button>`s that mirror this face (the ones `houseButtonSweep.test.ts`
+// keeps, dialog footers and rule-form links) carry the same three utilities.
 //
 // A disabled button normally takes no pointer events (no hover paint, no press).
 // With a `title` it keeps them: the title is the REASON it is disabled («Faltan
@@ -103,9 +106,9 @@ const ICON_TONE: Record<IconTone, string> = {
 };
 
 const SIZE: Record<ButtonSize, string> = {
-  sm: "text-[13px] px-3 py-1",
+  sm: "text-xs px-3 py-1",
   md: "text-sm px-4 py-2",
-  lg: "text-[16px] px-4 min-h-[44px]",
+  lg: "text-sm px-4 min-h-[44px]",
 };
 
 export function buttonClass(
