@@ -377,6 +377,21 @@ export const SERVICE_MESSAGE_TOOL_NAMES = [
 export const SERVICE_MESSAGE_WRITE_NAMES = SERVICE_MESSAGE_TOOL_NAMES.filter((name) => name !== "get_service_messages");
 
 /**
+ * Admin parity phase 3 (S4): Oasis Kids, after the conversation. Never called here: the two reads
+ * need a month and read the Kids roster, and the three writes change production Kids data.
+ */
+export const KIDS_TOOL_NAMES = [
+  "get_kids_month",
+  "generate_kids_month",
+  "save_kids_sundays",
+  "save_kids_pair",
+  "set_kids_absences",
+];
+
+/** The Kids writes: destructive, like every write (I14). */
+export const KIDS_WRITE_NAMES = ["save_kids_sundays", "save_kids_pair", "set_kids_absences"];
+
+/**
  * Admin parity phase 1: three reads after the P1 reads (`/admin`'s Equidad, rules and integrity
  * queue). Read-only, so the smoke may call them, but it does not need to.
  */
@@ -399,6 +414,7 @@ export const EXPECTED_TOOLS = [
   ...SERVICE_EDITOR_TOOL_NAMES,
   ...SERVICE_DELETE_TOOL_NAMES,
   ...SERVICE_MESSAGE_TOOL_NAMES,
+  ...KIDS_TOOL_NAMES,
 ];
 
 /** What `ping` and every read tool declare (spec I14). */
@@ -424,7 +440,7 @@ export const SOLVE_MONTH_ANNOTATIONS = Object.freeze({
 export function expectedAnnotations(name) {
   // A saved version is a private record like solve_month's; the check only reads.
   if (name === "solve_month" || name === "save_proposal_edits" || name === "revise_proposal") return SOLVE_MONTH_ANNOTATIONS;
-  return WRITE_TOOL_NAMES.includes(name) || name === "apply_schedule" || SERVICE_EDITOR_WRITE_NAMES.includes(name) || SERVICE_DELETE_WRITE_NAMES.includes(name) || SERVICE_MESSAGE_WRITE_NAMES.includes(name) ? WRITE_ANNOTATIONS : READ_ONLY_ANNOTATIONS;
+  return WRITE_TOOL_NAMES.includes(name) || name === "apply_schedule" || SERVICE_EDITOR_WRITE_NAMES.includes(name) || SERVICE_DELETE_WRITE_NAMES.includes(name) || SERVICE_MESSAGE_WRITE_NAMES.includes(name) || KIDS_WRITE_NAMES.includes(name) ? WRITE_ANNOTATIONS : READ_ONLY_ANNOTATIONS;
 }
 
 /**
@@ -528,7 +544,8 @@ export function toolCallRequest(name, args, id = 1) {
     EDITOR_TOOL_NAMES.includes(name) ||
     SERVICE_EDITOR_TOOL_NAMES.includes(name) ||
     SERVICE_DELETE_TOOL_NAMES.includes(name) ||
-    SERVICE_MESSAGE_TOOL_NAMES.includes(name)
+    SERVICE_MESSAGE_TOOL_NAMES.includes(name) ||
+    KIDS_TOOL_NAMES.includes(name)
   ) {
     throw new Error(`refusing to call the write tool "${name}": the dev smoke never calls a write tool (DV1)`);
   }

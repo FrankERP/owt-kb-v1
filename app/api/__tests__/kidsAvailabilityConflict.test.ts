@@ -17,6 +17,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { evaluate, parse } from "groq-js";
 import type { NextRequest } from "next/server";
 
+// The handlers are wrapped in `withVerificationRunContext` (its module is `server-only`).
+vi.mock("server-only", () => ({}));
+
 const h = vi.hoisted(() => ({
   requireMinistryManager: vi.fn(),
   /** Every `.set()` payload that actually reached storage. */

@@ -1,6 +1,7 @@
 # ADR-0022: An unpublished Kids Sunday does not count as served
 
-**Date:** 2026-08-21 · **Status:** Accepted
+**Date:** 2026-08-21 · **Status:** Accepted (amended 2026-10-27: the draft-reading
+read moved into one module, see «Amendment» at the end)
 
 ## Context
 
@@ -128,3 +129,23 @@ Sundays that were actually served, and that claim is true on the `published` axi
 - If the Kids team ever adopts a workflow where serving happens without publishing,
   this decision is wrong and should be revisited — the trigger is a manager asking
   why a pair that clearly served still reads «nunca».
+
+## Amendment (2026-10-27): one module reads the drafts
+
+Admin parity phase 3 (S4) gave the MCP connector Kids tools, and `get_kids_month` must
+show the same month the planner edits, drafts included. A third file reading drafts
+would have needed its own exemption, so the month read moved out of the route into
+**`app/utils/kidsScheduleReads.ts`** (`readKidsMonthSchedules`), which both the schedules
+GET and `get_kids_month` call. `draftGatingCoverage.test.ts` now keys the file exemption
+to that module instead of `api/kids/schedules/route.ts`; the planner page's `"schedules"`
+projection keeps its label exemption. Both callers sit behind a Kids manager (the route's
+`requireMinistryManager("kids")`, the connector's super-admin bearer).
+
+The generator's history read moved with the generator into `app/utils/kidsMonthPlan.ts`
+(`proposeKidsMonth`, shared by `POST /api/kids/generate` and `generate_kids_month`); its
+`published == true` filter is unchanged and still pinned by name. The writer moved into
+`app/utils/kidsCommit.ts` (ADR-0043's shape). A correction while here: the Decision's
+"the PUT must read a draft in order to publish it" was never true of the code — the
+writer creates the document if missing and patches it by its deterministic id, reading
+no `kidsSchedule` at all. The exemption always rested on the GET alone.
+
