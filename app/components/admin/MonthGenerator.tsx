@@ -602,7 +602,7 @@ function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search,
         <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">{label}</p>
         <button
           type="button" onClick={onSelectAll} disabled={readOnly}
-          className="font-label text-[10px] uppercase tracking-widest text-accent/70 hover:text-accent transition-colors"
+          className="font-body font-semibold leading-tight text-xs text-accent/70 hover:text-accent transition-colors"
         >
           {allSelected ? "Ninguno" : "Todos"}
         </button>
@@ -878,7 +878,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues, siblin
           {EXCL_PATTERNS.map(pat => (
             <button
               key={pat} type="button" onClick={() => toggleExcl(pat)}
-              className={`font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full border transition-colors ${
+              className={`font-body font-semibold leading-tight text-xs px-2 py-0.5 rounded-full border transition-colors ${
                 excl.includes(pat)
                   ? "bg-negative-strong/20 text-negative-fg border-negative-strong/40"
                   : "text-mono-500 border-accent/15 hover:border-negative-strong/30 hover:text-negative-fg"
@@ -1012,7 +1012,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues, siblin
         <button
           type="button"
           onClick={() => setWeekEx(ws => [...ws, { id: uid(), week: 1, pattern: "*.*" }])}
-          className="font-label text-[10px] uppercase tracking-widest text-accent/70 hover:text-accent transition-colors mt-1"
+          className="font-body font-semibold leading-tight text-xs text-accent/70 hover:text-accent transition-colors mt-1"
         >
           + Semana
         </button>
@@ -1081,7 +1081,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues, siblin
                 type="button"
                 title={cap.relative ? "Cambiar a número fijo" : "Relativo a los domingos del mes"}
                 onClick={() => setCaps(cs => cs.map(x => x.id === cap.id ? { ...x, relative: !x.relative } : x))}
-                className={`font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded flex-none border transition-colors ${
+                className={`font-body font-semibold leading-tight text-xs px-1.5 py-0.5 rounded flex-none border transition-colors ${
                   cap.relative
                     ? "border-accent/40 bg-accent/10 text-accent"
                     : "border-accent/15 text-mono-600 hover:text-accent"
@@ -1098,7 +1098,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues, siblin
         <button
           type="button"
           onClick={() => setCaps(cs => [...cs, { id: uid(), pattern: "Sun.*", op: "<=", value: 2, relative: false, relOffset: 2 }])}
-          className="font-label text-[10px] uppercase tracking-widest text-accent/70 hover:text-accent transition-colors mt-1"
+          className="font-body font-semibold leading-tight text-xs text-accent/70 hover:text-accent transition-colors mt-1"
         >
           + Tope
         </button>
@@ -1106,10 +1106,10 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues, siblin
 
       {/* Actions */}
       <div className="flex gap-2 pt-1">
-        <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest border border-accent/20 text-mono-500 hover:text-accent hover:border-accent transition-colors">
+        <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-body font-semibold leading-tight text-xs border border-accent/20 text-mono-500 hover:text-accent hover:border-accent transition-colors">
           Cancelar
         </button>
-        <button type="button" onClick={handleAdd} disabled={!canAdd} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest bg-negative-strong/20 hover:bg-negative-strong/30 text-negative-fg transition-colors disabled:opacity-40">
+        <button type="button" onClick={handleAdd} disabled={!canAdd} className="flex-1 py-1 rounded font-body font-semibold leading-tight text-xs bg-negative-strong/20 hover:bg-negative-strong/30 text-negative-fg transition-colors disabled:opacity-40">
           {initialValues ? "Guardar cambios" : "Agregar restricción"}
         </button>
       </div>
@@ -1157,10 +1157,10 @@ function ConflictForm({ members, onAdd, onCancel, initialValues }: {
         <p className="font-label text-[10px] text-negative-fg">Selecciona dos personas distintas</p>
       )}
       <div className="flex gap-2 pt-1">
-        <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest border border-accent/20 text-mono-500 hover:text-accent hover:border-accent transition-colors">
+        <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-body font-semibold leading-tight text-xs border border-accent/20 text-mono-500 hover:text-accent hover:border-accent transition-colors">
           Cancelar
         </button>
-        <button type="button" disabled={!canAdd} onClick={() => onAdd({ id: initialValues?.id ?? uid(), personA, personB, pattern })} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest bg-badge-violet-deep/20 hover:bg-badge-violet-deep/30 text-badge-violet-fg transition-colors disabled:opacity-40">
+        <button type="button" disabled={!canAdd} onClick={() => onAdd({ id: initialValues?.id ?? uid(), personA, personB, pattern })} className="flex-1 py-1 rounded font-body font-semibold leading-tight text-xs bg-badge-violet-deep/20 hover:bg-badge-violet-deep/30 text-badge-violet-fg transition-colors disabled:opacity-40">
           {initialValues ? "Guardar cambios" : "Agregar conflicto"}
         </button>
       </div>
@@ -1215,10 +1215,10 @@ function PresenceForm({ members, onAdd, onCancel, initialValues }: {
         </Select>
       </div>
       <div className="flex gap-2 pt-1">
-        <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest border border-accent/20 text-mono-500 hover:text-accent hover:border-accent transition-colors">
+        <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-body font-semibold leading-tight text-xs border border-accent/20 text-mono-500 hover:text-accent hover:border-accent transition-colors">
           Cancelar
         </button>
-        <button type="button" disabled={!canAdd} onClick={() => onAdd({ id: initialValues?.id ?? uid(), persons: selected, pattern })} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest bg-positive-deep/20 hover:bg-positive-deep/30 text-positive-strong transition-colors disabled:opacity-40">
+        <button type="button" disabled={!canAdd} onClick={() => onAdd({ id: initialValues?.id ?? uid(), persons: selected, pattern })} className="flex-1 py-1 rounded font-body font-semibold leading-tight text-xs bg-positive-deep/20 hover:bg-positive-deep/30 text-positive-strong transition-colors disabled:opacity-40">
           {initialValues ? "Guardar cambios" : "Agregar presencia"}
         </button>
       </div>
@@ -1637,7 +1637,7 @@ function SolverConfigSaveBar({ config, rules }: {
         <button
           type="button"
           onClick={rules.reload}
-          className="font-label text-[11px] uppercase tracking-widest px-3 py-2 rounded-lg border border-accent/30 text-accent hover:bg-accent/10 transition-colors"
+          className="font-body font-semibold leading-tight text-sm px-3 py-2 rounded-lg border border-accent/30 text-accent hover:bg-accent/10 transition-colors"
         >
           Recargar reglas
         </button>
@@ -1698,7 +1698,7 @@ function SolverConfigUnavailable({ source, onReload }: {
         <button
           type="button"
           onClick={onReload}
-          className="font-label text-[11px] uppercase tracking-widest px-3 py-2 rounded-lg border border-accent/30 text-accent hover:bg-accent/10 transition-colors"
+          className="font-body font-semibold leading-tight text-sm px-3 py-2 rounded-lg border border-accent/30 text-accent hover:bg-accent/10 transition-colors"
         >
           Reintentar
         </button>
@@ -1738,7 +1738,7 @@ function SolverConfigReloadNotice({ source, onReload }: {
       <button
         type="button"
         onClick={onReload}
-        className="font-label text-[11px] uppercase tracking-widest px-3 py-2 rounded-lg border border-accent/30 text-accent hover:bg-accent/10 transition-colors"
+        className="font-body font-semibold leading-tight text-sm px-3 py-2 rounded-lg border border-accent/30 text-accent hover:bg-accent/10 transition-colors"
       >
         Reintentar
       </button>
@@ -2017,7 +2017,7 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
                 <button
                   type="button"
                   onClick={() => toggleMember(m.field, m._id)}
-                  className="rounded-lg border border-accent/20 px-2 py-1 font-label text-[10px] uppercase tracking-widest text-accent hover:bg-accent/10"
+                  className="rounded-lg border border-accent/20 px-2 py-1 font-body font-semibold leading-tight text-xs text-accent hover:bg-accent/10"
                 >
                   Quitar del pool
                 </button>
