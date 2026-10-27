@@ -1,4 +1,5 @@
-// A server module that spawns a process must gate the spawn on a production build.
+// A server module that spawns a process, or builds a path from process.cwd(), must gate it on a
+// production build.
 //
 // `spawn(python, [path.join(process.cwd(), …)])` is a path the file tracer cannot resolve, so
 // it packs the WHOLE repository into every function that reaches the module: docs/, the e2e
@@ -13,6 +14,7 @@ import { describe, expect, it } from "vitest";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
 const ROOTS = ["app", "sanity"];
+const ROOT_FILES = ["auth.ts", "proxy.ts"];
 
 function sourceFiles(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
@@ -22,16 +24,23 @@ function sourceFiles(dir: string): string[] {
   });
 }
 
-const SPAWNS = /from\s+["'](node:)?child_process["']/;
+/** Code only: a gate written in a comment gates nothing. */
+const stripComments = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+
+// What makes the tracer give up: a process spawn, or a path built from the working directory.
+const TRACE_HAZARD = /from\s+["'](node:)?child_process["']|require\(\s*["'](node:)?child_process["']\s*\)|import\(\s*["'](node:)?child_process["']\s*\)|process\.cwd\(\)/;
 const GATE = /process\.env\.NODE_ENV\s*===\s*["']production["']/;
 
 describe("function trace guard", () => {
-  it("every server module that imports child_process gates it on a production build", () => {
-    const files = ROOTS.flatMap((r) => sourceFiles(path.join(REPO_ROOT, r)));
-    const spawners = files.filter((f) => SPAWNS.test(fs.readFileSync(f, "utf8")));
+  it("every server module that spawns a process or builds a path from process.cwd() gates it on a production build", () => {
+    const files = [
+      ...ROOTS.flatMap((r) => sourceFiles(path.join(REPO_ROOT, r))),
+      ...ROOT_FILES.map((f) => path.join(REPO_ROOT, f)),
+    ];
+    const hazards = files.filter((f) => TRACE_HAZARD.test(stripComments(fs.readFileSync(f, "utf8"))));
     // The two local solver paths; if this drops to zero the guard is scanning nothing.
-    expect(spawners.length).toBeGreaterThan(0);
-    const ungated = spawners.filter((f) => !GATE.test(fs.readFileSync(f, "utf8")));
+    expect(hazards.length).toBeGreaterThan(0);
+    const ungated = hazards.filter((f) => !GATE.test(stripComments(fs.readFileSync(f, "utf8"))));
     expect(ungated.map((f) => path.relative(REPO_ROOT, f))).toEqual([]);
   });
 });

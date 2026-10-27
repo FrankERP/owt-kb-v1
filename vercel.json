@@ -1,5 +1,6 @@
 {
   "fluid": true,
+  "regions": ["iad1"],
   "ignoreCommand": "node scripts/vercel-ignore-build.mjs",
   "git": {
     "deploymentEnabled": {

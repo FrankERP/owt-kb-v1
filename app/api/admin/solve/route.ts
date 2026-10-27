@@ -107,7 +107,7 @@ async function callRemoteSolver(config: SolveRequest): Promise<SolveResponse> {
       ...(apiKey ? { "X-Api-Key": apiKey } : {}),
     },
     body: JSON.stringify(config),
-    // Vercel serverless functions have a 10s default; solver can take up to ~30s
+    // The route's own `maxDuration` (60 s) bounds the wait; the solver can take ~30 s,
     // so we rely on the GCF's own 120s timeout — no fetch timeout needed here.
   });
 

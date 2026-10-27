@@ -28,12 +28,18 @@ pre-warming, and the default timeout becomes 300 s (routes that declare `maxDura
 It is set per deployment in `vercel.json`, not in the dashboard, so it reaches `preview` (dev)
 before `main` and is reverted by a commit.
 
-The region stays `iad1` for now.
+The region stays `iad1` for now, pinned in the same file (`"regions": ["iad1"]`, the value the
+project setting already had) so a dashboard change cannot move it silently.
 
-Module state was audited for sharing between concurrent requests: the access cache, the SMTP
-pool (`app/utils/email.ts`) and the outbox sweep's role memo (`app/utils/outboxSweep.ts`, which
-already documents overlapping sweeps in one warm instance) are all safe to share; nothing keeps
-per-request data in module scope.
+Module state was audited for sharing between concurrent requests: the access cache, the MCP
+grant store (`app/mcp/oauth/grantStore.ts`), the SMTP pool (`app/utils/email.ts`) and the
+Google audience list are keyed per member or document, or static; nothing keeps per-request data
+in module scope. The one change it needed: the outbox sweep's role memo (`app/utils/outboxSweep.ts`)
+is swapped at the start of each sweep, so `fetchRole` now writes into the memo that was current
+when its read started — otherwise an older sweep's in-flight read could land in a newer sweep's
+memo and that sweep would classify against state read before its own commit. Concurrent sweeps on
+one instance also share the 8 SMTP connections, which roughly doubles queue waits (~2.4 s a
+wave), far under `SEND_TIMEOUT_MS`.
 
 ## Rejected
 
