@@ -68,6 +68,8 @@ import {
 import {
   selectBulkOverride,
   selectPublishReady,
+  classifyPublishBlockers,
+  isBulkOverridable,
   type PublishCandidate,
   type PublishOverrideAcknowledgement,
   type PublishSelectionEntry,
@@ -1006,6 +1008,14 @@ export interface CommandSummaryCounters {
   upcoming: number;
   past: number;
   readyToPublish: number;
+  /**
+   * Visible drafts that are NOT ready but that «Publicar todos» alone would
+   * publish: no hard blocker, and every workflow blocker bulk-acknowledgeable
+   * (`BULK_OVERRIDE_BLOCKERS`: a missing setlist, an active proposal). This is
+   * the month-start state — teams assigned, no setlist yet — and the one the
+   * toolbar's publish button must open the plan for (2026-10-27).
+   */
+  overridableDrafts: number;
   publishedReady: number;
   conflicts: number;
   pendingProposals: number;
@@ -1028,6 +1038,7 @@ export function commandSummaryCounters(input: {
     upcoming: all.filter((c) => !c.isPast).length,
     past: all.filter((c) => c.isPast).length,
     readyToPublish: 0,
+    overridableDrafts: 0,
     publishedReady: 0,
     conflicts: 0,
     pendingProposals: 0,
@@ -1038,7 +1049,11 @@ export function commandSummaryCounters(input: {
     const r = card.readiness;
     if (r.publishState === "draft") {
       if (r.isReadyToPublish) counters.readyToPublish += 1;
-      else counters.blockedDrafts += 1;
+      else {
+        counters.blockedDrafts += 1;
+        const { hard, workflow } = classifyPublishBlockers(r);
+        if (hard.length === 0 && isBulkOverridable(workflow)) counters.overridableDrafts += 1;
+      }
     } else if (r.isOperationallyReady) {
       counters.publishedReady += 1;
     }
