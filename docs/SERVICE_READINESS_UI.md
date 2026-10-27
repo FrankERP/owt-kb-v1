@@ -261,9 +261,10 @@ hidden entirely when the override would add nothing beyond `Publicar N`.
 The **toolbar** button that opens this modal («Publicar listos (N)» beside «Generar mes», the
 «⋯» menu's twin on a phone) is always there and opens the plan whenever *either* commit could
 publish: it reads «Publicar listos (N)» while a draft is ready and «Publicar todos (M)» when
-only the override reaches something (`commandSummaryCounters().overridableDrafts`: drafts with
-no hard blocker whose workflow blockers are all in `BULK_OVERRIDE_BLOCKERS`), and stays,
-disabled with the toolbar's reason line, when neither could. Between 2026-10-22 and 10-27 it
+only the override reaches something. Both the state and the label are read from the plan the
+button opens (`buildPublishConfirmation` over the visible **upcoming** cards: a past month's
+drafts are never announced in bulk), never from a second predicate; with drafts present and
+none publishable it stays, disabled, with the toolbar's reason line. Between 2026-10-22 and 10-27 it
 rendered only with a READY draft, which cut off `Publicar todos` in the month-start state it
 exists for — teams assigned, no setlist yet — and Frank reported the feature as gone.
 

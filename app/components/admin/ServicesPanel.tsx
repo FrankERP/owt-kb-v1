@@ -911,6 +911,9 @@ export default function ServicesPanel({
     : `${selectedMonths.size} meses`;
 
   const counters = commandSummaryCounters({ all: cards, visible: visibleCards });
+  /** What the toolbar's publish button submits: the visible cards whose date has not gone. */
+  const toolbarPublishCards = useMemo(() => visibleCards.filter((c) => !c.isPast), [visibleCards]);
+  const toolbarPlan = useMemo(() => buildPublishConfirmation(toolbarPublishCards), [toolbarPublishCards]);
   const summaryLine = commandSummarySegments(counters).join(" · ");
   /** The toolbar's «Editar mes»: the one selected month, else the current one. */
   const openMonthEditor1 = (opener: "toolbar" | "menu" = "toolbar") =>
@@ -1008,22 +1011,27 @@ export default function ServicesPanel({
   // With nothing ready the button is NAMED after the commit it will offer, and
   // when neither could publish it stays, disabled, with its reason LAST in the
   // reason order: a closed «Generar mes» is the sentence an admin needs first.
-  const canOpenPublishPlan = counters.readyToPublish > 0 || counters.overridableDrafts > 0;
-  const publishButtonLabel =
-    counters.readyToPublish > 0
-      ? `Publicar listos (${counters.readyToPublish})`
-      : counters.overridableDrafts > 0
-        ? `Publicar todos (${counters.overridableDrafts})`
-        : "Publicar listos (0)";
-  const nothingToPublish =
-    canOpenPublishPlan
+  //
+  // The button's state and label are read from the PLAN it opens
+  // (`buildPublishConfirmation`, the modal's one selection), never from a
+  // second predicate that could disagree with it; and that plan is built over
+  // the UPCOMING visible cards only — a past month's drafts are never announced
+  // in bulk (the card's own actions remain for a past draft).
+  const readyCount = toolbarPlan.selected.length;
+  const overrideOnlyCount = readyCount === 0 ? toolbarPlan.overrideAll.length : 0;
+  const canOpenPublishPlan = readyCount > 0 || overrideOnlyCount > 0;
+  const publishButtonLabel = overrideOnlyCount > 0 ? `Publicar todos (${overrideOnlyCount})` : `Publicar listos (${readyCount})`;
+  const blockedUpcomingDrafts = toolbarPublishCards.filter(
+    (c) => c.readiness.publishState === "draft" && !c.readiness.isReadyToPublish,
+  ).length;
+  // The line only when there ARE drafts and none can go: an all-published board
+  // has nothing to explain beyond the disabled «(0)».
+  const nothingToPublish: CardGate | null =
+    canOpenPublishPlan || blockedUpcomingDrafts === 0
       ? null
       : {
           enabled: false,
-          reason:
-            counters.blockedDrafts > 0
-              ? `Publicar: ningún borrador se puede publicar todavía — ${plural(counters.blockedDrafts, "necesita", "necesitan")} revisión (sin equipo, conflicto o datos).`
-              : "Publicar: no hay borradores en esta vista.",
+          reason: `Publicar: ningún borrador se puede publicar todavía — ${plural(blockedUpcomingDrafts, "necesita", "necesitan")} revisión (sin equipo, conflicto o datos).`,
         };
   const toolbarGateReason =
     [
@@ -1224,7 +1232,7 @@ export default function ServicesPanel({
               variant="secondary"
               size="lg"
               disabled={!publishGate.enabled || !canOpenPublishPlan}
-              onClick={() => openPublishPlan(visibleCards)}
+              onClick={() => openPublishPlan(toolbarPublishCards)}
               className="hidden sm:inline-flex"
             >
               {publishButtonLabel}
@@ -1270,7 +1278,7 @@ export default function ServicesPanel({
                 </Button>
               }
             >
-              <MenuItem disabled={!publishGate.enabled || !canOpenPublishPlan} onSelect={() => openPublishPlan(visibleCards)}>
+              <MenuItem disabled={!publishGate.enabled || !canOpenPublishPlan} onSelect={() => openPublishPlan(toolbarPublishCards)}>
                 {publishButtonLabel}
               </MenuItem>
               <MenuItem disabled={!generateGate.enabled} onSelect={() => openGenerator("menu")}>
