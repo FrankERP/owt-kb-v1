@@ -446,8 +446,8 @@ function Row({ r, max, average, view, includeSpecials, saturdays, selected, onSe
     >
       <div className="flex-1 min-w-0">
         {onSelect ? (
-          // A bare <button>, not `Button`: that primitive is a label-styled
-          // control (uppercase, centred, padded) and this is a member's NAME,
+          // A bare <button>, not `Button`: that primitive is a padded, centred
+          // control (semibold since 2026-10-27) and this is a member's NAME,
           // which must read exactly like the board's plain one. A toggle, so
           // `aria-pressed` carries the state a sighted admin reads off the tint.
           <button
