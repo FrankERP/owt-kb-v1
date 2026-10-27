@@ -24,7 +24,7 @@ beforeEach(() => vi.unstubAllGlobals());
 afterEach(cleanup);
 
 /** The reassuring copy that must never appear on a failed load. */
-const ALL_CLEAR = /Todo bien/i;
+const ALL_CLEAR = /Nadie asignado tiene marcada una fecha/i;
 
 describe("AvailabilityPanel — a failed load never reads as 'no conflicts'", () => {
   it("reports the failure instead of an all-clear when a response is not ok", async () => {

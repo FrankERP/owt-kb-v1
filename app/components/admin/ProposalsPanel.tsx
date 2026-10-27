@@ -1,9 +1,10 @@
 "use client";
 
-import { PAGE_LEDE, PAGE_TITLE } from "@/app/utils/homeHero";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PAGE_LEDE, PAGE_TITLE, SHEET_TITLE } from "@/app/utils/homeHero";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useToast } from "@/app/components/ui/Toast";
 import Button from "@/app/components/ui/Button";
+import Collapse from "@/app/components/ui/Collapse";
 import SegmentedControl from "@/app/components/ui/SegmentedControl";
 import Skeleton, { SkeletonGroup } from "@/app/components/ui/Skeleton";
 import ProposalThread, { type ThreadMessage } from "@/app/components/ProposalThread";
@@ -22,6 +23,8 @@ import {
   widenStepsForTargets,
 } from "./proposalListView";
 import { serviceTodayIso } from "./serviceReadiness";
+import { UNDER_NAVBAR_SCROLL_MT } from "@/app/utils/navbarHeight";
+import { PROPOSAL_STATUS_WORD, dayBlock, proposalSublineMiddle } from "./adminRowCopy";
 
 /** The four stored statuses, from the shared handoff contract. */
 type ProposalStatus = ProposalReviewStatus;
@@ -71,27 +74,22 @@ function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-const SERVICE_LABEL: Record<string, string> = {
-  sunday: "Domingo",
-  saturday: "Sábado",
-  special: "Especial",
+/** What needs the admin opens on arrival; history stays folded until asked. */
+const OPEN_BY_DEFAULT: Record<ProposalStatus, boolean> = {
+  draft: false,
+  pending: true,
+  approved: false,
+  changes_requested: true,
 };
 
-const STATUS_STYLE: Record<ProposalStatus, string> = {
-  draft: "bg-mono-500/15 text-mono-400 border border-mono-500/30",
-  pending: "bg-recency-fg/15 text-recency-strong border border-recency-fg/30",
-  approved: "bg-positive-deep/15 text-positive-strong border border-positive-deep/30",
-  changes_requested: "bg-negative-strong/15 text-negative-fg border border-negative-strong/30",
-};
-
-const STATUS_LABEL: Record<ProposalStatus, string> = {
-  draft: "Borrador",
-  pending: "Pendiente",
-  approved: "Aprobada",
-  changes_requested: "Cambios",
-};
-
-// ─── ProposalCard ─────────────────────────────────────────────────────────────
+// ─── ProposalCard — a hairline row since the Admin pass (ADR-0070, PR B) ──────
+//
+// The day in the display face on the left, «Domingo 1 de noviembre» at 17 px,
+// «Propuesta de Gaby · 4 canciones · Pendiente» at 14 px, and a chevron: the
+// header is one raw <button> (aria-expanded) because the house Button is a
+// label-styled control and this is a row's title. The body — setlist, team
+// message, thread, actions — folds under it with `Collapse`; a review item
+// opens on arrival, history stays folded.
 
 function ProposalCard({
   proposal,
@@ -125,6 +123,16 @@ function ProposalCard({
   // A 409 means the reviewed revision is stale: keep this card (and its open
   // panel) exactly as it is and require a reload before reviewing again.
   const [conflict, setConflict] = useState(false);
+  const [open, setOpen] = useState(OPEN_BY_DEFAULT[proposal.status] || !!highlighted);
+  const bodyId = useId();
+  // A handoff that lands on this row must find it open, whatever its status:
+  // adjusted during render on the edge (React's "storing information from
+  // previous renders"), not in an effect that would paint it folded first.
+  const [wasHighlighted, setWasHighlighted] = useState(!!highlighted);
+  if (!!highlighted !== wasHighlighted) {
+    setWasHighlighted(!!highlighted);
+    if (highlighted) setOpen(true);
+  }
 
   /**
    * Post, then raise this card's fail-closed lock if something else moved the
@@ -184,75 +192,81 @@ function ProposalCard({
   };
 
   const inputCls = "w-full px-3 py-2 rounded-lg border border-accent/20 bg-transparent font-body text-sm focus:outline-none focus:border-accent transition-colors placeholder:text-placeholder";
+  const { day, month } = dayBlock(proposal.service_date);
+  const sublineMiddle = proposalSublineMiddle({ songCount: proposal.songs.length, coContributors });
 
   return (
     <div
       ref={register}
       tabIndex={-1}
       aria-current={highlighted ? "true" : undefined}
-      className={`min-w-0 rounded-xl border bg-accent-deep/5 dark:bg-accent/5 overflow-hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
-        highlighted
-          ? "border-accent shadow-[0_0_0_1px_rgb(var(--accent-rgb)/0.45)]"
-          : "border-edge-accent-subtle"
+      data-proposal-row=""
+      className={`min-w-0 border-b border-ink/[0.10] ${UNDER_NAVBAR_SCROLL_MT} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+        highlighted ? "bg-accent/[0.06]" : ""
       }`}
     >
-      {/* Card header */}
-      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-accent/10">
-        <div>
-          <p className="font-display text-base font-semibold">
-            {SERVICE_LABEL[proposal.service_type]} · {capitalize(formatDate(proposal.service_date))}
-          </p>
-          <p className="font-body text-sm text-accent">
-            {proposal.lead_name}
-            {coContributors.length > 0 && (
-              <span className="text-mono-400"> · con {coContributors.join(", ")}</span>
-            )}
-          </p>
-        </div>
-        <span className={`font-label text-[11px] uppercase tracking-widest px-2.5 py-1 rounded-full shrink-0 ${STATUS_STYLE[proposal.status]}`}>
-          {STATUS_LABEL[proposal.status]}
+      {/* Row header: the whole line toggles the body. */}
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={bodyId}
+        onClick={() => setOpen(o => !o)}
+        className="flex min-h-[72px] w-full items-center gap-4 py-3 text-left transition-colors duration-fast ease-out-brand hover:bg-accent/[0.055] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60"
+      >
+        <span aria-hidden="true" className="flex w-10 shrink-0 flex-col items-center">
+          <span className="font-display text-[30px] font-semibold leading-none text-ink">{day}</span>
+          <span className="font-label text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-dim">{month}</span>
         </span>
-      </div>
+        <span className="min-w-0 flex-1">
+          <span className="block font-body text-[17px] font-semibold leading-tight text-ink">
+            {capitalize(formatDate(proposal.service_date))}
+            {proposal.service_type === "special" && <span className="text-ink-muted"> · Especial</span>}
+          </span>
+          <span className="mt-1 block font-body text-sm leading-tight text-ink-muted [overflow-wrap:anywhere]">
+            {"Propuesta de "}<span>{proposal.lead_name}</span>{` · ${sublineMiddle} · `}<span>{PROPOSAL_STATUS_WORD[proposal.status]}</span>
+          </span>
+        </span>
+        <svg
+          aria-hidden="true"
+          width="18" height="18" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          className={`shrink-0 text-ink-dim transition-transform duration-fast ease-out-brand ${open ? "rotate-90" : ""}`}
+        >
+          <polyline points="9 6 15 12 9 18" />
+        </svg>
+      </button>
 
+      <Collapse open={open} id={bodyId} className="space-y-5 pb-5 sm:pl-14">
       {/* Songs */}
-      <div className="px-4 py-3 space-y-1.5">
+      <div>
         {proposal.songs.length === 0 && (
-          <p className="font-body text-sm text-mono-500 italic">Sin canciones</p>
+          <p className="font-body text-sm text-ink-dim italic">Sin canciones</p>
         )}
-        {proposal.songs.map((song, i) => {
-          const nextSong = proposal.songs[i + 1];
-          const linkedNext = !!song.medley_tag && !!nextSong?.medley_tag && song.medley_tag === nextSong.medley_tag;
-          const linkedPrev = i > 0 && !!song.medley_tag && proposal.songs[i - 1].medley_tag === song.medley_tag;
-          return (
-            <div key={song._key}>
-              <div className={`flex items-center gap-3 ${song.medley_tag ? "pl-2 border-l-2 border-accent/40" : ""}`}>
-                <span className="font-label text-xs text-mono-500 w-4 text-right shrink-0">{i + 1}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="font-body text-sm font-semibold truncate">{song.title}</p>
-                  {song.author && (
-                    <p className="font-body text-xs text-mono-400 truncate">{song.author}</p>
-                  )}
-                </div>
-                {linkedPrev && (
-                  <span className="font-label text-[10px] uppercase tracking-widest text-accent/70 shrink-0">medley</span>
-                )}
-                <span className="font-label text-xs px-2 py-0.5 rounded-full border border-accent/20 text-accent shrink-0">
-                  {song.play_key}
-                </span>
-              </div>
-              {linkedNext && <div className="h-1" />}
-            </div>
-          );
-        })}
+        {proposal.songs.length > 0 && (
+          <ol className="space-y-2">
+            {proposal.songs.map((song, i) => {
+              const linkedPrev = i > 0 && !!song.medley_tag && proposal.songs[i - 1].medley_tag === song.medley_tag;
+              return (
+                <li key={song._key} className={`flex items-baseline gap-2.5 font-body text-[15px] ${song.medley_tag ? "border-l-2 border-accent/40 pl-2" : ""}`}>
+                  <span className="w-4 shrink-0 text-right font-label text-[10px] font-semibold text-ink-dim">{i + 1}</span>
+                  <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+                    <span className="font-semibold text-ink">{song.title}</span>
+                    {song.author && <span className="text-ink-muted"> — {song.author}</span>}
+                    {linkedPrev && <span className="ml-2 font-label text-[10px] uppercase tracking-widest text-accent/70">medley</span>}
+                  </span>
+                  <span className="shrink-0 font-display text-base font-semibold text-ink">{song.play_key}</span>
+                </li>
+              );
+            })}
+          </ol>
+        )}
       </div>
 
       {/* Team message */}
       {proposal.team_notes && (
-        <div className="px-4 pb-3">
-          <div className="p-3 rounded-lg border border-accent/20 bg-accent/5">
-            <p className="font-label text-[11px] uppercase tracking-widest text-accent mb-1">Mensaje para el equipo</p>
-            <p className="font-body text-sm text-mono-300 whitespace-pre-wrap">{proposal.team_notes}</p>
-          </div>
+        <div>
+          <p className={`mb-1 ${SHEET_TITLE}`}>Mensaje para el equipo</p>
+          <p className="font-body text-[15px] leading-relaxed text-ink-muted whitespace-pre-wrap [overflow-wrap:anywhere]">{proposal.team_notes}</p>
         </div>
       )}
 
@@ -262,7 +276,7 @@ function ProposalCard({
           non-empty and on `changes_requested`, and inheriting either condition
           would hide the thread on a `pending` proposal, which is where the
           conversation happens. */}
-      <div className="px-4 pb-3">
+      <div>
         <ProposalThread
           // The pre-proposal messages open the thread (ADR-0065); it orders the
           // whole list by `at`. `postMessage` replaces only `messages`.
@@ -276,7 +290,7 @@ function ProposalCard({
 
       {/* Stale-review banner (409). The card keeps exactly what was reviewed. */}
       {conflict && (
-        <div className="px-4 pb-3">
+        <div>
           <div className="rounded-lg border border-recency-fg/40 bg-recency-fg/10 px-3 py-2">
             <p className="font-label text-[11px] uppercase tracking-widest text-recency-strong">Propuesta actualizada</p>
             <p className="font-body text-sm text-recency-faint/90">
@@ -288,7 +302,7 @@ function ProposalCard({
 
       {/* Actions */}
       {(proposal.status === "pending" || proposal.status === "changes_requested") && (
-        <div className="px-4 pb-4 space-y-3">
+        <div className="space-y-3">
           {requestingChanges ? (
             <div className="space-y-2">
               <textarea
@@ -299,13 +313,13 @@ function ProposalCard({
                 value={adminNotes}
                 onChange={e => setAdminNotes(e.target.value)}
               />
-              <div className="flex gap-2">
-                <Button variant="secondary" className="flex-1" onClick={() => setRequestingChanges(false)}>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="ghost" size="lg" onClick={() => setRequestingChanges(false)}>
                   Cancelar
                 </Button>
                 <Button
                   variant="danger"
-                  className="flex-1"
+                  size="lg"
                   onClick={handleRequestChanges}
                   disabled={conflict || !adminNotes.trim()}
                   busy={submitting}
@@ -316,13 +330,10 @@ function ProposalCard({
               </div>
             </div>
           ) : (
-            <div className="flex gap-2">
-              <Button variant="secondary" className="flex-1" onClick={() => setRequestingChanges(true)}>
-                Solicitar cambios
-              </Button>
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="primary"
-                className="flex-1"
+                size="lg"
                 onClick={handleApprove}
                 disabled={conflict || proposal.songs.length === 0}
                 busy={submitting}
@@ -330,19 +341,20 @@ function ProposalCard({
               >
                 Aprobar
               </Button>
+              <Button variant="ghost" size="lg" onClick={() => setRequestingChanges(true)}>
+                Solicitar cambios
+              </Button>
             </div>
           )}
         </div>
       )}
 
       {proposal.status === "approved" && (
-        <div className="px-4 pb-4 space-y-3">
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-positive-deep/20 bg-positive-deep/5">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-positive-strong shrink-0">
-              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
-            </svg>
-            <p className="font-label text-[11px] uppercase tracking-widest text-positive-strong">Setlist publicado</p>
-          </div>
+        <div className="space-y-3">
+          <p className="flex items-center gap-2 font-body text-sm text-positive-strong">
+            <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-positive-fg" />
+            Setlist publicado
+          </p>
 
           {/* Re-open for revision. Sends the shared proposal back to
               changes_requested; the live setlist stays until re-approval. */}
@@ -356,13 +368,13 @@ function ProposalCard({
                 value={adminNotes}
                 onChange={e => setAdminNotes(e.target.value)}
               />
-              <div className="flex gap-2">
-                <Button variant="secondary" className="flex-1" onClick={() => setReopening(false)}>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="ghost" size="lg" onClick={() => setReopening(false)}>
                   Cancelar
                 </Button>
                 <Button
                   variant="primary"
-                  className="flex-1"
+                  size="lg"
                   onClick={handleReopen}
                   disabled={conflict}
                   busy={submitting}
@@ -373,12 +385,13 @@ function ProposalCard({
               </div>
             </div>
           ) : (
-            <Button variant="secondary" className="w-full" onClick={() => setReopening(true)}>
+            <Button variant="ghost" size="lg" className="-ml-4" onClick={() => setReopening(true)}>
               Reabrir para ajustes
             </Button>
           )}
         </div>
       )}
+      </Collapse>
     </div>
   );
 }
@@ -513,7 +526,10 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
     const el = cardRefs.current.get(id);
     if (!el) return;
     scrollTargetRef.current = null;
-    el.scrollIntoView({ block: "center", behavior: prefersReducedMotion() ? "auto" : "smooth" });
+    // `start`, not `center`: a folded row opens in the same commit, so centring
+    // would measure its 72 px header and leave the body it reveals off screen.
+    // The row's `UNDER_NAVBAR_SCROLL_MT` keeps the header out from under the bar.
+    el.scrollIntoView({ block: "start", behavior: prefersReducedMotion() ? "auto" : "smooth" });
     el.focus({ preventScroll: true });
   }, [highlightIds, filter, proposals, windowSteps]);
 
@@ -737,18 +753,18 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
       )}
 
       {!loading && !error && visible.length === 0 && hiddenCount === 0 && (
-        <div className="text-center py-12 space-y-1">
-          <p className="font-body text-sm text-mono-500">
+        <div className="py-12 space-y-1">
+          <p className="font-body text-[15px] text-ink-dim">
             {filter === "all" ? "No hay propuestas todavía." : `Sin propuestas en esta categoría.`}
           </p>
-          <p className="font-body text-xs text-mono-500">
+          <p className="font-body text-sm text-ink-dim">
             Los líderes proponen setlists desde su perfil; aparecerán aquí para revisión.
           </p>
           {/* An empty «Pendientes» (the tab's landing filter) is the common case
               on a quiet week; a way to the history keeps it from being a dead end. */}
           {filter === "pending" && approvedCount > 0 && (
             <div className="pt-3">
-              <Button variant="secondary" size="sm" onClick={() => changeFilter("approved")}>
+              <Button variant="ghost" size="lg" className="-ml-4" onClick={() => changeFilter("approved")}>
                 Ver aprobadas
               </Button>
             </div>
@@ -756,8 +772,8 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
         </div>
       )}
 
-      {!loading && !error && (
-        <div className="space-y-4">
+      {!loading && !error && visible.length > 0 && (
+        <div className="border-t border-ink/[0.10]">
           {visible.map(p => (
             <ProposalCard
               key={p._id}
@@ -788,14 +804,15 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
       )}
 
       {!loading && !error && canWiden && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-edge-accent-subtle px-4 py-3">
-          <p aria-hidden className="font-label text-[11px] uppercase tracking-widest text-mono-500">
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <p aria-hidden className="font-body text-sm text-ink-dim">
             {hiddenCount === 1
               ? "1 propuesta anterior oculta"
               : `${hiddenCount} propuestas anteriores ocultas`}
           </p>
           <Button
-            variant="secondary"
+            variant="ghost"
+            size="lg"
             // Jump to the window that shows the NEWEST hidden row, not a blind
             // `+ 1`: a press that changes nothing on screen reads as broken.
             onClick={() => setWindowSteps(stepsToShowMore)}
