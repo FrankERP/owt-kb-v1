@@ -369,7 +369,7 @@ describe("command summary", () => {
       blockedDrafts: 0,
     });
     expect(segments.join(" · ")).toBe(
-      "6 próximos · 2 listos para publicar · 1 conflicto · 1 propuesta pendiente",
+      "6 por venir · 2 listos para publicar · 1 conflicto · 1 propuesta pendiente",
     );
   });
 
@@ -384,7 +384,7 @@ describe("command summary", () => {
       integrityIssues: 0,
       blockedDrafts: 0,
     });
-    expect(segments).toEqual(["0 próximos"]);
+    expect(segments).toEqual(["0 por venir"]);
   });
 });
 

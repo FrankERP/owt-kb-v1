@@ -1,5 +1,6 @@
 "use client";
 
+import { PAGE_LEDE, PAGE_TITLE } from "@/app/utils/homeHero";
 import { useState, useEffect, useCallback, useRef } from "react";
 
 import Button from "@/app/components/ui/Button";
@@ -184,7 +185,7 @@ export default function AvailabilityPanel() {
     return (
       <div className="space-y-5">
         <div>
-          <h1 className="font-display text-2xl uppercase tracking-wide">Disponibilidad</h1>
+          <h1 className={PAGE_TITLE}>Disponibilidad</h1>
         </div>
         <div role="alert" className="rounded-xl border border-negative-strong/30 bg-negative-surface-deepest/35 px-5 py-8 text-center">
           <p className="font-display text-lg uppercase text-negative-fg">Sin datos</p>
@@ -203,8 +204,8 @@ export default function AvailabilityPanel() {
       {/* Header + view toggle */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="font-display text-2xl uppercase tracking-wide">Disponibilidad</h1>
-          <p className="font-label text-xs uppercase tracking-widest text-mono-500 mt-0.5">
+          <h1 className={PAGE_TITLE}>Disponibilidad</h1>
+          <p className={`mt-2 ${PAGE_LEDE}`}>
             {conflicts.length > 0
               ? `${conflicts.length} conflicto${conflicts.length !== 1 ? "s" : ""} detectado${conflicts.length !== 1 ? "s" : ""}`
               : "Sin conflictos en próximos servicios"}

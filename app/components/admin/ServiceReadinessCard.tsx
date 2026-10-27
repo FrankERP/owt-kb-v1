@@ -39,9 +39,8 @@ import { buildRuns } from "../../utils/medley";
 import Button from "../ui/Button";
 import Menu, { MenuItem, MenuSeparator } from "../ui/Menu";
 import NumberRoll from "../ui/NumberRoll";
-import ReadinessBadge from "./ReadinessBadge";
 import ServiceIssueList from "./ServiceIssueList";
-import ServicePrimaryAction from "./ServicePrimaryAction";
+import ServicePrimaryAction, { ServiceReviewFlag, isReviewKind } from "./ServicePrimaryAction";
 import {
   CARD_RAIL,
   CARD_SECTIONS,
@@ -49,7 +48,6 @@ import {
   cardIdentity,
   cardPreview,
   dn,
-  pillWidth,
   serviceIssueLines,
   servicePrimaryActionProps,
   type CardSection,
@@ -151,6 +149,9 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
   // opens exactly the editor the icon would have.
   const showTeamIcon = action.route !== "service_modal";
   const showSetlistIcon = action.route !== "setlist_editor";
+  // A blocker is a small flag in the corner, not a button across the card
+  // (phase 5 of the «millones» pass; see `ServiceReviewFlag`).
+  const reviewFlag = isReviewKind(action.kind);
 
   const isChipSource = (section: string, itemKey?: string) =>
     !!itemKey &&
@@ -160,14 +161,14 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
     swapSource.section === section &&
     swapSource.itemKey === itemKey;
 
+  // Instruments and FOH in their stored order: they read as one running line now
+  // («Bajo Mkz · Batería Samo»), so there is no chip width to pack by.
   const instrPills = (role.instruments ?? [])
     .filter((s) => s.person)
-    .map((s) => ({ label: s.instrument, person: s.person! }))
-    .sort((a, b) => pillWidth(a.label, dn(a.person)) - pillWidth(b.label, dn(b.person)));
+    .map((s) => ({ label: s.instrument, person: s.person! }));
   const fohPills = (role.foh ?? [])
     .filter((s) => s.person)
-    .map((s) => ({ label: s.role, person: s.person! }))
-    .sort((a, b) => pillWidth(a.label, dn(a.person)) - pillWidth(b.label, dn(b.person)));
+    .map((s) => ({ label: s.role, person: s.person! }));
   const hasVoices =
     (role.leads ?? []).length + (role.bgvs ?? []).length + (role.chorus ?? []).length > 0;
   const hasTeam = hasVoices || instrPills.length > 0 || fohPills.length > 0;
@@ -202,7 +203,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
             <div className={`flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 ${CARD_STYLE.longText}`}>
               <h3
                 title={identity.dateText}
-                className={`font-display text-xl font-bold uppercase leading-none text-ink md:text-2xl ${CARD_STYLE.longText}`}
+                className={`font-display text-2xl font-semibold uppercase leading-none tracking-[0.02em] text-ink md:text-[26px] ${CARD_STYLE.longText}`}
               >
                 {identity.headline}
               </h3>
@@ -214,17 +215,26 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
               data-card-meta=""
               className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 max-sm:order-2 max-sm:basis-full"
             >
+              {/* «En 6 días · ● Publicado»: the state is a dot and a word in 14 px
+                  body (phase 5 of the «millones» pass), no longer a chip. The dot
+                  is filled green for published, an amber ring for a draft — the
+                  word carries the meaning, the colour only reinforces it. */}
               {identity.relative && (
-                <span className="font-label text-[11px] uppercase tracking-widest text-ink-dim">
+                <span className="font-body text-sm text-ink-dim">
                   <NumberRoll value={identity.relative} />
+                  <span aria-hidden="true"> ·</span>
                 </span>
               )}
-              <ReadinessBadge
-                text={identity.publication.text}
-                icon={isDraft ? "◌" : "◉"}
-                tone={identity.publication.tone}
-                className="!py-0.5"
-              />
+              <span
+                data-card-state={isDraft ? "draft" : "published"}
+                className={`inline-flex items-center gap-1.5 font-body text-sm ${isDraft ? "text-warning-strong" : "text-positive-strong"}`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${isDraft ? "border border-warning-fg" : "bg-positive-fg"}`}
+                />
+                {identity.publication.text}
+              </span>
             </div>
 
             {/* Mode affordances replace the action cluster while a mode is active. */}
@@ -270,8 +280,9 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
               // ONE right-aligned cluster, so a long special name can push the pair
               // down together but never leave the icons orphaned on a line of their own.
               <div className="contents sm:ml-auto sm:flex sm:shrink-0 sm:items-center sm:gap-3">
-                <ServicePrimaryAction action={action} onAction={props.onPrimaryAction} />
+                {!reviewFlag && <ServicePrimaryAction action={action} onAction={props.onPrimaryAction} />}
                 <div className="ml-auto flex shrink-0 items-center gap-0.5 max-sm:order-1 sm:ml-0">
+                  {reviewFlag && <ServiceReviewFlag action={action} onAction={props.onPrimaryAction} />}
                   {showTeamIcon && (
                     <IconAction
                       label="Editar equipo"
@@ -470,20 +481,23 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                     </div>
                   )}
                   {(instrPills.length > 0 || fohPills.length > 0) && (
-                    // Instruments and FOH share one band: the label on each chip
-                    // («Bajo», «Audio») already says which is which, and two
-                    // headed blocks for five chips cost more height than they named.
-                    <div className="flex min-w-0 flex-wrap gap-1.5" data-card-band="">
+                    // Instruments and FOH share one running line («Bajo Mkz ·
+                    // Batería Samo · Consola Vega»): the seat's label already says
+                    // which is which, and a line of text costs a third of the
+                    // height a band of chips did (phase 5 of the «millones» pass).
+                    <p className={`font-body text-sm leading-relaxed text-ink-dim ${CARD_STYLE.longText}`} data-card-band="">
                       {[...instrPills, ...fohPills].map((p, i) => (
-                        <TeamRow
-                          key={i}
-                          label={p.label}
-                          value={dn(p.person)}
-                          isConflict={highlightConflict && conflictIds.has(p.person._id)}
-                          conflictNote={conflictNotes.get(p.person._id)}
-                        />
+                        <span key={i}>
+                          {i > 0 && <span aria-hidden="true"> · </span>}
+                          <TeamRow
+                            label={p.label}
+                            value={dn(p.person)}
+                            isConflict={highlightConflict && conflictIds.has(p.person._id)}
+                            conflictNote={conflictNotes.get(p.person._id)}
+                          />
+                        </span>
                       ))}
-                    </div>
+                    </p>
                   )}
                 </div>
               ) : (
@@ -667,7 +681,7 @@ function VocalCol({
       <p className="mb-0.5 font-label text-[10px] uppercase tracking-widest text-ink-dim">
         {label}
       </p>
-      <p className={`font-body text-sm leading-snug ${CARD_STYLE.longText}`}>
+      <p className={`font-body text-[15px] leading-snug ${CARD_STYLE.longText}`}>
         {members.length === 0 ? (
           <span className="text-ink-dim">—</span>
         ) : (
@@ -690,8 +704,9 @@ function VocalCol({
 }
 
 /**
- * One instrument/FOH chip: `BAJO · Mkz`. Neutral (ADR-0059); only a live
- * availability conflict colours it, and then with the text and the ⚠ too.
+ * One instrument/FOH seat in the running line: the seat muted, the name in ink
+ * («Bajo **Mkz**»). Neutral (ADR-0059); only a live availability conflict
+ * colours it, and then with the ⚠ and the note on `title` too.
  */
 function TeamRow({
   label,
@@ -705,22 +720,9 @@ function TeamRow({
   conflictNote?: string;
 }) {
   return (
-    <span
-      title={isConflict && conflictNote ? conflictNote : undefined}
-      className={`inline-flex min-w-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 ${
-        isConflict
-          ? "border-negative-strong/70 bg-negative-strong/10 text-negative-fg"
-          : "border-ink-dim/30 text-ink"
-      }`}
-    >
-      <span
-        className={`shrink-0 font-label text-[9px] uppercase tracking-widest ${
-          isConflict ? "text-negative-fg" : "text-ink-dim"
-        }`}
-      >
-        {label}
-      </span>
-      <span className={`font-body text-xs leading-tight ${CARD_STYLE.longText} ${isConflict ? "font-semibold" : ""}`}>
+    <span title={isConflict && conflictNote ? conflictNote : undefined} className="whitespace-nowrap">
+      <span className={isConflict ? "text-negative-fg" : undefined}>{label}</span>{" "}
+      <span className={`font-semibold ${isConflict ? "text-negative-fg" : "text-ink"}`}>
         {isConflict && <span aria-hidden="true">⚠ </span>}
         {value}
       </span>

@@ -11,6 +11,7 @@
 // touch gets the same affordance, and the kill switch asks before it fires
 // (decision O).
 
+import { PAGE_LEDE, PAGE_TITLE } from "@/app/utils/homeHero";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -892,9 +893,9 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-2xl uppercase tracking-wide">Miembros</h1>
+          <h1 className={PAGE_TITLE}>Miembros</h1>
           {!loading && (
-            <p className="font-label text-xs uppercase tracking-widest text-mono-500 mt-0.5">
+            <p className={`mt-2 ${PAGE_LEDE}`}>
               {/* `filterValue` is in here deliberately: with scope "Todos", no query
                   and a type/role filter active, the heading used to read "57 miembros"
                   above a list of 5 — a silently shortened list is how someone concludes

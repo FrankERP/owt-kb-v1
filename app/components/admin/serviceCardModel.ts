@@ -1,8 +1,8 @@
 // Every presentational decision `/admin -> Servicios` makes, as pure functions
 // (Plan B items 7-9).
 //
-// The components in `ServiceReadinessCard` / `ReadinessBadge` /
-// `ServicePrimaryAction` / `ServiceIssueList` render what this module returns and
+// The components in `ServiceReadinessCard` /
+// `ServicePrimaryAction` (+ `ServiceReviewFlag`) / `ServiceIssueList` render what this module returns and
 // decide nothing themselves, so card ordering, issue copy, the
 // command-summary counters, bulk-publish selection copy, action routing and the
 // per-target month preflight are all table-testable in vitest's `node`
@@ -1066,7 +1066,8 @@ export function commandSummaryCounters(input: {
  * when it is non-zero, so the line stays readable at 320px.
  */
 export function commandSummarySegments(c: CommandSummaryCounters): string[] {
-  const segments = [plural(c.upcoming, "próximo", "próximos")];
+  // «7 por venir», as Inicio and the calendar say it — never «próximos».
+  const segments = [`${c.upcoming} por venir`];
   if (c.readyToPublish > 0) {
     segments.push(
       `${plural(c.readyToPublish, "listo", "listos")} para publicar`,

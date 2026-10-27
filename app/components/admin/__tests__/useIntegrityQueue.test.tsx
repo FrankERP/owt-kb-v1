@@ -353,7 +353,7 @@ describe("IntegrityQueuePanel renders the queue it is handed", () => {
     const { container } = panel("clean");
     expect(container.querySelector('[data-integrity-compact="clean"]')).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Integridad de datos/ })).toBeNull();
-    expect(screen.getByRole("status").textContent).toContain("sin problemas de integridad");
+    expect(screen.getByRole("status").textContent).toContain("Sin problemas de integridad");
   });
 
   it("starts open when there is something to say, and stays togglable", () => {

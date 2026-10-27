@@ -20,6 +20,14 @@ export const SHEET_TITLE = "font-label text-xs uppercase tracking-[0.22em] text-
  */
 export const PAGE_TITLE = "font-display text-[46px] font-semibold leading-[0.98] tracking-[-0.01em] text-ink md:text-[76px] md:leading-[0.95]";
 
+/**
+ * The line under a page title: what matters today, in 17 px body (20 px from
+ * `md`), muted — «7 por venir · 1 publicado · 6 borradores». The Control Room
+ * tabs share it (phase 5 of the «millones» pass); a count worth the eye sits in
+ * a `text-ink` span inside it.
+ */
+export const PAGE_LEDE = "font-body text-[17px] leading-snug text-ink-dim md:text-xl";
+
 /** Sanity's crop: the fraction (0–1) cut from each edge of the uncropped asset. */
 export type HeroCrop = { top?: number | null; bottom?: number | null; left?: number | null; right?: number | null } | null | undefined;
 

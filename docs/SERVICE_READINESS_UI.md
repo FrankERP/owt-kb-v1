@@ -45,11 +45,10 @@ publishing a service computed over data nobody proved.
 | `proposalHandoff.ts` | pure | The card → tab → panel handoff contract. |
 | `applyRefreshedRole.ts` | pure | Adopts the committed `_rev` a guarded edit returns. |
 | `serviceHandoffContext.tsx` | context | The handoff API a card calls; no-ops outside a provider. |
-| `ServiceReadinessCard.tsx` | component | One service card — since 2026-10-22 the compact card: one header line (`Dom 25 oct · en 3 días` + the state chip + the primary action + the icon cluster), then «Equipo» beside «Setlist» when the card is ≥36 rem wide (`.brand-service-card-body`, a container query in `brand.css`), its day colour a 3 px rail only (ADR-0059). |
-| `ReadinessBadge.tsx` | component | One icon + text + tone chip. |
+| `ServiceReadinessCard.tsx` | component | One service card — since 2026-10-22 the compact card: one header line (`Dom 25 oct · en 3 días` + the state chip + the primary action + the icon cluster), then «Equipo» beside «Setlist» when the card is ≥36 rem wide (`.brand-service-card-body`, a container query in `brand.css`), its day colour a 3 px rail only (ADR-0059). Since 2026-10-27 (the «millones» Admin pass, ADR-0070) the header reads «DOM 25 OCT» in the display face over one meta line — the countdown, then the state as a dot + word (`data-card-state`: «Borrador» behind an amber ring, «Publicado» behind a green dot — never a chip), the instrument + FOH band is running text («Batería **Juan** · Bajo **Ana**», `data-card-band`), and a REVIEW action (`isReviewKind`) is a small amber flag in the icon cluster rather than a button. |
 | `ServiceIssueList.tsx` | component | Blocking-issue lines, truncated with a count. |
-| `ServicePrimaryAction.tsx` | component | The single primary-action button — a house `Button` still emitting `data-action-kind`/`-rule`/`-route`; its tone is the variant. It renders inside the card's header row (`data-card-primary-action`): its own width from `sm`, a full-width line of its own below it. |
-| `IntegrityQueuePanel.tsx` | component | The "Integridad de datos" panel — renders the queue `useIntegrityQueue` hands it (R5). It is the ONLY place that state is written out: `ServicesPanel` used to repeat the title and summary under its own heading, and the rail's dot says it a second time already. Two shapes since 2026-10-22 (bloque 4): one status line («✓ sin problemas de integridad» + «Recargar»; «… comprobando» on the first load — `firstLoad` + `loading` from the hook; a reload keeps the held shape with «Recargar» busy) when the inventory is proven clean, the full section only when there are issues or the inventory could not be proven clean. `AdminPanel` hands it to `ServicesPanel` as `integritySlot`, which renders it under the board's heading and NOT on «Editar mes», «Editar servicio» or «Generar mes». |
+| `ServicePrimaryAction.tsx` | component | The single primary-action button — a house `Button` still emitting `data-action-kind`/`-rule`/`-route`; its tone is the variant. It renders inside the card's header row (`data-card-primary-action`): its own width from `sm`, a full-width line of its own below it. The same module exports `isReviewKind` and `ServiceReviewFlag`: the four review kinds (`review_data`, `review_duplicate_roles`, `review_setlist_data`, `resolve_conflict`) render as a 44 px amber icon in the card's icon cluster (`aria-label` = the action's label, `title` = its reason, the same `data-*` attributes and `data-tone="danger"`), because Frank refused a big «Revisar datos» button on an incomplete draft — the flag marks it, the icon's flow fixes it. |
+| `IntegrityQueuePanel.tsx` | component | The "Integridad de datos" panel — renders the queue `useIntegrityQueue` hands it (R5). It is the ONLY place that state is written out: `ServicesPanel` used to repeat the title and summary under its own heading, and the rail's dot says it a second time already. Two shapes since 2026-10-22 (bloque 4): one status line (a green dot + «Sin problemas de integridad» + «Recargar», «Integridad de datos» `sr-only` before it since 2026-10-27; «Comprobando los datos» behind a hollow dot on the first load — `firstLoad` + `loading` from the hook; a reload keeps the held shape with «Recargar» busy) when the inventory is proven clean, the full section only when there are issues or the inventory could not be proven clean. `AdminPanel` hands it to `ServicesPanel` as `integritySlot`, which renders it under the board's heading and NOT on «Editar mes», «Editar servicio» or «Generar mes». |
 | `useIntegrityQueue.ts` | hook | The ONE loader for the three service-integrity routes; `AdminPanel` calls it once and shares the queue with the rail's dot. `enabled` gates it on the role having a Servicios tab. |
 
 Mounting hierarchy:
@@ -60,9 +59,8 @@ AdminPanel.tsx  (services tab)
    └─ ServicesPanel
       ├─ IntegrityQueuePanel     ← `integritySlot` under the board heading (board only); `useIntegrityQueue` (in AdminPanel) does the fetching
       └─ ServiceReadinessCard    ← one per visible card
-         ├─ ReadinessBadge       (publication badge)
          ├─ ServiceIssueList
-         └─ ServicePrimaryAction
+         └─ ServicePrimaryAction / ServiceReviewFlag   (one module; a review kind is the flag, every other kind the button)
 ```
 
 **When the inventory is read.** Once per `/admin` mount, and again each time the admin
@@ -317,8 +315,11 @@ silently re-arm a submit built on the pre-failure snapshot. The operator reloads
 
 ## 10. Accessibility and layout invariants
 
-- Colour is never the only carrier of meaning. Every `ReadinessBadge` renders an icon **and**
-  Spanish text; the icon is `aria-hidden` so a screen reader reads the label once.
+- Colour is never the only carrier of meaning. The state line pairs its dot with the word
+  («Borrador» / «Publicado», the dot `aria-hidden`), the review flag carries the action's label
+  as `aria-label` and its reason as `title`, and the compact integrity line keeps «Integridad de
+  datos» as `sr-only` text before its summary. `ReadinessBadge` (the icon + text + tone chip) was
+  deleted on 2026-10-27 — nothing rendered it after the Admin pass.
 - Purple is reserved exclusively for special-service identity and is never a readiness tone.
 - `CARD_SECTIONS` **is** the rendered order — the card maps over it, so a reorder breaks a
   test rather than drifting silently. The four-module readiness strip that Plan B put at
