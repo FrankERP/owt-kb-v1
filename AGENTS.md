@@ -162,7 +162,7 @@ looks wrong** — several exist to stop a plausible-looking change.
   not carry it; the planner Switch is disabled for a past CDMX month (client-only, C1-D7).
 - **Draft gating:** member-facing **worship** reads filter `published != false` (absent =
   visible). **Every `kidsSchedule` read under `app/**` uses `published == true`**, manager
-  reads included (ADR-0022), except its two draft editors (`api/kids/schedules/route.ts`, the
+  reads included (ADR-0022), except its two draft editors (`utils/kidsScheduleReads.ts`, the
   planner page's `"schedules"` projection). Guard: `draftGatingCoverage.test.ts`.
 - **Sanity array-of-object writes need a `_key` per item.**
 - **`solverConfig`:** saves carry `SOLVER_CONFIG_VERSION`; the rules POST refuses any other
@@ -255,6 +255,7 @@ looks wrong** — several exist to stop a plausible-looking change.
   `delete_services`: DELETE, only with the check's echoed list and token, never a past service,
   ADR-0072; `serviceCommitCallers.test.ts`). The service conversation's writers live in
   `serviceThreadCommit.ts` too, called by its four routes and the MCP conversation tools (ADR-0073);
+  Oasis Kids' in `kidsCommit.ts`, called by the four `/api/kids/*` writes and the MCP Kids tools;
   `/api/mcp` buffers SSE so a tool finishes in the handler.
 - **The MCP proposal editor: the server judges, the card only shows** (ADR-0062). Every check and
   save replays the whole edit list through the planner's gate in `editorBoard.ts` only; a saved edit

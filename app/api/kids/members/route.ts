@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireMinistryManager } from "@/app/utils/authGuards";
 import { serverClient } from "@/sanity/lib/serverClient";
+import { PUBLISHED_PERSPECTIVE } from "@/app/utils/kidsScheduleReads";
 
 /**
  * The Kids roster's member picker — deliberately NOT `GET /api/admin/members`,
@@ -25,6 +26,7 @@ export async function GET() {
   const session = await requireMinistryManager("kids");
   if (!session) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const members = await serverClient.fetch(KIDS_MEMBERS_QUERY);
+  // `published`, like every Kids planner read: a raw read lists a Studio draft as a second volunteer.
+  const members = await serverClient.fetch(KIDS_MEMBERS_QUERY, {}, PUBLISHED_PERSPECTIVE);
   return NextResponse.json(members);
 }

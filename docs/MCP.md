@@ -144,7 +144,9 @@ registered after `create_service`: `check_service_deletes`, `delete_services` an
 `delete_services_app` (see [Deleting saved services](#deleting-saved-services-admin-parity-phase-2)). Admin parity
 phase 3 adds five, thirty-four in all, registered after the deletes: `get_service_messages`,
 `send_service_message`, `edit_service_message`, `set_pastor_message` and `set_team_message` (see
-[A service's messages](#a-services-messages-admin-parity-phase-3)). Every tool is
+[A service's messages](#a-services-messages-admin-parity-phase-3)). Oasis Kids (phase 3, S4) adds
+five more, thirty-nine in all, registered last: `get_kids_month`, `generate_kids_month`,
+`save_kids_sundays`, `save_kids_pair` and `set_kids_absences` (see [Oasis Kids](#oasis-kids-admin-parity-phase-3)). Every tool is
 registered the same way — one file per tool in `app/mcp/tools/`, exporting a
 `register<Tool>(server, deps?)` function that `registerAllTools` (`app/mcp/toolList.ts`) calls,
 the writes after the reads; `app/api/mcp/route.ts` runs it inside its handler init. Every
@@ -934,6 +936,30 @@ escribió nada». The thread's own rule holds: open until the service's date, th
 **Proof.** `serviceMessages.test.ts` (tools over fakes of the writers), `serviceThreadRoutes.test.ts`
 and `serviceMessageEditRoutes.test.ts` (the routes, unchanged by the extraction).
 
+### Oasis Kids (admin parity, phase 3)
+
+What `/kids/admin` does, from the chat, through the same code (spec:
+`docs/superpowers/plans/2026-10-27-owt-mcp-admin-parity-f3c-kids.md`). The four `/api/kids/*` writes
+now authorize and call `app/utils/kidsCommit.ts` (`saveKidsSunday`, `createKidsPair`,
+`patchKidsPair`, `setKidsAvailability`); `POST /api/kids/generate` calls `proposeKidsMonth`
+(`app/utils/kidsMonthPlan.ts`); the planner's month read, drafts included, is
+`readKidsMonthSchedules` (`app/utils/kidsScheduleReads.ts`, ADR-0022's one exempt module). The tools
+(`app/mcp/tools/kids.ts`) call the same functions. Pairs and volunteers go by NAME (no accents or
+case) or id; a name matching nothing or several is refused with the list. Writes need the bearer
+(`principalOf`) but record no author, as the routes. **Kids notifies nobody**, from either surface.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `get_kids_month` | `{month}` | Every Sunday of the month (saved or not, draft or published, each seat's pair by name and `pairIds` beside it), every pair (room, active, its two volunteers), the Kids volunteers, and that month's absences. Read-only |
+| `generate_kids_month` | `{month, seed?, exclude?}` | «Generar mes»: the same planner over the same inputs; `seed`/`fingerprint`/`exhausted` for «otra opción». Saves nothing. Read-only |
+| `save_kids_sundays` | `{sundays: [{date, seats, published?}]}` (≤ 6) | Each Sunday WHOLE, as the planner's PUT: an omitted seat is cleared. Every Sunday is resolved and checked (a Sunday, a known active pair, its own room, one seat per pair) before the first write; a writer refusal after that answers which Sundays were saved (not «No se escribió nada»). `published` only when the person asked; the answer marks each Sunday «PUBLICADO» or «borrador», so a change to a Sunday the volunteers already see is never silent. Destructive (I14) |
+| `save_kids_pair` | `{pair?, name?, room?, members?, active?}` | No `pair` creates (name, room, two volunteers; a name already used is refused so names stay unambiguous); with `pair` changes only the given fields; `active: false` retires. Destructive |
+| `set_kids_absences` | `{member, add?: [{date, note?}], remove?: [date]}` | By PARTS on the volunteer's fresh `_rev`: the dates nobody mentioned are carried over. The same list `/me` (and worship availability) writes; a lost race answers «cambiaron mientras tanto». Destructive |
+
+**Proof.** `kids.test.ts` (tools over fakes of the writers, the read and the planner),
+`kidsRoutes.test.ts` and `kidsAvailabilityConflict.test.ts` (the routes, unchanged by the extraction
+but for the `server-only` stub their new run-context wrapper needs).
+
 ### Notification audiences (the write tools)
 
 Confirmed from the code at `963cd736` (P3 plan, § «Notification audiences»):
@@ -951,6 +977,7 @@ Confirmed from the code at `963cd736` (P3 plan, § «Notification audiences»):
 | `send_service_message`, published service | push AND email to the service's Leads except the writer (`after()`, as `/admin`; email gated on the proposals preference + allowlist) | — | anything while the service is unpublished |
 | `set_pastor_message` | the same push AND email to the Leads, only when the message appears on an empty field of a published service | — | an edit or a clear |
 | `edit_service_message`, `set_team_message` | — | — | everything |
+| `save_kids_sundays`, `save_kids_pair`, `set_kids_absences` | — | — | everything (Kids sends nothing, as `/kids/admin`) |
 
 All of these pass the downstream filters: device tokens and push preferences, `EMAIL_ALLOWLIST`,
 and `wantsNotification`. Any outbox upsert through the deferred path also triggers the derated

@@ -265,7 +265,8 @@ several exist precisely to stop a plausible-looking change.
   `app/**` must carry `published == true`, manager-only ones included, because a
   fairness clock asking "did this pair serve?" needs the same answer the members got
   (ADR-0022). Two reads are exempt and both are editors of drafts —
-  `api/kids/schedules/route.ts` and the planner page's `"schedules"` projection.
+  `utils/kidsScheduleReads.ts` (the planner's month read, shared by its GET and the MCP
+  `get_kids_month` since 2026-10-27) and the planner page's `"schedules"` projection.
   `draftGatingCoverage.test.ts` enforces this, so a new manager-facing kids read that
   omits the filter fails the suite rather than shipping.
 - **Sanity array-of-object writes need a `_key` per item.**
@@ -464,6 +465,11 @@ several exist precisely to stop a plausible-looking change.
   (`app/mcp/tools/serviceMessages.ts`) both call them, so a chat message reaches the leads exactly as
   `/admin`'s does. The acting member is the session's on `/admin` and the bearer's (`principalOf`) in
   the chat, never an argument; no principal refuses before any read.
+  Oasis Kids' writers (one Sunday, the pair roster, a volunteer's absences) live in `kidsCommit.ts`
+  (admin parity phase 3, S4): the four `/api/kids/*` writes and the MCP Kids tools
+  (`app/mcp/tools/kids.ts`) both call them; the generator's inputs and seed search are
+  `proposeKidsMonth` (`kidsMonthPlan.ts`), and the month's draft-seeing read is
+  `kidsScheduleReads.ts` (ADR-0022, amended). Kids notifies nobody from either surface.
 - **The MCP proposal editor: the server judges, the card only shows** (ADR-0062). The card
   (`mcp-app/proposal-card/`) holds a list of edits, never a board; every check and save replays the
   whole list from the stored proposal through the planner's own gate. Only `editorBoard.ts` calls
