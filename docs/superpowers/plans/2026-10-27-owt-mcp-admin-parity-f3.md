@@ -1,6 +1,7 @@
 # OWT MCP — admin parity, phase 3: proposals, messages, songs (and Kids) from the chat (plan)
 
-**Status:** DRAFT 2026-10-27, waiting for Frank's «sí» (Q1–Q2, §5). Nothing is built.
+**Status:** DRAFT 2026-10-27, waiting for Frank's «sí» (Q1–Q2, §5). Nothing is built. Frank's summary
+(Spanish): Claude Doc https://claude.ai/artifact/SYwRUWHqFjXpkGLwppwm92.
 **Requirement (Frank, 2026-10-21 15:48Z, verbatim):** «Quiero poder hacer todo lo que hago en la
 página como admin, pero desde el chat». Phase 3 of the Claude Doc «Todo el admin desde el chat»:
 «Contestar y aprobar propuestas, editar canciones, y la rotación de Kids». Table rows: Propuestas
