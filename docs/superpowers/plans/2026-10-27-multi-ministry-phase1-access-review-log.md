@@ -85,7 +85,8 @@ that approval:
    error text; unticking Jóvenes removes its item; the Jóvenes scope only for the super-admin;
    `levelIn`/`groupsIn` non-member values; PR 3's stop condition on non-worship admins; the
    `managesMinistries` count is a sanity check; the mixed dev/production window; PR 3's visual check is
-   Frank's and saving there is real; `ministryRoles` items carry `_type`.
+   Frank's and saving there is real; `ministryRoles` items carry `_type`; and (item 12, from PR 1's
+   code review) a correction of §2's list of guard callers under `/api/me/*`.
 
 The approved body is otherwise byte-identical to the reviewed snapshot (checked with `diff`). The code
 review of PRs 2 and 3 covers §8.

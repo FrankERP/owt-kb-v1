@@ -34,18 +34,21 @@ _Avoid_: presence line (in Spanish copy), regla de presencia (the rule, not its 
 
 **Ministerio** (`MinistryId`, `app/ministries.ts`):
 A team of the church with its own plans, rules, notices and admins: Alabanza (`worship`), Oasis Kids
-(`kids`), Pastores de jóvenes (`jovenes`, from ADR-0075). A person belongs to one or more through
-`ministries`; absent means worship. Isolation is two-way and enforced on the server.
-_Avoid_: área, equipo (an «equipo» of the youth board is something else)
+(`kids`), and, planned by ADR-0075 (registered in phase 1's PR 2), Pastores de jóvenes (`jovenes`,
+shown in the app as «Jóvenes»). A person belongs to one or more through `ministries`; absent means
+worship. Isolation is two-way and enforced on the server.
+_Avoid_: área, equipo (in Jóvenes an «equipo» is one of the pastor teams that take turns organizing
+the quarterly pastors' meeting, a different thing, not modelled yet)
 
-**Grupo** (de Jóvenes):
+**Grupo** (de Jóvenes; planned, ADR-0075):
 A part of a ministry that is closed to the others: «Otro Nivel», «Invencibles», «Emprendedores». A
 meeting names the groups it belongs to; only their members, the ministry's admins and a super-admin
 see it. A meeting of several groups is one meeting, seen by each of them with its whole team.
 _Avoid_: sub-ministerio, filtro
 
-**Nivel** (`ministryRoles[].level`):
+**Nivel** (`ministryRoles[].level`; planned, phase 1's PR 2):
 What a person may do inside one ministry: `member` (sees their groups' meetings and the joint ones),
 `leader` (also plans their groups), `admin` (plans every group). Worship's level is still `role`, and
 Kids' admin is still `managesMinistries` (ADR-0075).
-_Avoid_: rol (in this app a «rol» is a service's roster)
+_Avoid_: rol for the level in new copy (a «rol» is a service's roster, Spanish `*_role` documents;
+worship's legacy `role` field keeps its form label «Rol en Alabanza»)

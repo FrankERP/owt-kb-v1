@@ -301,3 +301,7 @@ they conflict, this section wins. The code review of PRs 2 and 3 covers them.
 11. **Studio `ministryRoles` items** carry `_type` (the array's object type name) as well as `_key`, so
     the Studio never flags them as invalid items; the validator ignores `_type` and `_key` on read and
     the form strips both before sending.
+12. **Correction to §2 (code review of PR 1):** among worship member routes, only `/api/me/songs`,
+    `/api/me/proposals` and `/api/me/proposals/[id]/messages` call `requireMinistryMember`; the other
+    `/api/me/*` routes (`me`, availability, calendar-feed, notif-prefs, password, photo, push-token,
+    theme) serve the shared roster and stay open to any active member, which fits ADR-0075 decision 1.
