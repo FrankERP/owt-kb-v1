@@ -248,12 +248,13 @@ looks wrong** — several exist to stop a plausible-looking change.
 - **MCP tools register only in `registerAllTools`** (`app/mcp/toolList.ts`): its digest is the
   `toolsVersion` every model-visible tool asks for, and a stale Claude copy gets a refresh note
   (ADR-0069). Guidance that depends on an answer goes in the answer, not the description.
-- **The nine admin write paths** (setlists PUT, roles create, roles PATCH, roles DELETE,
-  copy-instruments, swap, publish-ready, unpublish, the fairness PUT) delegate everything after
+- **The ten admin write paths** (setlists PUT, roles create, roles PATCH, roles DELETE,
+  copy-instruments, swap, publish-ready, unpublish, the fairness PUT, the proposals PATCH) delegate everything after
   authorization to `app/utils/*Commit.ts`; MCP writes go only through them (`apply_schedule`: roles
   create + fairness PUT, ADR-0061; the saved-month editor: PATCH, copy, create, ADR-0066;
   `delete_services`: DELETE, only with the check's echoed list and token, never a past service,
-  ADR-0072; `serviceCommitCallers.test.ts`). The service conversation's writers live in
+  ADR-0072; the proposal tools: proposals PATCH, its planner in peek for the check, ADR-0076;
+  `serviceCommitCallers.test.ts`). The service conversation's writers live in
   `serviceThreadCommit.ts` too, called by its four routes and the MCP conversation tools (ADR-0073);
   Oasis Kids' in `kidsCommit.ts`, called by the four `/api/kids/*` writes and the MCP Kids tools;
   `/api/mcp` buffers SSE so a tool finishes in the handler.

@@ -17,11 +17,12 @@ vi.mock("@/sanity/lib/serverClient", () => ({
 
 import {
   bootstrapLegacyLock,
+  peekOwnedCoordination,
   resolveOwnedCoordination,
   type StoredLock,
   type StoredRole,
 } from "@/app/utils/roleWriteOps";
-import { loadWeekendCoordination } from "@/app/utils/serviceWriteTargets";
+import { loadWeekendCoordination, peekWeekendCoordination } from "@/app/utils/serviceWriteTargets";
 
 const INPUT = {
   roleId: "role-1",
@@ -407,5 +408,66 @@ describe("bootstrap propagation through shared writers", () => {
       failure: { code: "bootstrap_completed_reload" },
     });
     expect(result).not.toHaveProperty("coordination");
+  });
+});
+
+// Admin parity S1 (D4): the read-only check judges a weekend by the writer's plan but never
+// runs the bootstrap maintenance transaction.
+describe("peek coordination never writes", () => {
+  const target = () => ({
+    role: role(),
+    date: INPUT.date,
+    targetKey: INPUT.targetKey,
+    lockId: "roleTarget.sunday_role.2026-08-09",
+  });
+
+  /** A valid owned lock, minted by one real bootstrap, then the transaction count reset. */
+  async function ownedLock(over: Partial<StoredLock> = {}): Promise<void> {
+    onCommit = () => {
+      roleRows = [role()];
+      lockRows = [lock(over)];
+    };
+    await bootstrapLegacyLock(INPUT);
+    onCommit = null;
+    transactionCount = 0;
+  }
+
+  it("reports a legacy lockless weekend as needsBootstrap, with its role, and opens no transaction", async () => {
+    const peek = await peekOwnedCoordination([target()]);
+    expect(peek).toMatchObject({ ok: true, needsBootstrap: true, roles: [{ role: { _id: "role-1" }, lock: null }] });
+
+    const weekend = await peekWeekendCoordination({ roleType: "sunday_role", week: "2026-08-09" });
+    expect(weekend).toMatchObject({
+      ok: true,
+      coordination: { role: { _id: "role-1" }, lock: null, bootstrapped: false, needsBootstrap: true },
+    });
+    expect(transactionFactory).not.toHaveBeenCalled();
+    expect(transactionCount).toBe(0);
+  });
+
+  it("returns the owned lock like the writer when one exists, still without a transaction", async () => {
+    await ownedLock();
+    const weekend = await peekWeekendCoordination({ roleType: "sunday_role", week: "2026-08-09" });
+    const written = await loadWeekendCoordination({ roleType: "sunday_role", week: "2026-08-09" });
+    expect(weekend).toMatchObject({ ok: true, coordination: { needsBootstrap: false } });
+    expect(weekend.ok && written.ok && weekend.coordination.lock).toEqual(written.ok && written.coordination.lock);
+    expect(transactionCount).toBe(0);
+  });
+
+  it("refuses a wrong-owner lock exactly as the writer does", async () => {
+    await ownedLock({ roleId: "role-2" });
+    const peek = await peekOwnedCoordination([target()]);
+    const resolved = await resolveOwnedCoordination([target()]);
+    expect(peek).toEqual(resolved);
+    expect(peek).toMatchObject({ ok: false, failure: { code: "integrity_conflict", details: { detail: "lock_wrong_owner" } } });
+    expect(transactionCount).toBe(0);
+  });
+
+  it("propagates a raw role draft refusal like the writer's loader", async () => {
+    rawRoleRows = [{ _id: "drafts.role-1" }];
+    const weekend = await peekWeekendCoordination({ roleType: "sunday_role", week: "2026-08-09" });
+    const written = await loadWeekendCoordination({ roleType: "sunday_role", week: "2026-08-09" });
+    expect(weekend).toEqual(written);
+    expect(transactionFactory).not.toHaveBeenCalled();
   });
 });

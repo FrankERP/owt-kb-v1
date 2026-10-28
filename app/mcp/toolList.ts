@@ -26,6 +26,7 @@ import { registerCreateService } from "./tools/createService";
 import { registerServiceDeletes } from "./tools/serviceDeletes";
 import { registerServiceMessages } from "./tools/serviceMessages";
 import { registerKids } from "./tools/kids";
+import { registerSetlistProposalReview } from "./tools/setlistProposalReview";
 import { registerProposalCard } from "./apps/proposalCard";
 import { toolListDigest } from "./toolListVersion";
 
@@ -64,6 +65,8 @@ export function registerAllTools(server: McpServer, deps: { version: string }): 
   registerServiceMessages(server);
   // Admin parity phase 3 (S4): Oasis Kids (month, proposal, Sundays, pairs, absences).
   registerKids(server);
+  // Admin parity phase 3 (S1): deciding setlist proposals, through /admin's own writer.
+  registerSetlistProposalReview(server);
   // The card (MCP Apps), at a URI that carries its build's digest. Fixed per deployment, like the tools.
   registerProposalCard(server);
 }
