@@ -6,8 +6,9 @@
 // `normalizeMinistries`, the `managesMinistries` filter of `getMemberAccess`, and
 // the two guard predicates of `authGuards.ts`, over the registry as it stood
 // (worship, kids). The candidate is the real code: raw documents go through
-// `accessFromDoc` — the function `getMemberAccess` returns — so a forgotten
-// projection or an un-normalized field would fail here, not in production.
+// `accessFromDoc` — the function `getMemberAccess` returns — so an un-normalized
+// field would fail here, not in production. (That the fetch PROJECTS every field
+// is memberAccess.test.ts's job.)
 //
 // Do NOT update the oracle to make this pass. If the new code disagrees, the new
 // code changed someone's access.
@@ -41,7 +42,7 @@ const oldManager = (a: ReturnType<typeof oldAccess>, m: string) =>
 const ROLES = ["super-admin", "admin", "content-editor", "member", null, "weird"];
 const RAW_MINISTRIES: unknown[] = [
   undefined, [], ["worship"], ["kids"], ["worship", "kids"], ["worship", "jovenes"], ["jovenes"],
-  ["toString"], "worship", [null], ["kids", "constructor"],
+  ["toString"], "worship", [null], ["kids", "constructor"], ["jovenes", "toString"], ["jovenes", "jovenes"],
 ];
 const RAW_MANAGES: unknown[] = [undefined, [], ["kids"], ["worship"], ["__proto__"]];
 const RAW_ROLES: unknown[] = [
@@ -51,9 +52,10 @@ const RAW_ROLES: unknown[] = [
 ];
 const MINISTRIES: MinistryId[] = ["worship", "kids"];
 
-/** The ONE intended divergence: a stored ["jovenes"] alone read as worship before. */
+/** The ONE intended divergence: a stored value whose only known id is "jovenes"
+ *  read as worship before (old code dropped it and fell back to worship). */
 const divergesOnPurpose = (ministries: unknown) =>
-  Array.isArray(ministries) && ministries.length === 1 && ministries[0] === "jovenes";
+  Array.isArray(ministries) && ministries.includes("jovenes") && ministries.filter(oldIsMinistryId).length === 0;
 
 const rows: { doc: MemberAccessDoc; m: MinistryId }[] = [];
 for (const role of ROLES)

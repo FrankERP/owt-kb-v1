@@ -124,7 +124,10 @@ describe("getMemberAccess", () => {
     });
     const expected = [{ ministry: "jovenes", level: "leader", groups: ["invencibles"] }];
     expect((await getMemberAccess("m4")).ministryRoles).toEqual(expected);
-    expect(String(fetchMock.mock.calls[0][0])).toContain("ministryRoles");
+    const query = String(fetchMock.mock.calls[0][0]);
+    for (const f of ["disabled", "role", "ministries", "managesMinistries", "ministryRoles"]) {
+      expect(query, f).toMatch(new RegExp(`\\b${f}\\b`));
+    }
     expect((await getMemberAccess("m4")).ministryRoles).toEqual(expected);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });

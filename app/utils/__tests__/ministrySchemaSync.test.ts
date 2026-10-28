@@ -2,6 +2,8 @@
 // (ADR-0075). The guard that matters: `ministries` offers ASSIGNABLE ids only,
 // so registering a ministry for READING never lets the Studio store it.
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { teamMembers } from "@/sanity/schemas/worshipTeam";
 import {
   ASSIGNABLE_MINISTRY_IDS,
@@ -19,6 +21,13 @@ type Field = {
 const fields = (teamMembers as unknown as { fields: Field[] }).fields;
 const field = (name: string) => fields.find((f) => f.name === name)!;
 const values = (f: Field) => (f.options?.list ?? []).map((o) => o.value);
+
+describe("app/ministries.ts stays importable by the Studio", () => {
+  it("has no imports — the Studio's browser bundle has no CI build to catch a leak", () => {
+    const src = readFileSync(path.join(process.cwd(), "app/ministries.ts"), "utf8");
+    expect(src.match(/^\s*(import|export\s.*\sfrom)\s/m)).toBeNull();
+  });
+});
 
 describe("teamMembers ministry fields ↔ registry", () => {
   it("`ministries` offers exactly the assignable ministries", () => {

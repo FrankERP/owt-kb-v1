@@ -238,8 +238,9 @@ several exist precisely to stop a plausible-looking change.
 - **A special's `time` (`"HH:mm"`) is display and sort only — never identity.** Identity
   stays `date + normalized service_name` (ADR-0011); two sets on one day need different
   names. `isServiceTime`/`compareServiceTime` (`app/utils/serviceTime.ts`) are the ONLY
-  validator and comparator under `app/**`; the Studio schema mirrors the regex because
-  `sanity/` cannot import `app/`, and `serviceTimeSchemaSync.test.ts` fails if the two
+  validator and comparator under `app/**`; the Studio schema mirrors the regex (a schema
+  may import only an import-free `app/` module — `app/ministries.ts`, `app/mcp/oauth/documentTypes.ts`
+  — because no CI gate builds `/studio`), and `serviceTimeSchemaSync.test.ts` fails if the two
   drift. `time` is never combined with `date` into a `Date`.
   **Same-day sets are created in `/admin` stored mode («+ Nuevo servicio»)**, which keys
   specials by `_id`/`date|name`; the month CREATE flow drafts one special per date on
@@ -760,7 +761,7 @@ pass.
   options (`ministrySchemaSync.test.ts`). The reason is the release order: code older than
   the `jovenes` entry drops the unknown id and falls back to worship, so a stored
   `["jovenes"]` reads as a WORSHIP member there — catalog, setlist mail, calendar feed. The
-  read side therefore reached production (phase 1's PR 2) before `jovenes` became assignable,
+  read side (phase 1's PR 2) therefore reaches production before `jovenes` becomes assignable,
   and that release is never undone — by a git revert, a Vercel instant rollback or promoting
   an older deployment — while anyone holds `"jovenes"`: count
   `*[_type=="teamMembers" && "jovenes" in ministries]` first, and if it is not zero take it off

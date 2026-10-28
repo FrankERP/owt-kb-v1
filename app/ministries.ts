@@ -1,3 +1,9 @@
+// NO IMPORTS, by design: `sanity/schemas/worshipTeam.ts` imports this module,
+// and the embedded Studio (`/studio`) bundles every schema into a browser build
+// that no CI gate builds. A server-only import here would leak into that bundle
+// unseen. Same contract as `app/mcp/oauth/documentTypes.ts`; guarded by
+// `ministrySchemaSync.test.ts`.
+
 /**
  * Code-level ministry registry. Adding a ministry is a code change on
  * purpose: every new ministry brings its own rules and UI anyway.
