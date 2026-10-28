@@ -12,7 +12,7 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MemberForm } from "../admin/MembersPanel";
+import { MemberForm, MinistryScopeBar, resolveMinistryScope } from "../admin/MembersPanel";
 
 afterEach(cleanup);
 
@@ -128,5 +128,32 @@ describe("MemberForm — at least one ministry", () => {
     expect(screen.queryByText("Elige al menos un ministerio.")).toBeNull();
     submit();
     expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ADR-0075, access plan §5 «PR 2, write side closed»: the app READS jovenes, but
+// the form and the scope bar offer only ASSIGNABLE ministries until its write
+// side ships. A pill here would save into a 400; a scope tab would be dead.
+describe("Miembros offers no ministry it cannot store yet (Jóvenes)", () => {
+  it("the form has no Jóvenes pill", () => {
+    renderForm({ ...BASE, ministries: ["worship"] });
+    expect(screen.queryByRole("button", { name: "Jóvenes" })).toBeNull();
+  });
+
+  it("the scope bar has no Jóvenes tab, even with a member who holds it", () => {
+    const members = [
+      { ministries: ["worship"] },
+      { ministries: ["kids"] },
+      { ministries: ["worship", "jovenes"] },
+    ];
+    const { counts, visible } = resolveMinistryScope(members, "all");
+    expect(visible).toBe(true);
+    render(<MinistryScopeBar counts={counts} total={members.length} visible={visible} value="all" onChange={() => {}} />);
+    expect(screen.queryByText("Jóvenes")).toBeNull();
+    expect(screen.getByText("Oasis Kids")).toBeTruthy();
+  });
+
+  it("a Jóvenes-only member does not make the scope bar appear by itself", () => {
+    expect(resolveMinistryScope([{ ministries: ["worship"] }, { ministries: ["jovenes"] }], "all").visible).toBe(false);
   });
 });

@@ -279,7 +279,8 @@ each one owns, and its rules) and `docs/UTILITIES_AND_COMPONENTS.md`. Most are "
 - **Data/logic:** `normalizeText`, `assignedMemberRefsQuery`, `revalidateSongViews`/
   `revalidateServiceViews`, `buildRuns`/`normalizeMedleyTags`, `extractYouTubeId`,
   `computeParticipation`, `summarizeUnfilledSeats`, `paintsDayCard`, `publishVerdict`,
-  `isMemberActive`, `requireActiveSession`/`requireActiveManager`, `wantsNotification` (nothing
+  `isMemberActive`, `requireActiveSession`/`requireActiveManager`, `accessFromDoc`,
+  `isMinistryMember`/`isMinistryManager`, `normalizeMinistryRoles`, `wantsNotification` (nothing
   reads `notifPrefs` directly), `sweepOutbox`, `shell`/`td`/`C` (email palette),
   `serviceLabel`/`serviceIdentity`, `findDuplicates`/`serviceConflicts`,
   `daysUntil`/`formatCountdown`, `MEMBER_TYPE_LABEL`, `isWorshipNight`, `songLeads.ts`
@@ -330,14 +331,18 @@ Roles: `super-admin` > `admin` > `content-editor` > `member`. Gate via `requireA
 some actions are super-admin-only (checked in the route). Impersonation is super-admin-only,
 enforced server-side in `auth.ts`.
 
-**Ministries** (`worship`, `kids` — `app/ministries.ts`) are a SECOND axis, not a role tier:
-`requireMinistryMember(id)`/`requireMinistryManager(id)` (`app/utils/authGuards.ts`); worship
-pages call `requireWorshipPage` (dynamic — ADR-0020).
-- **Isolation is two-way**; only `super-admin` spans both; role never implies ministry,
-  management never implies membership. `/studio` is not ministry-scoped.
+**Ministries** (`worship`, `kids`, `jovenes` — `app/ministries.ts`; ADR-0075) are a SECOND axis,
+not a role tier: `requireMinistryMember(id)`/`requireMinistryManager(id)` (`app/utils/authGuards.ts`,
+built on `ministryAccess.ts` over ONE snapshot, `accessFromDoc`); worship pages call
+`requireWorshipPage` (dynamic — ADR-0020).
+- **Isolation is two-way**; only `super-admin` spans every ministry; role never implies ministry,
+  management never implies membership (in Jóvenes, management is a member's `admin` level in
+  `ministryRoles`). `/studio` is not ministry-scoped.
 - **Absent `ministries` ⇒ worship** (`normalizeMinistries`, `WORSHIP_MEMBER_GROQ_FILTER`);
   explicitly empty is rejected at every write (`validateMinistryWrite`) — a stored `[]` would
-  read back as worship.
+  read back as worship. A `ministryRoles` level counts only for a ministry named in `ministries`.
+- **Readable ≠ writable:** `ASSIGNABLE_MINISTRY_IDS`, not `ALL_MINISTRY_IDS`, gates every write and
+  offer; old code reads a new id as WORSHIP, so never undo its read side while anyone holds it.
 - **"Tipo" (`memberType`) is the ONLY worship eligibility axis** — an empty Tipo is in no seat
   and no pool. Do not reintroduce a second axis (ADR-0029 removed `retiredFrom`). `disabled`
   removes app ACCESS, not schedulability, and `handleEdit` never writes it.
