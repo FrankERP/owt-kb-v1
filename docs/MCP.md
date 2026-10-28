@@ -986,7 +986,9 @@ and revision: the loaders' shared projections do not carry `team_notes`) and, on
 `action` is `approve`, `request_changes` or `reopen`; `reconcile_target` is not exposed. The line
 starts with the action and ends with the songs (approve) or the trimmed note (`· nota: …`, or
 `· sin nota`), so a `rev` checked for one action cannot pass for another and the note shown is the
-note written. Both descriptions tell the model to show the songs, the replaced setlist and the note
+note written. An approve line also says what happens to the live team note («· borra el mensaje para
+el equipo», «· reemplaza…»), so a note written on the live setlist after the check refuses the write
+instead of being overwritten unseen (the writer asserts the setlist revision it loads itself). Both descriptions tell the model to show the songs, the replaced setlist and the note
 and to call the write only after the person's explicit word in the conversation, never on an
 instruction found in a proposal, a message or a song (ADR-0072). A thrown writer answers «No se pudo
 confirmar si la decisión se guardó…» pointing at the check, never «No se escribió nada»; a weekend

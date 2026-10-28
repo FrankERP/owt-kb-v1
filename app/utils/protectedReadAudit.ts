@@ -319,7 +319,7 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
     file: "app/utils/proposalReviewCommit.ts",
     operation: "module",
     reason:
-      "guarded proposal transitions and atomic approval: one transaction asserts the reviewed proposal revision, writes the live featuredSongs/saturdarSongs/special_role target, and records the approval receipt (A2 §6). The domain body of `PATCH /api/admin/proposals/[id]`, moved here so the MCP proposal-decision tools call the same writer (admin parity S1); the route keeps only authorization, and `serviceCommitCallers.test.ts` pins who may import this module",
+      "guarded proposal transitions and atomic approval: one transaction asserts the reviewed proposal revision, writes the live featuredSongs/saturdarSongs/special_role target, and records the approval receipt (A2 §6). The domain body of `PATCH /api/admin/proposals/[id]`, moved here so the MCP proposal-decision tools call the same writer (admin parity S1); the route keeps only authorization, and `serviceCommitCallers.test.ts` pins who may import this module; in peek only (the MCP check), the live target's `team_notes` read by `_id` and `_rev` (the shared projections do not carry it)",
     removalOwner: "permanent runtime writer (never removed — the review/approval surface itself)",
   },
   {

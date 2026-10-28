@@ -184,6 +184,21 @@ describe("check_setlist_proposal_review", () => {
     expect(text).toContain("No hay setlist todavía.");
   });
 
+  it("binds what approving does to the live team note into the line, so a note added after the check refuses", async () => {
+    expect(reviewLine({ action: "approve", label: "domingo 8 nov", songTitles: ["A"], note: "", liveNote: "blank" })).toBe(
+      "Aprobar · domingo 8 nov · 1 canción: A · borra el mensaje para el equipo",
+    );
+    // Checked with no live note…
+    h.planProposalReview.mockResolvedValue({ ok: true, plan: approvePlan({ teamNotes: "", liveTeamNotes: "" }) });
+    const checked = sc(await checkProposalReviewResult({ proposalId: ID, action: "approve" })) as { rev: string; line: string };
+    expect(checked.line).not.toContain("mensaje para el equipo");
+    // …and someone writes one before the confirmation: the re-rendered line differs, the writer is not called.
+    h.planProposalReview.mockResolvedValue({ ok: true, plan: approvePlan({ teamNotes: "", liveTeamNotes: "Nuevo" }) });
+    const out = await reviewProposalResult({ proposalId: ID, action: "approve", rev: checked.rev, line: checked.line }, PRINCIPAL);
+    expect(out.isError).toBe(true);
+    expect(h.reviewProposal).not.toHaveBeenCalled();
+  });
+
   it("names the live note a copied one replaces, and says so when the live note could not be read", async () => {
     h.planProposalReview.mockResolvedValue({ ok: true, plan: approvePlan({ teamNotes: "Nuevo", liveTeamNotes: "Viejo" }) });
     let text = textOf((await checkProposalReviewResult({ proposalId: ID, action: "approve" })) as never);

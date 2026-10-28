@@ -129,20 +129,43 @@ export function proposalSongTitles(doc: Record<string, unknown>, titles: SongTit
   );
 }
 
+export type LiveNoteEffect = "none" | "replace" | "blank" | "unread";
+
+const LIVE_NOTE_SUFFIX: Record<LiveNoteEffect, string> = {
+  none: "",
+  replace: " · reemplaza el mensaje para el equipo",
+  blank: " · borra el mensaje para el equipo",
+  unread: " · mensaje para el equipo sin leer",
+};
+
+/**
+ * What an approval does to the live «Mensaje para el equipo». It is part of the approve line, so a
+ * note added to the live setlist between the check and the write changes the line and refuses the
+ * write instead of being overwritten unseen (the writer asserts the setlist revision it loads itself).
+ */
+export function liveNoteEffect(plan: ProposalReviewPlan): LiveNoteEffect {
+  if (plan.kind !== "approve") return "none";
+  if (plan.liveTeamNotes === null) return "unread";
+  if (!plan.liveTeamNotes || plan.liveTeamNotes === plan.teamNotes) return "none";
+  return plan.teamNotes ? "replace" : "blank";
+}
+
 /**
  * The one-line summary the write re-renders and compares (D5): the action verb first, the service,
- * then the songs (approve) or the note in full (request changes / reopen).
+ * then the songs (approve) or the note in full (request changes / reopen); an approve ends
+ * with what it does to the live team note.
  */
 export function reviewLine(input: {
   action: ReviewAction;
   label: string;
   songTitles: readonly string[];
   note: string;
+  liveNote?: LiveNoteEffect;
 }): string {
   const head = `${VERB[input.action]} · ${input.label}`;
   if (input.action === "approve") {
     const n = input.songTitles.length;
-    return `${head} · ${n} ${n === 1 ? "canción" : "canciones"}: ${input.songTitles.join(", ")}`;
+    return `${head} · ${n} ${n === 1 ? "canción" : "canciones"}: ${input.songTitles.join(", ")}${LIVE_NOTE_SUFFIX[input.liveNote ?? "none"]}`;
   }
   return `${head} · ${input.note ? `nota: ${input.note}` : "sin nota"}`;
 }
@@ -302,6 +325,7 @@ export async function checkProposalReviewResult(
       label,
       songTitles: proposalSongTitles(plan.doc, titles),
       note: adminNotes,
+      liveNote: liveNoteEffect(plan),
     });
     const status = typeof plan.doc.status === "string" ? (STATUS_WORD[plan.doc.status] ?? plan.doc.status) : "sin estado";
     const pushCount = proposalReviewRecipients(plan.doc).length;
@@ -323,7 +347,7 @@ export async function checkProposalReviewResult(
       if (plan.liveTeamNotes === null) {
         lines.push(
           plan.teamNotes
-            ? `Mensaje para el equipo que se copia: «${plan.teamNotes}» (reemplaza el actual, que no se pudo leer).`
+            ? `Mensaje para el equipo que se copia: «${plan.teamNotes}» (reemplaza el actual, si hay uno; no se pudo leer).`
             : "La propuesta no trae mensaje para el equipo: el mensaje actual del setlist, si hay uno, quedaría VACÍO " +
               "(no se pudo leer; revisa otra vez para verlo).",
         );
@@ -437,7 +461,13 @@ export async function reviewProposalResult(
       const titles = await loadSongTitles(songIds(plan.doc.songs));
       if (!titles.ok) return admissionRefusal("invalid_request", "titles_unreadable", TITLES_UNREADABLE);
       const label = labelOf(plan);
-      const line = reviewLine({ action: args.action, label, songTitles: proposalSongTitles(plan.doc, titles), note: adminNotes });
+      const line = reviewLine({
+        action: args.action,
+        label,
+        songTitles: proposalSongTitles(plan.doc, titles),
+        note: adminNotes,
+        liveNote: liveNoteEffect(plan),
+      });
       if (!sameReviewLine(line, args.line)) return admissionRefusal("stale_revision", "line_changed", LINE_CHANGED);
 
       const outcome = await callDomain(() =>

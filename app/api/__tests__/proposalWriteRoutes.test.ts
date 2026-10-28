@@ -1637,6 +1637,9 @@ describe("proposalReviewCommit — the same writer the route calls, and its read
     store.setlists.push({ _id: "legacy-setlist", _rev: "set-rev-1", _type: "featuredSongs", week: WEEK, songs: [], team_notes: "Traigan agua" });
     const weekend = await planProposalReview(PROPOSAL_ID, { action: "approve", rev: null, adminNotes: "" }, "peek");
     expect(weekend).toMatchObject({ ok: true, plan: { kind: "approve", liveTeamNotes: "Traigan agua" } });
+    // The fake's setlist branch hands out whole documents, so the value alone would pass on a read off the
+    // loaded record: pin the query itself, on the revision the transaction asserts.
+    expect(operationalFetch).toHaveBeenCalledWith(expect.stringContaining("team_notes"), { id: "legacy-setlist", rev: "set-rev-1" });
 
     // The write path adds no read: it overwrites the note whatever it holds.
     operationalFetch.mockClear();
