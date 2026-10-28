@@ -1,11 +1,29 @@
 import { describe, it, expect } from "vitest";
-import { MINISTRIES, ALL_MINISTRY_IDS, isMinistryId, normalizeMinistries, validateMinistryWrite } from "@/app/ministries";
+import {
+  MINISTRIES,
+  ALL_MINISTRY_IDS,
+  ASSIGNABLE_MINISTRY_IDS,
+  isMinistryId,
+  normalizeMinistries,
+  validateMinistryWrite,
+} from "@/app/ministries";
 
 describe("ministry registry", () => {
-  it("registers worship and kids with Spanish display names", () => {
-    expect(MINISTRIES.worship).toEqual({ id: "worship", name: "Alabanza" });
-    expect(MINISTRIES.kids).toEqual({ id: "kids", name: "Oasis Kids" });
-    expect(ALL_MINISTRY_IDS).toEqual(["worship", "kids"]);
+  it("registers worship, kids and jovenes with Spanish display names", () => {
+    expect(MINISTRIES.worship).toEqual({ id: "worship", name: "Alabanza", groups: [] });
+    expect(MINISTRIES.kids).toEqual({ id: "kids", name: "Oasis Kids", groups: [] });
+    expect(MINISTRIES.jovenes.name).toBe("Jóvenes");
+    expect(MINISTRIES.jovenes.groups.map((g) => g.id)).toEqual(["otro-nivel", "invencibles", "emprendedores"]);
+    expect(ALL_MINISTRY_IDS).toEqual(["worship", "kids", "jovenes"]);
+  });
+  it("can READ jovenes but not WRITE it yet (ADR-0075: reads ship before writes)", () => {
+    // Code older than the jovenes entry reads a stored ["jovenes"] as WORSHIP, and
+    // preview writes the production dataset — so jovenes becomes assignable only
+    // in the PR that ships its write side, after this one is in production.
+    expect(ASSIGNABLE_MINISTRY_IDS).toEqual(["worship", "kids"]);
+    expect(validateMinistryWrite("ministries", ["jovenes"])).toBe("Invalid ministry");
+    expect(validateMinistryWrite("ministries", ["worship", "jovenes"])).toBe("Invalid ministry");
+    expect(normalizeMinistries(["jovenes"])).toEqual(["jovenes"]);
   });
   it("narrows ids", () => {
     expect(isMinistryId("kids")).toBe(true);

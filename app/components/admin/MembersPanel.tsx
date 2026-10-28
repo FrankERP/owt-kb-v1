@@ -30,6 +30,7 @@ import SegmentedControl from "../ui/SegmentedControl";
 import { PlusIcon } from "../ui/icons";
 import {
   ALL_MINISTRY_IDS,
+  ASSIGNABLE_MINISTRY_IDS,
   MANAGEABLE_MINISTRY_IDS,
   MINISTRIES,
   normalizeMinistries,
@@ -137,7 +138,9 @@ export function groupMembersByLetter<T extends { member_name: string; alias?: st
 /** Which ministry's people the Miembros list is showing. */
 export type MinistryScope = MinistryId | "all";
 
-const MINISTRY_SCOPES: MinistryScope[] = [...ALL_MINISTRY_IDS, "all"];
+// ASSIGNABLE, not ALL: a ministry the app can read but not yet store (ADR-0075)
+// gets no scope tab and no pill until its write side ships.
+const MINISTRY_SCOPES: MinistryScope[] = [...ASSIGNABLE_MINISTRY_IDS, "all"];
 
 const MINISTRY_SCOPE_LABEL = (s: MinistryScope) => (s === "all" ? "Todos" : MINISTRIES[s].name);
 
@@ -170,7 +173,7 @@ export function resolveMinistryScope<T extends { ministries?: string[] }>(
   for (const m of members) {
     for (const id of normalizeMinistries(m.ministries)) counts[id] += 1;
   }
-  const visible = ALL_MINISTRY_IDS.filter((id) => counts[id] > 0).length > 1;
+  const visible = ASSIGNABLE_MINISTRY_IDS.filter((id) => counts[id] > 0).length > 1;
   const scoped = visible && scope !== "all"
     ? members.filter((m) => normalizeMinistries(m.ministries).includes(scope))
     : members;
@@ -507,7 +510,7 @@ export function MemberForm({
       <div className="space-y-2">
         <label className="font-label text-xs uppercase tracking-widest text-mono-500">Ministerios</label>
         <div className="flex flex-wrap gap-2">
-          {ALL_MINISTRY_IDS.map((id) => {
+          {ASSIGNABLE_MINISTRY_IDS.map((id) => {
             const active = ministries.includes(id);
             return (
               <Button key={id} variant="pill" active={active} onClick={() => toggleMinistry(id)}>

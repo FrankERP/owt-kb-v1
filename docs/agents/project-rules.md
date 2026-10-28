@@ -238,8 +238,9 @@ several exist precisely to stop a plausible-looking change.
 - **A special's `time` (`"HH:mm"`) is display and sort only — never identity.** Identity
   stays `date + normalized service_name` (ADR-0011); two sets on one day need different
   names. `isServiceTime`/`compareServiceTime` (`app/utils/serviceTime.ts`) are the ONLY
-  validator and comparator under `app/**`; the Studio schema mirrors the regex because
-  `sanity/` cannot import `app/`, and `serviceTimeSchemaSync.test.ts` fails if the two
+  validator and comparator under `app/**`; the Studio schema mirrors the regex (a schema
+  may import only an import-free `app/` module — `app/ministries.ts`, `app/mcp/oauth/documentTypes.ts`
+  — because no CI gate builds `/studio`), and `serviceTimeSchemaSync.test.ts` fails if the two
   drift. `time` is never combined with `date` into a `Date`.
   **Same-day sets are created in `/admin` stored mode («+ Nuevo servicio»)**, which keys
   specials by `_id`/`date|name`; the month CREATE flow drafts one special per date on
@@ -749,10 +750,37 @@ Roles: `super-admin` > `admin` > `content-editor` > `member`. Gate via
 `requireActiveManager`; some actions are super-admin-only (checked in the route).
 Impersonation is super-admin-only, enforced server-side in `auth.ts`.
 
-**Ministries** (`worship`, `kids` — `app/ministries.ts`) are a SECOND axis, not a
-role tier. Gate with `requireMinistryMember(id)` / `requireMinistryManager(id)`
+**Ministries** (`worship`, `kids`, `jovenes` — `app/ministries.ts`) are a SECOND axis,
+not a role tier. Gate with `requireMinistryMember(id)` / `requireMinistryManager(id)`
 (`app/utils/authGuards.ts`); worship pages call `requireWorshipPage`
-(`app/utils/worshipPageGate.ts`, which makes them dynamic — ADR-0020).
+(`app/utils/worshipPageGate.ts`, which makes them dynamic — ADR-0020). Since ADR-0075
+(2026-10-27) both guards are thin wrappers over the pure `isMinistryMember` /
+`isMinistryManager` (`app/utils/ministryAccess.ts`), which read ONE snapshot produced by
+`accessFromDoc` (`app/utils/memberAccess.ts`, the normalization `getMemberAccess` caches).
+`ministryAccess.equivalence.test.ts` holds them to the pre-ADR-0075 predicates, copied
+verbatim as its oracle, for every existing member shape — never edit the oracle to make it
+pass.
+- **Two permission shapes, on purpose (ADR-0075).** Worship's level stays `role` and Kids'
+  admin stays `managesMinistries` (`requireActiveManager` reads `role` from 35 files). A
+  LEVELED ministry (`LEVELED_MINISTRY_IDS`, today Jóvenes) keeps `ministryRoles`
+  (`{_key = ministry, ministry, level: member|leader|admin, groups}`), read only through
+  `normalizeMinistryRoles`: an item for a ministry the person is not in, an unknown level, or
+  two items for one ministry fail closed to plain membership. A Jóvenes admin is a member with
+  level `admin`; `managesMinistries` never grants a leveled ministry. `levelIn`/`groupsIn`
+  answer `null`/`[]` for a non-member and have no super-admin arm — a group guard adds it.
+  Groups (`MINISTRIES.jovenes.groups`) are a security boundary like the ministry; no route
+  guards by group yet (phase 3 adds it with the first Jóvenes document).
+- **Readable ≠ writable (`ASSIGNABLE_MINISTRY_IDS`).** Registering a ministry in `MINISTRIES`
+  makes a stored id mean something; only `ASSIGNABLE_MINISTRY_IDS` makes it storable — it feeds
+  `validateMinistryWrite("ministries")`, the Miembros pills and scope bar, and the Studio
+  options (`ministrySchemaSync.test.ts`). The reason is the release order: code older than
+  the `jovenes` entry drops the unknown id and falls back to worship, so a stored
+  `["jovenes"]` reads as a WORSHIP member there — catalog, setlist mail, calendar feed. The
+  read side (phase 1's PR 2) therefore reaches production before `jovenes` becomes assignable,
+  and that release is never undone — by a git revert, a Vercel instant rollback or promoting
+  an older deployment — while anyone holds `"jovenes"`: count
+  `*[_type=="teamMembers" && "jovenes" in ministries]` first, and if it is not zero take it off
+  those members (a production write: dry run, then Frank's consent).
 - **Isolation is two-way:** a kids-only member reaches no worship surface, and a
   worship `admin`/`content-editor` gets nothing in kids. Only `super-admin` spans
   both. Role never implies ministry; management never implies membership. That
