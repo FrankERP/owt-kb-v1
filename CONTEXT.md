@@ -34,7 +34,7 @@ _Avoid_: presence line (in Spanish copy), regla de presencia (the rule, not its 
 
 **Ministerio** (`MinistryId`, `app/ministries.ts`):
 A team of the church with its own plans, rules, notices and admins: Alabanza (`worship`), Oasis Kids
-(`kids`), and, planned by ADR-0075 (registered in phase 1's PR 2), Pastores de jóvenes (`jovenes`,
+(`kids`), and, since ADR-0075 (readable since phase 1's PR 2, assignable since PR 3), Pastores de jóvenes (`jovenes`,
 shown in the app as «Jóvenes»). A person belongs to one or more through `ministries`; absent means
 worship. Isolation is two-way and enforced on the server.
 _Avoid_: área, equipo (in Jóvenes an «equipo» is one of the pastor teams that take turns organizing

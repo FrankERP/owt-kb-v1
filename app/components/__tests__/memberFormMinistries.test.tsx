@@ -12,7 +12,7 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MemberForm, MinistryScopeBar, resolveMinistryScope } from "../admin/MembersPanel";
+import { MemberForm, MinistryScopeBar, ministryScopeIds, resolveMinistryScope } from "../admin/MembersPanel";
 
 afterEach(cleanup);
 
@@ -131,29 +131,124 @@ describe("MemberForm — at least one ministry", () => {
   });
 });
 
-// ADR-0075, access plan §5 «PR 2, write side closed»: the app READS jovenes, but
-// the form and the scope bar offer only ASSIGNABLE ministries until its write
-// side ships. A pill here would save into a 400; a scope tab would be dead.
-describe("Miembros offers no ministry it cannot store yet (Jóvenes)", () => {
-  it("the form has no Jóvenes pill", () => {
-    renderForm({ ...BASE, ministries: ["worship"] });
-    expect(screen.queryByRole("button", { name: "Jóvenes" })).toBeNull();
+// ADR-0075, access plan §3.4 and §8: Jóvenes is assignable, with a level and
+// groups. The level travels WITH `ministries` (the route judges it against them),
+// seeded through the read's normalizer and sent without `_key`/`_type`.
+describe("MemberForm — the Jóvenes block", () => {
+  const STORED_ADMIN = {
+    ...BASE,
+    ministries: ["worship", "jovenes"],
+    ministryRoles: [{ _key: "jovenes", _type: "ministryRole", ministry: "jovenes", level: "admin", groups: ["emprendedores"] }],
+  };
+  const radio = (name: string) => screen.getByRole("radio", { name });
+
+  it("labels the role as worship's own", () => {
+    renderForm(BASE);
+    expect(screen.getByLabelText("Rol en Alabanza")).toBeTruthy();
   });
 
-  it("the scope bar has no Jóvenes tab, even with a member who holds it", () => {
-    const members = [
-      { ministries: ["worship"] },
-      { ministries: ["kids"] },
-      { ministries: ["worship", "jovenes"] },
-    ];
-    const { counts, visible } = resolveMinistryScope(members, "all");
+  it("shows no block until Jóvenes is ticked; ticking it sends a plain member level", () => {
+    const { onSubmit, submit } = renderForm(BASE);
+    expect(screen.queryByRole("radiogroup", { name: "Nivel en Jóvenes" })).toBeNull();
+    fireEvent.click(toggle("Jóvenes"));
+    expect(screen.getByRole("radiogroup", { name: "Nivel en Jóvenes" })).toBeTruthy();
+    submit();
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({
+      ministries: ["worship", "jovenes"],
+      ministryRoles: [{ ministry: "jovenes", level: "member", groups: [] }],
+    });
+  });
+
+  it("seeds level and groups from storage and sends them back WITHOUT _key/_type", () => {
+    const { onSubmit, submit } = renderForm(STORED_ADMIN);
+    expect(radio("Admin").getAttribute("aria-checked")).toBe("true");
+    expect(toggle("Emprendedores").getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(toggle("Otro Nivel"));
+    submit();
+    expect(onSubmit.mock.calls[0][0].ministryRoles).toEqual([
+      { ministry: "jovenes", level: "admin", groups: ["emprendedores", "otro-nivel"] },
+    ]);
+  });
+
+  it("touching only the level still sends ministries with it", () => {
+    const { onSubmit, submit } = renderForm(STORED_ADMIN);
+    fireEvent.click(radio("Miembro"));
+    submit();
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({
+      ministries: ["worship", "jovenes"],
+      ministryRoles: [{ ministry: "jovenes", level: "member", groups: ["emprendedores"] }],
+    });
+  });
+
+  it("touching another ministry re-sends the stored level intact", () => {
+    const { onSubmit, submit } = renderForm(STORED_ADMIN);
+    fireEvent.click(toggle("Oasis Kids"));
+    submit();
+    expect(onSubmit.mock.calls[0][0].ministryRoles).toEqual([{ ministry: "jovenes", level: "admin", groups: ["emprendedores"] }]);
+  });
+
+  it("unticking Jóvenes drops its item, so the person can leave it", () => {
+    const { onSubmit, submit } = renderForm(STORED_ADMIN);
+    fireEvent.click(toggle("Jóvenes"));
+    submit();
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ ministries: ["worship"], ministryRoles: [] });
+  });
+
+  it("an edit that touches no ministry sends neither ministries nor ministryRoles", () => {
+    const { onSubmit, submit } = renderForm(STORED_ADMIN);
+    fireEvent.change(screen.getByPlaceholderText("Nombre corto o apodo (opcional)"), { target: { value: "Noe" } });
+    submit();
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty("ministries");
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty("ministryRoles");
+  });
+
+  it("a leader with no group is stopped in the form", () => {
+    const { onSubmit, submit } = renderForm(BASE);
+    fireEvent.click(toggle("Jóvenes"));
+    fireEvent.click(radio("Líder"));
+    submit();
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByText("Un líder necesita al menos un grupo.")).toBeTruthy();
+  });
+
+  it("a level stored without membership is not shown (the read ignores it)", () => {
+    renderForm({ ...STORED_ADMIN, ministries: ["worship"] });
+    fireEvent.click(toggle("Jóvenes"));
+    expect(radio("Miembro").getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("a new member sends ministryRoles too (empty when Jóvenes is not ticked)", () => {
+    const { onSubmit, submit } = renderForm(undefined);
+    submit();
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ ministries: ["worship"], ministryRoles: [] });
+  });
+});
+
+describe("the scope bar offers Jóvenes to the super-admin only (access plan §8.5)", () => {
+  const members = [
+    { ministries: ["worship"] },
+    { ministries: ["kids"] },
+    { ministries: ["worship", "jovenes"] },
+  ];
+
+  it("a worship admin's bar has no Jóvenes tab, even with a member who holds it", () => {
+    const { counts, visible } = resolveMinistryScope(members, "all", ministryScopeIds(false));
     expect(visible).toBe(true);
     render(<MinistryScopeBar counts={counts} total={members.length} visible={visible} value="all" onChange={() => {}} />);
     expect(screen.queryByText("Jóvenes")).toBeNull();
     expect(screen.getByText("Oasis Kids")).toBeTruthy();
   });
 
-  it("a Jóvenes-only member does not make the scope bar appear by itself", () => {
+  it("a Jóvenes member alone does not make a worship admin's bar appear", () => {
     expect(resolveMinistryScope([{ ministries: ["worship"] }, { ministries: ["jovenes"] }], "all").visible).toBe(false);
+  });
+
+  it("the super-admin's bar has a Jóvenes tab, and it scopes the list", () => {
+    const ids = ministryScopeIds(true);
+    const { counts, visible, scoped } = resolveMinistryScope(members, "jovenes", ids);
+    expect(visible).toBe(true);
+    expect(scoped).toEqual([{ ministries: ["worship", "jovenes"] }]);
+    render(<MinistryScopeBar counts={counts} total={members.length} visible={visible} value="jovenes" onChange={() => {}} scopeIds={ids} />);
+    expect(screen.getByText("Jóvenes")).toBeTruthy();
   });
 });

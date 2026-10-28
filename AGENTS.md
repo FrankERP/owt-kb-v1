@@ -348,6 +348,9 @@ built on `ministryAccess.ts` over ONE snapshot, `accessFromDoc`); worship pages 
   read back as worship. A `ministryRoles` level counts only for a ministry named in `ministries`.
 - **Readable ≠ writable:** `ASSIGNABLE_MINISTRY_IDS`, not `ALL_MINISTRY_IDS`, gates every write and
   offer; old code reads a new id as WORSHIP, so never undo its read side while anyone holds it.
+- **A worship role needs worship:** `admin`/`content-editor` outside Alabanza is refused by the members
+  API (on change, pinned with `ifRevisionId`, 409) and the Studio (`worshipRoleWithoutWorship`) —
+  `requireActiveManager` reads `role` alone. A `ministryRoles` write carries `ministries` with it.
 - **"Tipo" (`memberType`) is the ONLY worship eligibility axis** — an empty Tipo is in no seat
   and no pool. Do not reintroduce a second axis (ADR-0029 removed `retiredFrom`). `disabled`
   removes app ACCESS, not schedulability, and `handleEdit` never writes it.

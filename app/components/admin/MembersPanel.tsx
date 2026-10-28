@@ -31,10 +31,15 @@ import { PlusIcon } from "../ui/icons";
 import {
   ALL_MINISTRY_IDS,
   ASSIGNABLE_MINISTRY_IDS,
+  LEVELED_MINISTRY_IDS,
   MANAGEABLE_MINISTRY_IDS,
   MINISTRIES,
+  MINISTRY_LEVELS,
   normalizeMinistries,
+  normalizeMinistryRoles,
   type MinistryId,
+  type MinistryLevel,
+  type MinistryRole,
 } from "@/app/ministries";
 import { interpretMemberDeleteResponse } from "@/app/utils/memberDelete";
 import { MEMBER_TYPES as MEMBER_TYPE_IDS, type MemberType } from "@/app/utils/memberTypes";
@@ -60,6 +65,10 @@ interface Member {
    *  `normalizeMinistries`, never raw (see `MemberForm`). */
   ministries?: string[];
   managesMinistries?: string[];
+  /** Level and groups in a leveled ministry (Jóvenes, ADR-0075), as stored.
+   *  Only the super-admin's list carries it; read it through
+   *  `normalizeMinistryRoles`, never raw. */
+  ministryRoles?: unknown;
   /** Stored as-is — absent means enabled (same contract as `isMemberActive`). */
   disabled?: boolean;
 }
@@ -92,6 +101,13 @@ interface MemberFormData {
    */
   ministries?: string[];
   managesMinistries?: string[];
+  /**
+   * Sent whenever `ministries` is (the route judges a level against the
+   * ministries of the same request): one item per ticked leveled ministry,
+   * without the stored `_key`/`_type`. Unticking Jóvenes therefore drops its
+   * item, and the route stores what is left.
+   */
+  ministryRoles?: MinistryRole[];
 }
 
 // The table's own abbreviations — deliberately not `MEMBER_TYPE_LABEL`'s full
@@ -138,9 +154,16 @@ export function groupMembersByLetter<T extends { member_name: string; alias?: st
 /** Which ministry's people the Miembros list is showing. */
 export type MinistryScope = MinistryId | "all";
 
-// ASSIGNABLE, not ALL: a ministry the app can read but not yet store (ADR-0075)
-// gets no scope tab and no pill until its write side ships.
-const MINISTRY_SCOPES: MinistryScope[] = [...ASSIGNABLE_MINISTRY_IDS, "all"];
+/**
+ * The ministries the Miembros scope bar may offer. ASSIGNABLE, not ALL: a
+ * ministry the app can read but not yet store (ADR-0075) gets no tab until its
+ * write side ships. A LEVELED ministry (Jóvenes) is a tab for the super-admin
+ * only: a worship admin's list can hold someone who is also in Jóvenes, and a
+ * «Jóvenes» tab there would be another ministry's noise (access plan §8.5).
+ */
+export function ministryScopeIds(superAdmin: boolean): MinistryId[] {
+  return superAdmin ? ASSIGNABLE_MINISTRY_IDS : ASSIGNABLE_MINISTRY_IDS.filter((id) => !LEVELED_MINISTRY_IDS.includes(id));
+}
 
 const MINISTRY_SCOPE_LABEL = (s: MinistryScope) => (s === "all" ? "Todos" : MINISTRIES[s].name);
 
@@ -168,12 +191,13 @@ const displayName = (m: Member) => m.alias?.trim() || m.member_name;
 export function resolveMinistryScope<T extends { ministries?: string[] }>(
   members: T[],
   scope: MinistryScope,
+  scopeIds: readonly MinistryId[] = ministryScopeIds(false),
 ): { counts: Record<MinistryId, number>; visible: boolean; scoped: T[] } {
   const counts = Object.fromEntries(ALL_MINISTRY_IDS.map((id) => [id, 0])) as Record<MinistryId, number>;
   for (const m of members) {
     for (const id of normalizeMinistries(m.ministries)) counts[id] += 1;
   }
-  const visible = ASSIGNABLE_MINISTRY_IDS.filter((id) => counts[id] > 0).length > 1;
+  const visible = scopeIds.filter((id) => counts[id] > 0).length > 1;
   const scoped = visible && scope !== "all"
     ? members.filter((m) => normalizeMinistries(m.ministries).includes(scope))
     : members;
@@ -186,12 +210,15 @@ export function MinistryScopeBar({
   visible,
   value,
   onChange,
+  scopeIds = ministryScopeIds(false),
 }: {
   counts: Record<MinistryId, number>;
   total: number;
   visible: boolean;
   value: MinistryScope;
   onChange: (next: MinistryScope) => void;
+  /** Pass the same list `resolveMinistryScope` got. */
+  scopeIds?: readonly MinistryId[];
 }) {
   if (!visible) return null;
   return (
@@ -203,7 +230,7 @@ export function MinistryScopeBar({
       className="brand-search-console self-start"
       value={value}
       onChange={onChange}
-      options={MINISTRY_SCOPES.map((s) => ({
+      options={[...scopeIds, "all" as const].map((s) => ({
         value: s,
         label: (
           <>
@@ -225,6 +252,8 @@ export function MinistryScopeBar({
  * overwrites the payload.
  */
 type ModalKind = "add" | "edit" | "password" | "delete";
+
+const MINISTRY_LEVEL_LABEL: Record<MinistryLevel, string> = { member: "Miembro", leader: "Líder", admin: "Admin" };
 
 const ROLES: { value: OWTRole; label: string }[] = [
   { value: "super-admin", label: "Super Admin" },
@@ -394,8 +423,35 @@ export function MemberForm({
   // Same discipline as `touchedPrefFields`: an edit that never touches a
   // ministry row must PATCH neither key.
   const [touchedMinistryFields, setTouchedMinistryFields] =
-    useState<ReadonlySet<"ministries" | "managesMinistries">>(() => new Set());
+    useState<ReadonlySet<"ministries" | "managesMinistries" | "ministryRoles">>(() => new Set());
   const [ministryError, setMinistryError] = useState<string | null>(null);
+  // Level and groups per LEVELED ministry (Jóvenes, ADR-0075), seeded through the
+  // read's own normalizer — so what the form shows is what the guards see, and a
+  // stored `_key`/`_type` never travels back. Kept while the ministry is
+  // unticked, so re-ticking restores it; the submit sends ticked ones only.
+  const [levels, setLevels] = useState<Partial<Record<MinistryId, { level: MinistryLevel; groups: string[] }>>>(() =>
+    Object.fromEntries(
+      normalizeMinistryRoles(initial?.ministryRoles, normalizeMinistries(initial?.ministries))
+        .map((r) => [r.ministry, { level: r.level, groups: r.groups }]),
+    ),
+  );
+  const NO_LEVEL = { level: "member" as const, groups: [] };
+  const levelOf = (id: MinistryId) => levels[id] ?? NO_LEVEL;
+  const editLevel = (
+    id: MinistryId,
+    next: (cur: { level: MinistryLevel; groups: string[] }) => Partial<{ level: MinistryLevel; groups: string[] }>,
+  ) => {
+    setLevels((prev) => {
+      const cur = prev[id] ?? NO_LEVEL;
+      return { ...prev, [id]: { ...cur, ...next(cur) } };
+    });
+    setTouchedMinistryFields((prev) => new Set(prev).add("ministryRoles"));
+    setMinistryError(null);
+  };
+  const toggleGroup = (id: MinistryId, group: string) =>
+    editLevel(id, ({ groups }) => ({
+      groups: groups.includes(group) ? groups.filter((g) => g !== group) : [...groups, group],
+    }));
 
   const toggleType = (value: string) => {
     setMemberType(prev =>
@@ -434,6 +490,11 @@ export function MemberForm({
         // would submit `[]`, which reads back as `["worship"]`. The route
         // rejects both too — this is the friendly half, not the enforcement.
         if (ministries.length === 0) { setMinistryError("Elige al menos un ministerio."); return; }
+        const tickedLeveled = LEVELED_MINISTRY_IDS.filter((id) => ministries.includes(id));
+        if (tickedLeveled.some((id) => levelOf(id).level === "leader" && levelOf(id).groups.length === 0)) {
+          setMinistryError("Un líder necesita al menos un grupo.");
+          return;
+        }
         setMinistryError(null);
         // Only an edit carries preferences, and only the fields actually touched
         // this session — never the full resolved snapshot. That snapshot can be
@@ -445,8 +506,13 @@ export function MemberForm({
         // On CREATE both arrays go unconditionally — there is no stored value to
         // clobber, and a Kids volunteer must be created kids-only rather than
         // existing as a worship member until someone remembers a second edit.
-        const touchedMinistries: Partial<Pick<MemberFormData, "ministries" | "managesMinistries">> = {};
-        if (!initial || touchedMinistryFields.has("ministries")) touchedMinistries.ministries = ministries;
+        // `ministryRoles` travels WITH `ministries`, always: the route judges a
+        // level against the ministries of the same request.
+        const touchedMinistries: Partial<Pick<MemberFormData, "ministries" | "managesMinistries" | "ministryRoles">> = {};
+        if (!initial || touchedMinistryFields.has("ministries") || touchedMinistryFields.has("ministryRoles")) {
+          touchedMinistries.ministries = ministries;
+          touchedMinistries.ministryRoles = tickedLeveled.map((id) => ({ ministry: id, ...levelOf(id) }));
+        }
         if (!initial || touchedMinistryFields.has("managesMinistries")) touchedMinistries.managesMinistries = managesMinistries;
         onSubmit({
           member_name: name, alias, email, role, memberType,
@@ -470,7 +536,7 @@ export function MemberForm({
         <input className={inputCls} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="correo@ejemplo.com" />
       </div>
       <div className="space-y-1">
-        <Select id="member-role" label="Rol" value={role} onChange={(e) => setRole(e.target.value as OWTRole)}>
+        <Select id="member-role" label="Rol en Alabanza" value={role} onChange={(e) => setRole(e.target.value as OWTRole)}>
           {ROLES.map((r) => (
             <option key={r.value} value={r.value}>{r.label}</option>
           ))}
@@ -523,6 +589,30 @@ export function MemberForm({
           <p className="text-sm text-negative-fg bg-negative-surface-deep/20 border border-negative-surface rounded-lg px-3 py-2">{ministryError}</p>
         )}
       </div>
+      {LEVELED_MINISTRY_IDS.filter((id) => ministries.includes(id)).map((id) => {
+        const { level, groups } = levelOf(id);
+        return (
+          <div key={id} className="space-y-2">
+            <label className="font-label text-xs uppercase tracking-widest text-mono-500">{MINISTRIES[id].name}</label>
+            <SegmentedControl
+              label={`Nivel en ${MINISTRIES[id].name}`}
+              value={level}
+              onChange={(next) => editLevel(id, () => ({ level: next }))}
+              options={MINISTRY_LEVELS.map((l) => ({ value: l, label: MINISTRY_LEVEL_LABEL[l] }))}
+            />
+            <div className="flex flex-wrap gap-2">
+              {MINISTRIES[id].groups.map((g) => (
+                <Button key={g.id} variant="pill" active={groups.includes(g.id)} onClick={() => toggleGroup(id, g.id)}>
+                  {g.name}
+                </Button>
+              ))}
+            </div>
+            <p className="font-body text-xs text-mono-500">
+              Admin administra {MINISTRIES[id].name}; un líder necesita al menos un grupo. No da acceso a Alabanza.
+            </p>
+          </div>
+        );
+      })}
       <div className="space-y-2">
         <label className="font-label text-xs uppercase tracking-widest text-mono-500">Administra ministerios</label>
         <div className="flex flex-wrap gap-2">
@@ -615,6 +705,18 @@ function PasswordForm({
   );
 }
 
+/** The route's own words when it sent any (the worship-role 400, the stale-edit
+ *  409), else the generic line — a refusal Frank can act on, not «Error». */
+async function serverError(res: Response, fallback: string): Promise<string> {
+  try {
+    const body: unknown = await res.json();
+    const error = typeof body === "object" && body !== null ? (body as { error?: unknown }).error : undefined;
+    return typeof error === "string" && error.trim() ? error : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 // ─── The panel ────────────────────────────────────────────────────────────────
 export default function MembersPanel({ role }: { role: OWTRole }) {
   const { update } = useSession();
@@ -673,9 +775,10 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
   // Ministry scope first, so the type/role filter and the Fuse index below both
   // work on the visible ministry only — searching inside "Oasis Kids" searches
   // Kids members, not the whole church.
+  const scopeIds = useMemo(() => ministryScopeIds(role === "super-admin"), [role]);
   const ministry = useMemo(
-    () => resolveMinistryScope(members, ministryScope),
-    [members, ministryScope],
+    () => resolveMinistryScope(members, ministryScope, scopeIds),
+    [members, ministryScope, scopeIds],
   );
 
   // Category filter — independent of the search query.
@@ -756,17 +859,17 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
       // without them, a Kids volunteer normalizes to `["worship"]` and holds the
       // whole song catalog, schedule, tags and authors until someone remembers a
       // second edit — with no signal to the admin that it happened.
-      const { member_name, alias, email, role: memberRole, memberType, ministries, managesMinistries, instruments } = data;
+      const { member_name, alias, email, role: memberRole, memberType, ministries, managesMinistries, ministryRoles, instruments } = data;
       const res = await fetch("/api/admin/members", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          member_name, alias, email, role: memberRole, memberType, ministries, managesMinistries,
+          member_name, alias, email, role: memberRole, memberType, ministries, managesMinistries, ministryRoles,
           ...(instruments !== undefined ? { instruments } : {}),
         }),
       });
       if (res.ok) { setModalOpen(false); setModalError(null); fetchMembers(); showToast("Miembro agregado."); }
-      else setModalError("Error al agregar miembro.");
+      else setModalError(await serverError(res, "Error al agregar miembro."));
     } catch {
       setModalError("Error de conexión.");
     } finally {
@@ -788,7 +891,7 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
         body: JSON.stringify({ ...rest, ...(emailPrefs ?? {}) }),
       });
       if (res.ok) { setModalOpen(false); setModalError(null); fetchMembers(); showToast("Miembro actualizado."); }
-      else setModalError("Error al actualizar.");
+      else setModalError(await serverError(res, "Error al actualizar."));
     } catch {
       setModalError("Error de conexión.");
     } finally {
@@ -962,6 +1065,7 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
           visible={ministry.visible}
           value={ministryScope}
           onChange={setMinistryScope}
+          scopeIds={scopeIds}
         />
 
         {/* Row 1: the search as a hairline beside the «Filtros» pill (ADR-0070's
