@@ -31,11 +31,11 @@ const EMAIL_KINDS = Object.keys(NOTIFY_PREF_FIELD) as NotifyKind[];
 
 const MEMBER_CHANGED_MESSAGE = "Alguien más cambió a esta persona; recarga.";
 
-/** Same membership, read through the storage contract (absent = worship), any order. */
+/** Same membership, read through the storage contract (absent = worship), as SETS. */
 function sameMinistries(a: unknown, b: unknown): boolean {
-  const x = normalizeMinistries(a);
-  const y = normalizeMinistries(b);
-  return x.length === y.length && x.every((m) => y.includes(m));
+  const x = new Set(normalizeMinistries(a));
+  const y = new Set(normalizeMinistries(b));
+  return x.size === y.size && [...x].every((m) => y.has(m));
 }
 
 export async function PATCH(

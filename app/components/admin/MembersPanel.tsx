@@ -435,16 +435,23 @@ export function MemberForm({
         .map((r) => [r.ministry, { level: r.level, groups: r.groups }]),
     ),
   );
-  const levelOf = (id: MinistryId) => levels[id] ?? { level: "member" as const, groups: [] };
-  const editLevel = (id: MinistryId, next: Partial<{ level: MinistryLevel; groups: string[] }>) => {
-    setLevels((prev) => ({ ...prev, [id]: { ...levelOf(id), ...next } }));
+  const NO_LEVEL = { level: "member" as const, groups: [] };
+  const levelOf = (id: MinistryId) => levels[id] ?? NO_LEVEL;
+  const editLevel = (
+    id: MinistryId,
+    next: (cur: { level: MinistryLevel; groups: string[] }) => Partial<{ level: MinistryLevel; groups: string[] }>,
+  ) => {
+    setLevels((prev) => {
+      const cur = prev[id] ?? NO_LEVEL;
+      return { ...prev, [id]: { ...cur, ...next(cur) } };
+    });
     setTouchedMinistryFields((prev) => new Set(prev).add("ministryRoles"));
     setMinistryError(null);
   };
-  const toggleGroup = (id: MinistryId, group: string) => {
-    const { groups } = levelOf(id);
-    editLevel(id, { groups: groups.includes(group) ? groups.filter((g) => g !== group) : [...groups, group] });
-  };
+  const toggleGroup = (id: MinistryId, group: string) =>
+    editLevel(id, ({ groups }) => ({
+      groups: groups.includes(group) ? groups.filter((g) => g !== group) : [...groups, group],
+    }));
 
   const toggleType = (value: string) => {
     setMemberType(prev =>
@@ -590,7 +597,7 @@ export function MemberForm({
             <SegmentedControl
               label={`Nivel en ${MINISTRIES[id].name}`}
               value={level}
-              onChange={(next) => editLevel(id, { level: next })}
+              onChange={(next) => editLevel(id, () => ({ level: next }))}
               options={MINISTRY_LEVELS.map((l) => ({ value: l, label: MINISTRY_LEVEL_LABEL[l] }))}
             />
             <div className="flex flex-wrap gap-2">

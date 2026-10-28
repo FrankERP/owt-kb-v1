@@ -333,6 +333,14 @@ describe("members routes — ministryRoles (Jóvenes level and groups)", () => {
       expect(h.revisions).toEqual([]);
     });
 
+    it("a repeated ministry cannot make a change look like none (review finding)", async () => {
+      // Stored worship admin; ["kids","kids"] has the stored list's LENGTH but no worship.
+      stored({ role: "admin", ministries: ["worship", "kids"] });
+      const res = await PATCH(req({ role: "admin", ministries: ["kids", "kids"] }), { params });
+      expect(res.status).toBe(400);
+      expect(h.commit).not.toHaveBeenCalled();
+    });
+
     it("a member that does not exist answers 404, not a write", async () => {
       h.storedFetch.mockResolvedValue(null);
       const res = await PATCH(req({ role: "admin" }), { params });
@@ -356,6 +364,12 @@ describe("members routes — ministryRoles (Jóvenes level and groups)", () => {
 
     it("refuses ministryRoles without ministries", async () => {
       const res = await POST(req({ ...base, ministryRoles: [admin] }));
+      expect(res.status).toBe(400);
+      expect(h.create).not.toHaveBeenCalled();
+    });
+
+    it("refuses a role the app does not know, as PATCH does", async () => {
+      const res = await POST(req({ ...base, role: "owner" }));
       expect(res.status).toBe(400);
       expect(h.create).not.toHaveBeenCalled();
     });

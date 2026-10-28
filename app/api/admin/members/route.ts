@@ -13,6 +13,8 @@ import {
 import { adminMembersQuery } from "@/app/utils/serviceReadQueries";
 import { parseMemberInstruments } from "@/app/components/admin/seatModel";
 
+const VALID_ROLES = ["super-admin", "admin", "content-editor", "member"];
+
 // Reading the member list is needed by the Servicios/Disponibilidad panels (admin-accessible).
 // Creating/editing members stays super-admin only (Miembros section).
 
@@ -59,6 +61,11 @@ export async function POST(req: NextRequest) {
 
   if (!member_name?.trim() || !email?.trim()) {
     return NextResponse.json({ error: "name and email required" }, { status: 400 });
+  }
+  // The same four roles PATCH accepts, so the worship-role rule below judges a
+  // role the app knows.
+  if (role !== undefined && !VALID_ROLES.includes(role)) {
+    return NextResponse.json({ error: "Invalid role" }, { status: 400 });
   }
 
   // The SAME validator PATCH uses, so create and edit cannot drift: an

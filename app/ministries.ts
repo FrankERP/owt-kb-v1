@@ -157,6 +157,10 @@ export function validateMinistryWrite(
   if (!Array.isArray(value)) return "Invalid ministry";
   const allowed = field === "ministries" ? ASSIGNABLE_MINISTRY_IDS : MANAGEABLE_MINISTRY_IDS;
   if (!value.every((m): m is MinistryId => allowed.includes(m as MinistryId))) return "Invalid ministry";
+  // A repeated id is never meant, and the members PATCH compares a request's
+  // ministries with the stored ones to decide whether the worship-role rule
+  // applies — a duplicate must not be able to make a change look like none.
+  if (new Set(value).size !== value.length) return "Ministerio repetido.";
   if (field === "ministries" && value.length === 0) return "Elige al menos un ministerio.";
   return null;
 }

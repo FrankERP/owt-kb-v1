@@ -25,6 +25,10 @@ describe("ministry registry", () => {
     expect(validateMinistryWrite("ministries", ["worship", "jovenes"])).toBeNull();
     expect(normalizeMinistries(["jovenes"])).toEqual(["jovenes"]);
   });
+  it("refuses a repeated id in either field", () => {
+    expect(validateMinistryWrite("ministries", ["kids", "kids"])).toBe("Ministerio repetido.");
+    expect(validateMinistryWrite("managesMinistries", ["kids", "kids"])).toBe("Ministerio repetido.");
+  });
   it("narrows ids", () => {
     expect(isMinistryId("kids")).toBe(true);
     expect(isMinistryId("worship")).toBe(true);
