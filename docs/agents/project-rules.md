@@ -477,6 +477,14 @@ several exist precisely to stop a plausible-looking change.
   asserted and the weekend lock bootstrap reported (`peekWeekendCoordination`/`peekOwnedCoordination`)
   instead of committed, so the check never writes. Never reuse the writing loaders in a read-only
   tool: `loadWeekendCoordination` commits `bootstrapLegacyLock` on a legacy weekend role.
+  The song library's writer is `songSaveCommit.ts` (admin parity phase 3, ADR-0077):
+  `POST /api/content/posts`, `PATCH /api/content/posts/[id]` and the authors POST call it without
+  options, as before; the MCP's `save_song_edits` and `create_song` call it with options (an
+  `ifRevisionId`, a token-derived id, and the new artists created in the song's own transaction).
+  The chat never sends a whole array: `applySongEdits` (`songEdits.ts`) applies its edits by parts
+  to the freshly read song, and a lyrics edit needs `lyricsGate` (the stored body round-trips
+  losslessly through the editor's text form). `/admin` stays last-writer-wins (no `ifRevisionId` on
+  the route): a page loaded before a chat save overwrites it when saved.
 - **The MCP proposal editor: the server judges, the card only shows** (ADR-0062). The card
   (`mcp-app/proposal-card/`) holds a list of edits, never a board; every check and save replays the
   whole list from the stored proposal through the planner's own gate. Only `editorBoard.ts` calls

@@ -257,6 +257,8 @@ looks wrong** — several exist to stop a plausible-looking change.
   `serviceCommitCallers.test.ts`). The service conversation's writers live in
   `serviceThreadCommit.ts` too, called by its four routes and the MCP conversation tools (ADR-0073);
   Oasis Kids' in `kidsCommit.ts`, called by the four `/api/kids/*` writes and the MCP Kids tools;
+  the song library's in `songSaveCommit.ts`, called by the song and author routes and the MCP song
+  tools (edits by parts, a lossless lyrics gate, `ifRevisionId`, a token-keyed create; ADR-0077);
   `/api/mcp` buffers SSE so a tool finishes in the handler.
 - **The MCP proposal editor: the server judges, the card only shows** (ADR-0062). Every check and
   save replays the whole edit list through the planner's gate in `editorBoard.ts` only; a saved edit

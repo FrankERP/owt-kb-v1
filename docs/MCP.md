@@ -149,7 +149,10 @@ five more, thirty-nine in all, registered last: `get_kids_month`, `generate_kids
 `save_kids_sundays`, `save_kids_pair` and `set_kids_absences` (see [Oasis Kids](#oasis-kids-admin-parity-phase-3)). Deciding
 setlist proposals (phase 3, S1) adds two more, forty-one in all, registered last:
 `check_setlist_proposal_review` and `review_setlist_proposal` (see
-[Deciding a setlist proposal](#deciding-a-setlist-proposal-admin-parity-phase-3)). Every tool is
+[Deciding a setlist proposal](#deciding-a-setlist-proposal-admin-parity-phase-3)). Creating and
+editing songs (phase 3, S3) adds four more, forty-five in all, registered last: `check_song_edits`,
+`save_song_edits`, `check_new_song` and `create_song` (see
+[Creating and editing songs](#creating-and-editing-songs-admin-parity-phase-3)). Every tool is
 registered the same way — one file per tool in `app/mcp/tools/`, exporting a
 `register<Tool>(server, deps?)` function that `registerAllTools` (`app/mcp/toolList.ts`) calls,
 the writes after the reads; `app/api/mcp/route.ts` runs it inside its handler init. Every
@@ -1038,6 +1041,42 @@ exactly as the same `/admin` write does; the saved-service save's inline upserts
 are delivered by layers 1 and 3 ([NOTIFICATIONS.md](NOTIFICATIONS.md#the-shape-of-it)). The tools
 report all of it as queued (I9).
 
+### Creating and editing songs (admin parity, phase 3)
+
+What «Nueva canción» and «Editar canción» do, from the chat, through the same writer:
+`POST /api/content/posts`, `PATCH /api/content/posts/[id]` and `POST /api/content/authors` now
+authorize and call `app/utils/songSaveCommit.ts`, and so do the write tools
+(`app/mcp/tools/songEdits.ts`). Decision record:
+[ADR-0077](adr/0077-songs-are-edited-from-the-chat-by-parts-through-admins-writer.md); plan:
+`docs/superpowers/plans/2026-10-27-owt-mcp-admin-parity-f3b-song-save.md`. Song writes notify nobody,
+from either surface. The writes refuse before any read without a principal; nothing is recorded as
+the author of a song edit, as in `/admin`.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `get_song {full: true}` | the read's own selector plus `full` | Adds the song's `rev`, `lyricsText` (the lyrics in the editor's text form: «# » heading, `**bold**`, `*italic*`), `lyricsEditable` and `charts [{chartKey, key, content}]`, which the chat copies passages from. Without `full` the payload is unchanged. `full` is MCP-only (the in-app assistant's schema refuses it, ADR-0060 amended). Read-only |
+| `check_song_edits` | `{songId, edits[≤30]}` | Applies the edits by parts to the FRESH song (`applySongEdits`): `set` (title, key, bpm, timeSig, the two URLs; `""` clears all but the title), `lyrics {replace, with, all?, nth?}`, `lyricsAll`, `chart {chartKey, …}`, `chartAll`, `addChart {key, content}`, `removeChart`, `addTag`/`removeTag` (existing tags only), `authors {names}` (the whole list; an unknown name creates the artist), `addLink`/`removeLink`, `addTutorial`/`removeTutorial`. Answers the before/after of ONLY what changes, rendered from the writer's own normalized patch (`songChangeLines`), plus `rev` and a token. Warns about ADR-0018 (a chart hides the lyrics) and a pending Studio draft. Read-only |
+| `save_song_edits` | `{songId, rev, edits, token}` | Verifies the token (`mcp-song-edits|`, over the song, `rev` and the edits), re-reads, refuses a different `_rev`, re-applies the edits and calls `patchSong` under `ifRevisionId`; a 409 is «La canción cambió». Destructive (I14) |
+| `check_new_song` | `{title, artists?, key?, bpm?, timeSig?, lyrics?, charts?, tags?, links?, musicalReferenceUrl?, lyricsVideoUrl?}` | The song as it would be created (the writer's own `buildSongCreate`), songs with the same title (reported, not refused) and a token valid 30 minutes. A slug another song has is refused. Read-only |
+| `create_song` | the same arguments plus `token` | Verifies the token (`mcp-song-create|`, with its issue time); the id is `post-mcp-` + 24 hex of it. An existing id answers «Ya estaba creada»; otherwise the slug is re-checked and `createSong` writes the new artists and the song in ONE transaction (`createIfNotExists` each). Destructive (I14) |
+
+**Passages.** A passage must occur exactly once at its turn (edits apply in order), unless the edit
+says `all: true` or `nth: k` (1-based, counted left to right without overlap). A lyrics edit needs
+`lyricsEditable` (`lyricsGate`: the stored body equals `textToBody(bodyToLyrics(body))` ignoring
+keys, and is NFC); otherwise every lyrics edit, `lyricsAll` included, is refused and the rest still
+work. Keys are English notation («Sol» is refused with the hint «Sol = G»). Chat text is
+NFC-normalized and stripped of `\r`; URLs and labels are trimmed.
+
+**Unknown outcomes.** A thrown save answers «No se pudo confirmar si el cambio se guardó» and says to
+read the song with `get_song {full: true}` before checking again (a passage already applied would
+otherwise be applied twice). A thrown create says to repeat `create_song` with the same token, which
+answers «Ya estaba creada» if it landed.
+
+**Proof.** `songEdits.test.ts` (the pure edits and the gate), `songSaveCommit.test.ts` (the chat's
+transaction), `contentPostsWriteRoute.test.ts` (the routes, unchanged, plus the URL clear through the
+real patch serializer), `songChange.test.ts`, `songTokens.test.ts`, the tools' `songEdits.test.ts`,
+`songTools.test.ts` (`full`), `adminChatViews.test.ts` (the assistant never sees it).
+
 ### Admin-surface gates (I15)
 
 I15 says every write refuses at least what its admin counterpart refuses. The counterpart is the
@@ -1123,6 +1162,21 @@ mode.
 | R4 | The retarget panel (`reconcile_target`) | **structural**: the schema's `action` enum leaves it out |
 | R5 | The confirmation the panel's button implies | **declared narrowing** (no data effect): the descriptions' rule, show and wait for the person's word (ADR-0072) |
 | R-server | The route's own refusals (not found, wrong source status, a drifted target, not a shared proposal, a stale rev) | **inherited**, worded by the tool |
+
+**`save_song_edits` / `create_song`**: «Editar canción» and «Nueva canción», against
+`PATCH /api/content/posts/[id]` and `POST /api/content/posts`.
+
+| # | Gate | Disposition |
+|---|---|---|
+| G1 | Title required | **mirror** (`set` refuses clearing it; `check_new_song` requires it) and **inherited** |
+| G2 | Only `http(s)` URLs (references, links, tutorials) | **mirror**, then **inherited** (`isSafeHttpUrl`) |
+| G3 | A blank link or tutorial row is dropped; a row with a label and no URL is refused | **mirror (behaviour)**: the writer's own `normalizeLinkRows`; a stored row it refuses blocks a link edit unless the same call removes it |
+| G4 | A chart with no content is refused; chart `_key`s must not collide | **inherited** for content; **structural** for keys (the chat never sends a key for a new chart, and existing charts keep theirs) |
+| G5 | Tags are picked from the existing list | **mirror**: an unknown tag is refused with the list |
+| G6 | Artists are created on the fly by name | **mirror (behaviour)**, inside the song's own transaction instead of a separate call first |
+| G7 | The key field takes any text | **declared narrowing, stricter**: the chat refuses a key the app cannot transpose |
+| G8 | The editors send whole fields | **declared narrowing** (harmless): the chat sends only the fields its edits touch; the writer is the same |
+| G9 | Last writer wins | **declared narrowing, stricter**: the chat writes under `ifRevisionId` (D10, below) |
 
 ### Stored state
 
@@ -1376,6 +1430,10 @@ Measured at implementation time (steps 1 and 9):
 - Adding any new route rehashes Turbopack's shared chunks, so **every existing function's trace
   shifted by ≈+90 KB** too — this is Turbopack build behavior, not something the new dependencies
   themselves cause.
+- **`get_song {full: true}`** (S3), measured on the production dataset 2026-10-28 (147 songs): the
+  longest lyrics are ≈1.9 K characters of text (92 blocks), and no song has a chord chart yet, so
+  `full` adds ≈2 KB at most today. A chart or a lyric the chat writes is capped by the tools' schema
+  at 20 000 characters.
 - **The per-deployment total on Vercel (Function Storage impact) was not measured.** Vercel's API
   does not expose a per-deployment total, and step 13 (the production release) did not surface
   one either — the three build-measured numbers above are the only size evidence this project
@@ -1392,7 +1450,15 @@ A few things that look like bugs at first glance and are not:
   calls `searchSongsResult`, `getSongResult`, `listServicesResult` and `getServiceResult` in
   process, through `app/utils/adminChatServer.ts`, instead of going through this connector — so a
   change to a read tool's payload reaches the assistant too (its views in `adminChatViews.ts` trim
-  what it does not need). The assistant never calls a write tool.
+  what it does not need). The assistant never calls a write tool, and its `get_song` schema has no
+  `full` (ADR-0077).
+
+- **`/admin` can overwrite a song edit made from the chat.** «Editar canción» is last-writer-wins:
+  it fills its form from the song page as loaded, so a page opened before a chat save and saved after
+  it writes its whole form back over the chat's edit (a URL the chat set can be cleared again).
+  Publishing a pending Studio draft of the song does the same; `check_song_edits` warns when a draft
+  exists. The chat itself never writes blind (`ifRevisionId`). Adding a revision check to the route
+  needs a conflict screen in the editors (ADR-0077).
 
 - **The consent page streams.** `/oauth/authorize` lives under `app/(client)/`, which has its own
   `loading.tsx` — so Next streams the route rather than blocking on it. A concrete consequence:

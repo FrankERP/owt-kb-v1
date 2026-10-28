@@ -39,4 +39,6 @@ export const DELIVERY_CAPABLE_IMPORTS: readonly string[] = [
   "kidsCommit",
   // Admin parity phase 3 (S1): the proposal-decision writer, extracted from its route.
   "proposalReviewCommit",
+  // Admin parity phase 3 (S3): the song writer, extracted from /admin's song and author routes.
+  "songSaveCommit",
 ];

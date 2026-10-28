@@ -16,9 +16,23 @@ export const CHAT_PLAY_HISTORY_LIMIT = 12;
 /** Longest lyrics or chart text handed to the model in one call, in characters. */
 export const CHAT_LYRICS_MAX_CHARS = 15_000;
 
-/** `get_song` without its rehearsal mixes (audio data the assistant cannot play) and with a bounded history. */
+/**
+ * `get_song` without its rehearsal mixes (audio data the assistant cannot play) and with a bounded history.
+ * The MCP's `full` fields (admin parity phase 3, S3) are dropped by name too: the assistant's schema has
+ * no `full`, and it must never see a writer's `rev` or uncapped lyrics and charts (its own lyrics read
+ * is capped, ADR-0060).
+ */
 export function chatSongView(payload: GetSongPayload): Record<string, unknown> {
-  const { rehearsalMixes: _mixes, playHistory, ...rest } = payload;
+  const {
+    rehearsalMixes: _mixes,
+    playHistory,
+    rev: _rev,
+    lyricsText: _lyricsText,
+    lyricsEditable: _lyricsEditable,
+    charts: _charts,
+    songId: _songId,
+    ...rest
+  } = payload as GetSongPayload & Record<string, unknown>;
   return {
     ...rest,
     playHistory: playHistory.slice(0, CHAT_PLAY_HISTORY_LIMIT),
