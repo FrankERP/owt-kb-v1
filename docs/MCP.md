@@ -974,12 +974,13 @@ writer: `PATCH /api/admin/proposals/[id]` now authorizes and calls `reviewPropos
 [ADR-0075](adr/0075-setlist-proposals-are-decided-from-the-chat-through-one-planner-in-two-modes.md);
 plan: `docs/superpowers/plans/2026-10-27-owt-mcp-admin-parity-f3a-proposal-review.md`. «Rechazar» is
 «Solicitar cambios»: `/admin` has no reject action. The acting member is the bearer's
-(`principalOf(ctx).sub`, recorded as `approvedBy`), never an argument; no principal refuses before
-any read.
+(`principalOf(ctx).sub`, recorded as `approvedBy`), never an argument; the write refuses before any
+read without a principal (the check, which writes nothing, needs none).
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `check_setlist_proposal_review` | `{proposalId, action, note?}` | Runs the writer's own planner in **peek** (`planProposalReview(…, "peek")`): the same parse, load, drift, receipt and retry rules, readiness and target, with the proposal's `_rev` reported instead of asserted and a legacy weekend lock's bootstrap reported instead of committed, so it never writes. Answers what the decision would do: for `approve` the songs in order with their keys, the live setlist it REPLACES, the team note it copies (none blanks the live one) and, on a worship night, the song leaders kept; who is told; or why it cannot. Its last text line is «Argumentos para review_setlist_proposal: {proposalId, action, rev, line, note}». Read-only |
+| `check_setlist_proposal_review` | `{proposalId, action, note?}` | Runs the writer's own planner in **peek** (`planProposalReview(…, "peek")`; the arguments are parsed by the tool's strict schema, the writer's request parser runs only in the write): the same load, drift, receipt and retry rules, readiness and target, with the proposal's `_rev` reported instead of asserted and a legacy weekend lock's bootstrap reported instead of committed, so it never writes. Answers what the decision would do: for `approve` the songs in order with their keys, the live setlist it REPLACES, the team note it copies and the live one it replaces or blanks (read by id
+and revision: the loaders' shared projections do not carry `team_notes`) and, on a worship night, the song leaders kept; who is told; or why it cannot. Its last text line is «Argumentos para review_setlist_proposal: {proposalId, action, rev, line, note}». Read-only |
 | `review_setlist_proposal` | `{proposalId, action, rev, line, note?}` | Re-renders the line from a fresh peek and refuses («La propuesta cambió») when it differs, then calls `reviewProposal`, which asserts `rev` in the transaction. A repeat of a decision already written writes nothing and says «ya estaba». Destructive (I14) |
 
 `action` is `approve`, `request_changes` or `reopen`; `reconcile_target` is not exposed. The line
@@ -995,7 +996,8 @@ check again and repeat it.
 **Who is told** (the forecast, from `app/mcp/writes/reports.ts`): approving a published service
 with songs queues the setlist notice (`setlistNoticeEligible`, the rule `setlistUpsert` itself
 calls); its audience follows ADR-0054 from the `before` the flush will use: the pending notice's,
-when one is waiting (the outbox keeps the first `before` of a window), else the live setlist. An
+when one is waiting (the outbox keeps the first `before` of a window; its rows are normalized as the
+flush normalizes them, `normalizeSnapshotRows`), else the live setlist. An
 empty one means «Setlist listo» to the WHOLE worship team; otherwise «El setlist cambió» to the
 participants plus the console team, and nothing when the songs do not change. Unpublished or past
 services: no email (a service dated today can cross midnight inside the window, so it is worded
@@ -1025,7 +1027,7 @@ Confirmed from the code at `963cd736` (P3 plan, § «Notification audiences»):
 | `set_pastor_message` | the same push AND email to the Leads, only when the message appears on an empty field of a published service | — | an edit or a clear |
 | `edit_service_message`, `set_team_message` | — | — | everything |
 | `save_kids_sundays`, `save_kids_pair`, `set_kids_absences` | — | — | everything (Kids sends nothing, as `/kids/admin`) |
-| `review_setlist_proposal` | push «Propuesta aprobada» / «Cambios solicitados» / «Propuesta reabierta» to the proposal's lead and contributors (`notifyProposalReview`, `after()`, as `/admin`) | on `approve` of a published service with songs, dated today or later: the `setlist` notice, audience per ADR-0054 from the stored `before` (the whole worship team when it is empty) | any email from `request_changes` / `reopen` |
+| `review_setlist_proposal` | push «Propuesta aprobada» / «Cambios solicitados» / «Propuesta reabierta» to the proposal's lead and contributors (`notifyProposalReview`, awaited after the commit, delivery fire-and-forget, as `/admin`) | on `approve` of a published service with songs, dated today or later: the `setlist` notice, audience per ADR-0054 from the stored `before` (the whole worship team when it is empty) | any email from `request_changes` / `reopen` |
 
 All of these pass the downstream filters: device tokens and push preferences, `EMAIL_ALLOWLIST`,
 and `wantsNotification`. Any outbox upsert through the deferred path also triggers the derated

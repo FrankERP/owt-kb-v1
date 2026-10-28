@@ -27,11 +27,14 @@ Two things made a naïve chat path wrong, both found in the plan review:
   session, the content-editor refusal and the JSON parse. The existing route tests passed unchanged
   and a route-vs-commit parity test pins the bodies.
 - **One planner, two modes.** `planProposalReview(id, request, "write" | "peek")` is the writer's whole
-  prefix: parse, load, drift, receipt and retry rules, readiness, target. `reviewProposal` runs it in
+  prefix after the request parse: load, drift, receipt and retry rules, readiness, target (the check's
+  arguments are parsed by its own strict schema). `reviewProposal` runs it in
   `"write"`; the chat's check runs it in `"peek"`, which reports the proposal's `_rev` instead of
   asserting it and uses `peekWeekendCoordination` / `peekOwnedCoordination`, which report
   `needsBootstrap` instead of running the bootstrap. Peek is a separate exported function, so the
-  swap, unpublish and copy callers keep the result type they narrow on.
+  swap, unpublish and copy callers keep the result type they narrow on. Peek alone also reads the live
+  setlist's `team_notes` by id and revision (the loaders' shared projections do not carry it), so the
+  check can say which note an approval replaces or blanks; the write adds no read.
 - Two tools: `check_setlist_proposal_review` (read-only) answers what the decision would do (songs,
   the live setlist it replaces, the team note it copies, who is told) plus `rev` and a one-line
   `line`; `review_setlist_proposal` takes both, re-renders the line from a fresh peek and refuses a

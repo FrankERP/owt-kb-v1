@@ -4,6 +4,7 @@
 
 import type { NotifyKind } from "./notifyPrefs";
 import type { OutboxSongRow } from "./outboxNotice";
+import { sortedLeadIds } from "./songLeads";
 
 export type LineKind =
   | "assigned" | "removed" | "roleChanged"
@@ -211,4 +212,34 @@ export function classifyProposalMessages(i: {
     after: [],
     notes: bodies.join("\n\n"),
   };
+}
+
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object";
+
+/**
+ * Stored `beforeSongs` rows carry no `group` at all for a standalone song
+ * (the schema field is a plain number), while `songRowsFrom` produces an
+ * explicit `null`. Normalising here keeps the two comparable — `undefined`
+ * would never equal `null` and every snapshot would read as changed.
+ *
+ * `leads` is KEPT, or the stored side would always compare leaderless against a
+ * live side that has leaders: a no-op save of a worship night would email, and
+ * clearing every leader would not. Exported for the MCP proposal check, which forecasts the flush
+ * from a pending notice's stored `before` (`app/mcp/reads/pendingSetlistNotice.ts`).
+ */
+export function normalizeSnapshotRows(rows: unknown): OutboxSongRow[] {
+  if (!Array.isArray(rows)) return [];
+  return rows.filter(isObj).map((r, i) => {
+    // Sorted and de-duplicated exactly like `songRowsFrom`, through the same
+    // helper, and ABSENT when empty, so a snapshot stored before leaders
+    // existed compares unchanged.
+    const leads = sortedLeadIds(r.leads);
+    return {
+      _key: typeof r._key === "string" ? r._key : `s${i}`,
+      ref: typeof r.ref === "string" ? r.ref : "",
+      key: typeof r.key === "string" ? r.key : "",
+      group: typeof r.group === "number" ? r.group : null,
+      ...(leads.length ? { leads } : {}),
+    };
+  });
 }

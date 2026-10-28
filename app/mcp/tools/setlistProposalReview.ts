@@ -320,8 +320,19 @@ export async function checkProposalReviewResult(
       lines.push(`Se publicaría este setlist (${count(n, "canción", "canciones")}): ${songList(plan.songs, titles)}.`);
       const replaced = songList(live, titles);
       lines.push(replaced ? `Reemplaza el setlist actual: ${replaced}.` : "No hay setlist todavía.");
-      if (plan.teamNotes) {
-        lines.push(`Mensaje para el equipo que se copia: «${plan.teamNotes}».`);
+      if (plan.liveTeamNotes === null) {
+        lines.push(
+          plan.teamNotes
+            ? `Mensaje para el equipo que se copia: «${plan.teamNotes}» (reemplaza el actual, que no se pudo leer).`
+            : "La propuesta no trae mensaje para el equipo: el mensaje actual del setlist, si hay uno, quedaría VACÍO " +
+              "(no se pudo leer; revisa otra vez para verlo).",
+        );
+      } else if (plan.teamNotes) {
+        lines.push(
+          plan.liveTeamNotes && plan.liveTeamNotes !== plan.teamNotes
+            ? `Mensaje para el equipo que se copia: «${plan.teamNotes}» (reemplaza «${plan.liveTeamNotes}»).`
+            : `Mensaje para el equipo que se copia: «${plan.teamNotes}».`,
+        );
       } else if (plan.liveTeamNotes) {
         lines.push(
           `La propuesta no trae mensaje para el equipo: el mensaje actual del setlist («${plan.liveTeamNotes}») quedaría VACÍO.`,

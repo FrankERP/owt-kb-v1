@@ -36,6 +36,7 @@
 import "server-only";
 
 import { writeClient } from "@/sanity/lib/serverClient";
+import { operationalClient } from "@/sanity/lib/operationalClient";
 import {
   notifyProposalReview,
   proposalReviewRecipients,
@@ -150,8 +151,12 @@ export interface ApprovePlan extends PlanBase {
   kind: "approve";
   approval: ApprovalInput;
   teamNotes: string;
-  /** The live setlist's «Mensaje para el equipo» the approval overwrites (an empty proposal note blanks it). */
-  liveTeamNotes: string;
+  /**
+   * The live setlist's «Mensaje para el equipo» the approval overwrites (an empty proposal note blanks
+   * it). Read only in PEEK, pinned to the revision the plan loaded (`peekLiveTeamNotes`); `null` in
+   * write mode, and in peek when that revision moved before the read.
+   */
+  liveTeamNotes: string | null;
   /** The stored `setlist_song` items the approval writes, leaders carried over on a worship night. */
   songs: Record<string, unknown>[];
   hasSongs: boolean;
@@ -176,9 +181,20 @@ export type ProposalReviewPlan = ReplayPlan | ApprovePlan | TransitionPlan;
 
 export type ProposalReviewPlanLoad = { ok: true; plan: ProposalReviewPlan } | Refusal;
 
-function stringField(doc: unknown, field: string): string {
-  const value = doc && typeof doc === "object" ? (doc as Record<string, unknown>)[field] : undefined;
-  return typeof value === "string" ? value : "";
+/**
+ * The live setlist's `team_notes`, for the check only. The loaders' shared projections
+ * (`SETLIST_PROJECTION`, `ROLE_PROJECTION`) do not carry `team_notes`, so it is read HERE, pinned to the
+ * revision the plan just loaded — as the team-note writer does (`serviceThreadCommit.ts`). The write
+ * path never reads it: the approval overwrites it whatever it holds, so write mode adds no read.
+ */
+async function peekLiveTeamNotes(mode: ProposalReviewMode, write: SetlistWrite): Promise<string | null> {
+  if (mode !== "peek") return null;
+  if (write.kind === "create") return "";
+  const row = await operationalClient.fetch<{ notes?: string | null } | null>(
+    `*[_id == $id && _rev == $rev][0]{ "notes": team_notes }`,
+    { id: write.id, rev: write.rev },
+  );
+  return row ? (typeof row.notes === "string" ? row.notes : "") : null;
 }
 
 function roleTypeOf(target: CanonicalTarget): RoleTypeName {
@@ -366,7 +382,7 @@ async function planApproval(
         kind: "approve",
         approval,
         teamNotes,
-        liveTeamNotes: stringField(specialRole, "team_notes"),
+        liveTeamNotes: await peekLiveTeamNotes(mode, { kind: "patch", id: specialRole._id, rev: specialRole._rev }),
         songs,
         hasSongs: songRows.length > 0,
         // The special role IS the live setlist target: its revision assertion both
@@ -436,8 +452,7 @@ async function planApproval(
       needsBootstrap: coordination.needsBootstrap,
       approval,
       teamNotes,
-      liveTeamNotes:
-        typeof targetLoad.target.record?.team_notes === "string" ? targetLoad.target.record.team_notes : "",
+      liveTeamNotes: await peekLiveTeamNotes(mode, setlistWrite),
       songs,
       hasSongs: songRows.length > 0,
       setlistId,

@@ -265,6 +265,12 @@ function canonicalRead(query: string, params: Record<string, unknown>): unknown 
       (p) => p.service_ref === params.roleId || (params.dates as string[]).includes(p.service_date as string),
     );
   }
+  if (query.includes("team_notes") && query.includes("_rev == $rev")) {
+    // The check's pinned `team_notes` read (`peekLiveTeamNotes`): projected HERE, because the loaders'
+    // shared projections do not carry the field and this fake would otherwise hand it out whole.
+    const doc = [...store.roles, ...store.setlists].find((d) => d._id === params.id && d._rev === params.rev);
+    return doc ? { notes: doc.team_notes ?? null } : null;
+  }
   if (query.includes("$setlistType") && query.includes("week == $week")) {
     return store.setlists.filter((s) => s._type === params.setlistType && s.week === params.week);
   }
@@ -1610,6 +1616,47 @@ describe("proposalReviewCommit — the same writer the route calls, and its read
     const write = await planProposalReview(PROPOSAL_ID, { action: "approve", rev: "prop-rev-STALE", adminNotes: "" }, "write");
     expect(write).toMatchObject({ ok: false, status: 409, body: { error: "stale_revision" } });
     expect(transactions).toHaveLength(0);
+  });
+
+  it("peek reads the live team note pinned to the loaded revision, which the shared projections do not carry", async () => {
+    // A special role IS its setlist; a weekend has its own document. Neither loader projects
+    // `team_notes` (`ROLE_PROJECTION`, `SETLIST_PROJECTION`), so a value read off the loaded document
+    // is always "" in production: the check must ask for it by id and revision.
+    store.roles.push(specialRole({ team_notes: "Lean Salmo 23" }));
+    store.proposals.push(
+      proposal({ _id: "setlistProposal.role-sp", service_type: "special", service_ref: "role-sp", service_date: "2026-08-20", team_notes: "" }),
+    );
+    const special = await planProposalReview("setlistProposal.role-sp", { action: "approve", rev: null, adminNotes: "" }, "peek");
+    expect(special).toMatchObject({ ok: true, plan: { kind: "approve", teamNotes: "", liveTeamNotes: "Lean Salmo 23" } });
+    expect(operationalFetch).toHaveBeenCalledWith(expect.stringContaining("team_notes"), { id: "role-sp", rev: "role-rev-sp" });
+
+    reset();
+    store.roles.push(sundayRole());
+    store.locks.push(lock());
+    store.proposals.push(proposal({ team_notes: "" }));
+    store.setlists.push({ _id: "legacy-setlist", _rev: "set-rev-1", _type: "featuredSongs", week: WEEK, songs: [], team_notes: "Traigan agua" });
+    const weekend = await planProposalReview(PROPOSAL_ID, { action: "approve", rev: null, adminNotes: "" }, "peek");
+    expect(weekend).toMatchObject({ ok: true, plan: { kind: "approve", liveTeamNotes: "Traigan agua" } });
+
+    // The write path adds no read: it overwrites the note whatever it holds.
+    operationalFetch.mockClear();
+    const write = await planProposalReview(PROPOSAL_ID, { action: "approve", rev: "prop-rev-1", adminNotes: "" }, "write");
+    expect(write).toMatchObject({ ok: true, plan: { kind: "approve", liveTeamNotes: null } });
+    expect(operationalFetch.mock.calls.some(([q]) => String(q).includes("team_notes") && String(q).includes("_rev == $rev"))).toBe(false);
+    expect(transactions).toHaveLength(0);
+  });
+
+  it("peek says it could not read the live team note when the setlist moved after the load", async () => {
+    store.roles.push(sundayRole());
+    store.locks.push(lock());
+    store.proposals.push(proposal({ team_notes: "" }));
+    store.setlists.push({ _id: "legacy-setlist", _rev: "set-rev-1", _type: "featuredSongs", week: WEEK, songs: [], team_notes: "x" });
+    const real = operationalFetch.getMockImplementation()!;
+    operationalFetch.mockImplementation(async (q: string, p: Record<string, unknown> = {}) =>
+      String(q).includes("team_notes") && String(q).includes("_rev == $rev") ? null : real(q, p),
+    );
+    const peek = await planProposalReview(PROPOSAL_ID, { action: "approve", rev: null, adminNotes: "" }, "peek");
+    expect(peek).toMatchObject({ ok: true, plan: { kind: "approve", liveTeamNotes: null } });
   });
 
   it("peek on a legacy weekend with no lock reports the bootstrap instead of committing it", async () => {

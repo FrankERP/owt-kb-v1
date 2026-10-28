@@ -184,6 +184,16 @@ describe("check_setlist_proposal_review", () => {
     expect(text).toContain("No hay setlist todavía.");
   });
 
+  it("names the live note a copied one replaces, and says so when the live note could not be read", async () => {
+    h.planProposalReview.mockResolvedValue({ ok: true, plan: approvePlan({ teamNotes: "Nuevo", liveTeamNotes: "Viejo" }) });
+    let text = textOf((await checkProposalReviewResult({ proposalId: ID, action: "approve" })) as never);
+    expect(text).toContain("Mensaje para el equipo que se copia: «Nuevo» (reemplaza «Viejo»).");
+    h.planProposalReview.mockResolvedValue({ ok: true, plan: approvePlan({ teamNotes: "", liveTeamNotes: null }) });
+    text = textOf((await checkProposalReviewResult({ proposalId: ID, action: "approve" })) as never);
+    expect(text).toContain("si hay uno, quedaría VACÍO (no se pudo leer");
+    expect(text).not.toContain("Sin mensaje para el equipo.");
+  });
+
   it("uses a pending notice's first snapshot, not the live list, for the audience", async () => {
     h.loadPendingSetlistBefore.mockResolvedValue([]);
     h.planProposalReview.mockResolvedValue({

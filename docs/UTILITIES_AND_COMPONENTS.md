@@ -538,8 +538,9 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   `planProposalReview(id, request, "peek")` is its prefix for a read-only check: the `_rev` reported,
   the weekend lock bootstrap reported (`peekWeekendCoordination` / `peekOwnedCoordination`), never run.
 - **`setlistNoticeEligible`** ([setlistNoticeEligibility.ts](../app/utils/setlistNoticeEligibility.ts))
-  — the ONE rule for whether a setlist write queues the setlist notice (published, a role, not a past
-  date by `isPastNoticeDate`, songs); `setlistUpsert` and the MCP's forecast both call it.
+  — the ONE rule for whether a setlist write queues the setlist notice (published, a role, a service
+  date, songs); `setlistUpsert` and the MCP's forecast both call it. A past date is judged apart
+  (`isPastNoticeDate`, `outboxClassify.ts`): the flush drops it, and the forecast says so.
 
 ### Oasis Kids planner (shared by `/api/kids/*` and the MCP Kids tools, admin parity phase 3)
 - **`kidsCommit.ts`** ([kidsCommit.ts](../app/utils/kidsCommit.ts)) — the ONLY Kids writers, after

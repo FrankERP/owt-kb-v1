@@ -416,7 +416,7 @@ describe("checkToolList", () => {
     name === "solve_month" || name === "save_proposal_edits" || name === "revise_proposal" ? solve : WRITE_TOOL_NAMES.includes(name) || name === "apply_schedule" || ["save_service_edits", "save_service_edits_app", "copy_instruments", "create_service", "delete_services", "delete_services_app", "send_service_message", "edit_service_message", "set_pastor_message", "set_team_message", "save_kids_sundays", "save_kids_pair", "set_kids_absences", "review_setlist_proposal"].includes(name) ? destructive : readOnly;
   const registered = () => EXPECTED_TOOLS.map((name) => ({ name, annotations: annotationsOf(name) }));
 
-  it("pins thirty-nine tools: ping, the seven reads, the three admin reads, the four writes, the two month tools, the three proposal-editor tools, the six saved-month editor tools, the three delete tools, the five conversation tools, then the five Kids tools, in registration order", () => {
+  it("pins forty-one tools: ping, the seven reads, the three admin reads, the four writes, the two month tools, the three proposal-editor tools, the six saved-month editor tools, the three delete tools, the five conversation tools, the five Kids tools, then the two proposal-decision tools, in registration order", () => {
     expect(EXPECTED_TOOLS).toEqual([
       "ping",
       "get_service",
@@ -482,7 +482,7 @@ describe("checkToolList", () => {
     }
   });
 
-  it("accepts the exact thirty-nine names, in order, each with its own annotations", () => {
+  it("accepts the exact forty-one names, in order, each with its own annotations", () => {
     expect(checkToolList(registered())).toEqual({ ok: true });
   });
 
