@@ -971,7 +971,7 @@ What `/admin`'s Propuestas does with a lead's setlist proposal, from the chat, t
 writer: `PATCH /api/admin/proposals/[id]` now authorizes and calls `reviewProposal`
 (`app/utils/proposalReviewCommit.ts`), and so does the write tool
 (`app/mcp/tools/setlistProposalReview.ts`). Decision record:
-[ADR-0075](adr/0075-setlist-proposals-are-decided-from-the-chat-through-one-planner-in-two-modes.md);
+[ADR-0076](adr/0076-setlist-proposals-are-decided-from-the-chat-through-one-planner-in-two-modes.md);
 plan: `docs/superpowers/plans/2026-10-27-owt-mcp-admin-parity-f3a-proposal-review.md`. «Rechazar» is
 «Solicitar cambios»: `/admin` has no reject action. The acting member is the bearer's
 (`principalOf(ctx).sub`, recorded as `approvedBy`), never an argument; the write refuses before any

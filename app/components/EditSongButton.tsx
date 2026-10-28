@@ -247,7 +247,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
           ref={triggerRef}
           type="button"
           onClick={handleOpen}
-          className="fixed z-40 flex items-center gap-2 rounded-full border border-accent/30 bg-surface-accent-solid text-on-fill px-4 py-2.5 font-label text-xs uppercase tracking-widest shadow-lg transition-colors hover:bg-accent-deep/80 dark:hover:bg-accent/30"
+          className="fixed z-40 flex items-center gap-2 rounded-full border border-accent/30 bg-surface-accent-solid text-on-fill px-4 py-2.5 font-body font-semibold leading-tight text-sm shadow-lg transition-colors hover:bg-accent-deep/80 dark:hover:bg-accent/30"
           // Steps left of the assistant bubble when it is on screen (`--assistant-fab-w`).
           style={{ bottom: "calc(1.5rem + var(--bottom-nav-h, 0px))", right: "calc(1.5rem + var(--assistant-fab-w, 0px))" }}
           aria-label={`Editar canción ${post.title}`}
@@ -280,7 +280,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
                   Artistas
                 </label>
                 {authorState === "error" && (
-                  <button type="button" onClick={loadAuthors} className="font-label text-[11px] uppercase tracking-widest text-accent">
+                  <button type="button" onClick={loadAuthors} className="font-body font-semibold leading-tight text-xs text-accent">
                     Reintentar
                   </button>
                 )}
@@ -325,7 +325,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
               <div role="toolbar" aria-label="Secciones y formato de letra" className="flex flex-wrap items-center gap-1 rounded-t-lg border border-accent/20 border-b-0 bg-accent/5 px-2 py-1.5">
                 {SECTION_LABELS.map((label) => (
                   <button key={label} type="button" onPointerDown={(e) => e.preventDefault()} onClick={() => insertLabel(label)}
-                    className="whitespace-nowrap rounded border border-accent/15 px-2 py-1 font-label text-[10px] uppercase tracking-widest text-mono-500 transition-colors hover:border-accent/40 hover:text-accent">
+                    className="whitespace-nowrap rounded border border-accent/15 px-2 py-1 font-body font-semibold leading-tight text-xs text-mono-500 transition-colors hover:border-accent/40 hover:text-accent">
                     {label}
                   </button>
                 ))}
@@ -411,7 +411,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
                   Tags
                 </label>
                 {tagState === "error" && (
-                  <button type="button" onClick={loadTags} className="font-label text-[11px] uppercase tracking-widest text-accent">
+                  <button type="button" onClick={loadTags} className="font-body font-semibold leading-tight text-xs text-accent">
                     Reintentar
                   </button>
                 )}
@@ -441,10 +441,10 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
           </div>
 
           <div className="flex shrink-0 gap-3 border-t border-accent/10 bg-surface-base/35 px-5 py-4 sm:px-6">
-            <button type="button" onClick={() => setOpen(false)} className="flex-1 rounded-lg border border-accent/20 py-2.5 font-label text-xs uppercase tracking-widest transition-colors hover:border-accent">
+            <button type="button" onClick={() => setOpen(false)} className="flex-1 rounded-lg border border-accent/20 py-2.5 font-body font-semibold leading-tight text-sm transition-colors hover:border-accent">
               Cancelar
             </button>
-            <button type="submit" disabled={saving} className="flex-1 rounded-lg border border-accent/35 bg-accent/20 py-2.5 font-label text-xs uppercase tracking-widest text-ink transition-colors hover:bg-accent/30 disabled:opacity-50">
+            <button type="submit" disabled={saving} className="flex-1 rounded-lg border border-accent/35 bg-accent/20 py-2.5 font-body font-semibold leading-tight text-sm text-ink transition-colors hover:bg-accent/30 disabled:opacity-50">
               {saving ? "Guardando…" : "Guardar"}
             </button>
           </div>
@@ -496,7 +496,7 @@ function RepeatRows({
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <p className="font-label text-xs uppercase tracking-widest text-ink-dim">{title}</p>
-        <button type="button" onClick={onAdd} className="font-label text-[11px] uppercase tracking-widest text-accent transition-colors hover:text-accent/70">
+        <button type="button" onClick={onAdd} className="font-body font-semibold leading-tight text-xs text-accent transition-colors hover:text-accent/70">
           {addLabel}
         </button>
       </div>

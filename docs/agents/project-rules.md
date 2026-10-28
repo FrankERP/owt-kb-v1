@@ -471,7 +471,7 @@ several exist precisely to stop a plausible-looking change.
   `proposeKidsMonth` (`kidsMonthPlan.ts`), and the month's draft-seeing read is
   `kidsScheduleReads.ts` (ADR-0022, amended). Kids notifies nobody from either surface.
   Deciding a setlist proposal (approve, «Solicitar cambios», reopen) lives in
-  `proposalReviewCommit.ts` (admin parity phase 3, ADR-0075): the proposals PATCH and the MCP's
+  `proposalReviewCommit.ts` (admin parity phase 3, ADR-0076): the proposals PATCH and the MCP's
   `review_setlist_proposal` call `reviewProposal`; `check_setlist_proposal_review` calls
   `planProposalReview(…, "peek")`, the writer's own prefix with the `_rev` reported instead of
   asserted and the weekend lock bootstrap reported (`peekWeekendCoordination`/`peekOwnedCoordination`)

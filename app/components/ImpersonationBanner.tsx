@@ -172,7 +172,7 @@ export default function ImpersonationBanner() {
           type="button"
           onClick={stopImpersonating}
           disabled={leaving}
-          className="ml-2 px-3 py-0.5 rounded-md border border-scrim/30 font-label text-xs uppercase tracking-widest hover:bg-scrim/10 transition-colors disabled:opacity-60"
+          className="ml-2 px-3 py-0.5 rounded-md border border-scrim/30 font-body font-semibold leading-tight text-xs hover:bg-scrim/10 transition-colors disabled:opacity-60"
         >
           {leaving ? "Saliendo…" : "Salir"}
         </button>

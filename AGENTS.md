@@ -253,7 +253,7 @@ looks wrong** — several exist to stop a plausible-looking change.
   authorization to `app/utils/*Commit.ts`; MCP writes go only through them (`apply_schedule`: roles
   create + fairness PUT, ADR-0061; the saved-month editor: PATCH, copy, create, ADR-0066;
   `delete_services`: DELETE, only with the check's echoed list and token, never a past service,
-  ADR-0072; the proposal tools: proposals PATCH, its planner in peek for the check, ADR-0075;
+  ADR-0072; the proposal tools: proposals PATCH, its planner in peek for the check, ADR-0076;
   `serviceCommitCallers.test.ts`). The service conversation's writers live in
   `serviceThreadCommit.ts` too, called by its four routes and the MCP conversation tools (ADR-0073);
   Oasis Kids' in `kidsCommit.ts`, called by the four `/api/kids/*` writes and the MCP Kids tools;

@@ -1,6 +1,9 @@
-# ADR-0075: Setlist proposals are decided from the chat through one planner in two modes
+# ADR-0076: Setlist proposals are decided from the chat through one planner in two modes
 
 **Date:** 2026-10-28 · **Status:** Accepted
+
+> **Numbering.** 0076 because records are numbered in the order they reach `main`; the solver-ops
+> record that holds 0076 on `preview` becomes 0077 there when this one merges (as ADR-0073).
 
 ## Context
 
