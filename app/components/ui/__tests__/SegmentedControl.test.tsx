@@ -55,6 +55,17 @@ function StatefulControl({
 }
 
 describe("SegmentedControl", () => {
+  it("sets its options in sentence case, body face, like Button (2026-10-27)", () => {
+    mount("calendar");
+    for (const radio of screen.getAllByRole("radio")) {
+      expect(radio.className).toContain("font-body");
+      expect(radio.className).toContain("font-semibold");
+      expect(radio.className).not.toMatch(/\buppercase\b/);
+      expect(radio.className).not.toContain("tracking-widest");
+      expect(radio.className).not.toContain("font-label");
+    }
+  });
+
   it("is a radiogroup whose checked option is the only tab stop", () => {
     mount("list");
     const group = screen.getByRole("radiogroup", { name: "Vista" });
