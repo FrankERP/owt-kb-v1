@@ -1,4 +1,4 @@
-# ADR-0077: The solver is verified and re-deployed from GitHub Actions with no Google key
+# ADR-0078: The solver is verified and re-deployed from GitHub Actions with no Google key
 
 **Date:** 2026-10-22 · **Status:** Accepted
 
@@ -8,6 +8,8 @@
 > messages from the chat) reaches `main` first.
 > Renumbered 0074 → 0076 on `preview` 2026-10-28: Fluid compute reached `main` as ADR-0074 and the
 > multi-ministry decision as ADR-0075 first.
+> Renumbered 0076 → 0077 → 0078 on `preview` 2026-10-28: admin parity phase 3's proposal decisions
+> (ADR-0076) and song editing (ADR-0077) reached `main` first.
 
 ## Context
 

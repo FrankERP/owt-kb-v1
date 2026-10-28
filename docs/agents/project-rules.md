@@ -86,7 +86,7 @@ disagree, `CLAUDE.md` wins and this file is the one to fix.
   set up as network secrets, the canonical copy of the adversarial-plan-review skill and the
   agent definitions under `~/.claude/agents/`. Google-side secret rotations go through Google
   Cloud Shell in the browser, not a laptop. **The production solver is verified and re-deployed
-  from GitHub Actions** (`.github/workflows/solver-v3-ops.yml`, keyless, ADR-0077): `verify` runs
+  from GitHub Actions** (`.github/workflows/solver-v3-ops.yml`, keyless, ADR-0078): `verify` runs
   by itself after every `gcf_v3/**` merge; a session dispatches `verify` (or, after Frank says
   yes in the thread, `deploy`) with the GitHub connector's `actions_run_trigger` and reads the
   result with `get_job_logs`. If the session's token cannot dispatch, Frank runs it from
@@ -488,6 +488,14 @@ several exist precisely to stop a plausible-looking change.
   asserted and the weekend lock bootstrap reported (`peekWeekendCoordination`/`peekOwnedCoordination`)
   instead of committed, so the check never writes. Never reuse the writing loaders in a read-only
   tool: `loadWeekendCoordination` commits `bootstrapLegacyLock` on a legacy weekend role.
+  The song library's writer is `songSaveCommit.ts` (admin parity phase 3, ADR-0077):
+  `POST /api/content/posts`, `PATCH /api/content/posts/[id]` and the authors POST call it without
+  options, as before; the MCP's `save_song_edits` and `create_song` call it with options (an
+  `ifRevisionId`, a token-derived id, and the new artists created in the song's own transaction).
+  The chat never sends a whole array: `applySongEdits` (`songEdits.ts`) applies its edits by parts
+  to the freshly read song, and a lyrics edit needs `lyricsGate` (the stored body round-trips
+  losslessly through the editor's text form). `/admin` stays last-writer-wins (no `ifRevisionId` on
+  the route): a page loaded before a chat save overwrites it when saved.
 - **The MCP proposal editor: the server judges, the card only shows** (ADR-0062). The card
   (`mcp-app/proposal-card/`) holds a list of edits, never a board; every check and save replays the
   whole list from the stored proposal through the planner's own gate. Only `editorBoard.ts` calls

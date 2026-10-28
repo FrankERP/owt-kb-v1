@@ -401,6 +401,15 @@ export const PROPOSAL_REVIEW_TOOL_NAMES = ["check_setlist_proposal_review", "rev
 export const PROPOSAL_REVIEW_WRITE_NAMES = ["review_setlist_proposal"];
 
 /**
+ * Admin parity phase 3 (S3): creating and editing songs, after the proposal decision. Never called
+ * here: the checks need a song or a title, and the saves write the song library everyone reads.
+ */
+export const SONG_TOOL_NAMES = ["check_song_edits", "save_song_edits", "check_new_song", "create_song"];
+
+/** The saves: destructive, like every write (I14). */
+export const SONG_WRITE_NAMES = ["save_song_edits", "create_song"];
+
+/**
  * Admin parity phase 1: three reads after the P1 reads (`/admin`'s Equidad, rules and integrity
  * queue). Read-only, so the smoke may call them, but it does not need to.
  */
@@ -425,6 +434,7 @@ export const EXPECTED_TOOLS = [
   ...SERVICE_MESSAGE_TOOL_NAMES,
   ...KIDS_TOOL_NAMES,
   ...PROPOSAL_REVIEW_TOOL_NAMES,
+  ...SONG_TOOL_NAMES,
 ];
 
 /** What `ping` and every read tool declare (spec I14). */
@@ -450,7 +460,7 @@ export const SOLVE_MONTH_ANNOTATIONS = Object.freeze({
 export function expectedAnnotations(name) {
   // A saved version is a private record like solve_month's; the check only reads.
   if (name === "solve_month" || name === "save_proposal_edits" || name === "revise_proposal") return SOLVE_MONTH_ANNOTATIONS;
-  return WRITE_TOOL_NAMES.includes(name) || name === "apply_schedule" || SERVICE_EDITOR_WRITE_NAMES.includes(name) || SERVICE_DELETE_WRITE_NAMES.includes(name) || SERVICE_MESSAGE_WRITE_NAMES.includes(name) || KIDS_WRITE_NAMES.includes(name) || PROPOSAL_REVIEW_WRITE_NAMES.includes(name) ? WRITE_ANNOTATIONS : READ_ONLY_ANNOTATIONS;
+  return WRITE_TOOL_NAMES.includes(name) || name === "apply_schedule" || SERVICE_EDITOR_WRITE_NAMES.includes(name) || SERVICE_DELETE_WRITE_NAMES.includes(name) || SERVICE_MESSAGE_WRITE_NAMES.includes(name) || KIDS_WRITE_NAMES.includes(name) || PROPOSAL_REVIEW_WRITE_NAMES.includes(name) || SONG_WRITE_NAMES.includes(name) ? WRITE_ANNOTATIONS : READ_ONLY_ANNOTATIONS;
 }
 
 /**
@@ -556,7 +566,8 @@ export function toolCallRequest(name, args, id = 1) {
     SERVICE_DELETE_TOOL_NAMES.includes(name) ||
     SERVICE_MESSAGE_TOOL_NAMES.includes(name) ||
     KIDS_TOOL_NAMES.includes(name) ||
-    PROPOSAL_REVIEW_TOOL_NAMES.includes(name)
+    PROPOSAL_REVIEW_TOOL_NAMES.includes(name) ||
+    SONG_TOOL_NAMES.includes(name)
   ) {
     throw new Error(`refusing to call the write tool "${name}": the dev smoke never calls a write tool (DV1)`);
   }
