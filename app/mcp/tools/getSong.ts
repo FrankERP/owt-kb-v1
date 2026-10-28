@@ -16,6 +16,8 @@ import { serviceTodayIso } from "@/app/components/admin/serviceReadiness";
 import { refusalResult, runReadTool, successResult } from "../reads/errors";
 import { loadSongDetailById, loadSongDetailBySlug, loadWeekendSetlistRows, type SongDetailRow } from "../reads/songDetail";
 import { parseGetSongSelector, presentSong } from "../reads/songPresenter";
+import { loadSongForEdit } from "../reads/songEditReads";
+import { lyricsGate } from "@/app/utils/songEdits";
 
 export const GET_SONG_INPUT = z
   .object({
@@ -25,6 +27,14 @@ export const GET_SONG_INPUT = z
   .strict();
 
 export type GetSongArgs = z.infer<typeof GET_SONG_INPUT>;
+
+/**
+ * The MCP's own schema: `full` exists only here. The in-app assistant registers `get_song` with
+ * `GET_SONG_INPUT` (ADR-0060) and never sees the lyrics text, the charts or the writer's `rev`.
+ */
+export const GET_SONG_FULL_INPUT = GET_SONG_INPUT.extend({ full: z.boolean().optional() }).strict();
+
+export type GetSongFullArgs = z.infer<typeof GET_SONG_FULL_INPUT>;
 
 export const SONG_UNREADABLE_MESSAGE = "No se pudo leer la canción. Intenta de nuevo en un momento.";
 
@@ -57,12 +67,16 @@ export const GET_SONG_DESCRIPTION =
   "(la página de la canción solo muestra los 3 más recientes; esta herramienta no recorta) — los especiales NO cuentan. " +
   "Selecciona con songId (el id canónico de Sanity) o slug, nunca ambos. Un songId drafts.* se rechaza: no es una canción. " +
   "Un slug que comparten varias canciones se rechaza y lista los candidatos (songId y título). " +
-  "Nunca incluye la letra, el contenido de los acordes ni ninguna URL de audio. Solo lee: no cambia nada.";
+  "Sin full no incluye la letra ni el contenido de los acordes; nunca incluye una URL de audio. Con full: true añade " +
+  "rev, lyricsText (la letra en el texto del editor: «# » encabezado, **negrita**, *cursiva*), lyricsEditable (si se " +
+  "puede cambiar desde el chat sin perder formato) y charts [{chartKey, key, content}]: úsalo antes de check_song_edits " +
+  "para copiar los pasajes exactos. Solo lee: no cambia nada.";
 
 /** The tool's whole behaviour, callable without a server (the route registers it below). */
-export async function getSongResult(args: GetSongArgs): Promise<CallToolResult> {
+export async function getSongResult(args: GetSongFullArgs): Promise<CallToolResult> {
   return runReadTool("get_song", async () => {
-    const parsed = parseGetSongSelector(args);
+    const { full, ...selector } = args;
+    const parsed = parseGetSongSelector(selector);
     if (!parsed.ok) return refusalResult(parsed.message);
 
     const detail =
@@ -73,7 +87,22 @@ export async function getSongResult(args: GetSongArgs): Promise<CallToolResult> 
 
     const playHistory = await loadWeekendSetlistRows();
     const payload = presentSong(detail.rows[0]!, serviceTodayIso(), { playHistory });
-    return successResult(payload);
+    if (!full) return successResult(payload);
+
+    // The editable song (S3, D8): read by id, so a slug selector reads the one song it resolved.
+    const song = await loadSongForEdit(detail.rows[0]!._id);
+    if (!song) return refusalResult(SONG_UNREADABLE_MESSAGE);
+    const gate = lyricsGate(song.body);
+    return successResult({
+      ...payload,
+      songId: song._id,
+      rev: song._rev,
+      lyricsText: gate.text,
+      lyricsEditable: gate.structural && gate.nfc,
+      charts: (song.chords ?? [])
+        .filter((c) => c && typeof c._key === "string")
+        .map((c) => ({ chartKey: c._key as string, key: c.key ?? "", content: c.content ?? "" })),
+    });
   });
 }
 
@@ -84,7 +113,7 @@ export function registerGetSong(server: McpServer): void {
     {
       title: "Ver una canción",
       description: GET_SONG_DESCRIPTION,
-      inputSchema: GET_SONG_INPUT,
+      inputSchema: GET_SONG_FULL_INPUT,
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async (args) => getSongResult(args),

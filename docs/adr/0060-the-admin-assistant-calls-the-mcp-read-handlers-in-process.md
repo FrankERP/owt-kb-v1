@@ -110,3 +110,8 @@ counter: the conversation lives in the browser and is resent, as text only, each
   open panel is z-[70] and opts out of pull-to-refresh (`data-pull-ignore`).
 - Adding a tool that writes would undo the reason for this design; `adminChatRoute.test.ts` pins
   the five names and that no MCP writer is among them.
+- **Amended by ADR-0077 (2026-10-28):** the MCP's `get_song` gained `full: true` (the song's `rev`,
+  the lyrics in the editor's text form and every chord chart, which the chat copies passages from).
+  `full` lives only in the MCP's schema (`GET_SONG_FULL_INPUT`); the assistant registers `get_song`
+  with `GET_SONG_INPUT`, which refuses it, and `chatSongView` drops those fields by name
+  (`adminChatViews.test.ts`). Its own capped lyrics read is unchanged.

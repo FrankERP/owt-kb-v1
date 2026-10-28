@@ -27,6 +27,7 @@ import { registerServiceDeletes } from "./tools/serviceDeletes";
 import { registerServiceMessages } from "./tools/serviceMessages";
 import { registerKids } from "./tools/kids";
 import { registerSetlistProposalReview } from "./tools/setlistProposalReview";
+import { registerSongEdits } from "./tools/songEdits";
 import { registerProposalCard } from "./apps/proposalCard";
 import { toolListDigest } from "./toolListVersion";
 
@@ -67,6 +68,8 @@ export function registerAllTools(server: McpServer, deps: { version: string }): 
   registerKids(server);
   // Admin parity phase 3 (S1): deciding setlist proposals, through /admin's own writer.
   registerSetlistProposalReview(server);
+  // Admin parity phase 3 (S3): creating and editing songs, through /admin's own writer.
+  registerSongEdits(server);
   // The card (MCP Apps), at a URI that carries its build's digest. Fixed per deployment, like the tools.
   registerProposalCard(server);
 }

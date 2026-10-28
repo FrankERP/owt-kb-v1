@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
-import { serverClient, writeClient } from "@/sanity/lib/serverClient";
-import { slugifyAuthor } from "@/app/utils/slugifyAuthor.mjs";
+import { serverClient } from "@/sanity/lib/serverClient";
+import { ensureAuthors } from "@/app/utils/songSaveCommit";
+import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
 
 export async function GET() {
   if (!await requireActiveManager()) {
@@ -13,27 +14,15 @@ export async function GET() {
   return NextResponse.json(authors);
 }
 
-export async function POST(req: NextRequest) {
+// Wrapped because the module it calls is a `*Commit` (`srVerificationRunContext.test.ts` scans by
+// import); creating an author sends nothing, and an unmarked request behaves as before.
+export const POST = withVerificationRunContext(postHandler);
+
+/** Create an author, or return the one with the same slug: `ensureAuthors` (`songSaveCommit.ts`). */
+async function postHandler(req: NextRequest) {
   if (!await requireActiveManager()) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const { name } = await req.json() as { name?: string };
-  if (!name?.trim()) {
-    return NextResponse.json({ error: "name required" }, { status: 400 });
-  }
-  const slug = slugifyAuthor(name.trim());
-  // Idempotent by slug: return the existing author instead of creating a
-  // duplicate (or slug-colliding) doc that would fragment the taxonomy.
-  const existing = await serverClient.fetch(
-    `*[_type == "author" && slug.current == $slug][0]{ _id, name, slug }`,
-    { slug }
-  );
-  if (existing) return NextResponse.json(existing);
-
-  const author = await writeClient.create({
-    _type: "author",
-    name: name.trim(),
-    slug: { _type: "slug", current: slug },
-  });
-  return NextResponse.json(author, { status: 201 });
+  const outcome = await ensureAuthors(await req.json());
+  return NextResponse.json(outcome.body, { status: outcome.status });
 }

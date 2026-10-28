@@ -6,6 +6,7 @@ const h = vi.hoisted(() => ({
   requireActiveManager: vi.fn(),
   fetch: vi.fn(),
   sets: [] as Record<string, unknown>[],
+  unsets: [] as string[][],
   patchedIds: [] as string[],
   created: [] as Record<string, unknown>[],
   commit: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock("@/app/utils/authGuards", () => ({
 vi.mock("@/sanity/lib/serverClient", () => {
   const chain: Record<string, unknown> = {};
   chain.set = (v: Record<string, unknown>) => { h.sets.push(v); return chain; };
+  chain.unset = (v: string[]) => { h.unsets.push(v); return chain; };
   chain.commit = () => h.commit();
   return {
     serverClient: { fetch: (...a: unknown[]) => h.fetch(...a) },
@@ -48,6 +50,7 @@ function req(body: unknown): NextRequest {
 
 beforeEach(() => {
   h.sets.length = 0;
+  h.unsets.length = 0;
   h.patchedIds.length = 0;
   h.created.length = 0;
   h.commit.mockReset().mockResolvedValue({ _id: "song-1" });
@@ -255,5 +258,34 @@ describe("the protocol guard is wired on every list, not just the one that was r
     );
     expect(res.status).toBe(400);
     expect(h.sets).toHaveLength(0);
+  });
+});
+
+describe("clearing a reference URL clears it", () => {
+  // The route used to `set({ musicalReferenceUrl: undefined })`: the client serializes a patch as JSON,
+  // which drops an undefined value, so clearing either URL in «Editar canción» left the old one stored.
+  it("PATCH sends an unset for a cleared URL, and a set for a filled one", async () => {
+    const res = await PATCH(
+      req({ musicalReferenceUrl: "", lyricsVideoUrl: "https://youtu.be/v" }),
+      { params: Promise.resolve({ id: "song-1" }) },
+    );
+    expect(res.status).toBe(200);
+    expect(h.unsets).toEqual([["musicalReferenceUrl"]]);
+    expect(h.sets[0]).toEqual({ lyricsVideoUrl: "https://youtu.be/v" });
+  });
+
+  it("what reaches Sanity, through the real patch serializer, removes the field", async () => {
+    const { Patch } = await import("@sanity/client");
+    const { buildSongPatch } = await import("@/app/utils/songSaveCommit");
+    const built = buildSongPatch({ musicalReferenceUrl: "", lyricsVideoUrl: "", bpm: "" }, [], []);
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+    const wire = JSON.parse(JSON.stringify(new Patch("song-1").set(built.set).unset(built.unset).serialize()));
+    expect(wire).toEqual({ id: "song-1", set: { bpm: null }, unset: ["musicalReferenceUrl", "lyricsVideoUrl"] });
+  });
+
+  it("PATCH without a URL in the body touches neither", async () => {
+    await PATCH(req({ title: "X" }), { params: Promise.resolve({ id: "song-1" }) });
+    expect(h.unsets).toEqual([]);
   });
 });

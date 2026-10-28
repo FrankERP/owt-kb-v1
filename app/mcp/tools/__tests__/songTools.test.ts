@@ -43,7 +43,8 @@ vi.mock("@/app/mcp/reads/songDetail", async (importOriginal) => {
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import { READ_TOOL_FAILURE_MESSAGE } from "@/app/mcp/reads/errors";
 import { songResponder, type SongResponder, type SongResponderOptions } from "@/app/mcp/reads/__tests__/songFixtures";
-import { GET_SONG_INPUT, getSongResult, registerGetSong, SONG_UNREADABLE_MESSAGE } from "../getSong";
+import { textToBody } from "@/app/utils/lyrics";
+import { GET_SONG_FULL_INPUT, GET_SONG_INPUT, getSongResult, registerGetSong, SONG_UNREADABLE_MESSAGE } from "../getSong";
 import { CATALOGUE_UNREADABLE_MESSAGE, registerSearchSongs, SEARCH_SONGS_INPUT, searchSongsResult } from "../searchSongs";
 
 const TODAY = "2026-09-30T23:30:00-06:00";
@@ -290,6 +291,50 @@ describe("get_song", () => {
     expect(payload.playHistory).toEqual([]);
     expect(payload.notes).toEqual(expect.arrayContaining([expect.stringMatching(/historial/)]));
     errorSpy.mockRestore();
+  });
+
+  describe("full (S3): what check_song_edits copies passages from", () => {
+    /** Answers the editable-song read (`loadSongForEdit`, the only projection with `tagRefs`); the rest as before. */
+    function wireEditable(row: Record<string, unknown> | null) {
+      const base = h.operational.getMockImplementation()!;
+      h.operational.mockImplementation((query: string, params?: Record<string, unknown>) =>
+        query.includes('"tagRefs"') ? Promise.resolve(row) : base(query, params),
+      );
+    }
+
+    it("adds rev, the lyrics text, whether it is editable, and the charts with their keys", async () => {
+      wireEditable({
+        _id: "song-1",
+        _rev: "rev-9",
+        body: textToBody("# Coro\nGrande es tu fidelidad"),
+        chords: [{ _key: "ch-g", key: "G", content: "[G]Grande" }, { key: "A", content: "no key" }],
+      });
+      const result = await getSongResult({ songId: "song-1", full: true });
+      expect(result.structuredContent).toMatchObject({
+        title: "Grande es tu fidelidad",
+        songId: "song-1",
+        rev: "rev-9",
+        lyricsText: "# Coro\nGrande es tu fidelidad",
+        lyricsEditable: true,
+        charts: [{ chartKey: "ch-g", key: "G", content: "[G]Grande" }],
+      });
+    });
+
+    it("says a lossy body is not editable from the chat", async () => {
+      wireEditable({ _id: "song-1", _rev: "r", body: [...textToBody("x"), { _type: "image", _key: "i" }], chords: [] });
+      const result = await getSongResult({ songId: "song-1", full: true });
+      expect(result.structuredContent).toMatchObject({ lyricsEditable: false });
+    });
+
+    it("without full adds none of it", async () => {
+      const payload = (await getSongResult({ songId: "song-1" })).structuredContent as Record<string, unknown>;
+      for (const key of ["rev", "lyricsText", "lyricsEditable", "charts"]) expect(payload, key).not.toHaveProperty(key);
+    });
+
+    it("only the MCP's schema accepts full", () => {
+      expect(GET_SONG_FULL_INPUT.safeParse({ songId: "song-1", full: true }).success).toBe(true);
+      expect(GET_SONG_INPUT.safeParse({ songId: "song-1", full: true }).success).toBe(false);
+    });
   });
 
   it("the registered handler is the same call", async () => {
