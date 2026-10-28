@@ -261,8 +261,14 @@ export function buildSongPatch(
     });
     if (links.ok) patch.referenceLinks = links.rows;
   }
-  if (body.musicalReferenceUrl != null) patch.musicalReferenceUrl = body.musicalReferenceUrl || undefined;
-  if (body.lyricsVideoUrl != null) patch.lyricsVideoUrl = body.lyricsVideoUrl || undefined;
+  // A cleared URL is an `unset`. It used to be `set({ field: undefined })`, which the client
+  // serializes as JSON and so drops: clearing a URL in «Editar canción» left the old one in place.
+  for (const field of SONG_URL_FIELDS) {
+    const value = body[field];
+    if (value == null) continue;
+    if (value) patch[field] = value;
+    else unset.push(field);
+  }
   if (body.tutorials != null) {
     const tutorials = normalizeLinkRows(body.tutorials, {
       type: "tutorial", labelField: "title", humanName: "Tutoriales", mintKey,
