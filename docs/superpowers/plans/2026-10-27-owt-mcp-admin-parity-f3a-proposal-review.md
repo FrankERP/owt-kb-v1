@@ -1,6 +1,8 @@
 # OWT MCP — admin parity, phase 3, slice S1: deciding setlist proposals from the chat (plan)
 
-**Status:** DRAFT for adversarial review (critical tier); rounds 1–2 fixed, churn cap reached, round 3 awaits Frank. Parent plan:
+**Status:** APPROVED (critical tier): two fresh reviewers in a row approved the bytes with SHA-256
+`4412794f…7891a` (commit 19a04161); review log `2026-10-27-owt-mcp-admin-parity-f3a-proposal-review-review-log.md`.
+§7 was added AFTER that approval from the reviewers' non-blocking notes and is NOT reviewed. Parent plan:
 `2026-10-27-owt-mcp-admin-parity-f3.md` (Frank's «Sí, con Kids ahora», 2026-10-27 19:12Z). Nothing
 of this slice is built. Review approval is not authorization to implement; the build follows the
 release order in CLAUDE.md.
@@ -192,3 +194,49 @@ then the service from `/admin` (or the chat).
 
 `reconcile_target`; any change to `/admin`'s behaviour; proposal creation by admins; emails to the
 lead on a decision (none today).
+
+## 7. Post-approval amendments (NOT reviewed; they override the sections they name)
+
+Adopted from the approving rounds' non-blocking notes after the approval; each was checked against
+the code by the author, none was reviewed.
+
+- **A1 (D8, the forecast).** The check also reads the pending `notificationOutbox` document
+  `outboxId("setlist", roleId)` (read-only). The outbox keeps the FIRST `before` of a debounce window
+  (`buildUpsert` uses `createIfNotExists`, `app/utils/outboxNotice.ts`) and the flush picks the
+  audience from that stored `before` (`resolveSetlistAudience`, `outboxSweep.ts`), so when a notice
+  is pending its `before` decides the forecast (empty → the whole worship team), not the live list.
+  With no pending notice and the approved songs equal to the live ones, the forecast says «sin
+  correo si las canciones no cambian» (`sameSongs`, `outboxClassify.ts`). Report tests cover both.
+- **A2 (D8, Task 3, names and homes).** The past-date predicate is exported as `isPastNoticeDate`:
+  `isPastServiceDate` already exists with other semantics (`app/components/admin/serviceReadiness.ts`).
+  `setlistNoticeEligible` lives in a neutral module (`app/utils/setlistNoticeEligibility.ts`) that
+  `serviceMutationSideEffects.ts` and `reports.ts` both import, so `reports.ts` still value-imports
+  no side-effect or commit module.
+- **A3 (D4, Task 1, peek).** Peek is a separate exported function (`peekOwnedCoordination`, and the
+  matching weekend loader variant), not a widened result on `resolveOwnedCoordination`, so the swap,
+  unpublish and copy callers keep the type they narrow on. Its bootstrap answer carries the owner
+  role, so the check still runs the owner-mismatch refusal and reads `published` and the
+  participants for the forecast.
+- **A4 (D5, wording).** The line binds the action for a model that follows the flow; it is a pure
+  render of public data, so a model could build another action's line itself. That is no weaker
+  than a token against a model that skips Frank's word, and ADR-0072's rule (the chat shows and
+  waits for his word) is the guard either way.
+- **A5 (Task 5).** The check runs inside `runReadTool`. Its `rev` and `line` are in the answer TEXT
+  (the last «Argumentos para review_setlist_proposal: …» line, as the other checks do), not only in
+  `structuredContent`; a test pins it. The write passes a `WriteFailureCopy` whose unknown-outcome
+  and bootstrap-reload lines say «vuelve a revisar con check_setlist_proposal_review», not
+  «get_service».
+- **A6 (§1, scope words).** «Rechazar» is «Solicitar cambios»: `/admin` has no reject action
+  (`PROPOSAL_ACTIONS`). «Responder en la conversación» is the service-message slice (in production,
+  PR #206).
+- **A7 (D7).** The chat trims the `request_changes` note; the panel sends it untrimmed, so the two
+  surfaces' retry fingerprints differ by surrounding whitespace. Stated in the gate-parity row.
+- **A8 (§5, cleanup and rollback).** `inventoryRoleDependencies` refuses deleting a special that
+  still has songs (`app/utils/roleDependencies.ts`), and reopen does not remove the approved songs.
+  Cleanup is therefore: clear the throwaway's setlist (`edit_setlist` with an empty list, or
+  `/admin`'s editor if the chat refuses an empty list; the service is unpublished, so nothing is
+  queued) → Frank deletes the test proposal in `/studio` → delete the service. Rollback: reverting
+  the PR removes the tools and the extraction; decisions already written stay (Studio's 3-day
+  history is the only undo, D10).
+- **A9 (docs).** `docs/MCP.md`'s «frozen … `team_notes` archive» line is reworded in the delivery:
+  the check shows the proposal's live `team_notes` (the lead's save writes it; approve copies it).
