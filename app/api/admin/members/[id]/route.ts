@@ -11,14 +11,32 @@ import { revalidateServiceViews } from "@/app/utils/revalidate";
 import { sanityConflictKind } from "@/app/utils/roleWriteRequest";
 import { SOLVER_CONFIG_DOC_ID } from "@/app/utils/solverConfigWriteRequest";
 import { operationalClient } from "@/sanity/lib/operationalClient";
-import { writeClient } from "@/sanity/lib/serverClient";
+import { serverClient, writeClient } from "@/sanity/lib/serverClient";
 import { revalidatePath } from "next/cache";
 import { NOTIFY_PREF_FIELD, wantsNotification, type NotifyKind } from "@/app/utils/notifyPrefs";
-import { validateMinistryWrite } from "@/app/ministries";
+import {
+  WORSHIP_ROLE_NEEDS_WORSHIP,
+  droppedMinistryRolePaths,
+  ministryRolesForStorage,
+  normalizeMinistries,
+  validateMinistryRolesWrite,
+  validateMinistryWrite,
+  worshipRoleWithoutWorship,
+  type MinistryRole,
+} from "@/app/ministries";
 import { parseMemberInstruments } from "@/app/components/admin/seatModel";
 import { MEMBER_TYPES } from "@/app/utils/memberTypes";
 
 const EMAIL_KINDS = Object.keys(NOTIFY_PREF_FIELD) as NotifyKind[];
+
+const MEMBER_CHANGED_MESSAGE = "Alguien más cambió a esta persona; recarga.";
+
+/** Same membership, read through the storage contract (absent = worship), any order. */
+function sameMinistries(a: unknown, b: unknown): boolean {
+  const x = normalizeMinistries(a);
+  const y = normalizeMinistries(b);
+  return x.length === y.length && x.every((m) => y.includes(m));
+}
 
 export async function PATCH(
   req: NextRequest,
@@ -43,6 +61,7 @@ export async function PATCH(
     instruments?: string[];
     ministries?: string[];
     managesMinistries?: string[];
+    ministryRoles?: unknown;
     // Legacy fallback field. No UI writes it any more (§5 of the notification
     // design takes it out of both panels); it stays accepted because it is what
     // an unset per-type field falls back to.
@@ -97,6 +116,46 @@ export async function PATCH(
     patch[field] = body[field];
   }
 
+  // Levels in a leveled ministry (Jóvenes, ADR-0075), validated against THIS
+  // request's `ministries`. With them the whole array is SET; without them, a
+  // `ministries` that leaves a leveled ministry out UNSETS its stale level. One
+  // or the other, so no patch both sets and unsets the same path.
+  let unsetPaths: string[] = [];
+  if (body.ministryRoles !== undefined) {
+    const error = validateMinistryRolesWrite(body.ministryRoles, body.ministries);
+    if (error) return NextResponse.json({ error }, { status: 400 });
+    patch.ministryRoles = ministryRolesForStorage(body.ministryRoles as MinistryRole[]);
+  } else if (body.ministries !== undefined) {
+    unsetPaths = droppedMinistryRolePaths(body.ministries);
+  }
+
+  // A worship management role needs worship, judged on the RESULTING state
+  // (access plan §3.4): `requireActiveManager` reads `role` alone, so a Jóvenes
+  // admin saved as `admin` would be a worship admin. Refused only when the
+  // request CHANGES role or ministries — the form always re-sends `role`, and
+  // refusing an unchanged one would lock an already-inconsistent person out of
+  // every other edit. The verdict rests on the stored state, so the write is
+  // pinned to the revision it read: a concurrent change answers 409, never a
+  // silent read-then-write on a permission field.
+  let readRevision: string | undefined;
+  if (body.role || body.ministries !== undefined) {
+    const stored = await serverClient.fetch<{ _rev?: string; role?: string | null; ministries?: unknown } | null>(
+      `*[_type == "teamMembers" && _id == $id][0]{ _rev, role, ministries }`,
+      { id },
+    );
+    if (!stored || typeof stored._rev !== "string") {
+      return NextResponse.json({ error: "Miembro no encontrado." }, { status: 404 });
+    }
+    const changesRole = !!body.role && body.role !== stored.role;
+    const changesMinistries = body.ministries !== undefined && !sameMinistries(body.ministries, stored.ministries);
+    const nextRole = body.role || stored.role;
+    const nextMinistries = body.ministries ?? stored.ministries;
+    if ((changesRole || changesMinistries) && worshipRoleWithoutWorship(nextRole, nextMinistries)) {
+      return NextResponse.json({ error: WORSHIP_ROLE_NEEDS_WORSHIP }, { status: 400 });
+    }
+    readRevision = stored._rev;
+  }
+
   // The five per-type email toggles, keyed off the same map every sender uses.
   const notifPatch: Record<string, unknown> = {};
   if (typeof body.notifEmail === "boolean") notifPatch["notifPrefs.email"] = body.notifEmail;
@@ -110,11 +169,22 @@ export async function PATCH(
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
 
-  let mutation = writeClient.patch(id).set(patch);
+  let mutation = writeClient.patch(id);
+  if (readRevision) mutation = mutation.ifRevisionId(readRevision);
+  mutation = mutation.set(patch);
+  if (unsetPaths.length > 0) mutation = mutation.unset(unsetPaths);
   if (Object.keys(notifPatch).length > 0) {
     mutation = mutation.setIfMissing({ notifPrefs: {} }).set(notifPatch);
   }
-  const doc = await mutation.commit();
+  let doc;
+  try {
+    doc = await mutation.commit();
+  } catch (err) {
+    if (readRevision && sanityConflictKind(err)) {
+      return NextResponse.json({ error: MEMBER_CHANGED_MESSAGE }, { status: 409 });
+    }
+    throw err;
+  }
   // A renamed member's name/alias surfaces on ISR schedule/home/me views.
   revalidateServiceViews();
   revalidatePath("/me");

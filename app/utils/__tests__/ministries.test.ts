@@ -16,13 +16,13 @@ describe("ministry registry", () => {
     expect(MINISTRIES.jovenes.groups.map((g) => g.id)).toEqual(["otro-nivel", "invencibles", "emprendedores"]);
     expect(ALL_MINISTRY_IDS).toEqual(["worship", "kids", "jovenes"]);
   });
-  it("can READ jovenes but not WRITE it yet (ADR-0075: reads ship before writes)", () => {
+  it("jovenes is assignable — its read side reached production first (ADR-0075)", () => {
     // Code older than the jovenes entry reads a stored ["jovenes"] as WORSHIP, and
-    // preview writes the production dataset — so jovenes becomes assignable only
-    // in the PR that ships its write side, after this one is in production.
-    expect(ASSIGNABLE_MINISTRY_IDS).toEqual(["worship", "kids"]);
-    expect(validateMinistryWrite("ministries", ["jovenes"])).toBe("Invalid ministry");
-    expect(validateMinistryWrite("ministries", ["worship", "jovenes"])).toBe("Invalid ministry");
+    // preview writes the production dataset — so jovenes became assignable only
+    // after the release that reads it (PR #212) was in production.
+    expect(ASSIGNABLE_MINISTRY_IDS).toEqual(["worship", "kids", "jovenes"]);
+    expect(validateMinistryWrite("ministries", ["jovenes"])).toBeNull();
+    expect(validateMinistryWrite("ministries", ["worship", "jovenes"])).toBeNull();
     expect(normalizeMinistries(["jovenes"])).toEqual(["jovenes"]);
   });
   it("narrows ids", () => {

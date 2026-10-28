@@ -772,7 +772,31 @@ pass.
   and that release is never undone — by a git revert, a Vercel instant rollback or promoting
   an older deployment — while anyone holds `"jovenes"`: count
   `*[_type=="teamMembers" && "jovenes" in ministries]` first, and if it is not zero take it off
-  those members (a production write: dry run, then Frank's consent).
+  those members (a production write: dry run, then Frank's consent). `jovenes` became
+  assignable in phase 1's PR 3, after PR 2 (#212) was verified in production on 2026-10-28.
+- **Writing a level (`validateMinistryRolesWrite`, both member routes).** `ministryRoles` is
+  accepted only with `ministries` in the SAME request, naming every item's ministry — judged
+  against the stored value instead, an absent `ministries` (= worship) would let a Jóvenes level
+  sit on someone who is no Jóvenes member at all. Strict where the read is forgiving: exactly
+  `ministry`/`level`/`groups`, a leveled ministry, a known level, known and unique groups, one
+  item per ministry, a `leader` with at least one group. Stored by `ministryRolesForStorage`
+  (`_key` = ministry, `_type: "ministryRole"`). A `ministries` sent WITHOUT `ministryRoles`
+  unsets the level of each leveled ministry it leaves out (`droppedMinistryRolePaths`), so a
+  stale level cannot revive; set and unset never touch one path in one patch. The Miembros
+  form sends `ministryRoles` whenever it sends `ministries`, without the stored `_key`/`_type`;
+  `adminMembersQuery` carries the field only on its super-admin (`$all`) arm, and the Jóvenes
+  scope tab is the super-admin's only (`ministryScopeIds`).
+- **A worship role needs worship (`worshipRoleWithoutWorship`).** `requireActiveManager` reads
+  `role` alone, so a Jóvenes admin saved as `admin` would be a worship admin. The members API
+  judges the RESULTING role and ministries (body, else stored) and refuses with 400 only a
+  request that CHANGES one of them — the form always re-sends `role`, so refusing an unchanged
+  one would lock an already-inconsistent person out of every edit. A PATCH that read the
+  stored state for this is pinned to its `_rev` (`ifRevisionId`; a mismatch answers 409
+  «Alguien más cambió a esta persona; recarga.»). The Studio, the second writer of `role` and
+  `ministries`, blocks publishing the same state with a `role` validation. A Studio edit that
+  drops `jovenes` from `ministries` leaves its `ministryRoles` item (the read ignores it, but
+  re-adding `jovenes` in the Studio revives the old level) — accepted: Miembros is the
+  supported path.
 - **Isolation is two-way:** a kids-only member reaches no worship surface, and a
   worship `admin`/`content-editor` gets nothing in kids. Only `super-admin` spans
   both. Role never implies ministry; management never implies membership. That

@@ -2,7 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
 import { operationalClient } from "@/sanity/lib/operationalClient";
-import { validateMinistryWrite } from "@/app/ministries";
+import {
+  WORSHIP_ROLE_NEEDS_WORSHIP,
+  validateMinistryRolesWrite,
+  validateMinistryWrite,
+  worshipRoleWithoutWorship,
+  ministryRolesForStorage,
+  type MinistryRole,
+} from "@/app/ministries";
 import { adminMembersQuery } from "@/app/utils/serviceReadQueries";
 import { parseMemberInstruments } from "@/app/components/admin/seatModel";
 
@@ -46,6 +53,7 @@ export async function POST(req: NextRequest) {
     instruments?: string[];
     ministries?: string[];
     managesMinistries?: string[];
+    ministryRoles?: unknown;
   };
   const { member_name, alias, email, role, memberType, ministries, managesMinistries } = body;
 
@@ -61,6 +69,18 @@ export async function POST(req: NextRequest) {
     if (body[field] === undefined) continue;
     const error = validateMinistryWrite(field, body[field]);
     if (error) return NextResponse.json({ error }, { status: 400 });
+  }
+
+  // A level in a leveled ministry (Jóvenes) is validated against the
+  // `ministries` of THIS request, which must name its ministry (ADR-0075).
+  if (body.ministryRoles !== undefined) {
+    const error = validateMinistryRolesWrite(body.ministryRoles, ministries);
+    if (error) return NextResponse.json({ error }, { status: 400 });
+  }
+  // A worship management role needs worship (absent ministries = worship). A
+  // create always "changes" both, so the rule always applies here.
+  if (worshipRoleWithoutWorship(role ?? "member", ministries)) {
+    return NextResponse.json({ error: WORSHIP_ROLE_NEEDS_WORSHIP }, { status: 400 });
   }
 
   let instruments: string[] | undefined;
@@ -82,6 +102,9 @@ export async function POST(req: NextRequest) {
     ...(instruments !== undefined ? { instruments } : {}),
     ...(ministries !== undefined ? { ministries } : {}),
     ...(managesMinistries !== undefined ? { managesMinistries } : {}),
+    ...(body.ministryRoles !== undefined
+      ? { ministryRoles: ministryRolesForStorage(body.ministryRoles as MinistryRole[]) }
+      : {}),
     slug: { _type: "slug", current: slug },
   });
 
