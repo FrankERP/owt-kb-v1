@@ -1,6 +1,6 @@
 # ADR-0019: Ship Kids as its own vertical; generalize at the third ministry
 
-**Date:** 2026-08-19 · **Status:** Accepted
+**Date:** 2026-08-19 · **Status:** Accepted, amended by [ADR-0075](0075-ministries-share-one-app-and-a-youth-group-is-a-security-boundary.md) (2026-10-27: the third ministry, Pastores de jóvenes, arrived; generalization starts, extracted from worship and Kids)
 
 ## Context
 
