@@ -5,7 +5,7 @@ vi.mock("@/sanity/lib/serverClient", () => ({
   serverClient: { fetch: (...a: unknown[]) => fetchMock(...a) },
 }));
 
-import { isMemberActive, getMemberAccess, __clearMemberAccessCache } from "../memberAccess";
+import { isMemberActive, getMemberAccess, accessFromDoc, __clearMemberAccessCache } from "../memberAccess";
 
 beforeEach(() => { fetchMock.mockReset(); __clearMemberAccessCache(); });
 
@@ -42,7 +42,7 @@ describe("getMemberAccess", () => {
   it("returns the member's current role alongside active", async () => {
     fetchMock.mockResolvedValueOnce({ _id: "m1", disabled: false, role: "admin" });
     expect(await getMemberAccess("m1")).toEqual({
-      active: true, role: "admin", ministries: ["worship"], managesMinistries: [],
+      active: true, role: "admin", ministries: ["worship"], managesMinistries: [], ministryRoles: [],
     });
   });
 
@@ -56,7 +56,7 @@ describe("getMemberAccess", () => {
   it("returns role null when the doc has no role field", async () => {
     fetchMock.mockResolvedValueOnce({ _id: "m1", disabled: false });
     expect(await getMemberAccess("m1")).toEqual({
-      active: true, role: null, ministries: ["worship"], managesMinistries: [],
+      active: true, role: null, ministries: ["worship"], managesMinistries: [], ministryRoles: [],
     });
   });
 
@@ -65,7 +65,7 @@ describe("getMemberAccess", () => {
     // ["worship"] default — absence of a document is not legacy membership.
     fetchMock.mockResolvedValueOnce(null);
     expect(await getMemberAccess("gone")).toEqual({
-      active: false, role: null, ministries: [], managesMinistries: [],
+      active: false, role: null, ministries: [], managesMinistries: [], ministryRoles: [],
     });
   });
 
@@ -87,7 +87,7 @@ describe("getMemberAccess", () => {
 
   it("treats a missing id as inactive without fetching", async () => {
     expect(await getMemberAccess("")).toEqual({
-      active: false, role: null, ministries: [], managesMinistries: [],
+      active: false, role: null, ministries: [], managesMinistries: [], ministryRoles: [],
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -115,5 +115,33 @@ describe("getMemberAccess", () => {
   it("defaults managesMinistries to empty", async () => {
     fetchMock.mockResolvedValueOnce({ _id: "m3", disabled: false, role: "admin" });
     expect((await getMemberAccess("m3")).managesMinistries).toEqual([]);
+  });
+
+  it("fetches and normalizes ministryRoles, cache hit included (ADR-0075)", async () => {
+    fetchMock.mockResolvedValue({
+      _id: "m4", disabled: false, role: "member", ministries: ["jovenes"],
+      ministryRoles: [{ _key: "jovenes", ministry: "jovenes", level: "leader", groups: ["invencibles", "bogus"] }],
+    });
+    const expected = [{ ministry: "jovenes", level: "leader", groups: ["invencibles"] }];
+    expect((await getMemberAccess("m4")).ministryRoles).toEqual(expected);
+    const query = String(fetchMock.mock.calls[0][0]);
+    for (const f of ["disabled", "role", "ministries", "managesMinistries", "ministryRoles"]) {
+      expect(query, f).toMatch(new RegExp(`\\b${f}\\b`));
+    }
+    expect((await getMemberAccess("m4")).ministryRoles).toEqual(expected);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("accessFromDoc", () => {
+  it("is exactly what getMemberAccess returns for the same document", async () => {
+    const doc = { _id: "m5", disabled: false, role: "admin", ministries: ["worship", "kids"], managesMinistries: ["kids"] };
+    fetchMock.mockResolvedValueOnce(doc);
+    expect(await getMemberAccess("m5")).toEqual(accessFromDoc(doc));
+  });
+  it("grants nothing for a missing document", () => {
+    expect(accessFromDoc(null)).toEqual({
+      active: false, role: null, ministries: [], managesMinistries: [], ministryRoles: [],
+    });
   });
 });

@@ -559,7 +559,17 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
 
 ### Auth & access (also see [AUTH_AND_SECURITY.md](AUTH_AND_SECURITY.md))
 - **`getMemberAccess(sanityId)`**, **`isMemberActive(sanityId)`** ([memberAccess.ts](../app/utils/memberAccess.ts))
-  — 30s-TTL live access/role snapshot.
+  — 30s-TTL live access/role snapshot. **`accessFromDoc(doc)`** (same file) is its pure
+  normalization (active, `normalizeMinistries`, `managesMinistries`, `ministryRoles`) — the ONE
+  place a stored member becomes an access snapshot; the equivalence test feeds it raw documents.
+- **`isMinistryMember(access, id)`**, **`isMinistryManager(access, id)`**, **`levelIn`**,
+  **`groupsIn`** ([ministryAccess.ts](../app/utils/ministryAccess.ts), ADR-0075) — the pure answers
+  the ministry guards wrap; never open-code `access.role === "super-admin" || …` again.
+- **`normalizeMinistryRoles(raw, ministries)`**, **`isGroupId(ministry, x)`**,
+  **`ASSIGNABLE_MINISTRY_IDS`**, **`LEVELED_MINISTRY_IDS`**, **`MINISTRY_LEVELS`**
+  ([ministries.ts](../app/ministries.ts)) — the one reading of `teamMembers.ministryRoles` (fails
+  closed), the prototype-safe group check, and the readable-vs-writable split (`ALL_MINISTRY_IDS`
+  reads, `ASSIGNABLE_MINISTRY_IDS` writes and offers).
 - **`requireActiveSession()`**, **`requireActiveManager()`** ([authGuards.ts](../app/utils/authGuards.ts)).
 - **`verifyGoogleIdToken(idToken)`** ([googleIdToken.ts](../app/utils/googleIdToken.ts)) — native
   SSO token verification.

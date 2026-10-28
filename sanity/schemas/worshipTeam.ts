@@ -1,5 +1,13 @@
 import { defineType } from "sanity";
 import { INSTRUMENT_SEAT_OPTIONS } from "./instrumentSeats";
+import {
+  ASSIGNABLE_MINISTRY_IDS,
+  LEVELED_MINISTRY_IDS,
+  MINISTRIES,
+  MINISTRY_LEVELS,
+} from "../../app/ministries";
+
+const MINISTRY_LEVEL_TITLE = { member: "Miembro", leader: "Líder", admin: "Admin" } as const;
 
 export const teamMembers = defineType({
   name: "teamMembers",
@@ -59,14 +67,56 @@ export const teamMembers = defineType({
       title: "Ministerios (membresía)",
       type: "array",
       of: [{ type: "string" }],
+      // From the registry's ASSIGNABLE list, never ALL: a ministry the app can read
+      // but not yet store is not offered here either (ADR-0075).
       options: {
-        list: [
-          { title: "Alabanza", value: "worship" },
-          { title: "Oasis Kids", value: "kids" },
-        ],
+        list: ASSIGNABLE_MINISTRY_IDS.map((id) => ({ title: MINISTRIES[id].name, value: id })),
       },
       description:
         "Ministerios a los que pertenece este miembro. VACÍO o ausente = solo Alabanza (comportamiento legado; NO rellenar en masa).",
+    },
+    {
+      // Level and groups in a LEVELED ministry (Jóvenes), ADR-0075. Read-only here:
+      // its one writer is the members API, which also requires the ministry in
+      // `ministries` (a level without membership grants nothing). `_key` is the
+      // ministry id, so one person has at most one item per ministry.
+      name: "ministryRoles",
+      title: "Nivel por ministerio",
+      type: "array",
+      readOnly: true,
+      of: [
+        {
+          type: "object",
+          name: "ministryRole",
+          fields: [
+            {
+              name: "ministry",
+              title: "Ministerio",
+              type: "string",
+              options: { list: LEVELED_MINISTRY_IDS.map((id) => ({ title: MINISTRIES[id].name, value: id })) },
+            },
+            {
+              name: "level",
+              title: "Nivel",
+              type: "string",
+              options: { list: MINISTRY_LEVELS.map((l) => ({ title: MINISTRY_LEVEL_TITLE[l], value: l })) },
+            },
+            {
+              name: "groups",
+              title: "Grupos",
+              type: "array",
+              of: [{ type: "string" }],
+              options: {
+                list: LEVELED_MINISTRY_IDS.flatMap((id) =>
+                  MINISTRIES[id].groups.map((g) => ({ title: g.name, value: g.id })),
+                ),
+              },
+            },
+          ],
+          preview: { select: { title: "ministry", subtitle: "level" } },
+        },
+      ],
+      description: "Solo lectura: se edita desde Miembros (super-admin).",
     },
     {
       // `worship` is deliberately NOT offered here — worship management stays with the

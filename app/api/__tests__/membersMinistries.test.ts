@@ -86,6 +86,18 @@ describe("PATCH /api/admin/members/[id] — ministries", () => {
     expect(h.commit).not.toHaveBeenCalled();
   });
 
+  // ADR-0075: the app READS jovenes before anything may WRITE it — code older than
+  // the registry entry reads a stored ["jovenes"] as worship, and preview writes
+  // the production dataset. Its write side ships in a later PR.
+  for (const ministries of [["jovenes"], ["worship", "jovenes"]]) {
+    it(`rejects ${JSON.stringify(ministries)} until jovenes is assignable`, async () => {
+      const res = await PATCH(req({ ministries }), { params });
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: "Invalid ministry" });
+      expect(h.commit).not.toHaveBeenCalled();
+    });
+  }
+
   it("rejects `worship` in managesMinistries — no guard reads it, so storing it would be a lie", async () => {
     const res = await PATCH(req({ managesMinistries: ["worship"] }), { params });
     expect(res.status).toBe(400);
@@ -173,6 +185,14 @@ describe("POST /api/admin/members — ministries", () => {
     expect(res.status).toBe(400);
     expect(h.create).not.toHaveBeenCalled();
   });
+
+  for (const ministries of [["jovenes"], ["worship", "jovenes"]]) {
+    it(`rejects ${JSON.stringify(ministries)} until jovenes is assignable (ADR-0075)`, async () => {
+      const res = await POST(req({ ...base, ministries }));
+      expect(res.status).toBe(400);
+      expect(h.create).not.toHaveBeenCalled();
+    });
+  }
 
   it("omits the fields entirely when the body does not carry them", async () => {
     // Absent ⇒ worship by the storage contract; writing `[]` here would be a lie.
