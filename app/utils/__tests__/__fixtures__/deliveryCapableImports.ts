@@ -37,4 +37,6 @@ export const DELIVERY_CAPABLE_IMPORTS: readonly string[] = [
   "serviceThreadCommit",
   // Admin parity phase 3 (S4): Oasis Kids' writers, extracted from the `/api/kids/*` routes.
   "kidsCommit",
+  // Admin parity phase 3 (S1): the proposal-decision writer, extracted from its route.
+  "proposalReviewCommit",
 ];

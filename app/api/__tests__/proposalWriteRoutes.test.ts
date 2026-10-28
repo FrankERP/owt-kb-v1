@@ -46,6 +46,7 @@ vi.mock("@/app/utils/revalidate", () => ({
 
 import { POST } from "@/app/api/me/proposals/route";
 import { PATCH } from "@/app/api/admin/proposals/[id]/route";
+import { planProposalReview, reviewProposal } from "@/app/utils/proposalReviewCommit";
 import {
   approvalInputFingerprint,
   buildApprovalReceipt,
@@ -1483,5 +1484,164 @@ describe("PATCH /api/admin/proposals/[id] — reconcile_target", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ idempotent: true });
     expect(transactions).toHaveLength(0);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// proposalReviewCommit — the route's writer outside the route (admin parity S1)
+// ════════════════════════════════════════════════════════════════════════════
+
+describe("proposalReviewCommit — the same writer the route calls, and its read-only peek", () => {
+  /** What a call committed, without the random keys and clock values the two runs cannot share. */
+  function committedShape() {
+    return committedTransactions().map((tx) =>
+      tx.ops.map((op) =>
+        op.kind === "patch"
+          ? { kind: op.kind, id: op.id, rev: op.rev, fields: Object.keys(op.set).sort(), appended: Object.keys(op.appended) }
+          : op.kind === "create"
+            ? { kind: op.kind, id: op.doc._id }
+            : op,
+      ),
+    );
+  }
+
+  function reset() {
+    transactions.length = 0;
+    commitOutcomes.length = 0;
+    store = emptyStore();
+  }
+
+  const scenarios: [string, () => void, Record<string, unknown>, string][] = [
+    [
+      "a weekend approval (create)",
+      () => {
+        store.roles.push(sundayRole());
+        store.locks.push(lock());
+        store.proposals.push(proposal());
+      },
+      { action: "approve", rev: "prop-rev-1" },
+      PROPOSAL_ID,
+    ],
+    [
+      "a special approval",
+      () => {
+        store.roles.push(specialRole());
+        store.proposals.push(
+          proposal({ _id: "setlistProposal.role-sp", service_type: "special", service_ref: "role-sp", service_date: "2026-08-20" }),
+        );
+      },
+      { action: "approve", rev: "prop-rev-1" },
+      "setlistProposal.role-sp",
+    ],
+    [
+      "a change request with a note",
+      () => {
+        store.roles.push(sundayRole());
+        store.locks.push(lock());
+        store.proposals.push(proposal());
+      },
+      { action: "request_changes", rev: "prop-rev-1", adminNotes: "Cambia la última" },
+      PROPOSAL_ID,
+    ],
+    [
+      "a stale revision",
+      () => {
+        store.roles.push(sundayRole());
+        store.locks.push(lock());
+        store.proposals.push(proposal());
+      },
+      { action: "approve", rev: "prop-rev-STALE" },
+      PROPOSAL_ID,
+    ],
+    [
+      "a reopen of a pending proposal (wrong source status)",
+      () => {
+        store.roles.push(sundayRole());
+        store.locks.push(lock());
+        store.proposals.push(proposal());
+      },
+      { action: "reopen", rev: "prop-rev-1" },
+      PROPOSAL_ID,
+    ],
+  ];
+
+  it.each(scenarios)("answers %s byte for byte as the route does, and commits the same operations", async (_label, seed, body, id) => {
+    seed();
+    const res = await patchAdmin(id, body);
+    const routeAnswer = { status: res.status, body: await res.json() };
+    const routeOps = committedShape();
+
+    reset();
+    seed();
+    const outcome = await reviewProposal(id, body, { reviewerId: "admin-1" });
+    expect({ status: outcome.status, body: JSON.parse(JSON.stringify(outcome.body)) }).toEqual(routeAnswer);
+    expect(committedShape()).toEqual(routeOps);
+  });
+
+  it("reports what an approval held, with no re-read: the songs written, the replaced list, the push audience", async () => {
+    store.roles.push(sundayRole());
+    store.locks.push(lock());
+    store.proposals.push(proposal());
+    const outcome = await reviewProposal(PROPOSAL_ID, { action: "approve", rev: "prop-rev-1" }, { reviewerId: "admin-1" });
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.effects).toMatchObject({
+      action: "approve",
+      status: "approved",
+      idempotent: false,
+      roleId: "role-1",
+      roleType: "sunday_role",
+      serviceDate: WEEK,
+      setlistId: `featuredSongs.${WEEK}`,
+      replacedSongs: [],
+      published: true,
+      pushRecipients: ["mem-1"],
+    });
+    expect(outcome.effects.songs).toHaveLength(2);
+  });
+
+  it("peek judges by the same rules but never writes, and reports the revision instead of asserting it", async () => {
+    store.roles.push(sundayRole());
+    store.locks.push(lock());
+    store.proposals.push(proposal());
+    const peek = await planProposalReview(PROPOSAL_ID, { action: "approve", rev: null, adminNotes: "" }, "peek");
+    expect(peek).toMatchObject({ ok: true, plan: { kind: "approve", docRev: "prop-rev-1", needsBootstrap: false, liveTeamNotes: "" } });
+    // The write with a stale rev is refused; the peek never asserted one.
+    const write = await planProposalReview(PROPOSAL_ID, { action: "approve", rev: "prop-rev-STALE", adminNotes: "" }, "write");
+    expect(write).toMatchObject({ ok: false, status: 409, body: { error: "stale_revision" } });
+    expect(transactions).toHaveLength(0);
+  });
+
+  it("peek on a legacy weekend with no lock reports the bootstrap instead of committing it", async () => {
+    store.roles.push(sundayRole());
+    store.proposals.push(proposal());
+    const peek = await planProposalReview(PROPOSAL_ID, { action: "approve", rev: null, adminNotes: "" }, "peek");
+    expect(peek).toMatchObject({ ok: true, plan: { kind: "approve", needsBootstrap: true, lock: null } });
+    const transition = await planProposalReview(
+      PROPOSAL_ID,
+      { action: "request_changes", rev: null, adminNotes: "Cambia" },
+      "peek",
+    );
+    expect(transition).toMatchObject({ ok: true, plan: { kind: "transition", needsBootstrap: true } });
+    expect(transactions).toHaveLength(0);
+  });
+
+  it("peek predicts a replay exactly, the note included", async () => {
+    store.roles.push(sundayRole());
+    store.locks.push(lock());
+    store.proposals.push(proposal());
+    const done = await reviewProposal(
+      PROPOSAL_ID,
+      { action: "request_changes", rev: "prop-rev-1", adminNotes: "Cambia la última" },
+      { reviewerId: "admin-1" },
+    );
+    expect(done.ok).toBe(true);
+    const before = transactions.length;
+    const same = await planProposalReview(PROPOSAL_ID, { action: "request_changes", rev: null, adminNotes: "Cambia la última" }, "peek");
+    expect(same).toMatchObject({ ok: true, plan: { kind: "replay" } });
+    // Another note is a new request (changes_requested is a valid source), not a replay.
+    const other = await planProposalReview(PROPOSAL_ID, { action: "request_changes", rev: null, adminNotes: "Otra nota" }, "peek");
+    expect(other).toMatchObject({ ok: true, plan: { kind: "transition" } });
+    expect(transactions).toHaveLength(before);
   });
 });

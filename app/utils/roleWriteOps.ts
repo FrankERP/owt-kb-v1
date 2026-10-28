@@ -348,16 +348,18 @@ export type RoleCoordination =
   | { ok: false; failure: RoleWriteFailure };
 
 /**
- * Resolve the coordination token every involved role must already own, so ONE
- * business transaction can assert all of them. A wrong-owner, vacant or malformed
- * token is an integrity conflict and is never repaired implicitly; exactly one
- * legacy weekend role with no token runs the §1 bootstrap maintenance transaction.
- * Any maintenance commit, concurrent maintenance, or uncertain persistence stops
- * the complete logical operation; callers never continue into a business write.
+ * The coordination plan for every involved role, read-only: each role's owned
+ * token, or the first legacy weekend role that would need the §1 bootstrap
+ * (and the roles planned before it). Shared by the writer
+ * (`resolveOwnedCoordination`) and the read-only check (`peekOwnedCoordination`),
+ * so both judge a target by the same rule.
  */
-export async function resolveOwnedCoordination(
-  targets: readonly RoleWriteTarget[],
-): Promise<RoleCoordination> {
+type CoordinationPlan =
+  | { ok: true; roles: CoordinatedRole[]; bootstrap: null }
+  | { ok: true; roles: CoordinatedRole[]; bootstrap: RoleWriteTarget }
+  | { ok: false; failure: RoleWriteFailure };
+
+async function planOwnedCoordination(targets: readonly RoleWriteTarget[]): Promise<CoordinationPlan> {
   const out: CoordinatedRole[] = [];
   const lockIds = targets
     .map((t) => t.lockId)
@@ -382,28 +384,7 @@ export async function resolveOwnedCoordination(
         failure: { code: "integrity_conflict", details: { lockId, detail: plan.detail } },
       };
     }
-    if (plan.kind === "bootstrap") {
-      const boot = await bootstrapLegacyLock({
-        roleId: target.role._id,
-        roleRev: target.role._rev,
-        targetKey,
-        dateField: roleDateField(target.role._type),
-        date: target.date,
-      });
-      const code =
-        boot.outcome === "committed_reload"
-          ? "bootstrap_completed_reload"
-          : boot.outcome === "unknown"
-            ? "bootstrap_outcome_unknown"
-            : "stale_revision";
-      return {
-        ok: false,
-        failure: {
-          code,
-          details: { ...boot.details, id: target.role._id },
-        },
-      };
-    }
+    if (plan.kind === "bootstrap") return { ok: true, roles: out, bootstrap: target };
     out.push({
       role: target.role,
       targetKey,
@@ -411,7 +392,80 @@ export async function resolveOwnedCoordination(
       lock: locks.get(lockId) as StoredLock,
     });
   }
-  return { ok: true, roles: out, bootstrapped: false };
+  return { ok: true, roles: out, bootstrap: null };
+}
+
+/**
+ * Resolve the coordination token every involved role must already own, so ONE
+ * business transaction can assert all of them. A wrong-owner, vacant or malformed
+ * token is an integrity conflict and is never repaired implicitly; exactly one
+ * legacy weekend role with no token runs the §1 bootstrap maintenance transaction.
+ * Any maintenance commit, concurrent maintenance, or uncertain persistence stops
+ * the complete logical operation; callers never continue into a business write.
+ */
+export async function resolveOwnedCoordination(
+  targets: readonly RoleWriteTarget[],
+): Promise<RoleCoordination> {
+  const plan = await planOwnedCoordination(targets);
+  if (!plan.ok) return plan;
+  const target = plan.bootstrap;
+  if (target) {
+    const boot = await bootstrapLegacyLock({
+      roleId: target.role._id,
+      roleRev: target.role._rev,
+      targetKey: target.targetKey,
+      dateField: roleDateField(target.role._type),
+      date: target.date,
+    });
+    const code =
+      boot.outcome === "committed_reload"
+        ? "bootstrap_completed_reload"
+        : boot.outcome === "unknown"
+          ? "bootstrap_outcome_unknown"
+          : "stale_revision";
+    return {
+      ok: false,
+      failure: {
+        code,
+        details: { ...boot.details, id: target.role._id },
+      },
+    };
+  }
+  return { ok: true, roles: plan.roles, bootstrapped: false };
+}
+
+/** `peekOwnedCoordination`'s answer: the writer's plan, with the bootstrap reported instead of run. */
+export type RoleCoordinationPeek =
+  | { ok: true; roles: CoordinatedRole[]; needsBootstrap: false }
+  | {
+      ok: true;
+      /** The roles planned before it, then the one that needs it (with `lock: null`). */
+      roles: CoordinatedRole[];
+      needsBootstrap: true;
+    }
+  | { ok: false; failure: RoleWriteFailure };
+
+/**
+ * The read-only twin of `resolveOwnedCoordination` for a check that must never
+ * write (admin parity S1, D4): the same plan, but a legacy weekend role with no
+ * token is REPORTED (`needsBootstrap: true`, its role carried with `lock: null`)
+ * instead of bootstrapped. It never calls `bootstrapLegacyLock` or any client
+ * that writes. Its own type, so the writers' callers keep the one they narrow on.
+ */
+export async function peekOwnedCoordination(
+  targets: readonly RoleWriteTarget[],
+): Promise<RoleCoordinationPeek> {
+  const plan = await planOwnedCoordination(targets);
+  if (!plan.ok) return plan;
+  const target = plan.bootstrap;
+  if (target) {
+    return {
+      ok: true,
+      roles: [...plan.roles, { role: target.role, targetKey: target.targetKey, date: target.date, lock: null }],
+      needsBootstrap: true,
+    };
+  }
+  return { ok: true, roles: plan.roles, needsBootstrap: false };
 }
 
 // ── Target occupancy ────────────────────────────────────────────────────────

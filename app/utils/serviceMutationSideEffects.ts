@@ -74,6 +74,7 @@ import { revalidatePath } from "next/cache";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import { writeClient } from "@/sanity/lib/serverClient";
 import { revalidateServiceViews } from "./revalidate";
+import { setlistNoticeEligible } from "./setlistNoticeEligibility";
 import { WORSHIP_AUDIENCE_GROQ_FILTER } from "@/app/ministries";
 import { sendPush } from "./push";
 import {
@@ -668,15 +669,8 @@ function setlistUpsert(
   now: Date,
   windows: UpsertWindowOverrides = {},
 ) {
-  // `published !== false` — missing/true is member-visible (grandfathered).
-  if (input.published === false) return null;
-  if (!input.roleId) return null;
-  // A notice with no usable date could never render a correct subject line —
-  // `isPast` at flush is a lexicographic YYYY-MM-DD comparison with no defined
-  // reading for `""`. Declining to mint the notice here is the right outcome,
-  // not deferring to that comparison's incidental behavior.
-  if (!input.serviceDate) return null;
-  if (!input.hasSongs) return null;
+  // The one eligibility rule, shared with the MCP proposal check's forecast.
+  if (!setlistNoticeEligible(input)) return null;
   return {
     id: outboxId("setlist", input.roleId),
     ...buildUpsert(

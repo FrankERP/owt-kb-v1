@@ -532,6 +532,15 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
 - **`PROPOSAL_NOTES_MAX`** ([proposalNotesLimit.ts](../app/utils/proposalNotesLimit.ts)) — 4000
   chars per message. A leaf so both the client and the pure write path can read it.
 
+- **`reviewProposal` / `planProposalReview`** ([proposalReviewCommit.ts](../app/utils/proposalReviewCommit.ts))
+  — the ONLY writer that decides a setlist proposal (approve, request changes, reopen, retarget),
+  called by `PATCH /api/admin/proposals/[id]` and the MCP's `review_setlist_proposal` (ADR-0075).
+  `planProposalReview(id, request, "peek")` is its prefix for a read-only check: the `_rev` reported,
+  the weekend lock bootstrap reported (`peekWeekendCoordination` / `peekOwnedCoordination`), never run.
+- **`setlistNoticeEligible`** ([setlistNoticeEligibility.ts](../app/utils/setlistNoticeEligibility.ts))
+  — the ONE rule for whether a setlist write queues the setlist notice (published, a role, not a past
+  date by `isPastNoticeDate`, songs); `setlistUpsert` and the MCP's forecast both call it.
+
 ### Oasis Kids planner (shared by `/api/kids/*` and the MCP Kids tools, admin parity phase 3)
 - **`kidsCommit.ts`** ([kidsCommit.ts](../app/utils/kidsCommit.ts)) — the ONLY Kids writers, after
   authorization (ADR-0043 shape, `CommitOutcome`): `saveKidsSunday(raw)` (one Sunday, WHOLE: an
