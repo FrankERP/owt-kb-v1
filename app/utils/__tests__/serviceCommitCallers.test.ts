@@ -72,6 +72,8 @@ const EXPECTED_CALLERS: Record<string, string[]> = {
     "app/api/kids/schedules/route.ts",
     "app/mcp/tools/kids.ts",
   ],
+  // Admin parity phase 3 (S1): the proposals PATCH route and the MCP proposal-decision tools.
+  proposalReviewCommit: ["app/api/admin/proposals/[id]/route.ts", "app/mcp/tools/setlistProposalReview.ts"],
   // Solver v3 C2 WR-16 / IF2-23: the ONE mutation path of `fairnessMonth`. Its importer
   // list grows only by a reviewed edit here — C2 adds `fairnessMonthCommit.ts` and
   // `fairnessLedgerRead.ts`; C4 adds its CLI file and its `scripts/lib` core.

@@ -1,6 +1,8 @@
 # OWT MCP — admin parity, phase 3, slice S3: creating and editing songs from the chat (plan)
 
-**Status:** DRAFT for adversarial review (critical tier); rounds 1 and 3 fixed (round 2 approved an earlier text), churn cap reached, round 4 awaits Frank. Parent plan:
+**Status:** APPROVED (critical tier): two fresh reviewers in a row approved the bytes with SHA-256
+`a5132dc0…acf8` (commit 19a04161); review log `2026-10-27-owt-mcp-admin-parity-f3b-song-save-review-log.md`.
+§7 was added AFTER that approval from the reviewers' non-blocking notes and is NOT reviewed. Parent plan:
 `2026-10-27-owt-mcp-admin-parity-f3.md` (Frank's «Sí, con Kids ahora», 2026-10-27 19:12Z; D6–D9 are
 this slice's starting decisions and are refined here). Nothing of this slice is built. Review
 approval is not authorization to implement; the build follows the release order in CLAUDE.md.
@@ -143,3 +145,41 @@ from `/admin`. The lossless refusal is proven by tests only.
 ## 6. Out of scope
 
 Song deletes; uploads; creating tags; `ifRevisionId` on the `/admin` route (D10); the rehearsal mixes.
+
+## 7. Post-approval amendments (NOT reviewed; they override the sections they name)
+
+Adopted from the approving rounds' non-blocking notes after the approval. The author checked each
+against the code; none was reviewed.
+
+- **A1 (D3, the round-trip rationale).** `bodyToLyrics(textToBody(t)) === t` does NOT refuse added
+  formatting: `*…*`, `**…**` and a leading `# ` round-trip and are stored as italic, bold and a
+  heading (both reviewers ran it). That is allowed and stated: the before/after shows the text in
+  the editor's own form, markers verbatim, and the `save_song_edits` description says those three
+  are formatting. Only a degenerate segment that does not round-trip is refused.
+- **A2 (D3/D4, `lyricsAll`).** `lyricsAll` passes the FULL D4 gate: a body that is not structurally
+  lossless (an `image`, a list, a `link` mark, an h2) refuses every lyrics edit, `lyricsAll`
+  included. An NFC-only difference may be exempted, explicitly and alone. Task 3 adds tests that
+  `lyricsAll` is refused on a body with an image and on one with a list.
+- **A3 (D1/D2/D3, clears).** The writer applies a field only when its raw value is `!= null`
+  (`app/api/content/posts/[id]/route.ts:84,101-102`), so a clear is never a raw `null`: `bpm`
+  clears with `bpm: ""` (the writer stores `null`), each URL clears through `opts.unset` (the D2 fix
+  makes the route derive the same unset from `""`). D1's «`.unset` only when `opts` asks» is reworded:
+  the D2 commit makes the route's `""` an unset too. Commit-level tests send a chat clear of `bpm`
+  and of each URL through the real patch serializer and assert what reaches Sanity.
+- **A4 (D7, authors).** Before minting `author-<slug>`, an author is matched by `normalizeText(name)`
+  among the song's CURRENT author refs and then among all authors; a name match whose slug differs
+  from `slugifyAuthor` reuses that author (Studio's slugifier differs on `&` and the like). Tags with
+  the same normalized name are refused as ambiguous. Author and tag lookups read the published
+  perspective (`operationalClient`), so a new song never points at a `drafts.*` id.
+- **A5 (D11, run-context).** Only handlers that take a request need `withVerificationRunContext`:
+  posts POST, `posts/[id]` PATCH and DELETE, and authors POST. A `GET()` with no request is exempt
+  by the scan (`srVerificationRunContext.test.ts`).
+- **A6 (D6, create token lifetime).** A create token carries its issue time and is refused after
+  30 minutes, so replaying an old `create_song` after the song was deleted cannot recreate it.
+- **A7 (D3, charts).** `removeChart` of the last chart gets the mirror of `addChart`'s ADR-0018
+  warning (the lyrics become visible to members again). A chart's key changes by removing the chart
+  and adding it again in one call; stated in the description. `chartAll` with empty content and
+  `lyricsAll ""` are named in the before/after as «se elimina el acorde» / «se borra la letra».
+- **A8 (D11, secrets).** `docs/SECRETS.md`'s `MCP_OAUTH_SECRET` rotation note and the use list in
+  `changeSetTokens.ts` name the two new labels (`mcp-song-edits|`, `mcp-song-create|`): a rotation
+  voids pending song checks.

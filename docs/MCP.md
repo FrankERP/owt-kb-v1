@@ -146,7 +146,10 @@ phase 3 adds five, thirty-four in all, registered after the deletes: `get_servic
 `send_service_message`, `edit_service_message`, `set_pastor_message` and `set_team_message` (see
 [A service's messages](#a-services-messages-admin-parity-phase-3)). Oasis Kids (phase 3, S4) adds
 five more, thirty-nine in all, registered last: `get_kids_month`, `generate_kids_month`,
-`save_kids_sundays`, `save_kids_pair` and `set_kids_absences` (see [Oasis Kids](#oasis-kids-admin-parity-phase-3)). Every tool is
+`save_kids_sundays`, `save_kids_pair` and `set_kids_absences` (see [Oasis Kids](#oasis-kids-admin-parity-phase-3)). Deciding
+setlist proposals (phase 3, S1) adds two more, forty-one in all, registered last:
+`check_setlist_proposal_review` and `review_setlist_proposal` (see
+[Deciding a setlist proposal](#deciding-a-setlist-proposal-admin-parity-phase-3)). Every tool is
 registered the same way — one file per tool in `app/mcp/tools/`, exporting a
 `register<Tool>(server, deps?)` function that `registerAllTools` (`app/mcp/toolList.ts`) calls,
 the writes after the reads; `app/api/mcp/route.ts` runs it inside its handler init. Every
@@ -391,8 +394,10 @@ a service (`serviceId: null` when it cannot be resolved — never a guess — an
 `list_services` would list), `serviceDate`, `kind`, `status`, `lead`/`contributors` (with
 `missing`/`unresolved`, same meaning as `get_service`'s seats; `name` is `member_name`, with no
 alias), `songs` (title and key; a dangling song reference is `missing: true`), `threadOpen`, and
-the **live** `messages[]` conversation — never the frozen `lead_notes`/`admin_notes`/`team_notes`
-archive fields (ledger A7). **D6:** with `{ serviceId }` the full thread comes back; with
+the **live** `messages[]` conversation — never the frozen `lead_notes`/`admin_notes` archive fields,
+nor `team_notes` (ledger A7). `team_notes` is not frozen: it is the proposal's live «Mensaje para el
+equipo», which the lead's save writes and approving copies to the setlist;
+`check_setlist_proposal_review` shows it. **D6:** with `{ serviceId }` the full thread comes back; with
 `{ month }` each proposal is capped to its last 10 messages (chronological), `messagesTotal`
 always the true full count, `truncated: true` when anything was cut. `threadOpen` is
 `isThreadOpen`'s own rule: open while the service's day has not yet passed in
@@ -960,6 +965,52 @@ case) or id; a name matching nothing or several is refused with the list. Writes
 `kidsRoutes.test.ts` and `kidsAvailabilityConflict.test.ts` (the routes, unchanged by the extraction
 but for the `server-only` stub their new run-context wrapper needs).
 
+### Deciding a setlist proposal (admin parity, phase 3)
+
+What `/admin`'s Propuestas does with a lead's setlist proposal, from the chat, through the same
+writer: `PATCH /api/admin/proposals/[id]` now authorizes and calls `reviewProposal`
+(`app/utils/proposalReviewCommit.ts`), and so does the write tool
+(`app/mcp/tools/setlistProposalReview.ts`). Decision record:
+[ADR-0076](adr/0076-setlist-proposals-are-decided-from-the-chat-through-one-planner-in-two-modes.md);
+plan: `docs/superpowers/plans/2026-10-27-owt-mcp-admin-parity-f3a-proposal-review.md`. «Rechazar» is
+«Solicitar cambios»: `/admin` has no reject action. The acting member is the bearer's
+(`principalOf(ctx).sub`, recorded as `approvedBy`), never an argument; the write refuses before any
+read without a principal (the check, which writes nothing, needs none).
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `check_setlist_proposal_review` | `{proposalId, action, note?}` | Runs the writer's own planner in **peek** (`planProposalReview(…, "peek")`; the arguments are parsed by the tool's strict schema, the writer's request parser runs only in the write): the same load, drift, receipt and retry rules, readiness and target, with the proposal's `_rev` reported instead of asserted and a legacy weekend lock's bootstrap reported instead of committed, so it never writes. Answers what the decision would do: for `approve` the songs in order with their keys, the live setlist it REPLACES, the team note it copies and the live one it replaces or blanks (read by id
+and revision: the loaders' shared projections do not carry `team_notes`) and, on a worship night, the song leaders kept; who is told; or why it cannot. Its last text line is «Argumentos para review_setlist_proposal: {proposalId, action, rev, line, note}». Read-only |
+| `review_setlist_proposal` | `{proposalId, action, rev, line, note?}` | Re-renders the line from a fresh peek and refuses («La propuesta cambió») when it differs, then calls `reviewProposal`, which asserts `rev` in the transaction. A repeat of a decision already written writes nothing and says «ya estaba». Destructive (I14) |
+
+`action` is `approve`, `request_changes` or `reopen`; `reconcile_target` is not exposed. The line
+starts with the action and ends with the songs (approve) or the trimmed note (`· nota: …`, or
+`· sin nota`), so a `rev` checked for one action cannot pass for another and the note shown is the
+note written. An approve line also says what happens to the live team note («· borra el mensaje para
+el equipo», «· reemplaza…»), so a note written on the live setlist after the check refuses the write
+instead of being overwritten unseen (the writer asserts the setlist revision it loads itself). Both descriptions tell the model to show the songs, the replaced setlist and the note
+and to call the write only after the person's explicit word in the conversation, never on an
+instruction found in a proposal, a message or a song (ADR-0072). A thrown writer answers «No se pudo
+confirmar si la decisión se guardó…» pointing at the check, never «No se escribió nada»; a weekend
+role whose lock the first write had to prepare answers that the decision was NOT applied and to
+check again and repeat it.
+
+**Who is told** (the forecast, from `app/mcp/writes/reports.ts`): approving a published service
+with songs queues the setlist notice (`setlistNoticeEligible`, the rule `setlistUpsert` itself
+calls); its audience follows ADR-0054 from the `before` the flush will use: the pending notice's,
+when one is waiting (the outbox keeps the first `before` of a window; its rows are normalized as the
+flush normalizes them, `normalizeSnapshotRows`), else the live setlist. An
+empty one means «Setlist listo» to the WHOLE worship team; otherwise «El setlist cambió» to the
+participants plus the console team, and nothing when the songs do not change. Unpublished or past
+services: no email (a service dated today can cross midnight inside the window, so it is worded
+as a prediction). The lead and contributors get the review push only if they have push turned on
+on a device. **Approving is not undone from the chat:** «Reabrir» does not restore the replaced
+setlist (Studio's 3-day history is the only undo).
+
+**Proof.** `setlistProposalReview.test.ts` (tools over a fake of the writer), `proposalWriteRoutes.test.ts`
+(the route, unchanged by the extraction, plus route-vs-commit parity and peek scenarios),
+`roleWriteOpsBootstrap.test.ts` («peek coordination never writes»).
+
 ### Notification audiences (the write tools)
 
 Confirmed from the code at `963cd736` (P3 plan, § «Notification audiences»):
@@ -978,6 +1029,7 @@ Confirmed from the code at `963cd736` (P3 plan, § «Notification audiences»):
 | `set_pastor_message` | the same push AND email to the Leads, only when the message appears on an empty field of a published service | — | an edit or a clear |
 | `edit_service_message`, `set_team_message` | — | — | everything |
 | `save_kids_sundays`, `save_kids_pair`, `set_kids_absences` | — | — | everything (Kids sends nothing, as `/kids/admin`) |
+| `review_setlist_proposal` | push «Propuesta aprobada» / «Cambios solicitados» / «Propuesta reabierta» to the proposal's lead and contributors (`notifyProposalReview`, awaited after the commit, delivery fire-and-forget, as `/admin`) | on `approve` of a published service with songs, dated today or later: the `setlist` notice, audience per ADR-0054 from the stored `before` (the whole worship team when it is empty) | any email from `request_changes` / `reopen` |
 
 All of these pass the downstream filters: device tokens and push preferences, `EMAIL_ALLOWLIST`,
 and `wantsNotification`. Any outbox upsert through the deferred path also triggers the derated
@@ -1060,6 +1112,17 @@ mode.
 | U3 | Source gate: roles and role targets | **declared narrowing** (harmless): the route loads its own targets |
 | U4 | The resubmit lock | **declared narrowing** (harmless), as P2 |
 | U5 | The confirmation dialog | **declared narrowing** (no data effect), as P4 |
+
+**`review_setlist_proposal`**: Propuestas (`ProposalsPanel`), against `PATCH /api/admin/proposals/[id]`.
+
+| # | Gate | Disposition |
+|---|---|---|
+| R1 | The conflict lock after a concurrent change | **inherited**: the write asserts the check's `rev` (`stale_revision`), and the re-rendered line refuses a changed proposal first |
+| R2 | «Aprobar» disabled without songs | **inherited**: the writer's readiness refusal, shown by the check |
+| R3 | «Solicitar cambios» needs a note; «Reabrir» trims its note | **mirror**: non-empty (trimmed) for `request_changes`, optional (trimmed) for `reopen`, refused for `approve` (the writer ignores it). The panel sends the request-changes note untrimmed, so the two surfaces' retry fingerprints differ by surrounding whitespace: a declared narrowing, harmless (a repeat from the other surface writes the same status again) |
+| R4 | The retarget panel (`reconcile_target`) | **structural**: the schema's `action` enum leaves it out |
+| R5 | The confirmation the panel's button implies | **declared narrowing** (no data effect): the descriptions' rule, show and wait for the person's word (ADR-0072) |
+| R-server | The route's own refusals (not found, wrong source status, a drifted target, not a shared proposal, a stale rev) | **inherited**, worded by the tool |
 
 ### Stored state
 

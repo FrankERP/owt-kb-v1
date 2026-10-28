@@ -86,7 +86,7 @@ disagree, `CLAUDE.md` wins and this file is the one to fix.
   set up as network secrets, the canonical copy of the adversarial-plan-review skill and the
   agent definitions under `~/.claude/agents/`. Google-side secret rotations go through Google
   Cloud Shell in the browser, not a laptop. **The production solver is verified and re-deployed
-  from GitHub Actions** (`.github/workflows/solver-v3-ops.yml`, keyless, ADR-0076): `verify` runs
+  from GitHub Actions** (`.github/workflows/solver-v3-ops.yml`, keyless, ADR-0077): `verify` runs
   by itself after every `gcf_v3/**` merge; a session dispatches `verify` (or, after Frank says
   yes in the thread, `deploy`) with the GitHub connector's `actions_run_trigger` and reads the
   result with `get_job_logs`. If the session's token cannot dispatch, Frank runs it from
@@ -451,8 +451,8 @@ several exist precisely to stop a plausible-looking change.
   note into a refused call. Put guidance that depends on an answer (repeat, check again) in the
   answer, which is never stale, not in the description. ADR-0069; tests in `mcpRoute.test.ts`
   («the tool list's version»).
-- **The nine admin write paths (setlists PUT, roles create, roles PATCH, roles DELETE, copy-instruments,
-  swap, publish-ready, unpublish, the fairness PUT) delegate everything after authorization to `app/utils/*Commit.ts`;
+- **The ten admin write paths (setlists PUT, roles create, roles PATCH, roles DELETE, copy-instruments,
+  swap, publish-ready, unpublish, the fairness PUT, the proposals PATCH) delegate everything after authorization to `app/utils/*Commit.ts`;
   `serviceCommitCallers.test.ts` pins their callers and `publishVerdict`'s; MCP writes go only
   through them; `/api/mcp` buffers SSE so a tool finishes inside the handler.** The MCP's
   `apply_schedule` (P4 on v3, ADR-0061) calls two of them: `createRole` (`roleCreateCommit.ts`, each
@@ -480,6 +480,13 @@ several exist precisely to stop a plausible-looking change.
   (`app/mcp/tools/kids.ts`) both call them; the generator's inputs and seed search are
   `proposeKidsMonth` (`kidsMonthPlan.ts`), and the month's draft-seeing read is
   `kidsScheduleReads.ts` (ADR-0022, amended). Kids notifies nobody from either surface.
+  Deciding a setlist proposal (approve, «Solicitar cambios», reopen) lives in
+  `proposalReviewCommit.ts` (admin parity phase 3, ADR-0076): the proposals PATCH and the MCP's
+  `review_setlist_proposal` call `reviewProposal`; `check_setlist_proposal_review` calls
+  `planProposalReview(…, "peek")`, the writer's own prefix with the `_rev` reported instead of
+  asserted and the weekend lock bootstrap reported (`peekWeekendCoordination`/`peekOwnedCoordination`)
+  instead of committed, so the check never writes. Never reuse the writing loaders in a read-only
+  tool: `loadWeekendCoordination` commits `bootstrapLegacyLock` on a legacy weekend role.
 - **The MCP proposal editor: the server judges, the card only shows** (ADR-0062). The card
   (`mcp-app/proposal-card/`) holds a list of edits, never a board; every check and save replays the
   whole list from the stored proposal through the planner's own gate. Only `editorBoard.ts` calls

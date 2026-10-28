@@ -52,6 +52,10 @@ import type { RolePublishedDescriptor } from "@/app/utils/serviceMutationSideEff
 import type { SetlistSaveEffects } from "@/app/utils/setlistSaveCommit";
 import type { RoleSwapEffects } from "@/app/utils/roleSwapCommit";
 import type { PublishReadyEffects } from "@/app/utils/publishReadyCommit";
+import type { ProposalReviewEffects } from "@/app/utils/proposalReviewCommit";
+import { setlistNoticeEligible } from "@/app/utils/setlistNoticeEligibility";
+import { isPastNoticeDate, sameSetlistSongs } from "@/app/utils/outboxClassify";
+import { songRowsFrom, type OutboxSongRow } from "@/app/utils/outboxNotice";
 import { loadMemberNames, type MemberNameLookup } from "../reads/serviceSnapshot";
 import { safeReportRead } from "./runWriteTool";
 
@@ -231,6 +235,137 @@ export function setlistSaveNotifications(effects: SetlistSaveEffects): PendingNo
         },
   );
   return out;
+}
+
+// ── Proposal decisions (admin parity phase 3, S1) ───────────────────────────
+
+const PUSH_TITLE_REVIEW: Record<string, string> = {
+  approve: "Propuesta aprobada",
+  request_changes: "Cambios solicitados",
+  reopen: "Propuesta reabierta",
+};
+
+/** ADR-0054's audience, as the approval answer and the check's forecast both state it. */
+const SETLIST_AUDIENCE_NOTE =
+  "participantes del servicio ofrecidos al aviso; al enviar se suma el equipo de consola, o TODO el equipo de alabanza si el setlist no tenía canciones (ADR-0054)";
+
+/**
+ * A proposal decision's notifications: the review push to the proposal's lead
+ * and contributors, and — for an approval — the debounced setlist email the
+ * approval queued (`effects.notice`). A replay queued nothing and reports nothing.
+ * `today` is the CDMX calendar day: a past service's notice is dropped at flush.
+ */
+export function proposalReviewNotifications(effects: ProposalReviewEffects, today: string): PendingNotification[] {
+  if (effects.idempotent) return [];
+  const out: PendingNotification[] = [];
+  const pushTitle = PUSH_TITLE_REVIEW[effects.action];
+  if (pushTitle) {
+    out.push({
+      channel: "push",
+      title: pushTitle,
+      status: "encolada",
+      memberIds: [...effects.pushRecipients],
+      when: WHEN_AFTER_RESPONSE,
+      date: effects.serviceDate,
+      audienceNote: "líder y colaboradores de la propuesta",
+      conditions: pushConditions("propuestas"),
+    });
+  }
+  if (effects.action !== "approve") return out;
+  const past = isPastNoticeDate(effects.serviceDate, today);
+  out.push(
+    effects.notice
+      ? {
+          channel: "outbox_email",
+          title: OUTBOX_TITLE_SETLIST,
+          status: "encolada",
+          memberIds: [...effects.notice.knownRecipients],
+          when: WHEN_DEBOUNCED,
+          date: effects.serviceDate,
+          audienceNote: SETLIST_AUDIENCE_NOTE,
+          ...(past ? { note: "La fecha del servicio ya pasó: el aviso se descarta al enviarse." } : {}),
+          conditions: outboxConditions(["solo mientras el servicio siga publicado"]),
+        }
+      : {
+          channel: "outbox_email",
+          title: OUTBOX_TITLE_SETLIST,
+          status: "no encolada",
+          memberIds: [],
+          when: WHEN_DEBOUNCED,
+          date: effects.serviceDate,
+          note: effects.published === false ? "No se encoló: el servicio no está publicado." : NOT_QUEUED_NOTE,
+          conditions: outboxConditions(),
+        },
+  );
+  return out;
+}
+
+/** What `proposalReviewNotificationForecast` needs: values the check's plan already holds. */
+export interface ProposalReviewForecastInput {
+  published: unknown;
+  roleId: string;
+  serviceDate: string;
+  /** The stored `setlist_song` items the approval would write. */
+  afterSongs: readonly unknown[];
+  /** The live songs the approval would replace, as loaded now. */
+  liveBeforeSongs: unknown;
+  /**
+   * The `before` rows of a `setlist` notice still pending for this service, or
+   * null when none is. The outbox keeps the FIRST `before` of a debounce window
+   * (`buildUpsert`'s `createIfNotExists`) and the flush picks the audience from
+   * it, so a pending one — not the live list — decides who is told.
+   */
+  pendingBefore: OutboxSongRow[] | null;
+  /** How many participants the service has (the «El setlist cambió» audience, before the console team). */
+  participants: number;
+  /** The CDMX calendar day. */
+  today: string;
+}
+
+/**
+ * The check's prediction of the setlist email an approval would cause, by the
+ * same rules the writer and the flush apply: `setlistNoticeEligible` (minted at
+ * all), `isPastNoticeDate` (dropped at flush), `sameSetlistSongs` (nothing to
+ * say), and ADR-0054's audience (an empty `before` = the whole worship team).
+ * A prediction, worded as one: the flush runs later, on live data.
+ */
+export function proposalReviewNotificationForecast(input: ProposalReviewForecastInput): string {
+  const head = "Correo de setlist:";
+  if (input.published === false) return `${head} ninguno, el servicio no está publicado.`;
+  if (
+    !setlistNoticeEligible({
+      published: input.published,
+      roleId: input.roleId,
+      serviceDate: input.serviceDate,
+      hasSongs: input.afterSongs.length > 0,
+    })
+  ) {
+    return `${head} ninguno.`;
+  }
+  if (isPastNoticeDate(input.serviceDate, input.today)) {
+    return `${head} ninguno, la fecha del servicio ya pasó (el aviso se descarta al enviarse).`;
+  }
+  const tonight =
+    input.serviceDate === input.today ? " Si el envío cae después de medianoche, se descarta." : "";
+  const before = input.pendingBefore ?? songRowsFrom(input.liveBeforeSongs);
+  const after = songRowsFrom(input.afterSongs);
+  const pending = input.pendingBefore
+    ? " Hay un aviso pendiente de un cambio anterior: se compara con el setlist de antes de ese cambio."
+    : "";
+  if (sameSetlistSongs(before, after)) {
+    return `${head} ninguno si las canciones no cambian: quedarían las mismas que ya tiene.${pending}`;
+  }
+  if (before.length === 0) {
+    return (
+      `${head} «Setlist listo» a TODO el equipo de alabanza (el servicio no tenía canciones), ` +
+      `${WHEN_DEBOUNCED}, según las preferencias de correo de cada quien.${pending}${tonight}`
+    );
+  }
+  const n = input.participants;
+  return (
+    `${head} «El setlist cambió» a ${n} ${n === 1 ? "participante" : "participantes"} del servicio más el ` +
+    `equipo de consola, ${WHEN_DEBOUNCED}, según las preferencias de correo de cada quien.${pending}${tonight}`
+  );
 }
 
 /**
