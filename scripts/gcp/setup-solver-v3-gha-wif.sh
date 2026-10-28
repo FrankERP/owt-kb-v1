@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-time (and re-runnable) Google Cloud setup for .github/workflows/solver-v3-ops.yml: keyless
-# access from GitHub Actions to the production solver function owt-solver-v3 (ADR-0074; plan
+# access from GitHub Actions to the production solver function owt-solver-v3 (ADR-0076; plan
 # docs/superpowers/plans/2026-10-22-solver-v3-gha-wif-ops.md §3).
 #
 # Run it in Google Cloud Shell (a browser, no laptop needed), from a checkout of main:
@@ -200,7 +200,7 @@ if [ "$APPLY" = 1 ] && [ "$CREATED_SA" = 1 ]; then sleep 15; fi
 say "Grants for $VERIFY_SA"
 # Function-level, not project-level: it reads this one function. If the rehearsal shows a gen2
 # function-level grant does not authorize `functions describe`, the fallback is the same role on
-# the project (ADR-0074 records which shipped; remove the superseded grant by hand).
+# the project (ADR-0076 records which shipped; remove the superseded grant by hand).
 run gcloud functions add-iam-policy-binding "$FUNCTION" --gen2 --region="$REGION" --project="$GCP_PROJECT" \
   --member="serviceAccount:${VERIFY_SA}" --role=roles/cloudfunctions.viewer --format=none
 run gcloud secrets add-iam-policy-binding "$SECRET" --project="$GCP_PROJECT" \

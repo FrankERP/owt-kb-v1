@@ -1,4 +1,4 @@
-# ADR-0075: Functions run on Fluid compute, and stay in iad1 although Sanity lives in Europe
+# ADR-0074: Functions run on Fluid compute, and stay in iad1 although Sanity lives in Europe
 
 **Date:** 2026-10-27 · **Status:** Accepted
 

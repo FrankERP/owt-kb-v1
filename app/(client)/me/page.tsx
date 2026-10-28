@@ -146,7 +146,7 @@ export default async function MePage() {
   // on `/me/disponibilidad`, which is where its ministry-neutrality is recorded.
   //
   // Every read on this page goes out at once — the profile, both worship reads and
-  // the kids read — because each one crosses the Atlantic (ADR-0075).
+  // the kids read — because each one crosses the Atlantic (ADR-0074).
   const [member, data, proposals, kidsRows] = await Promise.all([
     memberRead,
     inWorship ? operationalClient.fetch(

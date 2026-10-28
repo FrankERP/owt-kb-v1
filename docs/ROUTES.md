@@ -104,7 +104,7 @@ into the library, permanent (308) so bookmarks and the old nav keep working.
   `unavailableDates`, `photoUrl`), for a worship member the assignments + shared proposals
   (`operationalClient`), for a kids member `KIDS_ME_QUERY` (`operationalClient`,
   `published == true`); uses `describeContributors`. Sent together because each read crosses
-  the Atlantic (ADR-0075).
+  the Atlantic (ADR-0074).
 - **`/me/disponibilidad`** — `requireActiveSession()`, then `Promise.all` of
   `MEMBER_AVAILABILITY_QUERY` (`serverClient` — `_rev` is the save precondition) and
   `SERVICE_DATES_QUERY` over `horizon()` (`operationalClient`). Both in
@@ -116,7 +116,7 @@ into the library, permanent (308) so bookmarks and the old nav keep working.
 - **`/posts/[slug]`** — full `post` projection + last-3 past plays (bounded `week < today`),
   both keyed by the slug and started before `requireWorshipPage` settles (the gate is still
   awaited first, so its redirect wins); then the member's instruments only when the song has
-  rehearsal mixes. ADR-0075.
+  rehearsal mixes. ADR-0074.
 - **`/admin`** — only `requireActiveManager()`; panels fetch client-side.
 
 Two clients: `client` (CDN read, `useCdn:false`) for cacheable page data; `serverClient` (read

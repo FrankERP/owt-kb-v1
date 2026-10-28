@@ -119,7 +119,7 @@ async function getSongHistory(slug: string): Promise<SongHistoryEntry[]> {
   //
   // Keyed by the SLUG, not the song's id, so it runs alongside `getPost` instead of
   // after it: every read crosses the Atlantic (Sanity is in Belgium, the functions
-  // in iad1 — ADR-0075). `^._id` is the song inside the setlist filter, `^.^._id`
+  // in iad1 — ADR-0074). `^._id` is the song inside the setlist filter, `^.^._id`
   // inside a setlist's `songs[]`.
   const query = `
     *[_type == "post" && slug.current == $slug] | order(_id asc)[0] {
@@ -184,7 +184,7 @@ const LYRIC = `${SECTION_SCROLL} mb-14 lg:col-start-1 lg:row-start-1 lg:row-span
 const Page = async ({ params }: Params) => {
   const { slug } = await params;
   // One round trip for the gate, the song and its history, not three in a row:
-  // each read crosses the Atlantic (ADR-0075). The reads start first but the gate is
+  // each read crosses the Atlantic (ADR-0074). The reads start first but the gate is
   // awaited first, so its redirect always wins, even over a failed read (the `catch`
   // only keeps that failure from going unhandled while the gate decides). A visitor
   // the gate turns away — a kids-only member, a disabled one — costs two reads that

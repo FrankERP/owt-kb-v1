@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { parseWorkflow } from "../lib/ci-layout.mjs";
 
 // `.github/workflows/solver-v3-ops.yml` holds a keyless Google credential for the production
-// solver: `verify` reads the solver's API key, `deploy` runs the production trigger (ADR-0074).
+// solver: `verify` reads the solver's API key, `deploy` runs the production trigger (ADR-0076).
 // The Workload Identity provider federates only THIS file on `main`, so its shape is pinned here:
 // which events can start it, which jobs can mint a token, that the deploy path is the existing
 // trigger and nothing else, and that a public log never sees the key. The setup script must
