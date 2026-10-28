@@ -1,17 +1,54 @@
 /**
  * Code-level ministry registry. Adding a ministry is a code change on
  * purpose: every new ministry brings its own rules and UI anyway.
- * Generic per-ministry schemas are deliberately deferred until a THIRD
- * ministry exists — see ADR-0019.
+ * The third ministry (Pastores de jóvenes) arrived 2026-10-27, so the
+ * generalization ADR-0019 deferred starts here — ADR-0075.
+ *
+ * A GROUP is a part of a ministry closed to the others (ADR-0075 §2). Its id
+ * is stored on people and, later, on meetings; its name is display only, so a
+ * name can change without losing who is in which group.
  */
 export const MINISTRIES = {
-  worship: { id: "worship", name: "Alabanza" },
-  kids: { id: "kids", name: "Oasis Kids" },
+  worship: { id: "worship", name: "Alabanza", groups: [] },
+  kids: { id: "kids", name: "Oasis Kids", groups: [] },
+  jovenes: {
+    id: "jovenes",
+    name: "Jóvenes",
+    groups: [
+      { id: "otro-nivel", name: "Otro Nivel" },
+      { id: "invencibles", name: "Invencibles" },
+      { id: "emprendedores", name: "Emprendedores" },
+    ],
+  },
 } as const;
 
 export type MinistryId = keyof typeof MINISTRIES;
 
+/** Every ministry the code can READ. Registering one here makes a stored id
+ *  mean something; it does NOT make it writable — see ASSIGNABLE_MINISTRY_IDS. */
 export const ALL_MINISTRY_IDS = Object.keys(MINISTRIES) as MinistryId[];
+
+/**
+ * The ministries a write may store and the admin form and Studio may offer.
+ *
+ * Kept apart from ALL_MINISTRY_IDS on purpose (ADR-0075, access plan §3.1/§4.1):
+ * code older than the `jovenes` entry reads a stored `["jovenes"]` as WORSHIP
+ * (unknown ids are dropped and an empty list falls back to worship). So the
+ * release that teaches production to READ `jovenes` ships before any deployment
+ * can WRITE it — and `preview` writes the production dataset. `jovenes` joins
+ * this list only in the PR that adds its write side.
+ */
+export const ASSIGNABLE_MINISTRY_IDS: MinistryId[] = ["worship", "kids"];
+
+/** Ministries whose level and groups live in `teamMembers.ministryRoles`.
+ *  Worship's level stays the legacy `role`; Kids' admin stays `managesMinistries`. */
+export const LEVELED_MINISTRY_IDS: MinistryId[] = ["jovenes"];
+
+export const MINISTRY_LEVELS = ["member", "leader", "admin"] as const;
+export type MinistryLevel = (typeof MINISTRY_LEVELS)[number];
+
+/** One person's level and groups in one leveled ministry, as the read sees it. */
+export type MinistryRole = { ministry: MinistryId; level: MinistryLevel; groups: string[] };
 
 /**
  * Membership test, NOT `x in MINISTRIES`. The `in` operator walks the prototype
@@ -23,6 +60,15 @@ export const ALL_MINISTRY_IDS = Object.keys(MINISTRIES) as MinistryId[];
  */
 export function isMinistryId(x: unknown): x is MinistryId {
   return typeof x === "string" && (ALL_MINISTRY_IDS as string[]).includes(x);
+}
+
+/** Same prototype-safe membership test, for a group id inside one ministry. */
+export function isGroupId(ministry: MinistryId, x: unknown): x is string {
+  return typeof x === "string" && MINISTRIES[ministry].groups.some((g) => g.id === x);
+}
+
+function isLevel(x: unknown): x is MinistryLevel {
+  return typeof x === "string" && (MINISTRY_LEVELS as readonly string[]).includes(x);
 }
 
 /**
@@ -102,8 +148,38 @@ export function validateMinistryWrite(
   value: unknown,
 ): string | null {
   if (!Array.isArray(value)) return "Invalid ministry";
-  const allowed = field === "ministries" ? ALL_MINISTRY_IDS : MANAGEABLE_MINISTRY_IDS;
+  const allowed = field === "ministries" ? ASSIGNABLE_MINISTRY_IDS : MANAGEABLE_MINISTRY_IDS;
   if (!value.every((m): m is MinistryId => allowed.includes(m as MinistryId))) return "Invalid ministry";
   if (field === "ministries" && value.length === 0) return "Elige al menos un ministerio.";
   return null;
+}
+
+/**
+ * THE one reading of a stored `teamMembers.ministryRoles`, given the member's
+ * NORMALIZED `ministries`. Fails closed at every step — a dropped item leaves
+ * the person a plain member of that ministry, with no level and no groups:
+ *
+ * 1. Not an array → `[]`. An item whose ministry is not leveled, or that the
+ *    person is not a member of, is dropped: a level grants nothing without
+ *    membership (ADR-0075 «the trap»).
+ * 2. A `level` outside MINISTRY_LEVELS drops the item.
+ * 3. `groups`: kept only if a group of that ministry; de-duplicated.
+ * 4. Two stored items naming one ministry → BOTH dropped, even if one of them is
+ *    malformed: there is no guessing which one was meant.
+ */
+export function normalizeMinistryRoles(raw: unknown, ministries: readonly MinistryId[]): MinistryRole[] {
+  if (!Array.isArray(raw)) return [];
+  const items = raw.filter((i): i is Record<string, unknown> => typeof i === "object" && i !== null);
+  const named = (m: unknown) => items.filter((i) => i.ministry === m).length;
+  const parsed: MinistryRole[] = [];
+  for (const item of items) {
+    const { ministry, level, groups } = item;
+    if (named(ministry) !== 1) continue;
+    if (!isMinistryId(ministry) || !LEVELED_MINISTRY_IDS.includes(ministry)) continue;
+    if (!ministries.includes(ministry)) continue;
+    if (!isLevel(level)) continue;
+    const kept = Array.isArray(groups) ? groups.filter((g) => isGroupId(ministry, g)) : [];
+    parsed.push({ ministry, level, groups: [...new Set(kept)] });
+  }
+  return parsed;
 }

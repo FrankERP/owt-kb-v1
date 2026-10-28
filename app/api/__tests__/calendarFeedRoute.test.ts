@@ -191,6 +191,8 @@ describe("GET /api/calendar — after the signature", () => {
     ["an unknown member", { member: null, generation: null }],
     ["a disabled member", { member: { disabled: true }, generation: null }],
     ["a kids-only member", { member: { disabled: false, ministries: ["kids"] }, generation: null }],
+    // ADR-0075: under code that predates the jovenes entry this member read as worship.
+    ["a Jóvenes-only member", { member: { disabled: false, ministries: ["jovenes"] }, generation: null }],
   ] as const) {
     it(`404s ${name} with the same body, before the schedule read`, async () => {
       stubAll({ gate });

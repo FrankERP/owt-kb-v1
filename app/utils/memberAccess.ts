@@ -1,15 +1,59 @@
 import { serverClient } from "@/sanity/lib/serverClient";
-import { normalizeMinistries, isMinistryId, type MinistryId } from "@/app/ministries";
+import {
+  normalizeMinistries,
+  normalizeMinistryRoles,
+  isMinistryId,
+  type MinistryId,
+  type MinistryRole,
+} from "@/app/ministries";
 
 const TTL_MS = 30_000;
-type Entry = {
+
+/** What every permission decision reads about a member. */
+export type MemberAccess = {
   active: boolean;
   role: string | null;
   ministries: MinistryId[];
   managesMinistries: MinistryId[];
-  expires: number;
+  ministryRoles: MinistryRole[];
 };
+type Entry = MemberAccess & { expires: number };
 const cache = new Map<string, Entry>();
+
+/** The stored fields `accessFromDoc` reads — and the projection that fetches them. */
+export type MemberAccessDoc = {
+  _id: string;
+  disabled?: boolean;
+  role?: string | null;
+  ministries?: unknown;
+  managesMinistries?: unknown;
+  ministryRoles?: unknown;
+};
+const ACCESS_PROJECTION = "{ _id, disabled, role, ministries, managesMinistries, ministryRoles }";
+
+/**
+ * THE normalization from a stored member to its access snapshot — pure, so the
+ * ministry-guard equivalence test runs raw documents through the very code the
+ * guards read (a forgotten projection or an un-normalized `ministries` would
+ * show up there, not in production).
+ *
+ * A missing/deleted member gets NO ministries: `active:false` already blocks
+ * both guards, and [] is the shape that stays safe if that ever changes. An
+ * existing member goes through the SHARED normalizer — the same function the
+ * admin form seeds from, so storage and UI can never disagree about what absent
+ * means. `ministryRoles` is read against the NORMALIZED ministries: a level in a
+ * ministry the person is not in grants nothing (ADR-0075).
+ */
+export function accessFromDoc(doc: MemberAccessDoc | null): MemberAccess {
+  const active = !!doc && doc.disabled !== true;
+  const role = doc?.role ?? null;
+  const ministries = doc ? normalizeMinistries(doc.ministries) : [];
+  const managesMinistries = doc && Array.isArray(doc.managesMinistries)
+    ? doc.managesMinistries.filter(isMinistryId)
+    : [];
+  const ministryRoles = doc ? normalizeMinistryRoles(doc.ministryRoles, ministries) : [];
+  return { active, role, ministries, managesMinistries, ministryRoles };
+}
 
 /** For tests only. */
 export function __clearMemberAccessCache() { cache.clear(); }
@@ -27,44 +71,22 @@ export function __clearMemberAccessCache() { cache.clear(); }
  */
 export async function getMemberAccess(
   sanityId: string | undefined | null,
-): Promise<{
-  active: boolean;
-  role: string | null;
-  ministries: MinistryId[];
-  managesMinistries: MinistryId[];
-}> {
-  if (!sanityId) return { active: false, role: null, ministries: [], managesMinistries: [] };
+): Promise<MemberAccess> {
+  if (!sanityId) return accessFromDoc(null);
   const now = Date.now();
   const hit = cache.get(sanityId);
   if (hit && hit.expires > now) {
-    return {
-      active: hit.active, role: hit.role,
-      ministries: hit.ministries, managesMinistries: hit.managesMinistries,
-    };
+    const { expires: _expires, ...access } = hit;
+    return access;
   }
 
-  const doc = await serverClient.fetch<{
-    _id: string;
-    disabled?: boolean;
-    role?: string | null;
-    ministries?: unknown;
-    managesMinistries?: unknown;
-  } | null>(
-    `*[_type == "teamMembers" && _id == $id][0]{ _id, disabled, role, ministries, managesMinistries }`,
+  const doc = await serverClient.fetch<MemberAccessDoc | null>(
+    `*[_type == "teamMembers" && _id == $id][0]${ACCESS_PROJECTION}`,
     { id: sanityId },
   );
-  const active = !!doc && doc.disabled !== true;
-  const role = doc?.role ?? null;
-  // A missing/deleted member gets NO ministries: `active:false` already blocks both
-  // guards, and [] is the shape that stays safe if that ever changes. An existing
-  // member goes through the SHARED normalizer — the same function the admin form
-  // seeds from, so storage and UI can never disagree about what absent means.
-  const ministries = doc ? normalizeMinistries(doc.ministries) : [];
-  const managesMinistries = doc && Array.isArray(doc.managesMinistries)
-    ? doc.managesMinistries.filter(isMinistryId)
-    : [];
-  cache.set(sanityId, { active, role, ministries, managesMinistries, expires: now + TTL_MS });
-  return { active, role, ministries, managesMinistries };
+  const access = accessFromDoc(doc);
+  cache.set(sanityId, { ...access, expires: now + TTL_MS });
+  return access;
 }
 
 /**
