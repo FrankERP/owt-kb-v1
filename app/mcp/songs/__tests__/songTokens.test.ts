@@ -17,29 +17,35 @@ const KEY = new TextEncoder().encode("k".repeat(48));
 const OTHER = new TextEncoder().encode("o".repeat(48));
 const EDITS = [{ op: "set", field: "key", value: "A" }];
 const SONG = { title: "Nueva", key: "G" };
+const LINES = ["Tono: G → A"];
 const NOW = 1_800_000_000;
 
 describe("the edit token", () => {
   it("binds the song, the revision and the edit list, under its own key", () => {
-    const token = songEditsToken(KEY, { songId: "post-1", rev: "rev-1", edits: EDITS });
+    const token = songEditsToken(KEY, { songId: "post-1", rev: "rev-1", edits: EDITS, lines: LINES });
     expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    expect(sameSongEditsToken(KEY, token, { songId: "post-1", rev: "rev-1", edits: EDITS })).toBe(true);
-    expect(sameSongEditsToken(KEY, token, { songId: "post-2", rev: "rev-1", edits: EDITS })).toBe(false);
-    expect(sameSongEditsToken(KEY, token, { songId: "post-1", rev: "rev-2", edits: EDITS })).toBe(false);
-    expect(sameSongEditsToken(KEY, token, { songId: "post-1", rev: "rev-1", edits: [{ ...EDITS[0], value: "B" }] })).toBe(false);
-    expect(sameSongEditsToken(OTHER, token, { songId: "post-1", rev: "rev-1", edits: EDITS })).toBe(false);
-    expect(sameSongEditsToken(KEY, "", { songId: "post-1", rev: "rev-1", edits: EDITS })).toBe(false);
+    expect(sameSongEditsToken(KEY, token, { songId: "post-1", rev: "rev-1", edits: EDITS, lines: LINES })).toBe(true);
+    expect(sameSongEditsToken(KEY, token, { songId: "post-2", rev: "rev-1", edits: EDITS, lines: LINES })).toBe(false);
+    expect(sameSongEditsToken(KEY, token, { songId: "post-1", rev: "rev-2", edits: EDITS, lines: LINES })).toBe(false);
+    expect(sameSongEditsToken(KEY, token, { songId: "post-1", rev: "rev-1", edits: [{ ...EDITS[0], value: "B" }], lines: LINES })).toBe(false);
+    expect(sameSongEditsToken(OTHER, token, { songId: "post-1", rev: "rev-1", edits: EDITS, lines: LINES })).toBe(false);
+    expect(sameSongEditsToken(KEY, "", { songId: "post-1", rev: "rev-1", edits: EDITS, lines: LINES })).toBe(false);
+  });
+
+  it("binds the rendered result: the same edits resolving differently do not pass", () => {
+    const token = songEditsToken(KEY, { songId: "post-1", rev: "rev-1", edits: EDITS, lines: LINES });
+    expect(sameSongEditsToken(KEY, token, { songId: "post-1", rev: "rev-1", edits: EDITS, lines: ["Tono: G → Bb"] })).toBe(false);
   });
 
   it("does not depend on the order of an edit's keys (canonical JSON)", () => {
-    const a = songEditsToken(KEY, { songId: "post-1", rev: "rev-1", edits: [{ op: "set", field: "key", value: "A" }] });
-    const b = songEditsToken(KEY, { songId: "post-1", rev: "rev-1", edits: [{ value: "A", field: "key", op: "set" }] });
+    const a = songEditsToken(KEY, { songId: "post-1", rev: "rev-1", edits: [{ op: "set", field: "key", value: "A" }], lines: LINES });
+    const b = songEditsToken(KEY, { songId: "post-1", rev: "rev-1", edits: [{ value: "A", field: "key", op: "set" }], lines: LINES });
     expect(a).toBe(b);
   });
 
   it("is never the create token's MAC over the same input (each has its own label)", () => {
-    const create = songCreateToken(KEY, { songId: "post-1", rev: "rev-1", edits: EDITS }, NOW).split(".")[1];
-    expect(create).not.toBe(songEditsToken(KEY, { songId: "post-1", rev: "rev-1", edits: EDITS }));
+    const create = songCreateToken(KEY, { songId: "post-1", rev: "rev-1", edits: EDITS, lines: LINES }, NOW).split(".")[1];
+    expect(create).not.toBe(songEditsToken(KEY, { songId: "post-1", rev: "rev-1", edits: EDITS, lines: LINES }));
   });
 });
 

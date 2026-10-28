@@ -465,7 +465,7 @@ check mints a fresh token. Nothing stored holds it.
 
 **A fifth use: the song tools** (ADR-0077, admin parity phase 3; no new secret or env var). Two more
 HMACs under their own labels (`app/mcp/songs/songTokens.ts`): `mcp-song-edits|`, over the song, its
-revision and the edit list `check_song_edits` answered, and `mcp-song-create|`, over its issue time
+revision, the edit list `check_song_edits` answered and the before/after it rendered, and `mcp-song-create|`, over its issue time
 and the song `check_new_song` answered (the new song's id is derived from it). Rotating the key voids
 every pending song check: the save or create answers «revisa de nuevo» (or «no es la que se revisó»)
 and writes nothing. A song already created keeps its id; nothing stored holds a token.

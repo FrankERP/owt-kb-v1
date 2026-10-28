@@ -42,7 +42,7 @@ const CATALOG: SongCatalog = {
 };
 
 /** The check's own pipeline: edits → writer patch → lines. */
-function linesFor(edits: SongEdit[], s = song(), hasStudioDraft = false): string[] {
+function linesFor(edits: SongEdit[], s = song()): string[] {
   const applied = applySongEdits(s, edits, CATALOG);
   if (!applied.ok) throw new Error(applied.message);
   const ids = new Set(applied.raw.authorIds ?? []);
@@ -56,7 +56,6 @@ function linesFor(edits: SongEdit[], s = song(), hasStudioDraft = false): string
     unset: built.unset,
     newAuthors: applied.newAuthors,
     storedArtist: "Sinach",
-    hasStudioDraft,
   });
 }
 
@@ -122,12 +121,5 @@ describe("songChangeLines", () => {
     expect(linesFor([{ op: "removeLink", label: "Spotify" }, { op: "addLink", label: "YouTube", url: "https://youtu.be/y" }])).toEqual([
       "Links de referencia: + YouTube (https://youtu.be/y); − Spotify (https://open.spotify.com/x)",
     ]);
-  });
-
-  it("warns about a Studio draft only when something would change", () => {
-    expect(linesFor([{ op: "set", field: "key", value: "A" }], song(), true)).toContain(
-      "Ojo: hay un borrador de esta canción en Studio; si alguien lo publica, sobrescribe este cambio.",
-    );
-    expect(linesFor([{ op: "set", field: "key", value: "G" }], song(), true)).toEqual([]);
   });
 });

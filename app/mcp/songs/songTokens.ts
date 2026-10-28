@@ -3,9 +3,10 @@ import "server-only";
 // The two HMACs of the song tools (admin parity phase 3, S3, D5/D6), under `MCP_OAUTH_SECRET` with
 // their own labels — key separation, as `changeSetTokens.ts`:
 //
-//   · the edit token: "mcp-song-edits|" + the canonical JSON of {songId, rev, edits} as checked. The
-//     save refuses any other edit list, song or revision, so «the edits Frank saw» are the only edits
-//     that can be saved;
+//   · the edit token: "mcp-song-edits|" + the canonical JSON of {songId, rev, edits, lines} as checked,
+//     `lines` being the before/after the check rendered (without its Studio-draft warning). The save
+//     re-renders them from a fresh read and refuses any other edit list, song, revision or result, so
+//     a tag renamed or an artist created between check and save cannot change what is written unseen;
 //   · the create token: "mcp-song-create|" + its issue time + "|" + the canonical JSON of the song as
 //     checked. It carries the issue time and dies after `CREATE_TOKEN_TTL_S` (A6), so an old
 //     `create_song` replayed after the song was deleted cannot recreate it; the song's `_id` is derived
@@ -24,14 +25,22 @@ const CREATE_LABEL = "mcp-song-create|";
 /** How long a create check stays good, in seconds. */
 export const CREATE_TOKEN_TTL_S = 30 * 60;
 
-export function songEditsToken(key: Uint8Array, input: { songId: string; rev: string; edits: unknown }): string {
+export interface SongEditsTokenInput {
+  songId: string;
+  rev: string;
+  edits: unknown;
+  lines: readonly string[];
+}
+
+export function songEditsToken(key: Uint8Array, input: SongEditsTokenInput): string {
+  const body = canonicalJson({ songId: input.songId, rev: input.rev, edits: input.edits, lines: input.lines });
   return createHmac("sha256", key)
-    .update(`${EDITS_LABEL}${canonicalJson({ songId: input.songId, rev: input.rev, edits: input.edits })}`, "utf8")
+    .update(`${EDITS_LABEL}${body}`, "utf8")
     .digest()
     .toString("base64url");
 }
 
-export function sameSongEditsToken(key: Uint8Array, given: string, input: { songId: string; rev: string; edits: unknown }): boolean {
+export function sameSongEditsToken(key: Uint8Array, given: string, input: SongEditsTokenInput): boolean {
   return sameMac(given, songEditsToken(key, input));
 }
 

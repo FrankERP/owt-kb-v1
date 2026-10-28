@@ -83,8 +83,6 @@ export interface SongChangeInput {
   newAuthors: readonly NewAuthor[];
   /** The legacy artist string as stored (the writer rebuilds it from the authors). */
   storedArtist: string | null;
-  /** Whether a Studio draft (`drafts.<id>`) exists: publishing it would overwrite this save (D10). */
-  hasStudioDraft: boolean;
 }
 
 const SCALAR_LABEL: Record<string, string> = { title: "Título", key: "Tono", bpm: "BPM", timeSig: "Compás" };
@@ -186,8 +184,5 @@ export function songChangeLines(input: SongChangeInput): string[] {
     );
   }
 
-  if (lines.length && input.hasStudioDraft) {
-    lines.push("Ojo: hay un borrador de esta canción en Studio; si alguien lo publica, sobrescribe este cambio.");
-  }
   return lines;
 }

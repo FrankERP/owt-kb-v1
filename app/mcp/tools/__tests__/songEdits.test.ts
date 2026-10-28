@@ -176,19 +176,38 @@ describe("save_song_edits", () => {
     expect(d.readSong).not.toHaveBeenCalled();
   });
 
-  it("refuses other edits, another song or another revision than the token's, writing nothing", async () => {
+  it("refuses other edits or another song than the token's, writing nothing", async () => {
     const d = deps();
     const { rev, token } = await checked(d);
     for (const args of [
       { songId: "post-1", rev, token, edits: [{ op: "set", field: "key", value: "B" }] as SongEdit[] },
       { songId: "post-2", rev, token, edits: KEY_EDIT },
-      { songId: "post-1", rev: "rev-0", token, edits: KEY_EDIT },
     ]) {
       const out = await saveSongEditsResult(args, PRINCIPAL, d);
       expect(out.isError).toBe(true);
       expect(textOf(out)).toMatch(/no son los que se revisaron/);
     }
     expect(d.patch).not.toHaveBeenCalled();
+  });
+
+  it("refuses when a name resolves differently than at the check (a tag renamed meanwhile)", async () => {
+    const d = deps();
+    const edits: SongEdit[] = [{ op: "authors", names: ["Sinach", "Elevation Worship"] }];
+    const { rev, token } = await checked(d, edits);
+    // Someone created «Elevation Worship» in Studio between the check and the save: no longer «se crearía».
+    d.readCatalog.mockResolvedValueOnce({
+      ...CATALOG,
+      authors: [...CATALOG.authors, { _id: "author-ew", name: "Elevation Worship", slug: "elevation-worship" }],
+    });
+    const out = await saveSongEditsResult({ songId: "post-1", rev, token, edits }, PRINCIPAL, d);
+    expect(sc(out)).toMatchObject({ code: "invalid_request", detail: "not_the_checked" });
+    expect(d.patch).not.toHaveBeenCalled();
+  });
+
+  it("shows the Studio-draft warning at the check without binding it", async () => {
+    const d = deps({ readHasDraft: vi.fn<SongToolDeps["readHasDraft"]>(async () => true) });
+    const { rev, token } = await checked(d);
+    expect((await saveSongEditsResult({ songId: "post-1", rev, token, edits: KEY_EDIT }, PRINCIPAL, d)).isError).toBeUndefined();
   });
 
   it("refuses when the song changed since the check (fresh read) or at the commit (409)", async () => {
@@ -284,6 +303,16 @@ describe("check_new_song / create_song", () => {
     d.nowS.mockReturnValue(NOW + CREATE_TOKEN_TTL_S + 1);
     const old = await createSongResult({ ...NEW_SONG, token }, PRINCIPAL, d);
     expect(textOf(old)).toMatch(/más de 30 minutos/);
+    expect(d.create).not.toHaveBeenCalled();
+  });
+
+  it("answers «Ya estaba creada» to a retry after the token expired, when the create had landed", async () => {
+    const d = deps();
+    const { token } = await checkedNew(d);
+    d.nowS.mockReturnValue(NOW + CREATE_TOKEN_TTL_S + 1);
+    d.readIdExists.mockResolvedValueOnce(true);
+    const out = await createSongResult({ ...NEW_SONG, token }, PRINCIPAL, d);
+    expect(sc(out)).toMatchObject({ created: false });
     expect(d.create).not.toHaveBeenCalled();
   });
 

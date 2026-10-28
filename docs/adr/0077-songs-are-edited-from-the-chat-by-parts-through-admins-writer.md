@@ -35,12 +35,15 @@ Two more facts shaped it:
   every untouched chart keeps its `_key`. A passage edit must match exactly once at its turn, unless
   it says `all` or `nth`; a key must be English notation.
 - **Lyrics only when lossless** (`lyricsGate`): the stored body must equal
-  `textToBody(bodyToLyrics(body))` ignoring keys, and be NFC. Otherwise every lyrics edit is refused
-  and the rest still work.
+  `textToBody(bodyToLyrics(body))` ignoring keys, and be NFC. A structural difference refuses every
+  lyrics edit; a body that is only not NFC refuses passages (`lyricsAll` still works). The rest of the
+  edits always work.
 - **Check, then save, bound by a token.** `check_song_edits` answers the before/after of only what
   changes, built from the WRITER's own normalized patch, plus `rev` and an HMAC over
-  `{songId, rev, edits}` (label `mcp-song-edits|`). `save_song_edits` verifies the token, re-reads,
-  refuses a different `_rev`, re-applies the edits and writes under `ifRevisionId`.
+  `{songId, rev, edits, lines}` (label `mcp-song-edits|`; `lines` is that before/after). `save_song_edits`
+  re-reads, refuses a different `_rev`, re-applies and re-renders the edits, verifies the token, and
+  writes under `ifRevisionId`: a tag renamed or an artist created meanwhile changes the lines and
+  refuses, so nothing is written that Frank did not see.
 - **A create is keyed by its token.** `check_new_song` answers the song as it would be and a token
   carrying its issue time (label `mcp-song-create|`, dead after 30 minutes); the song's id is
   `post-mcp-` + 24 hex of that token. `create_song` reads the id first («Ya estaba creada») and writes

@@ -60,7 +60,7 @@ import { runWriteTool, type WriteFailureCopy } from "../writes/runWriteTool";
 import { principalOf, type McpPrincipal } from "../monthProposals/principal";
 import { memberTokenKey } from "../monthProposals/memberTokens";
 import { songChangeLines } from "../songs/songChange";
-import { checkSongCreateToken, sameSongEditsToken, songCreateToken, songEditsToken } from "../songs/songTokens";
+import { checkSongCreateToken, sameSongEditsToken, songCreateId, songCreateToken, songEditsToken } from "../songs/songTokens";
 
 // ── Copy ─────────────────────────────────────────────────────────────────────
 
@@ -70,7 +70,11 @@ const DRAFT_ID = "Ese id es una copia de borrador de Sanity (drafts.*), no una c
 const BAD_ID = "songId no es un id de documento válido.";
 const NO_SECRET = "No se pudo preparar la revisión en este momento. Intenta de nuevo más tarde.";
 const CHANGED = "La canción cambió desde que la revisaste: vuelve a revisarla con check_song_edits.";
-const NOT_CHECKED = "Estos cambios no son los que se revisaron: vuelve a revisarlos con check_song_edits y usa su token sin cambiar nada.";
+const NOT_CHECKED =
+  "Estos cambios no son los que se revisaron, o algo que nombran (una etiqueta, un artista) cambió desde la revisión: " +
+  "vuelve a revisarlos con check_song_edits y usa su token sin cambiar nada.";
+/** D10: publishing a pending Studio draft overwrites the chat's save. Shown by the check, never bound by the token. */
+const STUDIO_DRAFT = "Ojo: hay un borrador de esta canción en Studio; si alguien lo publica, sobrescribe este cambio.";
 const NOT_CHECKED_NEW = "Esta canción no es la que se revisó: vuelve a revisarla con check_new_song y usa su token sin cambiar nada.";
 const EXPIRED_NEW = "La revisión de esta canción tiene más de 30 minutos: vuelve a revisarla con check_new_song.";
 
@@ -245,8 +249,8 @@ type Plan =
   | { ok: true; raw: SongWriteInput; newAuthors: NewAuthor[]; lines: string[] }
   | { ok: false; result: CallToolResult };
 
-/** Apply the edits to the fresh song and render the normalized write's before/after. */
-function planEdits(song: StoredSongWithArtist, edits: readonly SongEdit[], catalog: SongCatalog, hasDraft: boolean): Plan {
+/** Apply the edits to the fresh song and render the normalized write's before/after (what the token binds). */
+function planEdits(song: StoredSongWithArtist, edits: readonly SongEdit[], catalog: SongCatalog): Plan {
   const applied = applySongEdits(song, edits, catalog);
   if (!applied.ok) return { ok: false, result: refuse([applied.message, NOTHING_WRITTEN], { code: "invalid_request", detail: "edit" }) };
   const built = buildSongPatch(applied.raw, authorRowsFor(applied.raw, catalog), applied.newAuthors);
@@ -261,7 +265,6 @@ function planEdits(song: StoredSongWithArtist, edits: readonly SongEdit[], catal
     unset: built.unset,
     newAuthors: applied.newAuthors,
     storedArtist: song.author,
-    hasStudioDraft: hasDraft,
   });
   return { ok: true, raw: applied.raw, newAuthors: applied.newAuthors, lines };
 }
@@ -296,16 +299,17 @@ export async function checkSongEditsResult(
     const [song, catalog, hasDraft] = await Promise.all([deps.readSong(args.songId), deps.readCatalog(), deps.readHasDraft(args.songId)]);
     if (!song) return refusalResult(NOT_FOUND);
 
-    const plan = planEdits(song, edits, catalog, hasDraft);
+    const plan = planEdits(song, edits, catalog);
     if (!plan.ok) return plan.result;
     const title = song.title ?? "(sin título)";
     if (!plan.lines.length) return answer([`«${title}»: con estos cambios no cambiaría nada.`], { songId: song._id, unchanged: true });
 
-    const token = songEditsToken(key.key, { songId: song._id, rev: song._rev, edits });
+    const token = songEditsToken(key.key, { songId: song._id, rev: song._rev, edits, lines: plan.lines });
     return answer(
       [
         `Cambios a «${title}» (nada se ha guardado):`,
         ...plan.lines,
+        hasDraft ? STUDIO_DRAFT : "",
         "Enséñale esto a la persona y espera su sí. Luego llama a save_song_edits con el mismo songId, las MISMAS edits y " +
           `estos valores: ${JSON.stringify({ rev: song._rev, token })}`,
       ],
@@ -340,15 +344,17 @@ export async function saveSongEditsResult(
         return refuse([NO_SECRET, NOTHING_WRITTEN], { code: "integrity_conflict", detail: "no_secret" });
       }
       const edits = cleanEdits(args.edits);
-      if (!sameSongEditsToken(key.key, args.token, { songId: args.songId, rev: args.rev, edits })) {
-        return refuse([NOT_CHECKED, NOTHING_WRITTEN], { code: "invalid_request", detail: "not_the_checked" });
-      }
 
       const [song, catalog] = await Promise.all([deps.readSong(args.songId), deps.readCatalog()]);
       if (!song) return refuse([NOT_FOUND, NOTHING_WRITTEN], { code: "not_found", detail: "song" });
       if (song._rev !== args.rev) return refuse([CHANGED, NOTHING_WRITTEN], { code: "stale_revision", detail: "rev" });
-      const plan = planEdits(song, edits, catalog, false);
+      const plan = planEdits(song, edits, catalog);
       if (!plan.ok) return plan.result;
+      // The token binds the rendered result too: same song and revision, so only the catalogue (a tag
+      // renamed, an artist created or deleted) could make these lines differ from the check's.
+      if (!sameSongEditsToken(key.key, args.token, { songId: args.songId, rev: args.rev, edits, lines: plan.lines })) {
+        return refuse([NOT_CHECKED, NOTHING_WRITTEN], { code: "invalid_request", detail: "not_the_checked" });
+      }
 
       const outcome = await callDomain(() => deps.patch(args.songId, plan.raw, { ifRevisionId: args.rev, newAuthors: plan.newAuthors }));
       if (!outcome.ok) {
@@ -514,6 +520,12 @@ export async function createSongResult(
       const song = cleanNewSong(rest);
       const checked = checkSongCreateToken(key.key, token, song, deps.nowS());
       if (!checked.ok) {
+        // An expired token is still a verified one (the MAC matched): a retry long after a create that
+        // landed answers «Ya estaba creada», as the failure copy promises, instead of «revisa de nuevo».
+        const expiredId = checked.reason === "expired" ? songCreateId(token) : null;
+        if (expiredId && (await deps.readIdExists(expiredId))) {
+          return answer([`Ya estaba creada «${song.title}»: no se escribió nada.`], { songId: expiredId, created: false });
+        }
         return refuse([checked.reason === "expired" ? EXPIRED_NEW : NOT_CHECKED_NEW, NOTHING_WRITTEN], {
           code: "invalid_request",
           detail: checked.reason,
