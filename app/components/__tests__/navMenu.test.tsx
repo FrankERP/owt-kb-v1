@@ -40,6 +40,17 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("NavMenu — account menu", () => {
+  it("carries Super admin for the super-admin only (no ministry's nav holds it)", async () => {
+    session = { user: { ...adminUser, role: "super-admin" } };
+    mount();
+    await act(async () => {});
+    fireEvent.click(screen.getByRole("button", { name: /Menú de usuario/ }));
+    const menu = screen.getByRole("menu", { name: "Menú de cuenta" });
+    const items = Array.from(menu.querySelectorAll('[role="menuitem"]')).map((n) => n.textContent?.trim());
+    expect(items).toEqual(["Mi semana", "Disponibilidad", "Ajustes", "Super admin", "Cerrar sesión"]);
+    expect(screen.getByRole("menuitem", { name: "Super admin" }).getAttribute("href")).toBe("/super-admin");
+  });
+
   it("once opened, shows Mi semana, Disponibilidad, Ajustes, Cerrar sesión and none of the retired destinations", async () => {
     mount();
     await act(async () => {});

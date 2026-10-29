@@ -1,9 +1,10 @@
 "use client";
 
 // The phone tab bar (spec §5.0, §19.1, decision B). Worship tabs: Inicio ·
-// Calendario · Biblioteca. Kids-only: Kids (+ Planear Kids when managesKids).
+// Calendario · Biblioteca. Kids: Kids (+ Planear Kids when managesKids). ONE
+// ministry at a time — the page's (`navSections.ts`, Frank 2026-10-29).
 // Plus a «Más» tab and its sheet ONLY when there is something the tabs cannot
-// hold (Kids, Planear Kids, Admin, Super admin) — Tema, Cerrar sesión AND «Yo» all live in
+// hold (the switch to the other ministry, Admin in worship) — Tema, Cerrar sesión AND «Yo» all live in
 // the avatar menu (NavMenu) now, one home per destination (M1 follow-up F1,
 // F2). A bar with fewer than two items (tabs + «Más») is not a bar and
 // renders nothing — the kids-only volunteer with no planner rights. It
@@ -18,6 +19,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import BottomNavBar, { type Tab, KidsIcon, PlanIcon, AdminIcon, HomeIcon, CalendarIcon, MusicIcon } from "./BottomNavBar";
+import { SECTION_LABEL, availableSections, currentSection, navAccess, sectionHome } from "./navSections";
 
 export const NAV_H_VAR = "--bottom-nav-h";
 export const NAV_CLASS = "has-bottom-nav";
@@ -30,33 +32,36 @@ export default function BottomNav() {
   const user = session?.user ?? null;
   const authHidden = !user || pathname.startsWith("/auth") || pathname.startsWith("/studio");
 
-  const role = user?.role;
-  const isSuper = role === "super-admin";
-  const isAdmin = isSuper || role === "admin" || role === "content-editor";
-  const ministries = user?.ministries ?? ["worship"];
-  const inWorship = isSuper || ministries.includes("worship");
-  const inKids = isSuper || ministries.includes("kids");
-  const managesKids = isSuper || (user?.managesMinistries ?? []).includes("kids");
+  // One ministry at a time (Frank, 2026-10-29): the tabs are the current
+  // section's, and «Más» carries the switch to the other one — never its tabs.
+  const access = navAccess(user ?? {});
+  const section = currentSection(pathname, access);
+  const otherSections = availableSections(access).filter((s) => s !== section);
 
-  const tabs: Tab[] = inWorship
+  const tabs: Tab[] = section === "worship"
     ? [
         { href: "/", label: "Inicio", icon: <HomeIcon />, match: (p) => p === "/" },
         { href: "/schedule", label: "Calendario", icon: <CalendarIcon />, match: (p) => p.startsWith("/schedule") },
         { href: "/biblioteca", label: "Biblioteca", icon: <MusicIcon />, match: (p) => /^\/(biblioteca|posts)/.test(p) },
       ]
-    : [
+    : section === "kids"
+    ? [
         { href: "/kids", label: "Kids", icon: <KidsIcon />, match: (p) => p === "/kids" },
-        ...(managesKids ? [{ href: "/kids/admin", label: "Planear Kids", icon: <PlanIcon />, match: (p: string) => p.startsWith("/kids/admin") }] : []),
-      ];
+        ...(access.managesKids ? [{ href: "/kids/admin", label: "Planear Kids", icon: <PlanIcon />, match: (p: string) => p.startsWith("/kids/admin") }] : []),
+      ]
+    : [];
 
   // «Más» holds only what the tabs cannot fit — the avatar menu (NavMenu) now
-  // owns Tema, Cerrar sesión and «Yo». When no row applies, there is nothing
-  // to hold: the bar shows the tabs and the sheet never opens.
+  // owns Tema, Cerrar sesión, «Yo» and Super admin. When no row applies, there
+  // is nothing to hold: the bar shows the tabs and the sheet never opens.
   const moreRows = [
-    ...(inWorship && inKids ? [{ href: "/kids", label: "Kids", icon: <KidsIcon /> }] : []),
-    ...(inWorship && managesKids ? [{ href: "/kids/admin", label: "Planear Kids", icon: <PlanIcon /> }] : []),
-    ...(isAdmin ? [{ href: "/admin", label: "Admin", icon: <AdminIcon /> }] : []),
-    ...(isSuper ? [{ href: "/super-admin", label: "Super admin", icon: <AdminIcon /> }] : []),
+    ...otherSections.map((s) => ({
+      href: sectionHome(s, access),
+      label: SECTION_LABEL[s],
+      icon: s === "kids" ? <KidsIcon /> : <HomeIcon />,
+    })),
+    // Worship's admin, so it lives in the worship section only.
+    ...(section === "worship" && access.isAdmin ? [{ href: "/admin", label: "Admin", icon: <AdminIcon /> }] : []),
   ];
 
   // A bar with fewer than two items (tabs + «Más») is not a bar — the

@@ -75,3 +75,7 @@ Other facts that shaped it: worship's documents carry no ministry field (ADR-001
   from its Miembros tab to `/super-admin` «Personas» (super-admin only; an old `?tab=members` link
   redirects there). Next, each ministry's own admin manages its own people (phase 3); do not move
   «Personas» back under `/admin`.
+- **The nav shows one ministry at a time** (Frank, 2026-10-29: «no me gusta estar en lo de Worship y
+  ver lo de Kids»): the page's ministry, with a switcher to the person's others (`navSections.ts`).
+  This replaces «combined by default» for everyone; a «ver todo junto» preference can be added if
+  someone asks.
