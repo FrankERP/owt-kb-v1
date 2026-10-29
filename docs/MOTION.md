@@ -493,7 +493,8 @@ the impersonation banner, the audio transport, and the song sheet's head.
   Calendario · Biblioteca) or the kids-only set (Kids · Planear Kids when
   managesKids applies), plus a **«Más»** tab that holds only what those tabs
   cannot fit: `Kids` (worship member also in Kids), `Planear Kids` (worship
-  member who manages Kids), `Admin` (admin/content-editor/super-admin). **Tema,
+  member who manages Kids), `Admin` (admin/content-editor/super-admin), `Super admin`
+  (super-admin; «Personas», ADR-0075). **Tema,
   Cerrar sesión and «Yo» all live in the avatar menu (`NavMenu`) now, not
   here** — M1 follow-up F1 moved the account actions and F2 moved «Yo»,
   because `/me` has one home, the avatar menu. When none of the

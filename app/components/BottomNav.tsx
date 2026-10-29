@@ -3,7 +3,7 @@
 // The phone tab bar (spec §5.0, §19.1, decision B). Worship tabs: Inicio ·
 // Calendario · Biblioteca. Kids-only: Kids (+ Planear Kids when managesKids).
 // Plus a «Más» tab and its sheet ONLY when there is something the tabs cannot
-// hold (Kids, Planear Kids, Admin) — Tema, Cerrar sesión AND «Yo» all live in
+// hold (Kids, Planear Kids, Admin, Super admin) — Tema, Cerrar sesión AND «Yo» all live in
 // the avatar menu (NavMenu) now, one home per destination (M1 follow-up F1,
 // F2). A bar with fewer than two items (tabs + «Más») is not a bar and
 // renders nothing — the kids-only volunteer with no planner rights. It
@@ -56,6 +56,7 @@ export default function BottomNav() {
     ...(inWorship && inKids ? [{ href: "/kids", label: "Kids", icon: <KidsIcon /> }] : []),
     ...(inWorship && managesKids ? [{ href: "/kids/admin", label: "Planear Kids", icon: <PlanIcon /> }] : []),
     ...(isAdmin ? [{ href: "/admin", label: "Admin", icon: <AdminIcon /> }] : []),
+    ...(isSuper ? [{ href: "/super-admin", label: "Super admin", icon: <AdminIcon /> }] : []),
   ];
 
   // A bar with fewer than two items (tabs + «Más») is not a bar — the

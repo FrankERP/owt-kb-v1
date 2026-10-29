@@ -47,6 +47,8 @@ export default function NavLinks() {
     ...(inKids ? [{ href: "/kids", label: "Kids", active: pathname.startsWith("/kids") && !pathname.startsWith("/kids/admin") }] : []),
     ...(managesKids ? [{ href: "/kids/admin", label: "Planear Kids", active: pathname.startsWith("/kids/admin") }] : []),
     ...(isAdmin ? [{ href: "/admin", label: "Admin", active: pathname.startsWith("/admin") }] : []),
+    // People across every ministry live outside worship's /admin (ADR-0075).
+    ...(isSuper ? [{ href: "/super-admin", label: "Super admin", active: pathname.startsWith("/super-admin") }] : []),
   ];
   return (
     <div role="group" className="hidden lg:flex items-center gap-1 pointer-events-auto" aria-label="Secciones">
