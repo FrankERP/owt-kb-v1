@@ -12,7 +12,7 @@
 // (decision O).
 
 import { PAGE_LEDE, PAGE_TITLE, SHEET_TITLE } from "@/app/utils/homeHero";
-import { normalizeText } from "@/app/utils/normalizeText";
+import { groupRowsByLetter } from "@/app/utils/libraryIndex";
 import { plural } from "@/app/utils/plural";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
@@ -139,16 +139,7 @@ export function groupMembersByLetter<T extends { member_name: string; alias?: st
   rows: T[],
   sortDir: SortDir,
 ): { letter: string; rows: T[] }[] {
-  const map = new Map<string, T[]>();
-  for (const m of rows) {
-    const c = normalizeText(m.alias?.trim() || m.member_name).trim().charAt(0).toUpperCase();
-    const letter = /[A-Z]/.test(c) ? c : "#";
-    (map.get(letter) ?? map.set(letter, []).get(letter)!).push(m);
-  }
-  const letters = [...map.keys()].filter((l) => l !== "#").sort();
-  if (sortDir === "desc") letters.reverse();
-  if (map.has("#")) letters.push("#");
-  return letters.map((letter) => ({ letter, rows: map.get(letter)! }));
+  return groupRowsByLetter(rows, (m) => m.alias?.trim() || m.member_name, sortDir);
 }
 
 /** Which ministry's people the Miembros list is showing. */
