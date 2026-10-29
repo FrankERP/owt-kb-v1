@@ -79,3 +79,15 @@ Other facts that shaped it: worship's documents carry no ministry field (ADR-001
   ver lo de Kids»): the page's ministry, with a switcher to the person's others (`navSections.ts`).
   This replaces «combined by default» for everyone; a «ver todo junto» preference can be added if
   someone asks.
+- **The Calendario is where ministries may meet, by the reader's choice** (Frank, 2026-10-29: «que
+  en su calendario puedan ver de todos los ministerios o solo de uno que quieran»). A member of
+  Alabanza and Oasis Kids gets «Todos · Alabanza · Oasis Kids» on `/schedule`, «Todos» first; the
+  server sends the Kids Sundays only to a Kids MEMBER (or the super-admin; managing Kids is not
+  enough), with «mine» decided by member id in the query. The choice is a per-device cookie
+  (`owt_calendar_view`, `calendarMinistry.ts`), not a field on the member: it is a way of looking,
+  like the theme, and writing it to the member's document would add a production writer for
+  nothing. Filtering is client-side over what was sent, so a switch is instant; that is not an
+  isolation boundary and needs none here — the reader is entitled to every day sent. Jóvenes joins
+  when it has a calendar (its groups ARE a boundary, so its days will be filtered on the server).
+  The phone subscription (ADR-0057) is a separate change: it is a public, signature-gated route,
+  so widening what it serves is an access change with its own plan.

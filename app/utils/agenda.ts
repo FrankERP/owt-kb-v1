@@ -3,9 +3,10 @@
 // ⚠ marks can never disagree.
 import type { ActiveDay } from "../components/CalendarView";
 import { plural } from "./plural";
-import { serviceStartTime } from "./calendarFeed";
+import { serviceStartTime, WEEKEND_SERVICE_TIME } from "./calendarFeed";
 
-export type Tone = "sun" | "sat" | "special";
+/** `kids` is an Oasis Kids Sunday, shown only to its members (`calendarMinistry.ts`). */
+export type Tone = "sun" | "sat" | "special" | "kids";
 
 export function findDuplicates(names: string[]): Set<string> {
   const counts = new Map<string, number>();
@@ -19,9 +20,14 @@ export const TONE_RAIL: Record<Tone, string> = {
   sun: "bg-accent",
   sat: "bg-warning-fg",
   special: "bg-info-fg",
+  // Neutral on purpose: the three worship colours already have jobs, rose is the
+  // musical key only (ADR-0071) and green is «tú». A Kids Sunday is another
+  // ministry's day, not a fourth kind of worship service.
+  kids: "bg-ink-dim",
 };
 
-export function serviceTone(e: Pick<ActiveDay, "day" | "roleId">): Tone {
+export function serviceTone(e: Pick<ActiveDay, "day" | "roleId" | "kids">): Tone {
+  if (e.kids) return "kids";
   if (e.roleId) return "special";
   if (e.day === "Sábado") return "sat";
   if (e.day === "Domingo") return "sun";
@@ -44,8 +50,10 @@ export function myNameFromSession(user?: { alias?: string | null; name?: string 
 /** The seat labels where `myName` (already lowercased/trimmed) is seated, in DayCard's
  *  own order and casing: Lead, BGVs, Coro, then each instrument, then each FOH seat. An
  *  empty `myName` (signed out, or no alias/name) seats nobody. */
-export function mySeats(e: Pick<ActiveDay, "leads" | "bgvs" | "chorus" | "instruments" | "fohTeam">, myName: string): string[] {
+export function mySeats(e: Pick<ActiveDay, "leads" | "bgvs" | "chorus" | "instruments" | "fohTeam" | "kids">, myName: string): string[] {
   if (!myName) return [];
+  // A Kids Sunday decided «mine» by member id on the server; names play no part.
+  if (e.kids) return e.kids.seats.filter((s) => s.mine).map((s) => s.label);
   const seated = (name?: string) => !!name && name.toLowerCase().trim() === myName;
   const seats: string[] = [];
   if ((e.leads ?? []).some(seated)) seats.push("Lead");
@@ -70,6 +78,10 @@ export function conflictLabel(n: number): string {
 }
 
 export function summarizeService(e: ActiveDay): string {
+  if (e.kids) {
+    const filled = e.kids.seats.filter((s) => s.pair).map((s) => `${s.label}: ${s.pair}`);
+    return filled.length ? filled.join(" · ") : "Sin asignaciones";
+  }
   const parts: string[] = [];
   if (e.leads?.length) parts.push(`Lead ${e.leads.join(", ")}`);
   for (const s of (e.instruments ?? []).filter((s) => s.person)) parts.push(`${s.label} ${s.person}`);
@@ -81,13 +93,15 @@ export function summarizeService(e: ActiveDay): string {
 /** The clock a row or a day sheet shows beside the service: a weekend at the team's
  *  standing hour, a special at its own valid `time`, else nothing — the feed's ONE rule
  *  (`serviceStartTime`), so the agenda, `/me` and the `.ics` never disagree on it. */
-export function serviceClock(e: Pick<ActiveDay, "day" | "roleId" | "time">): string | undefined {
+export function serviceClock(e: Pick<ActiveDay, "day" | "roleId" | "time" | "kids">): string | undefined {
+  // Oasis Kids runs during the Sunday service (an assumption, 2026-10-29).
+  if (e.kids) return WEEKEND_SERVICE_TIME.sunday;
   return serviceStartTime(e.roleId ? "special" : "weekend", e.day, e.time);
 }
 
 export type AgendaRow = { key: string; date: string; entry: ActiveDay; tone: Tone; conflicts: number; summary: string; monthStart: string | null };
 
-const ORDER: Record<Tone, number> = { sat: 0, sun: 1, special: 2 };
+const ORDER: Record<Tone, number> = { sat: 0, sun: 1, special: 2, kids: 3 };
 
 export function agendaRows(activeDays: Record<string, ActiveDay[]>): AgendaRow[] {
   const rows = Object.entries(activeDays)
@@ -99,7 +113,7 @@ export function agendaRows(activeDays: Record<string, ActiveDay[]>): AgendaRow[]
     const month = date.slice(0, 7);
     const monthStart = month !== lastMonth ? month : null;
     lastMonth = month;
-    return { key: `${date}:${entry.roleId ?? entry.day}`, date, entry, tone, conflicts: serviceConflicts(entry), summary: summarizeService(entry), monthStart };
+    return { key: `${date}:${entry.roleId ?? (entry.kids ? "kids" : entry.day)}`, date, entry, tone, conflicts: serviceConflicts(entry), summary: summarizeService(entry), monthStart };
   });
 }
 
