@@ -85,7 +85,10 @@ export function searchPosts(posts: Post[], q: string, fuse: Fuse<IndexedPost> = 
     .map((r) => r.item);
 }
 
-const byTitle = (a: Post, b: Post) => normalizeText(a.title).localeCompare(normalizeText(b.title));
+/** Alphabetical by title with accents and case folded — the order a Spanish reader expects. */
+export const compareByTitle = (a: { title: string }, b: { title: string }) =>
+  normalizeText(a.title).localeCompare(normalizeText(b.title));
+const byTitle = compareByTitle;
 
 export const isTipoSlug = (slug: string) => (TIPO_SLUGS as readonly string[]).includes(slug);
 
@@ -120,16 +123,32 @@ export function applyLibraryFilters(posts: Post[], f: LibraryFilters, fuse?: Fus
 
 export type LetterGroup = { letter: string; posts: Post[] };
 
-export function groupByLetter(posts: Post[]): LetterGroup[] {
-  const map = new Map<string, Post[]>();
-  for (const p of posts) {
-    const c = normalizeText(p.title).trim().charAt(0).toUpperCase();
+/**
+ * THE letter rule (ADR-0070): a list filed by the folded first letter of each
+ * row's `nameOf` («Él» under E), «#» last for anything that does not start
+ * with a letter, letters in `sortDir`. Rows keep the order the caller gave
+ * them — Biblioteca sorts by title first, Miembros by the shown name in its
+ * own direction, Canciones by title — so one rule serves all three.
+ */
+export function groupRowsByLetter<T>(
+  rows: readonly T[],
+  nameOf: (row: T) => string,
+  sortDir: "asc" | "desc" = "asc",
+): { letter: string; rows: T[] }[] {
+  const map = new Map<string, T[]>();
+  for (const row of rows) {
+    const c = normalizeText(nameOf(row)).trim().charAt(0).toUpperCase();
     const letter = /[A-Z]/.test(c) ? c : "#";
-    (map.get(letter) ?? map.set(letter, []).get(letter)!).push(p);
+    (map.get(letter) ?? map.set(letter, []).get(letter)!).push(row);
   }
   const letters = [...map.keys()].filter((l) => l !== "#").sort();
+  if (sortDir === "desc") letters.reverse();
   if (map.has("#")) letters.push("#");
-  return letters.map((letter) => ({ letter, posts: [...map.get(letter)!].sort(byTitle) }));
+  return letters.map((letter) => ({ letter, rows: map.get(letter)! }));
+}
+
+export function groupByLetter(posts: Post[]): LetterGroup[] {
+  return groupRowsByLetter(posts, (p) => p.title).map((g) => ({ letter: g.letter, posts: [...g.rows].sort(byTitle) }));
 }
 
 export function libraryKeys(posts: Post[]): string[] {

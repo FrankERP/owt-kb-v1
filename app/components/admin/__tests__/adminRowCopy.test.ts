@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PROPOSAL_STATUS_WORD, dateRunParts, dayBlock, formatDateRun, groupByLetter, joinEs, proposalSublineMiddle } from "../adminRowCopy";
+import { PROPOSAL_STATUS_WORD, dateRunParts, dayBlock, formatDateRun, joinEs, proposalSublineMiddle } from "../adminRowCopy";
 
 describe("adminRowCopy — the hairline rows' Spanish", () => {
   it("joinEs reads a list the Spanish way", () => {
@@ -46,18 +46,3 @@ describe("adminRowCopy — the hairline rows' Spanish", () => {
   });
 });
 
-describe("groupByLetter", () => {
-  it("files by the folded first letter, «#» last, and keeps the caller's row order", () => {
-    const rows = [{ t: "Él Es" }, { t: "10,000 Razones" }, { t: "alaba" }, { t: "Anclado" }, { t: "Cielo" }];
-    const groups = groupByLetter(rows, (r) => r.t);
-    expect(groups.map((g) => g.letter)).toEqual(["A", "C", "E", "#"]);
-    expect(groups[0].rows.map((r) => r.t)).toEqual(["alaba", "Anclado"]);
-    expect(groups[3].rows.map((r) => r.t)).toEqual(["10,000 Razones"]);
-  });
-
-  it("reverses the letters, never the rows, for desc", () => {
-    const rows = [{ t: "Alaba" }, { t: "Anclado" }, { t: "Cielo" }];
-    expect(groupByLetter(rows, (r) => r.t, "desc").map((g) => g.letter)).toEqual(["C", "A"]);
-    expect(groupByLetter(rows, (r) => r.t, "desc")[1].rows.map((r) => r.t)).toEqual(["Alaba", "Anclado"]);
-  });
-});

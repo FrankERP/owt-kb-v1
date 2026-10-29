@@ -147,9 +147,9 @@ pill; «Equipo» is the small-caps title, «Banda» is 17 px sentence case; a sh
   three stat tiles become the lede («21 activos esta semana · 28 este mes · 4 sin entrar»), a new
   Todos / Activos / Inactivos filter (finding who has not come in meant reading 34 rows), and one
   hairline row per person with their photo, the state as dot + word, and the open row's history
-  with the provider as a word instead of a coloured badge. Helper: `groupByLetter`
-  (`adminRowCopy.ts`), which Miembros now reads too. Tests: `adminPanelsPolish`,
-  `activityPanelFailure`, `adminRowCopy`.
+  with the provider as a word instead of a coloured badge. The letter rule is ONE function now,
+  `groupRowsByLetter` (`app/utils/libraryIndex.ts`), read by Biblioteca, Miembros and Canciones.
+  Tests: `adminPanelsPolish`, `activityPanelFailure`, `libraryIndex`.
 - **The house controls went sentence case (2026-10-27, same thread, Frank: «cambialos»).** `Button` and
   `SegmentedControl` were label-styled — Jura, uppercase, `tracking-widest` — and every screen of this
   pass overrode them (`normal-case tracking-normal font-body` on a dozen pills) because the mocks set

@@ -197,6 +197,24 @@ describe("Contenido", () => {
     expect(menu.getByRole("menuitem", { name: "Eliminar" })).not.toBeNull();
   });
 
+  it("files the rows alphabetically within a letter, accents folded, and survives a deleted author", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) =>
+      String(url).includes("/posts")
+        ? ok([
+            // The API's `order(title asc)` is code-point order: «Él» lands after «eterno».
+            { _id: "s1", title: "Eres todo", author: "", slug: { current: "a" }, authors: [null] },
+            { _id: "s2", title: "eterno", author: "X", slug: { current: "b" } },
+            { _id: "s3", title: "Él es fiel", author: "Y", slug: { current: "c" } },
+          ])
+        : ok([]),
+    ));
+    const { container } = mountContent();
+    await waitFor(() => expect(screen.getByText("Él es fiel")).not.toBeNull());
+    const titles = Array.from(container.querySelectorAll("[data-song-row] p:first-child")).map((p) => p.textContent);
+    expect(titles).toEqual(["Él es fiel", "Eres todo", "eterno"]);
+    expect(screen.getByRole("heading", { level: 2, name: "E" })).not.toBeNull();
+  });
+
   // The song search sits beside the song form's artist picker, which ignores
   // accents; the two must agree: «un corazon» finds that artist's songs.
   it("searches titles and artists ignoring accents, case and a trailing space", async () => {

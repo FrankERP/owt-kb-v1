@@ -22,7 +22,8 @@ import { writeErrorMessage } from "@/app/utils/writeError";
 import { formatKey } from "@/app/utils/formatKey";
 import { normalizeText } from "@/app/utils/normalizeText";
 import { plural } from "@/app/utils/plural";
-import { groupByLetter } from "./adminRowCopy";
+import { compareByTitle, groupRowsByLetter } from "@/app/utils/libraryIndex";
+import { hasSongLyrics } from "@/app/utils/songSections";
 
 /** Tags a row names before folding the rest into «+N»: two on a phone, four from `md`. */
 const PHONE_TAGS = 2;
@@ -43,7 +44,8 @@ interface Song {
   chords?: Array<{ _key?: string; key: string; content: string }>;
   referenceLinks?: Array<{ label: string; url: string }>;
   tags?: SongTag[];
-  authors?: Array<{ _id: string; name: string }>;
+  /** A deleted author still referenced projects as `null` (`authors[]->`). */
+  authors?: Array<{ _id: string; name: string } | null>;
 }
 
 /**
@@ -59,7 +61,7 @@ type ModalKind = "add" | "edit" | "delete";
 
 /** The artists a song names: its referenced authors, else the legacy free-text one. */
 const artistNames = (s: Song): string[] => {
-  const refs = (s.authors ?? []).map((a) => a.name.trim()).filter(Boolean);
+  const refs = (s.authors ?? []).flatMap((a) => (a?.name?.trim() ? [a.name.trim()] : []));
   if (refs.length > 0) return refs;
   return s.author?.trim() ? [s.author.trim()] : [];
 };
@@ -216,7 +218,7 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
     () => [...new Set(songs.flatMap(artistNames))].sort((a, b) => a.localeCompare(b, "es")),
     [songs],
   );
-  const withoutLyrics = useMemo(() => songs.filter((s) => !s.body || s.body.length === 0).length, [songs]);
+  const withoutLyrics = useMemo(() => songs.filter((s) => !hasSongLyrics(s)).length, [songs]);
 
   // The sheet's filters first (a tag matches when the song carries ANY picked
   // one, as Biblioteca reads them), then the search on top: the sheet's primary
@@ -236,10 +238,12 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
       artistNames(s).some((a) => normalizeText(a).includes(query))),
     [categoryFiltered, query],
   );
-  // By letter like Biblioteca and Miembros; a query is a relevance list, so it
-  // renders as one unlettered group.
+  // By letter like Biblioteca and Miembros, alphabetical within a letter with
+  // accents and case folded (the API's `order(title asc)` is code-point order,
+  // which files «Él» after «eterno»); a query is a relevance list, so it renders
+  // as one unlettered group in the API's order.
   const groups = useMemo(
-    () => (query ? [{ letter: "", rows: filtered }] : groupByLetter(filtered, (s) => s.title)),
+    () => (query ? [{ letter: "", rows: filtered }] : groupRowsByLetter([...filtered].sort(compareByTitle), (s) => s.title)),
     [filtered, query],
   );
   const activeFilters = tagFilter.length + (artistFilter ? 1 : 0);
@@ -247,7 +251,9 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
     setTagFilter((prev) => (prev.includes(slug) ? prev.filter((t) => t !== slug) : [...prev, slug]));
 
   // For edit modal: convert Song to the partial form shape SongForm expects
-  const songToFormInitial = (song: Song): Partial<FormState> => songToForm(song);
+  // A dangling author ref (`null`) is dropped here so the form never pre-selects nothing.
+  const songToFormInitial = (song: Song): Partial<FormState> =>
+    songToForm({ ...song, authors: (song.authors ?? []).flatMap((a) => (a ? [a] : [])) });
 
   // Derived from the KIND, which outlives the close — so the header does not
   // change wording halfway through the sheet's exit.
@@ -358,8 +364,8 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-body text-[17px] font-semibold leading-tight text-ink">{song.title}</p>
                         {/* Artist and tags as one quiet line: the first two tags on a phone,
-                            four from `md`, the rest folded into «+N». Pure CSS, so 147 rows
-                            cost no state; the full list lives in the Filtros sheet. */}
+                            four from `md`, the rest folded into «+N» — folded to `sr-only`, so a
+                            reader still hears every tag. Pure CSS, so 147 rows cost no state. */}
                         {(artists || songTags.length > 0) && (
                           <p className="mt-1 truncate font-body text-sm leading-tight text-ink-muted">
                             {artists}
@@ -367,16 +373,16 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
                             {songTags.map((tag, i) => (
                               <span
                                 key={tag._id}
-                                className={`lowercase ${i >= DESKTOP_TAGS ? "hidden" : i >= PHONE_TAGS ? "hidden md:inline" : ""}`}
+                                className={`lowercase ${i >= DESKTOP_TAGS ? "sr-only" : i >= PHONE_TAGS ? "sr-only md:not-sr-only" : ""}`}
                               >
                                 {i > 0 && " "}#{tag.name}
                               </span>
                             ))}
                             {songTags.length > PHONE_TAGS && (
-                              <span className="text-ink-dim md:hidden"> +{songTags.length - PHONE_TAGS}</span>
+                              <span className="text-ink-dim md:hidden" aria-hidden="true"> +{songTags.length - PHONE_TAGS}</span>
                             )}
                             {songTags.length > DESKTOP_TAGS && (
-                              <span className="hidden text-ink-dim md:inline"> +{songTags.length - DESKTOP_TAGS}</span>
+                              <span className="hidden text-ink-dim md:inline" aria-hidden="true"> +{songTags.length - DESKTOP_TAGS}</span>
                             )}
                           </p>
                         )}

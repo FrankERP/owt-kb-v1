@@ -12,7 +12,7 @@
 // (decision O).
 
 import { PAGE_LEDE, PAGE_TITLE, SHEET_TITLE } from "@/app/utils/homeHero";
-import { groupByLetter } from "./adminRowCopy";
+import { groupRowsByLetter } from "@/app/utils/libraryIndex";
 import { plural } from "@/app/utils/plural";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
@@ -123,7 +123,7 @@ export function groupMembersByLetter<T extends { member_name: string; alias?: st
   rows: T[],
   sortDir: SortDir,
 ): { letter: string; rows: T[] }[] {
-  return groupByLetter(rows, (m) => m.alias?.trim() || m.member_name, sortDir);
+  return groupRowsByLetter(rows, (m) => m.alias?.trim() || m.member_name, sortDir);
 }
 
 /** Which ministry's people the Miembros list is showing. */

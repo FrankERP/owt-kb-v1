@@ -4,31 +4,8 @@
 // Dates arrive as Sanity `YYYY-MM-DD` and are rendered at LOCAL NOON — never a
 // bare `new Date(iso)`, which lands the day before in America/Mexico_City.
 
-import { normalizeText } from "@/app/utils/normalizeText";
 import { plural } from "@/app/utils/plural";
 
-/**
- * A list by letter of the shown name, like Biblioteca (ADR-0070): the letter
- * of each row's `nameOf` (accents folded, so «Él» files under E), «#» last for
- * anything that does not start with a letter, letters in `sortDir`. Rows keep
- * the order the caller sorted them in. Miembros and Canciones both read it.
- */
-export function groupByLetter<T>(
-  rows: T[],
-  nameOf: (row: T) => string,
-  sortDir: "asc" | "desc" = "asc",
-): { letter: string; rows: T[] }[] {
-  const map = new Map<string, T[]>();
-  for (const row of rows) {
-    const c = normalizeText(nameOf(row)).trim().charAt(0).toUpperCase();
-    const letter = /[A-Z]/.test(c) ? c : "#";
-    (map.get(letter) ?? map.set(letter, []).get(letter)!).push(row);
-  }
-  const letters = [...map.keys()].filter((l) => l !== "#").sort();
-  if (sortDir === "desc") letters.reverse();
-  if (map.has("#")) letters.push("#");
-  return letters.map((letter) => ({ letter, rows: map.get(letter)! }));
-}
 
 const MONTH_LONG = new Intl.DateTimeFormat("es-MX", { month: "long" });
 const MONTH_SHORT = new Intl.DateTimeFormat("es-MX", { month: "short" });

@@ -37,6 +37,9 @@ const PROVIDER_LABEL: Record<string, string> = {
 /** The accesses an open row lists before «Ver los N». */
 const HISTORY_PREVIEW = 4;
 
+/** One locale for every clock and date in the panel, so a row and its detail spell 09:14 alike. */
+const LOCALE = "es-ES";
+
 type Scope = "all" | "active" | "inactive";
 
 const now = () => Date.now();
@@ -80,16 +83,16 @@ function statusOf(lastActive: string | null): StatusKey {
 /** «Hoy 9:14», «Ayer», «Hace 3 días», then the date. */
 function formatDate(iso: string) {
   const days = calendarDaysAgo(iso);
-  if (days === 0) return `Hoy ${new Date(iso).toLocaleTimeString("es-MX", { hour: "numeric", minute: "2-digit" })}`;
+  if (days === 0) return `Hoy ${new Date(iso).toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" })}`;
   if (days === 1) return "Ayer";
   if (days >= 2 && days <= 6) return `Hace ${days} días`;
-  return new Date(iso).toLocaleDateString("es-ES", {
+  return new Date(iso).toLocaleDateString(LOCALE, {
     year: "numeric", month: "short", day: "numeric",
   });
 }
 
 function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleString("es-ES", {
+  return new Date(iso).toLocaleString(LOCALE, {
     year: "numeric", month: "short", day: "numeric",
     hour: "2-digit", minute: "2-digit",
   });
@@ -219,15 +222,11 @@ export default function ActivityPanel() {
           const open = expanded === m._id;
           const name = displayName(m);
           const events = fullHistory === m._id ? m.events : m.events.slice(0, HISTORY_PREVIEW);
-          return (
-            <div key={m._id} data-activity-row="">
-              <button
-                type="button"
-                onClick={() => hasDetail && setExpanded(open ? null : m._id)}
-                aria-expanded={hasDetail ? open : undefined}
-                aria-controls={hasDetail ? `activity-${m._id}` : undefined}
-                className={`flex min-h-[68px] w-full items-center gap-3.5 py-2.5 text-left ${open ? "" : "border-b border-ink/[0.10]"} ${hasDetail ? "cursor-pointer" : "cursor-default"}`}
-              >
+          // The row is a button only when it opens something: a never-seen member's
+          // row is plain, so the keyboard does not stop on a control that does nothing.
+          const rowClass = `flex min-h-[68px] w-full items-center gap-3.5 py-2.5 text-left ${open ? "" : "border-b border-ink/[0.10]"}`;
+          const rowBody = (
+            <>
                 <Avatar name={name} photoUrl={m.photoUrl} />
 
                 <span className="min-w-0 flex-1">
@@ -259,7 +258,23 @@ export default function ActivityPanel() {
                 ) : (
                   <span className="w-4 shrink-0" aria-hidden="true" />
                 )}
-              </button>
+            </>
+          );
+          return (
+            <div key={m._id} data-activity-row="">
+              {hasDetail ? (
+                <button
+                  type="button"
+                  onClick={() => setExpanded(open ? null : m._id)}
+                  aria-expanded={open}
+                  aria-controls={`activity-${m._id}`}
+                  className={rowClass}
+                >
+                  {rowBody}
+                </button>
+              ) : (
+                <div className={rowClass}>{rowBody}</div>
+              )}
 
               {hasDetail && (
                 <Collapse
@@ -293,9 +308,11 @@ export default function ActivityPanel() {
                           </li>
                         ))}
                       </ul>
+                      {/* The route sends the latest 20; a longer history says so, rather
+                          than promising «los 143» and showing 20. */}
                       {m.events.length > HISTORY_PREVIEW && fullHistory !== m._id && (
                         <Button variant="ghost" size="sm" className="mt-2 -ml-3 text-accent" onClick={() => setFullHistory(m._id)}>
-                          Ver los {m.events.length}
+                          {m.events.length < m.loginCount ? `Ver los últimos ${m.events.length}` : `Ver los ${m.events.length}`}
                         </Button>
                       )}
                     </div>
