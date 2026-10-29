@@ -18,10 +18,12 @@
 //  1. Eligibility is NEVER re-implemented here. The pool is `rankCandidates`
 //     re-run per placement against `working`, filtered on `eligible` and
 //     `!undeclared`. That single call is what enforces Tipo, availability, and
-//     the same-category rule (a member already on another `instrumento:` row of
-//     this column is `blockedReason`, exactly the C2 refusal the picker and
-//     `moveGate` apply to a human). Round 1 of the review caught a version that
-//     forked this and seated one person on Keys and Drums the same day.
+//     the seat-clash rule (a member already on another `instrumento:` row of
+//     this column, or in one of its voice seats unless marked «Canta y toca a
+//     la vez», is `blockedReason` — `seatsClash`, exactly the C2 refusal the
+//     picker and `moveGate` apply to a human). Round 1 of the review caught a
+//     version that forked this and seated one person on Keys and Drums the
+//     same day; the voice half closes Tony on Coro and Drums (ADR-0078).
 //  2. Vacate happens ONCE, before any counting. A previous Auto's `origin:
 //     "auto"` instrument cells are emptied in one pass over the whole grid, so
 //     `working` never holds a pick this run has not made. Round 2 caught a

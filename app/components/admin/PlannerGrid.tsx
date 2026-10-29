@@ -129,6 +129,7 @@ import {
   normalizeSeatName,
   occupantDeclaresInstrument,
   occupantFitsSeat,
+  seatsClash,
   type SeatCategory,
 } from "./seatModel";
 import { renderableUnfilled } from "./instrumentFill";
@@ -537,44 +538,46 @@ interface CellDragHandlers {
 }
 
 /**
- * Same person, two different rows of the SAME category, on the same date.
- * `blockedReason` (`candidateRanking.ts:134-137`) only refuses this at manual
- * pick time — Auto is not a manual pick, so a hand-assigned Lead the solver
- * then places in BGV needs re-checking after every run. Cross-category
- * (voz + instrumento) double duty is legitimate and never flagged.
+ * Same person, two seats they may not hold together (`seatsClash`), on the same
+ * date: two rows of the SAME category, or a voice plus an instrument for someone
+ * not marked «Canta y toca a la vez». `blockedReason` (`candidateRanking.ts`)
+ * only refuses this at manual pick time — Auto is not a manual pick, so a
+ * hand-assigned Lead the solver then places in BGV, or a drummer the solver puts
+ * in Coro, needs re-checking after every run. Voz + instrumento for a marked
+ * member (Frank, Mkz) is legitimate and never flagged (ADR-0078).
  */
 function categoryDuplicatesForColumn(
   cells: GridCell[],
   rows: GridRow[],
   columnId: string,
+  singsAndPlays: ReadonlySet<string>,
 ): Map<string, string[]> {
   const rowById = new Map(rows.map((r) => [r.id, r]));
-  const byMember = new Map<string, { rowId: string; category: SeatCategory }[]>();
+  const byMember = new Map<string, { seatId: string; category: SeatCategory }[]>();
   for (const c of cells) {
     if (c.columnId !== columnId) continue;
     const row = rowById.get(c.rowId);
     if (!row) continue;
     for (const { memberId } of c.occupants) {
       const list = byMember.get(memberId) ?? [];
-      list.push({ rowId: c.rowId, category: row.category });
+      list.push({ seatId: c.rowId, category: row.category });
       byMember.set(memberId, list);
     }
   }
   const out = new Map<string, string[]>();
   for (const [memberId, entries] of byMember) {
-    const byCategory = new Map<string, string[]>();
-    for (const e of entries) {
-      const list = byCategory.get(e.category) ?? [];
-      list.push(e.rowId);
-      byCategory.set(e.category, list);
+    // Every clashing PAIR, so a member doubled in two categories on one date
+    // (Lead+BGV and Bass+Guitar) keeps both flags — the very thing this
+    // function exists to catch — while a legitimate third seat stays clean.
+    const flagged = new Set<string>();
+    for (let i = 0; i < entries.length; i++) {
+      for (let j = i + 1; j < entries.length; j++) {
+        if (!seatsClash(entries[i], entries[j], singsAndPlays.has(memberId))) continue;
+        flagged.add(entries[i].seatId);
+        flagged.add(entries[j].seatId);
+      }
     }
-    for (const rowIds of byCategory.values()) {
-      // ACCUMULATE, never overwrite: a member can be duplicated in two
-      // categories on one date (Lead+BGV and Bass+Guitar). Assigning here would
-      // keep only the last category's rows, silently un-flagging the other
-      // duplicate — the very thing this function exists to catch.
-      if (rowIds.length > 1) out.set(memberId, [...(out.get(memberId) ?? []), ...rowIds]);
-    }
+    if (flagged.size > 0) out.set(memberId, [...flagged]);
   }
   return out;
 }
@@ -762,11 +765,12 @@ export default function PlannerGrid(props: PlannerGridProps) {
   const duplicatesByColumnId = useMemo(() => {
     const map = new Map<string, Map<string, string[]>>();
     const columnIds = new Set(cells.map((c) => c.columnId));
+    const singsAndPlays = new Set(members.filter((m) => m.singsAndPlays === true).map((m) => m._id));
     for (const columnId of columnIds) {
-      map.set(columnId, categoryDuplicatesForColumn(cells, rows, columnId));
+      map.set(columnId, categoryDuplicatesForColumn(cells, rows, columnId, singsAndPlays));
     }
     return map;
-  }, [cells, rows]);
+  }, [cells, rows, members]);
 
   /**
    * E13 — the rules re-checked against everyone ALREADY SEATED, every render,

@@ -683,7 +683,9 @@ glyph-per-tab map and every item carries an explicit `aria-label`, because the l
 `display: none` — and so out of the a11y tree — while the planner is open; the `lg+` rail
 is also user-collapsible to those icons, persisted per browser in `owt_admin_rail_collapsed`,
 and the planner's forced collapse wins and hides the toggle — ADR-0044),
-`useIntegrityQueue` (`app/components/admin/useIntegrityQueue.ts` — the ONLY integrity
+`seatsClash` (`app/components/admin/seatModel.ts` — the ONE seat-clash predicate: same category
+never, voz + instrumento only for a member marked «Canta y toca a la vez» (`singsAndPlays`), FOH beside
+either allowed; `rankCandidates`' C2 and `PlannerGrid`'s ⚠ both read it — ADR-0078), `useIntegrityQueue` (`app/components/admin/useIntegrityQueue.ts` — the ONLY integrity
 fetch; `AdminPanel` calls it once and the panel AND the rail dot read that one state.
 Gated on the role actually having a Servicios tab (`enabled`), re-read on ENTERING
 Servicios, and a failed, in-flight or disabled domain reads `unknown`, never `clean`),
