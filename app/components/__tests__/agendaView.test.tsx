@@ -382,3 +382,112 @@ describe("CalendarView host", () => {
     expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual(["Septiembre 2026"]);
   });
 });
+
+// 2026-10-29 — the ministry filter, for a member of Alabanza and Oasis Kids.
+describe("CalendarView — ministry filter", () => {
+  const kidsSunday = (date: string, mine = false): ActiveDay => ({
+    day: "Oasis Kids",
+    date,
+    kids: {
+      seats: [
+        { seat: "ensenanza", label: "Enseñanza", pair: "Ana y Luis", mine: false },
+        { seat: "chiquitos", label: "RG Chiquitos", pair: "Beto y Sofi", mine },
+        { seat: "medianos", label: "RG Medianos", pair: null, mine: false },
+        { seat: "grandes", label: "RG Grandes", pair: "Mkz y Caro", mine: false },
+      ],
+    },
+  });
+  const BOTH: Record<string, ActiveDay[]> = {
+    ...ACTIVE,
+    "2026-09-13": [...ACTIVE["2026-09-13"], kidsSunday("2026-09-13", true)],
+    "2026-09-27": [kidsSunday("2026-09-27")],
+  };
+
+  function mountFiltered(view: "all" | "worship" | "kids" | undefined, activeDays = BOTH) {
+    render(
+      <MotionProvider>
+        <ToastProvider>
+          <CueDialogProvider>
+            <CalendarView activeDays={activeDays} viewMonth={null} todayStr="2026-09-10" ministryView={view} />
+          </CueDialogProvider>
+        </ToastProvider>
+      </MotionProvider>,
+    );
+  }
+
+  afterEach(() => {
+    document.cookie = "owt_calendar_view=; path=/; max-age=0";
+  });
+
+  it("shows no ministry control to a reader of one ministry", () => {
+    mountHost();
+    expect(screen.queryByRole("radiogroup", { name: "Ministerio" })).toBeNull();
+    expect(screen.queryByRole("radio", { name: "Todos" })).toBeNull();
+  });
+
+  it("opens on the remembered view and lists both ministries under «Todos»", () => {
+    mountFiltered("all");
+    expect(screen.getByRole("radio", { name: "Todos" }).getAttribute("aria-checked")).toBe("true");
+    expect(rows().map((r) => r.getAttribute("aria-label")?.split(",")[0])).toEqual([
+      "Domingo", "Oasis Kids", "Sábado", "Oasis Kids", "Domingo",
+    ]);
+  });
+
+  it("«Alabanza» hides every Kids Sunday; «Oasis Kids» hides every worship service", () => {
+    mountFiltered("all");
+    fireEvent.click(screen.getByRole("radio", { name: "Alabanza" }));
+    expect(rows().map((r) => r.getAttribute("aria-label")?.split(",")[0])).toEqual(["Domingo", "Sábado", "Domingo"]);
+    fireEvent.click(screen.getByRole("radio", { name: "Oasis Kids" }));
+    expect(rows().map((r) => r.getAttribute("aria-label")?.split(",")[0])).toEqual(["Oasis Kids", "Oasis Kids"]);
+  });
+
+  it("starts on a remembered single ministry", () => {
+    mountFiltered("kids");
+    expect(screen.getByRole("radio", { name: "Oasis Kids" }).getAttribute("aria-checked")).toBe("true");
+    expect(rows()).toHaveLength(2);
+  });
+
+  it("remembers the choice on this device", () => {
+    mountFiltered("all");
+    fireEvent.click(screen.getByRole("radio", { name: "Alabanza" }));
+    expect(document.cookie).toContain("owt_calendar_view=worship");
+  });
+
+  it("counts only what the chosen view shows", () => {
+    mountFiltered("all");
+    expect(screen.getByText(/5 servicios por venir/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("radio", { name: "Oasis Kids" }));
+    expect(screen.getByText(/2 servicios por venir/)).toBeTruthy();
+  });
+
+  it("marks the reader's Kids seat «Tú» in the row, decided by the server's flag", () => {
+    mountFiltered("kids");
+    const row = rows()[0];
+    // «te tocó» or «te toca» by the real clock; the seat is what this pins.
+    expect(row.getAttribute("aria-label")).toMatch(/te toc[aó]: RG Chiquitos$/);
+    expect(within(row).getByText("Tú · RG Chiquitos")).toBeTruthy();
+  });
+
+  it("opens a Kids Sunday as the four seats, with «Tú» on the reader's pair", () => {
+    mountFiltered("kids");
+    fireEvent.click(rows()[0]);
+    const sheet = screen.getByRole("dialog");
+    const kids = within(sheet).getByRole("region", { name: "Oasis Kids" });
+    expect(within(kids).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
+      "EnseñanzaAna y Luis",
+      "RG ChiquitosTú · Beto y Sofi",
+      "RG MedianosSin asignar",
+      "RG GrandesMkz y Caro",
+    ]);
+    expect(within(kids).getByRole("link", { name: "Ver Oasis Kids" }).getAttribute("href")).toBe("/kids");
+  });
+
+  it("names Oasis Kids in the Mes legend only while a Kids Sunday is shown", () => {
+    mountFiltered("all");
+    fireEvent.click(screen.getByRole("radio", { name: "Mes" }));
+    const legendKids = () => screen.queryAllByText("Oasis Kids").filter((el) => el.className.includes("text-[13px]"));
+    expect(legendKids()).toHaveLength(1);
+    fireEvent.click(screen.getByRole("radio", { name: "Alabanza" }));
+    expect(legendKids()).toHaveLength(0);
+  });
+});
