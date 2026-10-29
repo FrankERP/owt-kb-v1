@@ -497,8 +497,8 @@ the impersonation banner, the audio transport, and the song sheet's head.
   and, in worship, `Admin` (admin/content-editor/super-admin). **Tema,
   Cerrar sesión, «Yo» and Super admin all live in the avatar menu (`NavMenu`) now, not
   here** — M1 follow-up F1 moved the account actions and F2 moved «Yo»,
-  because `/me` has one home, the avatar menu. When none of the
-  three rows applies (the common case: a plain worship member with no Kids
+  because `/me` has one home, the avatar menu. When neither
+  row applies (the common case: a plain worship member with no Kids
   ministry), the «Más» button itself does not render — the bar shows the
   tabs alone — and the sheet never opens. A bar with fewer than two items
   (tabs + «Más») is not a bar: the kids-only volunteer with no planner rights

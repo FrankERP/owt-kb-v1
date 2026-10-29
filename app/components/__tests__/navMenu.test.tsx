@@ -1,7 +1,9 @@
 /** @vitest-environment jsdom */
-// NavMenu is now an ACCOUNT menu, all widths (M1 follow-up F1): the destinations
-// it used to repeat (Calendario, #Tags, Oasis Kids, Planear Kids, Admin) live in
-// NavLinks/BottomNav now, and NavMenu keeps only Mi semana, Ajustes and Cerrar sesión.
+// NavMenu is an ACCOUNT menu, all widths (M1 follow-up F1): the ministry
+// destinations (Calendario, Oasis Kids, Planear Kids, Admin) live in
+// NavLinks/BottomNav, and NavMenu keeps Mi semana, Disponibilidad, Ajustes,
+// Cerrar sesión — plus Super admin for the super-admin, which belongs to no
+// ministry (2026-10-29).
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MotionProvider } from "@/app/components/ui/MotionProvider";

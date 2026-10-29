@@ -2,7 +2,9 @@
 // gusta estar en lo de Worship y ver lo de Kids»). The nav shows one ministry at
 // a time — the one the current page belongs to — and a switcher to the others
 // the person belongs to or manages. Both nav surfaces (NavLinks at lg+,
-// BottomNav on phones) derive from here, so they can never disagree.
+// BottomNav on phones) take the SECTION from here, so they always agree on which
+// ministry is showing; each still builds its own row of links (the phone keeps a
+// Kids tab for a Kids manager outside Kids, so Planear Kids is never a lone tab).
 //
 // No "use client": pure functions over the session user and the path, testable
 // on their own (ADR-0028's neutral-module rule). COSMETIC like every nav filter —

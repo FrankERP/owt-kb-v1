@@ -41,6 +41,8 @@ function SectionSwitcher({ current, sections, access }: { current: NavSection; s
       trigger={
         <button
           type="button"
+          // The visible word stays in the name; the rest says what the button does.
+          aria-label={`${SECTION_LABEL[current]}, cambiar de ministerio`}
           className="flex items-center gap-1 px-3 py-2 font-label text-[11px] uppercase tracking-widest text-ink transition-colors duration-fast ease-out-brand hover:text-accent"
         >
           {SECTION_LABEL[current]}
