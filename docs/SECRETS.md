@@ -463,6 +463,13 @@ list `check_service_deletes` answered (`deleteListToken`). Rotating the key inva
 preview: `delete_services` refuses the call before any delete and answers «revisa de nuevo»; the next
 check mints a fresh token. Nothing stored holds it.
 
+**A fifth use: the song tools** (ADR-0077, admin parity phase 3; no new secret or env var). Two more
+HMACs under their own labels (`app/mcp/songs/songTokens.ts`): `mcp-song-edits|`, over the song, its
+revision, the edit list `check_song_edits` answered and the before/after it rendered, and `mcp-song-create|`, over its issue time
+and the song `check_new_song` answered (the new song's id is derived from it). Rotating the key voids
+every pending song check: the save or create answers «revisa de nuevo» (or «no es la que se revisó»)
+and writes nothing. A song already created keeps its id; nothing stored holds a token.
+
 **Blast radius.** Every access and refresh token that environment's routes ever signed stops
 verifying the instant the new key is live — a rotated secret cannot check a token signed under
 the old one, by construction. That is **that one environment's grants only**: on production, every

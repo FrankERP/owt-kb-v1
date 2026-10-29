@@ -542,6 +542,19 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   date, songs); `setlistUpsert` and the MCP's forecast both call it. A past date is judged apart
   (`isPastNoticeDate`, `outboxClassify.ts`): the flush drops it, and the forecast says so.
 
+### Song library writer (shared by `/admin`'s song editors and the MCP song tools, admin parity phase 3)
+- **`songSaveCommit.ts`** ([songSaveCommit.ts](../app/utils/songSaveCommit.ts)) — the ONLY song
+  writer, after authorization (ADR-0043 shape, ADR-0077): `createSong(raw, opts?)`,
+  `patchSong(id, raw, opts?)` and the authors route's `ensureAuthors(raw)` (route only). Without
+  `opts` the routes' own statements; with `opts` (the chat) one transaction holding the new artists
+  (`createIfNotExists`) and the song (`createIfNotExists` under the token's id, or the patch under
+  `ifRevisionId`). `buildSongCreate`/`buildSongPatch` are its pure halves (the chat's check renders
+  from them); `resolveSongAuthors` is the one author-name resolution; a cleared URL is an `unset`.
+- **`applySongEdits(song, edits, catalog)`** ([songEdits.ts](../app/utils/songEdits.ts)) — the chat's
+  edits by parts on the fresh song (passages with `all`/`nth`, charts by `_key`, tags and artists by
+  name, links by label), returning only the fields they touch. Also `lyricsGate(body)` (lossless and
+  NFC), `lyricsRoundTrips`, `resolveAuthor(s)`, `parsesAsKey` + `KEY_HINT`, `validBpm`.
+
 ### Oasis Kids planner (shared by `/api/kids/*` and the MCP Kids tools, admin parity phase 3)
 - **`kidsCommit.ts`** ([kidsCommit.ts](../app/utils/kidsCommit.ts)) — the ONLY Kids writers, after
   authorization (ADR-0043 shape, `CommitOutcome`): `saveKidsSunday(raw)` (one Sunday, WHOLE: an

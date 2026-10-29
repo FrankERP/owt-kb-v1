@@ -18,6 +18,9 @@ import "server-only";
 //     (`canonicalDeleteList`). `delete_services` refuses any list it was not minted for — a subset,
 //     one more service, a published one under a drafts-only check — so the call repeats the preview.
 //
+// The song tools' two labels (`mcp-song-edits|`, `mcp-song-create|`) live in `../songs/songTokens.ts`,
+// which reuses `canonicalJson` and `sameMac` from here.
+//
 // Rotating the secret invalidates every pending change set and token: the next save answers
 // «revisa de nuevo» (`docs/SECRETS.md`).
 

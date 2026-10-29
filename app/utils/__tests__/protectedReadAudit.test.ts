@@ -49,7 +49,7 @@ const REAL_SITES: ProtectedSite[] = AUDITED_FILES.flatMap((file) =>
   scanSource(file, readFileSync(path.join(REPO_ROOT, file), "utf8")),
 );
 
-const GUARD_FILE = "app/api/content/posts/[id]/route.ts";
+const GUARD_FILE = "app/utils/songSaveCommit.ts";
 const CLIENT_IMPORTS = `
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
 import { operationalClient } from "@/sanity/lib/operationalClient";
@@ -360,24 +360,24 @@ export async function commit(months) {
 
 describe("defensive type-rejection guard exclusion", () => {
   const guardSource = `${CLIENT_IMPORTS}
-export async function PATCH() {
+export async function patchSong() {
   const target = await writeClient.fetch(\`*[_id == $id][0]{ _type }\`, { id });
   if (target._type !== "post") return new Response(null, { status: 400 });
   await writeClient.patch(id).set({ title: "x" }).commit();
 }`;
 
-  it("recognizes the posts/[id] PATCH _type-only guard as its documented exclusion", () => {
+  it("recognizes the song writer's _type-only guard as its documented exclusion", () => {
     const sites = scanSource(GUARD_FILE, guardSource);
     expect(sites).toHaveLength(1);
-    expect(sites[0]).toMatchObject({ operation: "PATCH", kind: "type-rejection-guard" });
+    expect(sites[0]).toMatchObject({ operation: "module", kind: "type-rejection-guard" });
     expect(auditViolations(sites)).toHaveLength(0);
   });
 
-  it("still fails a protected-field generic _id read in the same file and method", () => {
+  it("still fails a protected-field generic _id read in the same file", () => {
     const sites = scanSource(
       GUARD_FILE,
       `${CLIENT_IMPORTS}
-export async function PATCH() {
+export async function patchSong() {
   const target = await writeClient.fetch(
     \`*[_id == $id][0]{ _type, "leads": Lead[]._ref, service_ref }\`, { id },
   );
@@ -389,10 +389,9 @@ export async function PATCH() {
     expect(auditViolations(sites)).toHaveLength(1);
   });
 
-  it("does not extend the guard exclusion to another file or another method", () => {
+  it("does not extend the guard exclusion to another file", () => {
     expect(auditViolations(scanSource("app/api/other/route.ts", guardSource))).toHaveLength(1);
-    const otherMethod = guardSource.replace("function PATCH", "function PUT");
-    expect(auditViolations(scanSource(GUARD_FILE, otherMethod))).toHaveLength(1);
+    expect(auditViolations(scanSource("app/utils/otherCommit.ts", guardSource))).toHaveLength(1);
   });
 
   it("keeps the guard registry separate from, and disjoint with, the A2 allowlist", () => {
@@ -401,7 +400,7 @@ export async function PATCH() {
     expect(DEFENSIVE_TYPE_REJECTION_GUARDS).toHaveLength(2);
     expect(DEFENSIVE_TYPE_REJECTION_GUARDS[0]).toMatchObject({
       file: GUARD_FILE,
-      operation: "PATCH",
+      operation: "module",
     });
     expect(DEFENSIVE_TYPE_REJECTION_GUARDS[1]).toMatchObject({
       file: "app/utils/kidsCommit.ts",

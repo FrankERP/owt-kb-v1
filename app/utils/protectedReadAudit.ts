@@ -525,10 +525,10 @@ export const OPERATOR_TOOLING_ALLOWLIST: readonly AuditExemption[] = [
  */
 export const DEFENSIVE_TYPE_REJECTION_GUARDS: readonly AuditExemption[] = [
   {
-    file: "app/api/content/posts/[id]/route.ts",
-    operation: "PATCH",
+    file: "app/utils/songSaveCommit.ts",
+    operation: "module",
     reason:
-      "`*[_id == $id][0]{ _type }` ownership guard on the song-content editor, so a manager cannot overwrite a role/proposal/teamMembers document by id; projects only _type",
+      "`*[_id == $id][0]{ _type }` ownership guard on the song-content editor (`patchSong`, called by the posts/[id] PATCH route and the MCP `save_song_edits`), so a manager cannot overwrite a role/proposal/teamMembers document by id; projects only _type",
     removalOwner: "song-content editor refactor (never A2)",
   },
   {
