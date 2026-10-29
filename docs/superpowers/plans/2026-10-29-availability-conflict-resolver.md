@@ -1,6 +1,7 @@
 # Availability conflicts: find them, fix drafts, propose for published services (plan)
 
-**Status:** DRAFT, not reviewed. Review approval is not authorization to implement; the build
+**Status:** DRAFT, revision 3 (rewritten after two review rounds hit the churn cap; a third round
+needs Frank's go-ahead). Review approval is not authorization to implement; the build
 follows the release order in CLAUDE.md.
 
 **Requirement (Frank, 2026-10-29, verbatim, thread «Resolver conflictos de disponibilidad
@@ -24,8 +25,8 @@ soon as it exists, and applies himself; the check runs on its own and also on de
 
 **Risk tier: critical**, from the ladder: a new production/server writer (an automated sweep that
 rewrites role documents with no human in the loop, on drafts) and a new mutation trust boundary (a
-member's availability save triggers that writer). Only the writer slice (§4–§6) owns the contract;
-the UI (§7) consumes it.
+member's availability save triggers that writer), which also adds one option to the guarded role edit
+writer (`editRole`, §5.1). Only the writer slice (§4–§6) owns the contract; the UI (§7) consumes it.
 
 **Out of scope:** re-running the v3 solver over a month (§3 says why); the Tony «Coro + Batería on
 2026-11-01» question (another thread); a dedicated email switch for this alert (§6.3).
@@ -34,8 +35,8 @@ the UI (§7) consumes it.
 
 ## 1. What changes for Frank
 
-1. Someone marks a day they already serve on. Within seconds (the member's save), or at the latest
-   the same evening (the daily cron), or whenever Frank presses «Revisar ahora» (all three: §5.3):
+1. Someone marks a day they already serve on. Within seconds (the member's save), or within about
+   half an hour (a scheduled check), or whenever Frank presses «Revisar ahora» (all three: §5.4):
    - **Draft service:** the app replaces that person in that seat with the best eligible person and
      records it. Nobody on the team is emailed (drafts send nothing, as today). Frank gets one email
      listing the change («Cambié a Tony por Ana en Coro — borrador del dom 3 ene»). Drafts exist
@@ -44,8 +45,8 @@ the UI (§7) consumes it.
      puede el dom 29 nov (Coro). Propuesta: Ana») and emails Frank once.
    - **No eligible person:** recorded as «sin reemplazo» and emailed once; nothing is written.
 2. In `/admin` › Disponibilidad › Conflictos, each conflict shows its proposal with «Aplicar»,
-   «Elegir otro» (the next eligible people) and «Mantener» (a deliberate keep: never proposed or
-   changed again). A conflict the app could not check («sin revisar», §5.2 step 3) says so. A
+   «Elegir otro» (the next eligible people) and «Mantener» (Frank's deliberate keep: never proposed
+   or changed again). A conflict the app could not check («sin revisar», §4.3) says so. A
    «Cambios automáticos» list shows the drafts the app changed in the last 30 days.
    «Revisar ahora» runs the whole check on demand.
 3. «Aplicar» writes through `/admin`'s own role PATCH writer, so the existing notices go out exactly
@@ -83,18 +84,31 @@ the UI (§7) consumes it.
   `eligible = ¬blockedReason ∧ ¬ruleBlockedReason ∧ available` — «the FILLER's composite verdict»,
   explicitly the predicate for a loop, not for the manual picker — plus `undeclared` (instrument not
   declared) and `alreadyAssigned` (holds another seat on the service). `localFill.ts` and
-  `instrumentFill.ts` fill with `eligible` (and `!undeclared` for instruments), ordered by `load`.
+  `instrumentFill.ts` fill with `eligible` (and `!undeclared` for instruments), but each in its own
+  order: voices by `orderByEffectiveLoad(pool, fairnessByMemberId(config, members))` (the rules'
+  `exempt`/`slack` settings; «never `RankedCandidate.load`», `localFill.ts:166-205`), instruments by
+  `orderForFill(pool, counts, playedPrevious)` (fewest instrument seats this month, then not on the
+  previous weekend, `instrumentFill.ts:173-216`).
   The MCP editor builds the seat's `windowRoles` as `savedWindowFor(...)` minus on-board services
   plus `cellsToParticipantRoles(board.cells, board.columns, members)` (`serviceEditor.ts:824`).
 - **Solver v3** assigns only `Lead | BGV | Choir` (`v3Wire.ts:13`); a stored service enters a solve
   with every seat pinned (`v3SolveRequest.ts:259`).
-- **Admin email precedent.** `serviceThreadNotify.ts:102` and `proposalNotify.ts`: `sendEmail`
-  serially, `getAllowlist`/`isEmailAllowed`, `wantsNotification(prefs, "proposals")`,
-  `EMAIL_REDIRECT_TO` on Preview (prefix `[→ address]`). Admin audience `ADMIN_RECIPIENTS_QUERY`
-  (`proposalNotifyQueries.ts:34`).
-- **Cron.** Vercel Hobby allows one daily cron: `/api/cron/service-reminders` at `0 1 * * *`
-  (19:00 CDMX), `maxDuration = 60`, `CRON_SECRET`-gated, excluded from `proxy.ts`. The 5-minute
-  trigger lives in GitHub Actions for the outbox only (`.github/workflows/flush-notifications.yml`).
+- **Admin email precedent.** `proposalNotify.ts:103-112`: `sendEmail` serially,
+  `getAllowlist`/`isEmailAllowed`, `wantsNotification(prefs, "proposals")`; `EMAIL_REDIRECT_TO` on
+  Preview (prefix `[→ address]`, as `serviceThreadNotify.ts:113-125` does). The shared
+  `ADMIN_RECIPIENTS_QUERY` (`proposalNotifyQueries.ts:34`) has no ministry or `disabled` filter (#8).
+- **Atomic multi-document writes.** `editRole` builds ONE `writeClient.transaction()` (role patch
+  under `ifRevisionId`, lock heartbeat/claim, special coordinator) and commits it once
+  (`roleEditCommit.ts:285-345`); a Content Lake conflict is `stale_revision`, any other failure
+  throws. Guarded creates in this repo use `create`, never `createIfNotExists` («a concurrent creation
+  must be TOLD», `setlistSaveCommit.ts:225`).
+- **Cron.** Vercel Hobby allows one daily cron: `/api/cron/service-reminders` at `0 1 * * *`,
+  whose outbox sweep may use up to ~60 s (`SWEEP_DEADLINE_MS` 45 s + reserve, `outboxSweep.ts:108`).
+  Sub-daily triggers live in GitHub Actions: `.github/workflows/flush-notifications.yml` curls
+  `$APP_BASE_URL/api/cron/flush-notifications` with `CRON_SECRET` every 5 min and asserts HTTP 200.
+  `/api/cron/*` is excluded from `proxy.ts` and each route checks `CRON_SECRET`.
+- **Environment.** `fairnessRecordEnvironment(process.env)` answers `production | preview | local`
+  (`solverDeployment.ts`); Preview writes to the real dataset (CLAUDE.md).
 
 ## 3. Decisions
 
@@ -104,42 +118,54 @@ the UI (§7) consumes it.
   publishing. Replacing one seat changes exactly two people. The fairness cost is one seat, and the
   ledger counts seats from roles, so the next Auto sees it (no `fairnessMonth` write: records hold
   eligibility, not seats).
-- **D2. The pick is the filler's.** Candidates = `serverPickCandidates` (`editorBoard.ts:162`,
-  which runs `rankCandidates` with the column, its Sunday spine and the rules from
-  `columnRuleInputs`, and answers `null` rather than judge with one missing → «sin revisar») for that
-  seat on the board with the absent person removed, with `windowRoles` built as
-  `serviceEditor.ts:824` builds them, filtered on `eligible ∧ ¬alreadyAssigned ∧ (instrument ⇒ ¬undeclared)`
-  and on the worship audience (as the MCP editor filters, `serviceEditor.ts:831`), in `rankCandidates`'
-  own order (rank, then `load`, then name). `¬alreadyAssigned` is stricter than the planner's C2: an
+- **D2. The pick is the fillers'.** The pool for a seat = `serverPickCandidates` (`editorBoard.ts:162`:
+  `rankCandidates` with the column, its Sunday spine and the rules from `columnRuleInputs`; `null`
+  when one is missing → «sin revisar») on the board with the absent person removed, `windowRoles`
+  built as `serviceEditor.ts:824` builds them, filtered on `eligible ∧ ¬alreadyAssigned ∧
+  (instrument ⇒ ¬undeclared)` and on the worship audience (`serviceEditor.ts:831`). Ordered exactly as
+  the fillers order it: a VOICE seat by `orderByEffectiveLoad(pool, fairnessByMemberId(config,
+  members))` (`localFill.ts`, so Frank's `exempt`/`slack` settings hold); an INSTRUMENT seat by
+  `orderForFill(pool, seatCounts(board cells), instrumentalistsOn(board cells, previous weekend
+  column))` (`instrumentFill.ts`; the two helpers become exports, unchanged); an FOH seat, which no
+  filler fills, in `rankCandidates`' order. `¬alreadyAssigned` is stricter than the planner's C2: an
   automatic pick never seats someone who already serves that service in any other seat. The proposal
-  doc told Frank «el saldo de equidad»; the ledger only measures voice lines, so D2 is the one order
-  that also covers instruments and FOH, and the same one «Llenar especiales» uses. The thread reply
-  says so.
-- **D3. Every candidate passes three gates before it is used, else the next one (at most 8):**
-  (a) `judgeTarget` on the service target is `ok` with `added.length === 0` (no new rule finding in
-  the service); (b) the month check (§4.3) shows no rule instance or missed protection that the
-  REMOVAL alone did not already cause; (c) worship-night song leads: if the absent person is a
-  `songs[].leads` member of a worship night (ADR-0036; read from `sources.snapshot.roles` as
-  `serviceEditor.ts`'s `songLeadLines` does), the conflict is never auto-applied and never
-  proposed («sin reemplazo: dirige canciones»). If no candidate passes: «sin reemplazo».
+  doc told Frank «el saldo de equidad»; the ledger only measures voice lines, so the fillers' orders
+  are the ones that also cover instruments; the thread reply says so.
+- **D3. Every candidate passes three gates before it is used, else the next one (at most 8 per
+  seat):** (a) `judgeTarget` on the service target is `ok` with `added.length === 0` (no new rule
+  finding in the service); (b) the month gate (§4.3); (c) worship-night song leads: if the absent
+  person is a `songs[].leads` member of a worship night (ADR-0036; read from
+  `sources.snapshot.roles` as `serviceEditor.ts`'s `songLeadLines` does), there is no pick: `none`,
+  `reason: song_lead`. If no candidate passes: `none`, `reason: no_candidate`.
 - **D4. Drafts auto, published propose.** A draft is `published == false` as stored
   (`coalesce(published, true)` in `adminRolesQuery`). Only services the board marks `editable`
   (approved, serializable, today or later) are touched. Past services are never read for action.
-- **D5. Auto at most once per conflict.** Conflict identity = `(roleId, memberId, date)`. If the
-  same identity reappears after the app (or an «Aplicar») removed that person, someone put them back
-  on purpose: the conflict becomes `kept` (no write, no proposal, no email), shown as «Mantenido».
-  The full lifecycle is the table in §5.1: `auto`, `applied` and `kept` are never ended by the
-  person's absence, so this rule always has its record to read.
+- **D5. Never twice on its own, and «Mantener» only by hand.** Conflict identity = `(roleId,
+  memberId, date)`. The app changes a given identity automatically at most ONCE, ever
+  (`autoApplied: true` on its record is sticky). If the person is seated there again after an
+  automatic or applied fix (copying instruments, a hand pick — the picker never refuses an
+  unavailable person, `pickJudge.ts:78-80`), it is a NEW conflict event: proposed (or `none`) and
+  emailed, on a draft too. `kept` is set ONLY by Frank's «Mantener» and is the one status that
+  silences an identity.
 - **D6. Horizon.** Services dated from CDMX today through the last day of the month after next (an
-  Auto plans up to two months ahead, so its drafts fall inside). One board per month; months without
-  a conflict or an open record are not opened.
-- **D7. Who triggers what.** The member's save scopes the sweep to THAT member (a member can only
-  cause their own removal). Only members in the worship pool (`adminMembersQuery`'s
-  `WORSHIP_MEMBER_GROQ_FILTER`) are seen; a seated person outside it is not detected, as in today's
-  readiness blocker, which reads the same pool. The cron and «Revisar ahora» sweep everyone. All three call one function.
+  Auto plans up to two months ahead, so its drafts fall inside).
+- **D7. Who triggers what.** The member's save scopes the sweep to THAT member's identities (a member
+  can only cause their own removal); the table (§5.2) is applied to nothing else. The scheduled
+  check and «Revisar ahora» sweep everyone. All call one function. `loadV3PlanSources` reads EVERY
+  member (`adminMembersQuery(true)` binds `$all`, `ministries.ts:130`), so detection sees everyone
+  seated; candidates are filtered to worship (D2).
 - **D8. Reproposal on read.** The UI shows the proposal recomputed on a fresh read (the email shows
   what was true when sent). «Aplicar» re-runs D2–D3 on a fresh read for the chosen candidate and
   refuses if it no longer passes or if the role `_rev` differs from the one the screen showed.
+- **D9. Only Production acts on its own.** The automatic parts — draft writes, record writes, email
+  claims and sends — run only where `fairnessRecordEnvironment(process.env) === "production"`.
+  Elsewhere (Preview shares the real dataset; local) the sweep runs DRY: it computes and answers its
+  report, writes nothing, sends nothing. «Aplicar» and «Mantener» are a person's own click and work
+  on Preview like every other admin button there.
+- **D10. One transaction for a change and its record.** Every role write this feature makes carries
+  its record mutation in the SAME Content Lake transaction as the role patch (§5.1), so a lost
+  response, a throw or a killed function leaves both written or neither. There is no intermediate
+  state to recover.
 
 ## 4. The pure core — `app/utils/availabilityConflicts.ts` (no I/O, no `"use client"` import)
 
@@ -154,120 +180,133 @@ the UI (§7) consumes it.
 
 `proposeReplacement({ board, roleId, memberId, members, config, windowRoles, todayIso, exclude, gate })`
 → `{ kind: "replace", target, seats: { rowId, from, to }[] } | { kind: "none", reason }`. For each
-seat the member holds in that service, in board row order: remove them from the cell, take
-`serverPickCandidates` for that cell (D2; `null` → `none`, `unchecked`), and use the first candidate
-that passes D2's filters, D3(a) on the target built so far and the month gate `gate` (§4.3) —
-at most 8 tried per seat. A person chosen for one seat is `alreadyAssigned` for the next.
-`target = columnTarget(boardAfter, roleId, todayIso)`. `exclude` lets «Elegir otro» skip people.
-Deterministic for the same inputs.
+seat the member holds in that service, in board row order: remove them from the cell, build the D2
+pool and order for that cell (`null` → `none`, `unchecked`), and use the first candidate that passes
+D3(a) on the target built so far and `gate` (§4.3), at most 8 tried per seat. A person chosen for one
+seat is `alreadyAssigned` for the next. `target = columnTarget(boardAfter, roleId, todayIso)`.
+`exclude` lets «Elegir otro» skip people. Pure and deterministic for the same inputs.
 
 ### 4.3 The month gate
 
-`monthCheck` (`monthCheck.ts:197`) gains three additive result fields, computed from what it already
-builds: `instances: BrokenInstance[]`, `missed: MissedProtection[]` (the core verdict) and
-`judged: boolean` (= the ledger was given AND the request built; the existing `checked` also needs the
+`monthCheck` (`monthCheck.ts:197`) gains three additive result fields from what it already builds:
+`instances: BrokenInstance[]` and `missed: MissedProtection[]` (the core verdict) and `judged:
+boolean` (= a ledger was given AND the request built; the existing `checked` also needs the
 fair-share read, which the gate does not use). Existing callers ignore them.
 
-The gate is pure: given the month's ONE ledger read (§5.2 step 3), it builds the month-check input
-exactly as `runStoredMonthCheck` does (`serviceEditor.ts:731`: `months: [month]`, the record's entry,
+The gate applies to VOICE seats only (the month check judges only voices, `monthCheck.ts:263-270`);
+an instrument or FOH pick rests on D2 and D3(a), as the planner's own pick does. For a voice seat,
+given the month's ONE ledger read (§5.3 step 3), it builds the month-check input exactly as
+`runStoredMonthCheck` does (`serviceEditor.ts:731`: `months: [month]`, the record's entry,
 `storedRoles` = the roles read minus the board's editable ones, `savedWindow` minus on-board
-services) with `fairShare: null`, and calls `monthCheck` twice: `removedOnly` (absent person out,
-seat empty) and `withCandidate`. Reject when either is not `judged` («sin revisar»), when
-`withCandidate` has an instance key `(family, rule, scope)` or a missed key `(code, person, scope)`
-that `removedOnly` lacks, or when a count instance in both has a `<=`/`==` rule and a larger
-`observed`. `entryFromRecord` moves unchanged from `serviceEditor.ts` to
-`app/mcp/monthProposals/storedEntries.ts`, imported by both. A month with no eligibility record
-cannot build (the synthetic ledger has no horizon entry, `monthCheck.ts:97–107`), so every pick there
-is `none`/`unchecked` — surfaced, never silent (§5.2 step 3). The month check judges only voice
-seats; instrument and FOH picks rest on D2 and D3(a), as the planner's own pick does.
+services) with `fairShare: null`, and runs `monthCheck` on `removedOnly` (absent person out, seat
+empty) and on `withCandidate`. Reject when either is not `judged`, when `withCandidate` has an
+instance key `(family, rule, scope)` or a missed key `(code, person, scope)` that `removedOnly`
+lacks, or when a count instance in both has a `<=`/`==` rule and a larger `observed`. When no voice
+candidate can be judged because the month cannot build (no eligibility record: the synthetic ledger
+has no horizon entry, `monthCheck.ts:97-107`), the seat's answer is `none`, `reason: unchecked` —
+surfaced in the UI and the email, never silent. `entryFromRecord` moves unchanged from
+`serviceEditor.ts` to `app/mcp/monthProposals/storedEntries.ts`, imported by both.
 
 ## 5. The writer — `app/utils/availabilityFixCommit.ts` (`server-only`)
 
-### 5.1 The record — `availabilityConflict`, and its transitions
+### 5.1 The record — `availabilityConflict` — and the one transaction
 
 Id `availabilityConflict.<sha256(roleId|memberId|date) hex, 32 chars>` (dotted → private). Fields:
-`roleId`, `memberId`, `date`, `serviceKind`, `published` (as last seen), `status`, `seats[] { _key,
-rowId, from, to? }`, `baseRev?` (the role `_rev` a `pending` write asserted), `reason?`
-(`no_candidate | song_lead | unchecked | write_refused`), `refusedCode?`, `eventSeq` (integer), `notifiedSeq` (integer), `firstSeenAt`,
-`updatedAt`, `appliedBy?`, `trigger`. Never deleted by this slice.
+`roleId`, `memberId`, `date`, `serviceKind`, `published` (as last seen), `status`
+(`proposed | none | auto | applied | kept | gone`), `seats[] { _key, rowId, from, to? }`, `reason?`
+(`no_candidate | song_lead | unchecked`), `autoApplied` (boolean, sticky, D5), `eventSeq` and
+`notifiedSeq` (integers), `firstSeenAt`, `updatedAt`, `appliedBy?`, `trigger`. Never deleted.
 
-Each sweep observes, per identity, **C** = «the person is seated in that service and that date is in
-their `unavailableDates`» on its fresh read (§5.2 step 1), and **S** = the service still exists and is
-`editable`. Every write to a record is `ifRevisionId` on the revision this sweep read (created with
-`createIfNotExists`); a lost race drops that record's step for this sweep, never retried in-sweep.
+**Every record write is guarded:** a new record by `create` (a concurrent creation fails the call —
+never `createIfNotExists`); an existing one by `patch(id).ifRevisionId(<rev this sweep read>)`. A
+failed guard means another sweep or click got there first: this sweep drops that identity's step and
+the next one re-reads.
 
-| Status now | C and S | Not C, or not S |
+**The change and its record commit together (D10).** `editRole` gains ONE option,
+`alongside?: RecordMutation` — a `{ create: doc }` or `{ patch: { id, ifRevisionId, set } }` it
+appends to the transaction it already builds (`roleEditCommit.ts:285-345`) before its single
+`commit()`. Nothing else in `editRole` changes; the existing callers pass nothing and behave as
+today. A conflict on the record (another sweep created or moved it) fails the whole transaction as
+`stale_revision`, so the role is not written either. Outcomes: `ok` → both written; `ok: false` →
+neither; a throw (a lost response, a timeout) → unknown, and the next sweep's fresh read sees either
+both (the record says `auto`/`applied` and the role shows the swap) or neither (the conflict is still
+there, with its old record). The function being killed after the commit is the same case.
+
+### 5.2 Transitions
+
+Each sweep observes, per identity in its scope, **C** = «the person is seated in that service and the
+date is in their `unavailableDates`» on its fresh read, and **S** = the service exists and is
+`editable`. «Pick» = `proposeReplacement` answered `replace`.
+
+| Status now | C and S | not C, or not S |
 |---|---|---|
-| (no record) or `gone` | draft with a pick → `pending` + the write (§5.2 step 4; its event is counted when it becomes `auto`); published, or no pick → `proposed` or `none`, **new event** (`eventSeq += 1`) | nothing |
-| `pending` | resolve by the stored seats (below) | resolve by the stored seats |
-| `proposed`, `none` | recompute. Same status → update `seats`/`reason`/`published` in place (no new event). `none` ↔ `proposed` → the new status, **new event** (a proposal that now exists is news). The service became a draft and has a pick → as (no record): `pending` + the write | `gone` |
-| `auto`, `applied` | someone seated the person again on purpose → `kept` (no write, no event) | unchanged (terminal; listed 30 days) |
-| `kept` | unchanged (no write, no event) | unchanged |
+| no record, `gone` | draft ∧ pick ∧ ¬`autoApplied` → the role edit + record `auto` in one transaction (`autoApplied: true`). Otherwise → `proposed` (pick) or `none`. **New event** either way | nothing |
+| `proposed`, `none` | draft ∧ pick ∧ ¬`autoApplied` → as above (`auto`, new event). Same status → update `seats`/`reason`/`published` in place, no event. `none` ↔ `proposed` → the new status, **new event** | `gone` |
+| `auto`, `applied` | the person is back: → `proposed` (pick) or `none`, **new event**; never auto (`autoApplied` stays true) | unchanged (listed 30 days) |
+| `kept` | unchanged | unchanged |
 
-**Resolving `pending`** reads the stored role as this sweep's fresh read shows it: if every `from`
-is absent from its row and every `to` is seated in its row → `auto` (**new event**; the `pending`
-step did not count one). Else if not C or not S (the person left the service some other way, or it is
-gone) → `gone`. Else, if the attempt recorded a known refusal other than `stale_revision`
-(`refusedCode`, §5.2 step 4) → `none` with `reason: write_refused` (**new event**: the writer will
-keep refusing, so Frank must look). Else (stale, thrown, unknown) → a fresh attempt in this sweep, as
-(no record). So a write whose outcome is unknown — a lost response, a thrown commit, a function killed
-after the commit — is settled by the next sweep from what is stored, and the change is never left
-without its record.
+`applied` is written only by «Aplicar» (§5.5) and does not count an event (Frank did it).
+«New event» = `eventSeq += 1` in the same write. A sweep whose read of the ledger FAILS (a transient
+read error, not an unbuildable month) leaves that month's identities untouched and logs it.
 
-**Notification is per event:** a record needs an email while `notifiedSeq < eventSeq` and its status
-is `auto`, `proposed` or `none`. The email step claims it by `patch(id).ifRevisionId(rev).set({
-notifiedSeq: eventSeq })` BEFORE sending; only claimed records go in the email. A send that fails after
-the claim is logged (fixed tag) and not retried; the UI still shows the event.
+**Notification is per event:** a record is due while `notifiedSeq < eventSeq` and its status is
+`auto`, `proposed` or `none`. The email step claims each due record with
+`patch(id).ifRevisionId(rev).set({ notifiedSeq: eventSeq })` BEFORE sending; only claimed records go in
+the email, so two concurrent sweeps never send one event twice. A send that fails after the claim is
+logged (fixed tag) and not retried; the record and the UI still show it.
 
-### 5.2 `sweepAvailabilityConflicts({ trigger, memberId?, deadlineMs })`
+### 5.3 `sweepAvailabilityConflicts({ trigger, memberId?, deadlineMs, mode })`
 
-1. Read `loadV3PlanSources()`; any failed or unready source → `{ ok: false }`, write nothing. Read
-   the records `*[_type == "availabilityConflict" && date >= $today]` through `operationalClient`.
-2. Horizon (D6): one `storedMonthBoard` per month that holds a conflict or a non-terminal record.
-   `findBoardConflicts` (scoped to `memberId` when given) gives C per identity; S from the board.
-   Then the table above, per identity.
-3. Per month that needs a pick: read the ledger ONCE (`loadV3Ledger([month])`). A failed READ is
-   transient: that month's identities are left exactly as they are (no record written, no event,
-   logged) and the next sweep retries. A month that reads but cannot be judged (no eligibility record,
-   §4.3) is structural: its picks are `none` with `reason: unchecked`, an event, so Frank hears it.
-   `proposeReplacement` + the month gate (§4.3) over that one ledger. One service with two absent
-   people gets one target built sequentially (§4.2).
-4. **Draft with a replacement:** write the record `pending` (`seats`, `baseRev = column.rev`) FIRST;
-   if that write fails, do not touch the role. Then `parseEditRequest({ ...target, rev: column.rev })`
-   → `editRole(roleId, parsed, { notices: "inline" })`, awaited. `ok` → record `auto` (new event)
-   in this sweep. Refused (`ok: false`) → patch the `pending` record's `refusedCode` with the
-   writer's code; thrown → leave it as is. Either way the next sweep resolves it (§5.1).
-   No new write STARTS after `deadlineMs − 15 s`.
-5. **Published with a replacement:** record `proposed` (no role write). **No replacement:** `none`.
-6. Email (§6) the claimed records. Return `{ ok, auto, proposed, none, kept, gone, pending }` by id.
-   Logs carry fixed tags and counts, never names or ids.
+`mode` is `"act"` only when D9 holds, else `"dry"`.
 
-### 5.3 Triggers
+1. Read `loadV3PlanSources()`; any failed or unready source → `{ ok: false }`, nothing written. Read
+   the records `*[_type == "availabilityConflict" && date >= $today]` through `operationalClient`
+   (inside this module: the one reader and writer of the type).
+2. One `storedMonthBoard` per horizon month (D6) that holds a conflict (`findBoardConflicts`, scoped
+   to `memberId` when given) or a `proposed`/`none` record in scope. C and S per identity.
+3. Per month that needs a pick: ONE `loadV3Ledger([month])`, then `proposeReplacement` with the gate.
+   One service with two absent people gets one target built sequentially (§4.2) and one write.
+4. Apply §5.2 per identity, earliest date first. A role edit: `parseEditRequest({ ...target, rev:
+   column.rev })` FIRST (a parse failure → `none`, `reason: no_candidate`, logged as `parse` — no
+   write attempted), then `editRole(roleId, parsed, { notices: "inline", alongside })`, awaited.
+   No new write starts after `deadlineMs − 15 s`; what is left waits for the next sweep.
+5. Email (§6) the claimed records.
+6. Answer `{ ok, mode, auto, proposed, none, kept, gone, skipped }` with ids; `"dry"` answers what
+   `"act"` would have done. Logs carry fixed tags and counts, never names or ids.
 
-- `PATCH /api/me/availability`: after a successful commit, inside `after()`: the dates ADDED by this
-  save (new minus the `current` it read) → one GROQ for the future services seating this member on
-  those dates (`assignedMemberRefsQuery`-style over the five seats) and one for their records. Only if
-  some (service, date) has no record or a `gone` one → `sweep({ trigger: "member", memberId,
-  deadlineMs: now + 50 s })`. The PATCH's contract and response are unchanged; the route gets
-  `maxDuration = 60` and the `withVerificationRunContext` wrapper (it now reaches a delivery-capable
-  module). A sweep failure is logged and never reaches the response.
-- `/api/cron/service-reminders`: after `sweepOutbox`, in its own try,
-  `sweep({ trigger: "cron", deadlineMs: routeStart + 55 s })`.
-- `POST /api/admin/availability-conflicts/sweep`: `requireActiveManager`, not `content-editor`, not
-  `session.user.isImpersonating` (as `/api/admin/chat`); `trigger: "manual"`, `deadlineMs: now + 50 s`;
-  answers the report. `maxDuration = 60`, `withVerificationRunContext`.
-- Not triggered: the Kids manager's availability writer and Studio edits. Their conflicts are found by
-  the 19:00 cron or «Revisar ahora» — not «en cuanto», and the thread reply says so.
+### 5.4 Triggers
 
-### 5.4 `applyAvailabilityFix({ roleId, rev, memberId, replacements, actor })` and «Mantener»
+- **The member's save.** `PATCH /api/me/availability`, after a successful commit, inside `after()`:
+  the dates ADDED by this save (new minus the `current` it read). One GROQ for the services on those
+  dates seating this member (the five seat paths) and one for their records; only if some (service,
+  date) has no record or one in `gone`/`auto`/`applied` (D5's «back») → `sweep({ trigger: "member",
+  memberId, deadlineMs: now + 50 s })`. The PATCH's contract and response are unchanged; the route
+  gets `maxDuration = 60` and `withVerificationRunContext`. A sweep failure is logged, never answered.
+- **The scheduled check.** A NEW route `GET /api/cron/availability-conflicts` (`CRON_SECRET`, fail
+  closed as `service-reminders`, `maxDuration = 60`, `withVerificationRunContext`; `/api/cron/*` is
+  already outside `proxy.ts`, `routeMatcher.test.ts` unchanged), called by a NEW GitHub Actions
+  workflow `.github/workflows/availability-conflicts.yml` every 30 min (`*/30 * * * *`, own
+  concurrency group, the same `CRON_SECRET`/`APP_BASE_URL` secrets and HTTP-200 assertion as
+  `flush-notifications.yml`). The route first runs a cheap pre-check — the horizon's seats and the
+  members' `unavailableDates` (two reads) plus the records — and opens the full sweep only when some
+  identity needs a step from §5.2. Kept out of the daily Vercel cron, whose outbox sweep owns its 60 s.
+  This also covers the Kids manager's availability writer and Studio edits, which have no trigger of
+  their own: within ~30 min (GitHub delays scheduled runs; the member trigger and the button do not
+  depend on it).
+- **«Revisar ahora».** `POST /api/admin/availability-conflicts/sweep`: `requireActiveManager`, not
+  `content-editor`, not `session.user.isImpersonating` (as `/api/admin/chat`); `trigger: "manual"`,
+  `deadlineMs: now + 50 s`; answers the report. `maxDuration = 60`, `withVerificationRunContext`.
 
-«Aplicar»/«Elegir otro»: fresh `loadV3PlanSources`; C must hold; the column's `rev` must equal `rev`
-(else `409 stale`); each chosen replacement passes D2–D3 on the fresh board with one ledger read;
-then record `pending` (as §5.2 step 4) and `editRole(roleId, parsed, { notices: "deferred" })` (as
-the PATCH route); `ok` → `applied` with `appliedBy` (no email: Frank did it); refused → `409`/`400`
-with the writer's code, record left `pending` for the sweep to settle. Route `POST
-/api/admin/availability-conflicts/apply`, same guard as the sweep. «Mantener»: `POST .../keep` →
-record `kept` (`ifRevisionId`, no role write).
+### 5.5 «Aplicar» / «Elegir otro» and «Mantener»
+
+`applyAvailabilityFix({ roleId, rev, memberId, replacements, actor })`: fresh `loadV3PlanSources`;
+C must hold; the column's `rev` must equal `rev` (else `409`); each chosen replacement passes D2–D3
+on the fresh board (one ledger read); then `editRole(roleId, parsed, { notices: "deferred",
+alongside })` with the record → `applied` (`appliedBy`, no event) in the same transaction. Refused →
+the writer's status and code. Route `POST /api/admin/availability-conflicts/apply`, the sweep's
+guard. «Mantener»: `POST .../keep {recordId, rev}` → `kept` under `ifRevisionId` (a record is created
+first, by `create`, when the conflict has none yet). `GET /api/admin/availability-conflicts` (§7)
+reads through this module too.
 
 ## 6. The email
 
@@ -275,9 +314,10 @@ record `kept` (`ifRevisionId`, no role write).
 
 One email per sweep that has new events, subject «Conflictos de disponibilidad (N)». Sections:
 «Cambié en borradores» (person → replacement, seat, service label), «Propuestas para servicios
-publicados» (same, with «Aplicar en la app»), «Sin reemplazo» (person, seat, reason). Link
-`${appBaseUrl()}/admin?tab=availability` (the tab param `AdminPanel.tsx` already reads). Built with `shell`/`td`/`C` (the light email palette),
-labels from `serviceLabel`.
+publicados» (same, with «Aplicar en la app»), «Sin reemplazo» (person, seat, reason, «no se pudo
+revisar» for `unchecked`). Link `${appBaseUrl()}/admin?tab=availability` (the tab param
+`AdminPanel.tsx` already reads). Built with `shell`/`td`/`C` (the light email palette), labels from
+`serviceLabel`.
 
 ### 6.2 Audience
 
@@ -286,7 +326,8 @@ filter, FrankERP/owt-kb-v1#8): `*[_type == "teamMembers" && role in ["super-admi
 disabled != true && <WORSHIP_AUDIENCE_GROQ_FILTER>]{ _id, email, notifPrefs }`, then an email, the
 allowlist (`getAllowlist`/`isEmailAllowed`) and `wantsNotification(prefs, "proposals")` — the admins'
 «Propuestas» switch, which the setlist-proposal admin email (`proposalNotify.ts:112`) honours.
-Serial sends (ADR-0013). Preview: `EMAIL_REDIRECT_TO` with the `[→ address]` subject prefix.
+Serial sends (ADR-0013). Only Production sends (D9); `EMAIL_REDIRECT_TO` is still honoured, as by
+every sender, in case that ever changes.
 
 ### 6.3 Not done
 
@@ -303,50 +344,60 @@ reset, 409 → reload with «El servicio cambió; vuelve a revisar».
 
 ## 8. Guards and docs (same delivery)
 
+- `roleEditCommit.ts`: the `alongside` option (§5.1) and its header line; nothing else changes.
 - `serviceCommitCallers.test.ts`: `roleEditCommit` gains `app/utils/availabilityFixCommit.ts`; a new
-  row `availabilityFixCommit` → the three admin routes, the availability PATCH and the cron route.
-- `__fixtures__/deliveryCapableImports.ts`: add `availabilityFixCommit`; the four routes that import
-  it wrap their handlers in `withVerificationRunContext` (the cron route already does).
+  row `availabilityFixCommit` → the four admin routes, the availability PATCH and the new cron route.
+- `__fixtures__/deliveryCapableImports.ts`: add `availabilityFixCommit`; every route importing it is
+  wrapped in `withVerificationRunContext`.
 - `protectedReadAudit.ts`: add `availabilityConflict` to `PROTECTED_TYPES` (dotted ids: an untokened
   read answers «nothing» with no error, the `fairnessMonth` lesson) and register
-  `availabilityFixCommit.ts` in `PROTECTED_RUNTIME_WRITERS` as its one writer; the test's writer count
-  moves accordingly.
-- `routeMatcher` unchanged (`/api/admin/*` stays behind `proxy.ts`).
+  `availabilityFixCommit.ts` in `PROTECTED_RUNTIME_WRITERS` as its one reader-writer; the test's
+  writer count moves accordingly. No other module names the type.
+- `instrumentFill.ts`: export `seatCounts` and `instrumentalistsOn`, unchanged.
 - Studio: `sanity/schemas/availabilityConflict.ts`, read-only fields, registered with the others.
-- ADR-0078 «Availability conflicts are fixed one seat at a time; drafts automatically» (D1, D2, D5,
-  the `pending` protocol).
+- `.github/workflows/availability-conflicts.yml` (new) and `docs/CI.md` (one line: what it calls).
+- ADR-0078 «Availability conflicts are fixed one seat at a time; drafts automatically, once» (D1,
+  D2, D5, D9, D10).
 - `docs/NOTIFICATIONS.md` (the new admin email), `CLAUDE.md` + `project-rules.md` (the writer joins
-  the admin write paths list), `docs/UTILITIES_AND_COMPONENTS.md`.
+  the admin write paths list; `editRole`'s `alongside`), `docs/UTILITIES_AND_COMPONENTS.md`.
 
 ## 9. Tests
 
 Pure core (vitest, fixtures in the style of the MCP editor tests): conflict finding over all five
 seat kinds; past and non-editable services ignored; D2 filters (unavailable, alreadyAssigned,
-undeclared instrument, non-worship, C2, C4) and order; `serverPickCandidates` `null` → unchecked; two
-seats of one person; two absent people in one service; D3(a) rejects a rule finding; the month gate
-rejects a new cap/pair/protection and a grown `<=` count, accepts a removal-only one, and rejects all
-when not `judged`; worship-night song lead → none.
+undeclared instrument, non-worship, C2, C4); D2 ORDER — a `slack` member ranks by `load + N`, an
+`exempt` one at the median, an instrumentalist who played the previous weekend after one who did
+not; `serverPickCandidates` `null` → `unchecked`; two seats of one person; two absent people in one
+service; D3(a) rejects a rule finding; the month gate rejects a new cap/pair/protection and a grown
+`<=` count, accepts a removal-only one, rejects when not `judged`, and is not applied to an
+instrument seat; worship-night song lead → `none`.
 
-Writer (mocked clients and deps, as the `serviceEditor` tests mock theirs), one test per row of the
-§5.1 table, plus: draft → `pending` written BEFORE `editRole`, `editRole` once with the column rev
-and `inline`; `editRole` throws after committing (the stored role shows the change) → the next sweep
-marks `auto` and emails once; `editRole` refuses `integrity_conflict` → next sweep `none`
-/`write_refused`, one email; `stale_revision` → next sweep re-attempts; `auto` then the admin
-re-seats the person → `kept`, no write, no email; `proposed` → date removed → `gone` → date added
-again → `proposed`, one more email; a `pending` write that fails → no `editRole`; failed sources →
-nothing written; two concurrent sweeps on one event → one email (claim); the member scope never
-touches another member; the deadline stops new writes. Routes: 403 for content-editor and
-impersonation, 409 on a stale `rev`, the availability PATCH answers the same with the sweep throwing.
+`editRole`: with `alongside` the record mutation is in the one committed transaction; a conflict on
+it returns `stale_revision` and writes no role; without it, today's tests pass unchanged.
+
+Writer (mocked clients and deps, as the `serviceEditor` tests mock theirs): one test per cell of the
+§5.2 table; `auto` then the person re-seated → `proposed`, one email, no write (D5), on a draft too;
+`proposed` → date removed → `gone` → date re-added → `proposed`, one more email; `kept` stays silent;
+`editRole` throws after its commit (the mocked store shows both writes) → the next sweep reads `auto`
+and does nothing more; two concurrent sweeps on one new identity → one `create` wins, the other drops
+(no second role write, one email); a parse failure writes nothing; a failed ledger read leaves the
+month untouched; `"dry"` mode writes and sends nothing and answers what `"act"` would do; the member
+scope never touches another member's record; the deadline stops new writes. Routes: 403 for
+content-editor and impersonation, 409 on a stale `rev`, the cron route 403 without `CRON_SECRET`, the
+availability PATCH answers the same when the sweep throws.
 
 ## 10. Rollback
 
-A PR reverting the triggers (§5.3) stops every automatic write; records are inert. Each auto change
-is a normal role edit, named in its record (`seats.from`/`to`) and reversible by hand.
+A PR removing the triggers (§5.4) stops every automatic write; records are inert, and the workflow
+can also be disabled from the Actions tab at once. Each auto change is a normal role edit, named in
+its record (`seats.from`/`to`) and reversible by hand.
 
 ## 11. Release
 
-Before merging to `main`: list the conflicts the first production sweep would act on (read-only MCP
-reads) and show Frank. Today (2026-10-29) that is two published services (2026-11-29, 2026-12-27):
-the first cron would only PROPOSE, and email him once. Deploy the Studio schema with the release
-(`sanity schema deploy`; the Content Lake itself accepts the type without it). Then the CLAUDE.md
-order: gates → one code review → preview → verify alias → PR → merge → prod alias.
+Before the merge to `preview`, list the conflicts the first production sweep would act on
+(read-only MCP reads) and show Frank. Today (2026-10-29) that is two published services
+(2026-11-29, 2026-12-27): the first scheduled check would only PROPOSE and email him once. On dev the
+sweep is dry (D9): «Revisar ahora» shows what it would do. Deploy the Studio schema with the release
+(`sanity schema deploy`; the Content Lake accepts the type without it). Then the CLAUDE.md order:
+gates → one code review → preview → verify alias → PR → merge → prod alias → first scheduled run
+checked in the Actions log.
