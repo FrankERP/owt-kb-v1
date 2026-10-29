@@ -3210,7 +3210,7 @@ function GridCellView({
             separate from the Tipo one: two questions, two answers. */}
         {undeclared.map((id) => (
           <p key={`instr-${id}`} className={`font-body text-[9px] text-warning-strong ${CARD_STYLE.longText}`}>
-            ⚠ {memberName(id)}: no declara {row.label} — revísalo en Miembros
+            ⚠ {memberName(id)}: no declara {row.label} — revísalo en Personas (super admin)
           </p>
         ))}
         {/* «Solo llenar vacíos» (spec §3.3): what a seat about to be pinned contradicts. The pin

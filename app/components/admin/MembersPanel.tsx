@@ -1,6 +1,6 @@
 "use client";
 
-// The Miembros tab — the member list, its filters, its modals and every member
+// «Personas» on /super-admin (the /admin Miembros tab until 2026-10-29, ADR-0075) — the member list, its filters, its modals and every member
 // write. Extracted from `AdminPanel` in R5 Task 3: the body used to be a VALUE
 // built on every render of every tab (wrapping it in a function turned
 // `react-hooks/refs` into an error at `handlePhotoClick`), and a component is

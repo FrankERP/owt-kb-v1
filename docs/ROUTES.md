@@ -50,9 +50,10 @@ Legend: **S** = server component (async unless noted; e.g. the Studio page is sy
 | `/me/disponibilidad` | `(client)/me/disponibilidad/page.tsx` | S | Member (**ministry-neutral**) | ISR 60s | The availability calendar, alone (R3 F3): `MyAvailabilityPanel` with the month grid always open, «Seleccionar fechas», «Repetir…» and the per-day note. A kids-only volunteer reaches it. |
 | `/me/ajustes` | `(client)/me/ajustes/page.tsx` | S | Member (**ministry-neutral**) | dynamic (session read; `revalidate = 60` is inert) — per-member signed calendar URLs depend on it | Ajustes, alone (R3 F3): the one `SettingsCard` — Tema, Tamaño de texto, Perfil, Calendario (the member's signed calendar-feed links, ADR-0057; worship members only). Reached from the avatar menu («Ajustes») and from `ThemeAnnouncement` on `/me` (`#tema`). |
 | `/me/propose/[roleId]` | `(client)/me/propose/[roleId]/page.tsx` | S | **Lead-only** | dynamic (`revalidate=0`) | Setlist proposal editor for a service the user Leads. |
-| `/admin` | `(client)/admin/page.tsx` | S | **Manager** | dynamic | Control Room; data fetched client-side from `/api/admin/*`. `?tab=` opens a specific tab, filtered by role. **No shell — the page is the workspace** (R5, [ADR-0035](adr/0035-the-admin-shell-is-gone.md)): one section nav (`AdminRail` — a vertical rail at `lg+` the member can collapse to icons (per browser; the planner's forced collapse wins), the underline strip below, the Servicios item carrying the integrity dot), one keyed body that fades in on a tab change, no panel boxes, and **no page-level horizontal scroll** — the planner grid and the availability matrix are the only horizontal scrollers, each in its own `overflow-x-auto` box. Servicios (one column of compact cards the page scrolls vertically, beside a sticky Participaciones — [ADR-0044](adr/0044-the-servicios-board-scrolls-vertically.md), amended 2026-10-22) and the integrity queue load eagerly; the other five tabs and `MonthGenerator` load on demand as their own `next/dynamic` chunks, which is why `/admin`'s first load fell from 358.6 to 150.8 kB gz (R5 Task 6, see [MOTION.md](MOTION.md)). |
+| `/admin` | `(client)/admin/page.tsx` | S | **Manager** | dynamic | Control Room; data fetched client-side from `/api/admin/*`. `?tab=` opens a specific tab, filtered by role. **No shell — the page is the workspace** (R5, [ADR-0035](adr/0035-the-admin-shell-is-gone.md)): one section nav (`AdminRail` — a vertical rail at `lg+` the member can collapse to icons (per browser; the planner's forced collapse wins), the underline strip below, the Servicios item carrying the integrity dot), one keyed body that fades in on a tab change, no panel boxes, and **no page-level horizontal scroll** — the planner grid and the availability matrix are the only horizontal scrollers, each in its own `overflow-x-auto` box. Servicios (one column of compact cards the page scrolls vertically, beside a sticky Participaciones — [ADR-0044](adr/0044-the-servicios-board-scrolls-vertically.md), amended 2026-10-22) and the integrity queue load eagerly; the other four tabs and `MonthGenerator` load on demand as their own `next/dynamic` chunks, which is why `/admin`'s first load fell from 358.6 to 150.8 kB gz (R5 Task 6, see [MOTION.md](MOTION.md)). |
 | `/auth/signin` | `(client)/auth/signin/page.tsx` | C | Public | — | Google SSO (web + native) + email/password. |
 | `/auth/not-a-member` | `(client)/auth/not-a-member/page.tsx` | C | Public | — | For authenticated Google users not in `teamMembers`. |
+| `/super-admin` | `(client)/super-admin/page.tsx` | S | **super-admin** (session role; closed while impersonating) | dynamic | «Personas»: every member of every ministry, their ministries and Jóvenes level (`SuperAdminPanel` → `MembersPanel` behind `next/dynamic`). Moved out of `/admin` (Alabanza's admin) on 2026-10-29, ADR-0075; `/admin?tab=members` redirects a super-admin here. |
 | `/studio`, `/studio/*` | `(admin)/studio/[[...tool]]/page.tsx` | S | **admin+** | `force-static` | Embedded Sanity Studio (`NextStudio`). |
 
 **Access column.** `proxy.ts` requires an authenticated session for everything except the
@@ -86,6 +87,7 @@ into the library, permanent (308) so bookmarks and the old nav keep working.
 | `/me/disponibilidad`, `/me/ajustes` | `requireActiveSession()` → redirect with that route's own `callbackUrl`. Ministry-neutral by design: neither gates on a ministry. (`/me/ajustes` reads one only to decide its «Calendario» block — `loadCalendarFeedState`; the page renders for every active member.) |
 | `/me/propose/[roleId]` | `requireWorshipPage()` + GROQ requires user in `Lead[]`, else `notFound()` |
 | `/admin` | `requireActiveManager()` → `redirect("/")` |
+| `/super-admin` | `requireActiveSession()` → sign-in; `role !== "super-admin"` → `redirect("/")` |
 | `/studio/*` | `proxy.ts` role check (admin/super-admin) + Sanity Studio's own auth |
 
 ---
@@ -118,6 +120,7 @@ into the library, permanent (308) so bookmarks and the old nav keep working.
   awaited first, so its redirect wins); then the member's instruments only when the song has
   rehearsal mixes. ADR-0074.
 - **`/admin`** — only `requireActiveManager()`; panels fetch client-side.
+- **`/super-admin`** — only the session-role gate; «Personas» fetches `/api/admin/members` client-side.
 
 Two clients: `client` (CDN read, `useCdn:false`) for cacheable page data; `serverClient` (read
 token) for private/fresh data.
@@ -185,7 +188,7 @@ See [UTILITIES_AND_COMPONENTS.md](UTILITIES_AND_COMPONENTS.md) for the full comp
 | `/posts/[slug]` | `revalidate = 3600` (bounds the fetch cache; the page is dynamic, ADR-0020) |
 | `/me/propose/[roleId]` | `revalidate = 0` (always dynamic) |
 | `/studio/[[...tool]]` | `export const dynamic = 'force-static'` |
-| `/admin`, `/auth/*` | none (implicitly dynamic / client) |
+| `/admin`, `/super-admin`, `/auth/*` | none (implicitly dynamic / client) |
 
 **Reminder:** mutations that change data behind these ISR pages must call the matching
 `revalidate*` helper — see [ARCHITECTURE.md §5](ARCHITECTURE.md#5-rendering--caching-model).

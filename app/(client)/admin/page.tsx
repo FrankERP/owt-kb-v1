@@ -53,7 +53,7 @@ export default async function AdminPage({
             on every other tab this is a no-op. */}
         <header className="mx-auto max-w-7xl">
           {/* The TAB is the page title now (phase 5 of the «millones» pass, 2026-10-27):
-              each panel renders its own `PAGE_TITLE` h1 («Servicios», «Miembros»…), so
+              each panel renders its own `PAGE_TITLE` h1 («Servicios», «Propuestas»…), so
               «Control Room» is a small label on a phone and the rail's title from `lg`
               (`AdminRail`), never two titles stacked. The navbar keeps the name. */}
           <p className={`${SHEET_TITLE} lg:hidden`}>Control Room</p>

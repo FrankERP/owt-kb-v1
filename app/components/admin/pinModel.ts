@@ -192,7 +192,7 @@ export function pinRefusal(input: {
   const unnamed = collected.unnamed[0];
   if (unnamed) {
     const who = members.find((x) => x._id === unnamed.memberId)?.alias?.trim() || "Un miembro";
-    return `${REFUSAL}: ${who} (en ${where(unnamed)}) no tiene nombre en su ficha. Complétalo en Miembros o quítalo de ese lugar.`;
+    return `${REFUSAL}: ${who} (en ${where(unnamed)}) no tiene nombre en su ficha. Complétalo en Personas (super admin) o quítalo de ese lugar.`;
   }
   if (collected.pins.length > PINNED_CAP) {
     return `${REFUSAL}: hay ${collected.pins.length} lugares de voz ocupados y el solver acepta hasta ${PINNED_CAP}. Borra algunos o apaga «Solo llenar vacíos».`;
@@ -217,7 +217,7 @@ export function pinRefusal(input: {
     if (group.length < 2) continue;
     const other = group.find((n) => n !== name) ?? name;
     const seat = collected.seats[collected.pins.findIndex((p) => p.person === name)];
-    return `${REFUSAL}: «${name}» (en ${where(seat)}) solo se distingue de «${other}» por mayúsculas o espacios, y el solver no puede saber cuál es cuál. Corrige el nombre en Miembros.`;
+    return `${REFUSAL}: «${name}» (en ${where(seat)}) solo se distingue de «${other}» por mayúsculas o espacios, y el solver no puede saber cuál es cuál. Corrige el nombre en Personas (super admin).`;
   }
   return null;
 }

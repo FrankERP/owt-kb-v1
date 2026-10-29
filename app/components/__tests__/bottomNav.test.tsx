@@ -53,6 +53,15 @@ describe("BottomNav", () => {
     expect(screen.queryByRole("button", { name: "Más" })).toBeNull();
   });
 
+  // Management never implies membership (ADR-0075): a Kids manager outside both
+  // worship and Kids still needs the bar to reach Planear Kids on a phone.
+  it("keeps Kids · Planear Kids for a Kids manager who is only in Jóvenes", () => {
+    session = { user: { ...worshipUser, ministries: ["jovenes"], managesMinistries: ["kids"] } };
+    mount();
+    const nav = screen.getByRole("navigation", { name: "Navegación principal" });
+    expect(Array.from(nav.querySelectorAll("a, button")).map((n) => n.textContent?.trim())).toEqual(["Kids", "Planear Kids"]);
+  });
+
   it("shows Kids · Planear Kids for a kids manager with no worship ministry, and NO «Más» button", () => {
     session = { user: { ...worshipUser, ministries: ["kids"], managesMinistries: ["kids"] } };
     mount();
@@ -117,8 +126,10 @@ describe("BottomNav", () => {
     expect(screen.getByRole("link", { name: "Super admin" }).getAttribute("href")).toBe("/super-admin");
   });
 
-  // Jóvenes has no screens yet: a «Kids» tab would only bounce them to /me.
-  it("renders nothing for a Jóvenes-only member — no stray Kids tab", () => {
+  // Jóvenes has no screens yet. Its one tab (Kids, which redirects them) is fewer
+  // than two items, so there is no bar at all — pinned so a future tab for them
+  // is a deliberate change.
+  it("renders nothing for a Jóvenes-only member", () => {
     session = { user: { ...worshipUser, ministries: ["jovenes"], managesMinistries: [] } };
     mount();
     expect(screen.queryByRole("navigation", { name: "Navegación principal" })).toBeNull();
