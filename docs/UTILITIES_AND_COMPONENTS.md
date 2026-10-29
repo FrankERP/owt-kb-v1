@@ -583,6 +583,11 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   ([ministries.ts](../app/ministries.ts)) — the one reading of `teamMembers.ministryRoles` (fails
   closed), the prototype-safe group check, and the readable-vs-writable split (`ALL_MINISTRY_IDS`
   reads, `ASSIGNABLE_MINISTRY_IDS` writes and offers).
+- **`validateMinistryRolesWrite(value, ministries)`**, **`ministryRolesForStorage(items)`**,
+  **`droppedMinistryRolePaths(ministries)`**, **`worshipRoleWithoutWorship(role, ministries)`**
+  ([ministries.ts](../app/ministries.ts)) — the members routes' write side of a level (strict,
+  against the SAME request's `ministries`), its stored shape, the stale levels a ministries
+  write clears, and the worship-role rule the API and the Studio `role` validation share.
 - **`requireActiveSession()`**, **`requireActiveManager()`** ([authGuards.ts](../app/utils/authGuards.ts)).
 - **`verifyGoogleIdToken(idToken)`** ([googleIdToken.ts](../app/utils/googleIdToken.ts)) — native
   SSO token verification.

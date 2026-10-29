@@ -636,12 +636,17 @@ export function serviceConversationQuery(roleId: string, threadId: string): Boun
  * The member list the admin panels read. Worship admins see worship members only;
  * a super-admin (`all: true`) sees everyone, because they are the only role that
  * can edit `ministries` at all. The caller binds `all`.
+ *
+ * `ministryRoles` (a Jóvenes level and groups, ADR-0075) rides only the
+ * super-admin arm: the Miembros form is its one editor, and a worship admin's
+ * list has no reason to carry another ministry's levels.
  */
 export function adminMembersQuery(all: boolean): BoundQuery {
   return {
     query: `*[_type == "teamMembers" && ${WORSHIP_MEMBER_GROQ_FILTER}] | order(member_name asc) {
       _id, member_name, alias, email, role, memberType, instruments, notifPrefs, ministries, managesMinistries,
       disabled,
+      $all => { ministryRoles },
       unavailableDates, unavailabilityNotes,
       "hasPassword": defined(passwordHash) && passwordHash != "",
       "photoUrl": coalesce(profilePhoto.asset->url, googlePhotoUrl)

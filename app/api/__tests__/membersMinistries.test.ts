@@ -19,6 +19,11 @@ const h = vi.hoisted(() => ({
   requireActiveManager: vi.fn(),
   // Every `.set()` payload, in order.
   sets: [] as Record<string, unknown>[],
+  // Every `.unset()` path list and `.ifRevisionId()` revision, in order.
+  unsets: [] as string[][],
+  revisions: [] as string[],
+  // The PATCH's read of the stored member (role rule, access plan §3.4).
+  storedFetch: vi.fn(),
   commit: vi.fn(),
   create: vi.fn(),
   operationalFetch: vi.fn(),
@@ -34,9 +39,11 @@ vi.mock("@/sanity/lib/serverClient", () => {
   const chain: Record<string, unknown> = {};
   chain.setIfMissing = () => chain;
   chain.set = (v: Record<string, unknown>) => { h.sets.push(v); return chain; };
+  chain.unset = (paths: string[]) => { h.unsets.push(paths); return chain; };
+  chain.ifRevisionId = (rev: string) => { h.revisions.push(rev); return chain; };
   chain.commit = () => h.commit();
   return {
-    serverClient: { fetch: vi.fn() },
+    serverClient: { fetch: (q: string, p: unknown) => h.storedFetch(q, p) },
     writeClient: {
       patch: () => chain,
       create: (doc: Record<string, unknown>) => h.create(doc),
@@ -72,6 +79,9 @@ const params = Promise.resolve({ id: "member-1" });
 beforeEach(() => {
   vi.clearAllMocks();
   h.sets.length = 0;
+  h.unsets.length = 0;
+  h.revisions.length = 0;
+  h.storedFetch.mockResolvedValue({ _rev: "rev-1", role: "member" }); // a legacy worship member
   h.requireActiveManager.mockResolvedValue({ user: { sanityId: "boss", role: "super-admin" } });
   h.commit.mockResolvedValue({ _id: "member-1", notifPrefs: {} });
   h.create.mockResolvedValue({ _id: "member-new" });
@@ -86,15 +96,13 @@ describe("PATCH /api/admin/members/[id] — ministries", () => {
     expect(h.commit).not.toHaveBeenCalled();
   });
 
-  // ADR-0075: the app READS jovenes before anything may WRITE it — code older than
-  // the registry entry reads a stored ["jovenes"] as worship, and preview writes
-  // the production dataset. Its write side ships in a later PR.
+  // ADR-0075: jovenes became writable only after the release that READS it was in
+  // production (code older than that reads a stored ["jovenes"] as worship).
   for (const ministries of [["jovenes"], ["worship", "jovenes"]]) {
-    it(`rejects ${JSON.stringify(ministries)} until jovenes is assignable`, async () => {
+    it(`stores ${JSON.stringify(ministries)} now that jovenes is assignable`, async () => {
       const res = await PATCH(req({ ministries }), { params });
-      expect(res.status).toBe(400);
-      expect(await res.json()).toEqual({ error: "Invalid ministry" });
-      expect(h.commit).not.toHaveBeenCalled();
+      expect(res.status).toBe(200);
+      expect(patchSet()).toMatchObject({ ministries });
     });
   }
 
@@ -161,6 +169,25 @@ describe("GET /api/admin/members — ministries", () => {
   });
 });
 
+describe("adminMembersQuery — ministryRoles rides the super-admin arm only", () => {
+  it("a worship admin's list never carries another ministry's levels", async () => {
+    const { adminMembersQuery } = await import("@/app/utils/serviceReadQueries");
+    const { evaluate, parse } = await import("groq-js");
+    const dataset = [{
+      _id: "m1", _type: "teamMembers", member_name: "Noemí", ministries: ["worship", "jovenes"],
+      ministryRoles: [{ _key: "jovenes", ministry: "jovenes", level: "admin", groups: [] }],
+    }];
+    const run = async (all: boolean) => {
+      const q = adminMembersQuery(all);
+      return (await (await evaluate(parse(q.query), { dataset, params: q.params })).get()) as Record<string, unknown>[];
+    };
+    expect((await run(true))[0].ministryRoles).toEqual(dataset[0].ministryRoles);
+    const worshipAdmin = await run(false);
+    expect(worshipAdmin).toHaveLength(1);
+    expect(worshipAdmin[0]).not.toHaveProperty("ministryRoles");
+  });
+});
+
 describe("POST /api/admin/members — ministries", () => {
   const base = { member_name: "Nuevo", email: "n@example.com" };
 
@@ -187,10 +214,10 @@ describe("POST /api/admin/members — ministries", () => {
   });
 
   for (const ministries of [["jovenes"], ["worship", "jovenes"]]) {
-    it(`rejects ${JSON.stringify(ministries)} until jovenes is assignable (ADR-0075)`, async () => {
+    it(`creates ${JSON.stringify(ministries)} now that jovenes is assignable (ADR-0075)`, async () => {
       const res = await POST(req({ ...base, ministries }));
-      expect(res.status).toBe(400);
-      expect(h.create).not.toHaveBeenCalled();
+      expect(res.status).toBe(201);
+      expect(h.create.mock.calls[0][0]).toMatchObject({ ministries });
     });
   }
 
@@ -208,5 +235,154 @@ describe("POST /api/admin/members — ministries", () => {
     const res = await POST(req({ ...base, ministries: ["kids"] }));
     expect(res.status).toBe(403);
     expect(h.create).not.toHaveBeenCalled();
+  });
+});
+
+// ADR-0075, access plan §3.4 and §5: the write side of a LEVELED ministry
+// (Jóvenes) and the rule that keeps a Jóvenes admin from becoming a worship admin.
+describe("members routes — ministryRoles (Jóvenes level and groups)", () => {
+  const admin = { ministry: "jovenes", level: "admin", groups: [] };
+  const leader = { ministry: "jovenes", level: "leader", groups: ["otro-nivel", "invencibles"] };
+  const stored = (p: Record<string, unknown>) => h.storedFetch.mockResolvedValue({ _rev: "rev-1", ...p });
+
+  it("PATCH stores the items keyed by ministry, with the Studio's _type", async () => {
+    const res = await PATCH(req({ ministries: ["worship", "jovenes"], ministryRoles: [leader] }), { params });
+    expect(res.status).toBe(200);
+    expect(patchSet().ministryRoles).toEqual([{ _key: "jovenes", _type: "ministryRole", ...leader }]);
+    expect(h.unsets).toEqual([]); // set and unset never touch one path in one patch
+  });
+
+  it("PATCH refuses ministryRoles without ministries in the SAME request (the absent = worship trap)", async () => {
+    const res = await PATCH(req({ ministryRoles: [admin] }), { params });
+    expect(res.status).toBe(400);
+    expect(h.commit).not.toHaveBeenCalled();
+  });
+
+  it("PATCH refuses a level in a ministry the request does not name", async () => {
+    const res = await PATCH(req({ ministries: ["worship"], ministryRoles: [admin] }), { params });
+    expect(res.status).toBe(400);
+    expect(h.commit).not.toHaveBeenCalled();
+  });
+
+  it("PATCH that drops jovenes without ministryRoles unsets its stale level", async () => {
+    stored({ role: "member", ministries: ["worship", "jovenes"] });
+    const res = await PATCH(req({ ministries: ["worship"] }), { params });
+    expect(res.status).toBe(200);
+    expect(h.unsets).toEqual([['ministryRoles[_key=="jovenes"]']]);
+    expect(patchSet()).not.toHaveProperty("ministryRoles");
+  });
+
+  it("PATCH that keeps jovenes without ministryRoles unsets nothing", async () => {
+    const res = await PATCH(req({ ministries: ["worship", "jovenes"] }), { params });
+    expect(res.status).toBe(200);
+    expect(h.unsets).toEqual([]);
+  });
+
+  describe("a worship role needs worship, judged on the resulting state", () => {
+    it("role-only PATCH: admin on a stored Jóvenes-only person → 400", async () => {
+      stored({ role: "member", ministries: ["jovenes"] });
+      const res = await PATCH(req({ role: "admin" }), { params });
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: "Un rol de Alabanza (admin o editor) requiere ser de Alabanza." });
+      expect(h.commit).not.toHaveBeenCalled();
+    });
+
+    it("ministries-only PATCH: Jóvenes-only on a stored content-editor → 400", async () => {
+      stored({ role: "content-editor" });
+      const res = await PATCH(req({ ministries: ["jovenes"], ministryRoles: [admin] }), { params });
+      expect(res.status).toBe(400);
+      expect(h.commit).not.toHaveBeenCalled();
+    });
+
+    it("re-sending an UNCHANGED role and ministries on an already-inconsistent person still saves", async () => {
+      // The form always sends `role`; refusing here would lock them out of every edit.
+      stored({ role: "admin", ministries: ["jovenes"] });
+      const res = await PATCH(req({ role: "admin", alias: "Goma" }), { params });
+      expect(res.status).toBe(200);
+      const again = await PATCH(req({ role: "admin", ministries: ["jovenes"] }), { params });
+      expect(again.status).toBe(200);
+    });
+
+    it("a super-admin may be Jóvenes-only; a member always may", async () => {
+      stored({ role: "member" });
+      expect((await PATCH(req({ role: "super-admin", ministries: ["jovenes"] }), { params })).status).toBe(200);
+      expect((await PATCH(req({ role: "member", ministries: ["jovenes"] }), { params })).status).toBe(200);
+    });
+
+    it("promoting a legacy member (absent ministries = worship) to admin is fine", async () => {
+      stored({ role: "member" });
+      expect((await PATCH(req({ role: "admin" }), { params })).status).toBe(200);
+    });
+
+    it("pins the write to the revision it judged; a concurrent change answers 409", async () => {
+      stored({ _rev: "rev-7", role: "member" });
+      h.commit.mockRejectedValueOnce({
+        statusCode: 409,
+        details: { type: "mutationError", items: [{ error: { type: "documentRevisionIDDoesNotMatchError" } }] },
+      });
+      const res = await PATCH(req({ role: "admin" }), { params });
+      expect(h.revisions).toEqual(["rev-7"]);
+      expect(res.status).toBe(409);
+      expect(await res.json()).toEqual({ error: "Alguien más cambió a esta persona; recarga." });
+    });
+
+    it("a PATCH without role or ministries reads nothing and pins nothing — as before", async () => {
+      const res = await PATCH(req({ alias: "Ani" }), { params });
+      expect(res.status).toBe(200);
+      expect(h.storedFetch).not.toHaveBeenCalled();
+      expect(h.revisions).toEqual([]);
+    });
+
+    it("a repeated ministry cannot make a change look like none (review finding)", async () => {
+      // Stored worship admin; ["kids","kids"] has the stored list's LENGTH but no worship.
+      stored({ role: "admin", ministries: ["worship", "kids"] });
+      const res = await PATCH(req({ role: "admin", ministries: ["kids", "kids"] }), { params });
+      expect(res.status).toBe(400);
+      expect(h.commit).not.toHaveBeenCalled();
+    });
+
+    it("a member that does not exist answers 404, not a write", async () => {
+      h.storedFetch.mockResolvedValue(null);
+      const res = await PATCH(req({ role: "admin" }), { params });
+      expect(res.status).toBe(404);
+      expect(h.commit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("POST", () => {
+    const base = { member_name: "Noemí", email: "noemi@example.com" };
+
+    it("creates a Jóvenes admin with the level keyed by ministry", async () => {
+      const res = await POST(req({ ...base, ministries: ["jovenes"], ministryRoles: [admin] }));
+      expect(res.status).toBe(201);
+      expect(h.create.mock.calls[0][0]).toMatchObject({
+        role: "member",
+        ministries: ["jovenes"],
+        ministryRoles: [{ _key: "jovenes", _type: "ministryRole", ...admin }],
+      });
+    });
+
+    it("refuses ministryRoles without ministries", async () => {
+      const res = await POST(req({ ...base, ministryRoles: [admin] }));
+      expect(res.status).toBe(400);
+      expect(h.create).not.toHaveBeenCalled();
+    });
+
+    it("refuses a role the app does not know, as PATCH does", async () => {
+      const res = await POST(req({ ...base, role: "owner" }));
+      expect(res.status).toBe(400);
+      expect(h.create).not.toHaveBeenCalled();
+    });
+
+    it("refuses a worship admin outside worship", async () => {
+      const res = await POST(req({ ...base, role: "admin", ministries: ["jovenes"] }));
+      expect(res.status).toBe(400);
+      expect(h.create).not.toHaveBeenCalled();
+    });
+
+    it("an admin created without ministries is a worship admin, as today", async () => {
+      const res = await POST(req({ ...base, role: "admin" }));
+      expect(res.status).toBe(201);
+    });
   });
 });
