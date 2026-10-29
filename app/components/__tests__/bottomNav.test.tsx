@@ -114,16 +114,28 @@ describe("BottomNav", () => {
     expect(screen.getByRole("link", { name: "Admin" }).getAttribute("href")).toBe("/admin");
   });
 
-  // (c) a super-admin spans every ministry and is a manager everywhere, so
-  // the sheet lists every row, in tab-bar-then-admin order — Super admin last
-  // (people across ministries live outside worship's /admin, ADR-0075).
-  it("shows «Más» for a super-admin and the sheet lists Kids, Planear Kids, Admin, Super admin", () => {
+  // (c) One ministry at a time (Frank, 2026-10-29): a super-admin in worship
+  // sees worship's tabs, and «Más» holds the switch to Kids and worship's Admin —
+  // never Kids' own tabs. Super admin lives in the avatar menu.
+  it("shows «Más» for a super-admin in worship with the switch to Oasis Kids and Admin", () => {
     session = { user: { ...worshipUser, role: "super-admin" } };
     mount();
     fireEvent.click(screen.getByRole("button", { name: "Más" }));
     const dialog = screen.getByRole("dialog", { name: "Más" });
-    expect(Array.from(dialog.querySelectorAll("a")).map((a) => a.textContent?.trim())).toEqual(["Kids", "Planear Kids", "Admin", "Super admin"]);
-    expect(screen.getByRole("link", { name: "Super admin" }).getAttribute("href")).toBe("/super-admin");
+    expect(Array.from(dialog.querySelectorAll("a")).map((a) => a.textContent?.trim())).toEqual(["Oasis Kids", "Admin"]);
+    expect(screen.getByRole("link", { name: "Oasis Kids" }).getAttribute("href")).toBe("/kids");
+  });
+
+  it("in Kids, a super-admin sees Kids' tabs and the switch back to Alabanza — no Admin", () => {
+    pathname = "/kids/admin";
+    session = { user: { ...worshipUser, role: "super-admin" } };
+    mount();
+    const nav = screen.getByRole("navigation", { name: "Navegación principal" });
+    expect(Array.from(nav.querySelectorAll("a")).map((n) => n.textContent?.trim())).toEqual(["Kids", "Planear Kids"]);
+    fireEvent.click(screen.getByRole("button", { name: "Más" }));
+    const dialog = screen.getByRole("dialog", { name: "Más" });
+    expect(Array.from(dialog.querySelectorAll("a")).map((a) => a.textContent?.trim())).toEqual(["Alabanza"]);
+    expect(screen.getByRole("link", { name: "Alabanza" }).getAttribute("href")).toBe("/");
   });
 
   // Jóvenes has no screens yet. Its one tab (Kids, which redirects them) is fewer
