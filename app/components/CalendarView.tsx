@@ -128,7 +128,8 @@ export default function CalendarView({ activeDays: allDays, viewMonth, todayStr,
     // Remembered on this device for the next visit. A blocked cookie only costs the
     // memory, never the switch itself.
     try {
-      document.cookie = `${CALENDAR_VIEW_COOKIE}=${v}; path=/; max-age=${CALENDAR_VIEW_MAX_AGE}; samesite=lax`;
+      const secure = window.location.protocol === "https:" ? "; secure" : "";
+      document.cookie = `${CALENDAR_VIEW_COOKIE}=${v}; path=/; max-age=${CALENDAR_VIEW_MAX_AGE}; samesite=lax${secure}`;
     } catch { /* ignore */ }
   }, []);
   // Without the prop there is nothing to filter: the server sent one ministry.

@@ -51,9 +51,10 @@ export function myNameFromSession(user?: { alias?: string | null; name?: string 
  *  own order and casing: Lead, BGVs, Coro, then each instrument, then each FOH seat. An
  *  empty `myName` (signed out, or no alias/name) seats nobody. */
 export function mySeats(e: Pick<ActiveDay, "leads" | "bgvs" | "chorus" | "instruments" | "fohTeam" | "kids">, myName: string): string[] {
-  if (!myName) return [];
-  // A Kids Sunday decided «mine» by member id on the server; names play no part.
+  // A Kids Sunday decided «mine» by member id on the server; names play no part,
+  // so a member with no name or alias is still «tú» there.
   if (e.kids) return e.kids.seats.filter((s) => s.mine).map((s) => s.label);
+  if (!myName) return [];
   const seated = (name?: string) => !!name && name.toLowerCase().trim() === myName;
   const seats: string[] = [];
   if ((e.leads ?? []).some(seated)) seats.push("Lead");
@@ -101,7 +102,8 @@ export function serviceClock(e: Pick<ActiveDay, "day" | "roleId" | "time" | "kid
 
 export type AgendaRow = { key: string; date: string; entry: ActiveDay; tone: Tone; conflicts: number; summary: string; monthStart: string | null };
 
-const ORDER: Record<Tone, number> = { sat: 0, sun: 1, special: 2, kids: 3 };
+// Kids runs during the Sunday service, so it lists right after it, before a special.
+const ORDER: Record<Tone, number> = { sat: 0, sun: 1, kids: 2, special: 3 };
 
 export function agendaRows(activeDays: Record<string, ActiveDay[]>): AgendaRow[] {
   const rows = Object.entries(activeDays)
@@ -145,7 +147,7 @@ function stripDay(date: string, activeDays: Record<string, ActiveDay[]>, todaySt
   const [y, m, d] = date.split("-").map(Number);
   const entries = activeDays[date] ?? [];
   const tones = entries.map(serviceTone);
-  const mine = !!myName && entries.some((e) => mySeats(e, myName).length > 0);
+  const mine = entries.some((e) => mySeats(e, myName).length > 0);
   return { date, num: d, dow: DOW_SHORT[new Date(Date.UTC(y, m - 1, d)).getUTCDay()], lit: tones.length > 0, tones, today: date === todayStr, mine };
 }
 
@@ -204,7 +206,7 @@ export function calendarCounts(activeDays: Record<string, ActiveDay[]>, todayStr
     if (viewMonth ? !date.startsWith(`${viewMonth}-`) : date < todayStr) continue;
     for (const entry of entries) {
       services += 1;
-      if (myName && mySeats(entry, myName).length > 0) mine += 1;
+      if (mySeats(entry, myName).length > 0) mine += 1;
     }
   }
   return { services, mine };

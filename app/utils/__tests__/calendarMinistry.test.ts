@@ -74,3 +74,14 @@ describe("agenda helpers on a Kids Sunday", () => {
     expect(serviceClock(kids)).toBe("11:00");
   });
 });
+
+describe("Kids «tú» without a name, and the Kids cache", () => {
+  it("still seats a member with no name or alias on a Kids Sunday, but nobody on a worship one", () => {
+    expect(mySeats(kids, "")).toEqual(["RG Chiquitos"]);
+    expect(mySeats({ leads: [""] }, "")).toEqual([]);
+  });
+  it("lists Kids right after the Sunday service and before a special that day", () => {
+    const special: ActiveDay = { day: "Noche de alabanza", date: "2026-11-01", roleId: "sp1" };
+    expect(agendaRows({ "2026-11-01": [special, kids, sunday] }).map((r) => r.tone)).toEqual(["sun", "kids", "special"]);
+  });
+});
