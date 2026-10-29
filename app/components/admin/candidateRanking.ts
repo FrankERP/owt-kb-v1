@@ -183,7 +183,7 @@ export function rankCandidates(input: {
   }
 
   // A member can hold several seats on one service (D4: voz + instrumento is
-  // real — Frank and Mkz both lead and play). A Map keyed by memberId would
+  // real — Frank and Mkz both lead and play, marked `singsAndPlays`, ADR-0078). A Map keyed by memberId would
   // keep only the LAST seat built for that member, and a caller that builds
   // `assigned` in seat order (voces, then instrumentos, then FOH) would have an
   // instrument seat silently overwrite a voice one, hiding the same-category

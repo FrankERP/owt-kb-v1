@@ -3053,9 +3053,9 @@ function GridCellView({
             // date, so a member flagged for a same-category conflict (e.g.
             // Lead+BGV) must NOT also light up on an unrelated row (e.g. Bass)
             // just because they happen to appear in `duplicates` at all —
-            // legitimate cross-category double duty (voz + instrumento) is
-            // real and must never be flagged. Only flag when THIS row's id is
-            // among the rows that hold the duplicate.
+            // voz + instrumento for a member marked «Canta y toca a la vez» is
+            // legitimate and must never be flagged (ADR-0078). Only flag when
+            // THIS row's id is among the rows that hold the duplicate.
             const isDuplicate = duplicates.get(id)?.includes(row.id) ?? false;
             const tipoMismatch = mismatchedSet.has(id);
             const ruleBroken = ruleOf(id)?.overridden === false;

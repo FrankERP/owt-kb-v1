@@ -443,7 +443,8 @@ re-pin locally), `functions-framework>=3.0,<4`. Entry point `solve`.
 ### Instrument seats are filled locally, not by the solver
 `app/components/admin/instrumentFill.ts` runs inside «Generar mes» on every exit (like the
 specials filler, `localFill.ts`). It seats only EMPTY `instrumento:` cells on weekend columns,
-through `rankCandidates` per placement (Tipo, availability, same-category block), among
+through `rankCandidates` per placement (Tipo, availability, the seat-clash block — same category, or a
+voice seat for someone not marked «Canta y toca a la vez», ADR-0078), among
 members who DECLARE the instrument (`teamMembers.instruments`). Ordering: fewest instrument
 seats this month **per member, all instruments** → did not play the previous weekend
 service → name. Guarantee: per-member total balance in the month; for instruments whose

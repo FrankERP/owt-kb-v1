@@ -19,7 +19,7 @@ const m = (id: string, name: string, types: string[], unavailable: string[] = []
   ({ _id: id, member_name: name, memberType: types, unavailableDates: unavailable });
 
 const MEMBERS: RankMember[] = [
-  // Frank is marked «Canta y toca a la vez» (ADR-0078), as he is in production.
+  // Frank is marked «Canta y toca a la vez» (ADR-0078), as he is meant to be in production.
   { ...m("m1", "Frank", ["voz", "instrumento"]), singsAndPlays: true },
   m("m2", "Gaby", ["voz"]),
   m("m3", "Liu", ["voz"], [DATE]),

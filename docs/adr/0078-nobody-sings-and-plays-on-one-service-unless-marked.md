@@ -43,5 +43,8 @@ the Studio, and `adminMembersQuery` carries it to every planner and MCP reader.
   where they do both. Marking them is a production write, done once with consent.
 - The server writers (roles PATCH, swap, copy-instruments) still check no seats at all, same
   category included; a clash written through them shows only in the grid.
+- The member-facing ⚠ (DayCard's `hasDuplicate`, `/schedule`'s `serviceConflicts`) still counts a
+  name twice within ONE section only, so a voice + instrument clash shows there as clean; the
+  planner grid is where it is flagged. Teaching those surfaces the flag is left open.
 - The MCP refusal code stays `same_category_double` (a wire name); its sentence is the planner's.
 - Undoing this (allowing voz + instrumento for everyone) reopens the 2026-11-29 bug.
