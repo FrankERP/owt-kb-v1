@@ -304,7 +304,7 @@ each one owns, and its rules) and `docs/UTILITIES_AND_COMPONENTS.md`. Most are "
   `<select>`/`<input type="checkbox|date|month">`), `SegmentedControl`, `FiltersPill` + `SearchLine` (a filter sheet's opener and the hairline search), `Collapse`,
   `Presence`, `Skeleton`/`SkeletonGroup`, `AnimatedList`, `SlidingIndicator`, `NumberRoll`,
   `SwipeStrip`, `useToast` (fixed stack) vs `useTransientValue` (inline flash) — not
-  interchangeable, `useLongPress`, `QuickActions`, `PullToRefresh` (mounted once),
+  interchangeable, `useLongPress`, `useMediaQuery` (the one `matchMedia` hook; server/jsdom = false), `QuickActions`, `PullToRefresh` (mounted once),
   `blackout()`, `Equalizer`/`PlayPauseGlyph`, `revealProps`, `haptic()`, `CueStrip`,
   `NAVBAR_H_CLASS`, `AdminRail`, `PanelSkeleton`/`PanelBoundary`, `MembersPanel`,
   `BottomNavBar` (presentational half of `BottomNav`).

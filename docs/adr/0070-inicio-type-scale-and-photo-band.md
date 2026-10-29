@@ -150,6 +150,33 @@ pill; «Equipo» is the small-caps title, «Banda» is 17 px sentence case; a sh
   with the provider as a word instead of a coloured badge. The letter rule is ONE function now,
   `groupRowsByLetter` (`app/utils/libraryIndex.ts`), read by Biblioteca, Miembros and Canciones.
   Tests: `adminPanelsPolish`, `activityPanelFailure`, `libraryIndex`.
+- **Phase 7 of the Admin pass (2026-10-29, same thread, mock v9 approved «Se ve bien»): the three
+  editors — Generar mes, Editar mes and Editar servicio.** Each editor owns its page head now: a
+  «← Servicios» ghost, the `PAGE_TITLE` («Generar mes» / «Editar mes» / «Editar servicio» — the
+  board's h1 is gone) and a `PAGE_LEDE` that states the step («Paso 1 de 2 · fechas y reglas») or
+  the month and its counts («Noviembre 2026 · 9 servicios · 2 con cambios», the service's date and
+  «publicado»/«borrador» for one service), with the month tools and «Ver mes completo» at its
+  right. Step 1 is `SHEET_TITLE` sections («Fechas», «Grupos del solver», «Reglas · N») over
+  hairlines: the pools are open checkbox clouds with a «Todos / Ninguno» ghost pair and a
+  `SearchLine` each (NOT fold rows — a closed `Collapse` is inert, and the pools are what the
+  step is for), a rule is a hairline row of its sentence with the pencil and «×» as 44 px targets
+  (the «≠»/«≥1» kind badges are gone), and the warnings (Tipo, cadence, coherence, the discard and
+  clear prompts) are `border-l-2` strips. The calendar's specials are hairline rows naming the date
+  and «cuenta / no cuenta para equidad», the composer a `SHEET_TITLE` block, the unavailable list a
+  ghost fold. The grid's chrome: the day in the display face at 30 px with the month under it, the
+  service type as a dot + word (accent Sunday, warning Saturday, info special — the same three the
+  calendar's legend draws), «Publicado / Borrador / Guardado» as words, row labels at 15 px semibold,
+  chips as pills, the candidates column titled `SHEET_TITLE` «Candidatos» over hairline rows with
+  the check at the left. **Below `xl` the candidates are a `CueDialog` sheet** (`useMediaQuery`,
+  `app/components/ui/useMediaQuery.ts` — the one media-query hook, `Select`'s pointer tests moved
+  onto it) with a `SearchLine` and a «Listo» primary, because a list stacked under a whole month
+  was a scroll away from the seat that was tapped; never in full screen, whose overlay inerts the
+  page. One service alone narrows the label track to `minmax(96px, 9rem)` so a phone shows the seat
+  and its chips side by side. The create footer is «Cancelar» · «Nada se guarda hasta crear los
+  borradores.» · «Crear y publicar» · «Crear N borradores», the stored save bar a hairline.
+  Tests: `PlannerGrid` (the sheet, via a `matchMedia` stub), `MonthCalendar`, the `MonthGenerator`
+  suites (cards by `[data-rule-card]`, the back control by its `aria-label`), `servicesBoard`
+  (the h1 arrives with the editor), `houseButtonSweep` (MonthGenerator 26 → 19).
 - **The house controls went sentence case (2026-10-27, same thread, Frank: «cambialos»).** `Button` and
   `SegmentedControl` were label-styled — Jura, uppercase, `tracking-widest` — and every screen of this
   pass overrode them (`normal-case tracking-normal font-body` on a dozen pills) because the mocks set

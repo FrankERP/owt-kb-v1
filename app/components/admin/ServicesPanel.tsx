@@ -1077,11 +1077,7 @@ export default function ServicesPanel({
   if (monthEditor) {
     return (
       <div className="space-y-5">
-        <div className="flex items-center justify-between">
-          <h1 className="font-display text-2xl uppercase tracking-wide">
-            {monthEditor.scope === "service" ? "Editar servicio" : "Editar mes"}
-          </h1>
-        </div>
+        {/* The title («Editar servicio» / «Editar mes») is the editor's own page head now (ADR-0070, phase 7). */}
         <PanelBoundary>
           <MonthGenerator
             key={`stored:${monthEditor.month}:${monthEditor.focusRoleId ?? "month"}`}
@@ -1138,9 +1134,6 @@ export default function ServicesPanel({
   if (showGenerator) {
     return (
       <div className="space-y-5">
-        <div className="flex items-center justify-between">
-          <h1 className="font-display text-2xl uppercase tracking-wide">Generar mes</h1>
-        </div>
         <PanelBoundary>
           <MonthGenerator
             engine={engine}
