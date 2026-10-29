@@ -105,14 +105,24 @@ describe("BottomNav", () => {
     expect(screen.getByRole("link", { name: "Admin" }).getAttribute("href")).toBe("/admin");
   });
 
-  // (c) a super-admin spans both ministries and is a manager everywhere, so
-  // the sheet lists all three rows, in tab-bar-then-admin order.
-  it("shows «Más» for a super-admin and the sheet lists Kids, Planear Kids, Admin", () => {
+  // (c) a super-admin spans every ministry and is a manager everywhere, so
+  // the sheet lists every row, in tab-bar-then-admin order — Super admin last
+  // (people across ministries live outside worship's /admin, ADR-0075).
+  it("shows «Más» for a super-admin and the sheet lists Kids, Planear Kids, Admin, Super admin", () => {
     session = { user: { ...worshipUser, role: "super-admin" } };
     mount();
     fireEvent.click(screen.getByRole("button", { name: "Más" }));
     const dialog = screen.getByRole("dialog", { name: "Más" });
-    expect(Array.from(dialog.querySelectorAll("a")).map((a) => a.textContent?.trim())).toEqual(["Kids", "Planear Kids", "Admin"]);
+    expect(Array.from(dialog.querySelectorAll("a")).map((a) => a.textContent?.trim())).toEqual(["Kids", "Planear Kids", "Admin", "Super admin"]);
+    expect(screen.getByRole("link", { name: "Super admin" }).getAttribute("href")).toBe("/super-admin");
+  });
+
+  // Jóvenes has no screens yet: a «Kids» tab would only bounce them to /me.
+  it("renders nothing for a Jóvenes-only member — no stray Kids tab", () => {
+    session = { user: { ...worshipUser, ministries: ["jovenes"], managesMinistries: [] } };
+    mount();
+    expect(screen.queryByRole("navigation", { name: "Navegación principal" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Kids" })).toBeNull();
   });
 
   // (d) Tema and Cerrar sesión moved to the avatar menu (NavMenu) — the sheet

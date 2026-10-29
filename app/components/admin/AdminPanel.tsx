@@ -39,7 +39,6 @@ const ActivityPanel = dynamic(() => import("./ActivityPanel"), { ssr: false, loa
 const ContentPanel = dynamic(() => import("./ContentPanel"), { ssr: false, loading: PanelSkeleton });
 const AvailabilityPanel = dynamic(() => import("./AvailabilityPanel"), { ssr: false, loading: PanelSkeleton });
 const ProposalsPanel = dynamic(() => import("./ProposalsPanel"), { ssr: false, loading: PanelSkeleton });
-const MembersPanel = dynamic(() => import("./MembersPanel"), { ssr: false, loading: PanelSkeleton });
 
 type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
 
@@ -268,19 +267,11 @@ export default function AdminPanel({
             <ActivityPanel />
           </PanelBoundary>
         );
-      case "content":
+      default:
+        // «Contenido». Miembros moved to /super-admin (ADR-0075, 2026-10-29).
         return (
           <PanelBoundary>
             <ContentPanel canDelete={role === "super-admin" || role === "admin"} />
-          </PanelBoundary>
-        );
-      default:
-        // The Miembros body is its OWN component since R5 Task 3 — it holds the
-        // member list, every member write and four dialogs, and it renders only
-        // on this tab (Task 6 mounts it behind `next/dynamic`).
-        return (
-          <PanelBoundary>
-            <MembersPanel role={role} />
           </PanelBoundary>
         );
     }

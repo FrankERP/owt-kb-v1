@@ -51,10 +51,10 @@ const read = (rel: string) => readFileSync(path.join(REPO_ROOT, rel), "utf8");
 const rail = (container: HTMLElement) =>
   within(container.querySelector("nav[aria-label='Secciones']") as HTMLElement);
 
-function mount(initialTab: "members" | "services" | "activity" = "services") {
-  // `CueDialogProvider` because Miembros (`MembersPanel`) keeps its four member
-  // dialogs MOUNTED and drives them with `open={…}` — a CueDialog throws without
-  // the provider whether or not it is open.
+function mount(initialTab: "services" | "activity" = "services") {
+  // `CueDialogProvider` because panels keep their dialogs MOUNTED and drive them
+  // with `open={…}` — a CueDialog throws without the provider whether or not it
+  // is open.
   return render(
     <ToastProvider>
       <CueDialogProvider>
@@ -80,7 +80,7 @@ describe("the admin page is the workspace", () => {
     ];
     expect(counts()).toEqual([1, 1]);
 
-    fireEvent.click(rail(container).getByRole("button", { name: "Miembros" }));
+    fireEvent.click(rail(container).getByRole("button", { name: "Actividad" }));
     expect(counts()).toEqual([1, 1]);
   });
 
@@ -152,7 +152,7 @@ describe("the admin page is the workspace", () => {
     // Content-editors see one tab. Three 403s per load for a dot they are never
     // shown is what the `enabled` gate exists to prevent. Since R5 Task 3 they
     // make no request AT ALL from this panel: the member list left with
-    // `MembersPanel`, which never mounts for them — so flush the effects and
+    // `MembersPanel` (now on /super-admin) — so flush the effects and
     // assert on `fetch` itself rather than waiting for a call that never comes.
     await act(async () => { await Promise.resolve(); });
     expect(integrityCalls()).toEqual([]);
@@ -163,7 +163,7 @@ describe("the admin page is the workspace", () => {
     // Scoped to THIS render's container, never `document.body`: the body holds
     // every tree the file has mounted plus the dialog portals, so a rail query
     // against it is one stray leftover away from resolving to another test's nav.
-    const { container } = mount("members");
+    const { container } = mount("activity");
     // Not the Servicios tab: the mount's own load, and no second pass.
     await waitFor(() => expect(integrityCalls()).toHaveLength(3));
 

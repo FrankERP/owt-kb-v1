@@ -27,6 +27,9 @@ export default async function AdminPage({
   // for certain. `resolveAdminTab` lives in a neutral module for the same
   // reason `paintsDayCard` does (ADR-0028).
   const tabParam = (await searchParams).tab;
+  // Miembros moved to the super-admin page (people span every ministry, ADR-0075);
+  // an old link or bookmark to it follows it there rather than landing on Servicios.
+  if (tabParam === "members" && role === "super-admin") redirect("/super-admin");
   const initialTab = resolveAdminTab(tabParam, role);
   // Whether the URL NAMED this tab or merely fell back to it. The panel follows
   // the URL only in the first case; see the re-sync in AdminPanel.

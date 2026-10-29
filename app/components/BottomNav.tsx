@@ -38,16 +38,21 @@ export default function BottomNav() {
   const inKids = isSuper || ministries.includes("kids");
   const managesKids = isSuper || (user?.managesMinistries ?? []).includes("kids");
 
+  // A member of neither worship nor Kids (today: Jóvenes only, which has no
+  // screens yet) gets no tabs — a «Kids» tab would only bounce them back to
+  // their profile. Their avatar menu still carries Mi perfil.
   const tabs: Tab[] = inWorship
     ? [
         { href: "/", label: "Inicio", icon: <HomeIcon />, match: (p) => p === "/" },
         { href: "/schedule", label: "Calendario", icon: <CalendarIcon />, match: (p) => p.startsWith("/schedule") },
         { href: "/biblioteca", label: "Biblioteca", icon: <MusicIcon />, match: (p) => /^\/(biblioteca|posts)/.test(p) },
       ]
-    : [
-        { href: "/kids", label: "Kids", icon: <KidsIcon />, match: (p) => p === "/kids" },
+    : inKids || managesKids
+    ? [
+        ...(inKids ? [{ href: "/kids", label: "Kids", icon: <KidsIcon />, match: (p: string) => p === "/kids" }] : []),
         ...(managesKids ? [{ href: "/kids/admin", label: "Planear Kids", icon: <PlanIcon />, match: (p: string) => p.startsWith("/kids/admin") }] : []),
-      ];
+      ]
+    : [];
 
   // «Más» holds only what the tabs cannot fit — the avatar menu (NavMenu) now
   // owns Tema, Cerrar sesión and «Yo». When no row applies, there is nothing
@@ -56,6 +61,7 @@ export default function BottomNav() {
     ...(inWorship && inKids ? [{ href: "/kids", label: "Kids", icon: <KidsIcon /> }] : []),
     ...(inWorship && managesKids ? [{ href: "/kids/admin", label: "Planear Kids", icon: <PlanIcon /> }] : []),
     ...(isAdmin ? [{ href: "/admin", label: "Admin", icon: <AdminIcon /> }] : []),
+    ...(isSuper ? [{ href: "/super-admin", label: "Super admin", icon: <AdminIcon /> }] : []),
   ];
 
   // A bar with fewer than two items (tabs + «Más») is not a bar — the

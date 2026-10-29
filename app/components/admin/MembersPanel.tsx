@@ -1036,7 +1036,7 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className={PAGE_TITLE}>Miembros</h1>
+          <h1 className={PAGE_TITLE}>Personas</h1>
           {!loading && (
             <p className={`mt-2 ${PAGE_LEDE}`}>
               {/* `filterValue` is in here deliberately: with scope "Todos", no query

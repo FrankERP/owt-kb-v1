@@ -70,3 +70,8 @@ Other facts that shaped it: worship's documents carry no ministry field (ADR-001
 - **Two permission shapes coexist** until worship or Kids move. That is the price of not migrating;
   one read function keeps the guards from open-coding either shape.
 - Do not "simplify" groups into separate ministries or into a UI filter: both were weighed above.
+- **People live outside worship's admin** (Frank, 2026-10-29). `/admin` is Alabanza's admin
+  (`requireActiveManager` reads the worship `role`), so the roster that spans every ministry moved
+  from its Miembros tab to `/super-admin` «Personas» (super-admin only; an old `?tab=members` link
+  redirects there). Next, each ministry's own admin manages its own people (phase 3); do not move
+  «Personas» back under `/admin`.
