@@ -1,6 +1,6 @@
 # Multi-ministry — phase 1, PRs 2 and 3: the access model (plan)
 
-**Status:** APPROVED 2026-10-27 (two fresh `APPROVED` in a row on digest `35091708…e449`, rounds 3 and 4; log: `2026-10-27-multi-ministry-phase1-access-review-log.md`). §8 was added after approval and is NOT reviewed. ADR-0075. Parent plan:
+**Status:** APPROVED 2026-10-27 (two fresh `APPROVED` in a row on digest `35091708…e449`, rounds 3 and 4; log: `2026-10-27-multi-ministry-phase1-access-review-log.md`). PR 2 in production 2026-10-28 (#212); PR 3 in review. §8 was added after approval and is NOT reviewed. ADR-0075. Parent plan:
 `2026-10-27-multi-ministry-phase1.md`. Approval of this plan is not authorization to implement.
 **Requirement (Frank, verbatim):** 2026-10-26 20:26Z «Puedes ayudarme a planear cómo convertiríamos
 esto en una app que pueda servirle a varios ministerios sin agregar ruido entre sí? Algo como planning

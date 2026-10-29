@@ -10,10 +10,12 @@ import {
   LEVELED_MINISTRY_IDS,
   MINISTRIES,
   MINISTRY_LEVELS,
+  WORSHIP_ROLE_NEEDS_WORSHIP,
 } from "@/app/ministries";
 
 type Field = {
   name: string;
+  validation?: (rule: unknown) => unknown;
   readOnly?: boolean;
   options?: { list?: { value: string }[] };
   of?: { fields?: Field[] }[];
@@ -42,5 +44,27 @@ describe("teamMembers ministry fields ↔ registry", () => {
     expect(values(sub("ministry"))).toEqual(LEVELED_MINISTRY_IDS);
     expect(values(sub("level"))).toEqual([...MINISTRY_LEVELS]);
     expect(values(sub("groups"))).toEqual(LEVELED_MINISTRY_IDS.flatMap((id) => MINISTRIES[id].groups.map((g) => g.id)));
+  });
+});
+
+// The Studio is the second writer of `role` and `ministries` (access plan §3.4):
+// an admin or editor outside Alabanza must not publish from there either.
+describe("teamMembers `role` validation", () => {
+  // A stand-in Rule whose `custom` hands back the validator itself.
+  const validator = field("role").validation!({ custom: (fn: unknown) => fn }) as (
+    role: unknown,
+    ctx: { document?: { ministries?: unknown } },
+  ) => true | string;
+
+  it("blocks an admin or editor whose ministries leave out worship", () => {
+    expect(validator("admin", { document: { ministries: ["jovenes"] } })).toBe(WORSHIP_ROLE_NEEDS_WORSHIP);
+    expect(validator("content-editor", { document: { ministries: ["kids"] } })).toBe(WORSHIP_ROLE_NEEDS_WORSHIP);
+  });
+  it("passes worship admins, absent ministries (= worship), members and the super-admin", () => {
+    expect(validator("admin", { document: { ministries: ["worship", "jovenes"] } })).toBe(true);
+    expect(validator("admin", { document: {} })).toBe(true);
+    expect(validator("admin", {})).toBe(true);
+    expect(validator("member", { document: { ministries: ["jovenes"] } })).toBe(true);
+    expect(validator("super-admin", { document: { ministries: ["jovenes"] } })).toBe(true);
   });
 });

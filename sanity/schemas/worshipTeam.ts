@@ -1,10 +1,12 @@
-import { defineType } from "sanity";
+import { defineType, type Rule } from "sanity";
 import { INSTRUMENT_SEAT_OPTIONS } from "./instrumentSeats";
 import {
   ASSIGNABLE_MINISTRY_IDS,
   LEVELED_MINISTRY_IDS,
   MINISTRIES,
   MINISTRY_LEVELS,
+  WORSHIP_ROLE_NEEDS_WORSHIP,
+  worshipRoleWithoutWorship,
 } from "../../app/ministries";
 
 const MINISTRY_LEVEL_TITLE = { member: "Miembro", leader: "Líder", admin: "Admin" } as const;
@@ -54,6 +56,14 @@ export const teamMembers = defineType({
         layout: "radio",
       },
       initialValue: "member",
+      // The Studio is the second writer of `role` and `ministries`, so it enforces
+      // the members API's rule too (ADR-0075): `requireActiveManager` reads `role`
+      // alone, and an admin or editor outside Alabanza would still be a worship
+      // admin. An error blocks publishing.
+      validation: (rule: Rule) =>
+        rule.custom((role, context) =>
+          worshipRoleWithoutWorship(role, context.document?.ministries) ? WORSHIP_ROLE_NEEDS_WORSHIP : true,
+        ),
     },
     {
       name: "disabled",
