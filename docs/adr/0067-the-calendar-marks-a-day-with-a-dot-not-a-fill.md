@@ -82,3 +82,9 @@ drawn. The month sheet shows one year at a time; reaching 2024 is two presses of
 «Año anterior», not a scroll. `lightContrast.test.ts` measures `surface-base` on
 `accent` for the selected cell (the `warning-fg`/`info-fg` selected fills no longer
 exist).
+
+**Amendment (2026-10-29):** an Oasis Kids Sunday on the Calendario (ADR-0075) takes a
+fourth tone, `kids`, and it is NEUTRAL (`bg-ink-dim`): amber, cyan and violet are the
+three worship days, rose is the musical key only (ADR-0071) and green is «tú». A Kids
+Sunday is another ministry's day, not a fourth kind of worship service, so it gets a
+dot and a rail without a colour of its own. The legend names it only while one is shown.
