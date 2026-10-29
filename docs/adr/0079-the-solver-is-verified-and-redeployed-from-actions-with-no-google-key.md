@@ -1,4 +1,4 @@
-# ADR-0078: The solver is verified and re-deployed from GitHub Actions with no Google key
+# ADR-0079: The solver is verified and re-deployed from GitHub Actions with no Google key
 
 **Date:** 2026-10-22 · **Status:** Accepted
 

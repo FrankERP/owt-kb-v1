@@ -86,7 +86,7 @@ disagree, `CLAUDE.md` wins and this file is the one to fix.
   set up as network secrets, the canonical copy of the adversarial-plan-review skill and the
   agent definitions under `~/.claude/agents/`. Google-side secret rotations go through Google
   Cloud Shell in the browser, not a laptop. **The production solver is verified and re-deployed
-  from GitHub Actions** (`.github/workflows/solver-v3-ops.yml`, keyless, ADR-0078): `verify` runs
+  from GitHub Actions** (`.github/workflows/solver-v3-ops.yml`, keyless, ADR-0079): `verify` runs
   by itself after every `gcf_v3/**` merge; a session dispatches `verify` (or, after Frank says
   yes in the thread, `deploy`) with the GitHub connector's `actions_run_trigger` and reads the
   result with `get_job_logs`. If the session's token cannot dispatch, Frank runs it from
@@ -693,7 +693,9 @@ glyph-per-tab map and every item carries an explicit `aria-label`, because the l
 `display: none` — and so out of the a11y tree — while the planner is open; the `lg+` rail
 is also user-collapsible to those icons, persisted per browser in `owt_admin_rail_collapsed`,
 and the planner's forced collapse wins and hides the toggle — ADR-0044),
-`useIntegrityQueue` (`app/components/admin/useIntegrityQueue.ts` — the ONLY integrity
+`seatsClash` (`app/components/admin/seatModel.ts` — the ONE seat-clash predicate: same category
+never, voz + instrumento only for a member marked «Canta y toca a la vez» (`singsAndPlays`), FOH beside
+either allowed; `rankCandidates`' C2 and `PlannerGrid`'s ⚠ both read it — ADR-0078), `useIntegrityQueue` (`app/components/admin/useIntegrityQueue.ts` — the ONLY integrity
 fetch; `AdminPanel` calls it once and the panel AND the rail dot read that one state.
 Gated on the role actually having a Servicios tab (`enabled`), re-read on ENTERING
 Servicios, and a failed, in-flight or disabled domain reads `unknown`, never `clean`),
