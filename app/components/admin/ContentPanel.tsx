@@ -1,7 +1,7 @@
 "use client";
 
-import { PAGE_LEDE, PAGE_TITLE } from "@/app/utils/homeHero";
-import { useState, useEffect, useCallback } from "react";
+import { PAGE_LEDE, PAGE_TITLE, SHEET_TITLE } from "@/app/utils/homeHero";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import type { PortableTextBody } from "@/app/utils/interface";
 import {
   SongForm,
@@ -13,16 +13,20 @@ import {
 import Button from "../ui/Button";
 import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
+import FiltersPill from "../ui/FiltersPill";
+import Menu, { MenuItem } from "../ui/Menu";
+import SearchLine from "../ui/SearchLine";
 import Skeleton, { SkeletonGroup } from "../ui/Skeleton";
 import { useToast } from "../ui/Toast";
 import { writeErrorMessage } from "@/app/utils/writeError";
+import { formatKey } from "@/app/utils/formatKey";
 import { normalizeText } from "@/app/utils/normalizeText";
 import { plural } from "@/app/utils/plural";
+import { groupByLetter } from "./adminRowCopy";
 
-/** Tags a phone shows on a song row before folding the rest into «+N». */
+/** Tags a row names before folding the rest into «+N»: two on a phone, four from `md`. */
 const PHONE_TAGS = 2;
-const TAG_CHIP =
-  "font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-accent/10 text-mono-400 border border-accent/15";
+const DESKTOP_TAGS = 4;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -53,6 +57,17 @@ interface Song {
  */
 type ModalKind = "add" | "edit" | "delete";
 
+/** The artists a song names: its referenced authors, else the legacy free-text one. */
+const artistNames = (s: Song): string[] => {
+  const refs = (s.authors ?? []).map((a) => a.name.trim()).filter(Boolean);
+  if (refs.length > 0) return refs;
+  return s.author?.trim() ? [s.author.trim()] : [];
+};
+
+/** «72 bpm · 4/4», or whichever half the song has. */
+const tempoLine = (s: Song): string =>
+  [s.bpm ? `${s.bpm} bpm` : "", s.timeSig ?? ""].filter(Boolean).join(" · ");
+
 // ─── Main panel ───────────────────────────────────────────────────────────────
 
 export default function ContentPanel({ canDelete = false }: { canDelete?: boolean }) {
@@ -62,6 +77,9 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
   const [loading, setLoading]   = useState(true);
   const [error, setError]     = useState<string | null>(null);
   const [search, setSearch]   = useState("");
+  const [tagFilter, setTagFilter]       = useState<string[]>([]);
+  const [artistFilter, setArtistFilter] = useState("");
+  const [filtersOpen, setFiltersOpen]   = useState(false);
   const [modalKind, setModalKind] = useState<ModalKind>("add");
   const [modalSong, setModalSong] = useState<Song | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -192,12 +210,41 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
     }
   };
 
+  // The lede's facts: every artist a song names (the Artista picker lists the
+  // same names), and the songs with no lyrics at all — the catalog's known gap.
+  const artistOptions = useMemo(
+    () => [...new Set(songs.flatMap(artistNames))].sort((a, b) => a.localeCompare(b, "es")),
+    [songs],
+  );
+  const withoutLyrics = useMemo(() => songs.filter((s) => !s.body || s.body.length === 0).length, [songs]);
+
+  // The sheet's filters first (a tag matches when the song carries ANY picked
+  // one, as Biblioteca reads them), then the search on top: the sheet's primary
+  // says what the FILTERS show, without the search box's own narrowing.
+  const categoryFiltered = useMemo(
+    () => songs.filter((s) =>
+      (tagFilter.length === 0 || (s.tags ?? []).some((t) => tagFilter.includes(t.slug.current))) &&
+      (!artistFilter || artistNames(s).includes(artistFilter))),
+    [songs, tagFilter, artistFilter],
+  );
   // Accent- and case-insensitive, like the song form's artist picker.
   const query = normalizeText(search.trim());
-  const filtered = songs.filter((s) =>
-    normalizeText(s.title).includes(query) ||
-    normalizeText(s.author).includes(query)
+  const filtered = useMemo(
+    () => categoryFiltered.filter((s) =>
+      normalizeText(s.title).includes(query) ||
+      normalizeText(s.author ?? "").includes(query) ||
+      artistNames(s).some((a) => normalizeText(a).includes(query))),
+    [categoryFiltered, query],
   );
+  // By letter like Biblioteca and Miembros; a query is a relevance list, so it
+  // renders as one unlettered group.
+  const groups = useMemo(
+    () => (query ? [{ letter: "", rows: filtered }] : groupByLetter(filtered, (s) => s.title)),
+    [filtered, query],
+  );
+  const activeFilters = tagFilter.length + (artistFilter ? 1 : 0);
+  const toggleTag = (slug: string) =>
+    setTagFilter((prev) => (prev.includes(slug) ? prev.filter((t) => t !== slug) : [...prev, slug]));
 
   // For edit modal: convert Song to the partial form shape SongForm expects
   const songToFormInitial = (song: Song): Partial<FormState> => songToForm(song);
@@ -209,29 +256,65 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-end justify-between gap-4">
+        <div className="min-w-0">
           <h1 className={PAGE_TITLE}>Canciones</h1>
-          {!loading && (
+          {!loading && !error && (
             <p className={`mt-2 ${PAGE_LEDE}`}>
-              {plural(songs.length, "canción", "canciones")}
+              <span className="text-ink">{plural(songs.length, "canción", "canciones")}</span>
+              {" · "}{plural(artistOptions.length, "artista", "artistas")}
+              {withoutLyrics > 0 && <> · {withoutLyrics} sin letra</>}
             </p>
           )}
         </div>
-        <Button variant="primary" size="lg" onClick={() => openModal("add")}>
-          <span className="text-base leading-none">+</span>
+        <Button variant="primary" size="lg" className="shrink-0" onClick={() => openModal("add")}>
           Agregar
         </Button>
       </div>
 
-      {/* Search — 16px on the phone, or iOS Safari zooms the page on focus and
-          never zooms back (`inputFontSize.test.ts` excludes `admin/` by path). */}
-      <input
-        className="w-full px-4 py-2.5 rounded-xl border border-surface-accent-20 bg-transparent font-body text-[16px] sm:text-sm focus:outline-none focus:border-accent dark:focus:border-surface-accent-20 transition-colors"
-        placeholder="Buscar canción o artista..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-      />
+      {/* The search as a hairline beside the «Filtros» pill (ADR-0070's Biblioteca
+          pattern, Miembros since the Admin pass): Tags and Artista live in the sheet. */}
+      <div className="flex items-center gap-3">
+        <SearchLine
+          label="Buscar canciones"
+          placeholder="Buscar canción o artista…"
+          value={search}
+          onChange={setSearch}
+          className="flex-1"
+        />
+        <FiltersPill count={activeFilters} open={filtersOpen} onClick={() => setFiltersOpen(true)} />
+      </div>
+
+      <CueDialog open={filtersOpen} mode="sheet" size="md" title="Filtros" label="Filtros" onDismiss={() => setFiltersOpen(false)}>
+        <div className="min-h-0 flex-1 space-y-8 overflow-y-auto p-5">
+          <section>
+            <p className={`mb-3 ${SHEET_TITLE}`}>Tags</p>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Tags">
+              {tags.map((t) => (
+                <Button key={t._id} variant="pill" size="md" active={tagFilter.includes(t.slug.current)} onClick={() => toggleTag(t.slug.current)}>
+                  #{t.name}
+                </Button>
+              ))}
+              {tags.length === 0 && <p className="font-body text-sm text-ink-dim">Sin tags todavía.</p>}
+            </div>
+          </section>
+          <section>
+            <p className={`mb-3 ${SHEET_TITLE}`}>Artista</p>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Artista">
+              <Button variant="pill" size="md" active={artistFilter === ""} onClick={() => setArtistFilter("")}>Todos</Button>
+              {artistOptions.map((a) => (
+                <Button key={a} variant="pill" size="md" active={artistFilter === a} onClick={() => setArtistFilter(a)}>{a}</Button>
+              ))}
+            </div>
+          </section>
+          <div className="flex items-center justify-between gap-3 border-t border-ink/[0.10] pt-5">
+            <Button variant="ghost" onClick={() => { setTagFilter([]); setArtistFilter(""); }}>Limpiar filtros</Button>
+            <Button variant="cta" onClick={() => setFiltersOpen(false)}>
+              {`Ver ${plural(categoryFiltered.length, "canción", "canciones")}`}
+            </Button>
+          </div>
+        </div>
+      </CueDialog>
 
       {/* States */}
       {loading && (
@@ -246,85 +329,98 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
         <p className="text-sm text-negative-fg bg-negative-surface-deep/20 border border-negative-surface rounded-xl px-4 py-3">{error}</p>
       )}
 
-      {/* Song list */}
+      {/* Song list: hairline rows under a display-face letter (ADR-0070). */}
       {!loading && !error && (
-        <div className="space-y-2">
+        <div>
           {filtered.length === 0 && (
-            <p className="font-body text-sm text-mono-500 text-center py-12">
-              {search ? "Sin resultados." : "No hay canciones todavía."}
+            <p className="py-12 text-center font-body text-base text-ink-muted">
+              {search || activeFilters > 0 ? "Sin resultados." : "No hay canciones todavía."}
             </p>
           )}
-          {filtered.map((song) => (
-            <div
-              key={song._id}
-              className="flex items-center gap-4 px-4 py-3 rounded-xl border border-edge-accent-subtle bg-accent/5 hover:border-accent-deep/30 dark:hover:border-accent/20 transition-colors group"
-            >
-              {/* Icon */}
-              <div className="w-9 h-9 rounded-lg bg-surface-accent-faint flex items-center justify-center shrink-0">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="text-accent">
-                  <path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" />
-                </svg>
-              </div>
-
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <p className="font-body text-sm font-semibold truncate">{song.title}</p>
-                <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                  {song.author && (
-                    <span className="font-body text-xs text-mono-500 truncate">{song.author}</span>
-                  )}
-                  {/* A phone shows the first two tags and «+N»; from `sm` all of
-                      them. Pure CSS (the extra chips fold to `sr-only`, so a
-                      reader still hears every tag), 147 rows cost no state and
-                      the desktop list is unchanged. */}
-                  {(song.tags ?? []).map((tag, i) => (
-                    <span key={tag._id} className={`${TAG_CHIP} ${i >= PHONE_TAGS ? "sr-only sm:not-sr-only" : ""}`}>
-                      #{tag.name}
-                    </span>
-                  ))}
-                  {(song.tags?.length ?? 0) > PHONE_TAGS && (
-                    <span className={`${TAG_CHIP} sm:hidden`} aria-hidden="true">
-                      +{(song.tags?.length ?? 0) - PHONE_TAGS}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Key badge */}
-              {song.key && (
-                <span className="font-label text-xs px-2.5 py-1 rounded-full border border-accent/40 text-accent shrink-0 hidden sm:inline">
-                  {song.key}
-                </span>
+          {groups.map((g) => (
+            <section key={g.letter || "search"}>
+              {g.letter && (
+                <h2 className="pb-1.5 pt-7 font-display text-[28px] font-semibold leading-none text-ink-dim md:text-[34px]">
+                  {g.letter}
+                </h2>
               )}
+              <div className="border-t border-ink/[0.10]">
+                {g.rows.map((song) => {
+                  const artists = artistNames(song).join(", ");
+                  const songTags = song.tags ?? [];
+                  const tempo = tempoLine(song);
+                  return (
+                    <div
+                      key={song._id}
+                      data-song-row=""
+                      className="flex min-h-[68px] items-center gap-3.5 border-b border-ink/[0.10] py-2.5"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-body text-[17px] font-semibold leading-tight text-ink">{song.title}</p>
+                        {/* Artist and tags as one quiet line: the first two tags on a phone,
+                            four from `md`, the rest folded into «+N». Pure CSS, so 147 rows
+                            cost no state; the full list lives in the Filtros sheet. */}
+                        {(artists || songTags.length > 0) && (
+                          <p className="mt-1 truncate font-body text-sm leading-tight text-ink-muted">
+                            {artists}
+                            {artists && songTags.length > 0 && <span className="text-ink-dim"> · </span>}
+                            {songTags.map((tag, i) => (
+                              <span
+                                key={tag._id}
+                                className={`lowercase ${i >= DESKTOP_TAGS ? "hidden" : i >= PHONE_TAGS ? "hidden md:inline" : ""}`}
+                              >
+                                {i > 0 && " "}#{tag.name}
+                              </span>
+                            ))}
+                            {songTags.length > PHONE_TAGS && (
+                              <span className="text-ink-dim md:hidden"> +{songTags.length - PHONE_TAGS}</span>
+                            )}
+                            {songTags.length > DESKTOP_TAGS && (
+                              <span className="hidden text-ink-dim md:inline"> +{songTags.length - DESKTOP_TAGS}</span>
+                            )}
+                          </p>
+                        )}
+                      </div>
 
-              {/*
-                Actions. A hover-only affordance does not exist on a phone: there
-                is no hover state to enter, so `opacity-0 group-hover:opacity-100`
-                hid Editar and Eliminar from every touch admin permanently. They
-                are visible by default and only fade behind hover FROM `sm` up —
-                where `focus-within` brings them back for the keyboard, which the
-                hover-only spelling excluded at every width.
-              */}
-              <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100 transition-opacity duration-fast ease-out-brand">
-                {/* `size="lg"` on the icon variant is the house 44px target — the
-                    actions are reachable by touch now, so they have to be hittable. */}
-                <Button variant="icon" size="lg" title="Editar" aria-label="Editar" onClick={() => openModal("edit", song)}>
-                  <PencilIcon />
-                </Button>
-                {canDelete && (
-                  <Button
-                    variant="icon"
-                    size="lg"
-                    tone="danger"
-                    title="Eliminar"
-                    aria-label="Eliminar"
-                    onClick={() => openModal("delete", song)}
-                  >
-                    <TrashIcon />
-                  </Button>
-                )}
+                      {tempo && (
+                        <span className="hidden shrink-0 font-body text-sm tabular-nums text-ink-muted md:inline">{tempo}</span>
+                      )}
+
+                      {/* The key in the display face and the KEY colour (ADR-0071): here the
+                          song is the protagonist, as in Biblioteca. No `uppercase`: it would
+                          turn «B♭» into «BB». */}
+                      <span
+                        aria-label={song.key ? `Tono ${formatKey(song.key)}` : "Sin tono"}
+                        className={`flex w-9 shrink-0 justify-end font-display text-[22px] font-semibold leading-none ${song.key ? "text-key-fg" : "text-ink-dim"}`}
+                      >
+                        {formatKey(song.key) || "—"}
+                      </span>
+
+                      {/* ONE menu per row, like Miembros: nothing here depends on hover, so a
+                          phone reaches every action the desktop does. */}
+                      <Menu
+                        label={`Acciones de ${song.title}`}
+                        align="end"
+                        trigger={
+                          <Button variant="icon" size="lg" aria-label={`Acciones de ${song.title}`}>
+                            <span aria-hidden="true" className="text-base leading-none">⋯</span>
+                          </Button>
+                        }
+                      >
+                        <MenuItem icon={<PencilIcon />} onSelect={() => openModal("edit", song)}>
+                          Editar
+                        </MenuItem>
+                        {canDelete && (
+                          <MenuItem icon={<TrashIcon />} danger onSelect={() => openModal("delete", song)}>
+                            Eliminar
+                          </MenuItem>
+                        )}
+                      </Menu>
+                    </div>
+                  );
+                })}
               </div>
-            </div>
+            </section>
           ))}
         </div>
       )}

@@ -8,22 +8,22 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 309,
+    "literalRows": 307,
     "filesScanned": 557,
     "filesWithColour": 61,
     "byCategory": {
       "2": 2,
-      "4": 66,
+      "4": 65,
       "5": 2,
-      "8": 85,
+      "8": 84,
       "9": 10,
       "11": 8,
       "12": 136
     },
     "byDisposition": {
-      "B": 110,
+      "B": 109,
       "exempt": 60,
-      "keep": 221,
+      "keep": 220,
       "C": 5,
       "D": 13
     },
@@ -2156,7 +2156,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 225,
+      "line": 253,
       "disposition": "B",
       "reason": null
     },
@@ -2186,25 +2186,13 @@
     },
     {
       "file": "app/components/admin/ContentPanel.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "bg-transparent",
-      "alpha": null,
-      "utility": "bg",
-      "carrier": null,
-      "line": 230,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/admin/ContentPanel.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
       "value": "stroke=\"currentColor\"",
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 264,
+      "line": 481,
       "disposition": "B",
       "reason": null
     },
@@ -2216,19 +2204,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 385,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/ContentPanel.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 394,
+      "line": 490,
       "disposition": "B",
       "reason": null
     },
@@ -2252,7 +2228,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 241,
+      "line": 232,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2264,7 +2240,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 277,
+      "line": 268,
       "disposition": "B",
       "reason": null
     },
@@ -2276,7 +2252,19 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 276,
+      "line": 267,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/admin/MembersPanel.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 1246,
       "disposition": "B",
       "reason": null
     },
@@ -2300,7 +2288,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1264,
+      "line": 1265,
       "disposition": "B",
       "reason": null
     },
@@ -2312,7 +2300,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1274,
+      "line": 1276,
       "disposition": "B",
       "reason": null
     },
@@ -2324,19 +2312,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1285,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/MembersPanel.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 1296,
+      "line": 1287,
       "disposition": "B",
       "reason": null
     },
@@ -2348,7 +2324,7 @@
       "alpha": null,
       "utility": "stroke",
       "carrier": null,
-      "line": 280,
+      "line": 271,
       "disposition": "C",
       "reason": null
     },
@@ -2360,7 +2336,7 @@
       "alpha": null,
       "utility": "text",
       "carrier": null,
-      "line": 275,
+      "line": 266,
       "disposition": "C",
       "reason": null
     },

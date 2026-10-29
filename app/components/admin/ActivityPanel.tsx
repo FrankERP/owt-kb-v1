@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { PAGE_TITLE } from "@/app/utils/homeHero";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { PAGE_LEDE, PAGE_TITLE } from "@/app/utils/homeHero";
+import { plural } from "@/app/utils/plural";
 import Collapse from "@/app/components/ui/Collapse";
 import Button from "@/app/components/ui/Button";
 import NumberRoll from "@/app/components/ui/NumberRoll";
+import SegmentedControl from "@/app/components/ui/SegmentedControl";
 import Skeleton, { SkeletonGroup } from "@/app/components/ui/Skeleton";
 
 interface LoginEvent {
@@ -17,6 +19,7 @@ interface MemberActivity {
   _id: string;
   member_name: string;
   alias?: string;
+  photoUrl?: string | null;
   lastSeen: string | null;
   lastLogin: string | null;
   lastActive: string | null;
@@ -30,6 +33,11 @@ const PROVIDER_LABEL: Record<string, string> = {
   credentials: "Email",
   azure:       "Microsoft",
 };
+
+/** The accesses an open row lists before «Ver los N». */
+const HISTORY_PREVIEW = 4;
+
+type Scope = "all" | "active" | "inactive";
 
 const now = () => Date.now();
 
@@ -48,17 +56,31 @@ function calendarDaysAgo(iso: string): number {
   return Math.round((nowMid.getTime() - thenMid.getTime()) / 86_400_000);
 }
 
-function activityStatus(lastActive: string | null): { color: string; label: string } {
+type StatusKey = "active" | "recent" | "inactive" | "never";
+
+/**
+ * The row's state as a dot and a WORD (the Servicios pattern): the colour says
+ * it to the eye, the word to everyone else, so no `sr-only` stand-in is needed.
+ */
+const STATUS: Record<StatusKey, { label: string; dot: string; text: string }> = {
+  active:   { label: "Activo",        dot: "bg-positive-deep",      text: "text-positive-strong" },
+  recent:   { label: "Reciente",      dot: "bg-recency-fg",         text: "text-recency-fg" },
+  inactive: { label: "Inactivo",      dot: "bg-negative-strong/70", text: "text-negative-fg" },
+  never:    { label: "Sin actividad", dot: "bg-mono-600",           text: "text-ink-dim" },
+};
+
+function statusOf(lastActive: string | null): StatusKey {
   const days = daysSince(lastActive);
-  if (days === null)  return { color: "bg-mono-700",      label: "Sin actividad" };
-  if (days <= 7)      return { color: "bg-positive-deep",     label: "Activo" };
-  if (days <= 30)     return { color: "bg-recency-fg",    label: "Reciente" };
-  return               { color: "bg-negative-strong/70",          label: "Inactivo" };
+  if (days === null) return "never";
+  if (days <= 7)     return "active";
+  if (days <= 30)    return "recent";
+  return "inactive";
 }
 
+/** «Hoy 9:14», «Ayer», «Hace 3 días», then the date. */
 function formatDate(iso: string) {
   const days = calendarDaysAgo(iso);
-  if (days === 0) return "Hoy";
+  if (days === 0) return `Hoy ${new Date(iso).toLocaleTimeString("es-MX", { hour: "numeric", minute: "2-digit" })}`;
   if (days === 1) return "Ayer";
   if (days >= 2 && days <= 6) return `Hace ${days} días`;
   return new Date(iso).toLocaleDateString("es-ES", {
@@ -73,25 +95,22 @@ function formatDateTime(iso: string) {
   });
 }
 
-function Avatar({ name }: { name: string }) {
+/** The name the list shows for a member: the alias when there is one. */
+const displayName = (m: MemberActivity) => m.alias?.trim() || m.member_name;
+
+function Avatar({ name, photoUrl }: { name: string; photoUrl?: string | null }) {
   const initials = name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
   return (
-    <div className="w-9 h-9 rounded-full bg-surface-accent-l100-d10 text-on-fill flex items-center justify-center shrink-0">
-      <span className="font-label text-xs text-accent">{initials}</span>
+    <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full">
+      {photoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={photoUrl} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-surface-accent-l100-d10 text-on-fill">
+          <span className="font-label text-sm text-accent">{initials}</span>
+        </div>
+      )}
     </div>
-  );
-}
-
-function ProviderBadge({ provider }: { provider: string }) {
-  const colors: Record<string, string> = {
-    google:      "bg-negative-strong/15 text-negative-fg border-negative-strong/30",
-    credentials: "bg-positive-deep/15 text-positive-strong border-positive-deep/30",
-    azure:       "bg-badge-azure-deep/15 text-badge-azure-fg border-badge-azure-deep/30",
-  };
-  return (
-    <span className={`font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full border ${colors[provider] ?? "bg-mono-500/15 text-mono-400 border-mono-500/30"}`}>
-      {PROVIDER_LABEL[provider] ?? provider}
-    </span>
   );
 }
 
@@ -100,6 +119,8 @@ export default function ActivityPanel() {
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [scope, setScope]       = useState<Scope>("all");
+  const [fullHistory, setFullHistory] = useState<string | null>(null);
 
   // `res.ok` is checked BEFORE parsing, and the payload's shape after it. The
   // route answers a lapsed session with `{ error: "Forbidden" }` and status 403
@@ -127,6 +148,15 @@ export default function ActivityPanel() {
   const activeThisWeek  = activity.filter((m) => (daysSince(m.lastActive) ?? 999) <= 7).length;
   const activeThisMonth = activity.filter((m) => (daysSince(m.lastActive) ?? 999) <= 30).length;
   const neverActive     = activity.filter((m) => !m.lastActive).length;
+  // «Inactivos» is everyone the month did not see — the never-seen included:
+  // the filter exists to find who has not come in, and both answer that.
+  const inactive        = activity.length - activeThisMonth;
+
+  const visible = useMemo(() => {
+    if (scope === "active") return activity.filter((m) => (daysSince(m.lastActive) ?? 999) <= 7);
+    if (scope === "inactive") return activity.filter((m) => (daysSince(m.lastActive) ?? 999) > 30);
+    return activity;
+  }, [activity, scope]);
 
   if (loading) {
     return (
@@ -150,126 +180,128 @@ export default function ActivityPanel() {
 
   return (
     <div className="space-y-6">
-      <h1 className={PAGE_TITLE}>Actividad</h1>
-      {/* Summary stats */}
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          // Short on purpose: «Activos esta semana» wrapped to three lines in a
-          // third of a 390 px phone (bloque 5). The dot says «activos» to the
-          // eye; `sr` keeps the word for a reader.
-          { label: "Esta semana",   sr: "Activos ", value: activeThisWeek,  dot: "bg-positive-deep"  },
-          { label: "Este mes",      sr: "Activos ", value: activeThisMonth, dot: "bg-recency-fg" },
-          { label: "Sin actividad", sr: "",         value: neverActive,     dot: "bg-mono-600"   },
-        ].map((stat) => (
-          <div key={stat.label} className="rounded-xl border border-edge-accent-subtle bg-accent/5 px-4 py-3 text-center">
-            <div className="flex items-center justify-center gap-1.5 mb-1">
-              <span className={`w-2 h-2 rounded-full shrink-0 ${stat.dot}`} />
-              <p className="font-display text-2xl leading-none">
-                <NumberRoll value={stat.value} />
-              </p>
-            </div>
-            <p className="font-label text-[10px] uppercase tracking-widest text-mono-500">
-              {stat.sr && <span className="sr-only">{stat.sr}</span>}
-              {stat.label}
-            </p>
-          </div>
-        ))}
+      <div>
+        <h1 className={PAGE_TITLE}>Actividad</h1>
+        {/* The three counts ARE the lede (the Admin pass, ADR-0070): no stat tiles.
+            Each number rolls in place when a reload moves it. */}
+        <p className={`mt-2 ${PAGE_LEDE}`}>
+          <span className="text-ink"><NumberRoll value={activeThisWeek} /> activos esta semana</span>
+          {" · "}<NumberRoll value={activeThisMonth} /> este mes
+          {" · "}<NumberRoll value={neverActive} /> sin entrar
+        </p>
+        <p className="mt-2 font-body text-sm text-ink-muted">
+          De {plural(activity.length, "persona", "personas")} con acceso. Activo = entró en los últimos 7 días; reciente, en los últimos 30.
+        </p>
       </div>
 
-      {/* Member list */}
-      <div className="space-y-2">
-        {activity.map((m) => {
-          const status = activityStatus(m.lastActive);
+      <SegmentedControl
+        label="Filtrar por actividad"
+        tone="filled"
+        size="sm"
+        className="w-fit"
+        value={scope}
+        onChange={setScope}
+        options={[
+          { value: "all", label: `Todos · ${activity.length}` },
+          { value: "active", label: `Activos · ${activeThisWeek}` },
+          { value: "inactive", label: `Inactivos · ${inactive}` },
+        ]}
+      />
+
+      {/* Member list: hairline rows, one per person (ADR-0070). */}
+      <div className="border-t border-ink/[0.10]">
+        {visible.length === 0 && (
+          <p className="py-12 text-center font-body text-base text-ink-muted">Nadie en este filtro.</p>
+        )}
+        {visible.map((m) => {
+          const status = STATUS[statusOf(m.lastActive)];
+          const hasDetail = m.loginCount > 0 || !!m.lastSeen;
+          const open = expanded === m._id;
+          const name = displayName(m);
+          const events = fullHistory === m._id ? m.events : m.events.slice(0, HISTORY_PREVIEW);
           return (
-            <div key={m._id} className="rounded-xl border border-edge-accent-subtle overflow-hidden">
+            <div key={m._id} data-activity-row="">
               <button
-                onClick={() => setExpanded(expanded === m._id ? null : m._id)}
-                aria-expanded={expanded === m._id}
-                aria-controls={`activity-${m._id}`}
-                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-accent-deep/5 dark:hover:bg-accent/5 transition-colors text-left"
+                type="button"
+                onClick={() => hasDetail && setExpanded(open ? null : m._id)}
+                aria-expanded={hasDetail ? open : undefined}
+                aria-controls={hasDetail ? `activity-${m._id}` : undefined}
+                className={`flex min-h-[68px] w-full items-center gap-3.5 py-2.5 text-left ${open ? "" : "border-b border-ink/[0.10]"} ${hasDetail ? "cursor-pointer" : "cursor-default"}`}
               >
-                <Avatar name={m.member_name} />
+                <Avatar name={name} photoUrl={m.photoUrl} />
 
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline gap-2 flex-wrap">
-                    <span className="font-body text-sm font-semibold">{m.member_name}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex min-w-0 items-baseline gap-2">
+                    <span className="truncate font-body text-[17px] font-semibold leading-tight text-ink">{name}</span>
                     {m.alias?.trim() && (
-                      <span className="font-label text-[11px] uppercase tracking-widest text-accent/70">&ldquo;{m.alias}&rdquo;</span>
+                      <span className="hidden truncate font-body text-sm text-ink-muted sm:inline">{m.member_name}</span>
                     )}
-                  </div>
-                  <p className="font-label text-[11px] uppercase tracking-widest text-mono-500 mt-0.5">
-                    {m.lastActive
-                      ? `Última actividad: ${formatDate(m.lastActive)}`
-                      : "Sin actividad registrada"}
-                  </p>
-                </div>
-
-                {/* Status dot + label */}
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <span className={`w-2 h-2 rounded-full ${status.color}`} aria-hidden="true" />
-                  {/*
-                    The label is `hidden sm:inline`, so on a phone the dot was
-                    the ONLY thing separating Activo from Inactivo — and a
-                    screen reader got nothing at any width. `sr-only` carries it
-                    without changing the mobile layout.
-                  */}
-                  <span className="sr-only">{status.label}</span>
-                  <span className="font-label text-[10px] uppercase tracking-widest text-mono-500 hidden sm:inline" aria-hidden="true">
-                    {status.label}
                   </span>
-                </div>
+                  <span className="mt-1 block truncate font-body text-sm leading-tight text-ink-muted">
+                    {m.lastActive ? formatDate(m.lastActive) : "Nunca ha entrado"}
+                    {m.loginCount > 0 && <> · {plural(m.loginCount, "acceso", "accesos")}</>}
+                  </span>
+                </span>
 
-                {/* Chevron */}
-                {(m.loginCount > 0 || m.lastSeen) && (
+                <span className={`flex shrink-0 items-center gap-1.5 font-body text-sm ${status.text}`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} aria-hidden="true" />
+                  {status.label}
+                </span>
+
+                {hasDetail ? (
                   <svg
-                    width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                    className={`text-mono-500 shrink-0 transition-transform duration-base ${expanded === m._id ? "rotate-180" : ""}`}
+                    width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+                    className={`shrink-0 text-ink-dim transition-transform duration-base ${open ? "rotate-180" : ""}`}
                   >
                     <polyline points="6 9 12 15 18 9" />
                   </svg>
+                ) : (
+                  <span className="w-4 shrink-0" aria-hidden="true" />
                 )}
               </button>
 
-              {/* Expanded detail */}
-              <Collapse
-                open={expanded === m._id}
-                id={`activity-${m._id}`}
-                className="border-t border-accent/10 px-4 py-3 space-y-3 bg-accent/[0.04]"
-              >
-                {/* Last seen vs last login */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <p className="font-label text-[10px] uppercase tracking-widest text-mono-600 mb-0.5">Última visita</p>
-                    <p className="font-body text-xs">
-                      {m.lastSeen ? formatDateTime(m.lastSeen) : "—"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="font-label text-[10px] uppercase tracking-widest text-mono-600 mb-0.5">Último inicio de sesión</p>
-                    <p className="font-body text-xs">
-                      {m.lastLogin ? formatDateTime(m.lastLogin) : "—"}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Login history */}
-                {m.events.length > 0 && (
-                  <div>
-                    <p className="font-label text-[10px] uppercase tracking-widest text-mono-600 mb-1.5">
-                      Historial de accesos ({m.loginCount})
-                    </p>
-                    <div className="space-y-1">
-                      {m.events.map((e) => (
-                        <div key={e._id} className="flex items-center justify-between gap-4">
-                          <span className="font-body text-xs text-mono-400">{formatDateTime(e.timestamp)}</span>
-                          <ProviderBadge provider={e.provider} />
-                        </div>
-                      ))}
+              {hasDetail && (
+                <Collapse
+                  open={open}
+                  id={`activity-${m._id}`}
+                  className="space-y-5 border-b border-ink/[0.10] pb-5 pt-1 sm:pl-[58px]"
+                >
+                  <div className="grid grid-cols-2 gap-4 sm:max-w-[540px]">
+                    <div>
+                      <p className="font-label text-[10px] uppercase tracking-widest text-ink-dim">Última visita</p>
+                      <p className="mt-1 font-body text-sm text-ink">{m.lastSeen ? formatDateTime(m.lastSeen) : "—"}</p>
+                    </div>
+                    <div>
+                      <p className="font-label text-[10px] uppercase tracking-widest text-ink-dim">Último inicio de sesión</p>
+                      <p className="mt-1 font-body text-sm text-ink">{m.lastLogin ? formatDateTime(m.lastLogin) : "—"}</p>
                     </div>
                   </div>
-                )}
-              </Collapse>
+
+                  {m.events.length > 0 && (
+                    <div className="sm:max-w-[540px]">
+                      <p className="font-label text-[11px] uppercase tracking-widest text-ink-muted">
+                        Historial de accesos · {m.loginCount}
+                      </p>
+                      {/* The provider as a quiet word, not a coloured badge: which door
+                          they came in by is a fact, not a state. */}
+                      <ul className="mt-1.5 border-t border-ink/[0.10]">
+                        {events.map((e) => (
+                          <li key={e._id} className="flex min-h-[40px] items-center justify-between gap-4 border-b border-ink/[0.10] font-body text-sm">
+                            <span className="text-ink">{formatDateTime(e.timestamp)}</span>
+                            <span className="text-ink-muted">{PROVIDER_LABEL[e.provider] ?? e.provider}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      {m.events.length > HISTORY_PREVIEW && fullHistory !== m._id && (
+                        <Button variant="ghost" size="sm" className="mt-2 -ml-3 text-accent" onClick={() => setFullHistory(m._id)}>
+                          Ver los {m.events.length}
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </Collapse>
+              )}
             </div>
           );
         })}

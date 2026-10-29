@@ -9,12 +9,12 @@
 //
 // The two that are NOT restatements:
 //
-//  - `ContentPanel`'s row actions. `opacity-0 group-hover:opacity-100` is not a
-//    subtle affordance on a phone, it is a missing one: there is no hover state
+//  - `ContentPanel`'s row actions. `opacity-0 group-hover:opacity-100` was not a
+//    subtle affordance on a phone, it was a missing one: there is no hover state
 //    to enter, so Editar and Eliminar were permanently invisible to every touch
-//    admin, and unreachable by keyboard at any width. The assertion is that no
-//    `opacity-0` survives WITHOUT an `sm:` prefix — the shape, not the spelling,
-//    because `opacity-0 sm:group-hover:…` would read as fixed and is not.
+//    admin, and unreachable by keyboard at any width. Since the Admin pass the
+//    row carries ONE menu (as Miembros does), so the assertion is that both
+//    actions are reachable through it and nothing on the row fades behind hover.
 //  - `AvailabilityPanel`'s sticky first column. The shadow is driven by a 1px
 //    sentinel observed against the scroll box, so the test drives a mocked
 //    `IntersectionObserver` and asserts the attribute the CSS hangs off.
@@ -22,7 +22,7 @@
 // jsdom applies no CSS and implements no IntersectionObserver, so these are
 // class/attribute assertions by design.
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import ActivityPanel from "../ActivityPanel";
@@ -174,27 +174,27 @@ describe("Contenido", () => {
     expectSkeletons(container, "Cargando canciones", 5);
   });
 
-  it("shows the row actions on touch: no opacity-0 without an sm: prefix", async () => {
+  it("reaches Editar and Eliminar through the row's one menu, with nothing hidden behind hover", async () => {
     vi.stubGlobal("fetch", vi.fn(async (url: string) =>
       String(url).includes("/posts")
-        ? ok([{ _id: "s1", title: "Santo", author: "X", slug: { current: "santo" } }])
+        ? ok([{ _id: "s1", title: "Santo", author: "X", slug: { current: "santo" }, key: "Bb" }])
         : ok([]),
     ));
     const { container } = mountContent();
     await waitFor(() => expect(screen.getByText("Santo")).not.toBeNull());
 
-    const actions = screen.getByRole("button", { name: "Editar" }).parentElement as HTMLElement;
-    for (const cls of actions.className.split(/\s+/)) {
-      // `opacity-0` unprefixed is the phone-invisible spelling; `sm:opacity-0` is
-      // the pointer-only fade the redesign asked for.
-      expect(cls, actions.className).not.toBe("opacity-0");
-    }
-    expect(actions.className).toContain("sm:opacity-0");
-    expect(actions.className).toContain("sm:group-hover:opacity-100");
-    // The keyboard was excluded by the hover-only spelling at every width.
-    expect(actions.className).toContain("sm:focus-within:opacity-100");
-    // A ≥44px target, now that a finger can reach them.
-    expect(screen.getByRole("button", { name: "Eliminar" }).className).toContain("min-h-[44px]");
+    const row = container.querySelector("[data-song-row]") as HTMLElement;
+    expect(row.className).not.toMatch(/opacity-0/);
+    // The key keeps its accidental as a symbol: «B♭», never «BB» (ADR-0071 colour).
+    expect(screen.getByLabelText("Tono B♭").className).toContain("text-key-fg");
+
+    const trigger = screen.getByRole("button", { name: "Acciones de Santo" });
+    // A ≥44px target, since a finger is what opens it.
+    expect(trigger.className).toContain("min-h-[44px]");
+    fireEvent.click(trigger);
+    const menu = within(screen.getByRole("menu", { name: "Acciones de Santo" }));
+    expect(menu.getByRole("menuitem", { name: "Editar" })).not.toBeNull();
+    expect(menu.getByRole("menuitem", { name: "Eliminar" })).not.toBeNull();
   });
 
   // The song search sits beside the song form's artist picker, which ignores
@@ -210,7 +210,7 @@ describe("Contenido", () => {
     ));
     mountContent();
     await waitFor(() => expect(screen.getByText("Santo")).not.toBeNull());
-    const search = screen.getByPlaceholderText("Buscar canción o artista...");
+    const search = screen.getByPlaceholderText("Buscar canción o artista…");
 
     fireEvent.change(search, { target: { value: "un corazon" } });
     expect(screen.getByText("Santo")).not.toBeNull();
