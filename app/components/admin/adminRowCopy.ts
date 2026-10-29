@@ -6,6 +6,7 @@
 
 import { plural } from "@/app/utils/plural";
 
+
 const MONTH_LONG = new Intl.DateTimeFormat("es-MX", { month: "long" });
 const MONTH_SHORT = new Intl.DateTimeFormat("es-MX", { month: "short" });
 

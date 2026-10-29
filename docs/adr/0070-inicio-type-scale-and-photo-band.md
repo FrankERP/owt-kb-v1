@@ -137,6 +137,19 @@ pill; «Equipo» is the small-caps title, «Banda» is 17 px sentence case; a sh
   Spanish run («20, 21 y 22 de noviembre», `adminRowCopy.ts`). The availability matrix, Generar mes, Editar
   mes and Editar servicio are untouched. Tests: `adminRowCopy`, `groupMembersByLetter`,
   `proposalsPanelHandoff`, `proposalsPanelThread`, `membersPanelMenu`, `availabilityPanelFailure`.
+- **Phase 6 of the Admin pass (2026-10-29, same thread, mock approved «Se ve bien»): Canciones and
+  Actividad, the two tabs PR A/B left.** The «Contenido» tab is named after its page, «Canciones»
+  (the tab IS the page title): «Agregar» primary, a `SearchLine` beside the «Filtros» pill (Tags /
+  Artista in the Biblioteca sheet), and the catalog as hairline rows under a display-face letter —
+  title, artist and tags as one quiet line, the key in the display face and the KEY colour
+  (ADR-0071: here the song is the protagonist), one menu per row instead of two icon buttons; the
+  tag chips, the note icon and the row frames are gone, the song sheets untouched. Actividad: the
+  three stat tiles become the lede («21 activos esta semana · 28 este mes · 4 sin entrar»), a new
+  Todos / Activos / Inactivos filter (finding who has not come in meant reading 34 rows), and one
+  hairline row per person with their photo, the state as dot + word, and the open row's history
+  with the provider as a word instead of a coloured badge. The letter rule is ONE function now,
+  `groupRowsByLetter` (`app/utils/libraryIndex.ts`), read by Biblioteca, Miembros and Canciones.
+  Tests: `adminPanelsPolish`, `activityPanelFailure`, `libraryIndex`.
 - **The house controls went sentence case (2026-10-27, same thread, Frank: «cambialos»).** `Button` and
   `SegmentedControl` were label-styled — Jura, uppercase, `tracking-widest` — and every screen of this
   pass overrode them (`normal-case tracking-normal font-body` on a dozen pills) because the mocks set

@@ -133,7 +133,7 @@ describe("AdminPanel — the tab in the URL", () => {
     expect(currentTab()).toBe("Actividad");
 
     rerender(<ToastProvider><CueDialogProvider><AdminPanel role="super-admin" initialTab="content" tabNamedInUrl /></CueDialogProvider></ToastProvider>);
-    expect(currentTab()).toBe("Contenido");
+    expect(currentTab()).toBe("Canciones");
     await waitFor(() => expect(tabParam()).toBe("content"));
   });
 

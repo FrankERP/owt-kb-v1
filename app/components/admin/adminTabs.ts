@@ -16,7 +16,8 @@ export const TAB_CATALOG: ReadonlyArray<{ id: AdminTabId; label: string; roles: 
   { id: "proposals",    label: "Propuestas",     roles: ["super-admin", "admin"] },
   { id: "availability", label: "Disponibilidad", roles: ["super-admin", "admin"] },
   { id: "activity",     label: "Actividad",      roles: ["super-admin", "admin"] },
-  { id: "content",      label: "Contenido",      roles: ["super-admin", "admin", "content-editor"] },
+  // «Canciones», as its page is titled (the Admin pass): the tab IS the page title.
+  { id: "content",      label: "Canciones",      roles: ["super-admin", "admin", "content-editor"] },
 ];
 
 /** The tabs this role may open, in bar order. */
