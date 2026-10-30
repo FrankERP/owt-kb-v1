@@ -93,11 +93,16 @@ describe("sign-in", () => {
     renderSignIn();
     const field = screen.getByLabelText("Contraseña") as HTMLInputElement;
     expect(field.type).toBe("password");
+    // The field's accessible name is its label alone: the toggle is a sibling,
+    // never a second control inside the <label>.
+    expect(field.getAttribute("aria-label")).toBeNull();
+    expect(document.querySelector(`label[for="${field.id}"]`)?.textContent).toBe("Contraseña");
     const toggle = screen.getByRole("button", { name: "Mostrar" });
-    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    // Its text is its state — no `aria-pressed` beside a label that swaps.
+    expect(toggle.getAttribute("aria-pressed")).toBeNull();
+    expect(toggle.getAttribute("aria-controls")).toBe(field.id);
     fireEvent.click(toggle);
     expect(field.type).toBe("text");
-    expect(screen.getByRole("button", { name: "Ocultar" }).getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(screen.getByRole("button", { name: "Ocultar" }));
     expect(field.type).toBe("password");
   });

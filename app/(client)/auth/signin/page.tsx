@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useId, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { isNativeApp, nativeGoogleIdToken } from "@/app/utils/native";
@@ -21,6 +21,8 @@ function SignInForm() {
   const [loading, setLoading]   = useState(false);
   const [credError, setCredError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const emailId = useId();
+  const passwordId = useId();
 
   async function handleGoogle() {
     if (isNativeApp()) {
@@ -103,9 +105,10 @@ function SignInForm() {
           {/* Credentials — the hairline fields of Mi perfil (`ui/hairlineField.ts`). */}
           <form onSubmit={handleCredentials} className="space-y-6">
             <div className="space-y-5">
-              <label className="block space-y-1.5" {...revealProps(5)}>
-                <span className={HAIRLINE_LABEL_CLASS}>Correo</span>
+              <div className="space-y-1.5" {...revealProps(5)}>
+                <label htmlFor={emailId} className={`block ${HAIRLINE_LABEL_CLASS}`}>Correo</label>
                 <input
+                  id={emailId}
                   type="email"
                   placeholder="tu@correo.com"
                   autoComplete="username"
@@ -114,13 +117,18 @@ function SignInForm() {
                   required
                   className={HAIRLINE_INPUT_CLASS}
                 />
-              </label>
-              <label className="block space-y-1.5" {...revealProps(6)}>
-                <span className={HAIRLINE_LABEL_CLASS}>Contraseña</span>
+              </div>
+              <div className="space-y-1.5" {...revealProps(6)}>
+                <label htmlFor={passwordId} className={`block ${HAIRLINE_LABEL_CLASS}`}>Contraseña</label>
                 {/* «Mostrar» sits on the field's own rule: a sign-in typed on a phone is
-                    the one place a member cannot see what they wrote. */}
-                <span className="relative block">
+                    the one place a member cannot see what they wrote. A sibling of the
+                    input, never inside its <label> (a second labelable control there is
+                    invalid and would read into the field's name); its own text IS its
+                    state, so it carries no `aria-pressed` (a swapped label plus a pressed
+                    state announce two contradictory things). */}
+                <div className="relative">
                   <input
+                    id={passwordId}
                     type={showPassword ? "text" : "password"}
                     placeholder="••••••••"
                     autoComplete="current-password"
@@ -133,14 +141,14 @@ function SignInForm() {
                     variant="ghost"
                     size="sm"
                     type="button"
-                    aria-pressed={showPassword}
+                    aria-controls={passwordId}
                     onClick={() => setShowPassword((on) => !on)}
                     className="absolute bottom-1 right-0"
                   >
                     {showPassword ? "Ocultar" : "Mostrar"}
                   </Button>
-                </span>
-              </label>
+                </div>
+              </div>
             </div>
             <div {...revealProps(7)}>
               <Button type="submit" variant="primary" size="lg" className="w-full" busy={loading} busyLabel="Entrando…" disabled={loading}>
