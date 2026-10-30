@@ -232,7 +232,7 @@ export default function AvailabilityPanel() {
       {/* ── Conflicts view: hairline rows (ADR-0070, the Admin pass PR B) ── */}
       {viewMode === "conflicts" && (
         <div className="space-y-8">
-          {/* The proposals (ADR-0079) own this list. The client-side list below is their fallback:
+          {/* The proposals (ADR-0080) own this list. The client-side list below is their fallback:
               shown only when the proposals read fails or cannot judge, so a failure there never
               reads as «sin conflictos». */}
           <AvailabilityProposals

@@ -107,7 +107,7 @@ const MAY_SEE_DRAFTS: Record<string, string> = {
     "(an admin may write before the month is published; ADR-0065). " +
     "Do NOT add a member-facing query here.",
   "utils/availabilityFixCommit.ts":
-    "The availability proposals' writer (ADR-0079). A conflict on a DRAFT is part " +
+    "The availability proposals' writer (ADR-0080). A conflict on a DRAFT is part " +
     "of the feature — the admin is told «borrador» or «publicado» — so its seat " +
     "pre-check reads every role. Its readers are the sweep and the admin panel " +
     "(`/api/admin/availability-conflicts`, `requireActiveManager`, never a member). " +

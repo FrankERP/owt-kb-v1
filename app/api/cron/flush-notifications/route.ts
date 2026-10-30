@@ -130,7 +130,7 @@ async function getHandler(req: NextRequest) {
   // measured between 0.09 and 2.03 runs/hour (docs/NOTIFICATIONS.md).
   const report = await drainOutbox();
 
-  // The availability proposals ride this tick (ADR-0079): after the response, every third bucket,
+  // The availability proposals ride this tick (ADR-0080): after the response, every third bucket,
   // only with room left. Its own try/catch: the drain's answer never depends on it.
   after(async () => {
     try {

@@ -91,7 +91,7 @@ describe("studio protection policy", () => {
       // The conversation before a service's proposal exists (ADR-0065): written only by
       // the admin service-thread messages route.
       "serviceThread",
-      // The availability proposals' records (ADR-0079): written only by availabilityFixCommit.ts.
+      // The availability proposals' records (ADR-0080): written only by availabilityFixCommit.ts.
       "availabilityConflict",
     ]);
     expect(PROTECTED_STUDIO_TYPES).toContain("saturdarSongs");

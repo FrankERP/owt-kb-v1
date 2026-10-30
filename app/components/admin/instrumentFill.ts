@@ -121,7 +121,7 @@ export function instrumentalistsOn(cells: GridCell[], columnId: string): Set<str
 
 /**
  * The rows `fillInstruments` may touch (see its comment): a known instrument whose row id is the id
- * its own label derives. Exported so the availability proposals (ADR-0079) order exactly these rows
+ * its own label derives. Exported so the availability proposals (ADR-0080) order exactly these rows
  * as the filler does, and no other.
  */
 export function isFillableInstrumentRow(r: GridRow): boolean {

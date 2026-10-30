@@ -1,4 +1,4 @@
-// The admin email of the availability proposals (ADR-0079; plan §6): one per sweep that claimed
+// The admin email of the availability proposals (ADR-0080; plan §6): one per sweep that claimed
 // events, «Propuestas» (person → replacement, seat, service) and «Sin reemplazo». Light palette
 // (`emailShell.ts`), as every app email. Pure: the writer (`availabilityFixCommit.ts`) reads the
 // names and sends it.

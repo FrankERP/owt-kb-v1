@@ -1,4 +1,4 @@
-// The availability proposals' writer (ADR-0079; plan §5–§6), over mocked clients. Fictitious people.
+// The availability proposals' writer (ADR-0080; plan §5–§6), over mocked clients. Fictitious people.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));

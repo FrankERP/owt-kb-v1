@@ -1,4 +1,4 @@
-# ADR-0079: Availability conflicts are proposed one seat at a time, and a person applies them
+# ADR-0080: Availability conflicts are proposed one seat at a time, and a person applies them
 
 **Date:** 2026-10-30 · **Status:** Accepted
 

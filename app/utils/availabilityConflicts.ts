@@ -1,4 +1,4 @@
-// Availability conflicts: find them and propose a replacement (ADR-0079; plan
+// Availability conflicts: find them and propose a replacement (ADR-0080; plan
 // docs/superpowers/plans/2026-10-29-availability-conflict-resolver.md §4). The pure core of the
 // availability writer (`availabilityFixCommit.ts`), which reads, records and emails; this module
 // only judges.
