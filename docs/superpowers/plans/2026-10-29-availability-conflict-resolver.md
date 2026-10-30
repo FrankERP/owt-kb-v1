@@ -1,6 +1,6 @@
 # Availability conflicts: find them, propose a replacement, apply with one click (plan)
 
-**Status:** DRAFT, revision 10 — PROPOSALS ONLY. Revisions 1–7 (seven review rounds) planned an
+**Status:** APPROVED at revision 10 (digest `78d5fa24…`, commit 0cc5dae; two consecutive fresh approvals, rounds 10–11 — see the review log beside this plan). §12 lists the changes made after that approval, which are NOT reviewed. PROPOSALS ONLY. Revisions 1–7 (seven review rounds) planned an
 automatic writer for drafts; every round from 5 to 7 found a defect in how automatic draft writes and
 proposals share one sweep. Frank chose (2026-10-30 13:54Z, decision card «Solo propuestas por
 ahora») to drop the automatic writes: the sweep never changes a service, drafts included. This
@@ -534,3 +534,31 @@ the release (`sanity schema deploy`; the Content Lake accepts the type without i
 order: gates → one code review → preview → verify alias → PR → merge → prod alias → the first ticks
 checked in the production logs (the tick logs one fixed line per run: skipped / pre-check clear /
 swept).
+
+## 12. Post-approval changes (UN-REVIEWED — outside the approved digest)
+
+Adopted from the approving rounds' non-blocking notes; the code review of the implementation covers
+them.
+
+1. **Month gate, grown caps.** A missed protection with the same key `(code, person, scope)` in both
+   builds whose `count` grows (`sunday_cap_exceeded`/`saturday_cap_exceeded`,
+   `monthCheckCore.ts:226`) rejects the candidate, as a grown `<=`/`==` count does.
+2. **Identities come from the roles read**, not the boards: the sweep enumerates C from `adminRoles`
+   (all five seat paths) plus the records in scope, then builds the boards for the months that need a
+   pick. A `kept`/`proposed`/`none` record in a month with no board still reaches «not C» → `gone`.
+3. **Second voice seat.** For a person with two voice seats, the second seat's `removedOnly` starts
+   from the board that already holds the first seat's pick.
+4. **Member trigger.** `memberTick` also acts on dates REMOVED by the save that have a
+   `kept`/`proposed`/`none` record (so a quick clear and re-mark is not missed), and its `deadlineMs`
+   is computed from the request's start (`startedAt + 50 s`), as the cron tick's is.
+5. **Email step.** The audience is read BEFORE any claim (a failed audience read claims nothing).
+   A member-scoped sweep claims only the records in its own scope; other due records wait for the
+   tick. The audience query also excludes the system accounts (`service-account-*`,
+   `member-dev-verify`), as the setlist audience does (`outboxSweep.ts:242`).
+6. **«Deshacer»** on a `kept` conflict in the panel (back to the sweep's judgement: the record goes
+   to `none` with no event, and the next sweep re-judges it).
+7. **Wording.** Presence rule ids are ordinals over rule keys (which include the keys the people
+   sent carry). The tick does NOT inherit an alarm for a blocked sweep: `reportOutboxLiveness` fires
+   on stale outbox items only. A sweep blocked for a long time (a lingering raw Studio draft, the
+   engine on v2) is visible only in the panel («No se pudo revisar») and the logs — an accepted cost
+   recorded in ADR-0078, told to Frank.
