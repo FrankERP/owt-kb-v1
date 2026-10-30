@@ -5,7 +5,8 @@
 // the solver only as a fixed service (SP-3). Uncounted specials keep today's filler (SP-4, CTL-2).
 //
 // Hard blocks: everything today's filler blocks — `rankCandidates`' `eligible` verdict (Tipo, a seat
-// already held in the same category at that service, availability, person exclusions and pairwise
+// already held at that service that clashes with this one (`seatsClash`: the same category, or an
+// instrument for someone not marked «Canta y toca a la vez», ADR-0078), availability, person exclusions and pairwise
 // conflicts) and the in-cell exclusion — AND RQ-2's eligibility for that role at that service, so
 // the pre-fill never pins someone the request calls ineligible.
 //

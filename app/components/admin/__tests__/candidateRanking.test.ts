@@ -19,7 +19,8 @@ const m = (id: string, name: string, types: string[], unavailable: string[] = []
   ({ _id: id, member_name: name, memberType: types, unavailableDates: unavailable });
 
 const MEMBERS: RankMember[] = [
-  m("m1", "Frank", ["voz", "instrumento"]),
+  // Frank is marked «Canta y toca a la vez» (ADR-0078), as he is meant to be in production.
+  { ...m("m1", "Frank", ["voz", "instrumento"]), singsAndPlays: true },
   m("m2", "Gaby", ["voz"]),
   m("m3", "Liu", ["voz"], [DATE]),
   m("m4", "Samo", ["instrumento"]),
@@ -56,12 +57,47 @@ describe("rankCandidates", () => {
     expect(frank?.blockedReason).toBe("Ya asignado en Lead");
   });
 
-  it("ALLOWS voz + instrumento and only informs", () => {
+  it("ALLOWS voz + instrumento for a member marked «Canta y toca a la vez», and only informs", () => {
     // Frank leads and plays EG on real services; the board must not fight that.
     const assigned: AssignedSeat[] = [{ seatId: "lead", category: "voz", memberId: "m1" }];
     const frank = rankCandidates({ seat: BASS, date: DATE, members: MEMBERS, windowRoles: [], assigned })
       .find((c) => c.id === "m1");
     expect(frank).toMatchObject({ alreadyAssigned: true, blockedReason: null });
+  });
+
+  // ADR-0078: Auto's instrument filler seated Tony on Drums while the solver
+  // had him in Coro (2026-11-29). Unmarked, voz + instrumento is a conflict
+  // in both directions, from any voice seat.
+  it("BLOCKS an instrument for an unmarked member already holding a voice seat", () => {
+    const tony: RankMember = m("m6", "Tony", ["voz", "instrumento"]);
+    const assigned: AssignedSeat[] = [{ seatId: "coro", category: "voz", memberId: "m6" }];
+    const drums = rankCandidates({ seat: instrumentSeatDef("Drums"), date: DATE, members: [tony], windowRoles: [], assigned })[0];
+    expect(drums).toMatchObject({ alreadyAssigned: true, blockedReason: "Ya asignado en Coro", eligible: false });
+  });
+
+  it("BLOCKS every voice seat for an unmarked member already on an instrument", () => {
+    const tony: RankMember = m("m6", "Tony", ["voz", "instrumento"]);
+    const assigned: AssignedSeat[] = [{ seatId: "instrumento:Drums", category: "instrumento", memberId: "m6" }];
+    for (const seat of VOICE_SEATS) {
+      const row = rankCandidates({ seat, date: DATE, members: [tony], windowRoles: [], assigned })[0];
+      expect(row.blockedReason, seat.id).toBe("Ya asignado en Drums");
+    }
+  });
+
+  it("an explicit `singsAndPlays: false` blocks like an absent one", () => {
+    const tony: RankMember = { ...m("m6", "Tony", ["voz", "instrumento"]), singsAndPlays: false };
+    const assigned: AssignedSeat[] = [{ seatId: "lead", category: "voz", memberId: "m6" }];
+    const bass = rankCandidates({ seat: BASS, date: DATE, members: [tony], windowRoles: [], assigned })[0];
+    expect(bass.blockedReason).toBe("Ya asignado en Lead");
+  });
+
+  it("FOH beside a voice or an instrument stays allowed", () => {
+    const tony: RankMember = m("m6", "Tony", ["voz", "instrumento", "foh"]);
+    const assigned: AssignedSeat[] = [
+      { seatId: "coro", category: "voz", memberId: "m6" },
+    ];
+    const console = rankCandidates({ seat: fohSeatDef("Console"), date: DATE, members: [tony], windowRoles: [], assigned })[0];
+    expect(console.blockedReason).toBeNull();
   });
 
   it("counts load and builds the strip on the same week rule as participation", () => {

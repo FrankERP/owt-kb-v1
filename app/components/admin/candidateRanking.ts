@@ -15,7 +15,7 @@ import {
   serviceWeekKey,
   type ParticipantRole,
 } from "@/app/utils/computeParticipation";
-import { occupantDeclaresInstrument, type SeatCategory, type SeatDef } from "./seatModel";
+import { occupantDeclaresInstrument, seatsClash, type SeatCategory, type SeatDef } from "./seatModel";
 import { evaluate } from "./ruleEnforcement";
 import type { GridColumn, SolverConfig } from "./plannerModel";
 
@@ -26,6 +26,9 @@ export interface RankMember {
   memberType?: string[];
   /** Declared instrument seats (spec D6): absent or empty = declares nothing. */
   instruments?: string[];
+  /** «Canta y toca a la vez» (Miembros): may hold a voice and an instrument on
+   *  one service. Absent = no (`seatsClash`, ADR-0078). */
+  singsAndPlays?: boolean;
   unavailableDates?: string[];
 }
 
@@ -180,7 +183,7 @@ export function rankCandidates(input: {
   }
 
   // A member can hold several seats on one service (D4: voz + instrumento is
-  // real — Frank and Mkz both lead and play). A Map keyed by memberId would
+  // real — Frank and Mkz both lead and play, marked `singsAndPlays`, ADR-0078). A Map keyed by memberId would
   // keep only the LAST seat built for that member, and a caller that builds
   // `assigned` in seat order (voces, then instrumentos, then FOH) would have an
   // instrument seat silently overwrite a voice one, hiding the same-category
@@ -198,11 +201,12 @@ export function rankCandidates(input: {
     .map((m) => {
       const heldSeats = seatsById.get(m._id) ?? [];
       // D4: same category is a real conflict (nobody sings Lead and BGV at once);
-      // voz + instrumento is what Frank and Mkz actually do, so it only informs.
+      // voz + instrumento is refused too, unless the member is marked
+      // `singsAndPlays` (Frank and Mkz lead and play) — `seatsClash`, ADR-0078.
       // The seat being targeted itself never counts as a conflict — a member
       // already in this exact seat must stay selectable so they can be toggled off.
       const conflict = heldSeats.find(
-        (held) => held.category === seat.category && held.seatId !== seat.id,
+        (held) => held.seatId !== seat.id && seatsClash(held, { seatId: seat.id, category: seat.category }, m.singsAndPlays),
       );
       const blockedReason = conflict ? `Ya asignado en ${labelOfSeatId(conflict.seatId)}` : null;
       const strip = weekKeys.map((k) => servedInWeek.get(k)?.has(m._id) ?? false);

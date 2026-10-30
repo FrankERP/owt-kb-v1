@@ -293,6 +293,11 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   ONE v3 six-key pattern map (equal to `rolesOfPattern` on v2's five keys, plus `Sat.Choir`;
   `patternRolesV3Sync.test.ts`) and the ONE per-month count resolution over `resolvedCapValue`.
   `memberFitsRoleKey` (plannerModel) is the one Tipo-fits-role predicate.
+- **`seatsClash`** ([seatModel.ts](../app/components/admin/seatModel.ts)) — the ONE answer to «may one
+  person hold both seats on one service»: same category never; voz + instrumento only for a member
+  marked «Canta y toca a la vez» (`singsAndPlays`); FOH beside either, yes. `rankCandidates`' C2 is
+  built on it (picker, drag gate, both fillers, the v3 pre-fill, the MCP judges) and `PlannerGrid`'s ⚠
+  reads it (ADR-0078).
 - **`fairnessMonthWriteRequest.ts`** ([source](../app/utils/fairnessMonthWriteRequest.ts), neutral, never
   client-imported) — the record's id and keys, `validateFairnessMonthWrite`, `contentHashOfWrite` /
   `contentHashOfStored`, `parseStoredFairnessMonth` (the ONE record-schema check), `decideFairnessMonth`

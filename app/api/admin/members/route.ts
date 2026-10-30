@@ -53,6 +53,7 @@ export async function POST(req: NextRequest) {
     role?: string;
     memberType?: string[];
     instruments?: string[];
+    singsAndPlays?: boolean;
     ministries?: string[];
     managesMinistries?: string[];
     ministryRoles?: unknown;
@@ -96,6 +97,10 @@ export async function POST(req: NextRequest) {
     if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
     instruments = parsed.value;
   }
+  // «Canta y toca a la vez» (ADR-0078): a boolean or nothing.
+  if (body.singsAndPlays !== undefined && typeof body.singsAndPlays !== "boolean") {
+    return NextResponse.json({ error: "singsAndPlays must be a boolean" }, { status: 400 });
+  }
 
   const slug = member_name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
 
@@ -107,6 +112,7 @@ export async function POST(req: NextRequest) {
     role: role ?? "member",
     memberType: memberType ?? [],
     ...(instruments !== undefined ? { instruments } : {}),
+    ...(body.singsAndPlays === true ? { singsAndPlays: true } : {}),
     ...(ministries !== undefined ? { ministries } : {}),
     ...(managesMinistries !== undefined ? { managesMinistries } : {}),
     ...(body.ministryRoles !== undefined

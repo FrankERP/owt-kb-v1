@@ -570,10 +570,10 @@ describe("PlannerGrid — manual pick blocking (D6)", () => {
     expect(onCellsChange).not.toHaveBeenCalled();
   });
 
-  it("does NOT block cross-category double duty (voz + instrumento)", () => {
+  it("does NOT block cross-category double duty (voz + instrumento) for a member marked «Canta y toca a la vez»", () => {
     const cells: InputGridCell[] = [{ date: "2026-08-09", rowId: "lead", memberIds: ["m1"], origin: "manual" }];
     const membersWithBoth: RankMember[] = [
-      { _id: "m1", member_name: "Frank", memberType: ["voz", "instrumento"] },
+      { _id: "m1", member_name: "Frank", memberType: ["voz", "instrumento"], singsAndPlays: true },
       ...members.slice(1),
     ];
     const onCellsChange = vi.fn();
@@ -585,6 +585,35 @@ describe("PlannerGrid — manual pick blocking (D6)", () => {
     expect(frankRow.getAttribute("aria-disabled")).toBeNull();
     fireEvent.click(frankRow);
     expect(onCellsChange).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("PlannerGrid — voz + instrumento without «Canta y toca a la vez» (ADR-0078)", () => {
+  const tony: RankMember[] = [
+    // Not "Tony": the base fixture already has a drummer by that name (d2).
+    { _id: "m1", member_name: "Antonio", memberType: ["voz", "instrumento"], instruments: ["Drums"] },
+    ...members.slice(1),
+  ];
+
+  it("REFUSES the instrument pick for an unmarked member already in Coro", () => {
+    const cells: InputGridCell[] = [{ date: "2026-08-09", rowId: "coro", memberIds: ["m1"], origin: "auto" }];
+    const onCellsChange = vi.fn();
+    const { container } = render(<PlannerGrid {...baseProps({ cells, members: tony, onCellsChange })} />);
+    fireEvent.click(cellFor(container, "instrumento:Drums", "2026-08-09"));
+    const row = candidateLi("Antonio");
+    expect(row.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(row);
+    expect(onCellsChange).not.toHaveBeenCalled();
+  });
+
+  it("flags Coro + Drums on BOTH cells (the 2026-11-29 roster)", () => {
+    const cells: InputGridCell[] = [
+      { date: "2026-08-09", rowId: "coro", memberIds: ["m1"], origin: "auto" },
+      { date: "2026-08-09", rowId: "instrumento:Drums", memberIds: ["m1"], origin: "auto" },
+    ];
+    const { container } = render(<PlannerGrid {...baseProps({ cells, members: tony })} />);
+    expect(within(cellFor(container, "coro", "2026-08-09")).getByText(/⚠/)).toBeTruthy();
+    expect(within(cellFor(container, "instrumento:Drums", "2026-08-09")).getByText(/⚠/)).toBeTruthy();
   });
 });
 
@@ -601,13 +630,13 @@ describe("PlannerGrid — duplicate surfacing after Auto (fact 27)", () => {
     expect(within(bgvCell).getByText(/⚠/)).toBeTruthy();
   });
 
-  it("does NOT flag cross-category double duty (voz + instrumento)", () => {
+  it("does NOT flag cross-category double duty (voz + instrumento) for a marked member", () => {
     // The fixture has to BE double duty for the name to be true: a `voz`-only
     // member on a Bass seat is a Tipo mismatch, which the grid now warns about
     // separately — in amber, so a red-only assertion would pass while showing
     // the very thing the test says is legitimate.
     const dualDuty = [
-      { _id: "m1", member_name: "Frank", memberType: ["voz", "instrumento"], instruments: ["Bass"] },
+      { _id: "m1", member_name: "Frank", memberType: ["voz", "instrumento"], instruments: ["Bass"], singsAndPlays: true },
     ];
     const cells: InputGridCell[] = [
       { date: "2026-08-09", rowId: "lead", memberIds: ["m1"], origin: "auto" },
@@ -637,7 +666,7 @@ describe("PlannerGrid — duplicate surfacing after Auto (fact 27)", () => {
     // instrument warning (spec §7) too, so the Bass cell's `⚠` count stays
     // this test's own subject rather than either.
     const dualDuty = [
-      { _id: "m1", member_name: "Frank", memberType: ["voz", "instrumento"], instruments: ["Bass"] },
+      { _id: "m1", member_name: "Frank", memberType: ["voz", "instrumento"], instruments: ["Bass"], singsAndPlays: true },
     ];
     const { container } = render(<PlannerGrid {...baseProps({ cells, members: dualDuty })} />);
     const leadCell = cellFor(container, "lead", "2026-08-09");

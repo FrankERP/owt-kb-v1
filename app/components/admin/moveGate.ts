@@ -284,7 +284,7 @@ export function evaluateMove(input: MoveGateInput): MoveGateVerdict {
   // `assignedForColumn` keys seats by the CELL's `rowId`, which is why
   // `assignedAfterSourceRemoval` matches on `source.rowId` and never on a seat
   // id: matching on the seat id would silently remove nothing on exactly those
-  // rows, and the move would then be refused as a same-category double.
+  // rows, and the move would then be refused as a seat clash (C2).
   // `seatDefForRow` THROWS on a row it cannot recognise (a `voz` row whose id is
   // not one of `VOICE_SEATS`). The picker meets that during a render, where a
   // throw is loud; this gate runs inside a pointer handler, where it would break
