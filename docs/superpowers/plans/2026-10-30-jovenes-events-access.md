@@ -77,7 +77,7 @@ _id: "ministryEvent.<uuid>"            minted by the commit module, never by a c
 ministry: "jovenes"                    an id in LEVELED_MINISTRY_IDS
 audience: { kind: "ministry" }         the Saturday meeting (all three groups)
         | { kind: "groups", groups: string[] }   one group, or a joint event (2–3 groups)
-kind: "saturday" | "group" | "joint"   display and editor routing ONLY; never read for access
+kind: "saturday" | "ministry" | "group" | "joint"   display and editor routing ONLY; never read for access
 date: "YYYY-MM-DD"                     local-noon rendering (CLAUDE.md invariant)
 time?: "HH:mm"   arrival?: "HH:mm"     display only, `isServiceTime`
 title?: string
@@ -96,10 +96,15 @@ published: boolean                     written on every create; read as `publish
   (admins still see it, to repair it). Rejected: «absent = whole ministry», which is the fail-open
   direction; worship's «absent = visible» exists only because worship predates the field.
 - **D3. `kind` never decides access.** The commit module derives the allowed `kind` from the
-  audience (ministry ⇔ saturday; one group ⇔ group; two or more ⇔ joint) and refuses a mismatch, so
+  audience (a ministry audience ⇔ `saturday`, or `ministry` for another whole-ministry meeting such
+  as the quarterly pastors' board; one group ⇔ `group`; two or more ⇔ `joint`) and refuses a mismatch, so
   the two cannot disagree, but no reader or writer authorizes on `kind`.
-- **D4. Weak references.** Removing a pastor (`/api/admin/members/[id]` DELETE, Studio) must never
-  fail because an old event names them; a dangling seat reads as «Sin asignar».
+- **D4. Weak references, stored as weak.** Removing a pastor (`/api/admin/members/[id]` DELETE,
+  which answers 409 on a referential-integrity error) must never fail because an old event names
+  them; a dangling seat reads as «Sin asignar». Sanity enforces integrity from the STORED reference,
+  not the schema, so the commit module writes `{ _type: "reference", _ref, _weak: true }` on every
+  seat and program member (the Kids precedent writes no `_weak` and must not be copied), and G4
+  asserts it.
 
 ## 4. The read contract — `app/utils/ministryEventReads.ts` (server-only, the ONLY reader)
 
@@ -109,7 +114,8 @@ published: boolean                     written on every create; read as `publish
   `_type == "ministryEvent" && _id in path("ministryEvent.*") && ministry == $ministry && date >= $from && date <= $to`.
   The id-prefix arm means a document created outside the commit module with an undotted id (public)
   is never served by the app either.
-- **R2. Member arm.** `mode: "member"` adds `published == true && (audience.kind == "ministry" ||
+- **R2. Member arm.** An inactive access (`access.active === false`) returns `[]` with no I/O, so
+  the module is safe without its page's guard. `mode: "member"` adds `published == true && (audience.kind == "ministry" ||
   count(audience.groups[@ in $groups]) > 0)` with `$groups = groupsIn(access, ministry)` filtered
   through `isGroupId`. A non-member (`levelIn` null, not super-admin) gets no query at all: the
   function returns `[]` without I/O. A member with no groups sees only `audience.kind == "ministry"`
@@ -117,7 +123,12 @@ published: boolean                     written on every create; read as `publish
 - **R3. Editor arm.** `mode: "editor"` requires `isMinistryManager(access, ministry)` (admin level
   or super-admin) → every event of the ministry, published or not; a `leader` in editor mode gets
   exactly the member arm plus unpublished events whose audience is `groups` and every group in it is
-  one they lead (`levelIn == "leader"` ⇒ their `groupsIn`). Anyone else in editor mode gets `[]`.
+  one they lead (`levelIn == "leader"` ⇒ `$led = groupsIn`): the GROQ is
+  `(<member arm>) || (published != true && audience.kind == "groups" && count(audience.groups) > 0 && count(audience.groups[!(@ in $led)]) == 0)`.
+  Anyone else in editor mode gets `[]`.
+- **R8. One definition of «may read».** `ministryEventReads.ts` also exports the pure TypeScript
+  `mayRead(access, event, mode)` that W3a and any other server decision call. It is the same
+  predicate as the GROQ, and G3 holds the two equal on every case of its matrix.
 - **R4. Token first.** Before any query: no `SANITY_API_READ_TOKEN` ⇒ throw
   `MinistryEventReadUnavailable` (the page renders an error state, never «no events»). Client:
   `operationalClient` (published perspective, no CDN).
@@ -150,13 +161,14 @@ delegate; nothing else writes the type (§6 guard).
   |---|---|---|
   | super-admin, Jóvenes admin | any event of the ministry | any |
   | Jóvenes leader | an event whose audience is `groups` and EVERY group, stored and new, is one they lead | those events |
-  | Encargado or apoyo of THIS event (by the stored `seats`) who may READ it now (W3a) | nothing | this event only |
+  | Encargado or apoyo of THIS event (by the stored `seats`) who may READ it now (W3a), on an event whose audience is the ministry | nothing | this event only |
   | anyone else | nothing | nothing |
 
 - **W3a. A seat never outlives the right to read.** A seat holder's program write is allowed only
   when, by the FRESH access of W1, the actor is active and the stored event passes R2's member
   predicate for them: a member of the ministry, `published == true`, and the audience is the
-  ministry or overlaps their CURRENT groups. So a pastor moved to another group, a person removed
+  ministry or overlaps their CURRENT groups — that is, `mayRead(freshAccess, storedEvent, "member")`
+  (R8), never a second copy of the rule. So a pastor moved to another group, a person removed
   from Jóvenes, or a seat on an unpublished event is refused (403 «Ya no tienes acceso a este
   evento.»), whatever the stored seats say. The seat is a reason to WRITE, never a reason to READ.
 - **W3b. What a write answers.** Every write answers `{ ok, id, rev }` and nothing of the event's
@@ -165,11 +177,17 @@ delegate; nothing else writes the type (§6 guard).
   An edit is judged against both the stored and the requested audience, so a leader can neither
   move an event out of a group they do not lead nor into one. A leader cannot create or change a
   `ministry` audience (the Saturday roster is admins').
+- **W2a. The client's revision is required.** Every PATCH and DELETE body carries `_rev`; missing ⇒
+  400 `rev_required`, different from the stored one ⇒ 409 (as `kidsCommit.ts` refuses a missing
+  `_rev`). Arrays are written whole, and the encargado and the apoyo may edit the same program, so a
+  write never lands on a revision its author did not see.
 - **W4. Program PATCH writes only `program`.** The server builds `set({ program })` from validated
   input; `date`, `audience`, `kind`, `seats`, `notes`, `published` are untouched whatever the body
   says. Each line: `label` 1–60 chars, optional `member` (must be a Jóvenes member), optional `note`
   ≤ 300 chars, a minted `_key`; at most 20 lines.
-- **W5. Validation.** `ministry` ∈ `LEVELED_MINISTRY_IDS`; audience groups via `isGroupId`, no
+- **W5. Validation.** People are validated only where the write ADDS or CHANGES them: a stored seat
+  or program line kept as it was passes even if its person has since left the ministry or been
+  deleted, so an old event never becomes uneditable. `ministry` ∈ `LEVELED_MINISTRY_IDS`; audience groups via `isGroupId`, no
   duplicates, 1–3; `kind` matches the audience (D3); `date` valid; times `isServiceTime`; every
   seat/program member is a member of the ministry (fresh read) and, for a `groups` audience, of at
   least one of its groups; seats ≤ 6; `_key` minted per item; `published` boolean.
@@ -195,28 +213,38 @@ delegate; nothing else writes the type (§6 guard).
 
 - **G1. Read coverage** (`ministryEventCoverage.test.ts`): every file under `app/**` that names
   `"ministryEvent"` is one of: `ministryEventReads.ts`, `ministryEventCommit.ts`, the schema, the
-  Studio protection list, tests. Any other file fails the build. MCP (`app/mcp/**`) and the admin
+  Studio protection list, `protectedReadAudit.ts`, tests. Any other file fails the build. MCP (`app/mcp/**`) and the admin
   chat are therefore covered by construction.
 - **G1b. Protected-read audit.** `ministryEvent` joins `PROTECTED_TYPES` in
-  `app/utils/protectedReadAudit.ts` (as the dotted single-writer `fairnessMonth` did), so generic
-  `_id` reads are caught too, not only the type literal G1 scans for.
+  `app/utils/protectedReadAudit.ts` (as the dotted single-writer `fairnessMonth` did), its write
+  sites are registered there, and its fields (`audience`, `seats`, `program`) join the generic-read
+  signal, so a `*[_id == $id]{ seats, program }` read elsewhere is flagged too. The audit judges the
+  client, not the person: authorization stays G1 + R1.
 - **G2. Query shape** (unit): the member query contains the id-prefix arm, `published == true` and
   the audience arm; `$groups` is a parameter, never interpolated; a non-member returns `[]` with no
   fetch; no token throws.
-- **G3. Isolation matrix** (unit, fetch mocked by a tiny in-memory GROQ-free evaluator of the same
-  predicate, plus the real GROQ string asserted): for an Otro Nivel pastor, an Emprendedores-only
-  event, an unpublished event, an audience-less event and an undotted-id event are never returned;
-  the ministry event and an Otro Nivel + Emprendedores joint event are.
+- **G3. Isolation matrix, on the real engine.** The test captures the query and params
+  `readMinistryEvents` builds (member arm, admin editor arm, leader editor arm) and runs them with
+  `groq-js` `evaluate(parse(query), { dataset, params })` — the repo's precedent,
+  `app/api/__tests__/adminMemberVisibility.test.ts` — over one fixture matrix: people (pastor of
+  Otro Nivel, of Emprendedores, of two groups, with no groups, leader of one group, leader of two,
+  admin, super-admin, inactive, worship-only) × events (ministry, each single group, each joint
+  pair, unpublished, no audience, `groups` absent or empty, unknown group, undotted id, `drafts.`
+  id, other ministry). It asserts the expected visibility table, and that `mayRead` (R8) answers the
+  same for every pair. No hand-written evaluator.
 - **G4. Write matrix** (unit, Sanity mocked): each row of W3's table, both directions of a leader's
   audience move, the program PATCH ignoring every non-`program` field, a stale revision → 409, a
   demoted actor (fresh read says `member`) refused even when the cached snapshot says `leader`; W3a's
   three refusals (seat holder moved to another group, removed from Jóvenes, seated on an unpublished
-  event); every write's answer carries no event content (W3b); a duplicate create token → 409
-  `already_created` and one document.
+  event) and a seat holder of a group event refused; every write's answer carries no event content
+  (W3b); a duplicate create token → 409 `already_created` and one document; missing `_rev` → 400;
+  every stored member reference has `_weak: true`; an event keeping a seat of a departed person
+  still accepts an edit.
 - **G5. Studio.** `ministryEvent` joins `PROTECTED_STUDIO_TYPES` (read-only inspection, no create,
   no actions); `studioProtection.test.ts` covers it.
 - **G6. Live proof on dev before production** (`preview` writes the real dataset, so with Frank's
-  consent): one event per audience created through the route, then an untokened dataset query for
+  consent): one event per audience created through the route as `published: false` with the rollout
+  state at `hidden`, so no pastor can see them, then an untokened dataset query for
   `*[_type == "ministryEvent"]` answers `[]`, and a tokened one answers them; the test events are
   deleted through the route afterwards.
 
@@ -227,7 +255,7 @@ delegate; nothing else writes the type (§6 guard).
 2. PR B — read side: schema + Studio protection, `ministryEventReads.ts`, G1–G3, G5, `/jovenes`
    (pastors' list of upcoming events; each event's sheet carries the program editor for its
    encargado/apoyo, reading in member mode, since a plain member's editor-mode read is `[]`), behind
-   a rollout state PR B ADDS to the registry (`hidden → superAdmin → admins → all`; it does not exist
+   the editor itself stays hidden until PR C ships its route; a rollout state PR B ADDS to the registry (`hidden → superAdmin → admins → all`; it does not exist
    today), the Jóvenes nav section, and `docs/DATA_MODEL.md`'s entry for the type and its dotted id.
    **Critical** — this plan's R-section.
 3. PR C — write side: `ministryEventCommit.ts`, the four routes, G4, Planear Jóvenes (Saturday
@@ -251,5 +279,11 @@ range).
   includes a group they do not lead (W3); an admin does. Frank's answer 2 covered a group's own
   calendar and the Saturday roster, not joint events, so this is put to him as a decision; until he
   answers, the narrower rule stands (it can only be widened later, never leak).
-- **A Sanity project member** (Frank) can read every event in `/studio`'s inspection pane; that is
-  the super-admin's own access.
+- **Sanity project accounts read everything.** `/studio` lets worship `admin` through `proxy.ts`,
+  and any Sanity project account reads every event in Studio and its Vision tool, `readOnly` or not.
+  Who holds one is checked in sanity.io/manage before the rollout reaches `all` (believed: Frank
+  only); a token in a non-Frank hand would cross the boundary by design.
+- **The encargado's program right is narrower than «any event»:** only on whole-ministry meetings
+  (the Saturday roster and the like), as Frank said «de cada sábado»; group events have no such
+  right until he asks. On a Saturday kept as a draft the encargado cannot add lines until it is
+  published (W3a); the editor says so.
