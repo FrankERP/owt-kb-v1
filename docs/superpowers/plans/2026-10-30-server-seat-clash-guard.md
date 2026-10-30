@@ -17,10 +17,12 @@ gate (C2 in `rankCandidates`).
 
 ## 2. What exists today (verified 2026-10-30)
 
-- **Client side** refuses a clash everywhere a roster is BUILT in the app: picker, drag
-  (`moveGate.ts`, C2 «never forceable», DD2), Auto's fillers (`instrumentFill.ts`,
-  `v3Prefill.ts`), and the MCP judges (`storedJudge`, `serviceEditor`, `proposalEditor`) — all
-  through `rankCandidates`' `blockedReason`.
+- **Client side** refuses a clash where a SEAT is chosen: picker, drag (`moveGate.ts`, C2
+  «never forceable», DD2), Auto's fillers (`instrumentFill.ts`, `v3Prefill.ts`), and the MCP
+  judges (`storedJudge`, `serviceEditor`, `proposalEditor`) — all through `rankCandidates`'
+  `blockedReason`. Not where the SOLVER chooses a voice: it does not see instrument cells
+  already on the board, so a hand-placed drummer it puts in Coro reaches «Crear» with only the
+  grid's ⚠ (ADR-0078, Rejected) — see D3b.
 - **Server side** checks referential integrity only. `editRole` says so in a comment
   (`roleEditCommit.ts:116-118`: «referential validation only; memberType remains UI guidance,
   not server policy»). Four protected writers change seats:
@@ -74,10 +76,15 @@ flag.
 - New `app/utils/seatClashGuard.ts` (pure, no I/O):
   `addedSeatClashes(before: NormalizedSeats | null, after: NormalizedSeats, singsAndPlays: ReadonlySet<string>): AddedClash[]`
   where `AddedClash = { memberId, seats: [SeatRef, SeatRef] }`, `SeatRef = { seatId, label }`.
-  It builds each member's occurrence list per side, enumerates unordered pairs through
-  `seatsClash` (imported from `seatModel.ts` — a pure module already imported under
-  `app/utils/`), and returns after-pairs absent from before-pairs, sorted for stable output.
-  FOH stays out of every pair with a voice or an instrument, exactly as `seatsClash` says.
+  It builds each member's occurrence list per side and returns after-pairs absent from
+  before-pairs, sorted for stable output. FOH stays out of every pair with a voice or an
+  instrument, exactly as `seatsClash` says.
+- **One pair enumerator, not two.** The pair loop that `PlannerGrid.categoryDuplicatesForColumn`
+  (`PlannerGrid.tsx:558-590`) runs today moves to `seatModel.ts` as
+  `clashingPairs(entries: {seatId, category}[], singsAndPlays: boolean): [number, number][]`
+  (pure, beside `seatsClash`); the grid and `addedSeatClashes` both call it. `seatModel.ts` is
+  pure and already imported by server code (`app/api/admin/members/*`), and `app/utils/`
+  already imports other `app/components/admin` modules.
 - The flag comes from the member read each writer ALREADY makes: `loadCanonicalMemberIds`
   (`roleWriteOps.ts:252`) over `CANONICAL_MEMBER_PROJECTION` (`serviceReadQueries.ts:63`).
   Add `singsAndPlays` to that projection and a sibling `loadCanonicalMembers(ids)` returning
@@ -101,19 +108,45 @@ special-identity coordinator, the occupancy inventory, the transaction:
   create is never refused by a rule that did not exist when it committed. Before = `null`.
 - **swapRoles:** after the dangling check (line 284-292), before `resolveOwnedCoordination`
   (line 295); judged per involved role on the LOADED roles plus the replacements/arrays the
-  handler already built (`afterSeatsOf`, `replacementsOf`). The member read widens from
-  `involvedPersonIds` to every assignee of every after-state (the flag of a person not moved
-  still decides nothing — only pairs that changed can be added — but one read is simpler than
-  proving which ids matter).
+  handler already built (`afterSeatsOf`, `replacementsOf`).
 - **copyInstruments:** after the dangling check (line 120-125), before coordination; before =
-  `normalizeStoredSeats(loadedTarget.target.role)`, after = `afterSeats`. Member read widens to
-  `seatAssignees(afterSeats)`.
+  `normalizeStoredSeats(loadedTarget.target.role)`, after = `afterSeats`.
+
+**The member read keeps its current id set in every writer** (so the dangling-reference refusal
+keeps exactly its current scope). It already covers every person whose seats change: editRole
+and createRole read every assignee of the request; swap reads `involvedPersonIds` (the moved
+people: both seat occupants, a whole section, or both whole teams); copy reads the copied
+instrument occupants. A pair can only be ADDED for a person whose seat list changed, and a
+person absent from the read (unchanged seats) is judged unmarked on BOTH sides, so it adds
+nothing.
 
 Every transaction already asserts `ifRevisionId` on the very revisions loaded here, so the
 before-state judged is the one overwritten; a concurrent edit fails the transaction (409) as
 today. The flag itself is read outside the transaction: a «Canta y toca a la vez» untick that
 lands between the read and the commit is not seen. Accepted: the flag is edited by hand, a few
 times a year, and the client gate already judged the same roster.
+
+### D3b — The month confirm refuses a clash BEFORE the fairness records (client)
+
+Auto can produce a clash in normal use, not only through a flag race: the solver is not told
+about instrument cells already on the board (pins are voice rows only, `v3SolveRequest.ts:127-155`),
+hand-placed instrument cells survive the fill (`instrumentFill.ts:128-130`), and ADR-0078 says a
+pinned drummer the solver puts in Coro «is caught by the grid's ⚠ instead». Nothing between that ⚠
+and «Crear» refuses. With the server guard alone, the draft would be refused with 400 AFTER
+`runV3ConfirmAttempt` has written the month's fairness records — the month left incomplete,
+later months blocked, a count line with no reason, and «Reintentar» repeating the refusal.
+
+So `runV3ConfirmAttempt` (`v3ConfirmRun.ts:57`) gains a third pre-write guard, beside the two it
+already has (past month, drafts outside the horizon) and before step 2 (records): when any
+creatable draft holds a clash (`addedSeatClashes(null, seatsOf(draft), singsAndPlays)`), return
+`{ kind: "refused_guard", lines: [one seatClashSentence per clash, prefixed by the draft's
+date], retry: false }` — nothing written. Its input gains `singsAndPlays: ReadonlySet<string>`,
+built by the callers from the members they already hold (`MonthGenerator.confirmV3` from
+`adminMembersQuery`, which projects `singsAndPlays` since #217; `apply_schedule` from the member
+list it already loads (`sources.members`, `applySchedule.ts:~300`), its projection extended with
+`singsAndPlays` where it lacks it). A person missing from the list is judged unmarked (the
+refusal side — the server guard would refuse the same draft). v2's `handleConfirm` (`MonthGenerator.tsx:4749`, rollback engine) gets
+the same check before its first write. The server guard stays the backstop.
 
 ### D4 — Refusal shape: `invalid_request` (400), with a machine detail
 
@@ -133,8 +166,9 @@ each entry `{ memberId, name, seats: [labelA, labelB] }`.
 ### D5 — The words the person reads
 
 One Spanish sentence, built in ONE place — a new `seatClashSentence(clash)` in
-`app/utils/seatClashGuard.ts`, reusing the C2 wording of `clashReason`
-(`candidateRanking.ts`):
+`app/utils/seatClashGuard.ts`. Its «para cantar y tocar…» clause is ONE exported constant
+(`SINGS_AND_PLAYS_HINT` in `seatModel.ts`) that `clashReason` (`candidateRanking.ts`) uses too,
+so the two wordings cannot drift:
 «Tony quedaría en Coro y Drums en el mismo servicio; para cantar y tocar en un servicio, marca
 «Canta y toca a la vez» en Miembros.» (the second clause only for voz + instrumento, like
 `clashReason`). Shown by:
@@ -146,16 +180,22 @@ One Spanish sentence, built in ONE place — a new `seatClashSentence(clash)` in
 - The planner's two swap toasts (`MonthGenerator.tsx` ~3763 seat/section swap «No se
   intercambiaron … (code)», and the column swap ~3962) show the sentence instead of the bare
   code when the refusal carries `seatClashes`.
-- MCP: `refusalFor` (`app/mcp/writes/refusals.ts`) gains a branch for `details.seatClashes`
-  (used by `swap_assignment`, `copy_instruments`, `create_service`), emitting names and seat
-  labels only — `memberId` never reaches the wire (members are tokens or names on the MCP,
-  ADR-0062); the stored-save result lines (`save_service_edits`, `v3Copy.ts`
-  `notSavedRecheck(reason)`) get the same sentence as the reason.
+- MCP, every surface that renders one of the four writers' refusals, each emitting names and
+  seat labels only — `memberId` never reaches the wire (members are tokens or names on the MCP,
+  ADR-0062):
+  - `refusalFor` (`app/mcp/writes/refusals.ts`) gains a branch for `details.seatClashes`
+    (`swap_assignment`'s path);
+  - `serviceRefusalLine` (same file, `apply_schedule`'s per-draft line, `applySchedule.ts:185`):
+    the same branch, so it never prints «Detalle técnico: seat_clash»; and `ISSUE_COPY` gains a
+    `seat_clash` entry as the fallback when the detail is absent;
+  - `copy_instruments` (`serviceEditor.ts:~1108`, `S.copy.recheck(S.reason[code])`) and the
+    stored-save result lines (`save_service_edits`, `v3Copy.ts` `notSavedRecheck(reason)`): the
+    sentence as the reason when the refusal carries `seatClashes`.
+  - `create_service` always sends an empty roster, so it can never meet the guard; unchanged.
 - **Not changed:** the planner's stored save (`MonthGenerator.tsx:3613-3629`, «N servicio(s)
-  fue rechazado antes de escribir; tus cambios siguen pendientes.», also «Editar servicio») and
-  the v3 confirm (`v3ConfirmRun.ts`, per-month created/failed COUNTS). Both build their roster
-  through C2 already, so they reach the guard only through a flag race (D3); their count lines
-  stay true and are not worth a new outcome shape.
+  fue rechazado antes de escribir; tus cambios siguen pendientes.», also «Editar servicio»).
+  Every seat it writes went through C2 (picker, drag, fill), so it reaches the guard only
+  through a flag race (D3); its count line stays true. The month confirm is handled by D3b.
 - Any path that does not read the detail shows its existing `invalid_request` copy —
   never «saved».
 
@@ -187,14 +227,24 @@ One Spanish sentence, built in ONE place — a new `seatClashSentence(clash)` in
    to a roster with a grandfathered clash; `createRole` replay of an existing receipt is not
    refused; swap section/team/seat each judged on both roles.
 4. **Coverage guard** — `app/utils/__tests__/seatClashGuardCoverage.test.ts`: each of the four
-   writer modules calls `addedSeatClashes(` and the call precedes its first
-   `resolveOwnedCoordination(` / `.transaction(` in source order; a list of the
+   writer modules calls `addedSeatClashes(` and the call precedes, in source order, its first
+   occurrence of every write-capable call it makes — `resolveOwnedCoordination(`,
+   `bootstrapLegacyLock(`, `loadSpecialIdentityCoordinator(`, `loadTargetOccupancy(`,
+   `.transaction(` (editRole's first write is the legacy bootstrap, not coordination); a list of the
    non-seat writers (§2) is pinned so a NEW `*Commit.ts` must be classified (fails until added
    to one list or the other).
-5. **Copy** — D5's surfaces, with tests: `mutationErrorMessage` with `seatClashes`;
-   `refusalFor` with `seatClashes` emits the sentence and no `memberId`/document id anywhere in
-   `content` or `structuredContent`; the stored-save result line.
-6. **Docs, same delivery** — ADR-0078 Consequences (server writers now refuse an ADDED clash;
+5. **Month confirm (D3b)** — the guard in `runV3ConfirmAttempt` and v2's `handleConfirm`.
+   Tests (`v3ConfirmRun.test.ts`): a draft with an unmarked Coro + Drums returns
+   `refused_guard` naming the person and both seats, and `putRecords`/`postDraft` are never
+   called; the same draft with the member marked proceeds; a retry after records already landed
+   (state.recordsDone) with a clash draft still refuses before posting. `apply_schedule` passes
+   the flag set (its test covers the refusal line).
+6. **Copy** — D5's surfaces, with tests: `mutationErrorMessage` with `seatClashes`;
+   `refusalFor` and `serviceRefusalLine` with `seatClashes` emit the sentence and no
+   `memberId`/document id anywhere in `content` or `structuredContent`; `copy_instruments`' and
+   the stored-save result lines; `clashReason` and `seatClashSentence` share the hint constant.
+   The grid's ⚠ tests stay green on `clashingPairs`.
+7. **Docs, same delivery** — ADR-0078 Consequences (server writers now refuse an ADDED clash;
    Studio and publish stay open; the diff rule and why); CLAUDE.md + AGENTS.md (identical line,
    `agentDocsParity`): the `seatsClash` util line gains «the four seat writers refuse a clash
    the write ADDS (`addedSeatClashes`)»; `docs/agents/project-rules.md` long form;
@@ -219,6 +269,9 @@ One Spanish sentence, built in ONE place — a new `seatClashSentence(clash)` in
 - **A legitimate roster now refused:** only a pair the write ADDS, for an unmarked member, in a
   seat combination the planner's own C2 already refuses — the server now says what the client
   already said. The one new place admins meet it is swap/copy, which never judged it.
-- **Auto confirm refuses a draft:** only if a flag changed between the solve and the confirm;
-  the confirm already reports a per-draft failure and keeps the others (`v3ConfirmRun.ts`).
+- **Auto confirm meets a clash:** in normal use (a hand-placed instrument plus a solver voice),
+  D3b refuses the whole confirm before any record or draft is written and names the person and
+  seats; the admin fixes the cell the grid already flags and confirms again. The server guard
+  only sees a confirm draft through a flag race between the pre-check and the post, where the
+  draft fails with today's per-month counts.
 - **Copy drift:** one sentence builder; the coverage of D5's surfaces is by test.
