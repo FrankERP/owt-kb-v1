@@ -240,6 +240,40 @@ describe("the sweep", () => {
     expect(w.records.get(DANI_SUN1)).toMatchObject({ status: "none", reason: "unchecked" });
   });
 
+  it("an unfixable conflict stops reopening the tick once checked, and is re-judged once editable", async () => {
+    const locked = (rows: StoredRow[]) => {
+      const sum = summaryFor(rows);
+      return { ...sum, targets: sum.targets.map((t) => (t.canonicalIds[0] === "sun1" ? { ...t, lock: null } : t)) };
+    };
+    w.summary.current = locked;
+    w.unavailable("m-dani", "2026-11-01");
+    await sweep(w, { trigger: "cron" });
+    const rec = w.records.get(DANI_SUN1)!;
+    expect(rec.checkedAt).toBeTruthy();
+    const seats = [{ _id: "sun1", date: "2026-11-01", members: ["m-dani"] }];
+    const off = new Map([["m-dani", new Set(["2026-11-01"])]]);
+    expect(precheckOpens({ seats, unavailable: off, records: [{ ...rec, notifiedSeq: rec.eventSeq }], nowMs: w.clock.now })).toBe(false);
+    // The service becomes editable: the next run re-judges the «unchecked» record at once, tick or not.
+    w.summary.current = null;
+    w.clock.now += 60_000;
+    await sweep(w, { trigger: "cron" });
+    expect(w.records.get(DANI_SUN1)!.status).toBe("proposed");
+  });
+
+  it("a person's own trigger re-judges a fresh open record; the tick waits for it to go stale", async () => {
+    w.unavailable("m-dani", "2026-11-01");
+    await sweep(w);
+    const proposed = w.records.get(DANI_SUN1)!;
+    expect(proposed.status).toBe("proposed");
+    // Every candidate leaves: the tick keeps the fresh judgement, «Revisar ahora» re-judges it.
+    for (const m of w.members) if (m._id !== "m-dani") m.unavailableDates = ["2026-11-01"];
+    w.clock.now += 60_000;
+    await sweep(w, { trigger: "cron" });
+    expect(w.records.get(DANI_SUN1)!._rev).toBe(proposed._rev);
+    await sweep(w, { trigger: "manual" });
+    expect(w.records.get(DANI_SUN1)!.status).toBe("none");
+  });
+
   it("the member scope never touches another member's identity", async () => {
     w.unavailable("m-dani", "2026-11-01");
     w.unavailable("m-ana", "2026-11-07");
@@ -378,6 +412,20 @@ describe("the triggers", () => {
     expect(await availabilityTick({ startedAt: w.clock.now }, w.deps)).toBe("clear");
     w.unavailable("m-dani", "2026-11-01");
     expect(await availabilityTick({ startedAt: w.clock.now }, w.deps)).toBe("swept");
+  });
+
+  it("«Deshacer» empties the old judgement and the next sweep re-judges it", async () => {
+    w.unavailable("m-dani", "2026-11-01");
+    await sweep(w);
+    let rec = w.records.get(DANI_SUN1)!;
+    await setConflictKept({ roleId: "sun1", memberId: "m-dani", date: "2026-11-01", serviceKind: "sunday_role", published: true, rev: rec._rev, kept: true, actor: "m-frank" }, w.deps);
+    rec = w.records.get(DANI_SUN1)!;
+    await setConflictKept({ roleId: "sun1", memberId: "m-dani", date: "2026-11-01", serviceKind: "sunday_role", published: true, rev: rec._rev, kept: false, actor: "m-frank" }, w.deps);
+    rec = w.records.get(DANI_SUN1)!;
+    expect(rec).toMatchObject({ status: "none", seats: [] });
+    expect(rec.reason).toBeUndefined();
+    await sweep(w, { trigger: "cron" });
+    expect(w.records.get(DANI_SUN1)!.status).toBe("proposed");
   });
 
   it("the pre-check opens for each case §5.4 names and not otherwise", () => {

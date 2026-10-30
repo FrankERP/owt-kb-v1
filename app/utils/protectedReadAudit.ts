@@ -31,6 +31,9 @@ export const PROTECTED_TYPES = [
   // read off a non-canonical client is the A2 failure; its one writer is the executor
   // (`PROTECTED_WRITE_EXECUTORS`).
   "fairnessMonth",
+  // The availability proposals' records (ADR-0079): dotted (private) ids, read only through
+  // `operationalClient`, written only by `availabilityFixCommit.ts`.
+  "availabilityConflict",
 ] as const;
 
 export type ProtectedType = (typeof PROTECTED_TYPES)[number];

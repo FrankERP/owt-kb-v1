@@ -723,6 +723,7 @@ describe("git-tracked protected read inventory", () => {
       "setlistProposal",
       "specialIdentityCoordinator",
       "fairnessMonth",
+      "availabilityConflict",
     ]);
   });
 });

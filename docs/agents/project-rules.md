@@ -487,7 +487,7 @@ several exist precisely to stop a plausible-looking change.
   losslessly through the editor's text form). `/admin` stays last-writer-wins (no `ifRevisionId` on
   the route): a page loaded before a chat save overwrites it when saved.
   The availability proposals' writer is `availabilityFixCommit.ts` (ADR-0079): the four
-  `/api/admin/availability-conflicts/*` routes (`requireActiveManager`, never a content-editor, never
+  `/api/admin/availability-conflicts` routes (the GET and its `apply`/`keep`/`sweep` POSTs) (`requireActiveManager`, never a content-editor, never
   impersonating), the member's `PATCH /api/me/availability` (its `after()` trigger, that member only)
   and layer 1's flush cron (`availabilityTick`, every third bucket) call it; no MCP tool does. Its
   sweep writes ONLY its own `availabilityConflict.<sha256>` records and the admin email, and only on

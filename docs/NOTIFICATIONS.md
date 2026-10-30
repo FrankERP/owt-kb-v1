@@ -80,6 +80,11 @@ hand-writing a fixture that mirrors them).
 | 2 — backstop | opportunistic sweep after any queueing write (not after the MCP saved-service save's inline upserts, above) | end of `commitUpserts()` in `serviceMutationSideEffects.ts` — keeps its report and raises the destroyed-mail alarm |
 | 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` (mails a person about destroyed mail, as layer 2 also does; layer 1 goes red on the same conditions instead — see §"The destroyed-mail alarm") |
 
+**Layer 1 also carries the availability proposals' tick** (ADR-0079): after the drain has
+answered, `after()` runs `availabilityTick` on every third 5-minute bucket with at least 40 s left;
+it never changes the drain's response, and its failure is only logged. See §"The availability
+conflicts email".
+
 **Layer 1 is load-bearing, not one of three redundant paths.** Layer 2 only
 flushes subjects that have *already* gone quiet, so it can never flush the
 terminal edit of a working session — and the terminal edit is what every notice
@@ -576,7 +581,9 @@ person removed and the person added hear about it; on a draft nobody does).
 - **Triggers:** the member's own save (`after()` on `PATCH /api/me/availability`, that member's
   conflicts only), every third tick of layer 1 (`/api/cron/flush-notifications` runs
   `availabilityTick` in `after()`, after the drain answered; a cheap seat pre-check first, so a
-  quiet tick reads three small queries and stops), and «Revisar ahora» in the panel.
+  tick with nothing new, nothing unemailed and nothing older than 6 hours reads three small queries
+  and stops; a conflict that cannot be judged is re-checked at most every 6 hours), and «Revisar
+  ahora» in the panel.
 - **Only Production sends** (`fairnessRecordEnvironment`). On Preview the sweep runs dry: no
   record, no email. But «Aplicar» and «Mantener» pressed on dev write the REAL dataset, like every
   admin button there.

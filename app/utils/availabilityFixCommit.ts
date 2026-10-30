@@ -72,6 +72,8 @@ export const TICK_BUCKET_MS = 300_000;
 export const TICK_MIN_LEFT_MS = 40_000;
 /** Applied conflicts listed this long. */
 const APPLIED_LIST_MS = 30 * 24 * 60 * 60 * 1000;
+/** The panel's GET judges inside this much of its 60 s function; then alternatives, then picks, stop. */
+const PANEL_BUDGET_MS = 30_000;
 
 export type ConflictStatus = "proposed" | "none" | "applied" | "kept" | "gone";
 export type SweepTrigger = "member" | "cron" | "manual";
@@ -153,12 +155,14 @@ export function transition(record: ConflictRecord | null, obs: Observation, held
       ? { status: "proposed", seats: seatsOf(obs.proposal, held, obs.conflict.memberId) }
       : { status: "none", seats: seatsOf(null, held, obs.conflict.memberId), reason: obs.proposal.reason };
   // No record, `gone`, or `applied` with the person seated again: a NEW event.
-  if (status === null || status === "gone" || status === "applied") return { ...judged, published, event: true, checked: obs.e };
+  // `checked` is true even when the service is not editable: that observation is the check, so an
+  // unfixable conflict stops reopening the tick's pre-check until it is stale again.
+  if (status === null || status === "gone" || status === "applied") return { ...judged, published, event: true, checked: true };
   // `proposed`/`none`.
-  if (judged.status !== status) return { ...judged, published, event: true, checked: obs.e };
+  if (judged.status !== status) return { ...judged, published, event: true, checked: true };
   const changed = !sameSeats(judged.seats, record!.seats) || (judged.reason ?? null) !== (record!.reason ?? null) || published !== record!.published;
-  if (changed) return { ...judged, published, event: false, checked: obs.e };
-  if (stale && obs.e) return { ...judged, published, event: false, checked: true };
+  if (changed) return { ...judged, published, event: false, checked: true };
+  if (stale) return { ...judged, published, event: false, checked: true };
   return null;
 }
 
@@ -382,8 +386,11 @@ export async function sweepAvailabilityConflicts(
     else {
       if (record?.status === "kept") continue;
       const stale = !record?.checkedAt || deps.now() - Date.parse(record.checkedAt) > RECHECK_MS;
-      // An unchanged open record is re-judged only when stale; a new one always.
-      if (record && (record.status === "proposed" || record.status === "none") && !stale && record.published === conflict.published) {
+      // On the tick, an unchanged open record is re-judged only when stale; a new one always. A
+      // person's own trigger («Revisar ahora», the member's save) re-judges every one, and an
+      // «unchecked» record is re-judged on any run (its service may have become editable).
+      if (options.trigger === "cron" && record && (record.status === "proposed" || record.status === "none")
+        && record.reason !== "unchecked" && !stale && record.published === conflict.published) {
         continue;
       }
       const ledger = await ledgerFor(conflict.date.slice(0, 7));
@@ -431,7 +438,7 @@ export async function sweepAvailabilityConflicts(
           updatedAt: nowIso,
           ...(change.checked ? { checkedAt: nowIso } : {}),
           trigger: options.trigger,
-        }, change.reason ? [] : ["reason"]);
+        }, change.reason ? ["appliedBy"] : ["reason", "appliedBy"]);
       }
     } catch (err) {
       // Another run moved it first (a lost guard): drop the step, the next run re-reads.
@@ -464,6 +471,8 @@ async function emailDue(j: Judgeable, options: { memberId?: string; deadlineMs: 
     (r.status === "proposed" || r.status === "none") && r.notifiedSeq < r.eventSeq && (!options.memberId || r.memberId === options.memberId));
   const claimed: ConflictRecord[] = [];
   for (const r of due) {
+    // A claim is a promise to send: stop claiming once the sends would not fit (the rest wait).
+    if (deps.now() > options.deadlineMs - EMAIL_CUTOFF_MS) break;
     try {
       await deps.patch(r._id, r._rev, { notifiedSeq: r.eventSeq });
       claimed.push(r);
@@ -677,12 +686,14 @@ export async function setConflictKept(
     } else {
       if (input.rev && input.rev !== record._rev) return refuse(409, "stale_revision");
       if (!input.kept && record.status !== "kept") return refuse(409, "not_kept");
+      // «Deshacer» empties the old judgement (seats, reason) so nothing stale is ever mailed; the
+      // epoch `checkedAt` makes the next sweep re-judge it.
       await deps.patch(id, record._rev, {
         status: input.kept ? "kept" : "none",
         updatedAt: nowIso,
         trigger: "keep",
-        ...(input.kept ? {} : { checkedAt: new Date(0).toISOString() }),
-      });
+        ...(input.kept ? {} : { seats: [], checkedAt: new Date(0).toISOString() }),
+      }, input.kept ? [] : ["reason"]);
     }
   } catch (err) {
     if (sanityConflictKind(err)) return refuse(409, "stale_revision");
@@ -724,6 +735,9 @@ export async function readConflictPanel(deps: AvailabilityDeps = defaultAvailabi
     return { ok: true, blocked: read.reason, open: [], applied: [], kept: [] };
   }
   const j = read.value;
+  // Many open voice conflicts can cost many month-check builds; past the budget the panel shows
+  // first proposals only, then «sin revisar», rather than time out into «No se pudo revisar».
+  const budgetEnd = deps.now() + PANEL_BUDGET_MS;
   const members = new Map((j.sources.members as EditorMember[]).map((m) => [m._id, m.alias?.trim() || m.member_name]));
   const name = (id: string) => members.get(id) ?? "alguien que ya no está en la lista";
   const roles = new Map(j.sources.adminRoles.map((r) => [r._id, r]));
@@ -751,7 +765,7 @@ export async function readConflictPanel(deps: AvailabilityDeps = defaultAvailabi
       recordId: id, recordRev: record?._rev ?? null, roleId: c.roleId, roleRev: c.roleRev, memberId: c.memberId, date: c.date,
       serviceKind: c.roleType, published: c.published, service: label(c.roleId, c.date), person: name(c.memberId),
     };
-    if (!isEditable(j, c)) {
+    if (!isEditable(j, c) || deps.now() > budgetEnd) {
       open.push({ ...base, options: [], none: { reason: "unchecked", seats: held.map((rowId) => ({ rowId, seat: seatLabel(rowId) })) } });
       continue;
     }
@@ -762,6 +776,7 @@ export async function readConflictPanel(deps: AvailabilityDeps = defaultAvailabi
     const exclude = new Set<string>();
     let first: Proposal | null = null;
     for (let k = 0; k < 4; k++) {
+      if (k > 0 && deps.now() > budgetEnd) break;
       const p = propose(j, c, ledger, { exclude });
       first ??= p;
       if (p.kind !== "replace") break;

@@ -72,6 +72,9 @@ Accepted costs, told to Frank:
 - If the record write after a successful «Aplicar» fails, the role change stands and the next sweep
   records the conflict as `gone`, so it misses the 30-day «Aplicados» list.
 - The month gate judges one month; a candidate's load in the neighbouring month is not compared.
+- A conflict whose service cannot be judged is re-checked by the tick at most every 6 hours (a
+  person's «Revisar ahora» re-judges it at once). The panel's read stops computing alternatives,
+  then picks, past a 30 s budget, so a very busy month may show «sin revisar» until a calmer read.
 - «Mantener» and «Aplicar» pressed on dev write the REAL dataset, like every admin button there.
 
 Undoing it: set `AVAILABILITY_SWEEP_DISABLED=1` to stop the sweeps; the panel still reads. Removing

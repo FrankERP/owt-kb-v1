@@ -260,7 +260,7 @@ looks wrong** — several exist to stop a plausible-looking change.
   the song library's in `songSaveCommit.ts`, called by the song and author routes and the MCP song
   tools (edits by parts, a lossless lyrics gate, `ifRevisionId`, a token-keyed create; ADR-0077);
   the availability proposals' in `availabilityFixCommit.ts`, called by the four
-  `/api/admin/availability-conflicts/*` routes, the member's availability PATCH and the flush cron,
+  `/api/admin/availability-conflicts` routes, the member's availability PATCH and the flush cron,
   never by an MCP tool — its sweep NEVER writes a service, only «Aplicar» does, through `editRole`
   (ADR-0079); `/api/mcp` buffers SSE so a tool finishes in the handler.
 - **The MCP proposal editor: the server judges, the card only shows** (ADR-0062). Every check and

@@ -279,7 +279,7 @@ export default function AvailabilityProposals({ fallback, onChanged }: {
 
       {applied.length > 0 && (
         <div className="space-y-3">
-          <h2 className={SHEET_TITLE}>Aplicados (últimos 30 días)</h2>
+          <h2 className={SHEET_TITLE}>Aplicados en los últimos 30 días (servicios por venir)</h2>
           <ul className="border-t border-ink/[0.10]">
             {applied.map((a) => (
               <li key={a.recordId} data-availability-applied="" className="flex min-h-[48px] items-center border-b border-ink/[0.10] py-2 font-body text-[15px] text-ink-muted [overflow-wrap:anywhere]">
