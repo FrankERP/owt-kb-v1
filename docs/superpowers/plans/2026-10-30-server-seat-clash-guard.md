@@ -63,7 +63,10 @@ built by ONE server function on both sides (`lead`, `bgv`, `coro`,
 same person twice in one seat is the pair `(lead, lead)` and clashes (same category). These
 match the planner's create-mode row ids; stored-mode grid rows keep `normalizeLabel` spellings
 (`instrumentFill.ts:131-135`), which does not matter because the server never compares its ids
-with the grid's — only before with after, through the same function. Both sides are judged
+with the grid's — only before with after, through the same function. That function also
+lowercases the label part of an instrument or FOH id (labels shown to people keep their case),
+so a stored «drums» and a requested «Drums» are one seat and a grandfathered pair on it is not
+read as added. Both sides are judged
 with the member's CURRENT flag.
 
 - **Why not "no clash in the result":** a roster that already holds a clash (today only
@@ -98,7 +101,9 @@ with the member's CURRENT flag.
 - The flag comes from the member read each writer ALREADY makes: `loadCanonicalMemberIds`
   (`roleWriteOps.ts:252`) over `CANONICAL_MEMBER_PROJECTION` (`serviceReadQueries.ts:63`).
   Add `singsAndPlays` to that projection and a sibling `loadCanonicalMembers(ids)` returning
-  `Map<id, { singsAndPlays: boolean; name: string }>` (name = alias ?? member_name, for the
+  `Map<id, { singsAndPlays: boolean; name: string }>` (name = the trimmed alias, else the trimmed `member_name` — the same rule as
+  `loadMemberNamesByIds` (`roleWriteOps.ts:199`), shared through one small helper so one person is
+  never named two ways; for the
   message). `loadCanonicalMemberIds` stays as a wrapper over it (its fifth caller,
   `app/mcp/tools/editSetlist.ts`, is unchanged). No extra round trip.
 - Only `singsAndPlays === true` counts as marked (same as `seatsClash`); absent = unmarked.
@@ -179,7 +184,10 @@ already hold (`MonthGenerator.confirmV3` from `adminMembersQuery`, which project
 since #217; `apply_schedule` from the member list it already loads (`sources.members`,
 `applySchedule.ts:~300`), its projection extended with `singsAndPlays` where it lacks it). A
 person missing from the map is judged unmarked (the refusal side — the server guard would refuse
-the same draft) and named «alguien que ya no está en Miembros». v2's `handleConfirm` (`MonthGenerator.tsx:4749`, rollback engine) gets
+the same draft) and named «alguien que ya no está en Miembros». The client map comes from
+`adminMembersQuery`, which lists worship members only, so a marked person outside Alabanza would
+be refused by the pre-check though the server would allow it — the safe direction, and no such
+person sits in a worship roster today (a worship seat needs a Tipo). v2's `handleConfirm` (`MonthGenerator.tsx:4749`, rollback engine) gets
 the same check before its first write. The server guard stays the backstop.
 
 ### D4 — Refusal shape: `invalid_request` (400), with a machine detail
@@ -222,10 +230,18 @@ never both:
   ADR-0063). `classifyPatchOutcome` (`plannerSaveModel.ts:223`) keeps, on a `knownFailure`,
   the sentences of a well-formed `details.seatClashes` (`{ kind: "knownFailure", code,
   seatClashSentences?: string[] }`; malformed or absent → none). The save loop collects
-  `{date}: {sentence}` per refused column, and the final notice — which today overwrites the
-  per-column line with «N servicio(s) fue rechazado antes de escribir; tus cambios siguen
-  pendientes.» — keeps that count line and appends the collected sentences. This is the line
-  an admin sees after «Copiar a todo el mes» copies a drummer onto Sundays where they sing; the
+  `{date}: {sentence}` per refused column into a new state, `saveClashLines`, set beside
+  `saveKnownFailures` (`MonthGenerator.tsx:3622`) and cleared everywhere it is cleared (3041,
+  3589). The save ends on one of THREE notices that report refused columns, and all three
+  append those lines: the all-refused line (3629, «N servicio(s) fue rechazado antes de
+  escribir…»), and — when some columns were sent, so the loop reloads and the reconciliation
+  effect writes the notice — both reconciliation lines (3038 «Se verificaron …; N fue
+  rechazado…» and 3039 «Cambios guardados y verificados. N servicio(s) fue rechazado…»), which
+  today read only the count. One pure helper in `plannerSaveModel.ts`,
+  `storedSaveNotice({ applied, maintenance, knownFailures, clashLines })`, builds all three, so
+  no branch can drop them. The mixed save is the usual case: «Copiar a todo el mes» dirties
+  every other column and only the ones where the person already sings are refused. This is the
+  line an admin sees after «Copiar a todo el mes» copies a drummer onto Sundays where they sing; the
   grid's ⚠ already flags those cells before «Guardar». The copy itself is unchanged: making it
   skip or name clashing columns would fix one path, while the save line covers every path that
   reaches PATCH.
@@ -251,6 +267,10 @@ never both:
   - `create_service` always sends an empty roster, so it can never meet the guard; unchanged.
 - Any path that does not read the detail shows its existing `invalid_request` copy —
   never «saved».
+- **The one stated exception:** the month confirm's per-month count lines (v3 and v2), after a
+  draft POST refused by the server guard. D3b refuses every clash before the first write with
+  the sentence, so the server only refuses a confirm draft through a flag race between the
+  pre-check and the POST (§6); those lines stay as today.
 
 ### D6 — Out of scope (stated so nobody "fixes" it)
 
@@ -286,7 +306,7 @@ never both:
    section/team/seat each judged on both roles.
 4. **Coverage guard** — `app/utils/__tests__/seatClashGuardCoverage.test.ts`: each of the four
    writer modules calls `addedSeatClashes(` and the call precedes, in source order, its first
-   occurrence of every write-capable call it makes — `resolveOwnedCoordination(`,
+   occurrence of every call that writes or precedes its writes — `resolveOwnedCoordination(`,
    `bootstrapLegacyLock(`, `loadSpecialIdentityCoordinator(`, `loadTargetOccupancy(`,
    `.transaction(` (editRole's first write is the legacy bootstrap, not coordination), scanning
    the source with comments and import lines stripped (several of these files name the calls in
@@ -307,9 +327,10 @@ never both:
    `draftsOutsideHorizon`; past/ceiling answers unchanged.
 6. **Copy** — D5's surfaces, with tests: `classifyPatchOutcome` keeps the sentences of a
    well-formed `seatClashes` and none of a malformed one (`plannerSaveModel.test.ts`); the
-   stored save's final notice keeps the count line and lists `{date}: {sentence}` (the save
-   loop's notice built by a pure helper in `plannerSaveModel.ts` so it is testable without the
-   component); `mutationErrorMessage` with `seatClashes`; `refusalFor` and `serviceRefusalLine`
+   stored save's notices list `{date}: {sentence}` in all three branches of `storedSaveNotice`
+   — all refused; mixed (one column saved, one refused for a clash: the reconciliation line
+   keeps «Cambios guardados y verificados.» and adds the sentence); mixed with a maintenance
+   column — and the lines clear on the next save; `mutationErrorMessage` with `seatClashes`; `refusalFor` and `serviceRefusalLine`
    with `seatClashes` emit the sentence, not the `ISSUE_COPY`/`CODE_COPY` fallback, and no
    `memberId`/document id anywhere in `content` or `structuredContent`; `copy_instruments`' and
    the stored-save result lines; same seat twice reads «aparece dos veces en»; `clashReason`
