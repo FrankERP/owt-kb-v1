@@ -181,6 +181,20 @@ pill; «Equipo» is the small-caps title, «Banda» is 17 px sentence case; a sh
   Tests: `PlannerGrid` (the sheet, via a `matchMedia` stub), `MonthCalendar`, the `MonthGenerator`
   suites (cards by `[data-rule-card]`, the back control by its `aria-label`), `servicesBoard`
   (the h1 arrives with the editor), `houseButtonSweep` (MonthGenerator 26 → 19).
+- **Phase 8 of the Admin pass (2026-10-30, same thread, mock approved «Apruebo»): the sign-in screen
+  and «Acceso no autorizado», the last screens of the rollout.** The glass card, its beam
+  (`.brand-stage-hero`, kept in `brand.css` for the gallery's swatch fixture only), the spaced
+  uppercase «BACKSTAGE» and the cyan «Acceso del equipo» label are gone: the page is the same head
+  as every other screen — the mark at 72 px (88 from `md`), «Backstage» as the `PAGE_TITLE`, one
+  `PAGE_LEDE` («Oasis Worship Team · inicia sesión para ver tus servicios y canciones.») — over
+  «Continuar con Google» as a full-width secondary, «o con tu correo» as a `SHEET_TITLE` between
+  hairlines, Correo and Contraseña as Mi perfil's hairline fields (`ui/hairlineField.ts`, 17 px, a
+  visible label each instead of an `aria-label`) with a «Mostrar / Ocultar» ghost on the password's
+  rule (new: a phone is where a member cannot see what they typed), and «Iniciar sesión» as the
+  full-width primary; the error is a `border-l-2` strip, the forgotten-password line stays at 13 px.
+  «Acceso no autorizado» follows the same head with a 15 px explanation and a full-width primary
+  («Salir y entrar con otra cuenta»). The reveal stagger (0, 3, 4, 5, 6, 7) is unchanged. Tests:
+  `signin.test.tsx`, `fallbackPages.test.tsx`.
 - **The house controls went sentence case (2026-10-27, same thread, Frank: «cambialos»).** `Button` and
   `SegmentedControl` were label-styled — Jura, uppercase, `tracking-widest` — and every screen of this
   pass overrode them (`normal-case tracking-normal font-body` on a dozen pills) because the mocks set
