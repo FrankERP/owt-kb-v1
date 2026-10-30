@@ -72,7 +72,7 @@ describe("rankCandidates", () => {
     const tony: RankMember = m("m6", "Tony", ["voz", "instrumento"]);
     const assigned: AssignedSeat[] = [{ seatId: "coro", category: "voz", memberId: "m6" }];
     const drums = rankCandidates({ seat: instrumentSeatDef("Drums"), date: DATE, members: [tony], windowRoles: [], assigned })[0];
-    expect(drums).toMatchObject({ alreadyAssigned: true, blockedReason: "Ya asignado en Coro", eligible: false });
+    expect(drums).toMatchObject({ alreadyAssigned: true, blockedReason: `Ya asignado en Coro; para cantar y tocar en un servicio, marca «Canta y toca a la vez» en Miembros`, eligible: false });
   });
 
   it("BLOCKS every voice seat for an unmarked member already on an instrument", () => {
@@ -80,7 +80,7 @@ describe("rankCandidates", () => {
     const assigned: AssignedSeat[] = [{ seatId: "instrumento:Drums", category: "instrumento", memberId: "m6" }];
     for (const seat of VOICE_SEATS) {
       const row = rankCandidates({ seat, date: DATE, members: [tony], windowRoles: [], assigned })[0];
-      expect(row.blockedReason, seat.id).toBe("Ya asignado en Drums");
+      expect(row.blockedReason, seat.id).toBe(`Ya asignado en Drums; para cantar y tocar en un servicio, marca «Canta y toca a la vez» en Miembros`);
     }
   });
 
@@ -88,7 +88,17 @@ describe("rankCandidates", () => {
     const tony: RankMember = { ...m("m6", "Tony", ["voz", "instrumento"]), singsAndPlays: false };
     const assigned: AssignedSeat[] = [{ seatId: "lead", category: "voz", memberId: "m6" }];
     const bass = rankCandidates({ seat: BASS, date: DATE, members: [tony], windowRoles: [], assigned })[0];
-    expect(bass.blockedReason).toBe("Ya asignado en Lead");
+    expect(bass.blockedReason).toBe(`Ya asignado en Lead; para cantar y tocar en un servicio, marca «Canta y toca a la vez» en Miembros`);
+  });
+
+  it("names a same-category clash before a voice + instrument one, so the hint never misleads", () => {
+    const tony: RankMember = m("m6", "Tony", ["voz", "instrumento"]);
+    const assigned: AssignedSeat[] = [
+      { seatId: "instrumento:Drums", category: "instrumento", memberId: "m6" },
+      { seatId: "lead", category: "voz", memberId: "m6" },
+    ];
+    const bgv = rankCandidates({ seat: BGV, date: DATE, members: [tony], windowRoles: [], assigned })[0];
+    expect(bgv.blockedReason).toBe("Ya asignado en Lead");
   });
 
   it("FOH beside a voice or an instrument stays allowed", () => {

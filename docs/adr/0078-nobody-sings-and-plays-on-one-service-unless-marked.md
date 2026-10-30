@@ -20,9 +20,11 @@ over two narrower rules (below). The ONE predicate is `seatsClash` (`app/compone
 same category always clashes; voz + instrumento clashes unless marked; FOH beside either is
 unchanged. `rankCandidates` uses it for C2, so the picker, the drag gate, `instrumentFill`,
 `localFill`, the v3 counted-specials pre-fill and the MCP editors' judges all refuse it with
-«Ya asignado en …»; `PlannerGrid` flags an already-seated clash with ⚠ on both cells. The flag is
+«Ya asignado en …» (a voice + instrument refusal also names the Miembros checkbox, `clashReason`); `PlannerGrid` flags an already-seated clash with ⚠ on both cells. The flag is
 edited in Miembros (super-admin; `PATCH /api/admin/members/[id]`, absent = untouched) and in
-the Studio, and `adminMembersQuery` carries it to every planner and MCP reader.
+the Studio, and `adminMembersQuery` carries it to every planner and MCP reader. The flag stays stored when a Tipo is
+unticked, like `instruments`, so re-ticking Voz or Instrumento restores the member's setting rather
+than silently dropping it; without both Tipos the member cannot hold both seats anyway.
 
 ## Rejected
 
