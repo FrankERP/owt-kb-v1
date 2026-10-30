@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { sweepOutbox, type SweepReport } from "@/app/utils/outboxSweep";
+import { availabilityTick } from "@/app/utils/availabilityFixCommit";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
 
 // LAYER 1 of the outbox's three flush triggers (spec §3) — the PRIMARY one, and
@@ -109,6 +110,7 @@ export async function drainOutbox(opts: {
 export const GET = withVerificationRunContext(getHandler);
 
 async function getHandler(req: NextRequest) {
+  const startedAt = Date.now();
   // The `Authorization: Bearer <CRON_SECRET>` pattern the service-reminders cron
   // already uses. 401 rather than that route's 403: the credential is missing or
   // wrong, which is what 401 means, and no caller of this route depends on 403.
@@ -127,5 +129,15 @@ async function getHandler(req: NextRequest) {
   // Scheduler; the GitHub caller alone is starved when the repo is busy with CI,
   // measured between 0.09 and 2.03 runs/hour (docs/NOTIFICATIONS.md).
   const report = await drainOutbox();
+
+  // The availability proposals ride this tick (ADR-0079): after the response, every third bucket,
+  // only with room left. Its own try/catch: the drain's answer never depends on it.
+  after(async () => {
+    try {
+      await availabilityTick({ startedAt });
+    } catch {
+      console.error("[availability-sweep] tick failed");
+    }
+  });
   return NextResponse.json(report);
 }

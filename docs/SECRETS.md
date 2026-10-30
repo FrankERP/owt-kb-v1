@@ -582,6 +582,26 @@ else — no other route, page or data path reads this variable.
 
 ---
 
+## `AVAILABILITY_SWEEP_DISABLED`
+
+**Needed in: Vercel production, ONLY when switching the availability sweeps off — leave unset
+otherwise. Not needed in: Preview (it never acts there anyway), `.env.local`, GitHub Actions, the
+iOS build, GCF.**
+
+**Not a secret** — a kill switch, plain config ([ADR-0079](adr/0079-availability-conflicts-are-proposed-one-seat-at-a-time-and-a-person-applies-them.md)).
+The value `1` stops every AUTOMATIC availability sweep: the member's save trigger and the flush
+cron's tick return before reading anything, and «Revisar ahora» answers dry (it computes, writes no
+record, sends no email). The panel in `/admin › Disponibilidad › Conflictos` still reads, and
+«Aplicar», «Mantener» and «Deshacer» still work — they are a person's own click.
+
+**Where it comes from.** Set directly by Frank, Vercel → project `owt-backstage` → Settings →
+Environment Variables → Production. There is no issuer.
+
+**Rotate:** n/a — set `1` to stop, remove it to resume. **Takes effect on the next deployment**, like
+every Vercel env var. **Blast radius:** only the availability proposals' automatic sweeps.
+
+---
+
 ## `VERCEL_ENV` / `VERCEL_GIT_COMMIT_SHA` / `VERCEL_GIT_COMMIT_REF` — Vercel system variables the app and the build scripts read
 
 **Not secrets, and never configured by hand — Vercel sets all three automatically on every

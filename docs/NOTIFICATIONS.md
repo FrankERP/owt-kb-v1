@@ -555,6 +555,36 @@ The admin routes ignore the return value. The MCP tools turn it into their `noti
 report, worded «encolada», never «enviada». **Unpublish queues nothing and runs no sweep**, from
 `/admin` or from the MCP alike (`roleUnpublishCommit.ts`).
 
+## The availability conflicts email — admins only (ADR-0079)
+
+When someone marks a day they already serve on, the availability sweep
+(`app/utils/availabilityFixCommit.ts`) records a proposal and sends ONE email per sweep that claimed
+new events: «Conflictos de disponibilidad (N)», sections «Propuestas» and «Sin reemplazo», a link to
+`/admin?tab=availability` (`availabilityConflictEmail.ts`, the light palette). **It never changes a
+service**, so it queues no role notice; the notices go out only when an admin presses «Aplicar»,
+which saves through `/admin`'s own `editRole` exactly like a hand edit (on a published service the
+person removed and the person added hear about it; on a draft nobody does).
+
+- **Audience:** `teamMembers` with `role` admin or super-admin, `disabled != true`, in worship
+  (`WORSHIP_AUDIENCE_GROQ_FILTER`), not the system accounts (`service-account-*`,
+  `member-dev-verify`), with an email, on `EMAIL_ALLOWLIST`, and with the «Propuestas» switch on
+  (`wantsNotification(prefs, "proposals")`). Serial sends; `EMAIL_REDIRECT_TO` honoured.
+- **Not the outbox.** The sweep sends directly, after claiming its records (`notifiedSeq` =
+  `eventSeq` under `ifRevisionId`); a claimed event whose send fails is NOT retried — the claim is
+  the de-duplication. The audience is read before any claim, so a failed audience read claims
+  nothing.
+- **Triggers:** the member's own save (`after()` on `PATCH /api/me/availability`, that member's
+  conflicts only), every third tick of layer 1 (`/api/cron/flush-notifications` runs
+  `availabilityTick` in `after()`, after the drain answered; a cheap seat pre-check first, so a
+  quiet tick reads three small queries and stops), and «Revisar ahora» in the panel.
+- **Only Production sends** (`fairnessRecordEnvironment`). On Preview the sweep runs dry: no
+  record, no email. But «Aplicar» and «Mantener» pressed on dev write the REAL dataset, like every
+  admin button there.
+- **Kill switch:** `AVAILABILITY_SWEEP_DISABLED=1` (`docs/SECRETS.md`).
+- **No liveness alarm.** A sweep that cannot judge (a raw Studio draft, the engine on v2, no read
+  token) is visible only as «No se pudo revisar» in the panel and in the `[availability-sweep]`
+  logs — an accepted cost (ADR-0079).
+
 ## The liveness alarm
 
 The daily cron reports the oldest `firstQueuedAt` across notices in **either**

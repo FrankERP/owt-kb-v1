@@ -44,6 +44,18 @@ vi.mock("@/sanity/lib/serverClient", () => ({
   writeClient: { transaction: vi.fn(), patch: vi.fn() },
 }));
 
+// The availability proposals ride layer 1 after the response (ADR-0079); this file asserts only
+// that the tick is queued and that the drain's answer never depends on it.
+const availabilityTickMock = vi.fn();
+const afterCallbacks: Array<() => unknown> = [];
+vi.mock("@/app/utils/availabilityFixCommit", () => ({
+  availabilityTick: (...a: unknown[]) => availabilityTickMock(...a),
+}));
+vi.mock("next/server", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("next/server")>();
+  return { ...mod, after: (fn: () => unknown) => void afterCallbacks.push(fn) };
+});
+
 const SECRET = "cron-secret-for-tests";
 
 /** A minimal `NextRequest` — the two cron routes read headers and search params. */
@@ -131,6 +143,27 @@ describe("layer 1 — /api/cron/flush-notifications", () => {
     const res = await GET(req({ authorization: `Bearer ${SECRET}` }));
     expect(res.status).toBe(200);
     expect(sweepOutboxMock).toHaveBeenCalled();
+  });
+
+  it("queues the availability tick after the drain, and survives its failure", async () => {
+    afterCallbacks.length = 0;
+    const GET = await flushRoute();
+    const res = await GET(req({ authorization: `Bearer ${SECRET}` }));
+    expect(res.status).toBe(200);
+    expect(availabilityTickMock).not.toHaveBeenCalled();
+    expect(afterCallbacks).toHaveLength(1);
+    availabilityTickMock.mockRejectedValueOnce(new Error("boom"));
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(afterCallbacks[0]()).resolves.toBeUndefined();
+    expect(availabilityTickMock).toHaveBeenCalledWith({ startedAt: expect.any(Number) });
+    err.mockRestore();
+  });
+
+  it("does not queue the availability tick for an unauthorized call", async () => {
+    afterCallbacks.length = 0;
+    const GET = await flushRoute();
+    await GET(req({}));
+    expect(afterCallbacks).toHaveLength(0);
   });
 
   it("sweeps at the FULL budget — the derating belongs to layer 2 alone", async () => {

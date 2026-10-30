@@ -9,7 +9,7 @@
   ],
   "summary": {
     "literalRows": 303,
-    "filesScanned": 558,
+    "filesScanned": 568,
     "filesWithColour": 61,
     "byCategory": {
       "2": 2,
@@ -44,7 +44,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 180,
+      "line": 188,
       "disposition": "exempt",
       "reason": "Google brand mark — a third-party mark that must not be themed"
     },
@@ -56,7 +56,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 179,
+      "line": 187,
       "disposition": "exempt",
       "reason": "Google brand mark — a third-party mark that must not be themed"
     },
@@ -68,7 +68,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 182,
+      "line": 190,
       "disposition": "exempt",
       "reason": "Google brand mark — a third-party mark that must not be themed"
     },
@@ -80,7 +80,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 181,
+      "line": 189,
       "disposition": "exempt",
       "reason": "Google brand mark — a third-party mark that must not be themed"
     },

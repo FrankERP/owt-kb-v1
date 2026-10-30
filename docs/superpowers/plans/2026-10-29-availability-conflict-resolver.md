@@ -562,3 +562,5 @@ them.
    on stale outbox items only. A sweep blocked for a long time (a lingering raw Studio draft, the
    engine on v2) is visible only in the panel («No se pudo revisar») and the logs — an accepted cost
    recorded in ADR-0078, told to Frank.
+8. **ADR number.** ADR-0078 was taken by «Canta y toca a la vez» (PR #217) while this plan was in
+   review, so the decision record is **ADR-0079**; every «ADR-0078» above means ADR-0079.

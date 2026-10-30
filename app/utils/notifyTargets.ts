@@ -23,6 +23,17 @@ export function assignedMemberRefsQuery(roleFilter: string): string {
   return `array::unique([\n    ${spreads}\n  ][defined(@)])`;
 }
 
+/**
+ * Per role matching `roleFilter`: its id, its service day (`coalesce(week, date)` — weekend roles
+ * store `week`, specials `date`) and the unique member ids in ANY seat, from the same five paths as
+ * `assignedMemberRefsQuery`. The availability proposals' cheap pre-check (ADR-0079). `roleFilter`
+ * is a trusted, code-owned predicate, as above.
+ */
+export function assignedSeatsByRoleQuery(roleFilter: string): string {
+  const seats = ASSIGNED_SEAT_PATHS.map((p) => `...coalesce(${p}, [])`).join(", ");
+  return `*[${roleFilter}]{ _id, "date": coalesce(week, date), "members": array::unique([${seats}][defined(@)]) }`;
+}
+
 /** Member ids present in `next` but not `prev`. */
 export function addedAssignees(prev: string[], next: string[]): string[] {
   const prevSet = new Set(prev);
