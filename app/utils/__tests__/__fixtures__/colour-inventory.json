@@ -9,21 +9,21 @@
   ],
   "summary": {
     "literalRows": 307,
-    "filesScanned": 557,
+    "filesScanned": 558,
     "filesWithColour": 61,
     "byCategory": {
       "2": 2,
-      "4": 65,
+      "4": 63,
       "5": 2,
-      "8": 84,
+      "8": 86,
       "9": 10,
       "11": 8,
       "12": 136
     },
     "byDisposition": {
-      "B": 109,
+      "B": 111,
       "exempt": 60,
-      "keep": 220,
+      "keep": 218,
       "C": 5,
       "D": 13
     },
@@ -2348,7 +2348,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 336,
+      "line": 344,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2360,7 +2360,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 611,
+      "line": 805,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2372,7 +2372,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 798,
+      "line": 2676,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2384,19 +2384,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2666,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/admin/MonthGenerator.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "bg-transparent",
-      "alpha": null,
-      "utility": "bg",
-      "carrier": null,
-      "line": 2672,
+      "line": 2682,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2408,19 +2396,7 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 1509,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/admin/MonthGenerator.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "bg-transparent",
-      "alpha": null,
-      "utility": "disabled:hover:bg",
-      "carrier": null,
-      "line": 1668,
+      "line": 1516,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2432,7 +2408,19 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 5580,
+      "line": 5624,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/admin/MonthGenerator.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 5706,
       "disposition": "B",
       "reason": null
     },
@@ -2444,7 +2432,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2596,
+      "line": 2751,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2456,9 +2444,21 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 3476,
+      "line": 3642,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/admin/PlannerGrid.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 3482,
+      "disposition": "B",
+      "reason": null
     },
     {
       "file": "app/components/admin/ProposalsPanel.tsx",
@@ -2636,7 +2636,7 @@
       "alpha": null,
       "utility": "border",
       "carrier": null,
-      "line": 1362,
+      "line": 1355,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2648,7 +2648,7 @@
       "alpha": null,
       "utility": "border",
       "carrier": null,
-      "line": 1955,
+      "line": 1948,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3536,7 +3536,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 134,
+      "line": 117,
       "disposition": "B",
       "reason": null
     },

@@ -5,7 +5,7 @@
 // implements (docs/superpowers/plans/2026-07-29-planner-grid.md) — see the
 // numbered list in `task-3-brief.md` and the file header comment in
 // `PlannerGrid.tsx`.
-import { fireEvent, render, cleanup, screen, within } from "@testing-library/react";
+import { fireEvent, render, cleanup, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import PlannerGrid, { type PlannerGridProps, type SolveDiagnostics } from "../PlannerGrid";
@@ -275,8 +275,8 @@ describe("PlannerGrid — cell density (D7, amended by ADR-0045)", () => {
     expect(chips.map((c) => c.getAttribute("data-over-target"))).toEqual([null, null, "true"]);
     expect(chips[2].className).toContain("bg-warning-fg/10");
     expect(chips[0].className).not.toContain("bg-warning-fg/10");
-    // The name stays legible: the `+N`'s amber TEXT is ~3.5:1 in light.
-    expect(chips[2].className).toContain("text-ink-muted");
+    // The name stays legible: the chip's text is ink (ADR-0070's Admin pass), the tint is the only warning.
+    expect(chips[2].className).toContain("text-ink");
     expect(chips[2].className).not.toContain("text-warning-strong");
     expect(chips[2].getAttribute("aria-label")).toMatch(/Liu.*\(por encima del objetivo\)/);
     expect(chips[0].getAttribute("aria-label")).not.toMatch(/objetivo/);
@@ -531,7 +531,7 @@ describe("PlannerGrid — candidate order frozen while the picker is open", () =
     expect(after).toEqual(before);
     // Ana's OWN row state still updates live — she now reads as selected.
     const anaRow = candidateLi("Ana");
-    expect(anaRow.className).toContain("border-accent bg-accent/10");
+    expect(anaRow.getAttribute("data-selected")).toBe("true");
   });
 
   it("reopening the picker (a fresh cell) recomputes the order from scratch", () => {
@@ -1425,7 +1425,7 @@ describe("PlannerGrid — E6 hard blocks on a manual pick", () => {
     );
     fireEvent.click(cellFor(container, "lead", SPECIAL_DATE));
     const gaby = candidateLi("Gaby");
-    expect(within(gaby).getByText("No disp.")).toBeTruthy();
+    expect(within(gaby).getByText("No disponible")).toBeTruthy();
     expect(gaby.getAttribute("aria-disabled")).toBeNull();
     expect(overrideButtons()).toHaveLength(0);
     fireEvent.click(gaby);
@@ -1970,5 +1970,86 @@ describe("PlannerGrid — «Editar servicio» draws one column, judges the month
     const zoeIdx = names.findIndex((n) => n.includes("Zoe"));
     expect(zoeIdx).toBeGreaterThanOrEqual(0);
     expect(anaIdx).toBeGreaterThan(zoeIdx);
+  });
+});
+
+// ─── The candidates sheet (ADR-0070's Admin pass) ─────────────────────────────
+// Below `xl` the picker is a `CueDialog` sheet, not a column under the month. jsdom
+// answers every media query `false`, so every suite above renders the column; this
+// block is the one that says the screen is narrow, and it says so explicitly — the
+// `selectPopover.test.tsx` shape.
+describe("the candidates picker as a sheet below xl", () => {
+  const NARROW = "(max-width: 1279.98px)";
+  const original = Object.getOwnPropertyDescriptor(window, "matchMedia");
+
+  function mockWidth(narrow: boolean) {
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: (query: string) => ({
+        matches: query === NARROW ? narrow : false,
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    });
+  }
+
+  afterEach(() => {
+    cleanup();
+    if (original) Object.defineProperty(window, "matchMedia", original);
+    // @ts-expect-error — back to the un-stubbed jsdom shape every other suite renders in.
+    else delete window.matchMedia;
+  });
+
+  function renderNarrow(props: PlannerGridProps) {
+    return render(
+      <CueDialogProvider>
+        <PlannerGrid {...props} />
+      </CueDialogProvider>,
+    );
+  }
+
+  it("opens as a sheet, searches by name without accents, toggles a seat and closes on «Listo»", async () => {
+    mockWidth(true);
+    const onCellsChange = vi.fn();
+    const { container } = renderNarrow(baseProps({ onCellsChange }));
+    fireEvent.click(
+      within(cellFor(container, "lead", "2026-08-09")).getByRole("button", { name: /Candidatos para Lead/ }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: "Candidatos" });
+    // The region the column carried — same name, so focus and the wiring tests read the same label.
+    expect(within(dialog).getByRole("region", { name: /Candidatos para Lead/ })).toBeTruthy();
+    // No column beside the grid while the sheet is up.
+    expect(container.querySelector("[data-candidate-picker]")).toBeNull();
+
+    const search = within(dialog).getByLabelText("Buscar candidato") as HTMLInputElement;
+    fireEvent.change(search, { target: { value: "MKZ" } });
+    expect(within(dialog).getByText("Mkz")).toBeTruthy();
+    expect(within(dialog).queryByText("Gaby")).toBeNull();
+    fireEvent.change(search, { target: { value: "zzz" } });
+    expect(within(dialog).getByText("Nadie con ese nombre.")).toBeTruthy();
+    fireEvent.change(search, { target: { value: "" } });
+
+    fireEvent.click(within(dialog).getByText("Mkz"));
+    expect(onCellsChange).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Listo" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Candidatos" })).toBeNull());
+  });
+
+  it("stays a column at xl and above", () => {
+    mockWidth(false);
+    const { container } = renderNarrow(baseProps());
+    fireEvent.click(
+      within(cellFor(container, "lead", "2026-08-09")).getByRole("button", { name: /Candidatos para Lead/ }),
+    );
+    expect(screen.queryByRole("dialog", { name: "Candidatos" })).toBeNull();
+    expect(container.querySelector("[data-candidate-picker]")).toBeTruthy();
+    expect(screen.getByRole("region", { name: /Candidatos para Lead/ })).toBeTruthy();
   });
 });
