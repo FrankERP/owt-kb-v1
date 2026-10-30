@@ -1,6 +1,6 @@
 # Availability conflicts: find them, fix drafts, propose for published services (plan)
 
-**Status:** DRAFT, revision 5 (rounds 3 and 4, each with Frank's go-ahead, found blockers fixed here; a further round
+**Status:** DRAFT, revision 6 (rounds 3–5 ran with Frank's go-ahead; his standing go-ahead covers rounds 5–7; a further round
 needs Frank's go-ahead). Review approval is not authorization to implement; the build
 follows the release order in CLAUDE.md.
 
@@ -228,7 +228,8 @@ Id `availabilityConflict.<sha256(roleId|memberId|date) hex, 32 chars>` (dotted �
 `roleId`, `memberId`, `date`, `serviceKind`, `published` (as last seen), `status`
 (`proposed | none | auto | applied | kept | gone`), `seats[] { _key, rowId, from, to? }`, `reason?`
 (`no_candidate | song_lead | unchecked | write_refused`), `autoApplied` (boolean, sticky, D5), `eventSeq` and
-`notifiedSeq` (integers), `firstSeenAt`, `updatedAt`, `appliedBy?`, `trigger`. Never deleted.
+`notifiedSeq` (integers), `firstSeenAt`, `updatedAt`, `checkedAt` (set by a sweep that judged it, only on a write it makes
+anyway or at most every 6 h), `appliedBy?`, `trigger`. Never deleted.
 
 **Every record write is guarded:** a new record by `create` (a concurrent creation fails the call —
 never `createIfNotExists`); an existing one by `patch(id).ifRevisionId(<rev this sweep read>)`. A
@@ -255,7 +256,11 @@ makes NO transition at all — every record stays as it is — and answers why (
 conflict or re-announce it.
 
 On a judgeable read, per identity in its scope: **C** = «the service exists, the person is seated in
-it, and the date is in their `unavailableDates`»; **E** = the service is `editable` on the board.
+it, and the date is in their `unavailableDates`», taken from the ROLES READ (`adminRoles`, all five
+seat paths, `computeAvailabilityConflicts`) — not from the board, which leaves out a role it cannot
+translate (`translateStoredRole` → `null`, `storedRoleReadModel.ts:151,159`); **E** = the service is a
+board column and `editable`. A role in scope with no board column is therefore C-not-E (`unchecked`),
+never «not C».
 «Pick» = `proposeReplacement` answered `replace` (only computed when E). Not C is the ONLY evidence
 that a conflict ended: the service was deleted, the person left it, or they cleared the date.
 
@@ -278,7 +283,8 @@ read error, not an unbuildable month) leaves that month's identities untouched a
 **Notification is per event:** a record is due while `notifiedSeq < eventSeq` and its status is
 `auto`, `proposed` or `none`. The email step claims each due record with
 `patch(id).ifRevisionId(rev).set({ notifiedSeq: eventSeq })` BEFORE sending; only claimed records go in
-the email, so two concurrent sweeps never send one event twice. A send that fails after the claim is
+the email, so two concurrent sweeps never send one event twice. The claim is made whether or not any
+admin will receive it (an empty audience still settles the event), so a due record never loops. A send that fails after the claim is
 logged (fixed tag) and not retried; the record and the UI still show it.
 
 ### 5.3 `sweepAvailabilityConflicts({ trigger, memberId?, deadlineMs, mode })`
@@ -292,9 +298,17 @@ logged (fixed tag) and not retried; the record and the UI still show it.
    to `memberId` when given) or a `proposed`/`none` record in scope. Any board not `coherent`, or the
    engine not `v3` (`resolveSolverEngine`, as `openMonth` refuses) → stop: no transition (§5.2). C and
    E per identity.
-3. Per month that needs a pick: ONE `loadV3Ledger([month])`, then `proposeReplacement` with the gate.
-   One service with two absent people gets one target built sequentially (§4.2) and one write.
-4. Apply §5.2 per identity, earliest date first. A role edit: `parseEditRequest({ ...target, rev:
+3. Per month that needs a pick: ONE `loadV3Ledger([month])`. The month's identities are then taken
+   ONE AT A TIME, earliest date first, against a WORKING board: each `proposeReplacement` (order,
+   window `load`, `seatCounts`/`instrumentalistsOn` and the month gate's `removedOnly`/`withCandidate`)
+   reads the working board, and each pick is folded into it with `withTarget` before the next
+   identity — an `auto` only after its commit returned `ok`, a `proposed` as soon as it is recorded
+   (so two proposals of one sweep never offer the same person past a cap, and «Aplicar» still
+   re-judges on a fresh read, D8). If an `auto` write does not return `ok` (refused, stale or thrown),
+   the month stops: no further role write in that month this sweep (its proposals and `none`s already
+   decided stand; the rest waits for the next read). One service with two absent people gets one
+   target built sequentially (§4.2) and one write.
+4. Apply §5.2 per identity in that order. A role edit: `parseEditRequest({ ...target, rev:
    column.rev })` FIRST (a parse failure → `none`, `reason: no_candidate`, logged as `parse` — no
    write attempted), then `editRole(roleId, parsed, { notices: "inline", alongside })`, awaited.
    No new ROLE write starts after `deadlineMs − 15 s`; what is left waits for the next sweep.
@@ -326,7 +340,9 @@ logged (fixed tag) and not retried; the record and the UI still show it.
   and the records — and opens the full sweep (`trigger: "cron"`, `deadlineMs: startedAt + 55 s`) only
   when some identity needs a step from §5.2 OR some record is due: a conflict with no record or a
   `gone`/`auto`/`applied` one, a `proposed`/`none` record whose conflict is no longer seen, a
-  `proposed`/`none` record on a draft with `autoApplied` false (it may be fixable now), or ANY record
+  `proposed`/`none` record on a draft with `autoApplied` false whose `checkedAt` is more than 6 h old
+  (it may be fixable now; the age stops an unfixable draft from reopening a sweep every tick), or ANY
+  record
   with `notifiedSeq < eventSeq` in `auto`/`proposed`/`none` (an email a previous run left unsent). No new Scheduler job, secret or workflow; the tick inherits the flush's liveness
   alarm (if the flush stops, the daily cron already says so). This also covers the Kids manager's
   availability writer, Studio edits, hand picks and copied instruments, which have no trigger of
@@ -338,8 +354,10 @@ logged (fixed tag) and not retried; the record and the UI still show it.
 ### 5.5 «Aplicar» / «Elegir otro» and «Mantener»
 
 `applyAvailabilityFix({ roleId, rev, memberId, replacements, actor })`: fresh `loadV3PlanSources`;
-C must hold; the column's `rev` must equal `rev` (else `409`); each chosen replacement passes D2–D3
-on the fresh board (one ledger read); then `editRole(roleId, parsed, { notices: "deferred",
+C must hold; the column's `rev` must equal `rev` (else `409`); `replacements` must cover EVERY seat
+the person holds there (all or nothing, as §4.2; else `400`); each chosen replacement passes D2–D3
+on the fresh board (one ledger read); `alongside` is `{ create }` when the conflict has no record yet,
+else `{ patch }` under the record's read revision; then `editRole(roleId, parsed, { notices: "deferred",
 alongside })` with the record → `applied` (`appliedBy`, no event) in the same transaction. Refused →
 the writer's status and code. Route `POST /api/admin/availability-conflicts/apply`, the sweep's
 guard. «Mantener»: `POST .../keep {recordId, rev}` → `kept` under `ifRevisionId` (a record is created
@@ -398,8 +416,12 @@ reset, 409 → reload with «El servicio cambió; vuelve a revisar».
   response untouched; `docs/NOTIFICATIONS.md` §layer 1 says the tick rides it.
 - ADR-0078 «Availability conflicts are fixed one seat at a time; drafts automatically, once» (D1,
   D2, D5, D9, D10), including two accepted costs: an automatic draft write while Frank edits that same
-  draft in `/admin` turns his next save into the usual «cambió» 409 (no silent overwrite); and an email
-  that fails after its claim is not retried (the record and the UI keep it).
+  draft in `/admin` turns his next save into the usual «cambió» 409 (no silent overwrite); an email
+  that fails after its claim is not retried (the record and the UI keep it); a person Frank seats
+  DELIBERATELY on a draft despite their unavailability (the picker allows it) is replaced once — he
+  re-seats them and it becomes a proposal he can «Mantener»; and the month gate, like the MCP
+  editor's, judges one month at a time, so a protection spanning a month boundary (consecutive
+  Sundays on Nov 29 / Dec 6) is not seen.
 - `docs/NOTIFICATIONS.md` (the new admin email), `CLAUDE.md` + `project-rules.md` (the writer joins
   the admin write paths list; `editRole`'s `alongside`), `docs/UTILITIES_AND_COMPONENTS.md`.
 
@@ -410,7 +432,11 @@ seat kinds; past and non-editable services ignored; D2 filters (unavailable, alr
 undeclared instrument, non-worship, C2, C4); D2 ORDER — a `slack` member ranks by `load + N`, an
 `exempt` one at the median, an instrumentalist who played the previous weekend after one who did
 not; `serverPickCandidates` `null` → `unchecked`; two seats of one person; two absent people in one
-service; D3(a) rejects a rule finding; the month gate rejects a new cap/pair/protection and a grown
+service; ONE person absent from TWO drafts of one month whose shared best candidate would break a
+`<=` cap or `consecutive_sundays` if picked for both → the second pick sees the first (working board)
+and takes someone else or `none`; an `auto` that does not return `ok` stops that month's later writes;
+a role with an FOH item missing its person (untranslatable) → `unchecked`, its record never `gone`;
+D3(a) rejects a rule finding; the month gate rejects a new cap/pair/protection and a grown
 `<=` count, accepts a removal-only one, rejects when not `judged`, and is not applied to an
 instrument seat; worship-night song lead → `none`.
 
