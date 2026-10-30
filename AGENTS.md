@@ -297,14 +297,16 @@ each one owns, and its rules) and `docs/UTILITIES_AND_COMPONENTS.md`. Most are "
   `countsForFairnessDefault`/`COUNTS_FOR_FAIRNESS_GROQ`, `FairnessSwitch`, `SOLVER_ENGINE` +
   `resolveSolverEngine` (server only), `SOLVER_HISTORY_SOURCE`, `SOLVER_SENDS_HISTORY`,
   `loadSolverHistory`, `deriveSolverHistory`/`historyWindow`, `fetchDerivedHistory`,
-  `useIntegrityQueue`, `ruleCopy.ts` (the ONE Spanish wording of a rule — card, forms, MCP).
+  `useIntegrityQueue`, `ruleCopy.ts` (the ONE Spanish wording of a rule — card, forms, MCP),
+  `seatsClash` (the ONE «two seats one person may not hold on a service»: same category, or voz +
+  instrumento unless the member is marked «Canta y toca a la vez» — ADR-0078).
 - **UI — never hand-roll these:** `Button` (the only button; `tone`, never a `hover:` pair in
   `className`), `CueDialog` (every dialog; `<CueDialog open={x}>`, never a literal `open` —
   `cueDialogMount.test.ts`), `Menu`, `Select`, `DateField`, `Switch`, `Checkbox` (never a bare
   `<select>`/`<input type="checkbox|date|month">`), `SegmentedControl`, `FiltersPill` + `SearchLine` (a filter sheet's opener and the hairline search), `Collapse`,
   `Presence`, `Skeleton`/`SkeletonGroup`, `AnimatedList`, `SlidingIndicator`, `NumberRoll`,
   `SwipeStrip`, `useToast` (fixed stack) vs `useTransientValue` (inline flash) — not
-  interchangeable, `useLongPress`, `QuickActions`, `PullToRefresh` (mounted once),
+  interchangeable, `useLongPress`, `useMediaQuery` (a media query a RENDER depends on; server/jsdom = false), `QuickActions`, `PullToRefresh` (mounted once),
   `blackout()`, `Equalizer`/`PlayPauseGlyph`, `revealProps`, `haptic()`, `CueStrip`,
   `NAVBAR_H_CLASS`, `AdminRail`, `PanelSkeleton`/`PanelBoundary`, `MembersPanel`,
   `BottomNavBar` (presentational half of `BottomNav`).

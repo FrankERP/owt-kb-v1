@@ -77,6 +77,30 @@ export function fohSeatDef(label: string): SeatDef {
 }
 
 /**
+ * Whether ONE person may not hold both seats on the same service — the C2
+ * conflict the picker, drag, fillers and MCP judges refuse (`rankCandidates`)
+ * and the grid flags. Same category always clashes (nobody sings Lead and BGV at
+ * once, or plays Keys and Drums). A voice seat and an instrument clash too,
+ * unless the member is marked «Canta y toca a la vez» (`singsAndPlays`, set in
+ * Miembros): Frank (Lead + EG) and Mkz (Lead + Bass) lead while they play, and
+ * nobody else does — Frank chose «nadie, salvo una lista» on 2026-10-29, after
+ * Auto's instrument filler seated Tony on Drums while the solver had him in Coro
+ * (2026-11-29; ADR-0078). FOH alongside a voice or an instrument is left as it
+ * was. Two copies of the same seat clash as well: a member twice in one cell is
+ * a duplicate, and a caller that must exempt the seat being edited does so
+ * itself.
+ */
+export function seatsClash(
+  a: { seatId: string; category: SeatCategory },
+  b: { seatId: string; category: SeatCategory },
+  singsAndPlays: boolean | undefined,
+): boolean {
+  if (a.category === b.category) return true;
+  const kinds = new Set([a.category, b.category]);
+  return kinds.has("voz") && kinds.has("instrumento") && singsAndPlays !== true;
+}
+
+/**
  * The `memberType` a seat of this category requires. Every `SeatDef` above
  * already carries it; this is the same fact keyed by category, for the callers
  * that hold a `GridRow` (which has a category, not a `SeatDef`).

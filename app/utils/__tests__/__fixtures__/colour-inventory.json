@@ -8,28 +8,28 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 307,
-    "filesScanned": 557,
+    "literalRows": 303,
+    "filesScanned": 558,
     "filesWithColour": 61,
     "byCategory": {
       "2": 2,
-      "4": 65,
+      "4": 63,
       "5": 2,
-      "8": 84,
+      "8": 86,
       "9": 10,
-      "11": 8,
+      "11": 4,
       "12": 136
     },
     "byDisposition": {
-      "B": 109,
       "exempt": 60,
-      "keep": 220,
+      "B": 107,
+      "keep": 217,
       "C": 5,
       "D": 13
     },
     "compositingClasses": 22,
     "compositingSelectorOccurrences": 60,
-    "compositingClassNameOccurrences": 29,
+    "compositingClassNameOccurrences": 28,
     "compositingRuleBodies": 52,
     "lightCounterpartClasses": 13,
     "pairs": 3,
@@ -38,61 +38,13 @@
   "literalRows": [
     {
       "file": "app/(client)/auth/signin/page.tsx",
-      "category": 11,
-      "categoryName": "arbitrary-value-var-brand",
-      "value": "[var(--brand-radius-control)]",
-      "alpha": null,
-      "utility": null,
-      "carrier": null,
-      "line": 89,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/(client)/auth/signin/page.tsx",
-      "category": 11,
-      "categoryName": "arbitrary-value-var-brand",
-      "value": "[var(--brand-radius-control)]",
-      "alpha": null,
-      "utility": null,
-      "carrier": null,
-      "line": 122,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/(client)/auth/signin/page.tsx",
-      "category": 11,
-      "categoryName": "arbitrary-value-var-brand",
-      "value": "[var(--brand-radius-control)]",
-      "alpha": null,
-      "utility": null,
-      "carrier": null,
-      "line": 134,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/(client)/auth/signin/page.tsx",
-      "category": 11,
-      "categoryName": "arbitrary-value-var-brand",
-      "value": "[var(--brand-radius-panel)]",
-      "alpha": null,
-      "utility": null,
-      "carrier": null,
-      "line": 79,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/(client)/auth/signin/page.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
       "value": "fill=\"#34A853\"",
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 172,
+      "line": 180,
       "disposition": "exempt",
       "reason": "Google brand mark — a third-party mark that must not be themed"
     },
@@ -104,7 +56,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 171,
+      "line": 179,
       "disposition": "exempt",
       "reason": "Google brand mark — a third-party mark that must not be themed"
     },
@@ -116,7 +68,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 174,
+      "line": 182,
       "disposition": "exempt",
       "reason": "Google brand mark — a third-party mark that must not be themed"
     },
@@ -128,7 +80,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 173,
+      "line": 181,
       "disposition": "exempt",
       "reason": "Google brand mark — a third-party mark that must not be themed"
     },
@@ -2228,7 +2180,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 261,
+      "line": 266,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2240,7 +2192,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 297,
+      "line": 302,
       "disposition": "B",
       "reason": null
     },
@@ -2252,7 +2204,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 296,
+      "line": 301,
       "disposition": "B",
       "reason": null
     },
@@ -2264,7 +2216,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1350,
+      "line": 1373,
       "disposition": "B",
       "reason": null
     },
@@ -2276,7 +2228,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1359,
+      "line": 1382,
       "disposition": "B",
       "reason": null
     },
@@ -2288,7 +2240,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1369,
+      "line": 1392,
       "disposition": "B",
       "reason": null
     },
@@ -2300,7 +2252,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1380,
+      "line": 1403,
       "disposition": "B",
       "reason": null
     },
@@ -2312,7 +2264,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1391,
+      "line": 1414,
       "disposition": "B",
       "reason": null
     },
@@ -2324,7 +2276,7 @@
       "alpha": null,
       "utility": "stroke",
       "carrier": null,
-      "line": 300,
+      "line": 305,
       "disposition": "C",
       "reason": null
     },
@@ -2336,7 +2288,7 @@
       "alpha": null,
       "utility": "text",
       "carrier": null,
-      "line": 295,
+      "line": 300,
       "disposition": "C",
       "reason": null
     },
@@ -2348,7 +2300,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 336,
+      "line": 344,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2360,7 +2312,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 611,
+      "line": 805,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2372,7 +2324,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 798,
+      "line": 2676,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2384,19 +2336,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2666,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/admin/MonthGenerator.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "bg-transparent",
-      "alpha": null,
-      "utility": "bg",
-      "carrier": null,
-      "line": 2672,
+      "line": 2682,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2408,19 +2348,7 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 1509,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/admin/MonthGenerator.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "bg-transparent",
-      "alpha": null,
-      "utility": "disabled:hover:bg",
-      "carrier": null,
-      "line": 1668,
+      "line": 1516,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2432,7 +2360,19 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 5580,
+      "line": 5624,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/admin/MonthGenerator.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 5706,
       "disposition": "B",
       "reason": null
     },
@@ -2444,7 +2384,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2596,
+      "line": 2760,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2456,9 +2396,21 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 3476,
+      "line": 3651,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/admin/PlannerGrid.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 3491,
+      "disposition": "B",
+      "reason": null
     },
     {
       "file": "app/components/admin/ProposalsPanel.tsx",
@@ -2636,7 +2588,7 @@
       "alpha": null,
       "utility": "border",
       "carrier": null,
-      "line": 1362,
+      "line": 1355,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2648,7 +2600,7 @@
       "alpha": null,
       "utility": "border",
       "carrier": null,
-      "line": 1955,
+      "line": 1948,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3536,7 +3488,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 134,
+      "line": 117,
       "disposition": "B",
       "reason": null
     },
@@ -3915,15 +3867,7 @@
       "reason": "Usage site of a compositing class"
     },
     {
-      "file": "app/(client)/auth/signin/page.tsx",
-      "kind": "className",
-      "class": "facet-panel",
-      "count": 1,
-      "disposition": "keep",
-      "reason": "Usage site of a compositing class"
-    },
-    {
-      "file": "app/(client)/auth/signin/page.tsx",
+      "file": "app/(client)/auth/not-a-member/page.tsx",
       "kind": "className",
       "class": "lockup-mark",
       "count": 1,
@@ -3933,7 +3877,7 @@
     {
       "file": "app/(client)/auth/signin/page.tsx",
       "kind": "className",
-      "class": "stage-hero",
+      "class": "lockup-mark",
       "count": 1,
       "disposition": "keep",
       "reason": "Usage site of a compositing class"

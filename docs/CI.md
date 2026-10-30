@@ -420,9 +420,10 @@ observation that separates the two.
 **Second occurrence (2026-10-20).** PR #152's merge (`e3d3a221`, a visual-only
 change to the planner) failed with the same signature, under
 `./app/(admin)/layout.tsx`; its tree had built `READY` on `preview` 15 minutes
-earlier and the release diff touched no font, layout, config or lockfile. A
-session's own production redeploy is refused by its permission classifier, so
-it would have been Frank's to click. Nobody redeployed: PR #153 (docs only)
+earlier and the release diff touched no font, layout, config or lockfile. That
+session's own production redeploy was refused by its permission classifier, so
+it would have been Frank's to click (the fourth occurrence below shows the
+call going through from a cloud session). Nobody redeployed: PR #153 (docs only)
 merged on top about 15 minutes later as `76fdaac0`, and that build — the
 normal cache-backed `main` build, not a no-cache redeploy — went `READY` and
 took the alias, carrying #152 with it. So a later commit's ordinary build is
@@ -438,6 +439,15 @@ included, and the identical tree passed `tsc`, `vitest` and `eslint`. One no-cac
 that deployment (`POST /v13/deployments?forceNew=1`, preview, no `target`) went `READY` and took
 `dev-owt-backstage`. Like the first time, the retry skipped the cache, so it does not separate the
 two causes.
+
+**Fourth occurrence (2026-10-30).** PR #219's merge (`4434020a`, the sign-in page
+in the type system) failed with the same signature under `./app/(admin)/layout.tsx`;
+its tree had built `READY` on `preview` about 25 minutes earlier and the release
+diff (`5c3b66d1..4434020a`) touched no font, layout, config or lockfile. The cloud
+session's own `POST /v13/deployments` (Vercel MCP `create_deployment` with the
+failed `deploymentId`, `target: "production"`, `forceNew=1`) was accepted this
+time; the redeploy went `READY` in about 3 minutes and took the alias. Again a
+no-cache retry, so still no observation that separates the two causes.
 
 **Recognising it** — all of these, not some:
 
