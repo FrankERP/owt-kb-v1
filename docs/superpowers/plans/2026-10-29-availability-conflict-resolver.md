@@ -1,6 +1,6 @@
 # Availability conflicts: find them, propose a replacement, apply with one click (plan)
 
-**Status:** DRAFT, revision 8 — PROPOSALS ONLY. Revisions 1–7 (seven review rounds) planned an
+**Status:** DRAFT, revision 9 — PROPOSALS ONLY. Revisions 1–7 (seven review rounds) planned an
 automatic writer for drafts; every round from 5 to 7 found a defect in how automatic draft writes and
 proposals share one sweep. Frank chose (2026-10-30 13:54Z, decision card «Solo propuestas por
 ahora») to drop the automatic writes: the sweep never changes a service, drafts included. This
@@ -129,9 +129,12 @@ switch for this alert (§6.3).
   `rankCandidates` with the column, its Sunday spine and the rules from `columnRuleInputs`; `null`
   when one is missing → «sin revisar») on the board with the absent person removed, `windowRoles`
   built as `serviceEditor.ts:824` builds them, filtered on `eligible ∧ ¬alreadyAssigned ∧
-  (instrument ⇒ ¬undeclared)` and on the worship audience (`serviceEditor.ts:831`). Ordered exactly as
+  (instrument ⇒ ¬undeclared)` and on the worship audience (`serviceEditor.ts:831`). Ordered as
   the fillers order it: a VOICE seat by `orderByEffectiveLoad(pool, fairnessByMemberId(config,
-  members))` (`localFill.ts`, so Frank's `exempt`/`slack` settings hold); an INSTRUMENT seat by
+  members))` (`localFill.ts`, so Frank's `exempt`/`slack` settings hold) — the local filler's order,
+  which today fills only specials; weekend voices are filled by v3, which a one-seat pick cannot call
+  (D1), so for a weekend voice this is a deliberate choice of the closest local order, not parity
+  with v3; an INSTRUMENT seat by
   `orderForFill(pool, seatCounts(board cells), instrumentalistsOn(board cells, previous weekend
   column))` (`instrumentFill.ts`; the two helpers become exports, unchanged) — only on the rows and
   columns `fillInstruments` itself fills (a canonical-label instrument row, `instrumentFill.ts:146-148`,
@@ -208,10 +211,16 @@ read (D5).
 
 ### 4.3 The month gate
 
-`monthCheck` (`monthCheck.ts:197`) gains three additive result fields from what it already builds:
-`instances: BrokenInstance[]` and `missed: MissedProtection[]` (the core verdict) and `judged:
-boolean` (= a ledger was given AND the request built; the existing `checked` also needs the
-fair-share read, which the gate does not use). Existing callers ignore them.
+`monthCheck` (`monthCheck.ts:197`) is NOT changed: its whole `MonthCheck` result is serialized into
+four MCP answers (`serviceEditor.ts:909,1038`, `proposalEditor.ts:566,694`), where members cross the
+wire as tokens only (ADR-0062), and the raw verdict carries member ids (`MissedProtection.person`)
+and solver rule ids. Instead `monthCheck.ts` gains a SEPARATE pure export
+`monthCheckVerdict(input: MonthCheckInput)` → `{ judged: boolean, instances: BrokenInstance[],
+missed: MissedProtection[] }`, built by the same internal steps `monthCheck` uses (one shared
+helper, so the two cannot drift); `judged` = a ledger was given AND the request built (the existing
+`checked` also needs the fair-share read, which the gate does not use). Only the availability gate
+calls it; its result never reaches an MCP answer, a log or the email. A test asserts the four MCP
+answers' shapes are unchanged and name no member id.
 
 The gate applies to VOICE seats only (the month check judges only voices, `monthCheck.ts:263-270`);
 an instrument or FOH pick rests on D2 and D3(a), as the planner's own pick does. For a voice seat,
@@ -219,7 +228,7 @@ given the month's ONE ledger read (§5.3 step 3), it builds the month-check inpu
 `runStoredMonthCheck` does (`serviceEditor.ts:731`: `months: [month]`, the record's entry,
 `storedRoles` = the roles read minus the board's editable ones, `savedWindow` minus on-board
 services) with `fairShare: null`, and runs `monthCheck` on `removedOnly` (absent person out, seat
-empty) and on `withCandidate`. Reject when either is not `judged`, when `withCandidate` has an
+empty) and on `withCandidate`, both through `monthCheckVerdict`. Reject when either is not `judged`, when `withCandidate` has an
 instance key `(family, rule, scope)` or a missed key `(code, person, scope)` that `removedOnly`
 lacks, or when a count instance in both has a `<=`/`==` rule and a larger `observed`. When no voice
 candidate can be judged because the month cannot build (no eligibility record: the synthetic ledger
@@ -248,15 +257,17 @@ the next one re-reads. A record write is one single-document mutation; nothing e
 Each sweep first requires a JUDGEABLE read: every source ready (§5.3 step 1), the inventory
 `coherent` and the engine `v3`. Otherwise the sweep makes NO transition at all — every record stays
 as it is — and answers why (`sources`, `incoherent`, `engine`); the UI says «No se pudo revisar» with
-that reason, and every such run logs one fixed-tag line (`[availability-sweep] blocked <reason>`),
+that reason (computed by the GET from its own fresh read, §7 — a blocked sweep writes nothing),
+and every such run logs one fixed-tag line (`[availability-sweep] blocked <reason>`),
 visible in the production logs. So a transient state can never end a conflict or re-announce it.
 
-On a judgeable read, per identity in its scope: **C** = «the service exists, the person is seated in
-it, and the date is in their `unavailableDates`», taken from the ROLES READ (`adminRoles`, all five
+On a judgeable read, per identity in its scope: **C** = «the service exists, its CURRENT date equals
+the identity's `date`, the person is seated in it, and that date is in their `unavailableDates`», taken from the ROLES READ (`adminRoles`, all five
 seat paths, `computeAvailabilityConflicts`) — not from the board, which leaves out a role it cannot
 translate (`translateStoredRole` → `null`, `storedRoleReadModel.ts:151,159`); **E** = the service is a
 board column and `editable`. A role in scope with no board column is therefore C-not-E (`unchecked`),
-never «not C». «Pick» = `proposeReplacement` answered `replace` (only computed when E). Not C is the
+never «not C». A service moved to another date makes the old identity «not C» (→ `gone`); the new
+date is a new identity. «Pick» = `proposeReplacement` answered `replace` (only computed when E). Not C is the
 ONLY evidence that a conflict ended: the service was deleted, the person left it, or they cleared the
 date.
 
@@ -284,14 +295,19 @@ is not emailed.
 
 ### 5.3 `sweepAvailabilityConflicts({ trigger, memberId?, deadlineMs, mode })`
 
-`mode` is `"act"` only when D10 holds, else `"dry"`. The sweep imports no role writer; it writes only
-`availabilityConflict` documents (a test asserts it never calls `editRole`).
+`mode` is `"act"` only when D10 holds, else `"dry"`. The sweep never calls a role writer (the module
+imports `editRole` for «Aplicar» only, §5.5); it writes only `availabilityConflict` documents (a test
+asserts the sweep never calls `editRole`).
 
 1. Without `SANITY_API_READ_TOKEN` the module refuses before any read (`{ ok: false, reason:
    "no_token" }`): the ids are private and an untokened read answers «no records» with no error (as
-   `fairnessLedgerRead.ts:123` refuses). Read `loadV3PlanSources()`; any failed or unready source →
-   `{ ok: false }`, nothing written. Read the records `*[_type == "availabilityConflict" && date >=
-   $today]` through `operationalClient` (inside this module: the one reader and writer of the type).
+   `fairnessLedgerRead.ts:123` refuses). Read the records `*[_type == "availabilityConflict" && date
+   >= $today]` through `operationalClient` (inside this module: the one reader and writer of the
+   type) FIRST, then `loadV3PlanSources()`; any failed or unready source → `{ ok: false }`, nothing
+   written. The order matters: «Aplicar» writes the role before its record (§5.5), so a record read
+   before the roles can only be OLDER than the roles it is judged with; any record «Aplicar» wrote
+   after that read has a new revision, and this sweep's `ifRevisionId` write on it fails and drops
+   the step (no spurious «back» event for a conflict already applied).
 2. One `storedMonthBoard` per horizon month (D7) that holds a conflict (`findBoardConflicts`, scoped
    to `memberId` when given) or a `proposed`/`none` record in scope. Any board not `coherent`, or the
    engine not `v3` (`resolveSolverEngine`, as `openMonth` refuses) → stop: no transition (§5.2). C and
@@ -395,8 +411,9 @@ email. Follow-up if Frank wants to turn this one off alone.
 ## 7. UI (standard; consumes §5)
 
 `GET /api/admin/availability-conflicts` → open conflicts with their recomputed proposal and up to 3
-alternatives (D8), records `applied` in the last 30 days, `kept`, and the last sweep's «No se pudo
-revisar» reason when it had one. `AvailabilityPanel`'s «Conflictos» view renders them (house `Button`,
+alternatives (D8), records `applied` in the last 30 days, `kept`, and — when its OWN fresh read is not
+judgeable (§5.2: `sources`, `incoherent`, `engine`) — that reason as «No se pudo revisar», instead of
+proposals (nothing stores a blocked sweep's reason). `AvailabilityPanel`'s «Conflictos» view renders them (house `Button`,
 `Menu`, hairline rows) with «Aplicar», «Elegir otro», «Mantener» and a header «Revisar ahora». Every
 handler: try/catch/finally, `res.ok`, loading reset, 409 → reload with «El servicio cambió; vuelve a
 revisar».
@@ -412,7 +429,12 @@ revisar».
 - `protectedReadAudit.ts`: add `availabilityConflict` to `PROTECTED_TYPES` (dotted ids: an untokened
   read answers «nothing» with no error, the `fairnessMonth` lesson) and register
   `availabilityFixCommit.ts` in `PROTECTED_RUNTIME_WRITERS` as its one reader-writer; the test's
-  writer count moves accordingly. No other module names the type.
+  writer count moves accordingly. No other runtime module reads or writes the type (the Studio schema
+  only declares it).
+- `draftGatingCoverage.test.ts`: the new role reads in `availabilityFixCommit.ts` (the pre-check,
+  `memberTick`) deliberately include drafts (a draft service's conflict is proposed too, D4); they
+  join the test's documented exemptions with that reason.
+- `monthCheck.ts`: `monthCheckVerdict` (§4.3); `MonthCheck` unchanged.
 - `instrumentFill.ts`: export `seatCounts` and `instrumentalistsOn`, unchanged.
 - `notifyTargets.ts`: `assignedSeatsByRoleQuery(roleFilter)` beside `assignedMemberRefsQuery`, over
   the same `ASSIGNED_SEAT_PATHS` (a test asserts both name the five paths).
@@ -452,7 +474,9 @@ the other drops (one email); a failed ledger read leaves the month untouched; an
 an unready source or engine `v2` makes no transition (every record unchanged, nothing sent); a
 conflict on a non-editable service → `none`/`unchecked`, never `gone`; `"dry"` mode writes and sends
 nothing and answers what `"act"` would do; the member scope never touches another member's record;
-the deadline stops new judgements; a record left due by a failed or cut step 5 is emailed by the NEXT
+the deadline stops new judgements; «Aplicar» committing between the sweep's records read and its
+roles read → the sweep's record write fails its guard, no event, no email; a service moved to another
+date → the old identity `gone`; a record left due by a failed or cut step 5 is emailed by the NEXT
 tick (the pre-check opens the sweep for it); delivery blocked → no claim, events stay due; no read
 token → refused before any read; the kill switch stops both ticks; an unchanged `proposed`/`none` is
 not re-written. `availabilityTick`: skips outside its bucket and with < 40 s left; the pre-check opens
@@ -478,7 +502,10 @@ normal role edit named in its record (`seats.from`/`to`) and reversible by hand.
 Before the merge to `preview`, list the conflicts the first production sweep would propose (read-only
 MCP reads) and show Frank. Today (2026-10-29) that is two published services (2026-11-29,
 2026-12-27, both Mkz in Lead + Bass): the first scheduled check would only propose and email him once.
-On dev the sweep is dry (D10): «Revisar ahora» shows what it would do. Deploy the Studio schema with
+Also read-only, before the merge: that Frank is in the email audience (super-admin or admin, in
+worship, not disabled, email allowlisted, `notifPrefs.proposals` not false), that the role inventory
+is coherent (no lingering raw Studio draft), and that Nov and Dec have fairness records (else every
+voice proposal is «sin revisar»); report each to Frank. On dev the sweep is dry (D10): «Revisar ahora» shows what it would do. Deploy the Studio schema with
 the release (`sanity schema deploy`; the Content Lake accepts the type without it). Then the CLAUDE.md
 order: gates → one code review → preview → verify alias → PR → merge → prod alias → the first ticks
 checked in the production logs (the tick logs one fixed line per run: skipped / pre-check clear /
