@@ -221,7 +221,7 @@ function judgeBoard(input: MonthCheckInput, person: (id: string) => string):
 }
 
 /**
- * The raw core verdict for the availability gate (`availabilityConflicts.ts`, ADR-0080), built by
+ * The raw core verdict for the availability gate (`availabilityConflicts.ts`, ADR-0079), built by
  * the same path as `monthCheck`. It carries member ids and rule ids, so it is NEVER part of
  * `MonthCheck`, which four MCP answers serialize whole (members cross that wire as tokens only,
  * ADR-0062). `judged` = a ledger was given AND the request built; `ruleIds` is the request's rule

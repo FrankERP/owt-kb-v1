@@ -1,6 +1,6 @@
 "use client";
 
-// «Disponibilidad › Conflictos»: the availability proposals (ADR-0080). Someone marked a day they
+// «Disponibilidad › Conflictos»: the availability proposals (ADR-0079). Someone marked a day they
 // already serve on; the server proposes who takes each of their seats and NEVER changes the service
 // by itself. A person applies it here: «Aplicar» (the proposal), «Elegir otro» (an alternative),
 // «Mantener» (a deliberate keep, silenced while that conflict lasts) and «Deshacer» on a kept one.

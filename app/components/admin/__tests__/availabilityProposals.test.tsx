@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 //
-// «Disponibilidad › Conflictos» — the availability proposals (ADR-0080). The server judges and
+// «Disponibilidad › Conflictos» — the availability proposals (ADR-0079). The server judges and
 // this card only shows: these tests pin what the card SENDS (the exact replacement set the server
 // proposed, the record's revision on «Deshacer»), that a 409 reloads with «El servicio cambió»
 // instead of retrying, and that a read it cannot use falls back to the parent's own list — a

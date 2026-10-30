@@ -1,4 +1,4 @@
-// The availability proposals' pure core (ADR-0080; plan §4). Fictitious people only.
+// The availability proposals' pure core (ADR-0079; plan §4). Fictitious people only.
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));

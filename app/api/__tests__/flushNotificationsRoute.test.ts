@@ -44,7 +44,7 @@ vi.mock("@/sanity/lib/serverClient", () => ({
   writeClient: { transaction: vi.fn(), patch: vi.fn() },
 }));
 
-// The availability proposals ride layer 1 after the response (ADR-0080); this file asserts only
+// The availability proposals ride layer 1 after the response (ADR-0079); this file asserts only
 // that the tick is queued and that the drain's answer never depends on it.
 const availabilityTickMock = vi.fn();
 const afterCallbacks: Array<() => unknown> = [];

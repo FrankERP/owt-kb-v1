@@ -1,4 +1,4 @@
-// The four availability-conflict routes (ADR-0080): the admin guard comes first on every one —
+// The four availability-conflict routes (ADR-0079): the admin guard comes first on every one —
 // no session, a content-editor, or a super-admin impersonating someone gets 403 before the writer
 // is touched — and the bodies the writer receives are the validated ones.
 

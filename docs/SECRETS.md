@@ -588,7 +588,7 @@ else — no other route, page or data path reads this variable.
 otherwise. Not needed in: Preview (it never acts there anyway), `.env.local`, GitHub Actions, the
 iOS build, GCF.**
 
-**Not a secret** — a kill switch, plain config ([ADR-0080](adr/0080-availability-conflicts-are-proposed-one-seat-at-a-time-and-a-person-applies-them.md)).
+**Not a secret** — a kill switch, plain config ([ADR-0079](adr/0079-availability-conflicts-are-proposed-one-seat-at-a-time-and-a-person-applies-them.md)).
 The value `1` stops every AUTOMATIC availability sweep: the member's save trigger and the flush
 cron's tick return before reading anything, and «Revisar ahora» answers dry (it computes, writes no
 record, sends no email). The panel in `/admin › Disponibilidad › Conflictos` still reads, and

@@ -1,4 +1,4 @@
-// The availability proposals' writer (ADR-0080; plan
+// The availability proposals' writer (ADR-0079; plan
 // docs/superpowers/plans/2026-10-29-availability-conflict-resolver.md §5–§6).
 //
 // PROPOSALS ONLY. A sweep finds every person seated on a day they marked unavailable, proposes a

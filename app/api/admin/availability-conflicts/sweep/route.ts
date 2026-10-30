@@ -7,7 +7,7 @@ import { conflictAdmin } from "../guard";
 export const maxDuration = 60;
 
 /**
- * «Revisar ahora» (ADR-0080): the whole sweep on demand. It acts only on Production with the kill
+ * «Revisar ahora» (ADR-0079): the whole sweep on demand. It acts only on Production with the kill
  * switch off; anywhere else it answers what it would do (dry).
  */
 export const POST = withVerificationRunContext(postHandler);

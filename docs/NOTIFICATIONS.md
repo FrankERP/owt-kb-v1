@@ -80,7 +80,7 @@ hand-writing a fixture that mirrors them).
 | 2 — backstop | opportunistic sweep after any queueing write (not after the MCP saved-service save's inline upserts, above) | end of `commitUpserts()` in `serviceMutationSideEffects.ts` — keeps its report and raises the destroyed-mail alarm |
 | 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` (mails a person about destroyed mail, as layer 2 also does; layer 1 goes red on the same conditions instead — see §"The destroyed-mail alarm") |
 
-**Layer 1 also carries the availability proposals' tick** (ADR-0080): after the drain has
+**Layer 1 also carries the availability proposals' tick** (ADR-0079): after the drain has
 answered, `after()` runs `availabilityTick` on every third 5-minute bucket with at least 40 s left;
 it never changes the drain's response, and its failure is only logged. See §"The availability
 conflicts email".
@@ -560,7 +560,7 @@ The admin routes ignore the return value. The MCP tools turn it into their `noti
 report, worded «encolada», never «enviada». **Unpublish queues nothing and runs no sweep**, from
 `/admin` or from the MCP alike (`roleUnpublishCommit.ts`).
 
-## The availability conflicts email — admins only (ADR-0080)
+## The availability conflicts email — admins only (ADR-0079)
 
 When someone marks a day they already serve on, the availability sweep
 (`app/utils/availabilityFixCommit.ts`) records a proposal and sends ONE email per sweep that claimed
@@ -590,7 +590,7 @@ person removed and the person added hear about it; on a draft nobody does).
 - **Kill switch:** `AVAILABILITY_SWEEP_DISABLED=1` (`docs/SECRETS.md`).
 - **No liveness alarm.** A sweep that cannot judge (a raw Studio draft, the engine on v2, no read
   token) is visible only as «No se pudo revisar» in the panel and in the `[availability-sweep]`
-  logs — an accepted cost (ADR-0080).
+  logs — an accepted cost (ADR-0079).
 
 ## The liveness alarm
 

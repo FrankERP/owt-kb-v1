@@ -15,7 +15,7 @@ interface ApplyBody {
 const str = (v: unknown): v is string => typeof v === "string" && v.length > 0;
 
 /**
- * «Aplicar» / «Elegir otro» (ADR-0080): the chosen replacement for EVERY seat the person holds,
+ * «Aplicar» / «Elegir otro» (ADR-0079): the chosen replacement for EVERY seat the person holds,
  * judged again on a fresh read, then written through `/admin`'s own edit writer. The handler
  * authorizes and parses only; the rest is `applyAvailabilityFix`.
  */

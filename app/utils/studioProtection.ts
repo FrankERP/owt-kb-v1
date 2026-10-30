@@ -92,7 +92,7 @@ export const PROTECTED_STUDIO_TYPES = [
   // `POST /api/admin/service-threads/[roleId]/messages`. Human-meaningful like
   // `setlistProposal`, so protected but deliberately NOT internal — it keeps a read-only pane.
   "serviceThread",
-  // Availability conflicts and their proposals (ADR-0080): machine state written only by
+  // Availability conflicts and their proposals (ADR-0079): machine state written only by
   // `app/utils/availabilityFixCommit.ts`. Internal, like `mcpProposal`.
   "availabilityConflict",
 ] as const;
@@ -305,7 +305,7 @@ export const INTERNAL_STUDIO_FIELDS: Readonly<Record<string, readonly string[]>>
     "digest",
     "state",
   ],
-  // Written only by `app/utils/availabilityFixCommit.ts` (ADR-0080).
+  // Written only by `app/utils/availabilityFixCommit.ts` (ADR-0079).
   availabilityConflict: [
     "roleId",
     "memberId",

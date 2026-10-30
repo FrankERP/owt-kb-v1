@@ -7,7 +7,7 @@ export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 /**
- * «Disponibilidad › Conflictos» (ADR-0080): open conflicts with their proposal recomputed on this
+ * «Disponibilidad › Conflictos» (ADR-0079): open conflicts with their proposal recomputed on this
  * read, the ones applied in the last 30 days, the kept ones, and — when this read cannot judge —
  * why. Reads only; everything after the guard is `availabilityFixCommit.ts`.
  */
