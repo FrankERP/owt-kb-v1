@@ -43,7 +43,7 @@ gate (C2 in `rankCandidates`).
   2026-10-30): 18 rosters hold one person in a voice AND an instrument; 17 are Frank or Mkz
   (both `singsAndPlays: true` since 2026-10-30), the 18th is 2026-11-29 (Tony Coro + Drums, plus
   Mkz). No roster has a same-section duplicate (voice refs and instrument refs are each unique
-  per roster). The 2026-11-29 fix is a separate, consented write in this thread.
+  per roster), and no roster holds one person twice in FOH. The 2026-11-29 fix is a separate, consented write in this thread.
 
 ## 3. Decisions
 
@@ -99,9 +99,10 @@ Each writer calls `addedSeatClashes` right after its dangling-reference refusal 
 anything that can write — `resolveOwnedCoordination` (legacy-lock bootstrap commits), the
 special-identity coordinator, the occupancy inventory, the transaction:
 
-- **editRole:** after `loadRoleForWrite` and the stored-type checks (`roleEditCommit.ts`
-  ~line 170), before the dependency inventory and the bootstrap at ~line 236; the member read
-  moves from line 120 to cover `seatAssignees(request.seats)` exactly as now. Before =
+- **editRole:** the member read stays where it is (before `loadRoleForWrite`, line 119-124,
+  dangling refusal unchanged) and becomes `loadCanonicalMembers`; the guard runs after the
+  stored-type checks (~line 170), before `loadTargetOccupancy` (192), `bootstrapLegacyLock`
+  (233), `loadSpecialIdentityCoordinator` (252) and the transaction (287). Before =
   `normalizeStoredSeats(role)`.
 - **createRole:** beside the dangling check (`roleCreateCommit.ts:116-123`), i.e. AFTER the
   exact-receipt replay branch (line ~110), so an idempotent replay of an already-committed
@@ -138,9 +139,25 @@ later months blocked, a count line with no reason, and «Reintentar» repeating 
 
 So `runV3ConfirmAttempt` (`v3ConfirmRun.ts:57`) gains a third pre-write guard, beside the two it
 already has (past month, drafts outside the horizon) and before step 2 (records): when any
-creatable draft holds a clash (`addedSeatClashes(null, seatsOf(draft), singsAndPlays)`), return
-`{ kind: "refused_guard", lines: [one seatClashSentence per clash, prefixed by the draft's
-date], retry: false }` — nothing written. Its input gains `singsAndPlays: ReadonlySet<string>`,
+creatable draft NOT yet in `state.createdLocalIds` holds a clash
+(`addedSeatClashes(null, seatsOf(draft), singsAndPlays)`), return `{ kind: "refused_guard",
+reason: "seat_clash", lines: [one line per clash], retry: false }` — nothing written. Drafts
+already created are skipped: they exist as services now, the server judges any later edit to
+them, and a flag unticked after their creation must not block the rest of the confirm forever.
+The line is v3 copy, so it lives in `v3Copy.ts` (`V3_LINES.seatClash(dateLabel, sentence)`);
+only the sentence comes from `seatClashSentence`.
+
+`refused_guard` today has two causes (past/ceiling month, drafts outside the horizon) and its
+callers re-derive which one from `confirmGuard` — `apply_schedule` prints «{Mes} ya pasó…
+Vuelve a correr solve_month» for anything that is not a ceiling (`applySchedule.ts:385-391`),
+which would be false for a clash and would send the model to re-solve. So the result gains a
+discriminator, `reason: "past" | "ceiling" | "outside_horizon" | "seat_clash"`, set by each
+guard, and both callers branch on it instead of recomputing: `MonthGenerator.afterV3Attempt`
+already shows `result.lines`; `apply_schedule` shows `result.lines` for `seat_clash` (names and
+seat labels only) with `code: "invalid_request", detail: "seat_clash"` and no `next:
+"solve_month"` (fixing the cell in /admin, or editing the proposal, is the way out), keeps its
+current lines for `past`/`ceiling`, and for `outside_horizon` uses
+`V3_LINES.draftsOutsideHorizon` (today it wrongly says «ya pasó» there too). Its input gains `singsAndPlays: ReadonlySet<string>`,
 built by the callers from the members they already hold (`MonthGenerator.confirmV3` from
 `adminMembersQuery`, which projects `singsAndPlays` since #217; `apply_schedule` from the member
 list it already loads (`sources.members`, `applySchedule.ts:~300`), its projection extended with
@@ -177,14 +194,16 @@ so the two wordings cannot drift:
   case when its input's new optional `seatClashes` field is non-empty. `ServicesPanel`'s
   `describeMutationError` (`ServicesPanel.tsx:142-153`, the card's copy-instruments and edit
   flows) parses `body.details.seatClashes` beside `dependencies` and passes it.
-- The planner's two swap toasts (`MonthGenerator.tsx` ~3763 seat/section swap «No se
-  intercambiaron … (code)», and the column swap ~3962) show the sentence instead of the bare
-  code when the refusal carries `seatClashes`.
+- The planner's swap refusal toast: every stored swap (seat, section, column) goes through
+  `handleRejectedStoredSwap` (`MonthGenerator.tsx:3748-3772`, «No se intercambiaron … (code)»);
+  one change there shows the sentence instead of the bare code when the refusal carries
+  `seatClashes`.
 - MCP, every surface that renders one of the four writers' refusals, each emitting names and
   seat labels only — `memberId` never reaches the wire (members are tokens or names on the MCP,
   ADR-0062):
   - `refusalFor` (`app/mcp/writes/refusals.ts`) gains a branch for `details.seatClashes`
-    (`swap_assignment`'s path);
+    (`swap_assignment`'s path) that LEADS with the clash sentence(s) instead of
+    `CODE_COPY.invalid_request`;
   - `serviceRefusalLine` (same file, `apply_schedule`'s per-draft line, `applySchedule.ts:185`):
     the same branch, so it never prints «Detalle técnico: seat_clash»; and `ISSUE_COPY` gains a
     `seat_clash` entry as the fallback when the detail is absent;
@@ -230,15 +249,21 @@ so the two wordings cannot drift:
    writer modules calls `addedSeatClashes(` and the call precedes, in source order, its first
    occurrence of every write-capable call it makes — `resolveOwnedCoordination(`,
    `bootstrapLegacyLock(`, `loadSpecialIdentityCoordinator(`, `loadTargetOccupancy(`,
-   `.transaction(` (editRole's first write is the legacy bootstrap, not coordination); a list of the
+   `.transaction(` (editRole's first write is the legacy bootstrap, not coordination), scanning
+   the source with comments and import lines stripped (several of these files name the calls in
+   prose); and that the guard call sits inside the writer's exported function body; a list of the
    non-seat writers (§2) is pinned so a NEW `*Commit.ts` must be classified (fails until added
    to one list or the other).
-5. **Month confirm (D3b)** — the guard in `runV3ConfirmAttempt` and v2's `handleConfirm`.
-   Tests (`v3ConfirmRun.test.ts`): a draft with an unmarked Coro + Drums returns
-   `refused_guard` naming the person and both seats, and `putRecords`/`postDraft` are never
-   called; the same draft with the member marked proceeds; a retry after records already landed
-   (state.recordsDone) with a clash draft still refuses before posting. `apply_schedule` passes
-   the flag set (its test covers the refusal line).
+5. **Month confirm (D3b)** — the guard and the `reason` discriminator in
+   `runV3ConfirmAttempt`, v2's `handleConfirm`, and both callers' branches. Tests
+   (`v3ConfirmRun.test.ts`): a draft with an unmarked Coro + Drums returns `refused_guard` with
+   `reason: "seat_clash"` naming the person and both seats, and `putRecords`/`postDraft` are
+   never called; the same draft with the member marked proceeds; a retry after records landed
+   (`state.recordsDone`) with an uncreated clash draft still refuses before posting; a clash in
+   an already-created draft is skipped; each existing guard sets its own reason. `apply_schedule`
+   tests: a clash proposal answers the clash line, `code: "invalid_request"`, no «ya pasó» line
+   and no `next: "solve_month"`; an outside-horizon refusal answers
+   `draftsOutsideHorizon`; past/ceiling answers unchanged.
 6. **Copy** — D5's surfaces, with tests: `mutationErrorMessage` with `seatClashes`;
    `refusalFor` and `serviceRefusalLine` with `seatClashes` emit the sentence and no
    `memberId`/document id anywhere in `content` or `structuredContent`; `copy_instruments`' and
