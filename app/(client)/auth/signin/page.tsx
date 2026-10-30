@@ -8,6 +8,8 @@ import Image from "next/image";
 import Button from "@/app/components/ui/Button";
 import Presence from "@/app/components/ui/Presence";
 import { revealProps } from "@/app/utils/reveal";
+import { PAGE_LEDE, PAGE_TITLE, SHEET_TITLE } from "@/app/utils/homeHero";
+import { HAIRLINE_INPUT_CLASS, HAIRLINE_LABEL_CLASS } from "@/app/components/ui/hairlineField";
 
 function SignInForm() {
   const searchParams = useSearchParams();
@@ -18,6 +20,7 @@ function SignInForm() {
   const [password, setPassword] = useState("");
   const [loading, setLoading]   = useState(false);
   const [credError, setCredError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function handleGoogle() {
     if (isNativeApp()) {
@@ -55,95 +58,100 @@ function SignInForm() {
   const errorMsg = credError ?? (urlError ? "Error al iniciar sesión. Intenta de nuevo." : null);
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-5 py-10 sm:py-14">
-      <div className="w-full max-w-md">
+    <div className="flex min-h-screen items-center justify-center px-6 py-12 sm:py-16">
+      <div className="w-full max-w-md md:max-w-[440px]">
 
-        {/* Backstage identity */}
-        <div className="brand-stage-hero mb-7 flex flex-col items-center text-center" {...revealProps(0)}>
+        {/* The lockup: the mark, the name in the display face and one lede — the same
+            page head as every screen of the «millones» pass (ADR-0070), no card and
+            no beam. */}
+        <div className="space-y-4 md:space-y-5" {...revealProps(0)}>
           <Image
             src="/icons/backstage-v2-192.png"
             alt=""
             width={88}
             height={88}
             priority
-            className="brand-lockup-mark h-[88px] w-[88px] rounded-[24px]"
+            className="brand-lockup-mark h-[72px] w-[72px] rounded-[20px] md:h-[88px] md:w-[88px] md:rounded-[24px]"
           />
-          <h1 className="mt-5 font-display text-3xl uppercase tracking-[0.16em] text-ink">
-            Backstage
-          </h1>
-          <p className="mt-1 font-label text-[11px] uppercase tracking-[0.24em] text-ink-dim">
-            Oasis Worship Team
-          </p>
+          <h1 className={PAGE_TITLE}>Backstage</h1>
+          <p className={PAGE_LEDE}>Oasis Worship Team · inicia sesión para ver tus servicios y canciones.</p>
         </div>
 
-        <section className="brand-facet-panel rounded-[var(--brand-radius-panel)] border border-ink-dim/20 bg-surface-console/75 p-5 shadow-[0_24px_80px_rgb(var(--elevation-rgb)/0.28)] backdrop-blur-sm sm:p-6" {...revealProps(3)}>
-          <div className="mb-5">
-            <h2 className="font-label text-[11px] uppercase tracking-[0.22em] text-accent">Acceso del equipo</h2>
-            <p className="mt-1 font-body text-sm text-ink-dim">Inicia sesión para ver tus servicios y canciones.</p>
-          </div>
-
+        <div className="mt-9 space-y-6 md:mt-10" {...revealProps(3)}>
           {/* Error — inside Presence so the region is ABSENT until there is
               something to announce, rather than an empty live region sitting in
-              the tree for a screen reader to walk past. */}
+              the tree for a screen reader to walk past. A strip, not a box. */}
           <Presence show={!!errorMsg} variant="rise" as="div">
-            <p role="alert" className="mb-4 text-sm text-negative-muted bg-negative-surface-deepest/35 border border-negative-strong/30 rounded-[var(--brand-radius-control)] px-4 py-3">
+            <p role="alert" className="border-l-2 border-negative-strong/60 py-1 pl-4 font-body text-[15px] leading-snug text-negative-fg">
               {errorMsg}
             </p>
           </Presence>
 
-          {/* SSO buttons */}
-          <div className="space-y-3">
-            <div {...revealProps(4)}>
-              <Button variant="secondary" size="lg" className="w-full gap-3" onClick={handleGoogle} disabled={loading}>
-                <GoogleIcon />
-                Continuar con Google
-              </Button>
-            </div>
+          <div {...revealProps(4)}>
+            <Button variant="secondary" size="lg" className="w-full gap-3" onClick={handleGoogle} disabled={loading}>
+              <GoogleIcon />
+              Continuar con Google
+            </Button>
           </div>
 
-          {/* Divider */}
-          <div className="my-5 flex items-center gap-3">
-            <div className="flex-1 h-px bg-ink-dim/20" />
-            <span className="font-label text-[11px] uppercase tracking-widest text-ink-dim">o</span>
-            <div className="flex-1 h-px bg-ink-dim/20" />
+          <div className="flex items-center gap-3.5" aria-hidden="true">
+            <span className="h-px flex-1 bg-ink/[0.10]" />
+            <span className={SHEET_TITLE}>o con tu correo</span>
+            <span className="h-px flex-1 bg-ink/[0.10]" />
           </div>
 
-          {/* Credentials */}
-          <form onSubmit={handleCredentials} className="space-y-3">
-            <div {...revealProps(5)}>
-              <input
-                type="email"
-                placeholder="Email"
-                aria-label="Correo electrónico"
-                autoComplete="username"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full min-h-11 px-4 py-3 rounded-[var(--brand-radius-control)] border border-edge-control bg-surface-base/35 font-body text-[16px] sm:text-sm text-ink placeholder:text-placeholder focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40 transition-colors"
-              />
-            </div>
-            <div {...revealProps(6)}>
-              <input
-                type="password"
-                placeholder="Contraseña"
-                aria-label="Contraseña"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full min-h-11 px-4 py-3 rounded-[var(--brand-radius-control)] border border-edge-control bg-surface-base/35 font-body text-[16px] sm:text-sm text-ink placeholder:text-placeholder focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40 transition-colors"
-              />
+          {/* Credentials — the hairline fields of Mi perfil (`ui/hairlineField.ts`). */}
+          <form onSubmit={handleCredentials} className="space-y-6">
+            <div className="space-y-5">
+              <label className="block space-y-1.5" {...revealProps(5)}>
+                <span className={HAIRLINE_LABEL_CLASS}>Correo</span>
+                <input
+                  type="email"
+                  placeholder="tu@correo.com"
+                  autoComplete="username"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className={HAIRLINE_INPUT_CLASS}
+                />
+              </label>
+              <label className="block space-y-1.5" {...revealProps(6)}>
+                <span className={HAIRLINE_LABEL_CLASS}>Contraseña</span>
+                {/* «Mostrar» sits on the field's own rule: a sign-in typed on a phone is
+                    the one place a member cannot see what they wrote. */}
+                <span className="relative block">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className={`${HAIRLINE_INPUT_CLASS} pr-24`}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    type="button"
+                    aria-pressed={showPassword}
+                    onClick={() => setShowPassword((on) => !on)}
+                    className="absolute bottom-1 right-0"
+                  >
+                    {showPassword ? "Ocultar" : "Mostrar"}
+                  </Button>
+                </span>
+              </label>
             </div>
             <div {...revealProps(7)}>
               <Button type="submit" variant="primary" size="lg" className="w-full" busy={loading} busyLabel="Entrando…" disabled={loading}>
                 Iniciar sesión
               </Button>
             </div>
-            <p className="font-body text-xs text-ink-dim text-center pt-1">
+            <p className="text-center font-body text-[13px] leading-snug text-ink-dim">
               ¿Olvidaste tu contraseña? Pídele a un administrador que la restablezca.
             </p>
           </form>
-        </section>
+        </div>
 
       </div>
     </div>

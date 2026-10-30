@@ -3,11 +3,12 @@
 // its own controls.
 //
 // Three things are pinned here, and each one is a thing a refactor silently
-// loses: the stagger ORDER (the lockup, then the panel, then each control), the
-// alert's arrival through `Presence` (absent from the DOM until there is
+// loses: the stagger ORDER (the lockup, then the form block, then each control),
+// the alert's arrival through `Presence` (absent from the DOM until there is
 // something to say, so a screen reader is not handed an empty live region), and
-// the 16 px inputs — `inputFontSize.test.ts` guards the source string, this one
-// guards that the string is still on the control the member actually focuses.
+// the phone-safe inputs — since the «millones» pass (ADR-0070, phase 8) they are
+// the hairline fields of Mi perfil at 17 px; `inputFontSize.test.ts` guards the
+// source string, this one guards that it is on the control the member focuses.
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -33,6 +34,8 @@ vi.mock("@/app/utils/native", () => ({
 }));
 
 import SignInPage from "../signin/page";
+import { HAIRLINE_INPUT_CLASS } from "@/app/components/ui/hairlineField";
+import { PAGE_TITLE } from "@/app/utils/homeHero";
 
 // Warm the LazyMotion feature chunk (ADR-0031), precedent Collapse.test.tsx.
 beforeAll(async () => {
@@ -47,7 +50,7 @@ afterEach(() => {
 const renderSignIn = () => render(<MotionProvider><SignInPage /></MotionProvider>);
 
 describe("sign-in", () => {
-  it("staggers lockup, panel, Google, fields and submit in that order", () => {
+  it("staggers lockup, form block, Google, fields and submit in that order", () => {
     const { container } = renderSignIn();
     const idx = [...container.querySelectorAll("[data-reveal]")].map((el) =>
       (el as HTMLElement).style.getPropertyValue("--reveal-i"),
@@ -64,7 +67,7 @@ describe("sign-in", () => {
     renderSignIn();
     expect(screen.queryByRole("alert")).toBeNull();
 
-    fireEvent.change(screen.getByLabelText("Correo electrónico"), { target: { value: "a@b.mx" } });
+    fireEvent.change(screen.getByLabelText("Correo"), { target: { value: "a@b.mx" } });
     fireEvent.change(screen.getByLabelText("Contraseña"), { target: { value: "secreto" } });
     fireEvent.click(screen.getByRole("button", { name: "Iniciar sesión" }));
 
@@ -79,10 +82,36 @@ describe("sign-in", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Iniciar sesión" })).toBeTruthy());
   });
 
-  it("keeps 16px inputs on a phone", () => {
+  it("draws the hairline fields, never under 16px on a phone", () => {
     renderSignIn();
-    expect(screen.getByLabelText("Correo electrónico").className).toMatch(/text-\[16px\]/);
-    expect(screen.getByLabelText("Contraseña").className).toMatch(/text-\[16px\]/);
+    expect(screen.getByLabelText("Correo").className).toContain(HAIRLINE_INPUT_CLASS);
+    expect(screen.getByLabelText("Contraseña").className).toContain(HAIRLINE_INPUT_CLASS);
+    expect(HAIRLINE_INPUT_CLASS).toMatch(/text-\[17px\]/);
+  });
+
+  it("reveals the typed password behind «Mostrar» and hides it again", () => {
+    renderSignIn();
+    const field = screen.getByLabelText("Contraseña") as HTMLInputElement;
+    expect(field.type).toBe("password");
+    const toggle = screen.getByRole("button", { name: "Mostrar" });
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(toggle);
+    expect(field.type).toBe("text");
+    expect(screen.getByRole("button", { name: "Ocultar" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "Ocultar" }));
+    expect(field.type).toBe("password");
+  });
+
+  it("names the screen with the page title and reads the error as a strip", async () => {
+    signInMock.mockResolvedValueOnce({ error: "CredentialsSignin" });
+    renderSignIn();
+    expect(screen.getByRole("heading", { level: 1, name: "Backstage" }).className).toBe(PAGE_TITLE);
+    fireEvent.change(screen.getByLabelText("Correo"), { target: { value: "a@b.mx" } });
+    fireEvent.change(screen.getByLabelText("Contraseña"), { target: { value: "secreto" } });
+    fireEvent.click(screen.getByRole("button", { name: "Iniciar sesión" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert.className).toMatch(/border-l-2/);
+    expect(alert.className).not.toMatch(/rounded/);
   });
 
   it("offers Google through the house Button", () => {
