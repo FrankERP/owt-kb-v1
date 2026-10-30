@@ -208,7 +208,7 @@ export function rankCandidates(input: {
       const conflict = heldSeats.find(
         (held) => held.seatId !== seat.id && seatsClash(held, { seatId: seat.id, category: seat.category }, m.singsAndPlays),
       );
-      const blockedReason = conflict ? `Ya asignado en ${labelOfSeatId(conflict.seatId)}` : null;
+      const blockedReason = conflict ? clashReason(conflict.seatId, conflict.category !== seat.category) : null;
       const strip = weekKeys.map((k) => servedInWeek.get(k)?.has(m._id) ?? false);
       // Pad on the left so every strip is the same width regardless of history.
       const recent = [...Array(Math.max(0, weeks - strip.length)).fill(false), ...strip];
@@ -254,6 +254,17 @@ export function rankCandidates(input: {
   return rows.sort(
     (a, b) => rank(a) - rank(b) || a.load - b.load || a.name.localeCompare(b.name, "es"),
   );
+}
+
+/**
+ * C2's sentence. A voice + instrument clash also names the way out — the
+ * Miembros checkbox (ADR-0078) — so an admin refused for Frank's twin is told
+ * how to allow it, not just that it is refused. The picker, the drag notice and
+ * the MCP judges all show this string.
+ */
+export function clashReason(heldSeatId: string, crossCategory: boolean): string {
+  const base = `Ya asignado en ${labelOfSeatId(heldSeatId)}`;
+  return crossCategory ? `${base}; para cantar y tocar en un servicio, marca «Canta y toca a la vez» en Miembros` : base;
 }
 
 /** `lead` -> `Lead`, `instrumento:Bass` -> `Bass`. */
