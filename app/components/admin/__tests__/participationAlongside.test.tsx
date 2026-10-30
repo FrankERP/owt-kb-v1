@@ -270,7 +270,9 @@ function stubWideViewport(wide = true, queries: string[] = []) {
     (query: string) => {
       queries.push(query);
       return {
-        matches: wide,
+        // A `max-width` query is the OTHER side of a width: a wide viewport answers it
+        // `false` (the candidates sheet below `xl`, ADR-0070's Admin pass, asks one).
+        matches: query.includes("max-width") ? !wide : wide,
         media: query,
         onchange: null,
         addEventListener: () => {},
@@ -561,6 +563,11 @@ describe("the grid's chart placement — an in-flow column, at every width", () 
     const queries = stubWideViewport();
     goToGrid([]);
     expect(queries.filter((q) => q.includes("min-width"))).toEqual([]);
+    // The one `max-width` query belongs to the candidates PICKER (a sheet below `xl`,
+    // `useMediaQuery`), not to the chart — which still consults nothing.
+    expect(queries.filter((q) => q.includes("max-width"))).toEqual(
+      queries.filter((q) => q === "(max-width: 1279.98px)"),
+    );
   });
 
   it("gives the candidate picker its own column, only while a cell is active", () => {

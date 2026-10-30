@@ -140,6 +140,7 @@ import { serviceTodayIso, type TargetPreflight } from "./serviceReadiness";
 import { FairnessEngineNote, FairnessSwitch } from "./FairnessSwitch";
 import { effectiveColumnCounts, fairnessSwitchLabel, isFairnessColumnPast } from "./fairnessToggleModel";
 import {
+  CARD_RAIL,
   CARD_STYLE,
   PREFLIGHT_COPY,
   SERVICE_LABEL,
@@ -149,12 +150,17 @@ import {
 import CueDialog from "../ui/CueDialog";
 import Button from "@/app/components/ui/Button";
 import { ExpandIcon } from "@/app/components/ui/icons";
+import { SHEET_TITLE } from "@/app/utils/homeHero";
+import { useMediaQuery } from "@/app/components/ui/useMediaQuery";
+import SearchLine from "@/app/components/ui/SearchLine";
+import { normalizeText } from "@/app/utils/normalizeText";
 import Collapse from "@/app/components/ui/Collapse";
 import Checkbox from "@/app/components/ui/Checkbox";
 import DateField from "@/app/components/ui/DateField";
 import Menu, { MenuHeader, MenuItem } from "@/app/components/ui/Menu";
 import Switch from "@/app/components/ui/Switch";
 import { CLEAR_WHAT_LABEL, type ClearScope, type ClearWhat } from "./clearCells";
+
 // T4 of the drag-and-drop plan. `moveOccupant` composes the grid's single write
 // helper, `withUpdatedCell` (now in `plannerModel.ts`, so the MCP proposal editor
 // can replay a move on the server), twice rather than mutating cells itself.
@@ -405,6 +411,9 @@ const cellKey = (columnId: string, rowId: string) => `${columnId}|${rowId}`;
  * `new Date(iso)`: a bare parse of a `YYYY-MM-DD` is UTC midnight and prints the
  * day before in America/Mexico_City.
  */
+/** Below Tailwind's `xl` (1280px) — the width at which the candidates stop being a third column. */
+const PICKER_SHEET_QUERY = "(max-width: 1279.98px)";
+
 const shortDate = (iso: string) =>
   new Date(iso.slice(0, 10) + "T12:00:00").toLocaleDateString("es-MX", {
     day: "numeric",
@@ -656,6 +665,32 @@ export default function PlannerGrid(props: PlannerGridProps) {
   const [pickedMove, setPickedMove] = useState<PickedMove | null>(null);
   const pickerRef = useRef<HTMLDivElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
+  /**
+   * Below `xl` there is no third column for the candidates, and a list stacked under
+   * the whole month is a scroll away from the seat that was tapped — so the picker is
+   * a `CueDialog` sheet there (ADR-0070's Admin pass). `false` on the server and in
+   * jsdom (`useMediaQuery`), so the column is what every existing test renders. Never
+   * in full screen: that overlay inerts everything outside itself, and the column
+   * already fits beside the fitted grid.
+   */
+  const narrowViewport = useMediaQuery(PICKER_SHEET_QUERY);
+  const pickerAsSheet = narrowViewport && !fullScreen;
+  /**
+   * The seat's ACTION, captured when the picker opens, for the sheet's post-exit focus restore
+   * (`restoreFocusRef`): `closePicker`'s own `.focus()` runs while the provider still holds the
+   * page `inert`, so without this a sheet dismissed on a phone dropped focus at the page top.
+   */
+  const sheetOpenerRef = useRef<HTMLElement | null>(null);
+  /** The sheet's search, keyed to the open cell so switching seats starts it empty (no effect, no flash). */
+  const [pickerSearch, setPickerSearch] = useState<{ key: string; text: string }>({ key: "", text: "" });
+  /**
+   * The seat the sheet was LAST opened for — payload that outlives the close, so the sheet
+   * stays mounted with `open={openCell !== null}` (the house pattern, `cueDialogMount.test.ts`)
+   * and keeps its body through the exit animation instead of blanking when `openCell` clears.
+   */
+  const [sheetSeat, setSheetSeat] = useState<{ rowId: string; columnId: string } | null>(null);
+  /** The last list the open picker drew — what the sheet shows while it animates out. */
+  const sheetLast = useRef<{ candidates: RankedCandidate[]; stranded: string[] }>({ candidates: [], stranded: [] });
 
   // Finding 5: `removeError` was never cleared by anything except a
   // SUCCESSFUL `removeRow` call, so "Vacía la fila antes de eliminarla"
@@ -1320,7 +1355,29 @@ export default function PlannerGrid(props: PlannerGridProps) {
   function openPicker(row: GridRow, columnId: string) {
     setOpenOrder(rankFor(row, columnId).map((c) => c.id));
     setOpenCell({ rowId: row.id, columnId });
+    setSheetSeat({ rowId: row.id, columnId });
+    setPickerSearch({ key: "", text: "" });
+    sheetOpenerRef.current = document.querySelector<HTMLElement>(
+      `[data-row-id="${row.id}"][data-column-id="${columnId}"] [data-cell-action]`,
+    );
   }
+
+  /**
+   * The picker does not cross surfaces. Leaving full screen on a narrow viewport would
+   * otherwise mount the sheet already open — a modal popping up on the page the admin just
+   * returned to, over the full-screen exit's own focus restore — so both exits (the «Salir»
+   * button and Escape) go through here. In the handlers, not an effect on `fullScreen`: a
+   * state write inside an effect is a cascading render the compiler lint flags, and the
+   * exit is a user action with two call sites. A viewport that narrows UNDER an open column
+   * (a rotation mid-pick) keeps the column until the next open — rare, and never modal.
+   */
+  const leaveFullScreen = useCallback(() => {
+    setFullScreen(false);
+    if (narrowViewport && openCell) {
+      setOpenCell(null);
+      setOpenOrder(null);
+    }
+  }, [narrowViewport, openCell]);
 
   /**
    * Closes the picker and hands focus BACK to the cell that opened it.
@@ -1430,14 +1487,14 @@ export default function PlannerGrid(props: PlannerGridProps) {
         return;
       }
       if (fullScreen) {
-        setFullScreen(false);
+        leaveFullScreen();
         return;
       }
       closePicker();
     };
     document.addEventListener("keydown", onKeyDown, true);
     return () => document.removeEventListener("keydown", onKeyDown, true);
-  }, [openKey, fullScreen, closePicker, pendingMove, pickedMove]);
+  }, [openKey, fullScreen, closePicker, leaveFullScreen, pendingMove, pickedMove]);
 
   /**
    * What `role="dialog" aria-modal="true"` promises, actually delivered.
@@ -1727,9 +1784,12 @@ export default function PlannerGrid(props: PlannerGridProps) {
   // One service alone gets a bounded column: stretched across the page, a seat chip is a
   // 900px-wide bar whose name sits a long way from its row label.
   const dateTrack = fullScreen ? "minmax(0, 1fr)" : singleColumn ? "minmax(150px, 26rem)" : "minmax(150px, 1fr)";
-  const labelTrack = fullScreen ? "minmax(140px, max-content)" : "minmax(176px, max-content)";
+  // One service alone also narrows the label column (a phone is where «Editar servicio» is
+  // mostly used): a 96px floor with a 9rem cap, the label wrapping past it, so the row's name
+  // and its chips share a 390px screen instead of the label taking half of it.
+  const labelTrack = fullScreen ? "minmax(140px, max-content)" : singleColumn ? "minmax(96px, 9rem)" : "minmax(176px, max-content)";
   const cellMinW = fullScreen ? "min-w-0" : "min-w-[150px]";
-  const labelMinW = fullScreen ? "min-w-[140px]" : "min-w-[176px]";
+  const labelMinW = fullScreen ? "min-w-[140px]" : singleColumn ? "min-w-[96px]" : "min-w-[176px]";
   // The row-label column is `sticky` inside the horizontal scroller, so the seat
   // being read stays on screen while the month scrolls under it — losing track
   // of which row you are in is the failure mode a narrower grid actually has.
@@ -1743,7 +1803,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
     // a dark slab with no frame around it. Full screen already sits on an opaque surface.
     <div
       data-planner-scroller=""
-      className={fullScreen ? undefined : `overflow-x-auto rounded-xl border border-accent/15 bg-surface-base${singleColumn ? " w-fit max-w-full" : ""}`}
+      className={fullScreen ? undefined : `overflow-x-auto border-y border-ink/[0.10] bg-surface-base${singleColumn ? " w-fit max-w-full" : ""}`}
     >
       <div
         className="grid"
@@ -1757,7 +1817,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
                 key={band.month}
                 data-month-band={band.month}
                 style={{ gridColumn: `span ${band.columnIds.length}` }}
-                className={`px-1 pb-1 pt-1.5 font-label text-[11px] uppercase tracking-widest text-accent ${i > 0 ? "border-l-2 border-accent/40" : ""}`}
+                className={`px-1 pb-1 pt-2 font-body text-sm font-semibold text-ink-muted ${i > 0 ? "border-l-2 border-accent/40" : ""}`}
               >
                 {band.label}
               </div>
@@ -1940,86 +2000,172 @@ export default function PlannerGrid(props: PlannerGridProps) {
   // Not "always mounted and empty": an idle 240px panel is 240px the grid does
   // not have for the ~90% of the time nobody is picking anybody. The template is
   // flex, so the centre column simply reclaims the width.
+  // The sheet reads the seat it was last opened for (`sheetSeat`), which `openCell`
+  // matches while it is open and outlives on the way out. For the exit frame it draws
+  // the LAST list it showed — the frozen order and the stranded rows included — from a
+  // ref written after every open render, never a fresh ranking (which would reorder
+  // the rows and drop the stranded «Quitar» while the sheet slides away, and would
+  // cost two `rankCandidates` passes per render on a desktop that never draws it).
+  const sheetRow = sheetSeat ? rows.find((r) => r.id === sheetSeat.rowId) ?? null : null;
+  const sheetColumn = sheetSeat ? columnById.get(sheetSeat.columnId) ?? null : null;
+  const pickerKey = openCell ? `${openCell.rowId}|${openCell.columnId}` : "";
+  const sheetSearch = pickerSearch.key === pickerKey ? pickerSearch.text : "";
+  const sheetNeedle = normalizeText(sheetSearch.trim());
+  const pickerOpen = openCell !== null && openRow !== null;
+  const sheetBase = pickerOpen ? openCandidates : sheetLast.current.candidates;
+  const sheetStranded = pickerOpen ? strandedOccupants : sheetLast.current.stranded;
+  const sheetCandidates = sheetNeedle
+    ? sheetBase.filter((c) => normalizeText(c.name).includes(sheetNeedle))
+    : sheetBase;
+  useEffect(() => {
+    if (pickerOpen) sheetLast.current = { candidates: openCandidates, stranded: strandedOccupants };
+  });
+
+  // The list is one piece of markup for the column and the sheet: the rows, the stranded
+  // occupants and the empty line do not know which surface holds them. The seat is an
+  // argument rather than `openCell`, because the sheet draws its last seat while closing.
+  const pickerList = (
+    candidates: RankedCandidate[],
+    stranded: string[],
+    className: string,
+    seat: { cell: { rowId: string; columnId: string }; row: GridRow },
+  ) => {
+    const { cell: openCell, row: openRow } = seat;
+    return (
+      <ul className={className}>
+        {candidates.map((candidate) => (
+          <CandidateRow
+            key={candidate.id}
+            candidate={candidate}
+            selected={(
+              cellsByKey
+                .get(cellKey(openCell.columnId, openCell.rowId))
+                ?.occupants.map((o) => o.memberId) ?? []
+            ).includes(candidate.id)}
+            mutationLocked={mutationLocked}
+            picked={
+              pickedMove?.source.memberId === candidate.id &&
+              pickedMove.source.rowId === openCell.rowId &&
+              pickedMove.source.columnId === openCell.columnId
+            }
+            onToggle={(id) => toggleCandidate(openRow, openCell.columnId, id, openCandidates)}
+            onOverride={(id) =>
+              overrideCandidate(openRow, openCell.columnId, id, openCandidates)
+            }
+            onPickSource={(id) =>
+              togglePickedMove({ rowId: openCell.rowId, columnId: openCell.columnId, memberId: id })
+            }
+          />
+        ))}
+        {/* Seated here, but not in the candidate list — so there is no other
+            way out: the drag gate judges the TARGET seat, so a mismatched
+            member can only be relocated, and one with no Tipo at all has no
+            legal target; row removal refuses a non-empty row. Without this the cell's own warning would name an
+            action the surface does not offer, which is precisely what
+            ADR-0029 records the retirement badge doing. Removal only: there
+            is no toggle back, because putting them back is what their Tipo
+            says they cannot do. */}
+        {stranded.map((id) => (
+          <li key={`stranded-${id}`} className="flex min-h-[54px] items-center justify-between gap-2 border-b border-ink/[0.10] py-2">
+            <span className={`font-body text-[15px] font-semibold text-warning-strong ${CARD_STYLE.longText}`}>
+              {memberName(id)}
+              <span className="block font-body text-xs font-normal text-ink-muted/80">
+                {membersById.has(id)
+                  ? "Su Tipo ya no permite este puesto"
+                  : "No se encontró a esta persona en el equipo"}
+              </span>
+            </span>
+            <button
+              type="button"
+              disabled={mutationLocked}
+              onClick={() => removeStrandedOccupant(openRow, openCell.columnId, id)}
+              aria-label={`Quitar a ${memberName(id)} de ${openRow.label}`}
+              className="min-h-[44px] shrink-0 rounded-full border border-warning-strong/40 px-3 font-body text-xs font-semibold text-warning-strong hover:bg-warning-strong/15 disabled:opacity-50"
+            >
+              Quitar
+            </button>
+          </li>
+        ))}
+        {candidates.length === 0 && stranded.length === 0 && (
+          <li className="py-3 font-body text-sm text-ink-dim">
+            {sheetNeedle && sheetBase.length > 0 ? "Nadie con ese nombre." : "Nadie elegible para este puesto."}
+          </li>
+        )}
+      </ul>
+    );
+  };
+
   const pickerColumn =
-    openCell && openRow && openColumn ? (
+    openCell && openRow && openColumn && !pickerAsSheet ? (
       <div
         ref={pickerRef}
         tabIndex={-1}
         role="region"
         aria-label={`Candidatos para ${openRow.label} — ${openColumn.date}`}
         data-candidate-picker
-        className={`${CARD_STYLE.dialog} self-start rounded-xl border border-accent/15 p-3 focus:outline-none xl:sticky xl:top-4 xl:order-3 xl:w-[240px] xl:shrink-0`}
+        className="self-start focus:outline-none xl:sticky xl:top-4 xl:order-3 xl:w-[240px] xl:shrink-0"
       >
         <div className="mb-2 flex items-start justify-between gap-2">
-          <span className="font-label text-xs uppercase tracking-widest text-ink-muted/70">
-            Candidatos para {openRow.label} — {openColumn.date}
+          <span className="min-w-0 space-y-1">
+            <span className={`block ${SHEET_TITLE}`}>Candidatos</span>
+            <span className="block font-body text-sm text-ink-dim">{openRow.label} · {openColumn.date}</span>
           </span>
-          <Button variant="ghost" size="lg"
+          <Button variant="ghost" size="md"
             onClick={closePicker}
-            className="shrink-0 min-w-[44px]"
+            className="-mr-2 shrink-0"
           >
             Cerrar
           </Button>
         </div>
-        <ul className="max-h-[60vh] space-y-1.5 overflow-y-auto pr-1">
-          {openCandidates.map((candidate) => (
-            <CandidateRow
-              key={candidate.id}
-              candidate={candidate}
-              selected={(
-                cellsByKey
-                  .get(cellKey(openCell.columnId, openCell.rowId))
-                  ?.occupants.map((o) => o.memberId) ?? []
-              ).includes(candidate.id)}
-              mutationLocked={mutationLocked}
-              picked={
-                pickedMove?.source.memberId === candidate.id &&
-                pickedMove.source.rowId === openCell.rowId &&
-                pickedMove.source.columnId === openCell.columnId
-              }
-              onToggle={(id) => toggleCandidate(openRow, openCell.columnId, id, openCandidates)}
-              onOverride={(id) =>
-                overrideCandidate(openRow, openCell.columnId, id, openCandidates)
-              }
-              onPickSource={(id) =>
-                togglePickedMove({ rowId: openCell.rowId, columnId: openCell.columnId, memberId: id })
-              }
-            />
-          ))}
-          {/* Seated here, but not in the candidate list — so there is no other
-              way out: the drag gate judges the TARGET seat, so a mismatched
-              member can only be relocated, and one with no Tipo at all has no
-              legal target; row removal refuses a non-empty row. Without this the cell's own warning would name an
-              action the surface does not offer, which is precisely what
-              ADR-0029 records the retirement badge doing. Removal only: there
-              is no toggle back, because putting them back is what their Tipo
-              says they cannot do. */}
-          {strandedOccupants.map((id) => (
-            <li key={`stranded-${id}`} className="flex items-center justify-between gap-2 rounded-lg border border-warning-strong/40 bg-warning-strong/10 px-2 py-1.5">
-              <span className={`font-label text-xs text-warning-strong ${CARD_STYLE.longText}`}>
-                {memberName(id)}
-                <span className="block font-body text-[10px] normal-case text-ink-muted/80">
-                  {membersById.has(id)
-                    ? "Su Tipo ya no permite este puesto"
-                    : "No se encontró a esta persona en el equipo"}
-                </span>
-              </span>
-              <button
-                type="button"
-                disabled={mutationLocked}
-                onClick={() => removeStrandedOccupant(openRow, openCell.columnId, id)}
-                aria-label={`Quitar a ${memberName(id)} de ${openRow.label}`}
-                className="min-h-[44px] shrink-0 rounded-lg border border-warning-strong/40 px-2 font-label text-[10px] uppercase tracking-widest text-warning-strong hover:bg-warning-strong/15 disabled:opacity-50"
-              >
-                Quitar
-              </button>
-            </li>
-          ))}
-          {openCandidates.length === 0 && strandedOccupants.length === 0 && (
-            <li className="font-body text-xs italic text-mono-600">Nadie elegible para este puesto.</li>
-          )}
-        </ul>
+        {pickerList(openCandidates, strandedOccupants, "max-h-[60vh] overflow-y-auto border-t border-ink/[0.10] pr-1", { cell: openCell, row: openRow })}
       </div>
+    ) : null;
+
+  // The same picker as a sheet. Mounted only while `pickerAsSheet` (a narrow REAL viewport —
+  // `CueDialog` throws outside a `CueDialogProvider`, and jsdom never takes this branch) and
+  // after a first open (`sheetSeat`), then kept mounted and driven by `open={…}` like every
+  // house dialog, so it animates out with its body intact. It keeps the column's region, so
+  // focus lands on the same `aria-label`, and every dismissal — Escape, the scrim, the grip,
+  // «Listo» — is the one `closePicker`; the provider's post-exit restore then lands on the
+  // seat's action through `restoreFocusRef` (the synchronous focus inside `closePicker` is
+  // ignored while the page is still inert).
+  const pickerSheet =
+    pickerAsSheet && sheetSeat && sheetRow && sheetColumn ? (
+      <CueDialog
+        open={openCell !== null}
+        mode="sheet"
+        size="sm"
+        title="Candidatos"
+        label="Candidatos"
+        onDismiss={closePicker}
+        restoreFocusRef={sheetOpenerRef}
+      >
+        <div
+          ref={pickerRef}
+          tabIndex={-1}
+          role="region"
+          aria-label={`Candidatos para ${sheetRow.label} — ${sheetColumn.date}`}
+          data-candidate-picker="sheet"
+          className="space-y-4 px-5 pb-5 pt-4 focus:outline-none sm:px-6"
+        >
+          <p className="font-body text-sm text-ink-dim">
+            {sheetRow.label} · {sheetColumn.date}
+          </p>
+          <SearchLine
+            label="Buscar candidato"
+            placeholder="Buscar…"
+            value={sheetSearch}
+            onChange={(text) => setPickerSearch({ key: pickerKey, text })}
+          />
+          {pickerList(sheetCandidates, sheetStranded, "max-h-[50svh] overflow-y-auto border-t border-ink/[0.10]", { cell: sheetSeat, row: sheetRow })}
+          <p className="font-body text-[13px] leading-snug text-ink-dim">
+            Toca un nombre para ponerlo o quitarlo. Las barras son sus últimos cuatro servicios.
+          </p>
+          <Button variant="primary" size="lg" onClick={closePicker} className="w-full">
+            Listo
+          </Button>
+        </div>
+      </CueDialog>
     ) : null;
 
   // ── The left column ────────────────────────────────────────────────────────
@@ -2061,6 +2207,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
     <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
       {centre}
       {pickerColumn}
+      {pickerSheet}
       {participationColumn}
     </div>
   );
@@ -2102,11 +2249,11 @@ export default function PlannerGrid(props: PlannerGridProps) {
     >
       {fullScreen ? (
         <div className="flex items-center justify-between gap-3">
-          <p className="font-label text-xs uppercase tracking-widest text-mono-500">
+          <p className="font-body text-[15px] font-semibold text-ink">
             {monthLabel ?? "Cuadrícula del mes"}
           </p>
           <Button variant="secondary" size="lg"
-            onClick={() => setFullScreen(false)}
+            onClick={leaveFullScreen}
           >
             Salir de pantalla completa (Esc)
           </Button>
@@ -2120,7 +2267,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
             onClick={handleAutoClick}
             disabled={!!autoState.disabledReason || autoState.pending}
           >
-            {autoState.pending ? "Calculando..." : "🤖 Auto-asignar con Solver"}
+            {autoState.pending ? "Calculando..." : "Auto-asignar con Solver"}
           </Button>
         )}
         {mode === "create" && fillEmpty && (
@@ -2132,7 +2279,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
               disabled={autoState.pending}
               aria-labelledby={fillEmptyLabelId}
             />
-            <span id={fillEmptyLabelId} className="font-label text-xs uppercase tracking-widest text-ink-muted">
+            <span id={fillEmptyLabelId} className="font-body text-[15px] text-ink-muted">
               Solo llenar vacíos
             </span>
           </span>
@@ -2166,35 +2313,36 @@ export default function PlannerGrid(props: PlannerGridProps) {
           divide the viewport instead of overflowing it. One service alone already fits.
         */}
         {!singleColumn && (
-        <Button variant="secondary" size="lg"
+        <Button variant="ghost" size="md"
           // The anchor focus comes back to on the way out. An attribute rather
           // than a ref because leaving full screen rebuilds this subtree, so
           // this is a different DOM node by then — see the effect above.
           data-planner-fullscreen
           onClick={() => setFullScreen(true)}
+          className="ml-auto"
         >
           <ExpandIcon /> Pantalla completa
         </Button>
         )}
         {mode === "create" && autoState.disabledReason && (
-          <p className="font-body text-xs text-warning-strong">{autoState.disabledReason}</p>
+          <p className="basis-full font-body text-sm text-warning-strong">{autoState.disabledReason}</p>
         )}
-        {mode === "create" && autoState.error && <p className="font-body text-xs text-negative-fg">{autoState.error}</p>}
+        {mode === "create" && autoState.error && <p className="basis-full font-body text-sm text-negative-fg">{autoState.error}</p>}
         {mode === "create" && autoState.error && autoState.retry && (
           <Button variant="secondary" size="sm" onClick={autoState.retry}>Reintentar</Button>
         )}
         {mode === "create" && (autoState.notices ?? []).length > 0 && (
           <div className="basis-full space-y-1" data-auto-notices="">
             {(autoState.notices ?? []).map((line, i) => (
-              <p key={i} className="font-body text-xs text-warning-strong">{line}</p>
+              <p key={i} className="font-body text-sm text-warning-strong">{line}</p>
             ))}
           </div>
         )}
       </div>
 
       {mode === "create" && confirmingAuto && (
-        <div className="space-y-2 rounded-lg border border-warning-fg/30 bg-warning-fg/10 px-3 py-2">
-          <p className="font-body text-xs text-warning-soft">
+        <div className="space-y-3 border-l-2 border-warning-fg/60 py-1 pl-4">
+          <p className="font-body text-[15px] leading-snug text-warning-soft">
             {fillEmpty?.enabled
               ? `${fillEmpty.emptyVoiceSeats === 1 ? "Solo se llenará 1 lugar de voz vacío" : `Solo se llenarán los ${fillEmpty.emptyVoiceSeats} lugares de voz vacíos`} (Lead, BGV, Coro); lo que ya está puesto se respeta y se envía al solver como fijo. Los instrumentos vacíos se completan sin mover a nadie; FOH no se toca.`
               : (autoConfirmText ?? "Esto reemplazará toda asignación de voz (Lead, BGV, Coro) que el solver pueda resolver en este mes. Las asignaciones manuales de instrumentos y FOH no se tocan.")}
@@ -2205,7 +2353,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
               here rather than on the button because this is where the admin is
               told what Auto is about to do. */}
           {hasSpecialColumn && (
-            <p className="font-body text-xs text-warning-soft">
+            <p className="font-body text-sm leading-snug text-warning-soft">
               Los servicios especiales no pasan por el solver: se completan aquí mismo, solo Lead y
               BGV, respetando las reglas duras (nunca juntan a quienes una regla separa) y
               equilibrando la carga. Lo ya asignado a mano se conserva; si no queda nadie elegible,
@@ -2228,7 +2376,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
       )}
 
       {diagnostics && (
-        <div className="flex flex-wrap gap-2 font-label text-[11px] uppercase tracking-widest text-warning-strong">
+        <div className="flex flex-wrap gap-x-3 gap-y-1 font-body text-sm text-warning-strong">
           {diagnostics.objective_skipped && <span>Sin optimizar</span>}
           {diagnostics.fairness_relaxed && <span>Equidad relajada</span>}
           {diagnostics.sun_lead_fairness_relaxed && <span>Equidad de líderes de domingo relajada</span>}
@@ -2247,7 +2395,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
         </div>
       )}
       {diagnostics?.objective_skipped && (
-        <p className="font-body text-xs text-warning-strong">
+        <p className="font-body text-sm text-warning-strong">
           Este acomodo cumple las reglas, pero el solver no pudo optimizar la equidad: no tomó en
           cuenta la rotación de líderes ni que alguien repita el mismo rol en semanas seguidas.
           Revísalo antes de crear.
@@ -2257,7 +2405,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
       {mode === "create" && v3Report}
 
       {unresolvedNames.length > 0 && (
-        <p className="font-body text-xs text-negative-fg">
+        <p className="font-body text-sm text-negative-fg">
           Nombres no reconocidos: {unresolvedNames.join(", ")}
         </p>
       )}
@@ -2267,12 +2415,12 @@ export default function PlannerGrid(props: PlannerGridProps) {
           keeping at least one Lead. */}
       {/* Create mode only: it explains how Auto trims a short month, and the stored editor has no Auto. */}
       {mode === "create" && (
-        <p className="font-body text-[11px] text-mono-500">
+        <p className="font-body text-sm text-ink-dim">
           El líder siempre se asigna; primero queda vacío el coro, luego BGV.
         </p>
       )}
       {visibleUnfilled.length > 0 && (
-        <p className="font-body text-xs text-warning-strong">
+        <p className="font-body text-sm text-warning-strong">
           Lugares sin cubrir (faltó gente): {visibleUnfilled.length}
         </p>
       )}
@@ -2280,8 +2428,8 @@ export default function PlannerGrid(props: PlannerGridProps) {
       {/* The right column is empty space until a cell is picked, so say what
           fills it rather than leaving the admin to discover the interaction. */}
       {!openCell && (
-        <p className="font-body text-[11px] text-mono-500">
-          Selecciona una celda para ver los candidatos de ese puesto.
+        <p className="font-body text-sm text-ink-dim">
+          Toca un lugar para ver sus candidatos; arrastra un nombre para moverlo de lugar.
         </p>
       )}
         </>
@@ -2518,16 +2666,19 @@ function ColumnHeader({
 
   if (guardado) {
     return (
-      <div data-grid-column-id={column.columnId} className={`${minWClass} space-y-1 px-1`}>
-        <div className="flex items-center gap-1.5">
-          <span className="font-display text-base leading-none">{day}</span>
-          <span className="font-label text-xs uppercase tracking-widest text-mono-500">{month}</span>
+      <div data-grid-column-id={column.columnId} className={`${minWClass} space-y-1 px-1 pb-2`}>
+        <div className="flex items-baseline gap-1.5">
+          <span className="font-display text-[30px] font-semibold leading-none text-ink">{day}</span>
+          <span className="font-body text-[13px] text-ink-dim">{month}</span>
         </div>
-        <span className="font-label text-xs uppercase tracking-widest text-mono-500">{typeLabel}</span>
+        <span className="flex items-center gap-1.5 font-body text-sm font-semibold text-ink-muted">
+          <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${CARD_RAIL[column.type]}`} />
+          {typeLabel}
+        </span>
         {column.serviceName && (
-          <span className={`block font-body text-[11px] text-ink-muted/80 ${CARD_STYLE.longText}`}>{column.serviceName}</span>
+          <span className={`block font-body text-[13px] text-ink-muted/80 ${CARD_STYLE.longText}`}>{column.serviceName}</span>
         )}
-        <span data-guardado="" className="inline-block rounded-full border border-accent/30 px-1.5 py-0.5 font-label text-[10px] uppercase tracking-widest text-accent">
+        <span data-guardado="" className="block font-body text-[13px] text-accent">
           Guardado
         </span>
       </div>
@@ -2540,29 +2691,38 @@ function ColumnHeader({
           the admin had to lean in to tell one column from another. Bumped one
           step each. Deliberately scoped to THIS grid: the participation chart
           and the rest of the admin screens are unchanged. */}
-      <div className="flex items-center gap-1.5">
-        <span className="font-display text-base leading-none">{day}</span>
-        <span className="font-label text-xs uppercase tracking-widest text-mono-500">{month}</span>
+      <div className="flex items-baseline gap-1.5">
+        <span className="font-display text-[30px] font-semibold leading-none text-ink">{day}</span>
+        <span className="font-body text-[13px] text-ink-dim">{month}</span>
       </div>
-      {/* `block`: inline, the «Omitir» checkbox below sat glued to the end of «DOMINGO». */}
-      <span className="block font-label text-xs uppercase tracking-widest text-mono-500">{typeLabel}</span>
+      {/* The service type as dot + word (the Servicios cards' tones), never a tracked label. */}
+      <span className="flex items-center gap-1.5 font-body text-sm font-semibold text-ink-muted">
+        <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${CARD_RAIL[column.type]}`} />
+        {typeLabel}
+      </span>
       {/* E6/E18 — a special is identified by date AND name (`special_role:date:name`),
           and two differently-named specials can share a date. Without the name
           on screen the two columns are indistinguishable, and the header's own
           "ya existe un servicio especial con este nombre" copy points at a name
           the admin cannot see. Weekend columns carry no `serviceName` at all. */}
       {column.serviceName && (
-        <span className={`block font-body text-[11px] text-ink-muted/80 ${CARD_STYLE.longText}`}>
+        <span className={`block font-body text-[13px] text-ink-muted/80 ${CARD_STYLE.longText}`}>
           {column.serviceName}
           {stored && column.time ? ` · ${column.time}` : ""}
         </span>
       )}
       {stored && (
         <div className="flex flex-wrap items-center gap-1">
+          <span className="font-body text-[13px] text-ink-dim">
+            {"published" in column && column.published ? "Publicado" : "Borrador"}
+          </span>
           {!storedCounts && (
-            <span data-counts-off="" className="rounded-full border border-warning-fg/40 px-1.5 py-0.5 font-label text-[10px] uppercase tracking-widest text-warning-strong">
-              No cuenta para equidad
-            </span>
+            <>
+              <span aria-hidden="true" className="font-body text-[13px] text-ink-dim">·</span>
+              <span data-counts-off="" className="font-body text-[13px] text-warning-strong">
+                No cuenta para equidad
+              </span>
+            </>
           )}
           <Button
             variant="icon"
@@ -2576,7 +2736,7 @@ function ColumnHeader({
           </Button>
         </div>
       )}
-      {stored && readOnly && <p className="font-body text-[10px] text-warning-strong">Solo lectura: revisa la integridad del servicio.</p>}
+      {stored && readOnly && <p className="font-body text-xs text-warning-strong">Solo lectura: revisa la integridad del servicio.</p>}
       {stored && (
         <Collapse id={editRegionId} open={editing} className="space-y-1.5 pt-1">
           <DateField
@@ -2591,13 +2751,13 @@ function ColumnHeader({
           />
           {column.type === "special_role" && (
             <>
-              <label className="block font-label text-[9px] uppercase tracking-widest text-mono-500">
+              <label className="block font-label text-[10px] uppercase tracking-widest text-mono-500">
                 Nombre
                 <input
                   value={column.serviceName ?? ""}
                   disabled={readOnly || mutationLocked}
                   onChange={(event) => onStoredHeaderChange?.(column.columnId, { serviceName: event.target.value })}
-                  className="mt-1 w-full rounded border border-accent/15 bg-transparent px-1.5 py-1 font-body text-[11px] normal-case tracking-normal text-ink-muted"
+                  className="mt-1 w-full rounded border border-accent/15 bg-transparent px-1.5 py-1 font-body text-[16px] normal-case tracking-normal text-ink-muted sm:text-[13px]"
                 />
               </label>
               <DateField
@@ -2627,7 +2787,7 @@ function ColumnHeader({
           un-skip that changes nothing. */}
       {!stored && (
         <Checkbox
-          className="font-label text-[10px] uppercase tracking-widest text-mono-500"
+          className="font-body text-[13px] text-ink-dim"
           checked={skipped || blockCopy !== null}
           disabled={blockCopy !== null}
           onChange={onToggleSkip}
@@ -2660,7 +2820,7 @@ function ColumnHeader({
         </Menu>
       )}
       {!stored && blockCopy && (
-        <p className={`font-body text-[10px] text-warning-strong ${CARD_STYLE.longText}`}>{blockCopy}</p>
+        <p className={`font-body text-xs text-warning-strong ${CARD_STYLE.longText}`}>{blockCopy}</p>
       )}
       {/* Suppressed while blocked: the preflight's special branch is name-blind,
           so its badge would read "Se puede crear" right beside the reason this
@@ -2669,12 +2829,12 @@ function ColumnHeader({
       {!stored && preflight && !(blockCopy && preflight.state === "creatable") && (
         <div>
           <span
-            className={`inline-flex rounded-full border px-1.5 py-0.5 font-label text-[10px] uppercase tracking-widest ${TONE_CLASS[PREFLIGHT_COPY[preflight.state].tone]}`}
+            className={`inline-flex font-body text-[13px] ${TONE_CLASS[PREFLIGHT_COPY[preflight.state].tone]}`}
           >
             {PREFLIGHT_COPY[preflight.state].text}
           </span>
           {preflight.state !== "creatable" && preflight.reasons.length > 0 && (
-            <p className={`font-body text-[10px] text-mono-400 ${CARD_STYLE.longText}`}>
+            <p className={`font-body text-xs text-mono-400 ${CARD_STYLE.longText}`}>
               {preflight.reasons.map(describePreflightReason).join(" · ")}
             </p>
           )}
@@ -2774,7 +2934,7 @@ function RowGroup({
               down the column read as six warnings (the accessible name is the
               same either way). */}
           <span className="flex items-center gap-1">
-            <span className="font-label text-sm uppercase tracking-widest text-ink-muted/70 break-words">
+            <span className="font-body text-[15px] font-semibold text-ink-muted break-words">
               {row.label}
             </span>
             {onRemove && !manualTag && (
@@ -2792,7 +2952,7 @@ function RowGroup({
             )}
           </span>
           {manualTag && row.category !== "voz" && (
-            <span className="font-label text-[9px] uppercase tracking-widest text-mono-500">
+            <span className="font-body text-xs text-ink-dim">
               asignación manual
             </span>
           )}
@@ -2802,13 +2962,13 @@ function RowGroup({
               onClick={onRemove}
               disabled={mutationLocked}
               aria-label={`Eliminar fila ${row.label}`}
-              className="font-label text-[10px] uppercase tracking-widest text-negative-fg/80 hover:text-negative-fg"
+              className="font-body text-xs font-semibold text-negative-fg/80 hover:text-negative-fg"
             >
               Eliminar
             </button>
           )}
         </div>
-        {removeError && <p className="font-body text-[11px] text-negative-fg">{removeError}</p>}
+        {removeError && <p className="font-body text-xs text-negative-fg">{removeError}</p>}
       </div>
       {columns.map((column) => {
         if (!rowAppliesTo(row, column)) {
@@ -3046,7 +3206,7 @@ function GridCellView({
       <div className="relative">
         <div className="flex flex-wrap gap-1">
           {memberIds.length === 0 && (
-            <span className="font-body text-xs italic text-mono-600">Sin asignar</span>
+            <span className="font-body text-[13px] text-ink-dim">Sin asignar</span>
           )}
           {memberIds.map((id, index) => {
             // Finding 1: `duplicates` is keyed by member alone across the whole
@@ -3146,7 +3306,7 @@ function GridCellView({
                 // TEXT stays `text-ink-muted`: the `+N`'s `text-warning-strong`
                 // is ~3.5:1 on that fill in the light theme, and the name is the
                 // point (ADR-0045).
-                className={`rounded-full border px-1.5 py-0.5 font-label text-xs text-ink-muted ${CARD_STYLE.longText} ${
+                className={`rounded-full border px-2.5 py-1 font-body text-sm font-semibold text-ink ${CARD_STYLE.longText} ${
                   isDuplicate || ruleBroken
                     ? "border-negative-strong/50 bg-negative-strong/10"
                     : tipoMismatch || pinKinds.length > 0
@@ -3177,7 +3337,7 @@ function GridCellView({
         {overflow && (
           <p
             title="Por encima del objetivo — se acepta de todos modos"
-            className="mt-1 font-label text-[10px] uppercase tracking-widest text-warning-strong"
+            className="mt-1 font-body text-xs text-warning-strong"
           >
             <span aria-hidden="true">{memberIds.length}/{target} · sobre el objetivo</span>
             <span className="sr-only">Por encima del objetivo — se acepta de todos modos</span>
@@ -3188,7 +3348,7 @@ function GridCellView({
             the fix (open the cell, toggle them off) is only obvious once they do.
             `evaluate`'s self-exemption is what keeps that toggle-off possible. */}
         {flagged.map((x) => (
-          <p key={x.id} className={`font-body text-[9px] text-negative-fg ${CARD_STYLE.longText}`}>
+          <p key={x.id} className={`font-body text-xs text-negative-fg ${CARD_STYLE.longText}`}>
             ⚠ {memberName(x.id)}: {x.v.reason}
           </p>
         ))}
@@ -3196,7 +3356,7 @@ function GridCellView({
             E13 stops re-flagging it; this is what keeps it VISIBLE rather than
             silent, and it names the rule that was set aside. */}
         {overridden.map((x) => (
-          <p key={x.id} className={`font-body text-[9px] text-warning-strong ${CARD_STYLE.longText}`}>
+          <p key={x.id} className={`font-body text-xs text-warning-strong ${CARD_STYLE.longText}`}>
             Regla anulada — {memberName(x.id)}: {x.v.reason}
           </p>
         ))}
@@ -3206,14 +3366,14 @@ function GridCellView({
             simply stays here, silently. Named rather than tinted alone: the
             colour says something is wrong, the line says who and what to do. */}
         {mismatched.map((id) => (
-          <p key={`tipo-${id}`} className={`font-body text-[9px] text-warning-strong ${CARD_STYLE.longText}`}>
+          <p key={`tipo-${id}`} className={`font-body text-xs text-warning-strong ${CARD_STYLE.longText}`}>
             ⚠ {memberName(id)}: su Tipo ya no incluye {TYPE_LABEL[row.category]} — ábrelo para quitarlo
           </p>
         ))}
         {/* Seated, but does not DECLARE this instrument (spec §7). Its own line,
             separate from the Tipo one: two questions, two answers. */}
         {undeclared.map((id) => (
-          <p key={`instr-${id}`} className={`font-body text-[9px] text-warning-strong ${CARD_STYLE.longText}`}>
+          <p key={`instr-${id}`} className={`font-body text-xs text-warning-strong ${CARD_STYLE.longText}`}>
             ⚠ {memberName(id)}: no declara {row.label} — revísalo en Miembros
           </p>
         ))}
@@ -3223,16 +3383,16 @@ function GridCellView({
           const occurrence = memberIds.slice(0, index).filter((x) => x === id).length;
           const kinds = pinConflicts?.get(pinSeatKey({ columnId: column.columnId, rowId: row.id, memberId: id, occurrence })) ?? [];
           return kinds.map((k) => (
-            <p key={`pin-${id}-${occurrence}-${k}`} className={`font-body text-[9px] text-warning-strong ${CARD_STYLE.longText}`}>
+            <p key={`pin-${id}-${occurrence}-${k}`} className={`font-body text-xs text-warning-strong ${CARD_STYLE.longText}`}>
               ⚠ {memberName(id)}: {PIN_CONFLICT_LINE[k](row.label)}
             </p>
           ));
         })}
         {unfilled && (
-          <p className="font-label text-[9px] uppercase tracking-widest text-warning-strong">Sin cubrir</p>
+          <p className="font-body text-[13px] text-warning-strong">Sin cubrir</p>
         )}
         {unfilled && unfilledReason && (
-          <p className={`font-body text-[9px] text-warning-strong ${CARD_STYLE.longText}`}>{unfilledReason}</p>
+          <p className={`font-body text-xs text-warning-strong ${CARD_STYLE.longText}`}>{unfilledReason}</p>
         )}
         {/* Only on the cell being edited: on every instrument cell it was 36 copies of the same
             words in one month, for an action taken a few times a year. */}
@@ -3244,7 +3404,7 @@ function GridCellView({
               if (!mutationLocked) onCopy();
             }}
             disabled={mutationLocked}
-            className="mt-1 font-label text-[9px] uppercase tracking-widest text-ink-muted/70 hover:text-ink-muted"
+            className="mt-1 font-body text-xs font-semibold text-ink-muted/70 hover:text-ink-muted"
           >
             Copiar a todo el mes
           </button>
@@ -3316,29 +3476,39 @@ function CandidateRow({
           onToggle(candidate.id);
         }
       }}
-      className={`min-h-[44px] min-w-0 rounded-lg border px-3 py-2 transition-colors ${
+      className={`flex min-h-[54px] min-w-0 items-center gap-3 border-b border-ink/[0.10] py-2 transition-colors ${
         blocked
-          ? "cursor-not-allowed border-negative-strong/20 bg-negative-strong/5 opacity-60"
-          : selected
-            ? "cursor-pointer border-accent bg-accent/10"
-            : "cursor-pointer border-accent/15 hover:border-accent/40"
+          ? "cursor-not-allowed opacity-50"
+          : "cursor-pointer hover:bg-accent/[0.055]"
       }`}
+      data-selected={selected ? "true" : undefined}
+      // The seated state is the check at the left (aria-hidden) — this is what tells a reader.
+      aria-pressed={selected}
     >
+      {/* The pick is a check at the left, never a filled box: the row IS the control. */}
+      <span aria-hidden="true" className="flex w-5 shrink-0 justify-center text-accent">
+        {selected && (
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 12l5 5 9-10" />
+          </svg>
+        )}
+      </span>
+      <div className="min-w-0 flex-1">
       <div className="flex min-w-0 items-center justify-between gap-2">
-        <span className={`font-body text-sm ${CARD_STYLE.longText}`}>{candidate.name}</span>
-        <div className="flex shrink-0 items-center gap-1.5">
+        <span className={`font-body text-[15px] font-semibold ${selected ? "text-ink" : "text-ink-muted"} ${CARD_STYLE.longText}`}>{candidate.name}</span>
+        <div className="flex shrink-0 items-center gap-2 font-body text-[13px]">
           {!candidate.available && (
-            <span className="rounded-full border border-warning-fg/40 bg-warning-fg/10 px-1.5 py-0.5 font-label text-[10px] uppercase tracking-wide text-warning-strong">
-              No disp.
+            <span className="text-warning-strong">
+              No disponible
             </span>
           )}
           {candidate.undeclared && (
-            <span className="rounded-full border border-warning-fg/40 bg-warning-fg/10 px-1.5 py-0.5 font-label text-[10px] uppercase tracking-wide text-warning-strong">
+            <span className="text-warning-strong">
               Sin declarar
             </span>
           )}
           {candidate.alreadyAssigned && (
-            <span className="rounded-full border border-mono-500/40 bg-mono-500/10 px-1.5 py-0.5 font-label text-[10px] uppercase tracking-wide text-mono-300">
+            <span className="text-ink-dim">
               Ya asignado
             </span>
           )}
@@ -3364,17 +3534,17 @@ function CandidateRow({
           posing as the other's total.
         */}
         <span
-          className="font-label text-[10px] text-mono-500"
+          className="font-body text-xs text-ink-dim"
           title="Carga que ordena esta lista: el historial reciente más todo lo asignado en esta cuadrícula. No es el total de Participaciones, que cuenta el mes y solo los servicios que se van a crear."
         >
           Carga para ordenar: {candidate.load}
         </span>
       </div>
       {candidate.blockedReason && (
-        <p className="mt-1 font-body text-[11px] text-negative-fg">{candidate.blockedReason}</p>
+        <p className="mt-1 font-body text-xs text-negative-fg">{candidate.blockedReason}</p>
       )}
       {candidate.ruleBlockedReason && (
-        <p className="mt-1 font-body text-[11px] text-negative-fg">{candidate.ruleBlockedReason}</p>
+        <p className="mt-1 font-body text-xs text-negative-fg">{candidate.ruleBlockedReason}</p>
       )}
       {/*
         P10 — the override, as a SEPARATE, secondary action.
@@ -3396,7 +3566,7 @@ function CandidateRow({
             if (!mutationLocked) onOverride(candidate.id);
           }}
           disabled={mutationLocked}
-          className="mt-1.5 min-h-[44px] w-full rounded-lg border border-warning-fg/40 px-2 font-label text-[10px] uppercase tracking-widest text-warning-strong hover:bg-warning-fg/10"
+          className="mt-1.5 min-h-[44px] w-full rounded-full border border-warning-fg/40 px-3 font-body text-xs font-semibold text-warning-strong hover:bg-warning-fg/10"
         >
           Asignar de todos modos
         </button>
@@ -3432,7 +3602,7 @@ function CandidateRow({
             onPickSource(candidate.id);
           }}
           disabled={mutationLocked}
-          className={`mt-1.5 min-h-[44px] w-full rounded-lg border px-2 font-label text-[10px] uppercase tracking-widest disabled:opacity-50 ${
+          className={`mt-1.5 min-h-[44px] w-full rounded-full border px-3 font-body text-xs font-semibold disabled:opacity-50 ${
             picked
               ? "border-accent bg-accent/10 text-accent"
               : "border-accent/25 text-ink-muted/70 hover:border-accent"
@@ -3441,6 +3611,7 @@ function CandidateRow({
           {picked ? "Cancelar el movimiento" : "Marcar para mover"}
         </button>
       )}
+      </div>
     </li>
   );
 }
