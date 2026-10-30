@@ -106,6 +106,12 @@ const MAY_SEE_DRAFTS: Record<string, string> = {
     "`serviceConversationQuery`, the admin's «Mensajes del servicio» dialog " +
     "(an admin may write before the month is published; ADR-0065). " +
     "Do NOT add a member-facing query here.",
+  "utils/availabilityFixCommit.ts":
+    "The availability proposals' writer (ADR-0080). A conflict on a DRAFT is part " +
+    "of the feature — the admin is told «borrador» or «publicado» — so its seat " +
+    "pre-check reads every role. Its readers are the sweep and the admin panel " +
+    "(`/api/admin/availability-conflicts`, `requireActiveManager`, never a member). " +
+    "Do NOT add a member-facing query here.",
 };
 
 /**
@@ -345,7 +351,15 @@ describe("draft services stay invisible to members", () => {
   });
 
   it("keeps the exemption list honest — an entry that shields nothing is dead", () => {
-    const shielding = new Set(unfilteredRoleReads().map(({ rel }) => exemptionFor(rel)));
+    // An entry shields an unfiltered `*[…]` group OR an unfiltered bare predicate string
+    // (the availability writer has only the second kind).
+    const bare = sourceFiles(APP_DIR)
+      .map((file) => path.relative(APP_DIR, file))
+      .filter((rel) => unfilteredBarePredicates(rel, readFileSync(path.join(APP_DIR, rel), "utf8")).length);
+    const shielding = new Set([
+      ...unfilteredRoleReads().map(({ rel }) => exemptionFor(rel)),
+      ...bare.map(exemptionFor),
+    ]);
     const dead = Object.keys(MAY_SEE_DRAFTS).filter((prefix) => !shielding.has(prefix));
     expect(dead).toEqual([]);
   });

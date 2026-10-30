@@ -33,7 +33,7 @@ import { V3_EDITOR_LINES as E, missedLine, type V3Names } from "@/app/components
 import { buildV3SolveRequest, type V3Member } from "@/app/components/admin/v3SolveRequest";
 import type { V3StoredRole } from "@/app/components/admin/v3Services";
 import type { V3Role, V3SolveRequest } from "@/app/components/admin/v3Wire";
-import { judgeMonthWire, type CheckAssignments, type CheckRequest } from "./monthCheckCore";
+import { judgeMonthWire, type CheckAssignments, type CheckRequest, type CoreVerdict } from "./monthCheckCore";
 import type { EditorBoard } from "./editorBoard";
 import { draftLabel } from "./labels";
 
@@ -194,6 +194,62 @@ function fairnessLines(fair: FairShareLedger, months: readonly string[]): string
   return lines.sort((a, b) => b.gap - a.gap).map((l) => l.text);
 }
 
+const plannedColumnsOf = (board: EditorBoard) => board.columns.filter((c) => board.editable.has(board.localIdOf.get(c.columnId)!));
+
+/** The builder over the board, then the core verdict: the ONE path both exports below take. */
+function judgeBoard(input: MonthCheckInput, person: (id: string) => string):
+  | { ok: false; lines: string[] }
+  | { ok: true; built: Extract<ReturnType<typeof buildV3SolveRequest>, { ok: true }>; request: CheckRequest; verdict: ReturnType<typeof judgeMonthWire> } {
+  const { board } = input;
+  const planned = plannedColumnsOf(board);
+  const built = buildV3SolveRequest({
+    months: [...input.months],
+    currentMonth: input.currentMonth,
+    ledger: syntheticLedger(input, person),
+    config: input.config,
+    members: input.members,
+    storedRoles: input.storedRoles,
+    planned: { columns: planned, cells: board.cells, rows: board.rows },
+    savedWindow: input.savedWindow,
+    fillEmpty: false,
+    seed: 0,
+    requestId: "month-check",
+  });
+  if (!built.ok) return { ok: false, lines: built.lines };
+  const { request, assignments } = checkWire(built.request, planned.map((c) => c.columnId), board);
+  return { ok: true, built, request, verdict: judgeMonthWire(request, assignments) };
+}
+
+/**
+ * The raw core verdict for the availability gate (`availabilityConflicts.ts`, ADR-0080), built by
+ * the same path as `monthCheck`. It carries member ids and rule ids, so it is NEVER part of
+ * `MonthCheck`, which four MCP answers serialize whole (members cross that wire as tokens only,
+ * ADR-0062). `judged` = a ledger was given AND the request built; `ruleIds` is the request's rule
+ * table, which a caller comparing two builds must find equal (presence ids are ordinals over keys).
+ */
+export interface MonthCheckVerdict {
+  judged: boolean;
+  instances: CoreVerdict["instances"];
+  missed: CoreVerdict["missed"];
+  /** Per person, per service id: the roles the month's eligibility allows. */
+  eligibility: ReadonlyMap<string, Readonly<Record<string, readonly V3Role[]>>>;
+  ruleIds: string;
+}
+
+export function monthCheckVerdict(input: MonthCheckInput): MonthCheckVerdict {
+  const empty: MonthCheckVerdict = { judged: false, instances: [], missed: [], eligibility: new Map(), ruleIds: "" };
+  if (input.ledger === null) return empty;
+  const judged = judgeBoard(input, () => "");
+  if (!judged.ok) return empty;
+  return {
+    judged: true,
+    instances: judged.verdict.instances,
+    missed: judged.verdict.missed,
+    eligibility: new Map(judged.request.people.map((p) => [p.id, p.eligibility])),
+    ruleIds: JSON.stringify(judged.request.rules),
+  };
+}
+
 export function monthCheck(input: MonthCheckInput): MonthCheck {
   const { board, months } = input;
   const memberById = new Map(input.members.map((m) => [m._id, m]));
@@ -208,30 +264,16 @@ export function monthCheck(input: MonthCheckInput): MonthCheck {
   let checked = input.ledger !== null;
   if (!checked) notes.push(E.unchecked, E.omittedLedger);
 
-  const plannedColumns = board.columns.filter((c) => board.editable.has(board.localIdOf.get(c.columnId)!));
+  const plannedColumns = plannedColumnsOf(board);
   if (plannedColumns.some((c) => isSpecialRoleType(c.type) && !c.countsForFairness)) notes.push(E.uncountedSpecials);
 
-  const built = buildV3SolveRequest({
-    months: [...months],
-    currentMonth: input.currentMonth,
-    ledger: syntheticLedger(input, person),
-    config: input.config,
-    members: input.members,
-    storedRoles: input.storedRoles,
-    planned: { columns: plannedColumns, cells: board.cells, rows: board.rows },
-    savedWindow: input.savedWindow,
-    fillEmpty: false,
-    seed: 0,
-    requestId: "month-check",
-  });
-  if (!built.ok) {
+  const judged = judgeBoard(input, person);
+  if (!judged.ok) {
     if (checked) notes.push(E.uncheckedBuild);
     checked = false;
-    return { checked, notes: [...notes, ...built.lines], rules, services, fairness };
+    return { checked, notes: [...notes, ...judged.lines], rules, services, fairness };
   }
-
-  const { request, assignments } = checkWire(built.request, plannedColumns.map((c) => c.columnId), board);
-  const verdict = judgeMonthWire(request, assignments);
+  const { built, request, verdict } = judged;
   const names: V3Names = {
     person,
     rule: (id) => built.ruleLabels.get(id) ?? "una regla",

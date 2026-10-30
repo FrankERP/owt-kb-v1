@@ -100,7 +100,7 @@ function vacateAutoInstrumentCells(cells: GridCell[], weekendIds: Set<string>): 
 }
 
 /** Instrument seats held per member over the whole grid, all instrument rows, every column. */
-function seatCounts(cells: GridCell[]): Map<string, number> {
+export function seatCounts(cells: GridCell[]): Map<string, number> {
   const out = new Map<string, number>();
   for (const c of cells) {
     if (!isInstrumentRowId(c.rowId)) continue;
@@ -110,7 +110,7 @@ function seatCounts(cells: GridCell[]): Map<string, number> {
 }
 
 /** Members holding ANY instrument row on the given column. */
-function instrumentalistsOn(cells: GridCell[], columnId: string): Set<string> {
+export function instrumentalistsOn(cells: GridCell[], columnId: string): Set<string> {
   const out = new Set<string>();
   for (const c of cells) {
     if (c.columnId !== columnId || !isInstrumentRowId(c.rowId)) continue;
@@ -118,6 +118,18 @@ function instrumentalistsOn(cells: GridCell[], columnId: string): Set<string> {
   }
   return out;
 }
+
+/**
+ * The rows `fillInstruments` may touch (see its comment): a known instrument whose row id is the id
+ * its own label derives. Exported so the availability proposals (ADR-0080) order exactly these rows
+ * as the filler does, and no other.
+ */
+export function isFillableInstrumentRow(r: GridRow): boolean {
+  return isInstrumentRowId(r.id) && isKnownInstrument(r.label) && instrumentSeatDef(r.label).id === r.id;
+}
+
+/** A weekend column: the only columns `fillInstruments` fills. */
+export const isInstrumentFillColumn = (c: GridColumn) => isWeekend(c);
 
 export function fillInstruments(input: FillInstrumentsInput): FillInstrumentsResult {
   const { columns, rows, members, savedWindow, config } = input;
@@ -141,9 +153,7 @@ export function fillInstruments(input: FillInstrumentsInput): FillInstrumentsRes
   // row.id` is what `seatDefForRow(row).id === row.id` must hold for
   // everything the filler touches; a legacy-spelled row then stays manual,
   // with no marker, exactly like a zero-declarer row.
-  const instrumentRows = rows.filter(
-    (r) => isInstrumentRowId(r.id) && isKnownInstrument(r.label) && instrumentSeatDef(r.label).id === r.id,
-  );
+  const instrumentRows = rows.filter(isFillableInstrumentRow);
 
   let previousColumnId: string | null = null;
   for (const column of targets) {

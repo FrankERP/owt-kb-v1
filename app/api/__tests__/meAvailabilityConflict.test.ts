@@ -28,7 +28,20 @@ const h = vi.hoisted(() => ({
   beforeCommit: null as null | (() => void),
   /** Thrown by `commit()` instead of a conflict, for the "not a race" arm. */
   commitError: null as null | unknown,
+  /** The availability proposals' member trigger (ADR-0080), and the `after()` queue it rides. */
+  memberTick: vi.fn(),
+  afters: [] as Array<() => unknown>,
 }));
+
+// The route's run-context wrapper is `server-only` guarded.
+vi.mock("server-only", () => ({}));
+vi.mock("@/app/utils/availabilityFixCommit", () => ({
+  memberTick: (...a: unknown[]) => h.memberTick(...a),
+}));
+vi.mock("next/server", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("next/server")>();
+  return { ...mod, after: (fn: () => unknown) => void h.afters.push(fn) };
+});
 
 vi.mock("@/app/utils/authGuards", () => ({
   requireActiveSession: () => h.requireActiveSession(),
@@ -106,7 +119,7 @@ vi.mock("@/sanity/lib/serverClient", () => ({
 import { GET as availabilityGET, PATCH as availabilityPATCH } from "@/app/api/me/availability/route";
 
 function req(body: unknown): NextRequest {
-  return { json: async () => body } as unknown as NextRequest;
+  return { json: async () => body, headers: new Headers() } as unknown as NextRequest;
 }
 
 interface Snapshot {
@@ -125,6 +138,7 @@ beforeEach(() => {
   h.commits.length = 0;
   h.beforeCommit = null;
   h.commitError = null;
+  h.afters.length = 0;
   // A `dual` member: they sign in and mark their own dates AND a Kids manager
   // records absences for them. That is the population this race lives in.
   h.requireActiveSession.mockResolvedValue({ user: { sanityId: "dual", role: "member" } });
@@ -322,5 +336,42 @@ describe("PATCH /api/me/availability — the lost update", () => {
     const body = (await res.json()) as Snapshot;
     expect(body.unavailableDates).toEqual([]);
     expect(body._rev).toBe(docById("dual")!._rev);
+  });
+});
+
+describe("PATCH /api/me/availability — the availability proposals' trigger (ADR-0080)", () => {
+  it("hands the added AND cleared dates to `memberTick`, after the response", async () => {
+    docById("dual")!.unavailableDates = ["2026-10-04"];
+    const snapshot = await memberSnapshot();
+    const res = await availabilityPATCH(
+      req({ _rev: snapshot._rev, unavailableDates: ["2026-10-11"] }),
+    );
+    expect(res.status).toBe(200);
+    // Queued, not run inline: the member's answer never waits on a sweep.
+    expect(h.memberTick).not.toHaveBeenCalled();
+    expect(h.afters).toHaveLength(1);
+    await h.afters[0]();
+    expect(h.memberTick).toHaveBeenCalledWith(expect.objectContaining({
+      memberId: "dual",
+      addedDates: ["2026-10-11"],
+      removedDates: ["2026-10-04"],
+    }));
+  });
+
+  it("queues nothing when the dates did not change, nor on a lost race", async () => {
+    const snapshot = await memberSnapshot();
+    await availabilityPATCH(req({ _rev: snapshot._rev, unavailableDates: [] }));
+    siblingWrite("dual");
+    await availabilityPATCH(req({ _rev: snapshot._rev, unavailableDates: ["2026-10-04"] }));
+    expect(h.afters).toHaveLength(0);
+  });
+
+  it("swallows a failing sweep: the save already answered", async () => {
+    const snapshot = await memberSnapshot();
+    h.memberTick.mockRejectedValueOnce(new Error("boom"));
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    await availabilityPATCH(req({ _rev: snapshot._rev, unavailableDates: ["2026-10-04"] }));
+    await expect(h.afters[0]()).resolves.toBeUndefined();
+    err.mockRestore();
   });
 });

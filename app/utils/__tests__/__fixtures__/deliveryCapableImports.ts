@@ -41,4 +41,6 @@ export const DELIVERY_CAPABLE_IMPORTS: readonly string[] = [
   "proposalReviewCommit",
   // Admin parity phase 3 (S3): the song writer, extracted from /admin's song and author routes.
   "songSaveCommit",
+  // ADR-0080: the availability proposals' writer (its admin email, and «Aplicar» through `editRole`).
+  "availabilityFixCommit",
 ];

@@ -80,6 +80,11 @@ hand-writing a fixture that mirrors them).
 | 2 — backstop | opportunistic sweep after any queueing write (not after the MCP saved-service save's inline upserts, above) | end of `commitUpserts()` in `serviceMutationSideEffects.ts` — keeps its report and raises the destroyed-mail alarm |
 | 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` (mails a person about destroyed mail, as layer 2 also does; layer 1 goes red on the same conditions instead — see §"The destroyed-mail alarm") |
 
+**Layer 1 also carries the availability proposals' tick** (ADR-0080): after the drain has
+answered, `after()` runs `availabilityTick` on every third 5-minute bucket with at least 40 s left;
+it never changes the drain's response, and its failure is only logged. See §"The availability
+conflicts email".
+
 **Layer 1 is load-bearing, not one of three redundant paths.** Layer 2 only
 flushes subjects that have *already* gone quiet, so it can never flush the
 terminal edit of a working session — and the terminal edit is what every notice
@@ -554,6 +559,38 @@ The rules:
 The admin routes ignore the return value. The MCP tools turn it into their `notifications[]`
 report, worded «encolada», never «enviada». **Unpublish queues nothing and runs no sweep**, from
 `/admin` or from the MCP alike (`roleUnpublishCommit.ts`).
+
+## The availability conflicts email — admins only (ADR-0080)
+
+When someone marks a day they already serve on, the availability sweep
+(`app/utils/availabilityFixCommit.ts`) records a proposal and sends ONE email per sweep that claimed
+new events: «Conflictos de disponibilidad (N)», sections «Propuestas» and «Sin reemplazo», a link to
+`/admin?tab=availability` (`availabilityConflictEmail.ts`, the light palette). **It never changes a
+service**, so it queues no role notice; the notices go out only when an admin presses «Aplicar»,
+which saves through `/admin`'s own `editRole` exactly like a hand edit (on a published service the
+person removed and the person added hear about it; on a draft nobody does).
+
+- **Audience:** `teamMembers` with `role` admin or super-admin, `disabled != true`, in worship
+  (`WORSHIP_AUDIENCE_GROQ_FILTER`), not the system accounts (`service-account-*`,
+  `member-dev-verify`), with an email, on `EMAIL_ALLOWLIST`, and with the «Propuestas» switch on
+  (`wantsNotification(prefs, "proposals")`). Serial sends; `EMAIL_REDIRECT_TO` honoured.
+- **Not the outbox.** The sweep sends directly, after claiming its records (`notifiedSeq` =
+  `eventSeq` under `ifRevisionId`); a claimed event whose send fails is NOT retried — the claim is
+  the de-duplication. The audience is read before any claim, so a failed audience read claims
+  nothing.
+- **Triggers:** the member's own save (`after()` on `PATCH /api/me/availability`, that member's
+  conflicts only), every third tick of layer 1 (`/api/cron/flush-notifications` runs
+  `availabilityTick` in `after()`, after the drain answered; a cheap seat pre-check first, so a
+  tick with nothing new, nothing unemailed and nothing older than 6 hours reads three small queries
+  and stops; a conflict that cannot be judged is re-checked at most every 6 hours), and «Revisar
+  ahora» in the panel.
+- **Only Production sends** (`fairnessRecordEnvironment`). On Preview the sweep runs dry: no
+  record, no email. But «Aplicar» and «Mantener» pressed on dev write the REAL dataset, like every
+  admin button there.
+- **Kill switch:** `AVAILABILITY_SWEEP_DISABLED=1` (`docs/SECRETS.md`).
+- **No liveness alarm.** A sweep that cannot judge (a raw Studio draft, the engine on v2, no read
+  token) is visible only as «No se pudo revisar» in the panel and in the `[availability-sweep]`
+  logs — an accepted cost (ADR-0080).
 
 ## The liveness alarm
 

@@ -2,7 +2,7 @@
 // without a browser.
 //
 // The point of these tests: "we configured the Studio" is not evidence. The
-// policy is code, so every capability of every one of the twenty protected types
+// policy is code, so every capability of every one of the twenty-one protected types
 // is asserted here, plus the wiring in `sanity.config.ts` / `sanity/structure.ts`
 // that actually installs it — and the fact that the v5-inert
 // `__experimental_actions` is used nowhere.
@@ -58,7 +58,7 @@ function gitTracked(): string[] {
 // ── The policy ──────────────────────────────────────────────────────────────
 
 describe("studio protection policy", () => {
-  it("covers exactly the twenty protected types, keeping the saturdarSongs typo", () => {
+  it("covers exactly the twenty-one protected types, keeping the saturdarSongs typo", () => {
     expect([...PROTECTED_STUDIO_TYPES]).toEqual([
       "sunday_role",
       "saturday_role",
@@ -91,6 +91,8 @@ describe("studio protection policy", () => {
       // The conversation before a service's proposal exists (ADR-0065): written only by
       // the admin service-thread messages route.
       "serviceThread",
+      // The availability proposals' records (ADR-0080): written only by availabilityFixCommit.ts.
+      "availabilityConflict",
     ]);
     expect(PROTECTED_STUDIO_TYPES).toContain("saturdarSongs");
     expect(PROTECTED_STUDIO_TYPES as readonly string[]).not.toContain("saturdaySongs");
@@ -115,6 +117,7 @@ describe("studio protection policy", () => {
       "adminChatUsage",
       "mcpProposal",
       "serviceThread",
+      "availabilityConflict",
     ]);
   });
 
@@ -197,6 +200,7 @@ describe("studio protection policy", () => {
       "calendarFeed",
       "adminChatUsage",
       "mcpProposal",
+      "availabilityConflict",
     ]);
     for (const type of INTERNAL_STUDIO_TYPES) {
       expect(isInternalStudioType(type)).toBe(true);
@@ -490,7 +494,7 @@ describe("studio config installs the policy", () => {
     expect(structure).toContain("PROTECTED_STUDIO_TYPES");
   });
 
-  it("marks all twenty protected schema types read-only", () => {
+  it("marks all twenty-one protected schema types read-only", () => {
     const files: Record<string, string> = {
       sunday_role: "sanity/schemas/sunRole.ts",
       saturday_role: "sanity/schemas/satRole.ts",
@@ -512,6 +516,7 @@ describe("studio config installs the policy", () => {
       adminChatUsage: "sanity/schemas/adminChatUsage.ts",
       mcpProposal: "sanity/schemas/mcpProposal.ts",
       serviceThread: "sanity/schemas/serviceThread.ts",
+      availabilityConflict: "sanity/schemas/availabilityConflict.ts",
     };
     expect(Object.keys(files).sort()).toEqual([...PROTECTED_STUDIO_TYPES].sort());
     // The two MCP OAuth types declare `name:` as an IMPORTED constant
@@ -561,6 +566,7 @@ describe("studio config installs the policy", () => {
       "sanity/schemas/calendarFeed.ts",
       "sanity/schemas/adminChatUsage.ts",
       "sanity/schemas/mcpProposal.ts",
+      "sanity/schemas/availabilityConflict.ts",
     ]) {
       const src = read(file);
       expect(src, `${file} must be a hidden type`).toMatch(/^\s*hidden:\s*true,\s*$/m);
@@ -583,6 +589,7 @@ describe("studio config installs the policy", () => {
         "calendarFeed",
         "adminChatUsage",
         "mcpProposal",
+        "availabilityConflict",
       ].sort(),
     );
   });

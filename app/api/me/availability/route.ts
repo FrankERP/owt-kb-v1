@@ -1,7 +1,13 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { requireActiveSession } from "@/app/utils/authGuards";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
 import { sanityConflictKind } from "@/app/utils/roleWriteRequest";
+import { memberTick } from "@/app/utils/availabilityFixCommit";
+import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
+
+// The availability proposals' member trigger runs in `after()` (ADR-0080) and may sweep this
+// member's conflicts, so the function needs the room.
+export const maxDuration = 60;
 
 const CURRENT_QUERY = `*[_type == "teamMembers" && _id == $id][0] {
     _rev,
@@ -73,7 +79,11 @@ export async function GET() {
  * that omits the field — including a client bundle still cached from before this
  * deploy — which is exactly the audience the guard exists for.
  */
-export async function PATCH(req: NextRequest) {
+// A3 §3: anything the post-commit `after()` sends carries the in-flight verification run's markers.
+export const PATCH = withVerificationRunContext(patchHandler);
+
+async function patchHandler(req: NextRequest) {
+  const startedAt = Date.now();
   const session = await requireActiveSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -129,6 +139,21 @@ export async function PATCH(req: NextRequest) {
     if (!sanityConflictKind(err)) throw err;
     const fresh = await serverClient.fetch<CurrentMember | null>(CURRENT_QUERY, { id });
     return staleRevision(fresh);
+  }
+
+  // The availability proposals (ADR-0080): a date this member serves on, added or cleared, may open
+  // a sweep of THIS member's conflicts. After the response; a failure is logged, never answered.
+  const before = new Set(current.unavailableDates);
+  const addedDates = valid.filter((d) => !before.has(d));
+  const removedDates = [...before].filter((d) => !validSet.has(d));
+  if (addedDates.length || removedDates.length) {
+    after(async () => {
+      try {
+        await memberTick({ memberId: id, addedDates, removedDates, startedAt });
+      } catch {
+        console.error("[availability-sweep] member trigger failed");
+      }
+    });
   }
 
   return NextResponse.json({

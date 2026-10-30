@@ -50,7 +50,22 @@ const EXPECTED_CALLERS: Record<string, string[]> = {
   roleSwapCommit: ["app/api/admin/roles/swap/route.ts", "app/mcp/tools/swapAssignment.ts"],
   // Admin parity phase 1: the PATCH route and `save_service_edits` (T2.5, ADR-0066); the copy
   // route and `copy_instruments` (S3).
-  roleEditCommit: ["app/api/admin/roles/[id]/route.ts", "app/mcp/tools/serviceEditor.ts"],
+  // ADR-0080: «Aplicar» on an availability proposal saves through the same PATCH writer.
+  roleEditCommit: [
+    "app/api/admin/roles/[id]/route.ts",
+    "app/mcp/tools/serviceEditor.ts",
+    "app/utils/availabilityFixCommit.ts",
+  ],
+  // ADR-0080: the availability proposals — the four admin routes, the member's availability
+  // PATCH (its `after()` trigger) and layer 1's flush cron (the tick). Never an MCP tool.
+  availabilityFixCommit: [
+    "app/api/admin/availability-conflicts/apply/route.ts",
+    "app/api/admin/availability-conflicts/keep/route.ts",
+    "app/api/admin/availability-conflicts/route.ts",
+    "app/api/admin/availability-conflicts/sweep/route.ts",
+    "app/api/cron/flush-notifications/route.ts",
+    "app/api/me/availability/route.ts",
+  ],
   copyInstrumentsCommit: ["app/api/admin/roles/copy-instruments/route.ts", "app/mcp/tools/serviceEditor.ts"],
   // Admin parity phase 2 (T1): the DELETE route and `delete_services`/`delete_services_app`.
   roleDeleteCommit: ["app/api/admin/roles/[id]/route.ts", "app/mcp/tools/serviceDeletes.ts"],

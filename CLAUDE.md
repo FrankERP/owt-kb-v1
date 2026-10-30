@@ -262,7 +262,10 @@ looks wrong** — several exist to stop a plausible-looking change.
   Oasis Kids' in `kidsCommit.ts`, called by the four `/api/kids/*` writes and the MCP Kids tools;
   the song library's in `songSaveCommit.ts`, called by the song and author routes and the MCP song
   tools (edits by parts, a lossless lyrics gate, `ifRevisionId`, a token-keyed create; ADR-0077);
-  `/api/mcp` buffers SSE so a tool finishes in the handler.
+  the availability proposals' in `availabilityFixCommit.ts`, called by the four
+  `/api/admin/availability-conflicts` routes, the member's availability PATCH and the flush cron,
+  never by an MCP tool — its sweep NEVER writes a service, only «Aplicar» does, through `editRole`
+  (ADR-0080); `/api/mcp` buffers SSE so a tool finishes in the handler.
 - **The MCP proposal editor: the server judges, the card only shows** (ADR-0062). Every check and
   save replays the whole edit list through the planner's gate in `editorBoard.ts` only; a saved edit
   is a NEW `mcpProposal` (base `supersededBy` in the same transaction), never a mutated payload;
