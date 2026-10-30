@@ -565,7 +565,7 @@ timer, so a second flash inherits the first one's clock and an error can vanish 
 100ms. Use `hold` for a message that must PERSIST until something replaces it —
 `MonthGenerator`'s swap toast, which reports writes that landed in Sanity but could
 not be verified. Never hand-roll the timer. For a FIXED, stacked notification use
-`useToast` instead — the two are not interchangeable), `useToast`
+`useToast` instead — the two are not interchangeable), `useMediaQuery` (`app/components/ui/useMediaQuery.ts` — the ONE hook for a media query a RENDER depends on, `useSyncExternalStore` with a `false` server/jsdom snapshot; `Select`'s pointer tests and `PlannerGrid`'s candidates sheet read it — never `matchMedia` in render by hand; a one-shot read at event time, `prefers-reduced-motion` as an animation starts, stays a plain read), `useToast`
 (`app/components/ui/Toast.tsx` — the ONLY fixed toast stack; `toast({ message, tone?,
 duration?, hold?, action? })`, portalled, `z-[95]` above `CueDialog`), `Menu`
 (`app/components/ui/Menu.tsx` — every anchored dropdown; real `role="menu"` semantics,
