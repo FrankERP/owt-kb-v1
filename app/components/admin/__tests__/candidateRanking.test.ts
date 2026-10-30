@@ -91,6 +91,16 @@ describe("rankCandidates", () => {
     expect(bass.blockedReason).toBe(`Ya asignado en Lead; para cantar y tocar en un servicio, marca «Canta y toca a la vez» en Miembros`);
   });
 
+  it("names a same-category clash before a voice + instrument one, so the hint never misleads", () => {
+    const tony: RankMember = m("m6", "Tony", ["voz", "instrumento"]);
+    const assigned: AssignedSeat[] = [
+      { seatId: "instrumento:Drums", category: "instrumento", memberId: "m6" },
+      { seatId: "lead", category: "voz", memberId: "m6" },
+    ];
+    const bgv = rankCandidates({ seat: BGV, date: DATE, members: [tony], windowRoles: [], assigned })[0];
+    expect(bgv.blockedReason).toBe("Ya asignado en Lead");
+  });
+
   it("FOH beside a voice or an instrument stays allowed", () => {
     const tony: RankMember = m("m6", "Tony", ["voz", "instrumento", "foh"]);
     const assigned: AssignedSeat[] = [

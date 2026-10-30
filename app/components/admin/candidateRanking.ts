@@ -205,9 +205,12 @@ export function rankCandidates(input: {
       // `singsAndPlays` (Frank and Mkz lead and play) — `seatsClash`, ADR-0078.
       // The seat being targeted itself never counts as a conflict — a member
       // already in this exact seat must stay selectable so they can be toggled off.
-      const conflict = heldSeats.find(
+      // A same-category clash is named first: marking «Canta y toca a la vez»
+      // would not lift it, so the checkbox hint must not be what the admin reads.
+      const clashes = heldSeats.filter(
         (held) => held.seatId !== seat.id && seatsClash(held, { seatId: seat.id, category: seat.category }, m.singsAndPlays),
       );
+      const conflict = clashes.find((held) => held.category === seat.category) ?? clashes[0];
       const blockedReason = conflict ? clashReason(conflict.seatId, conflict.category !== seat.category) : null;
       const strip = weekKeys.map((k) => servedInWeek.get(k)?.has(m._id) ?? false);
       // Pad on the left so every strip is the same width regardless of history.
