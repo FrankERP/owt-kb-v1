@@ -124,8 +124,9 @@ published: boolean                     written on every create; read as `publish
 - **R5. Fresh enough.** Reads use the cached snapshot (≤ 30 s, like every guard): a pastor moved out
   of a group may see that group's events for up to 30 s. Writes do not accept that window (W1).
 - **R6. Never shared across people.** Every page or route that renders the result is dynamic
-  (it reads the session); no `unstable_cache`, ISR segment or `revalidate` export may hold the
-  output, and `$groups` is a query PARAMETER, so even Next's fetch cache keys on it. A post-filter
+  (it reads the session); no `unstable_cache` or ISR segment may hold the output, and a page that
+  renders it carries no `revalidate` export (inert on a session-reading page, but misleading: PR D
+  removes `/schedule`'s `revalidate = 60` when it adds Jóvenes there), and `$groups` is a query PARAMETER, so even Next's fetch cache keys on it. A post-filter
   in TypeScript over a wider read is forbidden (R1's GROQ is the boundary).
 - **R7. «Mine» by id.** A seat or program line is the reader's when `member._ref == $me`, decided in
   the projection; names are never compared.
@@ -149,9 +150,18 @@ delegate; nothing else writes the type (§6 guard).
   |---|---|---|
   | super-admin, Jóvenes admin | any event of the ministry | any |
   | Jóvenes leader | an event whose audience is `groups` and EVERY group, stored and new, is one they lead | those events |
-  | Encargado or apoyo of THIS event (by the stored `seats`) | nothing | this event only |
+  | Encargado or apoyo of THIS event (by the stored `seats`) who may READ it now (W3a) | nothing | this event only |
   | anyone else | nothing | nothing |
 
+- **W3a. A seat never outlives the right to read.** A seat holder's program write is allowed only
+  when, by the FRESH access of W1, the actor is active and the stored event passes R2's member
+  predicate for them: a member of the ministry, `published == true`, and the audience is the
+  ministry or overlaps their CURRENT groups. So a pastor moved to another group, a person removed
+  from Jóvenes, or a seat on an unpublished event is refused (403 «Ya no tienes acceso a este
+  evento.»), whatever the stored seats say. The seat is a reason to WRITE, never a reason to READ.
+- **W3b. What a write answers.** Every write answers `{ ok, id, rev }` and nothing of the event's
+  content; the screen re-reads through R1. So no write path can serve an event its actor could not
+  read.
   An edit is judged against both the stored and the requested audience, so a leader can neither
   move an event out of a group they do not lead nor into one. A leader cannot create or change a
   `ministry` audience (the Saturday roster is admins').
@@ -164,12 +174,20 @@ delegate; nothing else writes the type (§6 guard).
   seat/program member is a member of the ministry (fresh read) and, for a `groups` audience, of at
   least one of its groups; seats ≤ 6; `_key` minted per item; `published` boolean.
 - **W6. Ids.** Create mints `ministryEvent.<uuid>` (never accepts an id) and writes with
-  `create` (an id collision is an error, never an overwrite); delete is one transaction of an
+  `create` (an id collision is an error, never an overwrite). **Idempotent create:** the client
+  sends a create token (a v4 UUID it minted when the form opened) and the id is
+  `ministryEvent.<token>`, validated as a UUID; a retry or double tap hits the same id, and a
+  collision answers 409 `already_created`, which the client treats as success. A token never
+  overwrites (create, not createOrReplace), so a client choosing an id can at worst be refused; delete is one transaction of an
   `ifRevisionId` patch then `delete`, the fairness executor's guarded delete
   (`app/utils/fairnessMonthWriteRequest.ts:1145`).
 - **W7. Cache.** Every write calls `revalidateMinistryViews(ministry)` (new, in `revalidate.ts`:
   `/jovenes`, `/jovenes/admin`, `/schedule`), though those pages are dynamic — the call keeps a
   later static page from going stale silently.
+- **W9. Close the generic delete.** `DELETE /api/content/posts/[id]` today deletes ANY document id
+  for a worship admin, with no type check (`app/api/content/posts/[id]/route.ts:41-43`); that is a
+  writer outside W3 for every private type, `ministryEvent` included. PR C makes it refuse anything
+  whose stored `_type` is not `post` (read first, then a guarded delete), with a test.
 - **W8. Outcome.** `CommitOutcome` like `kidsCommit.ts`; refusals are named strings; the route sends
   `body`/`status` verbatim; client handlers follow the try/catch/finally + `res.ok` invariant.
 
@@ -179,6 +197,9 @@ delegate; nothing else writes the type (§6 guard).
   `"ministryEvent"` is one of: `ministryEventReads.ts`, `ministryEventCommit.ts`, the schema, the
   Studio protection list, tests. Any other file fails the build. MCP (`app/mcp/**`) and the admin
   chat are therefore covered by construction.
+- **G1b. Protected-read audit.** `ministryEvent` joins `PROTECTED_TYPES` in
+  `app/utils/protectedReadAudit.ts` (as the dotted single-writer `fairnessMonth` did), so generic
+  `_id` reads are caught too, not only the type literal G1 scans for.
 - **G2. Query shape** (unit): the member query contains the id-prefix arm, `published == true` and
   the audience arm; `$groups` is a parameter, never interpolated; a non-member returns `[]` with no
   fetch; no token throws.
@@ -188,7 +209,10 @@ delegate; nothing else writes the type (§6 guard).
   the ministry event and an Otro Nivel + Emprendedores joint event are.
 - **G4. Write matrix** (unit, Sanity mocked): each row of W3's table, both directions of a leader's
   audience move, the program PATCH ignoring every non-`program` field, a stale revision → 409, a
-  demoted actor (fresh read says `member`) refused even when the cached snapshot says `leader`.
+  demoted actor (fresh read says `member`) refused even when the cached snapshot says `leader`; W3a's
+  three refusals (seat holder moved to another group, removed from Jóvenes, seated on an unpublished
+  event); every write's answer carries no event content (W3b); a duplicate create token → 409
+  `already_created` and one document.
 - **G5. Studio.** `ministryEvent` joins `PROTECTED_STUDIO_TYPES` (read-only inspection, no create,
   no actions); `studioProtection.test.ts` covers it.
 - **G6. Live proof on dev before production** (`preview` writes the real dataset, so with Frank's
@@ -201,12 +225,17 @@ delegate; nothing else writes the type (§6 guard).
 1. PR A — docs: this plan, its review log, ADR (ministry events: private by id, audience read
    closed, three writers). Standard.
 2. PR B — read side: schema + Studio protection, `ministryEventReads.ts`, G1–G3, G5, `/jovenes`
-   (pastors' list of upcoming events) behind the registry's rollout state, the Jóvenes nav section.
+   (pastors' list of upcoming events; each event's sheet carries the program editor for its
+   encargado/apoyo, reading in member mode, since a plain member's editor-mode read is `[]`), behind
+   a rollout state PR B ADDS to the registry (`hidden → superAdmin → admins → all`; it does not exist
+   today), the Jóvenes nav section, and `docs/DATA_MODEL.md`'s entry for the type and its dotted id.
    **Critical** — this plan's R-section.
 3. PR C — write side: `ministryEventCommit.ts`, the four routes, G4, Planear Jóvenes (Saturday
    roster table, program lines for the encargado/apoyo, «Copiar para WhatsApp»). **Critical** — this
    plan's W-section. G6 before its production merge.
 4. PR D — group calendars, joint events, «Jóvenes» in the Calendario filter (reads through R1).
+   `/schedule` is worship-gated today (`requireWorshipPage`), so PR D also decides how a
+   Jóvenes-only pastor reaches the Calendario; that is a page gate, outside this contract.
 5. PR E — the bulk account script (dry run, `--apply`, Frank's consent), when Frank sends the list.
 
 Each PR: release order of CLAUDE.md (dev alias verified, `gates`, one fresh code review per merge
@@ -218,5 +247,9 @@ range).
   `ministryRoles` (level and groups) is readable from the dataset. That reveals membership, not the
   calendar this plan protects. Moving member PII behind a token is the DEF-A-16 stream, not this one.
 - **Reads trail a group change by up to 30 s** (R5); writes do not (W1).
+- **Leaders and joint events.** A leader of one group cannot create or edit a joint event that
+  includes a group they do not lead (W3); an admin does. Frank's answer 2 covered a group's own
+  calendar and the Saturday roster, not joint events, so this is put to him as a decision; until he
+  answers, the narrower rule stands (it can only be widened later, never leak).
 - **A Sanity project member** (Frank) can read every event in `/studio`'s inspection pane; that is
   the super-admin's own access.
