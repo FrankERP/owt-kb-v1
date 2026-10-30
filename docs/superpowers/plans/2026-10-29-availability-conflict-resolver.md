@@ -1,6 +1,6 @@
 # Availability conflicts: find them, fix drafts, propose for published services (plan)
 
-**Status:** DRAFT, revision 4 (round 3, run with Frank's go-ahead, found two blockers, fixed here; a fourth round
+**Status:** DRAFT, revision 5 (rounds 3 and 4, each with Frank's go-ahead, found blockers fixed here; a further round
 needs Frank's go-ahead). Review approval is not authorization to implement; the build
 follows the release order in CLAUDE.md.
 
@@ -69,8 +69,9 @@ writer (`editRole`, §5.1). Only the writer slice (§4–§6) owns the contract;
   (`app/utils/roleEditCommit.ts:111`) asserts the observed role `_rev`, refuses drafts overlays,
   dangling refs and lock conflicts, queues the role notices from the PRE-commit seats and
   revalidates. Callers are pinned (`serviceCommitCallers.test.ts`: the PATCH route and
-  `app/mcp/tools/serviceEditor.ts`). Notices for a draft are queued and never sent: the sweep
-  classifies against live state and a setlist/role notice's audience is gated on the role being
+  `app/mcp/tools/serviceEditor.ts`). A draft edit sends nothing: `queueRoleNotices`/`queueRoleNoticesNow` queue
+  nothing and the push is null for an unpublished role (`serviceMutationSideEffects.ts:345, 522-582`),
+  and the sweep would drop one anyway (`outboxClassify.ts:73`); the audience is gated on the role being
   published (`docs/NOTIFICATIONS.md` «Who hears about a setlist»; the same gate the planner's draft
   edits rely on today).
 - **The saved-month judge the MCP editor uses** (ADR-0066): `loadV3PlanSources()`
@@ -188,7 +189,10 @@ writer (`editRole`, §5.1). Only the writer slice (§4–§6) owns the contract;
 ### 4.2 Proposing a replacement
 
 `proposeReplacement({ board, roleId, memberId, members, config, windowRoles, todayIso, exclude, gate })`
-→ `{ kind: "replace", target, seats: { rowId, from, to }[] } | { kind: "none", reason }`. For each
+→ `{ kind: "replace", target, seats: { rowId, from, to }[] } | { kind: "none", reason }`. ALL OR
+NOTHING: `replace` only when EVERY seat the person holds there has a candidate (`to` always set);
+if any one seat has none, the answer is `none` and no seat is written or proposed — a draft is never
+left with an empty seat, and a proposal never half-covers the person. For each
 seat the member holds in that service, in board row order: remove them from the cell, build the D2
 pool and order for that cell (`null` → `none`, `unchecked`), and use the first candidate that passes
 D3(a) on the target built so far and `gate` (§4.3), at most 8 tried per seat. A person chosen for one
@@ -258,7 +262,8 @@ that a conflict ended: the service was deleted, the person left it, or they clea
 | Status now | C and E | C, not E | not C |
 |---|---|---|---|
 | no record, `gone` | draft ∧ pick ∧ ¬`autoApplied` → the role edit + record `auto` in one transaction (`autoApplied: true`). Otherwise → `proposed` (pick) or `none`. **New event** either way | `none`, `reason: unchecked`, **new event** | nothing |
-| `proposed`, `none` | draft ∧ pick ∧ ¬`autoApplied` → as above (`auto`, new event). Same status → update `seats`/`reason`/`published` in place, no event. `none` ↔ `proposed` → the new status, **new event** | `none`/`unchecked` in place (a `proposed` becomes it with a **new event**) | `gone` |
+| `proposed`, `none` | draft ∧ pick ∧ ¬`autoApplied` → as above (`auto`, new event). Same status → update `seats`/`reason`/`published` in place, no event — and only when one of them
+differs from the stored record (no write, so no `_rev` churn, when nothing changed). `none` ↔ `proposed` → the new status, **new event** | `none`/`unchecked` in place (a `proposed` becomes it with a **new event**) | `gone` |
 | `auto`, `applied` | the person is back: → `proposed` (pick) or `none`, **new event**; never auto (`autoApplied` stays true) | the person is back: `none`/`unchecked`, **new event** | unchanged (listed 30 days) |
 | `kept` | unchanged | unchanged | unchanged |
 
@@ -292,8 +297,10 @@ logged (fixed tag) and not retried; the record and the UI still show it.
 4. Apply §5.2 per identity, earliest date first. A role edit: `parseEditRequest({ ...target, rev:
    column.rev })` FIRST (a parse failure → `none`, `reason: no_candidate`, logged as `parse` — no
    write attempted), then `editRole(roleId, parsed, { notices: "inline", alongside })`, awaited.
-   No new write starts after `deadlineMs − 15 s`; what is left waits for the next sweep.
-5. Re-read the records (fresh revisions: a transaction's documents all take its id, and `editRole`'s
+   No new ROLE write starts after `deadlineMs − 15 s`; what is left waits for the next sweep.
+5. Always run, on every sweep that got past step 2, whether or not step 4 changed anything; it has
+   the window up to `deadlineMs` (the claims are short patches and are not cut by step 4's limit).
+   Re-read the records (fresh revisions: a transaction's documents all take its id, and `editRole`'s
    `committedRev` may be null) and email (§6) the ones claimed from that read.
 6. Answer `{ ok, mode, auto, proposed, none, kept, gone, skipped }` with ids; `"dry"` answers what
    `"act"` would have done. Logs carry fixed tags and counts, never names or ids.
@@ -317,9 +324,10 @@ logged (fixed tag) and not retried; the record and the UI still show it.
   the tick, the next one is 15 min away). It then runs a cheap PRE-CHECK — the horizon's seats (one
   `assignedMemberRefsQuery`-style read through `operationalClient`), the members' `unavailableDates`
   and the records — and opens the full sweep (`trigger: "cron"`, `deadlineMs: startedAt + 55 s`) only
-  when some identity needs a step from §5.2: a conflict with no record or a `gone`/`auto`/`applied`
-  one, a `proposed`/`none` record whose conflict is no longer seen, or a `none` on a draft (it may
-  have a pick now). No new Scheduler job, secret or workflow; the tick inherits the flush's liveness
+  when some identity needs a step from §5.2 OR some record is due: a conflict with no record or a
+  `gone`/`auto`/`applied` one, a `proposed`/`none` record whose conflict is no longer seen, a
+  `proposed`/`none` record on a draft with `autoApplied` false (it may be fixable now), or ANY record
+  with `notifiedSeq < eventSeq` in `auto`/`proposed`/`none` (an email a previous run left unsent). No new Scheduler job, secret or workflow; the tick inherits the flush's liveness
   alarm (if the flush stops, the daily cron already says so). This also covers the Kids manager's
   availability writer, Studio edits, hand picks and copied instruments, which have no trigger of
   their own.
@@ -389,7 +397,9 @@ reset, 409 → reload with «El servicio cambió; vuelve a revisar».
 - `/api/cron/flush-notifications/route.ts`: the `after()` call to `availabilityTick` (§5.4), its
   response untouched; `docs/NOTIFICATIONS.md` §layer 1 says the tick rides it.
 - ADR-0078 «Availability conflicts are fixed one seat at a time; drafts automatically, once» (D1,
-  D2, D5, D9, D10).
+  D2, D5, D9, D10), including two accepted costs: an automatic draft write while Frank edits that same
+  draft in `/admin` turns his next save into the usual «cambió» 409 (no silent overwrite); and an email
+  that fails after its claim is not retried (the record and the UI keep it).
 - `docs/NOTIFICATIONS.md` (the new admin email), `CLAUDE.md` + `project-rules.md` (the writer joins
   the admin write paths list; `editRole`'s `alongside`), `docs/UTILITIES_AND_COMPONENTS.md`.
 
@@ -417,10 +427,13 @@ month untouched; an incoherent inventory, an unready source or engine `v2` makes
 record unchanged, nothing sent); a conflict on a non-editable service → `none`/`unchecked`, never
 `gone`; a non-stale `editRole` refusal → `none`/`write_refused`; `"dry"` mode writes and sends nothing
 and answers what `"act"` would do; the member scope never touches another member's record; the
-deadline stops new writes. `availabilityTick`: skips outside its bucket and with < 40 s left; the
+deadline stops new role writes; a record left due by a failed or cut step 5 is emailed by the NEXT
+tick (the pre-check opens the sweep for it, step 5 runs with no transition); a person in Lead + Bass
+whose Bass has no candidate → `none`, nothing written or proposed for Lead either; an unchanged
+`proposed`/`none` is not re-written. `availabilityTick`: skips outside its bucket and with < 40 s left; the
 pre-check opens the sweep for each case §5.4 names and not otherwise; the flush route's response and
 status are byte-identical with the tick throwing. Routes: 403 for
-content-editor and impersonation, 409 on a stale `rev`, the cron route 403 without `CRON_SECRET`, the
+content-editor and impersonation, 409 on a stale `rev`, the flush route still 401 without `CRON_SECRET` and its tick registered only after that check, the
 availability PATCH answers the same when the sweep throws.
 
 ## 10. Rollback
