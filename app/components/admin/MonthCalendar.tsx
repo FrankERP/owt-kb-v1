@@ -250,7 +250,7 @@ export default function MonthCalendar({
           const tone = selected
             ? dow === 0
               ? "border-accent/50 bg-accent/10 text-accent"
-              : "border-recency-strong/50 bg-recency-strong/10 text-recency-strong"
+              : "border-warning-fg/50 bg-warning-fg/10 text-warning-strong"
             : special
               ? "border-info-fg/50 bg-info-fg/10 text-info-fg"
               : "border-accent/15 text-mono-500 hover:border-accent/40 hover:text-ink-muted";
@@ -297,7 +297,7 @@ export default function MonthCalendar({
       {/* The legend under the grid (ADR-0070's Admin pass): the three tones as dot + word. */}
       <div className="flex flex-wrap gap-x-4 gap-y-1 font-body text-[13px] text-ink-dim">
         <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-accent" />Domingo</span>
-        <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-recency-strong" />Sábado</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-warning-fg" />Sábado</span>
         <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-info-fg" />Especial</span>
       </div>
 

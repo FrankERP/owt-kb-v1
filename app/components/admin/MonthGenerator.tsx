@@ -5244,6 +5244,8 @@ export default function MonthGenerator({
             )}
           </>
         ),
+        // Only when a tool will render: an empty actions box still pads the head.
+        !((singleView && onScopeChange) || (storedMode && storedInventory.coherent && !singleView) || !storedMode) ? undefined : (
         <>
           {singleView && onScopeChange && (
             <Button variant="secondary" size="lg" onClick={() => onScopeChange("month")} disabled={storedTransportActive}>
@@ -5352,7 +5354,8 @@ export default function MonthGenerator({
               ← Fechas y reglas
             </Button>
           )}
-        </>,
+        </>
+        ),
       )}
 
       {storedMode && (!storedSource || !storedInventory.coherent) && (

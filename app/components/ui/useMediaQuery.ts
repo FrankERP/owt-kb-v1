@@ -8,9 +8,13 @@
 // existing test render the plain path, and the first client render matches the
 // server (no hydration mismatch) before the real answer arrives.
 //
-// `Select`'s pointer tests and `PlannerGrid`'s candidates sheet share this; a
-// consumer never calls `matchMedia` in render by hand (a value read in render and
-// never subscribed goes stale on rotation, and reads differently on the server).
+// For a query a RENDER depends on: `Select`'s pointer tests and `PlannerGrid`'s
+// candidates sheet. A value read in render by hand and never subscribed goes stale
+// on rotation and reads differently on the server — that is what this replaces. A
+// one-shot `matchMedia` read at EVENT time (`prefers-reduced-motion` when a pull, a
+// slide or a blackout starts: `PullToRefresh`, `SlidingIndicator`, `Blackout`, the
+// Integridad and Propuestas panels) decides one animation as it begins and is not a
+// render input, so those stay plain reads.
 import { useSyncExternalStore } from "react";
 
 function mql(query: string) {

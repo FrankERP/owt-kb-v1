@@ -164,14 +164,18 @@ pill; «Equipo» is the small-caps title, «Banda» is 17 px sentence case; a sh
   clear prompts) are `border-l-2` strips. The calendar's specials are hairline rows naming the date
   and «cuenta / no cuenta para equidad», the composer a `SHEET_TITLE` block, the unavailable list a
   ghost fold. The grid's chrome: the day in the display face at 30 px with the month under it, the
-  service type as a dot + word (accent Sunday, warning Saturday, info special — the same three the
-  calendar's legend draws), «Publicado / Borrador / Guardado» as words, row labels at 15 px semibold,
+  service type as a dot + word (`CARD_RAIL`, the Servicios cards' rail: accent Sunday, warning
+  Saturday, info special — the calendar's cells and legend now draw the same three; its Saturday
+  was the recency tone, the one Saturday colour in admin that differed), «Publicado / Borrador / Guardado» as words, row labels at 15 px semibold,
   chips as pills, the candidates column titled `SHEET_TITLE` «Candidatos» over hairline rows with
   the check at the left. **Below `xl` the candidates are a `CueDialog` sheet** (`useMediaQuery`,
   `app/components/ui/useMediaQuery.ts` — the one media-query hook, `Select`'s pointer tests moved
   onto it) with a `SearchLine` and a «Listo» primary, because a list stacked under a whole month
   was a scroll away from the seat that was tapped; never in full screen, whose overlay inerts the
-  page. One service alone narrows the label track to `minmax(96px, 9rem)` so a phone shows the seat
+  page, and leaving full screen on a narrow viewport closes the picker rather than mounting the
+  sheet already open. The sheet stays mounted after its first open and is driven by `open={…}`
+  over the last seat and the last list it drew, so it animates out with its body; `restoreFocusRef`
+  hands the post-exit focus to the seat's action, and a candidate row carries `aria-pressed`. One service alone narrows the label track to `minmax(96px, 9rem)` so a phone shows the seat
   and its chips side by side. The create footer is «Cancelar» · «Nada se guarda hasta crear los
   borradores.» · «Crear y publicar» · «Crear N borradores», the stored save bar a hairline.
   Tests: `PlannerGrid` (the sheet, via a `matchMedia` stub), `MonthCalendar`, the `MonthGenerator`

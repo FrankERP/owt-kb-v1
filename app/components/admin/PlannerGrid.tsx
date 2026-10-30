@@ -139,12 +139,12 @@ import { serviceTodayIso, type TargetPreflight } from "./serviceReadiness";
 import { FairnessEngineNote, FairnessSwitch } from "./FairnessSwitch";
 import { effectiveColumnCounts, fairnessSwitchLabel, isFairnessColumnPast } from "./fairnessToggleModel";
 import {
+  CARD_RAIL,
   CARD_STYLE,
   PREFLIGHT_COPY,
   SERVICE_LABEL,
   TONE_CLASS,
   describePreflightReason,
-  type ServiceType,
 } from "./serviceCardModel";
 import CueDialog from "../ui/CueDialog";
 import Button from "@/app/components/ui/Button";
@@ -160,12 +160,6 @@ import Menu, { MenuHeader, MenuItem } from "@/app/components/ui/Menu";
 import Switch from "@/app/components/ui/Switch";
 import { CLEAR_WHAT_LABEL, type ClearScope, type ClearWhat } from "./clearCells";
 
-/** A column header's dot: the Servicios cards' rail tones (`CARD_RAIL`), one per service type. */
-const COLUMN_DOT: Record<ServiceType, string> = {
-  sunday_role: "bg-accent",
-  saturday_role: "bg-warning-fg",
-  special_role: "bg-info-fg",
-};
 // T4 of the drag-and-drop plan. `moveOccupant` composes the grid's single write
 // helper, `withUpdatedCell` (now in `plannerModel.ts`, so the MCP proposal editor
 // can replay a move on the server), twice rather than mutating cells itself.
@@ -676,7 +670,14 @@ export default function PlannerGrid(props: PlannerGridProps) {
    * in full screen: that overlay inerts everything outside itself, and the column
    * already fits beside the fitted grid.
    */
-  const pickerAsSheet = useMediaQuery(PICKER_SHEET_QUERY) && !fullScreen;
+  const narrowViewport = useMediaQuery(PICKER_SHEET_QUERY);
+  const pickerAsSheet = narrowViewport && !fullScreen;
+  /**
+   * The seat's ACTION, captured when the picker opens, for the sheet's post-exit focus restore
+   * (`restoreFocusRef`): `closePicker`'s own `.focus()` runs while the provider still holds the
+   * page `inert`, so without this a sheet dismissed on a phone dropped focus at the page top.
+   */
+  const sheetOpenerRef = useRef<HTMLElement | null>(null);
   /** The sheet's search, keyed to the open cell so switching seats starts it empty (no effect, no flash). */
   const [pickerSearch, setPickerSearch] = useState<{ key: string; text: string }>({ key: "", text: "" });
   /**
@@ -685,6 +686,8 @@ export default function PlannerGrid(props: PlannerGridProps) {
    * and keeps its body through the exit animation instead of blanking when `openCell` clears.
    */
   const [sheetSeat, setSheetSeat] = useState<{ rowId: string; columnId: string } | null>(null);
+  /** The last list the open picker drew — what the sheet shows while it animates out. */
+  const sheetLast = useRef<{ candidates: RankedCandidate[]; stranded: string[] }>({ candidates: [], stranded: [] });
 
   // Finding 5: `removeError` was never cleared by anything except a
   // SUCCESSFUL `removeRow` call, so "Vacía la fila antes de eliminarla"
@@ -1349,7 +1352,28 @@ export default function PlannerGrid(props: PlannerGridProps) {
     setOpenOrder(rankFor(row, columnId).map((c) => c.id));
     setOpenCell({ rowId: row.id, columnId });
     setSheetSeat({ rowId: row.id, columnId });
+    setPickerSearch({ key: "", text: "" });
+    sheetOpenerRef.current = document.querySelector<HTMLElement>(
+      `[data-row-id="${row.id}"][data-column-id="${columnId}"] [data-cell-action]`,
+    );
   }
+
+  /**
+   * The picker does not cross surfaces. Leaving full screen on a narrow viewport would
+   * otherwise mount the sheet already open — a modal popping up on the page the admin just
+   * returned to, over the full-screen exit's own focus restore — so both exits (the «Salir»
+   * button and Escape) go through here. In the handlers, not an effect on `fullScreen`: a
+   * state write inside an effect is a cascading render the compiler lint flags, and the
+   * exit is a user action with two call sites. A viewport that narrows UNDER an open column
+   * (a rotation mid-pick) keeps the column until the next open — rare, and never modal.
+   */
+  const leaveFullScreen = useCallback(() => {
+    setFullScreen(false);
+    if (narrowViewport && openCell) {
+      setOpenCell(null);
+      setOpenOrder(null);
+    }
+  }, [narrowViewport, openCell]);
 
   /**
    * Closes the picker and hands focus BACK to the cell that opened it.
@@ -1459,14 +1483,14 @@ export default function PlannerGrid(props: PlannerGridProps) {
         return;
       }
       if (fullScreen) {
-        setFullScreen(false);
+        leaveFullScreen();
         return;
       }
       closePicker();
     };
     document.addEventListener("keydown", onKeyDown, true);
     return () => document.removeEventListener("keydown", onKeyDown, true);
-  }, [openKey, fullScreen, closePicker, pendingMove, pickedMove]);
+  }, [openKey, fullScreen, closePicker, leaveFullScreen, pendingMove, pickedMove]);
 
   /**
    * What `role="dialog" aria-modal="true"` promises, actually delivered.
@@ -1973,24 +1997,32 @@ export default function PlannerGrid(props: PlannerGridProps) {
   // not have for the ~90% of the time nobody is picking anybody. The template is
   // flex, so the centre column simply reclaims the width.
   // The sheet reads the seat it was last opened for (`sheetSeat`), which `openCell`
-  // matches while it is open and outlives on the way out; its candidates then come
-  // from the live ranking so the exit frame still shows a list.
+  // matches while it is open and outlives on the way out. For the exit frame it draws
+  // the LAST list it showed — the frozen order and the stranded rows included — from a
+  // ref written after every open render, never a fresh ranking (which would reorder
+  // the rows and drop the stranded «Quitar» while the sheet slides away, and would
+  // cost two `rankCandidates` passes per render on a desktop that never draws it).
   const sheetRow = sheetSeat ? rows.find((r) => r.id === sheetSeat.rowId) ?? null : null;
   const sheetColumn = sheetSeat ? columnById.get(sheetSeat.columnId) ?? null : null;
   const pickerKey = openCell ? `${openCell.rowId}|${openCell.columnId}` : "";
   const sheetSearch = pickerSearch.key === pickerKey ? pickerSearch.text : "";
   const sheetNeedle = normalizeText(sheetSearch.trim());
-  const sheetBase =
-    openCell && openRow ? openCandidates : sheetRow && sheetSeat ? rankFor(sheetRow, sheetSeat.columnId) : [];
+  const pickerOpen = openCell !== null && openRow !== null;
+  const sheetBase = pickerOpen ? openCandidates : sheetLast.current.candidates;
+  const sheetStranded = pickerOpen ? strandedOccupants : sheetLast.current.stranded;
   const sheetCandidates = sheetNeedle
     ? sheetBase.filter((c) => normalizeText(c.name).includes(sheetNeedle))
     : sheetBase;
+  useEffect(() => {
+    if (pickerOpen) sheetLast.current = { candidates: openCandidates, stranded: strandedOccupants };
+  });
 
   // The list is one piece of markup for the column and the sheet: the rows, the stranded
   // occupants and the empty line do not know which surface holds them. The seat is an
   // argument rather than `openCell`, because the sheet draws its last seat while closing.
   const pickerList = (
-    candidates: typeof openCandidates,
+    candidates: RankedCandidate[],
+    stranded: string[],
     className: string,
     seat: { cell: { rowId: string; columnId: string }; row: GridRow },
   ) => {
@@ -2029,7 +2061,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
             ADR-0029 records the retirement badge doing. Removal only: there
             is no toggle back, because putting them back is what their Tipo
             says they cannot do. */}
-        {strandedOccupants.map((id) => (
+        {stranded.map((id) => (
           <li key={`stranded-${id}`} className="flex min-h-[54px] items-center justify-between gap-2 border-b border-ink/[0.10] py-2">
             <span className={`font-body text-[15px] font-semibold text-warning-strong ${CARD_STYLE.longText}`}>
               {memberName(id)}
@@ -2050,7 +2082,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
             </button>
           </li>
         ))}
-        {candidates.length === 0 && strandedOccupants.length === 0 && (
+        {candidates.length === 0 && stranded.length === 0 && (
           <li className="py-3 font-body text-sm text-ink-dim">
             {sheetNeedle && sheetBase.length > 0 ? "Nadie con ese nombre." : "Nadie elegible para este puesto."}
           </li>
@@ -2081,7 +2113,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
             Cerrar
           </Button>
         </div>
-        {pickerList(openCandidates, "max-h-[60vh] overflow-y-auto border-t border-ink/[0.10] pr-1", { cell: openCell, row: openRow })}
+        {pickerList(openCandidates, strandedOccupants, "max-h-[60vh] overflow-y-auto border-t border-ink/[0.10] pr-1", { cell: openCell, row: openRow })}
       </div>
     ) : null;
 
@@ -2090,7 +2122,9 @@ export default function PlannerGrid(props: PlannerGridProps) {
   // after a first open (`sheetSeat`), then kept mounted and driven by `open={…}` like every
   // house dialog, so it animates out with its body intact. It keeps the column's region, so
   // focus lands on the same `aria-label`, and every dismissal — Escape, the scrim, the grip,
-  // «Listo» — is the one `closePicker`, which returns focus to the seat that opened it.
+  // «Listo» — is the one `closePicker`; the provider's post-exit restore then lands on the
+  // seat's action through `restoreFocusRef` (the synchronous focus inside `closePicker` is
+  // ignored while the page is still inert).
   const pickerSheet =
     pickerAsSheet && sheetSeat && sheetRow && sheetColumn ? (
       <CueDialog
@@ -2100,6 +2134,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
         title="Candidatos"
         label="Candidatos"
         onDismiss={closePicker}
+        restoreFocusRef={sheetOpenerRef}
       >
         <div
           ref={pickerRef}
@@ -2118,7 +2153,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
             value={sheetSearch}
             onChange={(text) => setPickerSearch({ key: pickerKey, text })}
           />
-          {pickerList(sheetCandidates, "max-h-[50svh] overflow-y-auto border-t border-ink/[0.10]", { cell: sheetSeat, row: sheetRow })}
+          {pickerList(sheetCandidates, sheetStranded, "max-h-[50svh] overflow-y-auto border-t border-ink/[0.10]", { cell: sheetSeat, row: sheetRow })}
           <p className="font-body text-[13px] leading-snug text-ink-dim">
             Toca un nombre para ponerlo o quitarlo. Las barras son sus últimos cuatro servicios.
           </p>
@@ -2214,7 +2249,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
             {monthLabel ?? "Cuadrícula del mes"}
           </p>
           <Button variant="secondary" size="lg"
-            onClick={() => setFullScreen(false)}
+            onClick={leaveFullScreen}
           >
             Salir de pantalla completa (Esc)
           </Button>
@@ -2633,7 +2668,7 @@ function ColumnHeader({
           <span className="font-body text-[13px] text-ink-dim">{month}</span>
         </div>
         <span className="flex items-center gap-1.5 font-body text-sm font-semibold text-ink-muted">
-          <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${COLUMN_DOT[column.type]}`} />
+          <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${CARD_RAIL[column.type]}`} />
           {typeLabel}
         </span>
         {column.serviceName && (
@@ -2658,7 +2693,7 @@ function ColumnHeader({
       </div>
       {/* The service type as dot + word (the Servicios cards' tones), never a tracked label. */}
       <span className="flex items-center gap-1.5 font-body text-sm font-semibold text-ink-muted">
-        <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${COLUMN_DOT[column.type]}`} />
+        <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${CARD_RAIL[column.type]}`} />
         {typeLabel}
       </span>
       {/* E6/E18 — a special is identified by date AND name (`special_role:date:name`),
@@ -3443,6 +3478,8 @@ function CandidateRow({
           : "cursor-pointer hover:bg-accent/[0.055]"
       }`}
       data-selected={selected ? "true" : undefined}
+      // The seated state is the check at the left (aria-hidden) — this is what tells a reader.
+      aria-pressed={selected}
     >
       {/* The pick is a check at the left, never a filled box: the row IS the control. */}
       <span aria-hidden="true" className="flex w-5 shrink-0 justify-center text-accent">
