@@ -1,6 +1,6 @@
 # Availability conflicts: find them, propose a replacement, apply with one click (plan)
 
-**Status:** DRAFT, revision 9 — PROPOSALS ONLY. Revisions 1–7 (seven review rounds) planned an
+**Status:** DRAFT, revision 10 — PROPOSALS ONLY. Revisions 1–7 (seven review rounds) planned an
 automatic writer for drafts; every round from 5 to 7 found a defect in how automatic draft writes and
 proposals share one sweep. Frank chose (2026-10-30 13:54Z, decision card «Solo propuestas por
 ahora») to drop the automatic writes: the sweep never changes a service, drafts included. This
@@ -51,7 +51,8 @@ switch for this alert (§6.3).
    Frank once. The service is NOT changed, draft or published.
 2. In `/admin` › Disponibilidad › Conflictos, each conflict shows its proposal (recomputed on a fresh
    read) with «Aplicar», «Elegir otro» (the next eligible people) and «Mantener» (Frank's deliberate
-   keep: never proposed or emailed again). A conflict the app could not check («sin revisar», §4.3)
+   keep: not proposed or emailed again while that conflict lasts; if the person later clears the date
+   and marks it again, that is a new conflict and Frank hears about it). A conflict the app could not check («sin revisar», §4.3)
    says so. «Revisar ahora» runs the whole check on demand. Conflicts applied in the last 30 days are
    listed below.
 3. «Aplicar» writes through `/admin`'s own role edit writer, so the existing notices go out exactly as
@@ -154,8 +155,9 @@ switch for this alert (§6.3).
   is no pick: `none`, `reason: song_lead`. If no candidate passes: `none`, `reason: no_candidate`.
 - **D4. Drafts and published alike: propose, never write.** The sweep writes only its own records
   and sends only the admin email. The one role write is «Aplicar» (§5.5), a person's click. Only
-  services the board marks `editable` (approved, serializable, today or later) get a pick; past
-  services are never read for action.
+  services the board marks `editable` (approved, serializable) AND dated today or later (CDMX) get a
+  pick — `editable` itself does not test the date (`storedMonthBoard.ts:66-69`), so the sweep and
+  «Aplicar» both check `date >= today` themselves; past services are never read for action.
 - **D5. Each judgement is independent, and «Aplicar» re-judges.** Every identity is judged against
   the SAME read of its month (the stored board), never against another proposal of the same sweep.
   Two proposals can therefore name the same person (for two seats of one service, or past a monthly
@@ -164,8 +166,11 @@ switch for this alert (§6.3).
   recomputed proposal. This removes the shared working board, whose interactions with automatic
   writes were the defect class of rounds 5–7.
 - **D6. Identity and «Mantener».** Conflict identity = `(roleId, memberId, date)`. `kept` is set ONLY
-  by Frank's «Mantener» and is the one status that silences an identity. If the person is seated
-  there again after an applied fix (copying instruments, a hand pick — the picker never refuses an
+  by Frank's «Mantener» and is the one status that silences an identity — for as long as the
+  conflict lasts: once it ends (not C: the date cleared, the person unseated, the service moved or
+  deleted) a `kept` record becomes `gone` like any other, and a later conflict on the same identity
+  is a NEW event («las personas cambian su disponibilidad después» is exactly that case). If the
+  person is seated there again after an applied fix (copying instruments, a hand pick — the picker never refuses an
   unavailable person, `pickJudge.ts:78-80`), it is a NEW conflict event: proposed (or `none`) and
   emailed.
 - **D7. Horizon.** Services dated from CDMX today through the last day of the month after next (an
@@ -216,7 +221,9 @@ four MCP answers (`serviceEditor.ts:909,1038`, `proposalEditor.ts:566,694`), whe
 wire as tokens only (ADR-0062), and the raw verdict carries member ids (`MissedProtection.person`)
 and solver rule ids. Instead `monthCheck.ts` gains a SEPARATE pure export
 `monthCheckVerdict(input: MonthCheckInput)` → `{ judged: boolean, instances: BrokenInstance[],
-missed: MissedProtection[] }`, built by the same internal steps `monthCheck` uses (one shared
+missed: MissedProtection[], eligibility, ruleIds }` (`eligibility` = the built request's
+`people[p].eligibility`, which D3(0) reads, so the request is built once per judgement; `ruleIds` =
+the request's rule-id table), built by the same internal steps `monthCheck` uses (one shared
 helper, so the two cannot drift); `judged` = a ledger was given AND the request built (the existing
 `checked` also needs the fair-share read, which the gate does not use). Only the availability gate
 calls it; its result never reaches an MCP answer, a log or the email. A test asserts the four MCP
@@ -228,7 +235,10 @@ given the month's ONE ledger read (§5.3 step 3), it builds the month-check inpu
 `runStoredMonthCheck` does (`serviceEditor.ts:731`: `months: [month]`, the record's entry,
 `storedRoles` = the roles read minus the board's editable ones, `savedWindow` minus on-board
 services) with `fairShare: null`, and runs `monthCheck` on `removedOnly` (absent person out, seat
-empty) and on `withCandidate`, both through `monthCheckVerdict`. Reject when either is not `judged`, when `withCandidate` has an
+empty) and on `withCandidate`, both through `monthCheckVerdict`. Presence rule ids are ordinals over the
+people sent (`v3RuleIds.ts:7-13`), so a candidate who enters the request only in `withCandidate` can
+shift them: when the two builds' `ruleIds` tables differ, the candidate is rejected (fail closed).
+Reject also when either is not `judged`, when `withCandidate` has an
 instance key `(family, rule, scope)` or a missed key `(code, person, scope)` that `removedOnly`
 lacks, or when a count instance in both has a `<=`/`==` rule and a larger `observed`. When no voice
 candidate can be judged because the month cannot build (no eligibility record: the synthetic ledger
@@ -276,7 +286,7 @@ date.
 | no record, `gone` | `proposed` (pick) or `none`, **new event** | `none`, `reason: unchecked`, **new event** | nothing |
 | `proposed`, `none` | same status → update `seats`/`reason`/`published` in place, no event, and only when one of them differs from the stored record (no write, no `_rev` churn, when nothing changed). `none` ↔ `proposed` → the new status, **new event** | `none`/`unchecked` in place (a `proposed` becomes it with a **new event**) | `gone` |
 | `applied` | the person is back: `proposed` (pick) or `none`, **new event** | the person is back: `none`/`unchecked`, **new event** | unchanged (listed 30 days) |
-| `kept` | unchanged | unchanged | unchanged |
+| `kept` | unchanged | unchanged | `gone` (the kept conflict ended; a later C is a new event) |
 
 `applied` is written only by «Aplicar» (§5.5) and does not count an event (Frank did it). «New
 event» = `eventSeq += 1` in the same write. A sweep whose read of the ledger FAILS (a transient read
@@ -316,8 +326,11 @@ asserts the sweep never calls `editRole`).
    judged by `proposeReplacement` on that month's stored board as read (D5).
 4. Apply §5.2 per identity in that order: one guarded record write each. No new identity is judged
    after `deadlineMs − 15 s`; what is left waits for the next sweep.
-5. Always run, on every sweep that got past step 2, whether or not step 4 changed anything; it has the
-   window up to `deadlineMs`. Re-read the records (fresh revisions) and email (§6) the ones claimed
+5. Always run, on every sweep that got past step 2, whether or not step 4 changed anything; it starts
+   only while at least 10 s remain before `deadlineMs` (every `deadlineMs` is at most 50 s after the
+   invocation began, under `maxDuration = 60`, so a claimed email has headroom to send); otherwise
+   the due records wait for the next tick unclaimed. It logs «claimed N» (fixed tag) before sending,
+   so a platform kill between claim and send leaves a trace. Re-read the records (fresh revisions) and email (§6) the ones claimed
    from that read.
 6. Answer `{ ok, mode, proposed, none, kept, gone, skipped }` with ids; `"dry"` answers what `"act"`
    would have done. Logs carry fixed tags and counts, never names or ids.
@@ -328,7 +341,9 @@ asserts the sweep never calls `editRole`).
   the dates ADDED by this save (new minus the `current` it read) go to `memberTick({ memberId,
   addedDates })` (exported by `availabilityFixCommit.ts`, which owns every read of the type): one read
   through `operationalClient` for the services on those dates seating this member
-  (`assignedSeatsByRoleQuery`) and one for their records; only if some (service, date) has no record
+  (`assignedSeatsByRoleQuery`, filtered on the service day as `coalesce(week, date)` — weekend roles
+  store `week`, specials `date`, `serviceReadQueries.ts:583`; a test pins the GROQ string) and one for
+  their records; only if some (service, date) has no record
   or one in `gone`/`applied` (D6's «back») → `sweep({ trigger: "member", memberId, deadlineMs: now +
   50 s })`. The PATCH's contract and response are unchanged; the route gets `maxDuration = 60` and
   `withVerificationRunContext`. A sweep failure is logged, never answered.
@@ -337,14 +352,14 @@ asserts the sweep never calls `editRole`).
   try/catch, it calls `availabilityTick({ startedAt })` (exported by `availabilityFixCommit.ts`),
   which returns at once unless the 5-minute bucket `floor(now / 300 s) % 3 === 0` (every third Cloud
   Scheduler tick, ~15 min; a GitHub backup call in the same bucket is harmless, the writes are
-  guarded) and at least 40 s of the invocation remain (`startedAt + 55 s − now`; a long drain skips
+  guarded) and at least 40 s remain before its deadline (`startedAt + 50 s − now ≥ 40 s`; a long drain skips
   the tick, the next one is 15 min away). It then runs a cheap PRE-CHECK — the horizon's seats per
   service (one read through `operationalClient` with a NEW builder `assignedSeatsByRoleQuery(roleFilter)`
   in `notifyTargets.ts`, built from the same private `ASSIGNED_SEAT_PATHS` as
   `assignedMemberRefsQuery` so the five paths cannot drift), the members' `unavailableDates` and the
-  records — and opens the full sweep (`trigger: "cron"`, `deadlineMs: startedAt + 55 s`) only when:
-  a conflict has no record or a `gone`/`applied` one; a `proposed`/`none` record's conflict is no
-  longer seen; a `proposed`/`none` record's `checkedAt` is more than 6 h old (a `none` may have a
+  records — and opens the full sweep (`trigger: "cron"`, `deadlineMs: startedAt + 50 s`) only when:
+  a conflict has no record or a `gone`/`applied` one; a `proposed`/`none`/`kept` record's conflict
+  is no longer seen; a `proposed`/`none` record's `checkedAt` is more than 6 h old (a `none` may have a
   candidate now and so become a `proposed` event; the age stops an unfixable one from reopening a
   sweep every tick); or ANY record is due (`notifiedSeq < eventSeq` in `proposed`/`none`: an email a
   previous run left unsent). No new Scheduler job, secret or workflow; the tick inherits the flush's
@@ -355,7 +370,8 @@ asserts the sweep never calls `editRole`).
   `AVAILABILITY_SWEEP_DISABLED=1` (a new env var with its `docs/SECRETS.md` entry: Production only,
   no secret value, set with `vercel env add` and a redeploy), so the sweep and its emails can be
   stopped without a code release; «Revisar ahora» then answers dry.
-- **«Revisar ahora».** `POST /api/admin/availability-conflicts/sweep`: `requireActiveManager`, not
+- **«Revisar ahora».** `POST /api/admin/availability-conflicts/sweep`: «the admin guard» =
+  `requireActiveManager`, not
   `content-editor`, not `session.user.isImpersonating` (as `/api/admin/chat`); `trigger: "manual"`,
   `deadlineMs: now + 50 s`; answers the report. `maxDuration = 60`, `withVerificationRunContext`.
 
@@ -363,8 +379,8 @@ asserts the sweep never calls `editRole`).
 
 `applyAvailabilityFix({ roleId, rev, memberId, replacements, actor })`:
 
-1. Fresh `loadV3PlanSources`, the month board (`coherent`, engine `v3`, the column `editable`, else
-   `409` «vuelve a revisar»); C must hold (else `409`); the column's `rev` must equal `rev` (else
+1. Fresh `loadV3PlanSources`, the month board (`coherent`, engine `v3`, the column `editable` and
+   dated today or later in CDMX — a screen left open past midnight — else `409` «vuelve a revisar»); C must hold (else `409`); the column's `rev` must equal `rev` (else
    `409`); `replacements` must cover EVERY seat the person holds there (all or nothing, as §4.2; else
    `400`); each chosen replacement passes D2–D3 on the fresh board (one ledger read), else `409` with
    the refusal. «Elegir otro» is the same call with a candidate from the alternatives list.
@@ -378,10 +394,10 @@ asserts the sweep never calls `editRole`).
    records `gone`, so the conflict leaves the open list either way (it then misses the 30-day
    «aplicados» list, the one cost).
 
-Route `POST /api/admin/availability-conflicts/apply`, the sweep's guard. «Mantener»: `POST .../keep
+Route `POST /api/admin/availability-conflicts/apply`, the admin guard (§5.4). «Mantener»: `POST .../keep
 { recordId?, roleId, memberId, date, rev? }` → `kept` under `ifRevisionId` (by `create` when the
 conflict has no record yet). `GET /api/admin/availability-conflicts` (§7) reads through this module
-too.
+too. All four routes use the admin guard.
 
 ## 6. The email
 
@@ -410,7 +426,7 @@ email. Follow-up if Frank wants to turn this one off alone.
 
 ## 7. UI (standard; consumes §5)
 
-`GET /api/admin/availability-conflicts` → open conflicts with their recomputed proposal and up to 3
+`GET /api/admin/availability-conflicts` (the admin guard, §5.4) → open conflicts with their recomputed proposal and up to 3
 alternatives (D8), records `applied` in the last 30 days, `kept`, and — when its OWN fresh read is not
 judgeable (§5.2: `sources`, `incoherent`, `engine`) — that reason as «No se pudo revisar», instead of
 proposals (nothing stores a blocked sweep's reason). `AvailabilityPanel`'s «Conflictos» view renders them (house `Button`,
@@ -438,6 +454,10 @@ revisar».
 - `instrumentFill.ts`: export `seatCounts` and `instrumentalistsOn`, unchanged.
 - `notifyTargets.ts`: `assignedSeatsByRoleQuery(roleFilter)` beside `assignedMemberRefsQuery`, over
   the same `ASSIGNED_SEAT_PATHS` (a test asserts both name the five paths).
+- `deliveryFirewallTransports.test.ts`: the new admin email joins its «invokes EVERY trigger» list.
+- The «`applyAvailabilityFix` only» importer rule for `editRole` cannot be pinned by
+  `serviceCommitCallers.test.ts` (it pins whole modules); a unit test asserts the sweep path never
+  calls `editRole` instead.
 - `docs/SECRETS.md`: `AVAILABILITY_SWEEP_DISABLED` (§5.4 kill switch).
 - Studio: `sanity/schemas/availabilityConflict.ts`, read-only fields, registered with the others.
 - `/api/cron/flush-notifications/route.ts`: the `after()` call to `availabilityTick` (§5.4), its
@@ -469,7 +489,8 @@ rejects when not `judged`, and is not applied to an instrument seat; worship-nig
 Writer (mocked clients and deps, as the `serviceEditor` tests mock theirs): one test per cell of the
 §5.2 table; the sweep never calls `editRole` (draft and published); `applied` then the person
 re-seated → `proposed`, one email; `proposed` → date removed → `gone` → date re-added → `proposed`,
-one more email; `kept` stays silent; two concurrent sweeps on one new identity → one `create` wins,
+one more email; `kept` stays silent while C holds; `kept` → date cleared → `gone` → date re-marked →
+`proposed`, one email; two concurrent sweeps on one new identity → one `create` wins,
 the other drops (one email); a failed ledger read leaves the month untouched; an incoherent inventory,
 an unready source or engine `v2` makes no transition (every record unchanged, nothing sent); a
 conflict on a non-editable service → `none`/`unchecked`, never `gone`; `"dry"` mode writes and sends
@@ -503,9 +524,12 @@ Before the merge to `preview`, list the conflicts the first production sweep wou
 MCP reads) and show Frank. Today (2026-10-29) that is two published services (2026-11-29,
 2026-12-27, both Mkz in Lead + Bass): the first scheduled check would only propose and email him once.
 Also read-only, before the merge: that Frank is in the email audience (super-admin or admin, in
-worship, not disabled, email allowlisted, `notifPrefs.proposals` not false), that the role inventory
+worship, not disabled, email allowlisted, `wantsNotification(notifPrefs, "proposals")` true — i.e. `notifPrefs.emailProposals`, falling
+back to `notifPrefs.email`, `notifyPrefs.ts:11-29`; not the push field `proposals`), that the role inventory
 is coherent (no lingering raw Studio draft), and that Nov and Dec have fairness records (else every
-voice proposal is «sin revisar»); report each to Frank. On dev the sweep is dry (D10): «Revisar ahora» shows what it would do. Deploy the Studio schema with
+voice proposal is «sin revisar»); report each to Frank, together with what the first sweep would propose — today's two known
+conflicts are Mkz in Lead + Bass, and with all-or-nothing they come out «sin reemplazo» if no
+bassist passes. On dev the sweep is dry (D10): «Revisar ahora» shows what it would do. Deploy the Studio schema with
 the release (`sanity schema deploy`; the Content Lake accepts the type without it). Then the CLAUDE.md
 order: gates → one code review → preview → verify alias → PR → merge → prod alias → the first ticks
 checked in the production logs (the tick logs one fixed line per run: skipped / pre-check clear /
