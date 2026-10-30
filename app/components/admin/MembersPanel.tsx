@@ -1,6 +1,6 @@
 "use client";
 
-// The Miembros tab — the member list, its filters, its modals and every member
+// «Personas» on /super-admin (the /admin Miembros tab until 2026-10-29, ADR-0075) — the member list, its filters, its modals and every member
 // write. Extracted from `AdminPanel` in R5 Task 3: the body used to be a VALUE
 // built on every render of every tab (wrapping it in a function turned
 // `react-hooks/refs` into an error at `handlePhotoClick`), and a component is
@@ -1027,7 +1027,7 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className={PAGE_TITLE}>Miembros</h1>
+          <h1 className={PAGE_TITLE}>Personas</h1>
           {!loading && (
             <p className={`mt-2 ${PAGE_LEDE}`}>
               {/* `filterValue` is in here deliberately: with scope "Todos", no query

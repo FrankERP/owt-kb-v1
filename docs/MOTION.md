@@ -489,15 +489,16 @@ and 5 (initials contrast) — `shellPolish.test.ts`.
 M1 is the app chrome: the phone tab bar, the desktop nav links, the avatar badge,
 the impersonation banner, the audio transport, and the song sheet's head.
 
-- **`BottomNav`** (`app/components/BottomNav.tsx`) — three worship tabs (Inicio ·
-  Calendario · Biblioteca) or the kids-only set (Kids · Planear Kids when
+- **`BottomNav`** (`app/components/BottomNav.tsx`) — ONE ministry at a time
+  (`navSections.ts`, Frank 2026-10-29): in worship the three worship tabs (Inicio ·
+  Calendario · Biblioteca), under `/kids…` the Kids set (Kids · Planear Kids when
   managesKids applies), plus a **«Más»** tab that holds only what those tabs
-  cannot fit: `Kids` (worship member also in Kids), `Planear Kids` (worship
-  member who manages Kids), `Admin` (admin/content-editor/super-admin). **Tema,
-  Cerrar sesión and «Yo» all live in the avatar menu (`NavMenu`) now, not
+  cannot fit: the switch to the person's other ministry («Oasis Kids» / «Alabanza»)
+  and, in worship, `Admin` (admin/content-editor/super-admin). **Tema,
+  Cerrar sesión, «Yo» and Super admin all live in the avatar menu (`NavMenu`) now, not
   here** — M1 follow-up F1 moved the account actions and F2 moved «Yo»,
-  because `/me` has one home, the avatar menu. When none of the
-  three rows applies (the common case: a plain worship member with no Kids
+  because `/me` has one home, the avatar menu. When neither
+  row applies (the common case: a plain worship member with no Kids
   ministry), the «Más» button itself does not render — the bar shows the
   tabs alone — and the sheet never opens. A bar with fewer than two items
   (tabs + «Más») is not a bar: the kids-only volunteer with no planner rights

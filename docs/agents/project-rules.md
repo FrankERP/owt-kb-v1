@@ -694,7 +694,8 @@ every admin panel behind `next/dynamic`, and a Suspense fallback ONLY: App Route
 and the one place a chunk-load failure surfaces on `/admin`; without it a rejected
 `import()` throws through `React.lazy` to the route's error page. «Reintentar» reloads the
 page, because `React.lazy` caches the rejection), `MembersPanel`
-(`app/components/admin/MembersPanel.tsx` — the Miembros tab; row actions are ONE `Menu`
+(`app/components/admin/MembersPanel.tsx` — «Personas» on `/super-admin` since 2026-10-29, the
+Miembros tab of `/admin` before (ADR-0075: people span every ministry); row actions are ONE `Menu`
 per row behind a ⋯ `Button variant="icon"`, never hover-only buttons, and taking access
 away asks first through a confirm `CueDialog` that stays open on a refused PATCH
 (decision O). Giving access back needs no confirm), `loadSolverHistory`
@@ -772,7 +773,7 @@ pass.
   guards by group yet (phase 3 adds it with the first Jóvenes document).
 - **Readable ≠ writable (`ASSIGNABLE_MINISTRY_IDS`).** Registering a ministry in `MINISTRIES`
   makes a stored id mean something; only `ASSIGNABLE_MINISTRY_IDS` makes it storable — it feeds
-  `validateMinistryWrite("ministries")`, the Miembros pills and scope bar, and the Studio
+  `validateMinistryWrite("ministries")`, the «Personas» pills and scope bar, and the Studio
   options (`ministrySchemaSync.test.ts`). The reason is the release order: code older than
   the `jovenes` entry drops the unknown id and falls back to worship, so a stored
   `["jovenes"]` reads as a WORSHIP member there — catalog, setlist mail, calendar feed. The
@@ -790,7 +791,7 @@ pass.
   item per ministry, a `leader` with at least one group. Stored by `ministryRolesForStorage`
   (`_key` = ministry, `_type: "ministryRole"`). A `ministries` sent WITHOUT `ministryRoles`
   unsets the level of each leveled ministry it leaves out (`droppedMinistryRolePaths`), so a
-  stale level cannot revive; set and unset never touch one path in one patch. The Miembros
+  stale level cannot revive; set and unset never touch one path in one patch. The «Personas»
   form sends `ministryRoles` whenever it sends `ministries`, without the stored `_key`/`_type`;
   `adminMembersQuery` carries the field only on its super-admin (`$all`) arm, and the Jóvenes
   scope tab is the super-admin's only (`ministryScopeIds`).
@@ -803,7 +804,7 @@ pass.
   «Alguien más cambió a esta persona; recarga.»). The Studio, the second writer of `role` and
   `ministries`, blocks publishing the same state with a `role` validation. A Studio edit that
   drops `jovenes` from `ministries` leaves its `ministryRoles` item (the read ignores it, but
-  re-adding `jovenes` in the Studio revives the old level) — accepted: Miembros is the
+  re-adding `jovenes` in the Studio revives the old level) — accepted: «Personas» is the
   supported path.
 - **Isolation is two-way:** a kids-only member reaches no worship surface, and a
   worship `admin`/`content-editor` gets nothing in kids. Only `super-admin` spans

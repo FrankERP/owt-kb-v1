@@ -27,6 +27,9 @@ export default async function AdminPage({
   // for certain. `resolveAdminTab` lives in a neutral module for the same
   // reason `paintsDayCard` does (ADR-0028).
   const tabParam = (await searchParams).tab;
+  // Miembros moved to the super-admin page (people span every ministry, ADR-0075);
+  // an old link or bookmark to it follows it there rather than landing on Servicios.
+  if (tabParam === "members" && role === "super-admin") redirect("/super-admin");
   const initialTab = resolveAdminTab(tabParam, role);
   // Whether the URL NAMED this tab or merely fell back to it. The panel follows
   // the URL only in the first case; see the re-sync in AdminPanel.
@@ -50,7 +53,7 @@ export default async function AdminPage({
             on every other tab this is a no-op. */}
         <header className="mx-auto max-w-7xl">
           {/* The TAB is the page title now (phase 5 of the «millones» pass, 2026-10-27):
-              each panel renders its own `PAGE_TITLE` h1 («Servicios», «Miembros»…), so
+              each panel renders its own `PAGE_TITLE` h1 («Servicios», «Propuestas»…), so
               «Control Room» is a small label on a phone and the rail's title from `lg`
               (`AdminRail`), never two titles stacked. The navbar keeps the name. */}
           <p className={`${SHEET_TITLE} lg:hidden`}>Control Room</p>

@@ -129,7 +129,9 @@ export default function ImpersonationBanner() {
         setError("No se pudo salir. Intenta de nuevo.");
         return;
       }
-      router.push("/admin");
+      // Back where impersonation starts: «Personas» on the super-admin page
+      // (only a super-admin can impersonate).
+      router.push("/super-admin");
       router.refresh();
     } catch {
       setError("No se pudo salir. Intenta de nuevo.");

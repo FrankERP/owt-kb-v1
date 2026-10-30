@@ -1795,7 +1795,7 @@ describe("declared instruments on the planner (spec §7, §6.3)", () => {
       />,
     );
     const cell = container.querySelector(`[data-row-id="${KEYS_ROW}"]`)!;
-    expect(cell.textContent).toContain("Ana Drums: no declara Keys — revísalo en Miembros");
+    expect(cell.textContent).toContain("Ana Drums: no declara Keys — revísalo en Personas (super admin)");
     expect(cell.textContent).not.toContain("su Tipo ya no incluye");
   });
 
