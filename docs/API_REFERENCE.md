@@ -81,7 +81,7 @@ Every rejection (other than the auth denials, which stay `{error:"Forbidden"}` /
 
 | Code | Status | Meaning |
 |------|--------|---------|
-| `invalid_request` | 400 | Rejected before any write (bad JSON, parse issue, non-canonical id, wrong stored `_type`). |
+| `invalid_request` | 400 | Rejected before any write (bad JSON, parse issue, non-canonical id, wrong stored `_type`). The four seat writers (roles POST and PATCH, swap, copy-instruments) also answer it for a seat clash the write would ADD (ADR-0078): `details: { issues: ["seat_clash"], seatClashes: [{ memberId, name, seats: [a, b], sentence }] }` — `sentence` is the Spanish line every client prints. |
 | `forbidden` | 403 | Registered but unused — routes emit the raw `{error:"Forbidden"}` body. |
 | `not_found` | 404 | The id resolves to **zero** canonical documents. |
 | `stale_revision` | 409 | A client-observed document/lock revision no longer matches stored state (or the commit lost the race). |

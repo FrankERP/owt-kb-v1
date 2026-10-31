@@ -685,7 +685,15 @@ is also user-collapsible to those icons, persisted per browser in `owt_admin_rai
 and the planner's forced collapse wins and hides the toggle — ADR-0044),
 `seatsClash` (`app/components/admin/seatModel.ts` — the ONE seat-clash predicate: same category
 never, voz + instrumento only for a member marked «Canta y toca a la vez» (`singsAndPlays`), FOH beside
-either allowed; `rankCandidates`' C2 and `PlannerGrid`'s ⚠ both read it — ADR-0078), `useIntegrityQueue` (`app/components/admin/useIntegrityQueue.ts` — the ONLY integrity
+either allowed; `rankCandidates`' C2 and `PlannerGrid`'s ⚠ both read it, through one pair loop
+`clashingPairs` — ADR-0078). On the server, `addedSeatClashes` (`app/utils/seatClashGuard.ts`) is
+the same rule as a DIFF: `editRole`, `createRole`, `swapRoles` and `copyInstruments` refuse only a
+pair their write ADDS (an old clash never blocks an unrelated edit), after the request's own
+refusals (dangling references, the stored role's read) and before any bootstrap, coordination or transaction
+(`seatClashGuardCoverage.test.ts`), with `400 invalid_request` + `details.seatClashes[].sentence`;
+every surface that renders a writer's refusal prints that sentence, never the member id. The month
+confirm (`runV3ConfirmAttempt`, v2's `handleConfirm`) runs the same check on its drafts
+(`draftSeatClashSentences`) BEFORE the fairness records, and `refused_guard` carries its `reason`, `useIntegrityQueue` (`app/components/admin/useIntegrityQueue.ts` — the ONLY integrity
 fetch; `AdminPanel` calls it once and the panel AND the rail dot read that one state.
 Gated on the role actually having a Servicios tab (`enabled`), re-read on ENTERING
 Servicios, and a failed, in-flight or disabled domain reads `unknown`, never `clean`),

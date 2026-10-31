@@ -9,7 +9,7 @@
   ],
   "summary": {
     "literalRows": 303,
-    "filesScanned": 558,
+    "filesScanned": 560,
     "filesWithColour": 61,
     "byCategory": {
       "2": 2,
@@ -44,7 +44,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 180,
+      "line": 188,
       "disposition": "exempt",
       "reason": "Google brand mark — a third-party mark that must not be themed"
     },
@@ -56,7 +56,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 179,
+      "line": 187,
       "disposition": "exempt",
       "reason": "Google brand mark — a third-party mark that must not be themed"
     },
@@ -68,7 +68,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 182,
+      "line": 190,
       "disposition": "exempt",
       "reason": "Google brand mark — a third-party mark that must not be themed"
     },
@@ -80,7 +80,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 181,
+      "line": 189,
       "disposition": "exempt",
       "reason": "Google brand mark — a third-party mark that must not be themed"
     },
@@ -2312,7 +2312,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 805,
+      "line": 811,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2324,7 +2324,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2676,
+      "line": 2684,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2336,7 +2336,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2682,
+      "line": 2690,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2348,7 +2348,7 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 1516,
+      "line": 1522,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2360,7 +2360,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 5624,
+      "line": 5652,
       "disposition": "B",
       "reason": null
     },
@@ -2372,7 +2372,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 5706,
+      "line": 5734,
       "disposition": "B",
       "reason": null
     },
@@ -2384,7 +2384,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2760,
+      "line": 2757,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2396,7 +2396,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 3651,
+      "line": 3648,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2408,7 +2408,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 3491,
+      "line": 3488,
       "disposition": "B",
       "reason": null
     },
@@ -2444,7 +2444,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 702,
+      "line": 704,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2588,7 +2588,7 @@
       "alpha": null,
       "utility": "border",
       "carrier": null,
-      "line": 1355,
+      "line": 1358,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2600,7 +2600,7 @@
       "alpha": null,
       "utility": "border",
       "carrier": null,
-      "line": 1948,
+      "line": 1951,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },

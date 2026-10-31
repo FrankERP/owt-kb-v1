@@ -60,7 +60,7 @@ export const PROPOSAL_PROJECTION = `{
   approval_receipt, last_transition
 }`;
 
-export const CANONICAL_MEMBER_PROJECTION = `{ _id, _rev, member_name, alias, unavailableDates, unavailabilityNotes }`;
+export const CANONICAL_MEMBER_PROJECTION = `{ _id, _rev, member_name, alias, unavailableDates, unavailabilityNotes, singsAndPlays }`;
 
 const DRAFTS_ONLY = `_id in path("drafts.**")`;
 

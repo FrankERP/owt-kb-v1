@@ -21,6 +21,7 @@ import ServicesOverview from "./ServicesOverview";
 const MonthGenerator = dynamic(() => import("./MonthGenerator"), { ssr: false, loading: PanelSkeleton });
 import type { ClearMonthSummary } from "./clearMonthModel";
 import { mutationErrorMessage, mutationSignal } from "./serviceMutationErrors";
+import { seatClashSentencesOf } from "@/app/utils/seatClashGuard";
 import { useSolverConfig } from "./useSolverConfig";
 import {
   SERVICE_SOURCE_KEYS,
@@ -142,14 +143,16 @@ const CHART_FOLD = "space-y-2 lg:space-y-0";
 async function describeMutationError(res: Response, fallback: string): Promise<string> {
   let code: string | undefined;
   let dependencyCount: number | undefined;
+  let seatClashSentences: string[] = [];
   try {
     const body = await res.json();
     code = typeof body?.error === "string" ? body.error : undefined;
     dependencyCount = Array.isArray(body?.details?.dependencies) ? body.details.dependencies.length : undefined;
+    seatClashSentences = seatClashSentencesOf(body);
   } catch {
     code = undefined;
   }
-  return mutationErrorMessage({ code, status: res.status, dependencyCount, fallback });
+  return mutationErrorMessage({ code, status: res.status, dependencyCount, seatClashSentences, fallback });
 }
 
 // ─── Modal wrapper ────────────────────────────────────────────────────────────

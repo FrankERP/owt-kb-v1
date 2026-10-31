@@ -15,7 +15,7 @@ import {
   serviceWeekKey,
   type ParticipantRole,
 } from "@/app/utils/computeParticipation";
-import { occupantDeclaresInstrument, seatsClash, type SeatCategory, type SeatDef } from "./seatModel";
+import { occupantDeclaresInstrument, seatsClash, SINGS_AND_PLAYS_HINT, type SeatCategory, type SeatDef } from "./seatModel";
 import { evaluate } from "./ruleEnforcement";
 import type { GridColumn, SolverConfig } from "./plannerModel";
 
@@ -267,7 +267,7 @@ export function rankCandidates(input: {
  */
 export function clashReason(heldSeatId: string, crossCategory: boolean): string {
   const base = `Ya asignado en ${labelOfSeatId(heldSeatId)}`;
-  return crossCategory ? `${base}; para cantar y tocar en un servicio, marca «Canta y toca a la vez» en Miembros` : base;
+  return crossCategory ? `${base}; ${SINGS_AND_PLAYS_HINT}` : base;
 }
 
 /** `lead` -> `Lead`, `instrumento:Bass` -> `Bass`. */
