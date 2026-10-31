@@ -22,6 +22,7 @@ const SEAT_WRITERS: Record<string, string> = {
 
 /** Writers that leave seats alone (remove a whole role, publish, songs, records, threads, Kids). */
 const NON_SEAT_WRITERS = [
+  "availabilityFixCommit.ts", // writes seats only through editRole («Aplicar», ADR-0079)
   "fairnessMonthCommit.ts",
   "kidsCommit.ts",
   "proposalReviewCommit.ts",

@@ -486,6 +486,16 @@ several exist precisely to stop a plausible-looking change.
   to the freshly read song, and a lyrics edit needs `lyricsGate` (the stored body round-trips
   losslessly through the editor's text form). `/admin` stays last-writer-wins (no `ifRevisionId` on
   the route): a page loaded before a chat save overwrites it when saved.
+  The availability proposals' writer is `availabilityFixCommit.ts` (ADR-0079): the four
+  `/api/admin/availability-conflicts` routes (the GET and its `apply`/`keep`/`sweep` POSTs) (`requireActiveManager`, never a content-editor, never
+  impersonating), the member's `PATCH /api/me/availability` (its `after()` trigger, that member only)
+  and layer 1's flush cron (`availabilityTick`, every third bucket) call it; no MCP tool does. Its
+  sweep writes ONLY its own `availabilityConflict.<sha256>` records and the admin email, and only on
+  Production (`fairnessRecordEnvironment`; dry elsewhere; `AVAILABILITY_SWEEP_DISABLED=1` stops it).
+  The one service write is «Aplicar», a person's click, which re-judges on a fresh read under the
+  role `_rev` the screen showed and calls `editRole` with `notices: "deferred"`, exactly as the
+  PATCH does. The pick is the planner fillers' (`serverPickCandidates`, `orderByEffectiveLoad`,
+  `orderForFill`) gated by `judgeTarget` and `monthCheckVerdict`; never re-implement either.
 - **The MCP proposal editor: the server judges, the card only shows** (ADR-0062). The card
   (`mcp-app/proposal-card/`) holds a list of edits, never a board; every check and save replays the
   whole list from the stored proposal through the planner's own gate. Only `editorBoard.ts` calls

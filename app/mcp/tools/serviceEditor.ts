@@ -63,7 +63,6 @@ import { savedWindowFor } from "@/app/components/admin/plannerMonth";
 import { classifyPatchOutcome } from "@/app/components/admin/plannerSaveModel";
 import { effectiveStoredCounts, isStoredColumnPast } from "@/app/components/admin/fairnessToggleModel";
 import type { ServiceRole } from "@/app/components/admin/serviceCardModel";
-import type { V3ConfirmEntry } from "@/app/components/admin/v3Confirm";
 import { isWorshipNightFormat } from "@/app/utils/serviceFormat";
 import { fairnessRecordEnvironment, resolveSolverEngine } from "@/app/utils/solverDeployment";
 import { loadFairnessLedgerWith } from "@/app/utils/fairnessLedgerRead";
@@ -107,6 +106,7 @@ import {
   type TargetJudgement,
 } from "../monthProposals/storedJudge";
 import { PROPOSAL_CARD_TOOL_META } from "../apps/proposalCard";
+import { entryFromRecord } from "../monthProposals/storedEntries";
 import { draftLabel } from "../monthProposals/labels";
 import { kindOfType } from "@/app/components/admin/v3Services";
 import { ROLE_TYPES } from "@/app/utils/serviceReadModel";
@@ -681,22 +681,6 @@ function changeSets(
     c.mac = changeMac(ctx.key, c);
   }
   return { ok: true, changes };
-}
-
-/** The month's frozen eligibility, from its fairness record (T2.3); none = «sin revisar» where it is needed (E7). */
-function entryFromRecord(record: LogicalRecord): V3ConfirmEntry {
-  return {
-    month: record.month,
-    state: "bound",
-    write: {
-      month: record.month,
-      source: record.source === "auto" ? "auto" : "manual",
-      expectedRev: record.rev,
-      people: record.people.map(({ name: _name, ...p }) => p),
-      presence: record.presence,
-    },
-    expects: ["unchanged"],
-  };
 }
 
 /** The ledger's stored services with each editable service replaced by the board's seats. */
