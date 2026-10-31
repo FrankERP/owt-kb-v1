@@ -58,7 +58,7 @@ function inputFor(opts: {
     adminRoles,
     todayIso: TODAY,
     ledger: ledgerFor(opts.listed === undefined ? ["m-ana", "m-bruno", "m-carla", "m-dani", "m-elsa"] : opts.listed),
-    ...(opts.exclude ? { exclude: new Set(opts.exclude) } : {}),
+    ...(opts.exclude ? { exclude: new Map([["coro", new Set(opts.exclude)]]) } : {}),
   };
 }
 

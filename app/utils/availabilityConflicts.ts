@@ -258,8 +258,8 @@ export interface ProposeInput {
   ledger: FairnessLedgerResponse | null;
   /** The role as the snapshot holds it, for the worship-night song leads. */
   snapshotRole?: { format?: unknown; songs?: Array<{ leads?: Array<{ _ref?: string }> }> };
-  /** People «Elegir otro» skips. */
-  exclude?: ReadonlySet<string>;
+  /** People «Elegir otro» skips, per seat (row id → member ids). */
+  exclude?: ReadonlyMap<string, ReadonlySet<string>>;
   /** Only these candidates per row (the chosen replacement on «Aplicar»; `null` = leave it empty); absent = any. */
   only?: ReadonlyMap<string, string | null>;
 }
@@ -280,7 +280,7 @@ export function seatCandidates(input: ProposeInput & { working: EditorBoard; row
   const worship = new Set(input.members.filter(isWorship).map((m) => m._id));
   const instrument = isInstrumentRowId(rowId);
   const pool = ranked.filter((c) =>
-    c.eligible && !c.alreadyAssigned && !(instrument && c.undeclared) && worship.has(c.id) && c.id !== input.memberId && !input.exclude?.has(c.id));
+    c.eligible && !c.alreadyAssigned && !(instrument && c.undeclared) && worship.has(c.id) && c.id !== input.memberId && !input.exclude?.get(rowId)?.has(c.id));
   return orderedPool({ board: working, columnId: roleId, rowId, pool, config, members: input.members });
 }
 

@@ -41,7 +41,8 @@ never changes a service, draft or published. That plan was approved in rounds 10
   (`fairnessRecordEnvironment`); Preview and local sweep dry. `AVAILABILITY_SWEEP_DISABLED=1` stops
   every automatic sweep without a release.
 - **A person applies** in `/admin › Disponibilidad › Conflictos` (`AvailabilityProposals.tsx`):
-  «Aplicar», «Elegir otro» (up to three alternatives), «Mantener» (silenced while that conflict
+  «Aplicar», «Elegir otro» (up to three alternatives; they vary the voice seats and keep the
+  instrument/FOH pick, or vary those when the person holds no voice seat), «Mantener» (silenced while that conflict
   lasts), «Deshacer» on a kept one. «Aplicar» re-judges on a fresh read under the role `_rev` the
   screen showed, then writes through `/admin`'s own `editRole` (`roleEditCommit.ts`, unchanged), so
   the usual notices go out on a published service and none on a draft.

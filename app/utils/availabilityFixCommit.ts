@@ -51,6 +51,7 @@ import { buildConflictEmail, type ConflictEmailLine } from "./availabilityConfli
 import {
   findRoleConflicts,
   horizonMonths,
+  isVoiceRow,
   proposeReplacement,
   type NoneReason,
   type Proposal,
@@ -301,7 +302,7 @@ function heldRows(board: StoredMonthBoard | undefined, roleId: string, memberId:
     .map((r) => r.id);
 }
 
-function propose(j: Judgeable, conflict: RoleConflict, ledger: FairnessLedgerResponse | null, extra: { exclude?: ReadonlySet<string>; only?: ReadonlyMap<string, string | null> } = {}): Proposal {
+function propose(j: Judgeable, conflict: RoleConflict, ledger: FairnessLedgerResponse | null, extra: { exclude?: ReadonlyMap<string, ReadonlySet<string>>; only?: ReadonlyMap<string, string | null> } = {}): Proposal {
   const board = j.boards.get(conflict.date.slice(0, 7))!;
   return proposeReplacement({
     board,
@@ -781,7 +782,9 @@ export async function readConflictPanel(deps: AvailabilityDeps = defaultAvailabi
     if (!ledgers.has(month)) ledgers.set(month, await deps.readLedger([month]).catch(() => null));
     const ledger = ledgers.get(month)!;
     const options: PanelConflict["options"] = [];
-    const exclude = new Set<string>();
+    // Per seat. An alternative varies the VOICE seats and keeps the instrument/FOH pick (the one
+    // other bassist stays in every option); a person who holds no voice seat varies those instead.
+    const exclude = new Map<string, Set<string>>();
     let first: Proposal | null = null;
     for (let k = 0; k < 4; k++) {
       if (k > 0 && deps.now() > budgetEnd) break;
@@ -789,10 +792,11 @@ export async function readConflictPanel(deps: AvailabilityDeps = defaultAvailabi
       first ??= p;
       if (p.kind !== "replace") break;
       options.push({ seats: p.seats.map((s) => ({ rowId: s.rowId, seat: seatLabel(s.rowId), to: s.to, toName: s.to === null ? null : name(s.to) })) });
-      const named = p.seats.flatMap((s) => (s.to === null ? [] : [s.to]));
+      const voiced = p.seats.some((s) => isVoiceRow(s.rowId));
+      const named = p.seats.filter((s): s is typeof s & { to: string } => s.to !== null && (!voiced || isVoiceRow(s.rowId)));
       // Nobody new to skip (every seat left empty): another round would repeat this option.
       if (!named.length) break;
-      for (const id of named) exclude.add(id);
+      for (const s of named) exclude.set(s.rowId, new Set([...(exclude.get(s.rowId) ?? []), s.to]));
     }
     open.push({
       ...base,

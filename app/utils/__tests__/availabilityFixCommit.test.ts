@@ -11,7 +11,7 @@ import type { RoleDomainSummary } from "@/app/utils/serviceReadSummary";
 import { snapshot, sources } from "@/app/utils/__tests__/v3MonthPlanFixtures";
 import { MEMBERS, RULES } from "@/app/mcp/monthProposals/__tests__/editorFixtures";
 import type { EditorMember } from "@/app/mcp/monthProposals/revise";
-import { NOVEMBER, applyPatch, summaryFor, type StoredRow } from "@/app/mcp/tools/__tests__/serviceEditorFixtures";
+import { NOVEMBER, applyPatch, storedRow, summaryFor, type StoredRow } from "@/app/mcp/tools/__tests__/serviceEditorFixtures";
 import type { ParsedEditRequest } from "../roleWriteRequest";
 import {
   applyAvailabilityFix,
@@ -395,6 +395,28 @@ describe("«Aplicar»", () => {
     expect(out).toMatchObject({ ok: true });
     expect(w.roles.get("sun1")!.instruments.map((i) => i.person._id)).not.toContain("m-tomas");
     expect(w.records.get(id)).toMatchObject({ status: "applied", seats: [{ empty: true }] });
+  });
+
+  it("alternatives vary the voice seats and keep the instrument pick: the one other bassist stays in every option", async () => {
+    const teo = { _id: "m-teo", member_name: "Teo Gil", alias: "Teo", memberType: ["voz", "sunday_lead", "instrumento"], instruments: ["Bass"], ministries: ["worship"] };
+    w = world({ rows: [storedRow("sun1", "sunday_role", "2026-11-01", { leads: ["m-teo"], instruments: [["Bass", "m-teo"]] })], members: [...MEMBERS, ELSA, teo] as EditorMember[] });
+    w.unavailable("m-teo", "2026-11-01");
+    const read = await readConflictPanel(w.deps);
+    if (!read.ok) throw new Error("expected a read");
+    const options = read.open[0].options;
+    expect(options.length).toBeGreaterThanOrEqual(2);
+    for (const o of options) expect(o.seats.find((x) => x.rowId === "instrumento:Bass")?.to).toBe("m-tomas");
+    const leads = options.map((o) => o.seats.find((x) => x.rowId === "lead")?.to);
+    expect(new Set(leads).size).toBe(leads.length);
+  });
+
+  it("an instrument-only conflict still offers the other bassists as alternatives, then «queda vacío» once", async () => {
+    const raul = { _id: "m-raul", member_name: "Raúl Paz", alias: "Raúl", memberType: ["instrumento"], instruments: ["Bass"], ministries: ["worship"] };
+    w = world({ members: [...MEMBERS, ELSA, raul] as EditorMember[] });
+    w.unavailable("m-tomas", "2026-11-01");
+    const read = await readConflictPanel(w.deps);
+    if (!read.ok) throw new Error("expected a read");
+    expect(read.open[0].options.map((o) => o.seats[0].to)).toEqual(["m-raul", null]);
   });
 
   it("refuses to leave a voice seat empty", async () => {
