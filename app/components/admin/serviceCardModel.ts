@@ -109,6 +109,8 @@ export interface MemberOption {
    * worship); carried so the planner hands it to `sundayCadence.ts` intact (C3 E25).
    */
   ministries?: unknown;
+  /** «Canta y toca a la vez» (Miembros, ADR-0078): may hold a voice and an instrument on one service. */
+  singsAndPlays?: boolean;
   /**
    * Stable stored `_key` of the seat this member occupies, when it came from a
    * role seat rather than the member directory. Swaps address seats by this key,

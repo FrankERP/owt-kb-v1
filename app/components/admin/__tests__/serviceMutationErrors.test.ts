@@ -25,3 +25,15 @@ describe("mutationErrorMessage", () => {
       .toBe("Los datos guardados no pasaron una revisión de integridad. No se modificó nada.");
   });
 });
+
+describe("a seat-clash refusal (ADR-0078)", () => {
+  it("says who and which seats instead of the generic invalid_request line", () => {
+    const sentence = "Tony quedaría en Coro y Drums en el mismo servicio.";
+    expect(mutationErrorMessage({ code: "invalid_request", status: 400, seatClashSentences: [sentence], fallback: "x" })).toBe(
+      `${sentence} No se modificó nada.`,
+    );
+    expect(mutationErrorMessage({ code: "invalid_request", status: 400, seatClashSentences: [], fallback: "x" })).toBe(
+      "La solicitud fue rechazada antes de guardar. Revisa los datos.",
+    );
+  });
+});

@@ -33,7 +33,7 @@ function attempt(over: Partial<Parameters<typeof runV3ConfirmAttempt>[0]> = {}) 
   const tracedPost = vi.fn(async (body: { creationRequestId: string; date: string }) => { log.push(`POST ${body.date}`); return postDraft(body as never); });
   const run = runV3ConfirmAttempt({
     entries: ENTRIES, months: ["2026-11", "2026-12"], drafts: DRAFTS, published: false,
-    state: INITIAL_V3_CONFIRM_STATE, currentMonth: "2026-10",
+    state: INITIAL_V3_CONFIRM_STATE, currentMonth: "2026-10", members: new Map(),
     ...over, putRecords: tracedPut, postDraft: tracedPost as never,
   });
   return { run, log, tracedPut, tracedPost };
@@ -62,7 +62,7 @@ describe("a draft outside the horizon (review fix)", () => {
     expect(tracedPut).not.toHaveBeenCalled();
     expect(tracedPost).not.toHaveBeenCalled();
     expect(out).toEqual({
-      kind: "refused_guard", retry: false, state: INITIAL_V3_CONFIRM_STATE,
+      kind: "refused_guard", reason: "outside_horizon", retry: false, state: INITIAL_V3_CONFIRM_STATE,
       lines: ["La vista previa tiene servicios fuera de diciembre. No se creó nada; vuelve a previsualizar."],
     });
   });
@@ -158,7 +158,7 @@ describe("the guard runs on EVERY attempt (CF-1, A40, HZ-9)", () => {
   it("a first attempt across the month boundary writes nothing and offers no «Reintentar»", async () => {
     const { run, tracedPut, tracedPost } = attempt({ currentMonth: "2026-12" });
     const out = await run;
-    expect(out).toEqual({ kind: "refused_guard", lines: ["Noviembre ya pasó mientras planeabas. No se creó ningún servicio; vuelve a correr Auto."], state: INITIAL_V3_CONFIRM_STATE, retry: false });
+    expect(out).toEqual({ kind: "refused_guard", reason: "past", lines: ["Noviembre ya pasó mientras planeabas. No se creó ningún servicio; vuelve a correr Auto."], state: INITIAL_V3_CONFIRM_STATE, retry: false });
     expect(tracedPut).not.toHaveBeenCalled();
     expect(tracedPost).not.toHaveBeenCalled();
   });
@@ -184,6 +184,7 @@ describe("the guard runs on EVERY attempt (CF-1, A40, HZ-9)", () => {
     expect(tracedPost).not.toHaveBeenCalled();
     expect(out).toEqual({
       kind: "refused_guard",
+      reason: "past",
       lines: [
         "Noviembre ya pasó mientras planeabas. No se creó ningún servicio; vuelve a correr Auto.",
         "Noviembre: 0 de 2 creados; 2 fallaron.",
@@ -198,7 +199,64 @@ describe("the guard runs on EVERY attempt (CF-1, A40, HZ-9)", () => {
     const { run, tracedPut } = attempt({ months: ["2027-11"], currentMonth: "2026-10" });
     const out = await run;
     expect(out.lines).toEqual(["Auto no planea más de 12 meses adelante: Noviembre queda fuera. Elige un mes hasta octubre."]);
+    expect(out).toMatchObject({ kind: "refused_guard", reason: "ceiling" });
     expect(tracedPut).not.toHaveBeenCalled();
+  });
+});
+
+describe("a seat clash in a draft still to create (ADR-0078)", () => {
+  // Tony was hand-placed on Drums and the solver put him in Coro: the pre-check refuses before the records.
+  const clashDraft = (localId: string, date: string): CreatableDraft => ({
+    ...draft(localId, date), chorus: ["m-tony"], instruments: [{ instrument: "Drums", personId: "m-tony" }, { instrument: "", personId: "m-ana" }],
+  });
+  const TONY = new Map([["m-tony", { name: "Tony", singsAndPlays: false }]]);
+
+  it("refuses before any PUT or POST, naming the date, the person and both seats", async () => {
+    const { run, tracedPut, tracedPost } = attempt({ drafts: [draft("n1", "2026-11-01"), clashDraft("n2", "2026-11-29")], members: TONY });
+    const out = await run;
+    expect(tracedPut).not.toHaveBeenCalled();
+    expect(tracedPost).not.toHaveBeenCalled();
+    expect(out).toMatchObject({ kind: "refused_guard", reason: "seat_clash", retry: false });
+    expect(out.lines).toHaveLength(1);
+    expect(out.lines[0]).toMatch(/^29 nov: Tony quedaría en Coro y Drums en el mismo servicio; para cantar y tocar/);
+  });
+
+  it("proceeds when the member is marked «Canta y toca a la vez»", async () => {
+    const marked = new Map([["m-tony", { name: "Tony", singsAndPlays: true }]]);
+    const { run, tracedPost } = attempt({ drafts: [clashDraft("n1", "2026-11-01")], months: ["2026-11"], members: marked });
+    expect((await run).kind).toBe("drafts");
+    expect(tracedPost).toHaveBeenCalledOnce();
+  });
+
+  it("names a member missing from the map with the fallback, never by id", async () => {
+    const out = await attempt({ drafts: [clashDraft("n1", "2026-11-01")], months: ["2026-11"] }).run;
+    expect(out.lines[0]).toContain("alguien que ya no está en Miembros");
+    expect(out.lines.join(" ")).not.toContain("m-tony");
+  });
+
+  it("refuses a retry after the records landed, before posting, with CF-6's per-month lines", async () => {
+    const recordsOnly: V3ConfirmState = { recordsDone: true, createdLocalIds: new Set() };
+    const { run, tracedPut, tracedPost } = attempt({ drafts: [clashDraft("n1", "2026-11-01")], months: ["2026-11"], state: recordsOnly, members: TONY });
+    const out = await run;
+    expect(tracedPut).not.toHaveBeenCalled();
+    expect(tracedPost).not.toHaveBeenCalled();
+    expect(out).toMatchObject({ kind: "refused_guard", reason: "seat_clash" });
+    expect(out.lines.slice(1)).toEqual(["Noviembre: 0 de 1 creados; 1 fallaron."]);
+  });
+
+  it("a clash only the server saw (a flag unticked after the page loaded) still names who and where", async () => {
+    const sentence = "Tony quedaría en Coro y Drums en el mismo servicio; para cantar y tocar en un servicio, marca «Canta y toca a la vez» en Miembros.";
+    const post = vi.fn(async (): Promise<DraftPostOutcome> => ({ ok: false, status: 400, error: "invalid_request", seatClashes: [sentence] }));
+    const out = await attempt({ drafts: [draft("n1", "2026-11-01")], months: ["2026-11"], postDraft: post as never }).run;
+    expect(out).toMatchObject({ kind: "drafts", complete: false });
+    expect(out.lines).toEqual(["Noviembre: 0 de 1 creados; 1 fallaron.", `1 nov: ${sentence}`]);
+  });
+
+  it("skips a clash in a draft this confirm already created", async () => {
+    const created: V3ConfirmState = { recordsDone: true, createdLocalIds: new Set(["n1"]) };
+    const { run, tracedPost } = attempt({ drafts: [clashDraft("n1", "2026-11-01"), draft("n2", "2026-11-08")], months: ["2026-11"], state: created, members: TONY });
+    expect((await run).kind).toBe("drafts");
+    expect(tracedPost).toHaveBeenCalledOnce();
   });
 });
 
