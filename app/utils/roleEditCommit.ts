@@ -70,7 +70,6 @@ import {
 } from "@/app/utils/roleWriteRequest";
 import {
   bootstrapLegacyLock,
-  clashInputsOf,
   loadCanonicalMembers,
   loadCanonicalRole,
   loadDependencies,
@@ -83,7 +82,7 @@ import {
   type StoredRole,
 } from "@/app/utils/roleWriteOps";
 import type { CommitOutcome } from "@/app/utils/commitOutcome";
-import { addedSeatClashes, seatClashErrorDetails } from "@/app/utils/seatClashGuard";
+import { addedSeatClashes, clashInputsOf, seatClashErrorDetails } from "@/app/utils/seatClashGuard";
 
 export interface RoleEditOptions {
   /** `"deferred"` (default, the route) or `"inline"` (the MCP save). See the header. */

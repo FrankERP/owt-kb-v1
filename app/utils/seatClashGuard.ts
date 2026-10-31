@@ -48,6 +48,20 @@ export function memberDisplayName(row: { alias?: unknown; member_name?: unknown 
   return alias || (typeof row.member_name === "string" ? row.member_name.trim() : "");
 }
 
+/** The marked ids and the names of a writer's member read (`loadCanonicalMembers`), as the guard takes them. */
+export function clashInputsOf(members: ReadonlyMap<string, { singsAndPlays: boolean; name: string }>): {
+  singsAndPlays: Set<string>;
+  names: Map<string, string>;
+} {
+  const singsAndPlays = new Set<string>();
+  const names = new Map<string, string>();
+  for (const [id, m] of members) {
+    if (m.singsAndPlays) singsAndPlays.add(id);
+    if (m.name) names.set(id, m.name);
+  }
+  return { singsAndPlays, names };
+}
+
 /** The name used when a member has neither alias nor `member_name`, or is not in the read. */
 export const UNKNOWN_MEMBER_NAME = "alguien que ya no está en Miembros";
 

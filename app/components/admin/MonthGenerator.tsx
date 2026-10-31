@@ -9,6 +9,7 @@ import type { SolveRequest, SolveResponse } from "@/app/api/admin/solve/route";
 import { DayCard } from "@/app/components/DayCard";
 import { draftToDayCardProps } from "@/app/utils/draftToDayCardProps";
 import { confirmMembersFrom, draftCreateBody, draftSeatClashSentences, newCreationRequestId, runDraftCreateBatch } from "@/app/utils/monthDraftCreate";
+import { seatClashSentencesOf } from "@/app/utils/seatClashGuard";
 import { normalizeServiceName } from "@/app/utils/normalizeLabel";
 import { isServiceTime } from "@/app/utils/serviceTime";
 import { WORSHIP_NIGHT_FORMAT, type ServiceFormat } from "@/app/utils/serviceFormat";
@@ -175,6 +176,7 @@ import type { FairnessLedgerResponse } from "@/app/utils/fairnessVocabulary";
 import type { V3Success } from "./v3Wire";
 import {
   classifyPatchOutcome,
+  storedSaveNotice,
   freezeSaveAttempt,
   reconcileSaveAttempt,
   sameRoleSemantics,
@@ -2497,6 +2499,8 @@ export default function MonthGenerator({
     groupFillRegionRef.current?.focus();
   }, [groupFillOpen]);
   const [saveKnownFailures, setSaveKnownFailures] = useState(0);
+  /** «{día}: {frase}» per column the server refused for a seat clash (ADR-0078); every save notice appends them. */
+  const [saveClashLines, setSaveClashLines] = useState<string[]>([]);
   const [pendingSaveAttempts, setPendingSaveAttempts] = useState<Map<string, {
     attempt: FrozenSaveAttempt;
     transport: PatchTransportOutcome;
@@ -3033,16 +3037,16 @@ export default function MonthGenerator({
           return next;
         });
         setPendingSaveAttempts(new Map());
-        setSaveNotice(
-          maintenanceRoleIds.size > 0
-            ? `Se verificaron ${appliedRoleIds.size} cambios; ${maintenanceRoleIds.size} servicio${maintenanceRoleIds.size !== 1 ? "s" : ""} quedó listo para volver a guardar.${saveKnownFailures ? ` ${saveKnownFailures} fue rechazado y conserva sus cambios.` : ""}`
-            : `Cambios guardados y verificados.${saveKnownFailures ? ` ${saveKnownFailures} servicio${saveKnownFailures !== 1 ? "s" : ""} fue rechazado y conserva sus cambios.` : ""}`,
-        );
+        setSaveNotice(storedSaveNotice(
+          { kind: "verified", applied: appliedRoleIds.size, maintenance: maintenanceRoleIds.size, knownFailures: saveKnownFailures },
+          saveClashLines,
+        ));
         setSaveKnownFailures(0);
+        setSaveClashLines([]);
       } else if (outcomes.some(({ outcome }) => outcome.kind === "committedThenSuperseded")) {
-        setSaveNotice("El cambio se guardó, pero otra edición lo reemplazó. Conservamos tu intención sin adoptar la versión remota.");
+        setSaveNotice(storedSaveNotice({ kind: "superseded" }, saveClashLines));
       } else {
-        setSaveNotice("No se pudo confirmar el resultado. Conservamos tus cambios; recarga antes de intentar de nuevo.");
+        setSaveNotice(storedSaveNotice({ kind: "unconfirmed" }, saveClashLines));
       }
       return;
     }
@@ -3055,7 +3059,7 @@ export default function MonthGenerator({
       setTouchedStoredRoleIds(new Set());
       setSwapVerificationPending(false);
     }
-  }, [allStoredTranslations, dirtyStoredColumns.length, invalidStoredColumns.length, pendingSaveAttempts, saveKnownFailures, setSwapToast, storedGenerationKey, storedInventory, storedMode, storedRowsDirty, storedTranslations, swapVerificationPending]);
+  }, [allStoredTranslations, dirtyStoredColumns.length, invalidStoredColumns.length, pendingSaveAttempts, saveClashLines, saveKnownFailures, setSwapToast, storedGenerationKey, storedInventory, storedMode, storedRowsDirty, storedTranslations, swapVerificationPending]);
 
   useEffect(() => {
     const attempt = createAttempt.current;
@@ -3587,8 +3591,10 @@ export default function MonthGenerator({
     setSavingStored(true);
     setSaveNotice(null);
     setSaveKnownFailures(0);
+    setSaveClashLines([]);
     const pending = new Map<string, { attempt: FrozenSaveAttempt; transport: PatchTransportOutcome }>();
     let knownFailures = 0;
+    const clashLines: string[] = [];
     try {
       for (const column of dirtyStoredColumns) {
         const serialized = serializeStoredColumn(column, rows, cells);
@@ -3612,7 +3618,8 @@ export default function MonthGenerator({
         }
         if (transport.kind === "knownFailure") {
           knownFailures += 1;
-          setSaveNotice(`El servidor rechazó ${column.date} (${transport.code}); los demás cambios seguros continuaron.`);
+          for (const sentence of transport.seatClashSentences ?? []) clashLines.push(`${dayLabel(column.date)}: ${sentence}`);
+          setSaveNotice(storedSaveNotice({ kind: "columnRefused", date: column.date, code: transport.code, seatClashSentences: transport.seatClashSentences }));
           continue;
         }
         pending.set(column.roleId, { attempt, transport });
@@ -3620,13 +3627,14 @@ export default function MonthGenerator({
       }
       setPendingSaveAttempts(pending);
       setSaveKnownFailures(knownFailures);
+      setSaveClashLines(clashLines);
       if (pending.size > 0) {
         const reloaded = await storedSource.reload();
         if (!reloaded) {
-          setSaveNotice("No se pudo verificar la recarga. Conservamos tus cambios y no se reintentó el guardado.");
+          setSaveNotice(storedSaveNotice({ kind: "reloadFailed" }, clashLines));
         }
       } else if (knownFailures > 0) {
-        setSaveNotice(`${knownFailures} servicio${knownFailures !== 1 ? "s" : ""} fue rechazado antes de escribir; tus cambios siguen pendientes.`);
+        setSaveNotice(storedSaveNotice({ kind: "allRefused", knownFailures }, clashLines));
       }
     } finally {
       setSavingStored(false);
@@ -3747,11 +3755,13 @@ export default function MonthGenerator({
 
   async function handleRejectedStoredSwap(response: Response, subject: string) {
     let code: string | null = null;
+    let seatClashSentences: string[] = [];
     try {
       const body = await response.json();
       if (body && typeof body === "object" && typeof (body as { error?: unknown }).error === "string") {
         code = (body as { error: string }).error;
       }
+      seatClashSentences = seatClashSentencesOf(body);
     } catch {}
     if (code === "bootstrap_completed_reload" && response.status === 409) {
       pendingSwapExpected.current = null;
@@ -3763,7 +3773,8 @@ export default function MonthGenerator({
     if (code && SWAP_PROVEN_PREWRITE_FAILURES.get(code) === response.status) {
       pendingSwapExpected.current = null;
       setSwapVerificationPending(false);
-      setSwapToast(`No se intercambiaron ${subject} (${code}).`);
+      // A seat clash (ADR-0078) says who and which seats; any other refusal keeps its code.
+      setSwapToast(seatClashSentences.length ? `No se intercambiaron ${subject}: ${seatClashSentences.join(" ")}` : `No se intercambiaron ${subject} (${code}).`);
       return;
     }
     setSwapVerificationPending(true);

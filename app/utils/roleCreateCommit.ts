@@ -58,7 +58,6 @@ import {
   type ParsedCreateRequest,
 } from "@/app/utils/roleWriteRequest";
 import {
-  clashInputsOf,
   loadCanonicalMembers,
   loadCanonicalRole,
   loadDependencies,
@@ -69,7 +68,7 @@ import {
   nowIso,
   type StoredReceipt,
 } from "@/app/utils/roleWriteOps";
-import { addedSeatClashes, seatClashErrorDetails } from "@/app/utils/seatClashGuard";
+import { addedSeatClashes, clashInputsOf, seatClashErrorDetails } from "@/app/utils/seatClashGuard";
 import type { CommitOutcome } from "@/app/utils/commitOutcome";
 
 /**

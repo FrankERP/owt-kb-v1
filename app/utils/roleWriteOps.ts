@@ -281,19 +281,6 @@ export async function loadCanonicalMemberIds(ids: string[]): Promise<Set<string>
   return new Set((await loadCanonicalMembers(ids)).keys());
 }
 
-/** The marked ids and the names of a `loadCanonicalMembers` answer, as the guard takes them. */
-export function clashInputsOf(members: ReadonlyMap<string, CanonicalMember>): {
-  singsAndPlays: Set<string>;
-  names: Map<string, string>;
-} {
-  const singsAndPlays = new Set<string>();
-  const names = new Map<string, string>();
-  for (const [id, m] of members) {
-    if (m.singsAndPlays) singsAndPlays.add(id);
-    if (m.name) names.set(id, m.name);
-  }
-  return { singsAndPlays, names };
-}
 
 // ── Shared write-target resolution (§2/§4) ──────────────────────────────────
 

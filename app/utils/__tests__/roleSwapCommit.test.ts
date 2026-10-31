@@ -60,8 +60,7 @@ vi.mock("@/sanity/lib/serverClient", () => ({
   },
 }));
 
-vi.mock("@/app/utils/roleWriteOps", async (importOriginal) => ({
-  clashInputsOf: (await importOriginal<typeof import("@/app/utils/roleWriteOps")>()).clashInputsOf,
+vi.mock("@/app/utils/roleWriteOps", () => ({
   loadRoleForWrite: (...a: unknown[]) => h.loadRoleForWrite(...a),
   loadCanonicalMembers: (...a: unknown[]) => h.loadCanonicalMembers(...a),
   resolveOwnedCoordination: (...a: unknown[]) => h.resolveOwnedCoordination(...a),

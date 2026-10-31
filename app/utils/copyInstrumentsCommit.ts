@@ -44,14 +44,13 @@ import {
   type NormalizedSeats,
 } from "@/app/utils/roleWriteRequest";
 import {
-  clashInputsOf,
   loadCanonicalMembers,
   loadRoleForWrite,
   nowIso,
   resolveOwnedCoordination,
   type StoredRole,
 } from "@/app/utils/roleWriteOps";
-import { addedSeatClashes, seatClashErrorDetails } from "@/app/utils/seatClashGuard";
+import { addedSeatClashes, clashInputsOf, seatClashErrorDetails } from "@/app/utils/seatClashGuard";
 import type { CommitOutcome } from "@/app/utils/commitOutcome";
 import type { RoleEditOptions } from "@/app/utils/roleEditCommit";
 

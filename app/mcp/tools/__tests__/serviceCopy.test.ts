@@ -168,6 +168,17 @@ describe("copy_instruments", () => {
     expect(sc(await copy(w, args))).toMatchObject({ ok: true, status: "saved" });
   });
 
+  it("a seat-clash refusal (ADR-0078) says who and where, as the reason to check again", async () => {
+    const SENTENCE = "Tomás quedaría en Coro y Bass en el mismo servicio; para cantar y tocar en un servicio, marca «Canta y toca a la vez» en Miembros.";
+    const w = serviceWorld();
+    const args = copyOf(await checkCopy(w, "sun1", "sun8"))!;
+    w.deps.copyInstruments.mockResolvedValueOnce({ ok: false, status: 400, body: { error: "invalid_request", details: { issues: ["seat_clash"], seatClashes: [{ memberId: "m-tomas", name: "Tomás", seats: ["Coro", "Bass"], sentence: SENTENCE }] } } });
+    const out = await copy(w, args);
+    expect(sc(out)).toMatchObject({ ok: false, status: "not_saved", next: "check_again" });
+    expect(textOf(out)).toContain("No se copió: Tomás quedaría en Coro y Bass en el mismo servicio;");
+    expect(`${textOf(out)}${JSON.stringify(sc(out))}`).not.toContain("m-tomas");
+  });
+
   it("an unknown outcome says «sin confirmar»; the repeat after it landed answers «ya estaba»", async () => {
     const w = serviceWorld();
     const args = copyOf(await checkCopy(w, "sun1", "sun8"))!;
