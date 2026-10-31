@@ -4,7 +4,8 @@
 // `fetch` is called here. Each attempt, in order:
 //   1. the guard (CF-1, A40, HZ-9) on the client's CDMX month AT THIS ATTEMPT — a horizon month that
 //      became past, or one past C2's ceiling, refuses before anything is written; no «Reintentar»; so
-//      does a draft outside the horizon months;
+//      does a draft outside the horizon months, and a draft not yet created that holds a seat clash
+//      (ADR-0078) — the server would refuse it AFTER the records, leaving the month incomplete;
 //   2. the records (CF-4): every month's frozen entry in ONE `PUT /api/admin/fairness/months`
 //      (all-or-nothing, C2 WR-9), resent byte-identical until it lands, never after (CF-7). A replay
 //      of a PUT that did land answers `unchanged` by C2's decision order (WR-8 row 1);
@@ -15,7 +16,9 @@
 // Only confirmed successes enter `createdLocalIds` (today's invariant, CF-6).
 
 import type { FairnessMonthsPut } from "@/app/utils/fairnessVocabulary";
-import { runDraftCreateBatch, type CreatableDraft, type DraftPostOutcome, type draftCreateBody } from "@/app/utils/monthDraftCreate";
+import {
+  draftSeatClashSentences, runDraftCreateBatch, type ConfirmMembers, type CreatableDraft, type DraftPostOutcome, type draftCreateBody,
+} from "@/app/utils/monthDraftCreate";
 import {
   classifyRecordPut, confirmGuard, draftsByMonth, guardLine, monthReportLines, recordRetryOffered, recordVerdictLine,
   type MonthProgress, type PutAnswer, type V3ConfirmEntry,
@@ -31,8 +34,14 @@ export interface V3ConfirmState {
 
 export const INITIAL_V3_CONFIRM_STATE: V3ConfirmState = Object.freeze({ recordsDone: false, createdLocalIds: new Set<string>() });
 
+/**
+ * Why a confirm was refused before writing. Set by the guard that refused, so a caller never
+ * re-derives it (`apply_schedule` once printed «ya pasó» for every cause that was not a ceiling).
+ */
+export type V3GuardReason = "past" | "ceiling" | "outside_horizon" | "seat_clash";
+
 export type V3ConfirmResult =
-  | { kind: "refused_guard"; lines: string[]; state: V3ConfirmState; retry: false }
+  | { kind: "refused_guard"; reason: V3GuardReason; lines: string[]; state: V3ConfirmState; retry: false }
   | { kind: "record_failed"; lines: string[]; state: V3ConfirmState; retry: boolean }
   | { kind: "drafts"; complete: boolean; lines: string[]; state: V3ConfirmState; progress: MonthProgress[]; retry: boolean; createdNow: string[] };
 
@@ -54,6 +63,11 @@ export function progressFrom(drafts: readonly CreatableDraft[], months: readonly
     });
 }
 
+/** CF-6's per-month lines once the records landed (spec §5.11 failure table); nothing before. */
+function reportAfterRecords(input: { drafts: readonly CreatableDraft[]; months: readonly string[]; state: V3ConfirmState }): string[] {
+  return input.state.recordsDone ? monthReportLines(progressFrom(input.drafts, input.months, input.state.createdLocalIds)) : [];
+}
+
 export async function runV3ConfirmAttempt(input: {
   entries: readonly V3ConfirmEntry[];
   months: readonly string[];
@@ -61,6 +75,8 @@ export async function runV3ConfirmAttempt(input: {
   published: boolean;
   state: V3ConfirmState;
   currentMonth: string;
+  /** Every member the drafts may seat: the name for a clash line and «Canta y toca a la vez». */
+  members: ConfirmMembers;
   putRecords: (body: FairnessMonthsPut) => Promise<{ status: number; body: unknown }>;
   postDraft: (body: ReturnType<typeof draftCreateBody>) => Promise<DraftPostOutcome>;
 }): Promise<V3ConfirmResult> {
@@ -72,7 +88,8 @@ export async function runV3ConfirmAttempt(input: {
     const createdBefore = input.state.createdLocalIds.size > 0;
     return {
       kind: "refused_guard",
-      lines: [guardLine(guard, createdBefore), ...(input.state.recordsDone ? monthReportLines(progressFrom(input.drafts, input.months, input.state.createdLocalIds)) : [])],
+      reason: guard.kind === "ceiling" ? "ceiling" : "past",
+      lines: [guardLine(guard, createdBefore), ...reportAfterRecords(input)],
       state: input.state,
       retry: false,
     };
@@ -81,7 +98,16 @@ export async function runV3ConfirmAttempt(input: {
   // skipped by `draftsByMonth`, and a confirm that wrote the records and created none of its drafts
   // would report success (review fix: a stale run's drafts can outlive a horizon change).
   if (input.drafts.some((d) => !input.months.includes(d.date.slice(0, 7)))) {
-    return { kind: "refused_guard", lines: [V3_LINES.draftsOutsideHorizon(input.months)], state: input.state, retry: false };
+    return { kind: "refused_guard", reason: "outside_horizon", lines: [V3_LINES.draftsOutsideHorizon(input.months)], state: input.state, retry: false };
+  }
+  // No draft still to create may hold a seat clash (ADR-0078). Drafts already created are services
+  // now: the server judges any later edit to them, and a flag unticked after their creation must not
+  // block the rest of this confirm forever.
+  const clashLines = input.drafts
+    .filter((d) => !input.state.createdLocalIds.has(d.localId))
+    .flatMap((d) => draftSeatClashSentences(d, input.members).map((sentence) => V3_LINES.seatClash(d.date, sentence)));
+  if (clashLines.length) {
+    return { kind: "refused_guard", reason: "seat_clash", lines: [...clashLines, ...reportAfterRecords(input)], state: input.state, retry: false };
   }
 
   // 2. Records first, atomically, until they land (CF-4, CF-7).

@@ -13,6 +13,8 @@
 
 import type { ServiceFormat } from "./serviceFormat";
 import { effectiveCreateCounts } from "@/app/components/admin/fairnessToggleModel";
+import { normalizeSeats } from "./roleWriteRequest";
+import { addedSeatClashes, memberDisplayName, seatClashSentence, UNKNOWN_MEMBER_NAME } from "./seatClashGuard";
 
 export interface DraftInstrumentSlot {
   instrument: string;
@@ -136,4 +138,30 @@ export async function runDraftCreateBatch(input: {
     else failed.push({ localId: draft.localId, status: outcome.status, error: outcome.error });
   }
   return { createdLocalIds, failed };
+}
+
+/** What a confirm knows of each member: the name for its line and «Canta y toca a la vez». */
+export type ConfirmMembers = ReadonlyMap<string, { name: string; singsAndPlays: boolean }>;
+
+/** The confirm's member map from a member list as `adminMembersQuery` projects it. */
+export function confirmMembersFrom(
+  list: readonly { _id: string; alias?: unknown; member_name?: unknown; singsAndPlays?: unknown }[],
+): ConfirmMembers {
+  return new Map(list.map((m) => [m._id, { name: memberDisplayName(m), singsAndPlays: m.singsAndPlays === true }]));
+}
+
+/**
+ * The seat-clash sentences of one draft (ADR-0078), judged on EXACTLY the seats
+ * the server will receive: `draftCreateBody` drops blank slots and
+ * `normalizeSeats` is the server's own reading, so this pre-check and
+ * `createRole`'s guard cannot disagree on the roster. A person missing from
+ * `members` is judged unmarked (the refusal side — the server would refuse the
+ * same draft) and named with the fallback, never by id. Shared by both engines'
+ * confirms; each engine words its own line around the sentence.
+ */
+export function draftSeatClashSentences(draft: CreatableDraft, members: ConfirmMembers): string[] {
+  const marked = new Set([...members].filter(([, m]) => m.singsAndPlays).map(([id]) => id));
+  return addedSeatClashes(null, normalizeSeats(draftCreateBody(draft, false)), marked).map((clash) =>
+    seatClashSentence(members.get(clash.memberId)?.name || UNKNOWN_MEMBER_NAME, clash),
+  );
 }

@@ -8,7 +8,7 @@ import {
 import type { SolveRequest, SolveResponse } from "@/app/api/admin/solve/route";
 import { DayCard } from "@/app/components/DayCard";
 import { draftToDayCardProps } from "@/app/utils/draftToDayCardProps";
-import { draftCreateBody, newCreationRequestId, runDraftCreateBatch } from "@/app/utils/monthDraftCreate";
+import { confirmMembersFrom, draftCreateBody, draftSeatClashSentences, newCreationRequestId, runDraftCreateBatch } from "@/app/utils/monthDraftCreate";
 import { normalizeServiceName } from "@/app/utils/normalizeLabel";
 import { isServiceTime } from "@/app/utils/serviceTime";
 import { WORSHIP_NIGHT_FORMAT, type ServiceFormat } from "@/app/utils/serviceFormat";
@@ -4672,6 +4672,7 @@ export default function MonthGenerator({
         published: publish && months.length === 1,                           // CF-8: never in a 2-month confirm
         state: session.state,
         currentMonth,
+        members: confirmMembersFrom(members),
         putRecords: async (body) => {
           const res = await fetch("/api/admin/fairness/months", {
             method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
@@ -4743,7 +4744,9 @@ export default function MonthGenerator({
       return;
     }
     setV3Confirm({ ...session, state: result.state, retry: result.retry });
-    reportV3(session.key, result.lines);
+    // A seat clash names the cells; the way out (fix the ⚠ cells, or reload after ticking
+    // «Canta y toca a la vez» — the check reads the members loaded with the page) is this caller's.
+    reportV3(session.key, result.kind === "refused_guard" && result.reason === "seat_clash" ? [...result.lines, V3_LINES.seatClashFix] : result.lines);
   }
 
   async function handleConfirm(publish: boolean) {
@@ -4805,6 +4808,14 @@ export default function MonthGenerator({
     // as today. v2 continues below, byte-identical.
     if (isV3) {
       await confirmV3(toCreateNow, publish);
+      return;
+    }
+    // v2's own seat-clash check (ADR-0078), before its first write, with v2's own words (the engines'
+    // copy is never crossed): the server would refuse such a draft anyway, so it is never posted.
+    const memberMap = confirmMembersFrom(members);
+    const clashes = toCreateNow.flatMap((d) => draftSeatClashSentences(d, memberMap).map((sentence) => `${dayLabel(d.date)}: ${sentence}`));
+    if (clashes.length > 0) {
+      setPushError(`${clashes.join(" ")} No se creó nada; arregla esas celdas (⚠) y vuelve a crear. Si acabas de marcar «Canta y toca a la vez», recarga la página.`);
       return;
     }
     setPushing(true);

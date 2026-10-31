@@ -11,6 +11,7 @@
 // `server-only` keeps the tokened clients out of any client bundle.
 
 import "server-only";
+import { memberDisplayName } from "@/app/utils/seatClashGuard";
 
 import { randomUUID } from "node:crypto";
 
@@ -208,11 +209,6 @@ export async function loadMemberNamesByIds(ids: string[]): Promise<Map<string, s
   return out;
 }
 
-/** A member's display name: the trimmed alias, else the trimmed `member_name`, else "". */
-export function memberDisplayName(row: { alias?: unknown; member_name?: unknown }): string {
-  const alias = typeof row.alias === "string" ? row.alias.trim() : "";
-  return alias || (typeof row.member_name === "string" ? row.member_name.trim() : "");
-}
 
 /**
  * The ids of a month's services as `/admin` lists them (`adminRolesQuery`, `date` = week or date),

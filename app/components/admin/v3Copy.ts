@@ -458,6 +458,11 @@ export const V3_LINES = {
   ruleTableTitle: "Reglas enviadas (id, tipo, posición en la configuración)",
   // CF-6, CF-8, CF-10 and §7.8's other lines
   recordOtherFailure: "No se pudo registrar la elegibilidad. No se creó nada; pulsa «Reintentar».",
+  // ADR-0078: a draft that puts one person in two seats they may not hold (a pinned
+  // drummer the solver put in Coro). One line per clash; the caller says what to do.
+  seatClash: (date: string, sentence: string) => `${dayLabel(date)}: ${sentence}`,
+  seatClashFix:
+    "No se creó nada. Arregla esas celdas (las marca ⚠ en la cuadrícula) y vuelve a pulsar «Crear». Si acabas de marcar «Canta y toca a la vez», recarga la página.",
   draftsOutsideHorizon: (months: readonly string[]) =>
     `La vista previa tiene servicios fuera de ${monthsList(months)}. No se creó nada; vuelve a previsualizar.`,
   pastAfterDrafts: (month: string) =>
@@ -566,6 +571,11 @@ export const V3_CONNECTOR_LINES = {
   recordInvalid: `El registro de elegibilidad de la propuesta fue rechazado como inválido. ${NO_WRITE_THIS_CALL} Vuelve a correr solve_month.`,
   recordUnknown:
     "No pude confirmar si el registro de elegibilidad quedó guardado; volver a llamar apply_schedule es seguro (si quedó, responde sin cambios).",
+  // ADR-0078: the proposal puts one person in two seats they may not hold. The way out is the
+  // proposal's — a fix in /admin does not change it — and `revise_proposal` refuses a proposal that
+  // started applying, so then only a new solve helps.
+  seatClashRevise: "Corrige esos lugares con revise_proposal y vuelve a llamar apply_schedule, o vuelve a correr solve_month.",
+  seatClashResolve: "Esta propuesta ya empezó a aplicarse, así que no se puede editar: vuelve a correr solve_month.",
   guardPast: (m: string) => `${monthNameCap(m)} ya pasó desde que se resolvió esta propuesta. ${NO_WRITE_THIS_CALL} Vuelve a correr solve_month.`,
   recordsSaved: (months: readonly string[]) => `El registro de elegibilidad de ${monthsList(months)} quedó guardado.`,
   // phase 4, per service

@@ -38,6 +38,16 @@ export interface SeatClashDetail {
   sentence: string;
 }
 
+/**
+ * A member's display name: the trimmed alias, else the trimmed `member_name`, else "". The one rule
+ * for the server's member reads (`loadMemberNamesByIds`, `loadCanonicalMembers`) and the confirm's
+ * client map, so one person is never named two ways.
+ */
+export function memberDisplayName(row: { alias?: unknown; member_name?: unknown }): string {
+  const alias = typeof row.alias === "string" ? row.alias.trim() : "";
+  return alias || (typeof row.member_name === "string" ? row.member_name.trim() : "");
+}
+
 /** The name used when a member has neither alias nor `member_name`, or is not in the read. */
 export const UNKNOWN_MEMBER_NAME = "alguien que ya no está en Miembros";
 
