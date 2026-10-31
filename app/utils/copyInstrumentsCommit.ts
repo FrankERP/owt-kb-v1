@@ -44,12 +44,14 @@ import {
   type NormalizedSeats,
 } from "@/app/utils/roleWriteRequest";
 import {
-  loadCanonicalMemberIds,
+  clashInputsOf,
+  loadCanonicalMembers,
   loadRoleForWrite,
   nowIso,
   resolveOwnedCoordination,
   type StoredRole,
 } from "@/app/utils/roleWriteOps";
+import { addedSeatClashes, seatClashErrorDetails } from "@/app/utils/seatClashGuard";
 import type { CommitOutcome } from "@/app/utils/commitOutcome";
 import type { RoleEditOptions } from "@/app/utils/roleEditCommit";
 
@@ -118,10 +120,21 @@ export async function copyInstruments(
 
   // ── Dangling assignment refusal ───────────────────────────────────────────
   const wanted = [...new Set(afterSeats.instruments.map((s) => s.personId))];
-  const resolvedMembers = await loadCanonicalMemberIds(wanted);
+  const members = await loadCanonicalMembers(wanted);
+  const resolvedMembers = new Set(members.keys());
   const dangling = wanted.filter((id) => !resolvedMembers.has(id));
   if (dangling.length) {
     return refuse(serviceError("integrity_conflict", { details: { danglingRefs: dangling } }));
+  }
+
+  // ── Seat-clash refusal (ADR-0078), before any coordination ────────────────
+  // A copied drummer who already sings on the destination is refused there.
+  // Only the copied occupants were read: anyone else only loses instrument
+  // seats, which never adds a pair.
+  const { singsAndPlays, names } = clashInputsOf(members);
+  const clashes = addedSeatClashes(normalizeStoredSeats(loadedTarget.target.role), afterSeats, singsAndPlays);
+  if (clashes.length) {
+    return refuse(serviceError("invalid_request", { details: seatClashErrorDetails(clashes, names) }));
   }
 
   // ── Coordination: assert/heartbeat both owned tokens in one transaction ────

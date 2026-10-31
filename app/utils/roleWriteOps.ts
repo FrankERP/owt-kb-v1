@@ -202,11 +202,16 @@ export async function loadMemberNamesByIds(ids: string[]): Promise<Map<string, s
   const rows = await runStrict<{ _id?: unknown; member_name?: unknown; alias?: unknown }>(fairnessMembersByIdsQuery(ids));
   for (const r of rows) {
     if (typeof r._id !== "string") continue;
-    const alias = typeof r.alias === "string" ? r.alias.trim() : "";
-    const name = alias || (typeof r.member_name === "string" ? r.member_name.trim() : "");
+    const name = memberDisplayName(r);
     if (name) out.set(r._id, name);
   }
   return out;
+}
+
+/** A member's display name: the trimmed alias, else the trimmed `member_name`, else "". */
+export function memberDisplayName(row: { alias?: unknown; member_name?: unknown }): string {
+  const alias = typeof row.alias === "string" ? row.alias.trim() : "";
+  return alias || (typeof row.member_name === "string" ? row.member_name.trim() : "");
 }
 
 /**
@@ -248,12 +253,50 @@ export async function loadReceiptsForRole(roleId: string): Promise<StoredReceipt
   return run<StoredReceipt>(roleCreationReceiptsForRoleQuery(roleId));
 }
 
+export interface CanonicalMember {
+  /** Only `true` counts as marked («Canta y toca a la vez»), as in `seatsClash`. */
+  singsAndPlays: boolean;
+  /** `memberDisplayName`; "" when the member has neither alias nor name. */
+  name: string;
+}
+
+/**
+ * Canonical members that actually resolve, keyed by id — the ONE member read
+ * each seat writer makes: its keys feed the dangling-assignment refusal, its
+ * flag and name the seat-clash guard (`addedSeatClashes`, ADR-0078). No extra
+ * round trip.
+ */
+export async function loadCanonicalMembers(ids: string[]): Promise<Map<string, CanonicalMember>> {
+  const unique = [...new Set(ids)].filter(Boolean);
+  const out = new Map<string, CanonicalMember>();
+  if (!unique.length) return out;
+  const rows = await run<{ _id?: unknown; singsAndPlays?: unknown; alias?: unknown; member_name?: unknown }>(
+    canonicalMembersByIdsQuery(unique),
+  );
+  for (const r of rows) {
+    if (typeof r._id !== "string") continue;
+    out.set(r._id, { singsAndPlays: r.singsAndPlays === true, name: memberDisplayName(r) });
+  }
+  return out;
+}
+
 /** Canonical member ids that actually resolve, for dangling-assignment refusal. */
 export async function loadCanonicalMemberIds(ids: string[]): Promise<Set<string>> {
-  const unique = [...new Set(ids)].filter(Boolean);
-  if (!unique.length) return new Set();
-  const rows = await run<{ _id: string }>(canonicalMembersByIdsQuery(unique));
-  return new Set(rows.map((r) => r._id).filter((id): id is string => typeof id === "string"));
+  return new Set((await loadCanonicalMembers(ids)).keys());
+}
+
+/** The marked ids and the names of a `loadCanonicalMembers` answer, as the guard takes them. */
+export function clashInputsOf(members: ReadonlyMap<string, CanonicalMember>): {
+  singsAndPlays: Set<string>;
+  names: Map<string, string>;
+} {
+  const singsAndPlays = new Set<string>();
+  const names = new Map<string, string>();
+  for (const [id, m] of members) {
+    if (m.singsAndPlays) singsAndPlays.add(id);
+    if (m.name) names.set(id, m.name);
+  }
+  return { singsAndPlays, names };
 }
 
 // ── Shared write-target resolution (§2/§4) ──────────────────────────────────

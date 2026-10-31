@@ -2621,3 +2621,102 @@ describe("POST /api/admin/roles/publish", () => {
     expect(afterCallbacks).toHaveLength(0);
   });
 });
+
+describe("seat-clash guard on create and PATCH (ADR-0078)", () => {
+  // Tony sings in Coro and is unmarked; Frank is marked «Canta y toca a la vez».
+  beforeEach(() => {
+    store.members.push(
+      { _id: "mem-tony", member_name: "Antonio", alias: "Tony" },
+      { _id: "mem-frank", member_name: "Frank", singsAndPlays: true },
+    );
+  });
+
+  const patchBody = (over: Record<string, unknown> = {}) => ({
+    rev: "rev-1",
+    _type: "sunday_role",
+    date: "2026-08-09",
+    leads: ["mem-1"],
+    bgvs: [],
+    chorus: [],
+    instruments: [],
+    foh: [],
+    ...over,
+  });
+
+  it("refuses a create that seats an unmarked member in Coro and on Drums, before any read past members", async () => {
+    const res = await createPOST(
+      req(createBody({ chorus: ["mem-tony"], instruments: [{ instrument: "Drums", personId: "mem-tony" }] })),
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body).toMatchObject({
+      error: "invalid_request",
+      details: {
+        issues: ["seat_clash"],
+        seatClashes: [{ memberId: "mem-tony", name: "Tony", seats: ["Coro", "Drums"] }],
+      },
+    });
+    expect(body.details.seatClashes[0].sentence).toContain("Tony quedaría en Coro y Drums");
+    expect(transactions).toHaveLength(0);
+    const queries = operationalFetch.mock.calls.map(([query]) => query as string);
+    expect(queries.some((query) => query.includes("week == $week"))).toBe(false);
+  });
+
+  it("allows the same create for a marked member", async () => {
+    const res = await createPOST(
+      req(
+        createBody({
+          creationRequestId: "req-marked-0000001",
+          leads: ["mem-frank"],
+          instruments: [{ instrument: "EG", personId: "mem-frank" }],
+        }),
+      ),
+    );
+    expect(res.status).toBe(201);
+    expect(committedTransactions()).toHaveLength(1);
+  });
+
+  it("never re-judges an exact receipt replay, even of a roster the rule would now refuse", async () => {
+    const clashing = createBody({ chorus: ["mem-tony"], instruments: [{ instrument: "Drums", personId: "mem-tony" }] });
+    store.receipts.push(receipt({ fingerprint: payloadFingerprint(clashing) }));
+    store.roles.push(role());
+    const res = await createPOST(req(clashing));
+    expect(res.status).toBe(200);
+    expect((await res.json()).replay).toBe(true);
+    expect(transactions).toHaveLength(0);
+  });
+
+  it("refuses a PATCH that adds a clash, before the legacy bootstrap or any transaction", async () => {
+    store.roles.push(role({ Chorus: [{ _key: "c1", _type: "reference", _ref: "mem-tony" }] }));
+    const res = await rolePATCH(
+      req(patchBody({ chorus: ["mem-tony"], instruments: [{ instrument: "Drums", personId: "mem-tony" }] })),
+      ctx("role-1"),
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).details.issues).toEqual(["seat_clash"]);
+    expect(transactions).toHaveLength(0);
+    expect(afterCallbacks).toHaveLength(0);
+  });
+
+  it("allows an unrelated PATCH to a roster that already holds a clash", async () => {
+    store.roles.push(
+      role({
+        Chorus: [{ _key: "c1", _type: "reference", _ref: "mem-tony" }],
+        instruments: [{ _key: "i1", _type: "instrument_slot", instrument: "Drums", person: { _type: "reference", _ref: "mem-tony" } }],
+      }),
+    );
+    store.locks.push(lock());
+    const res = await rolePATCH(
+      req(
+        patchBody({
+          chorus: ["mem-tony"],
+          instruments: [{ instrument: "Drums", personId: "mem-tony" }],
+          foh: [{ role: "Console", personId: "mem-5" }],
+        }),
+      ),
+      ctx("role-1"),
+    );
+    expect(res.status).toBe(200);
+    expect(committedTransactions()).toHaveLength(1);
+  });
+});

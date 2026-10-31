@@ -20,7 +20,7 @@ const h = vi.hoisted(() => ({
   transactions: [] as { ops: unknown[]; committed: boolean }[],
   commitError: null as Error | null,
   loadRoleForWrite: vi.fn(),
-  loadCanonicalMemberIds: vi.fn(),
+  loadCanonicalMembers: vi.fn(),
   resolveOwnedCoordination: vi.fn(),
   notifyRoleAssignments: vi.fn(),
   queueRoleNotices: vi.fn(),
@@ -60,9 +60,10 @@ vi.mock("@/sanity/lib/serverClient", () => ({
   },
 }));
 
-vi.mock("@/app/utils/roleWriteOps", () => ({
+vi.mock("@/app/utils/roleWriteOps", async (importOriginal) => ({
+  clashInputsOf: (await importOriginal<typeof import("@/app/utils/roleWriteOps")>()).clashInputsOf,
   loadRoleForWrite: (...a: unknown[]) => h.loadRoleForWrite(...a),
-  loadCanonicalMemberIds: (...a: unknown[]) => h.loadCanonicalMemberIds(...a),
+  loadCanonicalMembers: (...a: unknown[]) => h.loadCanonicalMembers(...a),
   resolveOwnedCoordination: (...a: unknown[]) => h.resolveOwnedCoordination(...a),
   nowIso: () => "2026-09-26T18:00:00.000Z",
 }));
@@ -179,7 +180,7 @@ beforeEach(() => {
   h.commitError = null;
   for (const fn of [
     h.loadRoleForWrite,
-    h.loadCanonicalMemberIds,
+    h.loadCanonicalMembers,
     h.resolveOwnedCoordination,
     h.notifyRoleAssignments,
     h.queueRoleNotices,
@@ -188,7 +189,9 @@ beforeEach(() => {
   ]) {
     fn.mockReset();
   }
-  h.loadCanonicalMemberIds.mockImplementation((ids: string[]) => Promise.resolve(new Set(ids)));
+  h.loadCanonicalMembers.mockImplementation((ids: string[]) =>
+    Promise.resolve(new Map(ids.map((id) => [id, { singsAndPlays: false, name: id.toUpperCase() }]))),
+  );
   h.roleUpdateNotice.mockImplementation((input: { date: string }) => ({
     recipients: [`added-${input.date}`],
     type: "sunday_role",
@@ -360,7 +363,7 @@ describe("swapRoles — refusals carry the route's status and body, and no effec
 
   it("a dangling assignment gives 409 before any coordination or transaction", async () => {
     mockTargets([roleA, roleB]);
-    h.loadCanonicalMemberIds.mockResolvedValue(new Set()); // neither m-A nor m-B resolves
+    h.loadCanonicalMembers.mockResolvedValue(new Map()); // neither m-A nor m-B resolves
 
     const outcome = await swapRoles(seatSwapBody);
 

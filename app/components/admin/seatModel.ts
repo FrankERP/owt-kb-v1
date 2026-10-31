@@ -101,6 +101,33 @@ export function seatsClash(
 }
 
 /**
+ * The way out of a voice + instrument clash, as words: the Miembros checkbox
+ * (ADR-0078). ONE constant, so C2's sentence (`clashReason`) and the server's
+ * refusal (`seatClashSentence`) cannot drift apart.
+ */
+export const SINGS_AND_PLAYS_HINT = "para cantar y tocar en un servicio, marca «Canta y toca a la vez» en Miembros";
+
+/**
+ * Every clashing PAIR among one member's seats on one service, as index pairs
+ * into `entries` (i < j). Every pair, not just "some clash": a member doubled in
+ * two categories (Lead+BGV and Bass+Guitar) yields both, and a legitimate third
+ * seat yields none. The grid's ⚠ and the server's seat-clash guard
+ * (`app/utils/seatClashGuard.ts`) both enumerate through this one loop.
+ */
+export function clashingPairs(
+  entries: readonly { seatId: string; category: SeatCategory }[],
+  singsAndPlays: boolean | undefined,
+): [number, number][] {
+  const out: [number, number][] = [];
+  for (let i = 0; i < entries.length; i++) {
+    for (let j = i + 1; j < entries.length; j++) {
+      if (seatsClash(entries[i], entries[j], singsAndPlays)) out.push([i, j]);
+    }
+  }
+  return out;
+}
+
+/**
  * The `memberType` a seat of this category requires. Every `SeatDef` above
  * already carries it; this is the same fact keyed by category, for the callers
  * that hold a `GridRow` (which has a category, not a `SeatDef`).
