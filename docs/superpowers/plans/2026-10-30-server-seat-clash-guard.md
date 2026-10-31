@@ -1,6 +1,6 @@
 # Server seat-clash guard — the role writers refuse a clash they would ADD
 
-**Status:** plan, awaiting Frank's OK. Owner thread: «Corregir a Tony en coro y batería».
+**Status:** plan; reviewed and APPROVED (rounds 6 and 7 on digest `c232751d…5450`, log beside this file); awaiting Frank's OK. §7 was added after that approval and is un-reviewed. Owner thread: «Corregir a Tony en coro y batería».
 **Governs:** ADR-0078 (nobody sings and plays on one service unless marked) — this closes its
 "server writers check no seats" consequence.
 
@@ -370,3 +370,38 @@ never both:
   only sees a confirm draft through a flag race between the pre-check and the post, where the
   draft fails with today's per-month counts.
 - **Copy drift:** one sentence builder; the coverage of D5's surfaces is by test.
+
+## 7. Post-approval changes (un-reviewed)
+
+Added after rounds 6 and 7 approved §1–§6 (digest `c232751d…5450`), from their non-blocking
+notes, each checked against the code. They narrow or complete what §3 says; none changes a
+decision. Where §3 and this section differ, this section wins.
+
+1. **The stored save: every notice, not three.** All the stored save's notices go through
+   `storedSaveNotice` and append `saveClashLines` when any exist — also «No se pudo verificar la
+   recarga…» (`MonthGenerator.tsx:3626`), «otra edición lo reemplazó» (3043), «No se pudo
+   confirmar el resultado» (3045), and a save that stops at an unknown transport (the loop's
+   `break`, 3619) after earlier clash refusals.
+2. **v2's confirm line is v2's.** v2's `handleConfirm` prints `seatClashSentence` output
+   directly (with the date), never `V3_LINES.seatClash`: the two engines' copy is never crossed
+   (CLAUDE.md, solver v3 C6).
+3. **`seatsOf(draft)` drops blank slots** exactly as `draftCreateBody` does
+   (`monthDraftCreate.ts:95-96`: an instrument or FOH entry without a label or a person), so the
+   pre-check judges the roster the server would receive.
+4. **The confirm's `seat_clash` refusal after records landed** appends `monthReportLines` like
+   the existing guards (`v3ConfirmRun.ts:75`); pinned in `v3ConfirmRun.test.ts`.
+5. **`apply_schedule`'s `seat_clash` branch** keeps `existsLine(proposal, obs)` and the
+   `stateSaveFailed` tail like its other branches. It names `revise_proposal` as the way out only
+   when nothing of the proposal was created yet (`obs.created.size === 0`); once it started
+   applying, `revise_proposal` refuses (`proposalEditor.ts:263`, `started_applying`), so the
+   line says to re-solve. Tests: both wordings; and a resumed apply after an admin deleted a
+   draft it had created (that draft is judged again — harmless, pinned).
+6. **A stale member list in /admin:** the D3b line in `MonthGenerator` adds «si acabas de marcar
+   «Canta y toca a la vez», recarga la página» — the pre-check reads the members loaded with the
+   page, as the picker does.
+7. **No empty name on the server:** a member whose alias and `member_name` are both blank is
+   named with the same fallback wording as D3b, in `seatClashes[].name` and the sentence.
+8. **One more MCP surface:** the saved-month editor's refused move group (`notSavedGroup`,
+   `serviceEditor.ts:~1346`) shows the sentence as its reason when the refusal carries
+   `seatClashes`, like `notSavedRecheck`.
+
