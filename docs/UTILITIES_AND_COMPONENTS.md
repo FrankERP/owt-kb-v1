@@ -305,6 +305,11 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   detail), `seatClashSentencesOf` (every client's reader of that detail — sentences only, never ids),
   `memberDisplayName` and `clashInputsOf`. The four seat writers call it; `draftSeatClashSentences`
   (`monthDraftCreate.ts`) runs it on a confirm's drafts, on the exact body the server receives.
+- **`roleSeats.ts`** ([source](../app/utils/roleSeats.ts), pure, client-safe) — `normalizeSeats` and
+  `NormalizedSeats`, the server's reading of a request's five seat paths (re-exported by
+  `roleWriteRequest.ts`, which reaches `node:crypto` and must stay out of client bundles). The
+  planner's confirm pre-check imports it from here; `roleSeatsClientSafe.test.ts` bundles the client
+  entry points for the browser and fails on any Node built-in.
 - **`fairnessMonthWriteRequest.ts`** ([source](../app/utils/fairnessMonthWriteRequest.ts), neutral, never
   client-imported) — the record's id and keys, `validateFairnessMonthWrite`, `contentHashOfWrite` /
   `contentHashOfStored`, `parseStoredFairnessMonth` (the ONE record-schema check), `decideFairnessMonth`

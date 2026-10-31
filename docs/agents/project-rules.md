@@ -688,8 +688,8 @@ never, voz + instrumento only for a member marked «Canta y toca a la vez» (`si
 either allowed; `rankCandidates`' C2 and `PlannerGrid`'s ⚠ both read it, through one pair loop
 `clashingPairs` — ADR-0078). On the server, `addedSeatClashes` (`app/utils/seatClashGuard.ts`) is
 the same rule as a DIFF: `editRole`, `createRole`, `swapRoles` and `copyInstruments` refuse only a
-pair their write ADDS (an old clash never blocks an unrelated edit), right after the
-dangling-reference refusal and before any bootstrap, coordination or transaction
+pair their write ADDS (an old clash never blocks an unrelated edit), after the request's own
+refusals (dangling references, the stored role's read) and before any bootstrap, coordination or transaction
 (`seatClashGuardCoverage.test.ts`), with `400 invalid_request` + `details.seatClashes[].sentence`;
 every surface that renders a writer's refusal prints that sentence, never the member id. The month
 confirm (`runV3ConfirmAttempt`, v2's `handleConfirm`) runs the same check on its drafts

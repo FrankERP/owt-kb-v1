@@ -15,7 +15,7 @@
 // team swap that carries an old clash onto another service is refused there.
 
 import { clashingPairs, normalizeSeatName, SINGS_AND_PLAYS_HINT, type SeatCategory } from "@/app/components/admin/seatModel";
-import type { NormalizedSeats } from "@/app/utils/roleWriteRequest";
+import type { NormalizedSeats } from "@/app/utils/roleSeats";
 
 export interface SeatRef {
   seatId: string;

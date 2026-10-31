@@ -462,7 +462,7 @@ export const V3_LINES = {
   // drummer the solver put in Coro). One line per clash; the caller says what to do.
   seatClash: (date: string, sentence: string) => `${dayLabel(date)}: ${sentence}`,
   seatClashFix:
-    "No se creó nada. Arregla esas celdas (las marca ⚠ en la cuadrícula) y vuelve a pulsar «Crear». Si acabas de marcar «Canta y toca a la vez», recarga la página.",
+    "No se creó nada en este intento. Arregla esas celdas (las marca ⚠ en la cuadrícula) y vuelve a pulsar «Crear». Si acabas de marcar «Canta y toca a la vez», recarga la página.",
   draftsOutsideHorizon: (months: readonly string[]) =>
     `La vista previa tiene servicios fuera de ${monthsList(months)}. No se creó nada; vuelve a previsualizar.`,
   pastAfterDrafts: (month: string) =>

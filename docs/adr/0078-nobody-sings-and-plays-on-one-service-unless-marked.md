@@ -51,7 +51,12 @@ than silently dropping it; without both Tipos the member cannot hold both seats 
   later) still takes unrelated edits, and removing one side of it is always allowed. The month
   confirm (v3 and v2) refuses a draft with a clash before writing the fairness records, so the
   pinned-drummer case above no longer reaches the server. Studio and publishing remain open: a
-  Studio edit runs no server rule, and publish-ready writes no seats.
+  Studio edit runs no server rule, and publish-ready writes no seats. Pairs are keyed by seat
+  label, so an OLD clash on an instrument or FOH slot reads as added if the write relabels that
+  slot to a name `normalizeSeatName` maps elsewhere, or re-sends a stored slot that had no label:
+  accepted, it only touches a roster that already holds a clash, and the refusal names the pair.
+  The confirm's pre-check reads seats with `roleSeats.ts`'s `normalizeSeats`, split out of
+  `roleWriteRequest.ts` so no `node:crypto` reaches the planner bundle (`roleSeatsClientSafe.test.ts`).
 - The member-facing ⚠ (DayCard's `hasDuplicate`, `/schedule`'s `serviceConflicts`) still counts a
   name twice within ONE section only, so a voice + instrument clash shows there as clean; the
   planner grid is where it is flagged. Teaching those surfaces the flag is left open.

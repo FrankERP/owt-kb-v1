@@ -13,7 +13,7 @@
 
 import type { ServiceFormat } from "./serviceFormat";
 import { effectiveCreateCounts } from "@/app/components/admin/fairnessToggleModel";
-import { normalizeSeats } from "./roleWriteRequest";
+import { normalizeSeats } from "./roleSeats";
 import { addedSeatClashes, memberDisplayName, seatClashSentence, UNKNOWN_MEMBER_NAME } from "./seatClashGuard";
 
 export interface DraftInstrumentSlot {
@@ -105,13 +105,15 @@ export interface DraftPostOutcome {
   status?: number;
   /** Machine error code from the shared service error model, when present. */
   error?: string;
+  /** A seat-clash refusal's sentences (`seatClashSentencesOf`), so the failure line names who and where. */
+  seatClashes?: string[];
 }
 
 export interface DraftBatchResult {
   /** Confirmed server-side successes (HTTP ok), including idempotent replays. */
   createdLocalIds: string[];
   /** Failed or unknown outcomes; each remains retryable with the same request id. */
-  failed: { localId: string; status?: number; error?: string }[];
+  failed: { localId: string; status?: number; error?: string; seatClashes?: string[] }[];
 }
 
 /**
@@ -135,7 +137,13 @@ export async function runDraftCreateBatch(input: {
       outcome = { ok: false };
     }
     if (outcome.ok) createdLocalIds.push(draft.localId);
-    else failed.push({ localId: draft.localId, status: outcome.status, error: outcome.error });
+    else
+      failed.push({
+        localId: draft.localId,
+        status: outcome.status,
+        error: outcome.error,
+        ...(outcome.seatClashes?.length ? { seatClashes: outcome.seatClashes } : {}),
+      });
   }
   return { createdLocalIds, failed };
 }

@@ -9,7 +9,7 @@
   ],
   "summary": {
     "literalRows": 303,
-    "filesScanned": 559,
+    "filesScanned": 560,
     "filesWithColour": 61,
     "byCategory": {
       "2": 2,
@@ -2312,7 +2312,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 807,
+      "line": 811,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2324,7 +2324,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2680,
+      "line": 2684,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2336,7 +2336,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2686,
+      "line": 2690,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2348,7 +2348,7 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 1518,
+      "line": 1522,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2360,7 +2360,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 5646,
+      "line": 5652,
       "disposition": "B",
       "reason": null
     },
@@ -2372,7 +2372,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 5728,
+      "line": 5734,
       "disposition": "B",
       "reason": null
     },

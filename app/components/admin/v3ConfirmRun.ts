@@ -129,6 +129,9 @@ export async function runV3ConfirmAttempt(input: {
   const created = new Set(state.createdLocalIds);
   const createdNow: string[] = [];
   const progress: MonthProgress[] = [];
+  // A clash the pre-check could not see (a flag unticked after the page loaded): the server's sentence.
+  const serverClashLines: string[] = [];
+  const dateOf = new Map(input.drafts.map((d) => [d.localId, d.date]));
   let blocked = false;
   for (const { month, drafts } of draftsByMonth(input.drafts, input.months)) {
     if (drafts.length === 0) continue;
@@ -142,6 +145,9 @@ export async function runV3ConfirmAttempt(input: {
       created.add(id);
       createdNow.push(id);
     }
+    for (const f of batch.failed) {
+      for (const sentence of f.seatClashes ?? []) serverClashLines.push(V3_LINES.seatClash(dateOf.get(f.localId) ?? "", sentence));
+    }
     const done = drafts.filter((d) => created.has(d.localId)).length;
     progress.push({
       month, total: drafts.length, created: done, failed: batch.failed.length, attempted: true,
@@ -151,5 +157,5 @@ export async function runV3ConfirmAttempt(input: {
   }
   state = { ...state, createdLocalIds: created };
   const complete = progress.every((p) => p.created === p.total);
-  return { kind: "drafts", complete, lines: complete ? [] : monthReportLines(progress), state, progress, retry: !complete, createdNow };
+  return { kind: "drafts", complete, lines: complete ? [] : [...monthReportLines(progress), ...serverClashLines], state, progress, retry: !complete, createdNow };
 }

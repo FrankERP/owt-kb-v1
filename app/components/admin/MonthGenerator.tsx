@@ -497,21 +497,25 @@ const DERIVED_HISTORY_READ_ERROR = "No se pudo leer el historial de equidad.";
 const uid = () => Math.random().toString(36).slice(2, 9);
 
 /** The draft create POST, shared by the v2 confirm (unchanged) and the v3 confirm (CF-5: today's mechanism). */
-async function postDraftToRoles(body: unknown): Promise<{ ok: boolean; status: number; error?: string }> {
+async function postDraftToRoles(body: unknown): Promise<{ ok: boolean; status: number; error?: string; seatClashes?: string[] }> {
   const res = await fetch("/api/admin/roles", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   let error: string | undefined;
+  let seatClashes: string[] = [];
   if (!res.ok) {
     try {
-      error = (await res.json())?.error;
+      const parsed = await res.json();
+      error = parsed?.error;
+      // A flag unticked after the page loaded passes the pre-check; the server's sentence still reaches the line.
+      seatClashes = seatClashSentencesOf(parsed);
     } catch {
       error = undefined;
     }
   }
-  return { ok: res.ok, status: res.status, error };
+  return { ok: res.ok, status: res.status, error, ...(seatClashes.length ? { seatClashes } : {}) };
 }
 
 /** «Editar servicio»'s heading: a special by its name, a weekend by its day. */
@@ -4816,7 +4820,7 @@ export default function MonthGenerator({
     if (!toCreateNow.length) return;
     // Solver v3 C6 §5.11: under v3 the confirm writes every horizon month's record first (one PUT),
     // then the drafts month by month — after the SAME gate, nameless-special and preflight re-checks
-    // as today. v2 continues below, byte-identical.
+    // as today. v2 continues below, unchanged except its own seat-clash pre-check (ADR-0078).
     if (isV3) {
       await confirmV3(toCreateNow, publish);
       return;
@@ -4920,9 +4924,11 @@ export default function MonthGenerator({
       // Keep the dialog open and report the partial failure instead of closing
       // as if the whole month was created successfully.
       const conflicts = result.failed.filter(f => f.status === 409).length;
+      const clashSentences = result.failed.flatMap(f => f.seatClashes ?? []);
       setPushError(
         `No se pudieron crear ${result.failed.length} de ${toCreateNow.length} servicios.` +
-        (conflicts ? " Alguien más cambió esas fechas: recarga y revisa." : " Intenta de nuevo."),
+        (clashSentences.length ? ` ${clashSentences.join(" ")}` : "") +
+        (conflicts ? " Alguien más cambió esas fechas: recarga y revisa." : clashSentences.length ? "" : " Intenta de nuevo."),
       );
     }
   }
