@@ -185,6 +185,16 @@ describe("proposeReplacement", () => {
     expect(proposeReplacement({ ...input, exclude: new Map([["lead", new Set(["m-lia"])]]) })).toEqual({ kind: "none", reason: "no_candidate" });
   });
 
+  it("only moves a singer UP: a Lead is never moved down to cover BGV", () => {
+    const lia = { _id: "m-lia", member_name: "Lía Paz", alias: "Lía", memberType: ["voz", "sunday_lead"], ministries: ["worship"] };
+    const rows = [storedRow("sun1", "sunday_role", "2026-11-01", { leads: ["m-lia"], bgvs: ["m-bruno"] })];
+    // Carla may lead but not sing BGV this month; nobody else free is on the record.
+    const input = inputFor({ rows, members: [...MEMBERS, ELSA, lia] as EditorMember[], absent: { roleId: "sun1", memberId: "m-bruno" } });
+    const carla = { ...listed("m-carla"), roles: { ...ALL_IN, "Sun.BGV": "out" as const, "Sun.Choir": "out" as const } };
+    input.ledger = ledgerResponse(["2026-11"], { horizon: [{ record: record("2026-11", [listed("m-bruno"), listed("m-lia"), carla]), storedServices: 1, recordBinds: true }] });
+    expect(proposeReplacement(input)).toEqual({ kind: "none", reason: "no_candidate" });
+  });
+
   it("never proposes for a worship night's song leader", () => {
     const input = inputFor({ absent: { roleId: "sun1", memberId: "m-dani" } });
     const out = proposeReplacement({ ...input, snapshotRole: { format: "worship_night", songs: [{ leads: [{ _ref: "m-dani" }] }] } });

@@ -142,6 +142,8 @@ export function isSongLead(role: { format?: unknown; songs?: Array<{ leads?: Arr
 // ── Board helpers ────────────────────────────────────────────────────────────
 
 const VOICE_ROLE: Readonly<Record<string, V3Role>> = { lead: "Lead", bgv: "BGV", coro: "Choir" };
+/** Voice rows from the top: a singer only ever moves UP this list. */
+const VOICE_ORDER = ["lead", "bgv", "coro"];
 export const isVoiceRow = (rowId: string) => rowId in VOICE_ROLE;
 
 function occupantsOf(board: EditorBoard, columnId: string, rowId: string): string[] {
@@ -291,9 +293,10 @@ const roleMonth = (board: StoredMonthBoard, roleId: string) => storedColumn(boar
 
 /**
  * The vacant voice seat `rowId` (the absent person still on `working`, gone on `removed`) taken by
- * someone already singing on the same service, whose seat a free person then takes. People are
- * tried in board order (Lead, BGV, Coro), never a worship night's song lead, at most
- * `MAX_MOVED_PER_SEAT`, each with up to `MAX_TRIED_PER_SEAT` fillers. `only` (on «Aplicar») fixes
+ * someone singing in a LOWER voice seat of the same service (BGV or Coro into Lead, Coro into BGV),
+ * whose seat a free person then takes. Singers are tried in board order, never a worship night's
+ * song lead, at most `MAX_MOVED_PER_SEAT` who could take the seat, each with up to
+ * `MAX_TRIED_PER_SEAT` fillers. `only` (on «Aplicar») fixes
  * the person moved (`only[rowId]`) and the filler of the seat they leave.
  */
 function moveUp(input: ProposeInput & {
@@ -306,16 +309,20 @@ function moveUp(input: ProposeInput & {
 }): { board: EditorBoard; changes: SeatChange[] } | null | "unchecked" {
   const { working, removed, roleId, rowId, memberId } = input;
   const wantedMover = input.only?.get(rowId);
-  const sources = removed.rows.map((r) => r.id).filter((r) => isVoiceRow(r) && r !== rowId && (!input.only || input.only.has(r)));
+  // Only UP: a BGV or Coro singer into Lead, a Coro singer into BGV — never a Lead down. Never a
+  // seat the absent person also holds (that one is being replaced in its own turn).
+  const rank = (r: string) => VOICE_ORDER.indexOf(r);
+  const sources = removed.rows.map((r) => r.id).filter((r) =>
+    isVoiceRow(r) && rank(r) > rank(rowId) && !occupantsOf(working, roleId, r).includes(memberId) && (!input.only || input.only.has(r)));
   let tried = 0;
   for (const from of sources) {
     for (const mover of occupantsOf(removed, roleId, from)) {
       if (mover === memberId || isSongLead(input.snapshotRole, mover) || input.exclude?.get(rowId)?.has(mover)) continue;
       if (wantedMover !== undefined && mover !== wantedMover) continue;
-      if (tried++ >= MAX_MOVED_PER_SEAT) return null;
       // The mover must be a candidate for the vacant seat once their own seat is freed.
       const freed = replaceIn(removed, roleId, from, mover, null);
       if (!seatCandidates({ ...input, working: freed, rowId })?.some((c) => c.id === mover)) continue;
+      if (tried++ >= MAX_MOVED_PER_SEAT) return null;
       const lifted = replaceIn(replaceIn(working, roleId, rowId, memberId, mover), roleId, from, mover, null);
       const fillers = seatCandidates({ ...input, working: lifted, rowId: from });
       if (!fillers) return "unchecked";
