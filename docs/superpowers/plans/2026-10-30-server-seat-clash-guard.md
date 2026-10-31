@@ -1,6 +1,8 @@
 # Server seat-clash guard — the role writers refuse a clash they would ADD
 
-**Status:** plan; reviewed and APPROVED (rounds 6 and 7 on digest `c232751d…5450`, log beside this file); awaiting Frank's OK. §7 was added after that approval and is un-reviewed. Owner thread: «Corregir a Tony en coro y batería».
+**Status:** APPROVED (rounds 6 and 7 on digest `c232751d…5450`, log beside this file); Frank's OK
+2026-10-31 00:45Z; implemented on branch `claude/project-thread-bkkvpk`. §7 was added after that
+approval and is un-reviewed; §8 records where the build differs from the text. Owner thread: «Corregir a Tony en coro y batería».
 **Governs:** ADR-0078 (nobody sings and plays on one service unless marked) — this closes its
 "server writers check no seats" consequence.
 
@@ -404,4 +406,20 @@ decision. Where §3 and this section differ, this section wins.
 8. **One more MCP surface:** the saved-month editor's refused move group (`notSavedGroup`,
    `serviceEditor.ts:~1346`) shows the sentence as its reason when the refusal carries
    `seatClashes`, like `notSavedRecheck`.
+
+## 8. Implementation notes (where the build differs from the text)
+
+- **`clashInputsOf` and `memberDisplayName` live in `seatClashGuard.ts`** (pure), not
+  `roleWriteOps.ts`: a test that mocks the read module must not lose the guard's helpers.
+  `loadCanonicalMembers` stays in `roleWriteOps.ts`.
+- **The confirm's draft check reads the server's own normalization** (`normalizeSeats` over
+  `draftCreateBody`), shared by both engines as `draftSeatClashSentences` in `monthDraftCreate.ts`;
+  that is §7.3's "drop blank slots exactly as `draftCreateBody` does", by construction.
+- **§7.5, the deleted draft:** a draft `apply_schedule` created and an admin then deleted stays in
+  `obs.created` (its receipt), so the pre-check does NOT judge it again; it is reported deleted and
+  never re-posted, as before. Pinned as such in `applySchedule.test.ts`.
+- **§7.8, `notSavedGroup`:** the services of a move group that were not saved are not themselves
+  refused; the one the server refused carries the sentence (`notSavedRecheck`'s reason), and the
+  group lines keep pointing at it. No separate sentence on `notSavedGroup`.
+- **The MCP reason clause** drops the sentence's final stop, since the copy around it adds its own.
 

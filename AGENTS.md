@@ -299,7 +299,8 @@ each one owns, and its rules) and `docs/UTILITIES_AND_COMPONENTS.md`. Most are "
   `loadSolverHistory`, `deriveSolverHistory`/`historyWindow`, `fetchDerivedHistory`,
   `useIntegrityQueue`, `ruleCopy.ts` (the ONE Spanish wording of a rule — card, forms, MCP),
   `seatsClash` (the ONE «two seats one person may not hold on a service»: same category, or voz +
-  instrumento unless the member is marked «Canta y toca a la vez» — ADR-0078).
+  instrumento unless the member is marked «Canta y toca a la vez» — ADR-0078; the four seat writers
+  refuse a clash the write ADDS, `addedSeatClashes`, and the month confirm before its records).
 - **UI — never hand-roll these:** `Button` (the only button; `tone`, never a `hover:` pair in
   `className`), `CueDialog` (every dialog; `<CueDialog open={x}>`, never a literal `open` —
   `cueDialogMount.test.ts`), `Menu`, `Select`, `DateField`, `Switch`, `Checkbox` (never a bare

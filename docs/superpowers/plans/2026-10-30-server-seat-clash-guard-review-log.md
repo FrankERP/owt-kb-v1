@@ -68,7 +68,9 @@ Plan §7, eight items from R6/R7's non-blocking notes, each checked against the 
 `v3ConfirmRun.ts:75`, `serviceEditor.ts:~1346`): every stored-save notice carries the clash
 lines; v2's line kept out of `V3_LINES`; blank draft slots dropped; `monthReportLines` after
 records; `apply_schedule`'s way out depends on whether applying started; a reload hint; an
-empty-name fallback; the `notSavedGroup` surface. They fall outside the approved digest.
+empty-name fallback; the `notSavedGroup` surface. They fall outside the approved digest. The build
+(plan §8) differs from §7.5 and §7.8 where the code showed the note's premise was off; the
+merge-range code review covers the implementation.
 
 ## Process failures on the author's side
 

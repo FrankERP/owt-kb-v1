@@ -43,8 +43,15 @@ than silently dropping it; without both Tipos the member cannot hold both seats 
 - Until Frank and Mkz are marked, Auto leaves them off EG/Bass on a service where they lead (the
   filler reports the seat empty if nobody else declares it), and the grid flags the stored months
   where they do both. Marking them is a production write, done once with consent.
-- The server writers (roles PATCH, swap, copy-instruments) still check no seats at all, same
-  category included; a clash written through them shows only in the grid.
+- **Server writers (2026-10-31, plan `docs/superpowers/plans/2026-10-30-server-seat-clash-guard.md`):**
+  roles create, PATCH, swap and copy-instruments refuse a clashing pair the write ADDS
+  (`addedSeatClashes`), judged per role with the member's current flag, before any write stage —
+  `400 invalid_request`, `details.seatClashes` with a built sentence that every refusal surface
+  prints. A diff, not the result, on purpose: a roster that already holds a clash (a flag unticked
+  later) still takes unrelated edits, and removing one side of it is always allowed. The month
+  confirm (v3 and v2) refuses a draft with a clash before writing the fairness records, so the
+  pinned-drummer case above no longer reaches the server. Studio and publishing remain open: a
+  Studio edit runs no server rule, and publish-ready writes no seats.
 - The member-facing ⚠ (DayCard's `hasDuplicate`, `/schedule`'s `serviceConflicts`) still counts a
   name twice within ONE section only, so a voice + instrument clash shows there as clean; the
   planner grid is where it is flagged. Teaching those surfaces the flag is left open.
