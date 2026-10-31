@@ -1,4 +1,4 @@
-// The availability proposals' pure core (ADR-0080; plan §4). Fictitious people only.
+// The availability proposals' pure core (ADR-0079; plan §4). Fictitious people only.
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
@@ -58,7 +58,7 @@ function inputFor(opts: {
     adminRoles,
     todayIso: TODAY,
     ledger: ledgerFor(opts.listed === undefined ? ["m-ana", "m-bruno", "m-carla", "m-dani", "m-elsa"] : opts.listed),
-    ...(opts.exclude ? { exclude: new Set(opts.exclude) } : {}),
+    ...(opts.exclude ? { exclude: new Map([["coro", new Set(opts.exclude)]]) } : {}),
   };
 }
 
@@ -101,7 +101,7 @@ describe("proposeReplacement", () => {
   it("skips people «Elegir otro» excludes", () => {
     const first = proposeReplacement(inputFor({ absent: { roleId: "sun1", memberId: "m-dani" } }));
     if (first.kind !== "replace") throw new Error("expected a pick");
-    const second = proposeReplacement(inputFor({ absent: { roleId: "sun1", memberId: "m-dani" }, exclude: [first.seats[0].to] }));
+    const second = proposeReplacement(inputFor({ absent: { roleId: "sun1", memberId: "m-dani" }, exclude: [first.seats[0].to!] }));
     expect(second.kind).toBe("replace");
     if (second.kind === "replace") expect(second.seats[0].to).not.toBe(first.seats[0].to);
   });
@@ -116,22 +116,46 @@ describe("proposeReplacement", () => {
       .toEqual({ kind: "none", reason: "no_candidate" });
   });
 
-  it("is «sin reemplazo» for an instrument nobody else declares, and picks a declared bassist", () => {
-    expect(proposeReplacement(inputFor({ absent: { roleId: "sun1", memberId: "m-tomas" } }))).toEqual({ kind: "none", reason: "no_candidate" });
+  it("leaves an instrument nobody else declares empty, and picks a declared bassist when there is one", () => {
+    const empty = proposeReplacement(inputFor({ absent: { roleId: "sun1", memberId: "m-tomas" } }));
+    expect(empty).toMatchObject({ kind: "replace", seats: [{ rowId: "instrumento:Bass", from: "m-tomas", to: null }] });
+    if (empty.kind === "replace") expect(JSON.stringify(empty.target)).not.toContain("m-tomas");
     const out = proposeReplacement(inputFor({ absent: { roleId: "sun1", memberId: "m-tomas" }, members: [...MEMBERS, ELSA, RAUL] as EditorMember[] }));
     expect(out).toMatchObject({ kind: "replace", seats: [{ rowId: "instrumento:Bass", from: "m-tomas", to: "m-raul" }] });
   });
 
-  it("is all or nothing: a person in Lead and Bass with no bassist gets no proposal at all", () => {
+  it("a person in Lead and Bass with no bassist: Lead gets a replacement and Bass is left empty", () => {
     const rows = [storedRow("sun1", "sunday_role", "2026-11-01", { leads: ["m-tomas2"], instruments: [["Bass", "m-tomas2"]] })];
     const both = { _id: "m-tomas2", member_name: "Teo Gil", alias: "Teo", memberType: ["voz", "sunday_lead", "instrumento"], instruments: ["Bass"], ministries: ["worship"] };
     const noBassist = MEMBERS.filter((m) => m._id !== "m-tomas");
-    const out = proposeReplacement(inputFor({ rows, members: [...noBassist, ELSA, both] as EditorMember[], absent: { roleId: "sun1", memberId: "m-tomas2" } }));
-    expect(out).toEqual({ kind: "none", reason: "no_candidate" });
-    // With a bassist, both seats are covered in one proposal.
+    const input = inputFor({ rows, members: [...noBassist, ELSA, both] as EditorMember[], absent: { roleId: "sun1", memberId: "m-tomas2" } });
+    const out = proposeReplacement(input);
+    expect(out.kind).toBe("replace");
+    if (out.kind !== "replace") return;
+    expect(out.seats.map((x) => x.rowId)).toEqual(["lead", "instrumento:Bass"]);
+    expect(out.seats[0].to).toEqual(expect.any(String));
+    expect(out.seats[1].to).toBeNull();
+    expect(out.target.leads).toEqual([out.seats[0].to]);
+    expect(JSON.stringify(out.target)).not.toContain("m-tomas2");
+
+    // «Aplicar» replays exactly that choice; an empty voice seat is refused.
+    const replay = proposeReplacement({ ...input, only: new Map<string, string | null>([["lead", out.seats[0].to], ["instrumento:Bass", null]]) });
+    expect(replay).toEqual(out);
+    expect(proposeReplacement({ ...input, only: new Map<string, string | null>([["lead", null], ["instrumento:Bass", null]]) }))
+      .toEqual({ kind: "none", reason: "no_candidate" });
+
+    // With a bassist, both seats are covered by people.
     const full = proposeReplacement(inputFor({ rows, members: [...MEMBERS, ELSA, both] as EditorMember[], absent: { roleId: "sun1", memberId: "m-tomas2" } }));
     expect(full.kind).toBe("replace");
-    if (full.kind === "replace") expect(full.seats.map((x) => x.rowId)).toEqual(["lead", "instrumento:Bass"]);
+    if (full.kind === "replace") expect(full.seats.every((x) => x.to !== null)).toBe(true);
+  });
+
+  it("still needs a person for every voice seat: no voice → no proposal at all", () => {
+    const rows = [storedRow("sun1", "sunday_role", "2026-11-01", { leads: ["m-tomas2"], instruments: [["Bass", "m-tomas2"]] })];
+    const both = { _id: "m-tomas2", member_name: "Teo Gil", alias: "Teo", memberType: ["voz", "sunday_lead", "instrumento"], instruments: ["Bass"], ministries: ["worship"] };
+    // Only Teo is on the month's eligibility: nobody else can lead.
+    expect(proposeReplacement(inputFor({ rows, members: [...MEMBERS, ELSA, both] as EditorMember[], absent: { roleId: "sun1", memberId: "m-tomas2" }, listed: ["m-tomas2"] })))
+      .toEqual({ kind: "none", reason: "no_candidate" });
   });
 
   it("never proposes for a worship night's song leader", () => {

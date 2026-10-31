@@ -20,7 +20,7 @@ import AvailabilityPanel from "../AvailabilityPanel";
 
 const ok = (body: unknown) => ({ ok: true, json: async () => body });
 
-/** The proposals' read (ADR-0080) with nothing open: the honest empty answer. */
+/** The proposals' read (ADR-0079) with nothing open: the honest empty answer. */
 const NO_PROPOSALS = { ok: true, blocked: null, open: [], applied: [], kept: [] };
 /** Members and roles answer `[]`; the proposals endpoint answers its own empty read. */
 const emptyLoad = async (url: string) =>

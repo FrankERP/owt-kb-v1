@@ -10,7 +10,7 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const str = (v: unknown): v is string => typeof v === "string" && v.length > 0;
 
 /**
- * «Mantener» (`kept: true`) and «Deshacer» (`kept: false`) on one conflict (ADR-0080). A kept
+ * «Mantener» (`kept: true`) and «Deshacer» (`kept: false`) on one conflict (ADR-0079). A kept
  * conflict is never proposed or emailed again while it lasts.
  */
 export const POST = withVerificationRunContext(postHandler);

@@ -1,4 +1,4 @@
-// The four availability-conflict routes (ADR-0080): the admin guard comes first on every one —
+// The four availability-conflict routes (ADR-0079): the admin guard comes first on every one —
 // no session, a content-editor, or a super-admin impersonating someone gets 403 before the writer
 // is touched — and the bodies the writer receives are the validated ones.
 
@@ -77,6 +77,13 @@ describe("the availability-conflict routes' guard", () => {
     h.session = { user: { sanityId: "m-frank", role: "admin" } };
     await sweepPOST(req());
     expect(h.sweepAvailabilityConflicts).toHaveBeenCalledWith(expect.objectContaining({ trigger: "manual", mode: "dry" }));
+  });
+
+  it("accepts `to: null` (leave the seat empty) and passes it through", async () => {
+    h.session = { user: { sanityId: "m-frank", role: "admin" } };
+    const replacements = [{ rowId: "instrumento:Bass", to: null }];
+    expect((await applyPOST(req({ ...APPLY, replacements }))).status).toBe(200);
+    expect(h.applyAvailabilityFix).toHaveBeenCalledWith(expect.objectContaining({ replacements }));
   });
 
   it("refuses a malformed body with 400", async () => {

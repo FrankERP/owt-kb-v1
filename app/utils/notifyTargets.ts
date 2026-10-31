@@ -26,7 +26,7 @@ export function assignedMemberRefsQuery(roleFilter: string): string {
 /**
  * Per role matching `roleFilter`: its id, its service day (`coalesce(week, date)` — weekend roles
  * store `week`, specials `date`) and the unique member ids in ANY seat, from the same five paths as
- * `assignedMemberRefsQuery`. The availability proposals' cheap pre-check (ADR-0080). `roleFilter`
+ * `assignedMemberRefsQuery`. The availability proposals' cheap pre-check (ADR-0079). `roleFilter`
  * is a trusted, code-owned predicate, as above.
  */
 export function assignedSeatsByRoleQuery(roleFilter: string): string {

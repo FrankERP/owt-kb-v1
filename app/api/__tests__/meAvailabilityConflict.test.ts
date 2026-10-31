@@ -28,7 +28,7 @@ const h = vi.hoisted(() => ({
   beforeCommit: null as null | (() => void),
   /** Thrown by `commit()` instead of a conflict, for the "not a race" arm. */
   commitError: null as null | unknown,
-  /** The availability proposals' member trigger (ADR-0080), and the `after()` queue it rides. */
+  /** The availability proposals' member trigger (ADR-0079), and the `after()` queue it rides. */
   memberTick: vi.fn(),
   afters: [] as Array<() => unknown>,
 }));
@@ -339,7 +339,7 @@ describe("PATCH /api/me/availability — the lost update", () => {
   });
 });
 
-describe("PATCH /api/me/availability — the availability proposals' trigger (ADR-0080)", () => {
+describe("PATCH /api/me/availability — the availability proposals' trigger (ADR-0079)", () => {
   it("hands the added AND cleared dates to `memberTick`, after the response", async () => {
     docById("dual")!.unavailableDates = ["2026-10-04"];
     const snapshot = await memberSnapshot();

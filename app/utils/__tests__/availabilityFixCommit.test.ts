@@ -1,4 +1,4 @@
-// The availability proposals' writer (ADR-0080; plan §5–§6), over mocked clients. Fictitious people.
+// The availability proposals' writer (ADR-0079; plan §5–§6), over mocked clients. Fictitious people.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
@@ -11,7 +11,7 @@ import type { RoleDomainSummary } from "@/app/utils/serviceReadSummary";
 import { snapshot, sources } from "@/app/utils/__tests__/v3MonthPlanFixtures";
 import { MEMBERS, RULES } from "@/app/mcp/monthProposals/__tests__/editorFixtures";
 import type { EditorMember } from "@/app/mcp/monthProposals/revise";
-import { NOVEMBER, applyPatch, summaryFor, type StoredRow } from "@/app/mcp/tools/__tests__/serviceEditorFixtures";
+import { NOVEMBER, applyPatch, storedRow, summaryFor, type StoredRow } from "@/app/mcp/tools/__tests__/serviceEditorFixtures";
 import type { ParsedEditRequest } from "../roleWriteRequest";
 import {
   applyAvailabilityFix,
@@ -373,6 +373,56 @@ describe("«Aplicar»", () => {
     expect(await applyAvailabilityFix({ roleId: "sun1", rev: "sun1-r1", memberId: "m-dani", replacements: [], actor: "a" }, w.deps)).toMatchObject({ status: 400 });
     // Bruno already serves sun1: he never passes.
     expect(await applyAvailabilityFix({ roleId: "sun1", rev: "sun1-r1", memberId: "m-dani", replacements: [{ rowId: "coro", to: "m-bruno" }], actor: "a" }, w.deps)).toMatchObject({ status: 409, body: { error: "refused" } });
+    expect(w.deps.editRole).not.toHaveBeenCalled();
+  });
+
+  it("an instrument nobody else plays: proposed, mailed and applied as «queda vacío»", async () => {
+    w.unavailable("m-tomas", "2026-11-01");
+    await sweep(w);
+    const id = conflictRecordId("sun1", "m-tomas", "2026-11-01");
+    expect(w.records.get(id)).toMatchObject({ status: "proposed", seats: [{ rowId: "instrumento:Bass", from: "m-tomas", empty: true }] });
+    expect(w.records.get(id)!.seats[0].to).toBeUndefined();
+    expect(w.sent).toHaveLength(1);
+    expect(w.sent[0].html).toContain("Propuestas");
+    expect(w.sent[0].html).toContain("queda vacío");
+
+    const read = await readConflictPanel(w.deps);
+    if (!read.ok) throw new Error("expected a read");
+    // One option only: leaving the seat empty names nobody, so there is no other to offer.
+    expect(read.open[0].options).toEqual([{ seats: [{ rowId: "instrumento:Bass", seat: "Bass", to: null, toName: null }] }]);
+
+    const out = await applyAvailabilityFix({ roleId: "sun1", rev: "sun1-r1", memberId: "m-tomas", replacements: [{ rowId: "instrumento:Bass", to: null }], actor: "m-frank" }, w.deps);
+    expect(out).toMatchObject({ ok: true });
+    expect(w.roles.get("sun1")!.instruments.map((i) => i.person._id)).not.toContain("m-tomas");
+    expect(w.records.get(id)).toMatchObject({ status: "applied", seats: [{ empty: true }] });
+  });
+
+  it("alternatives vary the voice seats and keep the instrument pick: the one other bassist stays in every option", async () => {
+    const teo = { _id: "m-teo", member_name: "Teo Gil", alias: "Teo", memberType: ["voz", "sunday_lead", "instrumento"], instruments: ["Bass"], ministries: ["worship"] };
+    w = world({ rows: [storedRow("sun1", "sunday_role", "2026-11-01", { leads: ["m-teo"], instruments: [["Bass", "m-teo"]] })], members: [...MEMBERS, ELSA, teo] as EditorMember[] });
+    w.unavailable("m-teo", "2026-11-01");
+    const read = await readConflictPanel(w.deps);
+    if (!read.ok) throw new Error("expected a read");
+    const options = read.open[0].options;
+    expect(options.length).toBeGreaterThanOrEqual(2);
+    for (const o of options) expect(o.seats.find((x) => x.rowId === "instrumento:Bass")?.to).toBe("m-tomas");
+    const leads = options.map((o) => o.seats.find((x) => x.rowId === "lead")?.to);
+    expect(new Set(leads).size).toBe(leads.length);
+  });
+
+  it("an instrument-only conflict still offers the other bassists as alternatives, then «queda vacío» once", async () => {
+    const raul = { _id: "m-raul", member_name: "Raúl Paz", alias: "Raúl", memberType: ["instrumento"], instruments: ["Bass"], ministries: ["worship"] };
+    w = world({ members: [...MEMBERS, ELSA, raul] as EditorMember[] });
+    w.unavailable("m-tomas", "2026-11-01");
+    const read = await readConflictPanel(w.deps);
+    if (!read.ok) throw new Error("expected a read");
+    expect(read.open[0].options.map((o) => o.seats[0].to)).toEqual(["m-raul", null]);
+  });
+
+  it("refuses to leave a voice seat empty", async () => {
+    w.unavailable("m-dani", "2026-11-01");
+    expect(await applyAvailabilityFix({ roleId: "sun1", rev: "sun1-r1", memberId: "m-dani", replacements: [{ rowId: "coro", to: null }], actor: "a" }, w.deps))
+      .toMatchObject({ status: 409, body: { error: "refused" } });
     expect(w.deps.editRole).not.toHaveBeenCalled();
   });
 

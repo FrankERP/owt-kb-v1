@@ -496,7 +496,7 @@ several exist precisely to stop a plausible-looking change.
   to the freshly read song, and a lyrics edit needs `lyricsGate` (the stored body round-trips
   losslessly through the editor's text form). `/admin` stays last-writer-wins (no `ifRevisionId` on
   the route): a page loaded before a chat save overwrites it when saved.
-  The availability proposals' writer is `availabilityFixCommit.ts` (ADR-0080): the four
+  The availability proposals' writer is `availabilityFixCommit.ts` (ADR-0079): the four
   `/api/admin/availability-conflicts` routes (the GET and its `apply`/`keep`/`sweep` POSTs) (`requireActiveManager`, never a content-editor, never
   impersonating), the member's `PATCH /api/me/availability` (its `after()` trigger, that member only)
   and layer 1's flush cron (`availabilityTick`, every third bucket) call it; no MCP tool does. Its

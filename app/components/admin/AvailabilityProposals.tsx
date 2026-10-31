@@ -1,6 +1,6 @@
 "use client";
 
-// «Disponibilidad › Conflictos»: the availability proposals (ADR-0080). Someone marked a day they
+// «Disponibilidad › Conflictos»: the availability proposals (ADR-0079). Someone marked a day they
 // already serve on; the server proposes who takes each of their seats and NEVER changes the service
 // by itself. A person applies it here: «Aplicar» (the proposal), «Elegir otro» (an alternative),
 // «Mantener» (a deliberate keep, silenced while that conflict lasts) and «Deshacer» on a kept one.
@@ -51,8 +51,11 @@ function isPanelRead(v: unknown): v is PanelRead {
 
 const state = (published: boolean) => (published ? "publicado" : "borrador");
 
-const seatRun = (seats: Array<{ seat: string; toName: string }>) =>
-  seats.map((s) => `${s.seat} → ${s.toName}`).join(", ");
+/** An instrument or FOH seat nobody can take is left empty (`toName: null`). */
+const EMPTY_SEAT = "queda vacío";
+
+const seatRun = (seats: Array<{ seat: string; toName: string | null }>) =>
+  seats.map((s) => `${s.seat} → ${s.toName ?? EMPTY_SEAT}`).join(", ");
 
 export default function AvailabilityProposals({ fallback, onChanged }: {
   /** The parent's client-side conflict list, shown whenever this read cannot answer. */
@@ -285,7 +288,7 @@ export default function AvailabilityProposals({ fallback, onChanged }: {
               <li key={a.recordId} data-availability-applied="" className="flex min-h-[48px] items-center border-b border-ink/[0.10] py-2 font-body text-[15px] text-ink-muted [overflow-wrap:anywhere]">
                 <span>
                   <span className="font-semibold text-ink">{a.service}</span>
-                  {`: ${a.seats.map((s) => `${s.seat}, ${s.from} → ${s.to}`).join("; ")}`}
+                  {`: ${a.seats.map((s) => `${s.seat}, ${s.from} → ${s.to ?? EMPTY_SEAT}`).join("; ")}`}
                 </span>
               </li>
             ))}

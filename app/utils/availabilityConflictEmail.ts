@@ -1,4 +1,4 @@
-// The admin email of the availability proposals (ADR-0080; plan §6): one per sweep that claimed
+// The admin email of the availability proposals (ADR-0079; plan §6): one per sweep that claimed
 // events, «Propuestas» (person → replacement, seat, service) and «Sin reemplazo». Light palette
 // (`emailShell.ts`), as every app email. Pure: the writer (`availabilityFixCommit.ts`) reads the
 // names and sends it.
@@ -10,8 +10,8 @@ export interface ConflictEmailLine {
   person: string;
   service: string;
   published: boolean;
-  /** One per seat: «Coro», «Bass»… with the proposed replacement, when there is one. */
-  seats: Array<{ seat: string; to?: string }>;
+  /** One per seat: «Coro», «Bass»… with the proposed replacement, or `empty` when it is left empty. */
+  seats: Array<{ seat: string; to?: string; empty?: boolean }>;
   reason?: "no_candidate" | "song_lead" | "unchecked";
 }
 
@@ -24,7 +24,7 @@ const REASON: Record<NonNullable<ConflictEmailLine["reason"]>, string> = {
 const state = (l: ConflictEmailLine) => (l.published ? "publicado" : "borrador");
 
 function proposalItem(l: ConflictEmailLine): string {
-  const seats = l.seats.map((s) => `${escapeHtml(s.seat)} → <strong style="color:${C.accent}">${escapeHtml(s.to ?? "")}</strong>`).join(", ");
+  const seats = l.seats.map((s) => `${escapeHtml(s.seat)} → <strong style="color:${C.accent}">${s.empty ? "queda vacío" : escapeHtml(s.to ?? "")}</strong>`).join(", ");
   return `<li style="margin:0 0 8px"><strong>${escapeHtml(l.person)}</strong> no puede el ${escapeHtml(l.service)} (${state(l)}). Propuesta: ${seats}.</li>`;
 }
 
@@ -45,7 +45,7 @@ function section(title: string, items: string[]): string {
 
 export function buildConflictEmail(lines: readonly ConflictEmailLine[]): { subject: string; html: string } {
   const link = `${appBaseUrl()}/admin?tab=availability`;
-  const proposals = lines.filter((l) => l.seats.length > 0 && l.seats.every((s) => s.to) && !l.reason);
+  const proposals = lines.filter((l) => l.seats.length > 0 && l.seats.every((s) => s.to || s.empty) && !l.reason);
   const none = lines.filter((l) => !proposals.includes(l));
   const subject = `Conflictos de disponibilidad (${lines.length})`;
   const header = tr(td(

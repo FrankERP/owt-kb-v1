@@ -1,7 +1,7 @@
 import { defineType } from "sanity";
 
 /**
- * Internal: one availability conflict and its proposal (ADR-0080) — a person seated on a service
+ * Internal: one availability conflict and its proposal (ADR-0079) — a person seated on a service
  * dated on a day they marked unavailable.
  *
  * `_id` is `availabilityConflict.<sha256(roleId|memberId|date), 32 hex>` — dotted, so an untokened
@@ -40,6 +40,7 @@ export const availabilityConflict = defineType({
             { name: "rowId", title: "Lugar", type: "string" },
             { name: "from", title: "Sale (id)", type: "string" },
             { name: "to", title: "Entra (id)", type: "string" },
+            { name: "empty", title: "Queda vacío", type: "boolean" },
           ],
         },
       ],

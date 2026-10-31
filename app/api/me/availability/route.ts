@@ -5,7 +5,7 @@ import { sanityConflictKind } from "@/app/utils/roleWriteRequest";
 import { memberTick } from "@/app/utils/availabilityFixCommit";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
 
-// The availability proposals' member trigger runs in `after()` (ADR-0080) and may sweep this
+// The availability proposals' member trigger runs in `after()` (ADR-0079) and may sweep this
 // member's conflicts, so the function needs the room.
 export const maxDuration = 60;
 
@@ -141,7 +141,7 @@ async function patchHandler(req: NextRequest) {
     return staleRevision(fresh);
   }
 
-  // The availability proposals (ADR-0080): a date this member serves on, added or cleared, may open
+  // The availability proposals (ADR-0079): a date this member serves on, added or cleared, may open
   // a sweep of THIS member's conflicts. After the response; a failure is logged, never answered.
   const before = new Set(current.unavailableDates);
   const addedDates = valid.filter((d) => !before.has(d));

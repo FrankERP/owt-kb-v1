@@ -44,7 +44,7 @@ import { adminChatUsage } from './schemas/adminChatUsage';
 // The MCP month proposal (P4 on solver v3): hidden/read-only, written only by
 // app/mcp/monthProposals/proposalStore.ts. See sanity/schemas/mcpProposal.ts.
 import { mcpProposal } from './schemas/mcpProposal';
-// Internal: availability conflicts and their proposals (ADR-0080), written only by
+// Internal: availability conflicts and their proposals (ADR-0079), written only by
 // app/utils/availabilityFixCommit.ts. See sanity/schemas/availabilityConflict.ts.
 import { availabilityConflict } from './schemas/availabilityConflict';
 // The conversation about a service before its setlist proposal exists (ADR-0065).

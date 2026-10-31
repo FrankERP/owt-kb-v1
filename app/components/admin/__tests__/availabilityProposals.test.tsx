@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 //
-// «Disponibilidad › Conflictos» — the availability proposals (ADR-0080). The server judges and
+// «Disponibilidad › Conflictos» — the availability proposals (ADR-0079). The server judges and
 // this card only shows: these tests pin what the card SENDS (the exact replacement set the server
 // proposed, the record's revision on «Deshacer»), that a 409 reloads with «El servicio cambió»
 // instead of retrying, and that a read it cannot use falls back to the parent's own list — a
@@ -70,6 +70,17 @@ describe("AvailabilityProposals", () => {
     });
     await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/Aplicado: Coro → Ana/));
     expect(onChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it("a seat nobody can take reads «queda vacío», and «Aplicar» sends it as null", async () => {
+    const lead = { rowId: "lead", seat: "Lead", to: "niza", toName: "Niza" };
+    const { posts } = serve(() => read({ open: [{ ...CONFLICT, options: [{ seats: [lead, { rowId: "instrumento:Bass", seat: "Bass", to: null, toName: null }] }] }] }));
+    render(<AvailabilityProposals fallback={FALLBACK} onChanged={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByText("Lead → Niza, Bass → queda vacío")).not.toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "Aplicar" }));
+    await waitFor(() => expect(posts).toHaveLength(1));
+    expect((posts[0].body as { replacements: unknown }).replacements).toEqual([{ rowId: "lead", to: "niza" }, { rowId: "instrumento:Bass", to: null }]);
   });
 
   it("a 409 reloads with «El servicio cambió» and reports nothing as saved", async () => {

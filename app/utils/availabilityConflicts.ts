@@ -1,4 +1,4 @@
-// Availability conflicts: find them and propose a replacement (ADR-0080; plan
+// Availability conflicts: find them and propose a replacement (ADR-0079; plan
 // docs/superpowers/plans/2026-10-29-availability-conflict-resolver.md §4). The pure core of the
 // availability writer (`availabilityFixCommit.ts`), which reads, records and emails; this module
 // only judges.
@@ -7,8 +7,10 @@
 // from the ROLES READ (all five seat paths), never from the month's board, which leaves out a role it
 // cannot translate: such a conflict is still a conflict, «sin revisar».
 //
-// A proposal replaces the person in EVERY seat they hold on that service, or in none (all or
-// nothing). Per seat, in board row order: the planner's own candidates for the seat
+// A proposal covers EVERY seat the person holds on that service, or none (all or nothing). A voice
+// seat needs a replacement; an instrument or FOH seat nobody can take is left EMPTY (Frank,
+// 2026-10-31: «si no hay nadie para cubrir Bass, se puede quedar vacío»), so a person in Lead and
+// Bass still gets a Lead proposal. Per seat, in board row order: the planner's own candidates for the seat
 // (`serverPickCandidates`) with the absent person removed, filtered on the filler's verdict
 // (`eligible`, not already serving the service, an instrument declared, in Alabanza), ordered as
 // the fillers order them — a voice by `orderByEffectiveLoad` (the rules' exempt/slack), an
@@ -71,7 +73,8 @@ export interface RoleConflict {
 export interface SeatChange {
   rowId: string;
   from: string;
-  to: string;
+  /** `null` = the seat is left empty (an instrument or FOH seat nobody can take). */
+  to: string | null;
 }
 
 export type Proposal =
@@ -255,10 +258,10 @@ export interface ProposeInput {
   ledger: FairnessLedgerResponse | null;
   /** The role as the snapshot holds it, for the worship-night song leads. */
   snapshotRole?: { format?: unknown; songs?: Array<{ leads?: Array<{ _ref?: string }> }> };
-  /** People «Elegir otro» skips. */
-  exclude?: ReadonlySet<string>;
-  /** Only these candidates per row (the chosen replacement on «Aplicar»); absent = any. */
-  only?: ReadonlyMap<string, string>;
+  /** People «Elegir otro» skips, per seat (row id → member ids). */
+  exclude?: ReadonlyMap<string, ReadonlySet<string>>;
+  /** Only these candidates per row (the chosen replacement on «Aplicar»; `null` = leave it empty); absent = any. */
+  only?: ReadonlyMap<string, string | null>;
 }
 
 /** The seat's replacement candidates in order, filtered (D2): what «Elegir otro» lists too. */
@@ -277,7 +280,7 @@ export function seatCandidates(input: ProposeInput & { working: EditorBoard; row
   const worship = new Set(input.members.filter(isWorship).map((m) => m._id));
   const instrument = isInstrumentRowId(rowId);
   const pool = ranked.filter((c) =>
-    c.eligible && !c.alreadyAssigned && !(instrument && c.undeclared) && worship.has(c.id) && c.id !== input.memberId && !input.exclude?.has(c.id));
+    c.eligible && !c.alreadyAssigned && !(instrument && c.undeclared) && worship.has(c.id) && c.id !== input.memberId && !input.exclude?.get(rowId)?.has(c.id));
   return orderedPool({ board: working, columnId: roleId, rowId, pool, config, members: input.members });
 }
 
@@ -300,11 +303,18 @@ export function proposeReplacement(input: ProposeInput): Proposal {
   const seats: SeatChange[] = [];
   for (const rowId of held) {
     const removed = replaceIn(working, roleId, rowId, memberId, null);
+    const voice = isVoiceRow(rowId);
+    const wanted = input.only?.get(rowId);
+    if (wanted === null) {
+      // «Aplicar» on a proposal that leaves this seat empty: never a voice seat.
+      if (voice) return { kind: "none", reason: "no_candidate" };
+      working = removed;
+      seats.push({ rowId, from: memberId, to: null });
+      continue;
+    }
     const pool = seatCandidates({ ...input, working: removed, rowId });
     if (!pool) return { kind: "none", reason: "unchecked" };
-    const wanted = input.only?.get(rowId);
     const tried = (wanted ? pool.filter((c) => c.id === wanted) : pool).slice(0, MAX_TRIED_PER_SEAT);
-    const voice = isVoiceRow(rowId);
     const baseline = voice ? verdictOn(removed, gate) : null;
     let picked: { id: string; board: EditorBoard } | null = null;
     let unchecked = false;
@@ -327,6 +337,11 @@ export function proposeReplacement(input: ProposeInput): Proposal {
       if (!judged.ok || judged.judged.added.length > 0 || judged.judged.reforced.length > 0) continue;
       picked = { id: candidate.id, board: next };
       break;
+    }
+    if (!picked && !unchecked && !voice && !wanted) {
+      working = removed;
+      seats.push({ rowId, from: memberId, to: null });
+      continue;
     }
     if (!picked) return { kind: "none", reason: unchecked ? "unchecked" : "no_candidate" };
     working = picked.board;
