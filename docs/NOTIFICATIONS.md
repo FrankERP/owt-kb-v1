@@ -568,7 +568,8 @@ new events: «Conflictos de disponibilidad (N)», sections «Propuestas» and «
 `/admin?tab=availability` (`availabilityConflictEmail.ts`, the light palette). **It never changes a
 service**, so it queues no role notice; the notices go out only when an admin presses «Aplicar»,
 which saves through `/admin`'s own `editRole` exactly like a hand edit (on a published service the
-person removed and the person added hear about it; on a draft nobody does).
+person removed and the person added hear about it; on a draft nobody does). An instrument or FOH
+seat nobody can take is proposed as «queda vacío»; applying it notifies only the person removed.
 
 - **Audience:** `teamMembers` with `role` admin or super-admin, `disabled != true`, in worship
   (`WORSHIP_AUDIENCE_GROQ_FILTER`), not the system accounts (`service-account-*`,

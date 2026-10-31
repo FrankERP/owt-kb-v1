@@ -72,6 +72,17 @@ describe("AvailabilityProposals", () => {
     expect(onChanged).toHaveBeenCalledTimes(1);
   });
 
+  it("a seat nobody can take reads «queda vacío», and «Aplicar» sends it as null", async () => {
+    const lead = { rowId: "lead", seat: "Lead", to: "niza", toName: "Niza" };
+    const { posts } = serve(() => read({ open: [{ ...CONFLICT, options: [{ seats: [lead, { rowId: "instrumento:Bass", seat: "Bass", to: null, toName: null }] }] }] }));
+    render(<AvailabilityProposals fallback={FALLBACK} onChanged={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByText("Lead → Niza, Bass → queda vacío")).not.toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "Aplicar" }));
+    await waitFor(() => expect(posts).toHaveLength(1));
+    expect((posts[0].body as { replacements: unknown }).replacements).toEqual([{ rowId: "lead", to: "niza" }, { rowId: "instrumento:Bass", to: null }]);
+  });
+
   it("a 409 reloads with «El servicio cambió» and reports nothing as saved", async () => {
     const onChanged = vi.fn();
     const { fetchMock } = serve(() => read({ open: [CONFLICT] }), () => ok({ error: "stale_revision" }, 409));

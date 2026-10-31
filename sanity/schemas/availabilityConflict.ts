@@ -40,6 +40,7 @@ export const availabilityConflict = defineType({
             { name: "rowId", title: "Lugar", type: "string" },
             { name: "from", title: "Sale (id)", type: "string" },
             { name: "to", title: "Entra (id)", type: "string" },
+            { name: "empty", title: "Queda vacío", type: "boolean" },
           ],
         },
       ],

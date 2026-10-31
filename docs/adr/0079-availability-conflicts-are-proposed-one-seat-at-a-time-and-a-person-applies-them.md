@@ -26,7 +26,10 @@ never changes a service, draft or published. That plan was approved in rounds 10
   else in `rankCandidates`' order), and walk at most 8 candidates through: a weekend voice must be
   on the month's v3 eligibility for that service; the service target is `ok` with no new finding
   (`judgeTarget`); the month gate (`monthCheckVerdict`, `monthCheck.ts`) shows no new or grown
-  protection. All seats or none. A worship-night song lead gets no pick («song_lead»). A service the
+  protection. All seats or none — except that an instrument or FOH seat nobody passes is proposed
+  EMPTY («queda vacío»; Frank, 2026-10-31: «si no hay nadie para cubrir Bass, se puede quedar
+  vacío»), so a person in Lead and Bass still gets a Lead proposal; a voice seat always needs a
+  person. A worship-night song lead gets no pick («song_lead»). A service the
   board cannot edit, a month without its fairness record, or no rules: «sin revisar».
 - **Record and tell** (`app/utils/availabilityFixCommit.ts`, the one writer): an
   `availabilityConflict.<sha256>` record per identity (`proposed`/`none`/`applied`/`kept`/`gone`,
@@ -57,6 +60,9 @@ never changes a service, draft or published. That plan was approved in rounds 10
   this design removed.
 - **A new `NotifyKind` for this email.** It touches the member form, `/me` and four tests for one
   admin email; it reuses «Propuestas». Follow-up if Frank wants it off alone.
+- **Leaving a voice seat empty** (for an instrument or FOH seat, an empty seat is what the team
+  already does by hand, as on 29 nov). A service short a voice is a decision about the service, not a
+  replacement; «Aplicar» refuses `to: null` on a voice seat.
 - **The client-side list as the only view.** It stays, but only as the fallback when the proposals'
   read fails or cannot judge — a failure never reads as «sin conflictos».
 

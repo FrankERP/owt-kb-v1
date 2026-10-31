@@ -55,6 +55,7 @@ import {
   type NoneReason,
   type Proposal,
   type RoleConflict,
+  type SeatChange,
 } from "./availabilityConflicts";
 
 export const CONFLICT_TYPE = "availabilityConflict";
@@ -84,6 +85,8 @@ export interface ConflictSeat {
   rowId: string;
   from: string;
   to?: string;
+  /** The proposal leaves this seat empty (an instrument or FOH seat nobody can take). */
+  empty?: boolean;
 }
 
 export interface ConflictRecord {
@@ -129,13 +132,16 @@ export interface RecordChange {
   checked: boolean;
 }
 
+/** A proposal's seats as a record stores them: `to`, or `empty: true` (never a stored `null`). */
+const storedSeats = (seats: readonly SeatChange[]): ConflictSeat[] =>
+  seats.map((s, i) => ({ _key: `s${i}`, rowId: s.rowId, from: s.from, ...(s.to === null ? { empty: true } : { to: s.to }) }));
+
 const seatsOf = (p: Proposal | null, held: readonly string[], memberId: string): ConflictSeat[] =>
-  p && p.kind === "replace"
-    ? p.seats.map((s, i) => ({ _key: `s${i}`, rowId: s.rowId, from: s.from, to: s.to }))
-    : held.map((rowId, i) => ({ _key: `s${i}`, rowId, from: memberId }));
+  p && p.kind === "replace" ? storedSeats(p.seats) : held.map((rowId, i) => ({ _key: `s${i}`, rowId, from: memberId }));
 
 const sameSeats = (a: readonly ConflictSeat[], b: readonly ConflictSeat[]) =>
-  a.length === b.length && a.every((x, i) => x.rowId === b[i].rowId && x.from === b[i].from && (x.to ?? "") === (b[i].to ?? ""));
+  a.length === b.length && a.every((x, i) =>
+    x.rowId === b[i].rowId && x.from === b[i].from && (x.to ?? "") === (b[i].to ?? "") && !!x.empty === !!b[i].empty);
 
 /**
  * The §5.2 table. `held` = the rows the person holds (for a `none`'s seats); `stale` = the record's
@@ -295,7 +301,7 @@ function heldRows(board: StoredMonthBoard | undefined, roleId: string, memberId:
     .map((r) => r.id);
 }
 
-function propose(j: Judgeable, conflict: RoleConflict, ledger: FairnessLedgerResponse | null, extra: { exclude?: ReadonlySet<string>; only?: ReadonlyMap<string, string> } = {}): Proposal {
+function propose(j: Judgeable, conflict: RoleConflict, ledger: FairnessLedgerResponse | null, extra: { exclude?: ReadonlySet<string>; only?: ReadonlyMap<string, string | null> } = {}): Proposal {
   const board = j.boards.get(conflict.date.slice(0, 7))!;
   return proposeReplacement({
     board,
@@ -492,7 +498,7 @@ async function emailDue(j: Judgeable, options: { memberId?: string; deadlineMs: 
       person: name(r.memberId),
       service: serviceLabel({ date: r.date, roleType: r.serviceKind, serviceName: role?.service_name, serviceTime: role?.time ?? undefined }),
       published: r.published,
-      seats: r.seats.map((s) => ({ seat: seatLabel(s.rowId), ...(s.to ? { to: name(s.to) } : {}) })),
+      seats: r.seats.map((s) => ({ seat: seatLabel(s.rowId), ...(s.to ? { to: name(s.to) } : s.empty ? { empty: true } : {}) })),
       ...(r.status === "none" ? { reason: r.reason ?? "no_candidate" } : {}),
     };
   });
@@ -612,7 +618,7 @@ export type ClickOutcome = { ok: true; status: number; body: Record<string, unkn
 const refuse = (status: number, error: string, extra: Record<string, unknown> = {}): ClickOutcome => ({ ok: false, status, body: { error, ...extra } });
 
 export async function applyAvailabilityFix(
-  input: { roleId: string; rev: string; memberId: string; replacements: ReadonlyArray<{ rowId: string; to: string }>; actor: string },
+  input: { roleId: string; rev: string; memberId: string; replacements: ReadonlyArray<{ rowId: string; to: string | null }>; actor: string },
   deps: AvailabilityDeps = defaultAvailabilityDeps(),
 ): Promise<ClickOutcome> {
   const read = await readJudgeable(deps);
@@ -644,7 +650,7 @@ export async function applyAvailabilityFix(
   const id = conflictRecordId(conflict.roleId, conflict.memberId, conflict.date);
   const record = j.records.find((r) => r._id === id) ?? null;
   const nowIso = new Date(deps.now()).toISOString();
-  const seats = proposal.seats.map((s, i) => ({ _key: `s${i}`, rowId: s.rowId, from: s.from, to: s.to }));
+  const seats = storedSeats(proposal.seats);
   let recorded = true;
   try {
     if (record) await deps.patch(id, record._rev, { status: "applied", seats, appliedBy: input.actor, updatedAt: nowIso, trigger: "apply" }, ["reason"]);
@@ -713,8 +719,9 @@ export interface PanelConflict {
   published: boolean;
   service: string;
   person: string;
-  /** The proposal on this read, then up to three alternatives (all or nothing each). */
-  options: Array<{ seats: Array<{ rowId: string; seat: string; to: string; toName: string }> }>;
+  /** The proposal on this read, then up to three alternatives (all or nothing each; an instrument or FOH seat may be left empty). */
+  /** `to: null` = the seat is left empty. */
+  options: Array<{ seats: Array<{ rowId: string; seat: string; to: string | null; toName: string | null }> }>;
   /** When there is no proposal: why, and the seats the person holds. */
   none?: { reason: NoneReason; seats: Array<{ rowId: string; seat: string }> };
 }
@@ -723,7 +730,8 @@ export interface PanelRead {
   ok: true;
   blocked: BlockedReason | null;
   open: PanelConflict[];
-  applied: Array<{ recordId: string; date: string; person: string; service: string; seats: Array<{ seat: string; from: string; to: string }> }>;
+  /** `to: null` = the seat was left empty. */
+  applied: Array<{ recordId: string; date: string; person: string; service: string; seats: Array<{ seat: string; from: string; to: string | null }> }>;
   kept: Array<{ recordId: string; recordRev: string; roleId: string; memberId: string; date: string; serviceKind: ServiceRole["_type"]; published: boolean; person: string; service: string }>;
 }
 
@@ -780,8 +788,11 @@ export async function readConflictPanel(deps: AvailabilityDeps = defaultAvailabi
       const p = propose(j, c, ledger, { exclude });
       first ??= p;
       if (p.kind !== "replace") break;
-      options.push({ seats: p.seats.map((s) => ({ rowId: s.rowId, seat: seatLabel(s.rowId), to: s.to, toName: name(s.to) })) });
-      for (const s of p.seats) exclude.add(s.to);
+      options.push({ seats: p.seats.map((s) => ({ rowId: s.rowId, seat: seatLabel(s.rowId), to: s.to, toName: s.to === null ? null : name(s.to) })) });
+      const named = p.seats.flatMap((s) => (s.to === null ? [] : [s.to]));
+      // Nobody new to skip (every seat left empty): another round would repeat this option.
+      if (!named.length) break;
+      for (const id of named) exclude.add(id);
     }
     open.push({
       ...base,
@@ -794,7 +805,7 @@ export async function readConflictPanel(deps: AvailabilityDeps = defaultAvailabi
     .filter((r) => r.status === "applied" && Date.parse(r.updatedAt) >= since)
     .map((r) => ({
       recordId: r._id, date: r.date, person: name(r.memberId), service: label(r.roleId, r.date, r.serviceKind),
-      seats: r.seats.map((s) => ({ seat: seatLabel(s.rowId), from: name(s.from), to: s.to ? name(s.to) : "" })),
+      seats: r.seats.map((s) => ({ seat: seatLabel(s.rowId), from: name(s.from), to: s.to ? name(s.to) : null })),
     }));
   return { ok: true, blocked: null, open, applied, kept };
 }

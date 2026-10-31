@@ -51,8 +51,11 @@ function isPanelRead(v: unknown): v is PanelRead {
 
 const state = (published: boolean) => (published ? "publicado" : "borrador");
 
-const seatRun = (seats: Array<{ seat: string; toName: string }>) =>
-  seats.map((s) => `${s.seat} → ${s.toName}`).join(", ");
+/** An instrument or FOH seat nobody can take is left empty (`toName: null`). */
+const EMPTY_SEAT = "queda vacío";
+
+const seatRun = (seats: Array<{ seat: string; toName: string | null }>) =>
+  seats.map((s) => `${s.seat} → ${s.toName ?? EMPTY_SEAT}`).join(", ");
 
 export default function AvailabilityProposals({ fallback, onChanged }: {
   /** The parent's client-side conflict list, shown whenever this read cannot answer. */
@@ -285,7 +288,7 @@ export default function AvailabilityProposals({ fallback, onChanged }: {
               <li key={a.recordId} data-availability-applied="" className="flex min-h-[48px] items-center border-b border-ink/[0.10] py-2 font-body text-[15px] text-ink-muted [overflow-wrap:anywhere]">
                 <span>
                   <span className="font-semibold text-ink">{a.service}</span>
-                  {`: ${a.seats.map((s) => `${s.seat}, ${s.from} → ${s.to}`).join("; ")}`}
+                  {`: ${a.seats.map((s) => `${s.seat}, ${s.from} → ${s.to ?? EMPTY_SEAT}`).join("; ")}`}
                 </span>
               </li>
             ))}

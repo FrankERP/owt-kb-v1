@@ -376,6 +376,34 @@ describe("«Aplicar»", () => {
     expect(w.deps.editRole).not.toHaveBeenCalled();
   });
 
+  it("an instrument nobody else plays: proposed, mailed and applied as «queda vacío»", async () => {
+    w.unavailable("m-tomas", "2026-11-01");
+    await sweep(w);
+    const id = conflictRecordId("sun1", "m-tomas", "2026-11-01");
+    expect(w.records.get(id)).toMatchObject({ status: "proposed", seats: [{ rowId: "instrumento:Bass", from: "m-tomas", empty: true }] });
+    expect(w.records.get(id)!.seats[0].to).toBeUndefined();
+    expect(w.sent).toHaveLength(1);
+    expect(w.sent[0].html).toContain("Propuestas");
+    expect(w.sent[0].html).toContain("queda vacío");
+
+    const read = await readConflictPanel(w.deps);
+    if (!read.ok) throw new Error("expected a read");
+    // One option only: leaving the seat empty names nobody, so there is no other to offer.
+    expect(read.open[0].options).toEqual([{ seats: [{ rowId: "instrumento:Bass", seat: "Bass", to: null, toName: null }] }]);
+
+    const out = await applyAvailabilityFix({ roleId: "sun1", rev: "sun1-r1", memberId: "m-tomas", replacements: [{ rowId: "instrumento:Bass", to: null }], actor: "m-frank" }, w.deps);
+    expect(out).toMatchObject({ ok: true });
+    expect(w.roles.get("sun1")!.instruments.map((i) => i.person._id)).not.toContain("m-tomas");
+    expect(w.records.get(id)).toMatchObject({ status: "applied", seats: [{ empty: true }] });
+  });
+
+  it("refuses to leave a voice seat empty", async () => {
+    w.unavailable("m-dani", "2026-11-01");
+    expect(await applyAvailabilityFix({ roleId: "sun1", rev: "sun1-r1", memberId: "m-dani", replacements: [{ rowId: "coro", to: null }], actor: "a" }, w.deps))
+      .toMatchObject({ status: 409, body: { error: "refused" } });
+    expect(w.deps.editRole).not.toHaveBeenCalled();
+  });
+
   it("a lost record write still answers ok, and the next sweep records `gone`", async () => {
     w.unavailable("m-dani", "2026-11-01");
     await sweep(w);
