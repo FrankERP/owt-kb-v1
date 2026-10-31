@@ -569,7 +569,9 @@ new events: «Conflictos de disponibilidad (N)», sections «Propuestas» and «
 service**, so it queues no role notice; the notices go out only when an admin presses «Aplicar»,
 which saves through `/admin`'s own `editRole` exactly like a hand edit (on a published service the
 person removed and the person added hear about it; on a draft nobody does). An instrument or FOH
-seat nobody can take is proposed as «queda vacío»; applying it notifies only the person removed.
+seat nobody can take is proposed as «queda vacío»; applying it notifies only the person removed. A
+proposal that moves a singer up («Lead → Marianne (pasa de BGV), BGV → Liu») changes three people on
+that one service, and «Aplicar» notifies the three as any hand edit would.
 
 - **Audience:** `teamMembers` with `role` admin or super-admin, `disabled != true`, in worship
   (`WORSHIP_AUDIENCE_GROQ_FILTER`), not the system accounts (`service-account-*`,

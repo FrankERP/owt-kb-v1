@@ -11,7 +11,7 @@ export interface ConflictEmailLine {
   service: string;
   published: boolean;
   /** One per seat: «Coro», «Bass»… with the proposed replacement, or `empty` when it is left empty. */
-  seats: Array<{ seat: string; to?: string; empty?: boolean }>;
+  seats: Array<{ seat: string; to?: string; empty?: boolean; movedFrom?: string }>;
   reason?: "no_candidate" | "song_lead" | "unchecked";
 }
 
@@ -24,7 +24,7 @@ const REASON: Record<NonNullable<ConflictEmailLine["reason"]>, string> = {
 const state = (l: ConflictEmailLine) => (l.published ? "publicado" : "borrador");
 
 function proposalItem(l: ConflictEmailLine): string {
-  const seats = l.seats.map((s) => `${escapeHtml(s.seat)} → <strong style="color:${C.accent}">${s.empty ? "queda vacío" : escapeHtml(s.to ?? "")}</strong>`).join(", ");
+  const seats = l.seats.map((s) => `${escapeHtml(s.seat)} → <strong style="color:${C.accent}">${s.empty ? "queda vacío" : escapeHtml(s.to ?? "")}</strong>${s.movedFrom ? ` (pasa de ${escapeHtml(s.movedFrom)})` : ""}`).join(", ");
   return `<li style="margin:0 0 8px"><strong>${escapeHtml(l.person)}</strong> no puede el ${escapeHtml(l.service)} (${state(l)}). Propuesta: ${seats}.</li>`;
 }
 

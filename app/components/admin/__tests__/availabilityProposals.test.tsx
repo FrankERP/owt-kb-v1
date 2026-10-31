@@ -83,6 +83,19 @@ describe("AvailabilityProposals", () => {
     expect((posts[0].body as { replacements: unknown }).replacements).toEqual([{ rowId: "lead", to: "niza" }, { rowId: "instrumento:Bass", to: null }]);
   });
 
+  it("a singer who moves up reads «(pasa de BGV)», and «Aplicar» sends both seats", async () => {
+    const { posts } = serve(() => read({ open: [{ ...CONFLICT, options: [{ seats: [
+      { rowId: "lead", seat: "Lead", to: "marianne", toName: "Marianne", movedFrom: "BGV" },
+      { rowId: "bgv", seat: "BGV", to: "liu", toName: "Liu" },
+    ] }] }] }));
+    render(<AvailabilityProposals fallback={FALLBACK} onChanged={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByText("Lead → Marianne (pasa de BGV), BGV → Liu")).not.toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "Aplicar" }));
+    await waitFor(() => expect(posts).toHaveLength(1));
+    expect((posts[0].body as { replacements: unknown }).replacements).toEqual([{ rowId: "lead", to: "marianne" }, { rowId: "bgv", to: "liu" }]);
+  });
+
   it("a 409 reloads with «El servicio cambió» and reports nothing as saved", async () => {
     const onChanged = vi.fn();
     const { fetchMock } = serve(() => read({ open: [CONFLICT] }), () => ok({ error: "stale_revision" }, 409));

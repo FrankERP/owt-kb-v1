@@ -51,7 +51,7 @@ interface World {
 
 let revs = 0;
 
-function world(opts: { rows?: StoredRow[]; members?: EditorMember[]; listed?: string[] } = {}): World {
+function world(opts: { rows?: StoredRow[]; members?: EditorMember[]; listed?: string[]; recordPeople?: LogicalRecord["people"] } = {}): World {
   const roles = new Map((opts.rows ?? NOVEMBER()).map((r) => [r._id, r]));
   const members = (opts.members ?? [...MEMBERS, ELSA]).map((m) => ({ ...m, ministries: (m as { ministries?: unknown }).ministries ?? ["worship"] })) as EditorMember[];
   const records = new Map<string, ConflictRecord>();
@@ -81,7 +81,7 @@ function world(opts: { rows?: StoredRow[]; members?: EditorMember[]; listed?: st
       }),
     })),
     readLedger: vi.fn(async (months: readonly string[]) =>
-      ledgerResponse([...months], { horizon: [{ record: record(months[0], people.map(listed)), storedServices: roles.size, recordBinds: true }] })),
+      ledgerResponse([...months], { horizon: [{ record: record(months[0], opts.recordPeople ?? people.map(listed)), storedServices: roles.size, recordBinds: true }] })),
     engine: () => engine.current,
     acts: () => acts.current,
     todayIso: () => TODAY,
@@ -417,6 +417,35 @@ describe("«Aplicar»", () => {
     const read = await readConflictPanel(w.deps);
     if (!read.ok) throw new Error("expected a read");
     expect(read.open[0].options.map((o) => o.seats[0].to)).toEqual(["m-raul", null]);
+  });
+
+  it("a singer moves up when nobody free can lead: shown, mailed and applied as one change of three people", async () => {
+    const lia = { _id: "m-lia", member_name: "Lía Paz", alias: "Lía", memberType: ["voz", "sunday_lead"], ministries: ["worship"] };
+    const noLead = (id: string) => ({ ...listed(id), roles: { ...ALL_IN, "Sun.Lead": "out" as const } });
+    w = world({
+      rows: [storedRow("sun1", "sunday_role", "2026-11-01", { leads: ["m-bruno"], bgvs: ["m-lia"] })],
+      members: [...MEMBERS, ELSA, lia] as EditorMember[],
+      recordPeople: [listed("m-bruno"), listed("m-lia"), noLead("m-ana"), noLead("m-dani"), noLead("m-elsa")],
+    });
+    w.unavailable("m-bruno", "2026-11-01");
+    await sweep(w);
+    const id = conflictRecordId("sun1", "m-bruno", "2026-11-01");
+    const rec = w.records.get(id)!;
+    expect(rec).toMatchObject({ status: "proposed", seats: [{ rowId: "lead", from: "m-bruno", to: "m-lia" }, { rowId: "bgv", from: "m-lia" }] });
+    expect(w.sent[0].html).toContain("(pasa de BGV)");
+
+    const read = await readConflictPanel(w.deps);
+    if (!read.ok) throw new Error("expected a read");
+    expect(read.open[0].options[0].seats[0]).toMatchObject({ seat: "Lead", toName: "Lía", movedFrom: "BGV" });
+
+    const filler = rec.seats[1].to!;
+    // A seat the proposal does not touch is refused; the move itself is applied.
+    expect(await applyAvailabilityFix({ roleId: "sun1", rev: "sun1-r1", memberId: "m-bruno", replacements: [{ rowId: "lead", to: "m-lia" }, { rowId: "coro", to: filler }], actor: "a" }, w.deps))
+      .toMatchObject({ status: 409, body: { error: "refused" } });
+    const out = await applyAvailabilityFix({ roleId: "sun1", rev: "sun1-r1", memberId: "m-bruno", replacements: [{ rowId: "lead", to: "m-lia" }, { rowId: "bgv", to: filler }], actor: "a" }, w.deps);
+    expect(out).toMatchObject({ ok: true });
+    expect(w.roles.get("sun1")!.leads.map((x) => x._id)).toEqual(["m-lia"]);
+    expect(w.roles.get("sun1")!.bgvs.map((x) => x._id)).toEqual([filler]);
   });
 
   it("refuses to leave a voice seat empty", async () => {
