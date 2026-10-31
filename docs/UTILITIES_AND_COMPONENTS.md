@@ -297,7 +297,19 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   person hold both seats on one service»: same category never; voz + instrumento only for a member
   marked «Canta y toca a la vez» (`singsAndPlays`); FOH beside either, yes. `rankCandidates`' C2 is
   built on it (picker, drag gate, both fillers, the v3 pre-fill, the MCP judges) and `PlannerGrid`'s ⚠
-  reads it (ADR-0078).
+  reads it (ADR-0078), both through `clashingPairs` (every clashing pair of one member's seats).
+  `SINGS_AND_PLAYS_HINT` is the ONE wording of the way out (C2's `clashReason` and the server's sentence).
+- **`seatClashGuard.ts`** ([source](../app/utils/seatClashGuard.ts), pure) — the server half of
+  ADR-0078: `addedSeatClashes(before, after, marked)` (the pairs a write ADDS; `before = null` for a
+  create), `seatClashSentence` (the ONE Spanish sentence), `seatClashErrorDetails` (the writers' 400
+  detail), `seatClashSentencesOf` (every client's reader of that detail — sentences only, never ids),
+  `memberDisplayName` and `clashInputsOf`. The four seat writers call it; `draftSeatClashSentences`
+  (`monthDraftCreate.ts`) runs it on a confirm's drafts, on the exact body the server receives.
+- **`roleSeats.ts`** ([source](../app/utils/roleSeats.ts), pure, client-safe) — `normalizeSeats` and
+  `NormalizedSeats`, the server's reading of a request's five seat paths (re-exported by
+  `roleWriteRequest.ts`, which reaches `node:crypto` and must stay out of client bundles). The
+  planner's confirm pre-check imports it from here; `roleSeatsClientSafe.test.ts` bundles the client
+  entry points for the browser and fails on any Node built-in.
 - **`fairnessMonthWriteRequest.ts`** ([source](../app/utils/fairnessMonthWriteRequest.ts), neutral, never
   client-imported) — the record's id and keys, `validateFairnessMonthWrite`, `contentHashOfWrite` /
   `contentHashOfStored`, `parseStoredFairnessMonth` (the ONE record-schema check), `decideFairnessMonth`

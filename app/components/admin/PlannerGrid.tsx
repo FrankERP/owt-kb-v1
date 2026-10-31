@@ -129,7 +129,7 @@ import {
   normalizeSeatName,
   occupantDeclaresInstrument,
   occupantFitsSeat,
-  seatsClash,
+  clashingPairs,
   type SeatCategory,
 } from "./seatModel";
 import { renderableUnfilled } from "./instrumentFill";
@@ -579,12 +579,9 @@ function categoryDuplicatesForColumn(
     // (Lead+BGV and Bass+Guitar) keeps both flags — the very thing this
     // function exists to catch — while a legitimate third seat stays clean.
     const flagged = new Set<string>();
-    for (let i = 0; i < entries.length; i++) {
-      for (let j = i + 1; j < entries.length; j++) {
-        if (!seatsClash(entries[i], entries[j], singsAndPlays.has(memberId))) continue;
-        flagged.add(entries[i].seatId);
-        flagged.add(entries[j].seatId);
-      }
+    for (const [i, j] of clashingPairs(entries, singsAndPlays.has(memberId))) {
+      flagged.add(entries[i].seatId);
+      flagged.add(entries[j].seatId);
     }
     if (flagged.size > 0) out.set(memberId, [...flagged]);
   }

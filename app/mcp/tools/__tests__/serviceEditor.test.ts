@@ -349,6 +349,17 @@ describe("save_service_edits", () => {
     expect(statuses(await save(w, changes))).toEqual({ sun15: "saved" });
   });
 
+  it("a seat-clash refusal (ADR-0078) shows the server's sentence as the reason, never the member id", async () => {
+    const SENTENCE = "Carla quedaría en BGV y Keys en el mismo servicio; para cantar y tocar en un servicio, marca «Canta y toca a la vez» en Miembros.";
+    const w = serviceWorld();
+    const changes = await checked(w, [{ op: "place", service: "sun15", seat: "BGV", member: "Carla" }]);
+    w.deps.editRole.mockResolvedValueOnce({ ok: false, status: 400, body: { error: "invalid_request", details: { issues: ["seat_clash"], seatClashes: [{ memberId: "m-carla", name: "Carla", seats: ["BGV", "Keys"], sentence: SENTENCE }] } } });
+    const out = await save(w, changes);
+    expect(statuses(out)).toEqual({ sun15: "notSavedRecheck" });
+    expect(textOf(out)).toContain("no se guardó: Carla quedaría en BGV y Keys en el mismo servicio; para cantar y tocar en un servicio, marca «Canta y toca a la vez» en Miembros; revisa el mes de nuevo");
+    expect(`${textOf(out)}${JSON.stringify(sc(out))}`).not.toContain("m-carla");
+  });
+
   it("an ambiguous_target refusal is never told to repeat", async () => {
     const w = serviceWorld();
     const changes = await checked(w, [{ op: "place", service: "sun15", seat: "BGV", member: "Carla" }]);

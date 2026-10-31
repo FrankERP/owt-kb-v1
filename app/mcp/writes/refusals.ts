@@ -49,6 +49,7 @@ import type { PublishSkipReason } from "@/app/components/admin/publishSelection"
 import type { PublishVerdictReason } from "@/app/utils/publishVerdict";
 import { refusalCopy } from "../reads/publishRefusal";
 import { WRITE_UNKNOWN_OUTCOME_MESSAGE } from "./runWriteTool";
+import { seatClashSentencesOf } from "@/app/utils/seatClashGuard";
 
 /** The sentence every refusal that wrote nothing ends with. */
 export const NOTHING_WRITTEN = "No se escribió nada.";
@@ -157,6 +158,8 @@ const ISSUE_COPY: Readonly<Record<string, string>> = {
     "No se puede intercambiar el equipo completo entre un sábado y un servicio que no es sábado.",
   incompatible_section_topology: "El Coro no se puede intercambiar con un sábado (el sábado no tiene Coro).",
   identical_selection: "Los dos servicios son el mismo.",
+  // Only when the refusal carries no `seatClashes` sentence (which names who and where, ADR-0078).
+  seat_clash: "Una persona quedaría en dos lugares que no puede ocupar en el mismo servicio (cantar y tocar a la vez, o dos lugares de la misma sección).",
   rev_disagreement: "Se enviaron dos revisiones distintas para el mismo servicio.",
   songs_length: "Un setlist admite como máximo 60 canciones.",
   _type: "El documento no es un servicio de alabanza.",
@@ -511,7 +514,15 @@ export function refusalFor(outcome: DomainRefusal): CallToolResult {
     }
   }
 
-  // 4. Everything else, by the top-level code.
+  // 4. A seat clash (ADR-0078): the server's sentences LEAD, instead of the generic
+  //    invalid_request copy — names and seat labels only, never a member id.
+  const clashSentences = seatClashSentencesOf(body);
+  if (clashSentences.length) {
+    content.detail = "seat_clash";
+    return refusalResult(withNothingWritten(clashSentences), content);
+  }
+
+  // 5. Everything else, by the top-level code.
   if (typeof details.detail === "string") content.detail = details.detail;
   if (MAINTENANCE_CODES.has(code)) {
     // The exact text, and nothing appended: the detail still travels as a code.
@@ -538,6 +549,9 @@ export function serviceRefusalLine(outcome: DomainRefusal): string {
   const body: Record<string, unknown> = isObj(outcome.body) ? outcome.body : {};
   const details: Record<string, unknown> = isObj(body.details) ? body.details : {};
   if (!isServiceErrorCode(body.error)) return "El servidor no lo aceptó.";
+  // A seat clash names who and where (ADR-0078), never «Detalle técnico: seat_clash».
+  const clashSentences = seatClashSentencesOf(body);
+  if (clashSentences.length) return clashSentences.join(" ");
   const parts = [CODE_COPY[body.error]];
   if (typeof details.detail === "string" && DETAIL_COPY[details.detail]) parts.push(DETAIL_COPY[details.detail]);
   parts.push(...issueSentences(strings(details.issues)));

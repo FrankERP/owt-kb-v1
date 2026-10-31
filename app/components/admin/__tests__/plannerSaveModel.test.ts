@@ -7,6 +7,7 @@ import {
   sameRoleSemantics,
   semanticSnapshot,
   serializeStoredColumn,
+  storedSaveNotice,
   type StoredRolePatchBody,
 } from "../plannerSaveModel";
 import type { StoredGridColumn, StoredGridRow } from "../storedRoleReadModel";
@@ -256,3 +257,53 @@ describe("countsForFairness in the stored save model (solver v3 C1 §6.1, §6.0)
     expect(serialized(held, "2026-03-01").body.countsForFairness).toBe(true);
   });
 });
+
+describe("a seat-clash refusal keeps its reason through every save notice (ADR-0078)", () => {
+  const SENTENCE = "Tony quedaría en Coro y Drums en el mismo servicio; para cantar y tocar en un servicio, marca «Canta y toca a la vez» en Miembros.";
+  const refusal = { error: "invalid_request", details: { issues: ["seat_clash"], seatClashes: [{ memberId: "m-tony", name: "Tony", seats: ["Coro", "Drums"], sentence: SENTENCE }] } };
+  const LINE = `29 nov: ${SENTENCE}`;
+
+  it("classifyPatchOutcome keeps the sentences of a well-formed detail and none of a malformed one", () => {
+    expect(classifyPatchOutcome({ status: 400, body: refusal })).toEqual({ kind: "knownFailure", code: "invalid_request", seatClashSentences: [SENTENCE] });
+    expect(classifyPatchOutcome({ status: 400, body: { error: "invalid_request", details: { seatClashes: [{ sentence: 1 }] } } })).toEqual({
+      kind: "knownFailure", code: "invalid_request",
+    });
+  });
+
+  it("the refused column's own line shows the sentence, never the bare code", () => {
+    const line = storedSaveNotice({ kind: "columnRefused", date: "2026-11-29", code: "invalid_request", seatClashSentences: [SENTENCE] });
+    expect(line).toContain(SENTENCE);
+    expect(line).not.toContain("(invalid_request)");
+  });
+
+  it("all refused: the count line plus the clash line", () => {
+    expect(storedSaveNotice({ kind: "allRefused", knownFailures: 1 }, [LINE])).toBe(
+      `1 servicio fue rechazado antes de escribir; tus cambios siguen pendientes. ${LINE}`,
+    );
+  });
+
+  it("mixed (one column saved, one refused for a clash): the reconciliation line keeps both", () => {
+    const notice = storedSaveNotice({ kind: "verified", applied: 1, maintenance: 0, knownFailures: 1 }, [LINE]);
+    expect(notice.startsWith("Cambios guardados y verificados. 1 servicio fue rechazado y conserva sus cambios.")).toBe(true);
+    expect(notice).toContain(LINE);
+  });
+
+  it("mixed with a maintenance column, a failed reload, a superseded or unconfirmed end: every one carries the lines", () => {
+    for (const end of [
+      { kind: "verified", applied: 1, maintenance: 1, knownFailures: 1 },
+      { kind: "reloadFailed" },
+      { kind: "superseded" },
+      { kind: "unconfirmed" },
+    ] as const) {
+      expect(storedSaveNotice(end, [LINE])).toContain(LINE);
+    }
+  });
+
+  it("without clash lines, every notice reads exactly as before", () => {
+    expect(storedSaveNotice({ kind: "verified", applied: 2, maintenance: 0, knownFailures: 0 })).toBe("Cambios guardados y verificados.");
+    expect(storedSaveNotice({ kind: "columnRefused", date: "2026-11-29", code: "stale_revision" })).toBe(
+      "El servidor rechazó 2026-11-29 (stale_revision); los demás cambios seguros continuaron.",
+    );
+  });
+});
+
