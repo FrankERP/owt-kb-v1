@@ -29,7 +29,12 @@ never changes a service, draft or published. That plan was approved in rounds 10
   protection. All seats or none — except that an instrument or FOH seat nobody passes is proposed
   EMPTY («queda vacío»; Frank, 2026-10-31: «si no hay nadie para cubrir Bass, se puede quedar
   vacío»), so a person in Lead and Bass still gets a Lead proposal; a voice seat always needs a
-  person. A worship-night song lead gets no pick («song_lead»). A service the
+  person. **When nobody free fits a voice seat, one singer already on the same service moves up**
+  into it and a free person takes the seat they leave (`moveUp`; Frank, 2026-10-31, on 27 dic:
+  Liu's «Mes por medio» and Niza's second Sunday in a row left nobody free for Lead, while «Marianne
+  BGV → Lead, Liu → BGV» broke nothing). Both people pass the same gates; never a worship night's
+  song lead; at most 6 singers × 8 fillers per seat. «Aplicar» accepts that one extra seat and
+  refuses unless the re-judged proposal is exactly the one shown. A worship-night song lead gets no pick («song_lead»). A service the
   board cannot edit, a month without its fairness record, or no rules: «sin revisar».
 - **Record and tell** (`app/utils/availabilityFixCommit.ts`, the one writer): an
   `availabilityConflict.<sha256>` record per identity (`proposed`/`none`/`applied`/`kept`/`gone`,
@@ -54,7 +59,8 @@ never changes a service, draft or published. That plan was approved in rounds 10
   refused. Revisit only as its own plan, on top of this one.
 - **Re-run solver v3 for the month.** It seats only voices (instrument and FOH conflicts stay), needs
   a new «free this pinned seat» mode in the Cloud Function contract and checker, and is free to move
-  other people — each move an email once published. One seat changes exactly two people.
+  other people — each move an email once published. One seat changes exactly two people, or three
+  when a singer moves up (below), all on that one service.
 - **Apply the first proposal of every conflict in one sweep.** Two proposals may name the same
   person (two seats, or past a monthly cap across services): each is judged alone against the same
   read, which is safe only because «Aplicar» re-judges. A batch apply would need the shared board

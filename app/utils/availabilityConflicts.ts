@@ -10,7 +10,10 @@
 // A proposal covers EVERY seat the person holds on that service, or none (all or nothing). A voice
 // seat needs a replacement; an instrument or FOH seat nobody can take is left EMPTY (Frank,
 // 2026-10-31: «si no hay nadie para cubrir Bass, se puede quedar vacío»), so a person in Lead and
-// Bass still gets a Lead proposal. Per seat, in board row order: the planner's own candidates for the seat
+// Bass still gets a Lead proposal. When nobody free fits a VOICE seat, someone already singing on
+// the same service moves up into it and a free person takes the seat they leave (`moveUp`: one
+// move, this service only, at most three people changed; Frank, 2026-10-31, 27 dic: Marianne BGV →
+// Lead, Liu → BGV). Per seat, in board row order: the planner's own candidates for the seat
 // (`serverPickCandidates`) with the absent person removed, filtered on the filler's verdict
 // (`eligible`, not already serving the service, an instrument declared, in Alabanza), ordered as
 // the fillers order them — a voice by `orderByEffectiveLoad` (the rules' exempt/slack), an
@@ -286,19 +289,86 @@ export function seatCandidates(input: ProposeInput & { working: EditorBoard; row
 
 const roleMonth = (board: StoredMonthBoard, roleId: string) => storedColumn(board, roleId)?.date.slice(0, 7) ?? "";
 
+/**
+ * The vacant voice seat `rowId` (the absent person still on `working`, gone on `removed`) taken by
+ * someone already singing on the same service, whose seat a free person then takes. People are
+ * tried in board order (Lead, BGV, Coro), never a worship night's song lead, at most
+ * `MAX_MOVED_PER_SEAT`, each with up to `MAX_TRIED_PER_SEAT` fillers. `only` (on «Aplicar») fixes
+ * the person moved (`only[rowId]`) and the filler of the seat they leave.
+ */
+function moveUp(input: ProposeInput & {
+  config: SolverConfig;
+  working: EditorBoard;
+  removed: EditorBoard;
+  rowId: string;
+  baseline: MonthCheckVerdict;
+  judge: (next: EditorBoard, baseline: MonthCheckVerdict, voices: ReadonlyArray<{ id: string; rowId: string }>) => GateAnswer;
+}): { board: EditorBoard; changes: SeatChange[] } | null | "unchecked" {
+  const { working, removed, roleId, rowId, memberId } = input;
+  const wantedMover = input.only?.get(rowId);
+  const sources = removed.rows.map((r) => r.id).filter((r) => isVoiceRow(r) && r !== rowId && (!input.only || input.only.has(r)));
+  let tried = 0;
+  for (const from of sources) {
+    for (const mover of occupantsOf(removed, roleId, from)) {
+      if (mover === memberId || isSongLead(input.snapshotRole, mover) || input.exclude?.get(rowId)?.has(mover)) continue;
+      if (wantedMover !== undefined && mover !== wantedMover) continue;
+      if (tried++ >= MAX_MOVED_PER_SEAT) return null;
+      // The mover must be a candidate for the vacant seat once their own seat is freed.
+      const freed = replaceIn(removed, roleId, from, mover, null);
+      if (!seatCandidates({ ...input, working: freed, rowId })?.some((c) => c.id === mover)) continue;
+      const lifted = replaceIn(replaceIn(working, roleId, rowId, memberId, mover), roleId, from, mover, null);
+      const fillers = seatCandidates({ ...input, working: lifted, rowId: from });
+      if (!fillers) return "unchecked";
+      const wantedFiller = input.only?.get(from);
+      for (const filler of (wantedFiller ? fillers.filter((c) => c.id === wantedFiller) : fillers).slice(0, MAX_TRIED_PER_SEAT)) {
+        const next = replaceIn(replaceIn(working, roleId, rowId, memberId, mover), roleId, from, mover, filler.id);
+        const answer = input.judge(next, input.baseline, [{ id: mover, rowId }, { id: filler.id, rowId: from }]);
+        if (answer === "unchecked") return "unchecked";
+        if (answer === "ok") {
+          return { board: next, changes: [{ rowId, from: memberId, to: mover }, { rowId: from, from: mover, to: filler.id }] };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/** Max people moved up from another voice seat of the same service, per vacant voice seat. */
+export const MAX_MOVED_PER_SEAT = 6;
+
 /** The replacement for every seat the person holds on the service, or why there is none (§4.2). */
 export function proposeReplacement(input: ProposeInput): Proposal {
   const { board, roleId, memberId, todayIso } = input;
   const column = storedColumn(board, roleId);
   if (!column || !board.editable.has(roleId) || column.date < todayIso || !input.config) return { kind: "none", reason: "unchecked" };
+  const config = input.config;
   if (isSongLead(input.snapshotRole, memberId)) return { kind: "none", reason: "song_lead" };
   const held = board.rows.filter((r) => occupantsOf(board, roleId, r.id).includes(memberId)).map((r) => r.id);
   if (!held.length) return { kind: "none", reason: "unchecked" };
 
   const gate: MonthGateInput = {
-    month: column.date.slice(0, 7), todayIso, config: input.config, members: input.members, adminRoles: input.adminRoles, ledger: input.ledger,
+    month: column.date.slice(0, 7), todayIso, config, members: input.members, adminRoles: input.adminRoles, ledger: input.ledger,
   };
   const weekend = !isSpecialRoleType(column.type);
+
+  /**
+   * One build judged against `baseline` (the month with the absent person's seat merely emptied):
+   * the month gate, each newly seated voice on the v3 eligibility for its role (weekends), and the
+   * service target adding no rule finding.
+   */
+  const judge = (next: EditorBoard, baseline: MonthCheckVerdict | null, voices: ReadonlyArray<{ id: string; rowId: string }>): GateAnswer => {
+    if (baseline) {
+      const after = verdictOn(next, gate);
+      const answer = compareVerdicts(baseline, after);
+      if (answer !== "ok") return answer;
+      if (weekend && !voices.every((v) => (after.eligibility.get(v.id)?.[roleId] ?? []).includes(VOICE_ROLE[v.rowId]))) return "reject";
+    }
+    const target = columnTarget(next, roleId, todayIso);
+    if (!target) return "reject";
+    const judged = judgeTarget({ board, roleId, target, members: [...input.members], config, todayIso });
+    return judged.ok && judged.judged.added.length === 0 && judged.judged.reforced.length === 0 ? "ok" : "reject";
+  };
+
   let working: EditorBoard = board;
   const seats: SeatChange[] = [];
   for (const rowId of held) {
@@ -316,27 +386,26 @@ export function proposeReplacement(input: ProposeInput): Proposal {
     if (!pool) return { kind: "none", reason: "unchecked" };
     const tried = (wanted ? pool.filter((c) => c.id === wanted) : pool).slice(0, MAX_TRIED_PER_SEAT);
     const baseline = voice ? verdictOn(removed, gate) : null;
-    let picked: { id: string; board: EditorBoard } | null = null;
+    let picked: { board: EditorBoard; changes: SeatChange[] } | null = null;
     let unchecked = false;
     for (const candidate of tried) {
       const next = replaceIn(working, roleId, rowId, memberId, candidate.id);
-      if (voice) {
-        const after = verdictOn(next, gate);
-        const answer = compareVerdicts(baseline!, after);
-        if (answer === "unchecked") {
-          unchecked = true;
-          break;
-        }
-        if (answer === "reject") continue;
-        // (0) A weekend voice only on the month's v3 eligibility for that role.
-        if (weekend && !(after.eligibility.get(candidate.id)?.[roleId] ?? []).includes(VOICE_ROLE[rowId])) continue;
+      const answer = judge(next, baseline, voice ? [{ id: candidate.id, rowId }] : []);
+      if (answer === "unchecked") {
+        unchecked = true;
+        break;
       }
-      const target = columnTarget(next, roleId, todayIso);
-      if (!target) continue;
-      const judged = judgeTarget({ board, roleId, target, members: [...input.members], config: input.config, todayIso });
-      if (!judged.ok || judged.judged.added.length > 0 || judged.judged.reforced.length > 0) continue;
-      picked = { id: candidate.id, board: next };
-      break;
+      if (answer === "ok") {
+        picked = { board: next, changes: [{ rowId, from: memberId, to: candidate.id }] };
+        break;
+      }
+    }
+    // Nobody free fits a voice seat: move someone up from another voice seat of the same service,
+    // and fill the seat they leave with someone free (one move, this service only).
+    if (!picked && !unchecked && voice) {
+      const moved = moveUp({ ...input, config, working, removed, rowId, baseline: baseline!, judge });
+      if (moved === "unchecked") unchecked = true;
+      else picked = moved;
     }
     if (!picked && !unchecked && !voice && !wanted) {
       working = removed;
@@ -345,7 +414,7 @@ export function proposeReplacement(input: ProposeInput): Proposal {
     }
     if (!picked) return { kind: "none", reason: unchecked ? "unchecked" : "no_candidate" };
     working = picked.board;
-    seats.push({ rowId, from: memberId, to: picked.id });
+    seats.push(...picked.changes);
   }
   const target = columnTarget(working, roleId, todayIso);
   if (!target) return { kind: "none", reason: "unchecked" };

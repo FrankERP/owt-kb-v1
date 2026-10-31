@@ -582,7 +582,9 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   the pure core: `findRoleConflicts` (a person seated in any of the five seats on a date in their
   `unavailableDates`, from CDMX today through `horizonMonths`), `proposeReplacement` (one seat at a
   time, all or nothing — an instrument or FOH seat nobody passes is proposed EMPTY (`to: null`,
-  stored as `empty: true`), a voice seat needs a person: the fillers' pool via `seatCandidates` → `serverPickCandidates`, their order —
+  stored as `empty: true`), a voice seat needs a person, and when nobody free fits one, `moveUp`
+  moves a singer of the same service into it and fills the seat they leave (three people, one
+  service; the panel and email say «(pasa de BGV)»): the fillers' pool via `seatCandidates` → `serverPickCandidates`, their order —
   `orderByEffectiveLoad` for voices, `orderForFill` for the rows `fillInstruments` fills — and at most
   `MAX_TRIED_PER_SEAT` = 8 candidates through the weekend-voice eligibility check, `judgeTarget` and
   the month gate `compareVerdicts` over `monthCheckVerdict`). Never writes; never calls the solver.

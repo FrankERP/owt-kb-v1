@@ -137,6 +137,12 @@ export interface RecordChange {
 const storedSeats = (seats: readonly SeatChange[]): ConflictSeat[] =>
   seats.map((s, i) => ({ _key: `s${i}`, rowId: s.rowId, from: s.from, ...(s.to === null ? { empty: true } : { to: s.to }) }));
 
+/** The seat a moved-up singer leaves (another change of the same proposal starts from them). */
+const movedFromOf = (seats: ReadonlyArray<{ rowId: string; from: string; to?: string | null }>, s: { rowId: string; to?: string | null }): { movedFrom?: string } => {
+  const left = s.to ? seats.find((t) => t !== s && t.from === s.to) : undefined;
+  return left ? { movedFrom: seatLabel(left.rowId) } : {};
+};
+
 const seatsOf = (p: Proposal | null, held: readonly string[], memberId: string): ConflictSeat[] =>
   p && p.kind === "replace" ? storedSeats(p.seats) : held.map((rowId, i) => ({ _key: `s${i}`, rowId, from: memberId }));
 
@@ -499,7 +505,7 @@ async function emailDue(j: Judgeable, options: { memberId?: string; deadlineMs: 
       person: name(r.memberId),
       service: serviceLabel({ date: r.date, roleType: r.serviceKind, serviceName: role?.service_name, serviceTime: role?.time ?? undefined }),
       published: r.published,
-      seats: r.seats.map((s) => ({ seat: seatLabel(s.rowId), ...(s.to ? { to: name(s.to) } : s.empty ? { empty: true } : {}) })),
+      seats: r.seats.map((s) => ({ seat: seatLabel(s.rowId), ...(s.to ? { to: name(s.to) } : s.empty ? { empty: true } : {}), ...movedFromOf(r.seats, s) })),
       ...(r.status === "none" ? { reason: r.reason ?? "no_candidate" } : {}),
     };
   });
@@ -633,7 +639,8 @@ export async function applyAvailabilityFix(
   const board = j.boards.get(conflict.date.slice(0, 7))!;
   const held = heldRows(board, input.roleId, input.memberId);
   const wanted = new Map(input.replacements.map((r) => [r.rowId, r.to]));
-  if (wanted.size !== input.replacements.length || held.length !== wanted.size || !held.every((r) => wanted.has(r))) return refuse(400, "seats");
+  // Every seat the person holds, plus at most the one seat a moved-up singer leaves.
+  if (wanted.size !== input.replacements.length || !held.every((r) => wanted.has(r)) || wanted.size > held.length + 1) return refuse(400, "seats");
   let ledger: FairnessLedgerResponse;
   try {
     ledger = await deps.readLedger([conflict.date.slice(0, 7)]);
@@ -642,6 +649,9 @@ export async function applyAvailabilityFix(
   }
   const proposal = propose(j, conflict, ledger, { only: wanted });
   if (proposal.kind !== "replace") return refuse(409, "refused", { reason: proposal.reason });
+  if (proposal.seats.length !== wanted.size || !proposal.seats.every((s) => wanted.has(s.rowId) && wanted.get(s.rowId) === s.to)) {
+    return refuse(409, "refused", { reason: "changed" });
+  }
   const parsed = parseEditRequest({ ...proposal.target, rev: input.rev });
   if (!parsed.ok) return refuse(409, "refused", { reason: "parse" });
   const outcome = await deps.editRole(input.roleId, parsed.value, { notices: "deferred" });
@@ -721,8 +731,8 @@ export interface PanelConflict {
   service: string;
   person: string;
   /** The proposal on this read, then up to three alternatives (all or nothing each; an instrument or FOH seat may be left empty). */
-  /** `to: null` = the seat is left empty. */
-  options: Array<{ seats: Array<{ rowId: string; seat: string; to: string | null; toName: string | null }> }>;
+  /** `to: null` = the seat is left empty; `movedFrom` = the seat a moved-up singer leaves. */
+  options: Array<{ seats: Array<{ rowId: string; seat: string; to: string | null; toName: string | null; movedFrom?: string }> }>;
   /** When there is no proposal: why, and the seats the person holds. */
   none?: { reason: NoneReason; seats: Array<{ rowId: string; seat: string }> };
 }
@@ -791,7 +801,7 @@ export async function readConflictPanel(deps: AvailabilityDeps = defaultAvailabi
       const p = propose(j, c, ledger, { exclude });
       first ??= p;
       if (p.kind !== "replace") break;
-      options.push({ seats: p.seats.map((s) => ({ rowId: s.rowId, seat: seatLabel(s.rowId), to: s.to, toName: s.to === null ? null : name(s.to) })) });
+      options.push({ seats: p.seats.map((s) => ({ rowId: s.rowId, seat: seatLabel(s.rowId), to: s.to, toName: s.to === null ? null : name(s.to), ...movedFromOf(p.seats, s) })) });
       const voiced = p.seats.some((s) => isVoiceRow(s.rowId));
       const named = p.seats.filter((s): s is typeof s & { to: string } => s.to !== null && (!voiced || isVoiceRow(s.rowId)));
       // Nobody new to skip (every seat left empty): another round would repeat this option.

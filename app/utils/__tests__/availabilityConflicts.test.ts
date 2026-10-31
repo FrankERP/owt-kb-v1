@@ -158,6 +158,33 @@ describe("proposeReplacement", () => {
       .toEqual({ kind: "none", reason: "no_candidate" });
   });
 
+  it("nobody free can lead: a singer on the same service moves up and a free person takes their seat", () => {
+    // Carla is off the month's eligibility and Ana may not lead on Sundays: nobody free can lead.
+    const lia = { _id: "m-lia", member_name: "Lía Paz", alias: "Lía", memberType: ["voz", "sunday_lead"], ministries: ["worship"] };
+    const rows = [storedRow("sun1", "sunday_role", "2026-11-01", { leads: ["m-bruno"], bgvs: ["m-lia"] })];
+    const input = inputFor({ rows, members: [...MEMBERS, ELSA, lia] as EditorMember[], absent: { roleId: "sun1", memberId: "m-bruno" }, listed: ["m-ana", "m-bruno", "m-dani", "m-elsa", "m-lia"] });
+    // Only Bruno and Lía may lead on Sundays this month (the v3 record); the rest sing BGV or Coro.
+    const noLead = (id: string) => ({ ...listed(id), roles: { ...ALL_IN, "Sun.Lead": "out" as const } });
+    input.ledger = ledgerResponse(["2026-11"], {
+      horizon: [{ record: record("2026-11", [listed("m-bruno"), listed("m-lia"), noLead("m-ana"), noLead("m-dani"), noLead("m-elsa")]), storedServices: 1, recordBinds: true }],
+    });
+    const out = proposeReplacement(input);
+    expect(out.kind).toBe("replace");
+    if (out.kind !== "replace") return;
+    expect(out.seats[0]).toEqual({ rowId: "lead", from: "m-bruno", to: "m-lia" });
+    expect(out.seats[1]).toMatchObject({ rowId: "bgv", from: "m-lia" });
+    const filler = out.seats[1].to!;
+    expect(["m-ana", "m-dani", "m-elsa"]).toContain(filler);
+    expect(out.target.leads).toEqual(["m-lia"]);
+    expect(out.target.bgvs).toEqual([filler]);
+
+    // «Aplicar» replays that exact move; a move nobody asked for is not made.
+    expect(proposeReplacement({ ...input, only: new Map([["lead", "m-lia"], ["bgv", filler]]) })).toEqual(out);
+    expect(proposeReplacement({ ...input, only: new Map([["lead", "m-lia"]]) })).toEqual({ kind: "none", reason: "no_candidate" });
+    // «Elegir otro» that skips Lía for Lead has nobody left.
+    expect(proposeReplacement({ ...input, exclude: new Map([["lead", new Set(["m-lia"])]]) })).toEqual({ kind: "none", reason: "no_candidate" });
+  });
+
   it("never proposes for a worship night's song leader", () => {
     const input = inputFor({ absent: { roleId: "sun1", memberId: "m-dani" } });
     const out = proposeReplacement({ ...input, snapshotRole: { format: "worship_night", songs: [{ leads: [{ _ref: "m-dani" }] }] } });

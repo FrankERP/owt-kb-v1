@@ -54,8 +54,9 @@ const state = (published: boolean) => (published ? "publicado" : "borrador");
 /** An instrument or FOH seat nobody can take is left empty (`toName: null`). */
 const EMPTY_SEAT = "queda vacío";
 
-const seatRun = (seats: Array<{ seat: string; toName: string | null }>) =>
-  seats.map((s) => `${s.seat} → ${s.toName ?? EMPTY_SEAT}`).join(", ");
+/** «Lead → Marianne (pasa de BGV), BGV → Liu, Bass → queda vacío». */
+const seatRun = (seats: Array<{ seat: string; toName: string | null; movedFrom?: string }>) =>
+  seats.map((s) => `${s.seat} → ${s.toName ?? EMPTY_SEAT}${s.movedFrom ? ` (pasa de ${s.movedFrom})` : ""}`).join(", ");
 
 export default function AvailabilityProposals({ fallback, onChanged }: {
   /** The parent's client-side conflict list, shown whenever this read cannot answer. */
