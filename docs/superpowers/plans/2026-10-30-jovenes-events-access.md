@@ -1,7 +1,7 @@
 # Multi-ministry — phase 3, Jóvenes: who sees and who writes a ministry event (plan)
 
 **Status:** AMENDED 2026-11-04 after approval (Frank widened who creates a joint event: R3, W2, W3,
-G3, G4, §8), under a fresh adversarial review. The first approval (critical tier; two fresh approvals
+W3a, W6, W9, G1, G1b, G3, G4, §8), under a fresh adversarial review. The first approval (critical tier; two fresh approvals
 on digest `cf407de9…d254`, 2026-10-31) and its post-approval items are in
 `2026-10-30-jovenes-events-access-review-log.md`. ADR-0075. Parent: the plan doc's tab «Fase 3: Jóvenes
 primero» (https://claude.ai/artifact/F1qn13J9ud8P3Urh6aF6th). Approval of this plan is not
@@ -158,8 +158,8 @@ published: boolean                     written on every create; read as `publish
 
 Routes `POST /api/ministries/[ministry]/events`, `PATCH` and `DELETE /api/ministries/[ministry]/events/[id]`,
 and `PATCH /api/ministries/[ministry]/events/[id]/program` authorize the session (active member) and
-delegate; nothing else writes the type: G1 confines who names it, and G1c pins who imports the
-commit module (W9 closes the one generic delete that ignores types).
+delegate; nothing else writes the type: G1 confines who names it, G1c pins who imports the
+commit module, and W9 closes the writers that take any id without checking its type.
 
 - **W1. Fresh access.** The commit module reads the actor's access with a NEW uncached read
   (`accessFromDoc` over a `serverClient` fetch), not `getMemberAccess`, so a demotion or a group
@@ -177,8 +177,10 @@ commit module (W9 closes the one generic delete that ignores types).
   evento no existe.», never 403, so a refusal never confirms that a document exists (the
   `kidsCommit.ts` precedent). An admin's «any event of the ministry» is safe only through that filter.
   An event the actor may read in neither mode (`mayRead(freshAccess, stored, "editor")` and
-  `mayRead(freshAccess, stored, "member")` both false) answers the same 404, so a leader probing another group's event ids
-  learns nothing; 403 is kept for an event the actor CAN read but not write.
+  `mayRead(freshAccess, stored, "member")` both false) answers the same 404, so a leader probing
+  another group's event ids learns nothing. **Precedence, once for every write:** W1's inactive
+  refusal, then this 404, then W3/W3a's authorization, whose refusals are therefore 403s on events
+  the actor CAN read and never reveal anything new.
 - **W2a. The client's revision is required.** Every PATCH and DELETE body carries `_rev`; missing ⇒
   400 `rev_required`, different from the stored one ⇒ 409 (as `kidsCommit.ts` refuses a missing
   `_rev`). Arrays are written whole, and the encargado and the apoyo may edit the same program, so a
@@ -205,10 +207,13 @@ commit module (W9 closes the one generic delete that ignores types).
   when, by the FRESH access of W1, the actor is active and the stored event passes R2's member
   predicate for them: a member of the ministry, `published == true`, and the audience is the
   ministry or overlaps their CURRENT groups — that is, `mayRead(freshAccess, storedEvent, "member")`
-  (R8), never a second copy of the rule. So a pastor moved to another group, a person removed
-  from Jóvenes, or a seat on an unpublished event is refused, whatever the stored seats say: 403
-  «Este evento todavía no está publicado.» when the only reason is `published != true`, otherwise
-  403 «Ya no tienes acceso a este evento.». The seat is a reason to WRITE, never a reason to READ.
+  (R8), never a second copy of the rule. So a person removed from Jóvenes, or a seat on an
+  unpublished event, is refused whatever the stored seats say — and since such an event is one the
+  actor reads in neither mode, the refusal is W2's 404, by the precedence there. (A pastor moved to
+  another group keeps the right: the seat right exists only on ministry-audience events, which every
+  member reads.) A readable event on which the actor holds no encargado/apoyo seat, or whose
+  audience is `groups`, answers 403 «No puedes editar el programa de este evento.». The seat is a
+  reason to WRITE, never a reason to READ.
 - **W3b. What a write answers.** Every write answers `{ ok, id, rev }` and nothing of the event's
   content; the screen re-reads through R1. So no write path can serve an event its actor could not
   read.
@@ -229,8 +234,10 @@ commit module (W9 closes the one generic delete that ignores types).
 - **W6. Ids.** Create never accepts an id from the client; it builds `ministryEvent.<token>` and
   writes with `create` (an id collision is an error, never an overwrite). **Idempotent create:** the
   client sends a create token (a v4 UUID it minted when the form opened), validated as a UUID and
-  lowercased before use, so one UUID in two cases cannot mint two ids; a retry or double tap hits the same id, and a
-  collision answers 409 `already_created`, which the client treats as success. A token never
+  lowercased before use, so one UUID in two cases cannot mint two ids; a retry or double tap hits the same id. A
+  collision answers 409 `already_created` (which the client treats as success) only when the actor
+  may read the existing document (R8, either mode); otherwise it answers W2's 404, so a create is
+  never an existence oracle either. A token never
   overwrites (create, not createOrReplace), so a client choosing an id can at worst be refused; delete is one transaction of an
   `ifRevisionId` patch then `delete`, the fairness executor's guarded delete
   (`app/utils/fairnessMonthWriteRequest.ts:1145`).
@@ -242,7 +249,12 @@ commit module (W9 closes the one generic delete that ignores types).
 - **W9. Close the generic delete.** `DELETE /api/content/posts/[id]` today deletes ANY document id
   for a worship admin, with no type check (`app/api/content/posts/[id]/route.ts:42-43`); that is a
   writer outside W3 for every private type, `ministryEvent` included. PR C makes it refuse anything
-  whose stored `_type` is not `post` (read first, then a guarded delete), with a test.
+  whose stored `_type` is not `post` (read first, then a guarded delete), with a test. The same PR
+  pins `app/api/admin/members/[id]/route.ts` to `teamMembers`: its DELETE (`:218`) deletes any id,
+  and its PATCH (`:172`) patches any id when the body carries neither `role` nor `ministries` (the
+  type-pinned read at `:141-145` runs only then). Both are super-admin-only, so no boundary is
+  crossed, but they would write an event outside the commit module, its revision guard and its
+  revalidation; after the pin a non-`teamMembers` id answers 404.
 
 ## 6. Guards (tests that keep the contract true)
 
@@ -251,7 +263,7 @@ commit module (W9 closes the one generic delete that ignores types).
   in any quote style or template string, or any exported identifier of the two modules that carries
   the type (e.g. a `MINISTRY_EVENT_TYPE` constant) — so a read through an imported constant is caught
   too. Only these may name it: `ministryEventReads.ts`, `ministryEventCommit.ts`, the schema
-  (`sanity/schemas/`), the Studio protection list, `protectedReadAudit.ts`, `revalidate.ts`, tests.
+  (`sanity/schemas/`) and the schema index that imports it (`sanity/schema.ts`), the Studio protection list, `protectedReadAudit.ts`, `revalidate.ts`, tests.
   Importing `readMinistryEvents` is allowed anywhere, but such a file may contain neither
   `unstable_cache` nor an `export const revalidate` (R6). MCP (`app/mcp/**`) and the admin chat are
   therefore covered by construction.
@@ -259,8 +271,10 @@ commit module (W9 closes the one generic delete that ignores types).
   pattern): only the four routes of §5 import `ministryEventCommit.ts`.
 - **G1b. Protected-read audit.** `ministryEvent` joins `PROTECTED_TYPES` in
   `app/utils/protectedReadAudit.ts` (as the dotted single-writer `fairnessMonth` did), its write
-  sites are registered there, and its fields (`audience`, `seats`, `program`) join the generic-read
-  signal, so a `*[_id == $id]{ seats, program }` read elsewhere is flagged too. The audit judges the
+  sites are registered there, and its fields that no other type uses join the generic-read signal
+  (`PROTECTED_FIELDS` excludes shared names, `protectedReadAudit.ts:38-43`): `audience` and `program`
+  if a grep at implementation still finds them on no other type; never `seats`, which is Kids
+  vocabulary. So a `*[_id == $id]{ audience, program }` read elsewhere is flagged too. The audit judges the
   client, not the person: authorization stays G1 + R1.
 - **G2. Query shape** (unit): the member query contains the id-prefix arm, `published == true` and
   the audience arm; `$groups` is a parameter, never interpolated; a non-member returns `[]` with no
@@ -280,10 +294,12 @@ commit module (W9 closes the one generic delete that ignores types).
   create a joint event with Emprendedores (allowed), create an Emprendedores-only event (refused),
   edit, publish and delete a joint event including Otro Nivel that an Emprendedores leader created
   (allowed), add Invencibles to it (allowed), remove Otro Nivel from it leaving Emprendedores alone
-  (refused, 403), any write to an Emprendedores-only event (404, as a missing id); the program PATCH ignoring every non-`program` field, a stale revision → 409, a
-  demoted actor (fresh read says `member`) refused even when the cached snapshot says `leader`; W3a's
-  three refusals (seat holder moved to another group, removed from Jóvenes, seated on an unpublished
-  event) and a seat holder of a group event refused; every write's answer carries no event content
+  (refused, 403), any write to an Emprendedores-only event (404, as a missing id), a create whose
+  token collides with an event the actor cannot read (404, not 409); the program PATCH ignoring every non-`program` field, a stale revision → 409, a
+  demoted actor (fresh read says `member`) refused even when the cached snapshot says `leader` (403
+  on an event they still read, 404 on a draft); for seat holders: removed from Jóvenes → 404, seated
+  on an unpublished Saturday → 404, moved to another group → still allowed on a Saturday, a seat on a
+  group event they read → 403, a readable event without a seat → 403; every write's answer carries no event content
   (W3b); a duplicate create token → 409 `already_created` and one document; missing `_rev` → 400;
   every stored member reference has `_weak: true`; an event keeping a seat — and a program line —
   of a departed person still accepts an edit, and the kept items keep their stored `_key`; an actor
@@ -326,8 +342,10 @@ range).
   calendar this plan protects. Moving member PII behind a token is the DEF-A-16 stream, not this one.
 - **Reads trail a group change by up to 30 s** (R5); writes do not (W1).
 - **A leader writes into a joint event's other groups.** By Frank's choice (2026-11-04), a leader
-  of one group can create, edit and delete a joint event that also shows in another group's
-  calendar, and add a group to it. That is a write into another group's calendar, accepted on
+  of one group can create a joint event that also shows in another group's calendar. The plan reads
+  that answer symmetrically: whoever may create it may also edit, publish, delete it and add or
+  remove groups (keeping one of their own); Frank's card asked only about creating, so this reading
+  is confirmed with him before PR C. That is a write into another group's calendar, accepted on
   purpose; it is never a READ of another group's events (R3 shows a leader only events that include
   a group they lead), and every such event keeps the actor's own group in it, so it can never pose
   as another group's own event.
@@ -337,5 +355,10 @@ range).
   only); a token in a non-Frank hand would cross the boundary by design.
 - **The encargado's program right is narrower than «any event»:** only on whole-ministry meetings
   (the Saturday roster and the like), as Frank said «de cada sábado»; group events have no such
-  right until he asks. On a Saturday kept as a draft the encargado cannot add lines until it is
-  published (W3a); the editor says so.
+  right until he asks. A Saturday kept as a draft is invisible to its encargado (member mode never
+  serves an unpublished event), so they add lines only once an admin publishes it; the admins'
+  roster editor says so beside the «Publicar» control.
+- **A joint event can keep a seat from a group it no longer includes.** When an edit narrows a
+  joint event, a kept seat or program line (W5) whose person is in none of the remaining groups
+  stays stored; no read leaks (that person no longer sees the event), and the editor marks the seat
+  «Ya no está en los grupos de esta junta» so a leader can clear it.
