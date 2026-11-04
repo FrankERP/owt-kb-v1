@@ -68,3 +68,68 @@ Not adopted: nothing.
   ran the plan's GROQ on `groq-js` and confirmed untokened that dotted ids are invisible.
 - Left UNVERIFIED by the reviewers, owned by the rollout: who holds Sanity project accounts (§8), and
   the real Sanity API's evaluation of `_id in path("ministryEvent.*")` with a token (G6 on dev).
+
+---
+
+# Amendment 2026-11-04 — who writes a joint event
+
+**Trigger:** on 2026-11-04 21:51Z Frank chose «Un líder de alguno de esos grupos» on the card «¿Quién
+puede crear una junta compartida entre dos o tres grupos?» (the approved plan had «a leader of ALL
+the included groups»). That widens a write right of a critical contract, so the amended plan went
+through a new loop: approval credit reset, two fresh approvals required.
+
+**Result: APPROVED** on digest `c2d703b2002fbd5cd09f6aac2af590ac9356e91bd595d1205d609845b3b37ad9`
+(rounds A2 and A3). Approval is not authorization to implement.
+
+| Round | Digest | Verdict | Defect class |
+|---|---|---|---|
+| A1 | `8abeb718…57dd` (bd614383) | CHANGES_REQUIRED | refusal precedence: the amendment's new «404 when unreadable» made every seat-holder 403 unreachable |
+| A2 | `c2d703b2…7ad9` | APPROVED | — |
+| A3 | `c2d703b2…7ad9` (same snapshot) | APPROVED | — |
+
+## Blocker and disposition
+
+- **A1 — W2's 404 and W3a's 403s contradicted each other.** Verified: the seat right exists only on
+  ministry-audience events, the leader editor arm serves drafts only for `groups` audiences, and the
+  member arm ignores groups on a ministry event, so every W3a refusal was an unreadable event (404)
+  and «moved to another group» could never be refused. Fixed: one precedence for every write, W3a's
+  outcomes, G4's expected statuses, and the §8 draft-Saturday note.
+
+## Non-blocking items adopted before approval (reviewed in A2/A3)
+
+The members route pinned to `teamMembers` (DELETE and the unpinned PATCH); `sanity/schema.ts` in G1's
+list; a create collision answers 409 only to a reader; the symmetric reading of Frank's answer put
+to him; a seat kept after a joint event narrows is marked in the editor; G1b leaves out `seats`
+(Kids vocabulary; `availabilityConflict` on `main` stores one too).
+
+## Non-blocking items adopted AFTER the final approval — not reviewed
+
+Each checked against the code first. All narrow or clarify.
+
+- W9: the photo route (`members/[id]/photo/route.ts:69-77`) and `set-password` (`:25-28`) pinned too.
+- PR C gate: it waits for Frank's answer on who edits or deletes a joint event; another answer
+  re-scopes W3/R3/G4 and gets a fresh review.
+- W2: the revision compare (409) placed after the 404 and the 403s; G4 row for a stale `_rev` on an
+  unreadable event.
+- W5: a duplicated `_key` in one request → 400.
+- W6: the remaining collision signal stated and accepted; on 409 the client re-opens the stored
+  event instead of closing as success.
+- R1/R7: `me` passed to `readMinistryEvents`; R8: `mayRead` covers the access arms, not the date
+  window.
+- §1 and G1c: MCP and the admin chat may not import either module.
+- G3: `groups` as a string. G5: `PROTECTED_STUDIO_TITLES` and the internal-types decision.
+- PR A: ADR-0075 Decision 4 («Kids first») amended; rebase on `main` first (line drift).
+- PR C: routes wrapped in `withVerificationRunContext`.
+- Wording: three route files / four handlers; the rollout registry is new in PR B.
+
+**Not adopted:**
+- Narrowing the encargado's right to `kind: "saturday"`. D3 forbids authorizing on `kind`, and §8
+  already says the right covers whole-ministry meetings «and the like».
+- Extending R6's check past the importing file. It would have no effect on a page that reads the
+  session, and PR D removes `/schedule`'s `revalidate` anyway.
+
+## Process notes
+
+This loop's churn count started at zero. It had one substantive round (A1). Each reviewer was fresh
+and never saw earlier rounds. The A2 and A3 reviewers ran the plan's GROQ on `groq-js` and confirmed,
+with untokened reads, that dotted ids cannot be seen.

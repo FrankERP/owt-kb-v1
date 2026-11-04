@@ -1,8 +1,8 @@
 # Multi-ministry — phase 3, Jóvenes: who sees and who writes a ministry event (plan)
 
-**Status:** AMENDED 2026-11-04 after approval (Frank widened who creates a joint event: R3, W2, W3,
-W3a, W6, W9, G1, G1b, G3, G4, §8), under a fresh adversarial review. The first approval (critical tier; two fresh approvals
-on digest `cf407de9…d254`, 2026-10-31) and its post-approval items are in
+**Status:** APPROVED again 2026-11-04 after Frank's joint-event amendment (critical tier; two fresh
+approvals on digest `c2d703b2…7ad9`), then amended with those reviewers' non-blocking items, which no
+reviewer has seen. Both approvals and every post-approval item are in
 `2026-10-30-jovenes-events-access-review-log.md`. ADR-0075. Parent: the plan doc's tab «Fase 3: Jóvenes
 primero» (https://claude.ai/artifact/F1qn13J9ud8P3Urh6aF6th). Approval of this plan is not
 authorization to implement.
@@ -39,7 +39,7 @@ the screen. A pastor of Otro Nivel can never receive, by any route the app serve
 audience is only Emprendedores.
 
 **Non-goals (later, or never in this slice):** email or push notices; the MCP connector and the
-admin assistant (neither reads nor writes `ministryEvent` — §6 pins that); the `.ics` feed
+admin assistant (neither names the type nor imports its read or commit module — G1 and G1c pin that); the `.ics` feed
 (ADR-0057's route keeps serving worship only); Kids moving onto `ministryEvent`; worship (never
 migrated); an engine; Studio editing of events.
 
@@ -115,7 +115,8 @@ published: boolean                     written on every create; read as `publish
 ## 4. The read contract — `app/utils/ministryEventReads.ts` (server-only, the ONLY reader)
 
 - **R1. One query builder.** Every read of `ministryEvent` under `app/**` goes through
-  `readMinistryEvents(access, { ministry, from, to, mode })`. `mode: "member"` (pages a pastor sees)
+  `readMinistryEvents(access, { me, ministry, from, to, mode })`, where `me` is the session's
+  effective member id (R7; `MemberAccess` carries no id). `mode: "member"` (pages a pastor sees)
   or `"editor"` (Planear Jóvenes). The GROQ always carries
   `_type == "ministryEvent" && _id in path("ministryEvent.*") && ministry == $ministry && date >= $from && date <= $to`.
   The id-prefix arm means a document created outside the commit module with an undotted id (public)
@@ -138,7 +139,9 @@ published: boolean                     written on every create; read as `publish
   Anyone else in editor mode gets `[]`.
 - **R8. One definition of «may read».** `ministryEventReads.ts` also exports the pure TypeScript
   `mayRead(access, event, mode)` that W3a and any other server decision call. It is the same
-  predicate as the GROQ, and G3 holds the two equal on every case of its matrix.
+  predicate as the GROQ's access arms (id prefix, ministry, published, audience; the `from`/`to`
+  window is a page range, not access, and is not part of it), and G3 holds the two equal on every
+  case of its matrix.
 - **R4. Token first.** Before any query: no `SANITY_API_READ_TOKEN` ⇒ throw
   `MinistryEventReadUnavailable` (the page renders an error state, never «no events»). Client:
   `operationalClient` (published perspective, no CDN).
@@ -178,9 +181,10 @@ commit module, and W9 closes the writers that take any id without checking its t
   `kidsCommit.ts` precedent). An admin's «any event of the ministry» is safe only through that filter.
   An event the actor may read in neither mode (`mayRead(freshAccess, stored, "editor")` and
   `mayRead(freshAccess, stored, "member")` both false) answers the same 404, so a leader probing
-  another group's event ids learns nothing. **Precedence, once for every write:** W1's inactive
-  refusal, then this 404, then W3/W3a's authorization, whose refusals are therefore 403s on events
-  the actor CAN read and never reveal anything new.
+  another group's event ids learns nothing. **Precedence, once for every write:** the body's shape
+  (a missing `_rev` is a 400, which depends on no document), W1's inactive refusal, then this 404,
+  then W3/W3a's authorization, then W2a's revision compare (409). So the 403s and the 409 happen only
+  on events the actor CAN read and never reveal anything new.
 - **W2a. The client's revision is required.** Every PATCH and DELETE body carries `_rev`; missing ⇒
   400 `rev_required`, different from the stored one ⇒ 409 (as `kidsCommit.ts` refuses a missing
   `_rev`). Arrays are written whole, and the encargado and the apoyo may edit the same program, so a
@@ -228,16 +232,20 @@ commit module, and W9 closes the writers that take any id without checking its t
   deleted, so an old event never becomes uneditable. «Kept as it was» means: the item's `_key`
   matches a stored item and its `member._ref` is the stored one (for a seat, its `role` too); anything
   else is an addition or a change and is validated. `ministry` ∈ `LEVELED_MINISTRY_IDS`; audience groups via `isGroupId`, no
-  duplicates, 1–3; `kind` matches the audience (D3); `date` valid; times `isServiceTime`; every
+  duplicates, 1–3; a request carrying the same `_key` on two items is refused (400
+  `duplicate_key`); `kind` matches the audience (D3); `date` valid; times `isServiceTime`; every
   seat/program member is a member of the ministry (fresh read) and, for a `groups` audience, of at
   least one of its groups; seats ≤ 6; keys as in W4 (seats too); `published` boolean.
 - **W6. Ids.** Create never accepts an id from the client; it builds `ministryEvent.<token>` and
   writes with `create` (an id collision is an error, never an overwrite). **Idempotent create:** the
   client sends a create token (a v4 UUID it minted when the form opened), validated as a UUID and
   lowercased before use, so one UUID in two cases cannot mint two ids; a retry or double tap hits the same id. A
-  collision answers 409 `already_created` (which the client treats as success) only when the actor
-  may read the existing document (R8, either mode); otherwise it answers W2's 404, so a create is
-  never an existence oracle either. A token never
+  collision answers 409 `already_created` only when the actor may read the existing document (R8,
+  either mode); otherwise it answers W2's 404. (A free token answers success, so a collision is
+  still distinguishable in principle; the ids are client-minted v4 UUIDs never shown to a
+  non-reader, and a probe leaves a document behind, so this is accepted.) On 409 the client does not
+  close as success: it re-opens the stored event, so edits made after a lost answer are not dropped
+  silently. A token never
   overwrites (create, not createOrReplace), so a client choosing an id can at worst be refused; delete is one transaction of an
   `ifRevisionId` patch then `delete`, the fairness executor's guarded delete
   (`app/utils/fairnessMonthWriteRequest.ts:1145`).
@@ -254,7 +262,10 @@ commit module, and W9 closes the writers that take any id without checking its t
   and its PATCH (`:172`) patches any id when the body carries neither `role` nor `ministries` (the
   type-pinned read at `:141-145` runs only then). Both are super-admin-only, so no boundary is
   crossed, but they would write an event outside the commit module, its revision guard and its
-  revalidation; after the pin a non-`teamMembers` id answers 404.
+  revalidation; after the pin a non-`teamMembers` id answers 404. The two other super-admin routes
+  that patch a client-supplied id get the same pin: `app/api/admin/members/[id]/photo/route.ts:69-77`
+  (`profilePhoto`) and `app/api/admin/set-password/route.ts:25-28` (`passwordHash` from
+  `sanityMemberId`).
 
 ## 6. Guards (tests that keep the contract true)
 
@@ -267,8 +278,10 @@ commit module, and W9 closes the writers that take any id without checking its t
   Importing `readMinistryEvents` is allowed anywhere, but such a file may contain neither
   `unstable_cache` nor an `export const revalidate` (R6). MCP (`app/mcp/**`) and the admin chat are
   therefore covered by construction.
-- **G1c. Writer callers** (`ministryEventCallers.test.ts`, the `serviceCommitCallers.test.ts`
-  pattern): only the four routes of §5 import `ministryEventCommit.ts`.
+- **G1c. Callers** (`ministryEventCallers.test.ts`, the `serviceCommitCallers.test.ts` pattern):
+  only the three route files of §5 (four handlers) import `ministryEventCommit.ts`, and nothing
+  under `app/mcp/**` or the admin chat (`app/api/admin/chat/**`, `adminChat*`) imports either
+  module.
 - **G1b. Protected-read audit.** `ministryEvent` joins `PROTECTED_TYPES` in
   `app/utils/protectedReadAudit.ts` (as the dotted single-writer `fairnessMonth` did), its write
   sites are registered there, and its fields that no other type uses join the generic-read signal
@@ -287,7 +300,8 @@ commit module, and W9 closes the writers that take any id without checking its t
   a leader of Otro Nivel against a draft joint Otro Nivel + Emprendedores event and a draft
   Emprendedores-only event,
   admin, super-admin, inactive, worship-only) × events (ministry, each single group, each joint
-  pair, unpublished, no audience, `groups` absent or empty, unknown group, unknown `audience.kind`
+  pair, unpublished, no audience, `groups` absent or empty, `groups` as a string (`"otro-nivel"`,
+  so a substring match in `mayRead` fails), unknown group, unknown `audience.kind`
   with valid `groups`, undotted id, `drafts.` id, other ministry). It asserts the expected visibility table, and that `mayRead` (R8) answers the
   same for every pair. No hand-written evaluator.
 - **G4. Write matrix** (unit, Sanity mocked): each row of W3's table; for a leader of Otro Nivel:
@@ -301,12 +315,14 @@ commit module, and W9 closes the writers that take any id without checking its t
   on an unpublished Saturday → 404, moved to another group → still allowed on a Saturday, a seat on a
   group event they read → 403, a readable event without a seat → 403; every write's answer carries no event content
   (W3b); a duplicate create token → 409 `already_created` and one document; missing `_rev` → 400;
+  an unreadable event with a stale `_rev` → 404, not 409; a duplicated `_key` → 400;
   every stored member reference has `_weak: true`; an event keeping a seat — and a program line —
   of a departed person still accepts an edit, and the kept items keep their stored `_key`; an actor
   whose fresh read says inactive is refused in every row; a foreign-type, other-ministry or missing
   id answers 404 on each route.
-- **G5. Studio.** `ministryEvent` joins `PROTECTED_STUDIO_TYPES` (read-only inspection, no create,
-  no actions); `studioProtection.test.ts` covers it.
+- **G5. Studio.** `ministryEvent` joins `PROTECTED_STUDIO_TYPES` and `PROTECTED_STUDIO_TITLES`
+  (read-only inspection, no create, no actions), with the internal-types/fields decision that file
+  asks of every protected type; `studioProtection.test.ts` covers it.
 - **G6. Live proof on dev before production** (`preview` writes the real dataset, so with Frank's
   consent): one event per audience created through the route as `published: false` with the rollout
   state at `hidden`, so no pastor can see them, then an untokened dataset query for
@@ -316,17 +332,25 @@ commit module, and W9 closes the writers that take any id without checking its t
 ## 7. Delivery
 
 1. PR A — docs: this plan, its review log, ADR (ministry events: private by id, audience read
-   closed, three writers). Standard.
+   closed, three writers), and an amendment to ADR-0075 Decision 4 («Kids moves onto the generic
+   model first»), which this plan reverses: Jóvenes goes first, Kids stays paused. Standard. The
+   branch is rebased on `main` first (the plan's line numbers are at 8a61f9f4; on 57bdf591 the
+   members route moved +10 lines).
 2. PR B — read side: schema + Studio protection, `ministryEventReads.ts`, G1–G3, G5, `/jovenes`
    (pastors' list of upcoming events; each event's sheet carries the program editor for its
    encargado/apoyo, reading in member mode, since a plain member's editor-mode read is `[]`; that
-   editor stays hidden until PR C ships its route), a rollout state that PR B adds to the registry
-   (`hidden → superAdmin → admins → all`; no registry exists today), the Jóvenes nav section, and
+   editor stays hidden until PR C ships its route), a new rollout registry with this type's state
+   (`hidden → superAdmin → admins → all`; none exists today), the Jóvenes nav section, and
    `docs/DATA_MODEL.md`'s entry for the type and its dotted id.
    **Critical** — this plan's R-section.
 3. PR C — write side: `ministryEventCommit.ts`, the four routes, G4, Planear Jóvenes (Saturday
    roster table, program lines for the encargado/apoyo, «Copiar para WhatsApp»). **Critical** — this
-   plan's W-section. G6 before its production merge.
+   plan's W-section. G6 before its production merge. Its routes are wrapped in
+   `withVerificationRunContext` (`srVerificationRunContext.test.ts` scans every route that imports a
+   `*Commit` module). **Gate:** PR C starts only after Frank answers who may edit or delete a joint
+   event (§8). If he picks anything but «cualquier líder de esos grupos», W3, R3 and G4 are
+   re-scoped (a creator-only rule needs a stored creator field) and that slice gets a fresh review
+   first.
 4. PR D — group calendars, joint events, «Jóvenes» in the Calendario filter (reads through R1).
    `/schedule` is worship-gated today (`requireWorshipPage`), so PR D also decides how a
    Jóvenes-only pastor reaches the Calendario; that is a page gate, outside this contract.
