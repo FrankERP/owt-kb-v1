@@ -1,8 +1,9 @@
 # Multi-ministry — phase 3, Jóvenes: who sees and who writes a ministry event (plan)
 
-**Status:** APPROVED by adversarial plan review (critical tier; two fresh approvals on digest
-`cf407de9…d254`, 2026-10-31), then amended with the reviewers' non-blocking items, which no reviewer
-has seen — see `2026-10-30-jovenes-events-access-review-log.md`. ADR-0075. Parent: the plan doc's tab «Fase 3: Jóvenes
+**Status:** AMENDED 2026-11-04 after approval (Frank widened who creates a joint event: R3, W2, W3,
+G3, G4, §8), under a fresh adversarial review. The first approval (critical tier; two fresh approvals
+on digest `cf407de9…d254`, 2026-10-31) and its post-approval items are in
+`2026-10-30-jovenes-events-access-review-log.md`. ADR-0075. Parent: the plan doc's tab «Fase 3: Jóvenes
 primero» (https://claude.ai/artifact/F1qn13J9ud8P3Urh6aF6th). Approval of this plan is not
 authorization to implement.
 
@@ -17,6 +18,9 @@ authorization to implement.
   the Saturday roster], pero recuerda que quien sea asignado como "encargado" de la reunión del
   sábado puede agregar quién da la oración, quién hace una dinámica, etc»; «3.- Sip, es la misma
   Gaby»; «4.- Lo reuno y te lo paso» (the pastors' list for a bulk account load).
+- 2026-11-04 21:51Z, on the card «¿Quién puede crear una junta compartida entre dos o tres grupos?»,
+  Frank chose «Un líder de alguno de esos grupos» (over «un líder de todos esos grupos» and «solo los
+  admins»).
 
 **Risk tier: critical**, derived from the ladder: the plan creates an ACL boundary (a group may not
 read another group's events) and a production writer with a mutation trust boundary (three
@@ -124,9 +128,13 @@ published: boolean                     written on every create; read as `publish
   events (`$groups = []` makes the second arm false).
 - **R3. Editor arm.** `mode: "editor"` requires `isMinistryManager(access, ministry)` (admin level
   or super-admin) → every event of the ministry, published or not; a `leader` in editor mode gets
-  exactly the member arm plus unpublished events whose audience is `groups` and every group in it is
-  one they lead (`levelIn == "leader"` ⇒ `$led = groupsIn`): the GROQ is
-  `(<member arm>) || (published != true && audience.kind == "groups" && count(audience.groups) > 0 && count(audience.groups[!(@ in $led)]) == 0)`.
+  exactly the member arm plus unpublished events whose audience is `groups` and AT LEAST ONE group
+  in it is one they lead (`levelIn == "leader"` ⇒ `$led = groupsIn`) — the events W3 lets them
+  write: the GROQ is
+  `(<member arm>) || (published != true && audience.kind == "groups" && count(audience.groups[@ in $led]) > 0)`.
+  So a draft joint event of Otro Nivel and Emprendedores is visible in editor mode to the leaders of
+  either group, and to no plain pastor of either until it is published; an unpublished event of
+  Emprendedores alone stays invisible to a leader of Otro Nivel.
   Anyone else in editor mode gets `[]`.
 - **R8. One definition of «may read».** `ministryEventReads.ts` also exports the pure TypeScript
   `mayRead(access, event, mode)` that W3a and any other server decision call. It is the same
@@ -168,6 +176,9 @@ commit module (W9 closes the one generic delete that ignores types).
   $ministry && _id == $id` — and a missing, foreign-type or other-ministry id answers 404 «Ese
   evento no existe.», never 403, so a refusal never confirms that a document exists (the
   `kidsCommit.ts` precedent). An admin's «any event of the ministry» is safe only through that filter.
+  An event the actor may read in neither mode (`mayRead(freshAccess, stored, "editor")` and
+  `mayRead(freshAccess, stored, "member")` both false) answers the same 404, so a leader probing another group's event ids
+  learns nothing; 403 is kept for an event the actor CAN read but not write.
 - **W2a. The client's revision is required.** Every PATCH and DELETE body carries `_rev`; missing ⇒
   400 `rev_required`, different from the stored one ⇒ 409 (as `kidsCommit.ts` refuses a missing
   `_rev`). Arrays are written whole, and the encargado and the apoyo may edit the same program, so a
@@ -177,13 +188,18 @@ commit module (W9 closes the one generic delete that ignores types).
   | Actor | Create / edit / delete / publish | Program lines |
   |---|---|---|
   | super-admin, Jóvenes admin | any event of the ministry | any |
-  | Jóvenes leader | an event whose audience is `groups` and EVERY group, stored and new, is one they lead | those events |
+  | Jóvenes leader | an event whose audience is `groups` and AT LEAST ONE group they lead is in it — in the stored audience AND in the requested one | those events |
   | Encargado or apoyo of THIS event (by the stored `seats`) who may READ it now (W3a), on an event whose audience is the ministry | nothing | this event only |
   | anyone else | nothing | nothing |
 
-  An edit is judged against both the stored and the requested audience, so a leader can neither
-  move an event out of a group they do not lead nor into one. A leader cannot create or change a
-  `ministry` audience (the Saturday roster is admins').
+  The leader rule (Frank, 2026-11-04) is one test applied to both audiences of a write: the stored
+  one (for an edit, delete or publish) and the requested one (for a create or edit) must each hold a
+  group the actor leads. So a leader of Otro Nivel may create a joint event with Emprendedores, edit
+  or delete a joint event that includes Otro Nivel (whoever created it), and add or remove other
+  groups, but can never write an event of Emprendedores alone: neither touch one (stored audience),
+  nor create one, nor turn a joint event into one by removing Otro Nivel (requested audience). For a
+  one-group event the rule is the same as before: they must lead that group. A leader cannot create
+  or change a `ministry` audience (the Saturday roster is admins').
 
 - **W3a. A seat never outlives the right to read.** A seat holder's program write is allowed only
   when, by the FRESH access of W1, the actor is active and the stored event passes R2's member
@@ -254,12 +270,17 @@ commit module (W9 closes the one generic delete that ignores types).
   `groq-js` `evaluate(parse(query), { dataset, params })` — the repo's precedent,
   `app/api/__tests__/adminMemberVisibility.test.ts` — over one fixture matrix: people (pastor of
   Otro Nivel, of Emprendedores, of two groups, with no groups, leader of one group, leader of two,
+  a leader of Otro Nivel against a draft joint Otro Nivel + Emprendedores event and a draft
+  Emprendedores-only event,
   admin, super-admin, inactive, worship-only) × events (ministry, each single group, each joint
   pair, unpublished, no audience, `groups` absent or empty, unknown group, unknown `audience.kind`
   with valid `groups`, undotted id, `drafts.` id, other ministry). It asserts the expected visibility table, and that `mayRead` (R8) answers the
   same for every pair. No hand-written evaluator.
-- **G4. Write matrix** (unit, Sanity mocked): each row of W3's table, both directions of a leader's
-  audience move, the program PATCH ignoring every non-`program` field, a stale revision → 409, a
+- **G4. Write matrix** (unit, Sanity mocked): each row of W3's table; for a leader of Otro Nivel:
+  create a joint event with Emprendedores (allowed), create an Emprendedores-only event (refused),
+  edit, publish and delete a joint event including Otro Nivel that an Emprendedores leader created
+  (allowed), add Invencibles to it (allowed), remove Otro Nivel from it leaving Emprendedores alone
+  (refused, 403), any write to an Emprendedores-only event (404, as a missing id); the program PATCH ignoring every non-`program` field, a stale revision → 409, a
   demoted actor (fresh read says `member`) refused even when the cached snapshot says `leader`; W3a's
   three refusals (seat holder moved to another group, removed from Jóvenes, seated on an unpublished
   event) and a seat holder of a group event refused; every write's answer carries no event content
@@ -304,10 +325,12 @@ range).
   `ministryRoles` (level and groups) is readable from the dataset. That reveals membership, not the
   calendar this plan protects. Moving member PII behind a token is the DEF-A-16 stream, not this one.
 - **Reads trail a group change by up to 30 s** (R5); writes do not (W1).
-- **Leaders and joint events.** A leader of one group cannot create or edit a joint event that
-  includes a group they do not lead (W3); an admin does. Frank's answer 2 covered a group's own
-  calendar and the Saturday roster, not joint events, so this is put to him as a decision; until he
-  answers, the narrower rule stands (it can only be widened later, never leak).
+- **A leader writes into a joint event's other groups.** By Frank's choice (2026-11-04), a leader
+  of one group can create, edit and delete a joint event that also shows in another group's
+  calendar, and add a group to it. That is a write into another group's calendar, accepted on
+  purpose; it is never a READ of another group's events (R3 shows a leader only events that include
+  a group they lead), and every such event keeps the actor's own group in it, so it can never pose
+  as another group's own event.
 - **Sanity project accounts read everything.** `/studio` lets worship `admin` through `proxy.ts`,
   and any Sanity project account reads every event in Studio and its Vision tool, `readOnly` or not.
   Who holds one is checked in sanity.io/manage before the rollout reaches `all` (believed: Frank
