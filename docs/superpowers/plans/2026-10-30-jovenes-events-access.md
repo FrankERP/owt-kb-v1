@@ -1,8 +1,8 @@
 # Multi-ministry — phase 3, Jóvenes: who sees and who writes a ministry event (plan)
 
-**Status:** APPROVED again 2026-11-04 after Frank's joint-event amendment (critical tier; two fresh
-approvals on digest `c2d703b2…7ad9`), then amended with those reviewers' non-blocking items, which no
-reviewer has seen. Both approvals and every post-approval item are in
+**Status:** AMENDED 2026-11-04 23:52Z (Frank: only a joint event's creator and the admins edit or
+delete it — §3 `createdBy`, D4, R3, W3, W4, G4, §7, §8), under a fresh adversarial review. The
+earlier approvals (digests `cf407de9…d254` and `c2d703b2…7ad9`) and their post-approval items are in
 `2026-10-30-jovenes-events-access-review-log.md`. ADR-0075. Parent: the plan doc's tab «Fase 3: Jóvenes
 primero» (https://claude.ai/artifact/F1qn13J9ud8P3Urh6aF6th). Approval of this plan is not
 authorization to implement.
@@ -20,6 +20,9 @@ authorization to implement.
   Gaby»; «4.- Lo reuno y te lo paso» (the pastors' list for a bulk account load).
 - 2026-11-04 21:51Z, on the card «¿Quién puede crear una junta compartida entre dos o tres grupos?»,
   Frank chose «Un líder de alguno de esos grupos» (over «un líder de todos esos grupos» and «solo los
+  admins»).
+- 2026-11-04 23:52Z, on the card «¿Quién puede editar o borrar una junta compartida ya creada?», Frank
+  chose «Solo quien la creó y los admins» (over «cualquier líder de esos grupos» and «solo los
   admins»).
 
 **Risk tier: critical**, derived from the ladder: the plan creates an ACL boundary (a group may not
@@ -91,6 +94,8 @@ seats: [{ _key, role: "encargado" | "apoyo" | "comparte", member: weak ref teamM
 program: [{ _key, label: string, member?: weak ref teamMembers, note?: string }]
 notes?: string
 published: boolean                     written on every create; read as `published == true`
+createdBy: weak ref teamMembers        the actor of the create (W1's fresh id); written once by the
+                                       create, never by any later write, never taken from a body
 ```
 
 - **D1. Private by id.** The dotted id makes the document unreadable without a token at the
@@ -109,8 +114,9 @@ published: boolean                     written on every create; read as `publish
   which answers 409 on a referential-integrity error) must never fail because an old event names
   them; a dangling seat reads as «Sin asignar». Sanity enforces integrity from the STORED reference,
   not the schema, so the commit module writes `{ _type: "reference", _ref, _weak: true }` on every
-  seat and program member (the Kids precedent writes no `_weak` and must not be copied), and G4
-  asserts it.
+  seat and program member and on `createdBy` (the Kids precedent writes no `_weak` and must not be
+  copied), and G4 asserts it. A dangling `createdBy` (creator deleted) leaves the joint event to the
+  admins.
 
 ## 4. The read contract — `app/utils/ministryEventReads.ts` (server-only, the ONLY reader)
 
@@ -130,8 +136,9 @@ published: boolean                     written on every create; read as `publish
 - **R3. Editor arm.** `mode: "editor"` requires `isMinistryManager(access, ministry)` (admin level
   or super-admin) → every event of the ministry, published or not; a `leader` in editor mode gets
   exactly the member arm plus unpublished events whose audience is `groups` and AT LEAST ONE group
-  in it is one they lead (`levelIn == "leader"` ⇒ `$led = groupsIn`) — the events W3 lets them
-  write: the GROQ is
+  in it is one they lead (`levelIn == "leader"` ⇒ `$led = groupsIn`) — every draft that includes
+  one of their groups, whether or not W3 lets them write it (a joint draft another leader created is
+  shown read-only, since it will reach their group when published): the GROQ is
   `(<member arm>) || (published != true && audience.kind == "groups" && count(audience.groups[@ in $led]) > 0)`.
   So a draft joint event of Otro Nivel and Emprendedores is visible in editor mode to the leaders of
   either group, and to no plain pastor of either until it is published; an unpublished event of
@@ -194,18 +201,23 @@ commit module, and W9 closes the writers that take any id without checking its t
   | Actor | Create / edit / delete / publish | Program lines |
   |---|---|---|
   | super-admin, Jóvenes admin | any event of the ministry | any |
-  | Jóvenes leader | an event whose audience is `groups` and AT LEAST ONE group they lead is in it — in the stored audience AND in the requested one | those events |
+  | Jóvenes leader | CREATE: a `groups` event holding AT LEAST ONE group they lead. EDIT / DELETE / PUBLISH a one-group event: they lead that group. EDIT / DELETE / PUBLISH a joint event (2–3 groups stored): they are its `createdBy` AND lead at least one of its stored groups. Every edit: the requested audience also holds a group they lead | the events they may edit |
   | Encargado or apoyo of THIS event (by the stored `seats`) who may READ it now (W3a), on an event whose audience is the ministry | nothing | this event only |
   | anyone else | nothing | nothing |
 
-  The leader rule (Frank, 2026-11-04) is one test applied to both audiences of a write: the stored
-  one (for an edit, delete or publish) and the requested one (for a create or edit) must each hold a
-  group the actor leads. So a leader of Otro Nivel may create a joint event with Emprendedores, edit
-  or delete a joint event that includes Otro Nivel (whoever created it), and add or remove other
-  groups, but can never write an event of Emprendedores alone: neither touch one (stored audience),
-  nor create one, nor turn a joint event into one by removing Otro Nivel (requested audience). For a
-  one-group event the rule is the same as before: they must lead that group. A leader cannot create
-  or change a `ministry` audience (the Saturday roster is admins').
+  The leader rule (Frank, 2026-11-04, two answers): any leader of one of the groups may CREATE a
+  joint event; once it exists, only its creator and the admins may edit, publish or delete it. The
+  stored audience decides which rule applies: a one-group event belongs to that group, and any
+  leader of it may write it (answer 2 of 2026-10-30); a joint event belongs to its creator, read from
+  the STORED `createdBy` and compared with W1's fresh actor id, and the creator must still lead one
+  of its groups (a creator who stopped leading leaves it to the admins). Every create or edit also
+  needs a group the actor leads in the requested audience. So a leader of Otro Nivel may create a
+  joint event with Emprendedores and later edit it, publish it, add or remove groups or delete it;
+  the Emprendedores leaders see it (R3) but answer 403 on any write; and nobody but an admin can turn
+  it into an Emprendedores-only event, because the creator must keep a group they lead. A leader
+  who adds a group to their group's one-group event creates a joint event in effect; `createdBy`
+  stays whoever created the event (never rewritten), so from then on it is that person's and the
+  admins'. A leader cannot create or change a `ministry` audience (the Saturday roster is admins').
 
 - **W3a. A seat never outlives the right to read.** A seat holder's program write is allowed only
   when, by the FRESH access of W1, the actor is active and the stored event passes R2's member
@@ -222,7 +234,7 @@ commit module, and W9 closes the writers that take any id without checking its t
   content; the screen re-reads through R1. So no write path can serve an event its actor could not
   read.
 - **W4. Program PATCH writes only `program`.** The server builds `set({ program })` from validated
-  input; `date`, `audience`, `kind`, `seats`, `notes`, `published` are untouched whatever the body
+  input; `date`, `audience`, `kind`, `seats`, `notes`, `published`, `createdBy` are untouched whatever the body
   says. Each line: `label` 1–60 chars, optional `member` (must be a Jóvenes member), optional `note`
   ≤ 300 chars; at most 20 lines. **Keys:** a line whose `_key` matches a stored line keeps that
   key; any other line (no key, or a key the stored event does not hold) gets a freshly minted one.
@@ -305,10 +317,16 @@ commit module, and W9 closes the writers that take any id without checking its t
   with valid `groups`, undotted id, `drafts.` id, other ministry). It asserts the expected visibility table, and that `mayRead` (R8) answers the
   same for every pair. No hand-written evaluator.
 - **G4. Write matrix** (unit, Sanity mocked): each row of W3's table; for a leader of Otro Nivel:
-  create a joint event with Emprendedores (allowed), create an Emprendedores-only event (refused),
-  edit, publish and delete a joint event including Otro Nivel that an Emprendedores leader created
-  (allowed), add Invencibles to it (allowed), remove Otro Nivel from it leaving Emprendedores alone
-  (refused, 403), any write to an Emprendedores-only event (404, as a missing id), a create whose
+  create a joint event with Emprendedores (allowed, `createdBy` = the actor's fresh id whatever the
+  body says), then edit, publish, add Invencibles to and delete their own joint event (allowed),
+  remove Otro Nivel from it leaving Emprendedores alone (403); a leader of Emprendedores on that
+  event: edit, publish, delete (403, readable); a joint event an admin created, written by any
+  leader (403); the creator after being demoted or moved out of every stored group (403 while they
+  still read it, 404 otherwise); a dangling `createdBy` (only admins write); a body or PATCH carrying
+  `createdBy` never changes the stored one; a second leader of Otro Nivel editing a one-group Otro
+  Nivel event someone else created (allowed) and adding Emprendedores to it (allowed; `createdBy`
+  unchanged, after which that leader answers 403); create an Emprendedores-only event (refused),
+  any write to an Emprendedores-only event (404, as a missing id), a create whose
   token collides with an event the actor cannot read (404, not 409); the program PATCH ignoring every non-`program` field, a stale revision → 409, a
   demoted actor (fresh read says `member`) refused even when the cached snapshot says `leader` (403
   on an event they still read, 404 on a draft); for seat holders: removed from Jóvenes → 404, seated
@@ -347,10 +365,8 @@ commit module, and W9 closes the writers that take any id without checking its t
    roster table, program lines for the encargado/apoyo, «Copiar para WhatsApp»). **Critical** — this
    plan's W-section. G6 before its production merge. Its routes are wrapped in
    `withVerificationRunContext` (`srVerificationRunContext.test.ts` scans every route that imports a
-   `*Commit` module). **Gate:** PR C starts only after Frank answers who may edit or delete a joint
-   event (§8). If he picks anything but «cualquier líder de esos grupos», W3, R3 and G4 are
-   re-scoped (a creator-only rule needs a stored creator field) and that slice gets a fresh review
-   first.
+   `*Commit` module). Frank answered the gate question on 2026-11-04 (creator and admins); this
+   plan carries that answer, so PR C has no open gate.
 4. PR D — group calendars, joint events, «Jóvenes» in the Calendario filter (reads through R1).
    `/schedule` is worship-gated today (`requireWorshipPage`), so PR D also decides how a
    Jóvenes-only pastor reaches the Calendario; that is a page gate, outside this contract.
@@ -365,14 +381,15 @@ range).
   `ministryRoles` (level and groups) is readable from the dataset. That reveals membership, not the
   calendar this plan protects. Moving member PII behind a token is the DEF-A-16 stream, not this one.
 - **Reads trail a group change by up to 30 s** (R5); writes do not (W1).
-- **A leader writes into a joint event's other groups.** By Frank's choice (2026-11-04), a leader
-  of one group can create a joint event that also shows in another group's calendar. The plan reads
-  that answer symmetrically: whoever may create it may also edit, publish, delete it and add or
-  remove groups (keeping one of their own); Frank's card asked only about creating, so this reading
-  is confirmed with him before PR C. That is a write into another group's calendar, accepted on
-  purpose; it is never a READ of another group's events (R3 shows a leader only events that include
-  a group they lead), and every such event keeps the actor's own group in it, so it can never pose
-  as another group's own event.
+- **A leader writes into a joint event's other groups.** By Frank's choices (2026-11-04), a leader
+  of one group can create a joint event that also shows in another group's calendar, and then edit
+  or delete it alone with the admins; the other groups' leaders see it but cannot change it. That
+  is a write into another group's calendar, accepted on purpose; it is never a READ of another
+  group's events (R3 shows a leader only events that include a group they lead), and the creator
+  must keep one of their own groups in it, so it can never pose as another group's own event.
+- **A joint event outlives its creator's role.** If the creator stops leading every group in it,
+  or is deleted, only the admins can change it; the editor shows «Creada por …» (or «Creada por
+  alguien que ya no está») so the other leaders know whom to ask.
 - **Sanity project accounts read everything.** `/studio` lets worship `admin` through `proxy.ts`,
   and any Sanity project account reads every event in Studio and its Vision tool, `readOnly` or not.
   Who holds one is checked in sanity.io/manage before the rollout reaches `all` (believed: Frank
