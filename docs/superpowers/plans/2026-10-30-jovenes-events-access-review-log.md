@@ -133,3 +133,55 @@ Each checked against the code first. All narrow or clarify.
 This loop's churn count started at zero. It had one substantive round (A1). Each reviewer was fresh
 and never saw earlier rounds. The A2 and A3 reviewers ran the plan's GROQ on `groq-js` and confirmed,
 with untokened reads, that dotted ids cannot be seen.
+
+---
+
+# Amendment 2026-11-04 (2) — who edits or deletes a joint event
+
+**Trigger:** the post-approval gate on PR C asked Frank who may edit or delete a joint event once it
+exists. At 23:52Z on 2026-11-04 he chose «Solo quien la creó y los admins», not the recommended
+«cualquier líder de esos grupos». So the plan needed a stored creator, and the writer's rule for
+joint events changed. A new loop started with its approval credit and churn count reset.
+
+**Result: APPROVED** on digest `c4faa023ecd5a68b90379ad0937d4e2f127c025f3f94964775d39fb27dbdb98d`
+(rounds B1 and B2, same snapshot). No round returned CHANGES_REQUIRED. Approval is not authorization
+to implement.
+
+| Round | Digest | Verdict |
+|---|---|---|
+| B1 | `c4faa023…b98d` | APPROVED |
+| B2 | `c4faa023…b98d` (same snapshot) | APPROVED |
+
+## Non-blocking items adopted AFTER the final approval — not reviewed
+
+Each item was checked against the code before it was adopted. All of them narrow or clarify the plan.
+
+- **W1:** the fresh read is a new uncached export of `memberAccess.ts` that reuses the private
+  `ACCESS_PROJECTION` (verified: it is not exported, `memberAccess.ts:33`).
+- **W2:** the writer throws the unavailable error when the read token is missing, instead of
+  answering a misleading 404.
+- **W5 and G3:** a `ministry` audience that carries `groups` is refused at write time and is a case
+  in the matrix.
+- **G1:**
+  - It also bans `"use cache"` and `cacheLife`.
+  - Its one-hop reach is stated as accepted.
+  - The rollout registry is keyed by a feature name.
+- **G3:** groq-js and Content Lake disagree on `path()`.
+  - Verified: groq-js answers `"ministryEvent-f" in path("ministryEvent.*")` → true, because its
+    `pathRegExp` does not escape the `.` (`shared.mjs:4-9`). One reviewer's untokened curl showed
+    Content Lake answers false.
+  - The matrix therefore uses only ids on which both engines agree.
+  - `mayRead` implements the real rule, with its own unit test.
+  - G6 probes the real engine.
+- **G6:** «hidden» is enforced on the server (the pages and the write routes), not only in the nav.
+- **PR B:** after the rebase, re-check W7's path list and G1b's field grep, because `main` has moved.
+- **§8:** both narrowings of «quien la creó» are spelled out and told to Frank:
+  - A creator who stops leading the event's groups loses the right to edit it.
+  - A leader who widens someone else's one-group event does not become its owner.
+
+**Not adopted:**
+- Narrowing the encargado's right to `kind: "saturday"`. Reviewers raised it again. It is declined
+  for the same reason as before (D3: no authorization on `kind`; §8 states the wider scope).
+- Correcting the comment in `adminMemberVisibility.test.ts:11` («the same engine Sanity runs»).
+  It is true for that test's operators. The `path()` divergence is recorded in G3 instead, and the
+  test file is outside this plan.
