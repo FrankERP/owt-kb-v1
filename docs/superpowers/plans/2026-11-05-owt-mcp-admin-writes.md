@@ -139,7 +139,13 @@ and `ADMIN_TIER_TOOLS` — the full list minus `SUPER_ADMIN_ONLY_TOOLS`, written
 literal arrays, not computed, so adding a tool to the connector changes no admin list by itself.
 
 `registerAllTools`: the two super-admin-only bundles (`registerKids`, `registerMemberTools`) are
-skipped for the admin scopes; everything else registers as for `full`/`fullNoApps`, with
+skipped for the admin scopes, AND every admin-scope registration goes through
+`allowlistedServer(server, names)` — a thin `Proxy` over the `McpServer` whose `registerTool(name,
+…)` registers only names in the scope's literal list (`ADMIN_TIER_TOOLS`, or it minus the app-only
+names) and silently skips any other; every other member forwards unchanged. So the runtime list is
+an allowlist, as ADR-0083 promised, not «everything but two bundles»: a tool added to a shared
+bundle later reaches no admin until its name is added to the list on purpose (and test 1 forces
+that choice). Everything else registers as for `full`/`fullNoApps`, with
 `appsHost = scope === "full" || scope === "admin"`; the card resource registers for `"full"` and
 `"admin"`; `"adminRead"` registers `registerReadTools` only (exactly today's `"read"` list — its
 digest must equal today's `read` digest, pinned, so a slice A connection sees no change). The
@@ -216,10 +222,22 @@ as in the app's planner; on other hosts nobody can force (ADR-0083 §4.1), admin
 `scripts/mcp-dev-smoke.mjs`: `EXPECT_TIERS = ["full", "admin"]` (`read` refused with a pointer to
 `admin`); `expectedToolsForTier("admin")` = the `adminNoApps` names (its grant is loopback; a test
 pins them to `ADMIN_TIER_TOOLS` minus the app-only names); the boundary probe moves from
-`edit_setlist` to **`list_members`**, a super-admin-only READ (`{}` or `{toolsVersion}` only, passes
-only on `Tool list_members not found`), so even a wrong tier could not write. The smoke never
-calls an admin write. On dev the smoke's new grant is `"admin"` only once the cutoff commit is on
-`preview`; before that it is `"adminRead"` (11 tools).
+`edit_setlist` to **`set_member_access`**, a super-admin-only people tool whose strict schema
+(`members.ts:206`, `{memberId, enabled}.strict()`) refuses `{}` before any handler code — so on a
+wrong tier the probe is a schema refusal, never a write and never a read of people data (a read
+probe such as `list_members` would print the team's emails on a wrong tier). It still accepts only
+`{}` or `{toolsVersion}` and passes only on `Tool set_member_access not found`. The smoke never
+calls an admin write.
+
+**What the smoke can and cannot prove before release.** The smoke signs in as the operator's own
+account. On dev, any admin grant is `"adminRead"` until the cutoff passes, and the production
+cutoff lies after the merge (§3.5), so the admin list cannot run end to end on dev before release.
+The pre-release evidence for the admin scopes is therefore the route suite (real handlers, real
+scope selection, grants seeded around the cutoff) plus the dev smoke on the operator's tier (the
+OAuth path is unchanged by this slice). `--expect-tier admin` exists for a post-release dev run by
+a worship-admin account, when one is available. The first end-to-end evidence for the admin tier
+is the production live proof's `tools/list` check (§7), taken BEFORE any write is attempted: if
+the list is wrong, Mkz disconnects and nothing else runs.
 
 ### 3.7 Every model-visible write asks the person first
 
@@ -275,8 +293,13 @@ digests once, on purpose: Frank's Claude and his ChatGPT each get one refresh no
   rollback paragraph of §7. An addendum, not a new ADR: Frank's same decision, in the slices
   ADR-0083 announced.
 - `docs/MCP.md`: Tiers table (admin rows and counts), consent text, the smoke's tier and probe,
-  status banner. ADR-0062/0066/0072 consequence lines: «app-only tools: claude.ai grants of a
-  super-admin or a worship admin».
+  status banner, and every line that says the connector is «for one super-admin» (e.g. the
+  endpoints section, `docs/MCP.md:1674`). ADR-0062/0066/0072 consequence lines: «app-only tools:
+  claude.ai grants of a super-admin or a worship admin». ADR-0072's reason for unbound,
+  non-expiring delete tokens («only a super-admin principal reaches the tool») is restated: a
+  worship admin now reaches it too; the conclusion holds because any principal who reaches
+  `delete_services` can mint their own token with `check_service_deletes`, so binding the token to
+  a principal would add nothing.
 - `CLAUDE.md` + `AGENTS.md` (`agentDocsParity`) + `docs/agents/project-rules.md`: «Who connects an
   agent (ADR-0083)» → worship admin `"admin"`: everything but `SUPER_ADMIN_ONLY_TOOLS`, read-only
   before `ADMIN_WRITES_CUTOFF`; every tool classified; every model-visible write carries
@@ -299,15 +322,18 @@ digests once, on purpose: Frank's Claude and his ChatGPT each get one refresh no
   `createdAt` → `"adminRead"`; `ADMIN_WRITES_CUTOFF > LEGACY_GRANT_CUTOFF`.
 - A description test (§3.7) over the full handler.
 - `consentCopy`/`authorizePage.test.tsx`: the admin text; no «No podrá cambiar nada» for an admin.
-- `mcpDevSmoke.test.ts`: tiers, the admin names, the `list_members` probe, `read` refused.
+- `mcpDevSmoke.test.ts`: tiers, the admin names, the `set_member_access` probe, `read` refused.
+- `allowlistedServer`: a name outside the list is not registered; listed names register with
+  byte-identical definitions; non-`registerTool` members forward.
 - `serviceCommitCallers.test.ts` unchanged (no new writer, no new caller).
 
 ## 7. Release and verification
 
 Per CLAUDE.md: gates → one merge-range code review → fixes → gates → `preview` → dev alias + SHA →
-the cutoff commit (branch, then `preview`) → dev smoke `--expect-tier admin` if a worship-admin dev
-account is available, else stated as not run → PR to `main` → `gates` → merge → prod alias + SHA →
-§3.5's window check at once. Frank is told about the one refresh note (§3.7) and asked to reconfirm
+the cutoff commit (branch, then `preview`) → dev smoke on the operator's tier (§3.6 says why not
+the admin tier) → PR to `main` → `gates` → merge → prod alias + SHA → §3.5's window check at once.
+**If the merge will land after the cutoff** (a `strict` update or a slow `gates` run), the cutoff is
+moved later in a new commit and the gates re-run before merging — never merge past it. Frank is told about the one refresh note (§3.7) and asked to reconfirm
 §9's risk answers for this scope (the release does not wait on a reconfirmation he already gave;
 it waits only if he withdraws it).
 
@@ -315,7 +341,9 @@ Live proof, with Frank: Mkz connects; the consent shows the admin text; `tools/l
 (ChatGPT) or 40 (Claude); `list_members` and the Kids tools are absent; Mkz edits the setlist of a
 DRAFT service he picks and writes one message on a draft service (no notice for an unpublished
 service), then cleans up: deletes his message with `edit_service_message` and restores the setlist
-with `edit_setlist` (the before-state read with `get_service` first and shown in the thread). If
+with `edit_setlist` (the before-state read with `get_service` first and shown in the thread). The
+draft he picks must ALREADY have a setlist: restoring a setlist that did not exist would leave an
+empty setlist document instead of «none». If
 Mkz connected under slice A, that old connection shows 11 tools until he reconnects.
 
 **Rollback.** Reverting the PR removes admin writes on the next request after deploy (tier and
@@ -330,6 +358,11 @@ A per-person cap on notifying writes from the MCP; an email to Frank when a new 
 not built yet — when built, it is classified like any other tool, and the app admits admins).
 
 ## 9. Decisions for Frank
+
+«Reglas» from Frank's card is not delivered by this slice: no MCP tool writes solver rules yet
+(phase 4 slice R). Said plainly in the plan message; when slice R is built, its tool is classified
+like any other and admins get it (the app's rules POST admits them).
+
 
 Answered: pastor message yes; risks accepted for now (19:54Z); scope «Todo como en la página»
 (19:55Z). Asked again with the release message, because the scope grew after he answered: the
