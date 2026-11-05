@@ -6,17 +6,18 @@
 //   authorization_code — the code verifies (signature, typ, iss, 60 s); the
 //     client_id verifies for THIS origin and hashes to the code's `client`; the
 //     presented redirect_uri equals the code's exactly, is one of the client's
-//     registered URIs AND is on this origin's allowlist (re-checked here, never
-//     trusted from the code or the client id — O1); the PKCE verifier matches;
-//     a `resource`, if sent, is the code's; the subject is still a live,
-//     non-disabled super-admin (O2). Only THEN is the code redeemed — a
+//     registered URIs (a loopback one may differ in its port only) AND is on
+//     this origin's allowlist (re-checked here, never trusted from the code or
+//     the client id — O1); the PKCE verifier matches; a `resource`, if sent, is
+//     the code's; the subject still has a connection tier — a live super-admin
+//     or worship admin (O2, ADR-0083). Only THEN is the code redeemed — a
 //     `create()` that fails on conflict, so a replay is refused (O4) — and a
-//     grant created.
+//     grant created, recording which kind of agent it went to (`client`).
 //   refresh_token — the refresh token verifies; the grant is read FRESH (never
 //     from the 30 s cache, which only the MCP route's revocation check may use);
 //     a missing or revoked grant, a client_id that does not hash to the grant's
 //     `clientHash` (RFC 6749 §6), a refresh token whose `sub` is not the grant's
-//     (R13) or a subject who is no longer a live super-admin are all refused;
+//     (R13) or a subject who no longer has a connection tier are all refused;
 //     then `rotateRefresh` — which refuses a foreign-origin grant (R9), revokes
 //     the WHOLE grant on a superseded jti (O4) and refuses without revoking on a
 //     lost revision race.
@@ -38,7 +39,8 @@ import { getMemberAccess } from "@/app/utils/memberAccess";
 import { createGrant, loadGrant, redeemCode, rotateRefresh } from "@/app/mcp/oauth/grantStore";
 import { mcpRoutePreflight } from "@/app/mcp/oauth/guard";
 import { resolveResource } from "@/app/mcp/oauth/origin";
-import { isRedirectUriAllowed } from "@/app/mcp/oauth/redirects";
+import { matchRegisteredRedirect, redirectTargetKind } from "@/app/mcp/oauth/redirects";
+import { mcpTierOf } from "@/app/mcp/oauth/tier";
 import { hasMediaType, readCappedBody } from "@/app/mcp/oauth/requestBody";
 import { basicClientAuthRefusedResponse, jsonNoStore, oauthErrorResponse } from "@/app/mcp/oauth/responses";
 import {
@@ -160,11 +162,11 @@ function attemptedClientAuthentication(request: Request, form: URLSearchParams):
   return form.has("client_secret") ? "body" : null;
 }
 
-/** O2: the subject is an existing, non-disabled member whose LIVE role is super-admin. */
+/** O2: the subject is an existing, non-disabled member whose LIVE access has a connection tier (ADR-0083). */
 async function subjectStatus(sub: string): Promise<"live" | "refused" | "error"> {
   try {
     const access = await getMemberAccess(sub);
-    return access.active && access.role === "super-admin" ? "live" : "refused";
+    return mcpTierOf(access) !== null ? "live" : "refused";
   } catch {
     return "error";
   }
@@ -222,7 +224,8 @@ async function exchangeAuthorizationCode(form: URLSearchParams, ctx: Context): P
   // 3. O1: the redirect target is one of the client's registered URIs AND on
   //    this origin's allowlist — re-checked here, never trusted from the code
   //    or the client id alone.
-  if (!client.claims.redirectUris.includes(redirectUri) || !isRedirectUriAllowed(redirectUri, ctx.origin)) {
+  const clientKind = redirectTargetKind(redirectUri, ctx.origin);
+  if (clientKind === null || !matchRegisteredRedirect(redirectUri, client.claims.redirectUris, ctx.origin)) {
     return invalidGrant();
   }
 
@@ -234,7 +237,7 @@ async function exchangeAuthorizationCode(form: URLSearchParams, ctx: Context): P
   const resource = resolveResource(form.getAll("resource"), ctx.origin);
   if (!resource.ok || resource.resource !== claims.resource) return invalidTarget();
 
-  // 6. O2: the subject is still a live super-admin.
+  // 6. O2: the subject still has a connection tier.
   const subject = await subjectStatus(claims.sub);
   if (subject === "error") return serverError("member lookup");
   if (subject === "refused") return invalidGrant();
@@ -245,8 +248,10 @@ async function exchangeAuthorizationCode(form: URLSearchParams, ctx: Context): P
     return redeemed.reason === "replay" ? invalidGrant() : serverError("code redemption", redeemed.cause);
   }
 
-  // 8. The grant — bound to the subject, the client (stored as its hash) and this origin.
-  const grant = await createGrant({ sub: claims.sub, clientId, origin: ctx.origin });
+  // 8. The grant — bound to the subject, the client (stored as its hash), this
+  //    origin, and the KIND of agent the code went to (ADR-0083: only a claude
+  //    grant gets the app-only card tools). Set once; a refresh never changes it.
+  const grant = await createGrant({ sub: claims.sub, clientId, origin: ctx.origin, client: clientKind });
   if (!grant.ok) return serverError("grant creation", grant.cause);
 
   return issueTokens(ctx, { sub: claims.sub, grantId: grant.grantId, refreshJti: grant.refreshJti });
@@ -281,7 +286,7 @@ async function refreshAccessToken(form: URLSearchParams, ctx: Context): Promise<
   // 6. RFC 8707: a resource, if sent, is this origin's.
   if (!resolveResource(form.getAll("resource"), ctx.origin).ok) return invalidTarget();
 
-  // 7. O2: the subject is still a live super-admin.
+  // 7. O2: the subject still has a connection tier.
   const subject = await subjectStatus(grant.sub);
   if (subject === "error") return serverError("member lookup");
   if (subject === "refused") return invalidGrant();

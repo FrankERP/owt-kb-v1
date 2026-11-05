@@ -759,7 +759,29 @@ export async function reviseProposalResult(
 /** MCP Apps: a tool only the card may call; a host that honours it hides it from the model (Q1 (1)). */
 const APP_ONLY_META = { ui: { resourceUri: PROPOSAL_CARD_TOOL_META.ui.resourceUri, visibility: ["app"] } } as const;
 
-export function registerProposalEditor(server: McpServer): void {
+/**
+ * `appsHost: false` (a grant whose agent is not claude.ai) leaves out the two app-only tools: their
+ * safety — the model cannot force — rests on the host hiding them, which only Claude is known to do
+ * (ADR-0083). The default registers them, so the claude.ai list is unchanged.
+ */
+export function registerProposalEditor(server: McpServer, opts: { appsHost?: boolean } = {}): void {
+  if (opts.appsHost !== false) registerProposalAppTools(server);
+  server.registerTool(
+    "revise_proposal",
+    {
+      title: "Cambiar lugares de una propuesta",
+      description: REVISE_PROPOSAL_DESCRIPTION,
+      inputSchema: REVISE_PROPOSAL_INPUT,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+      // The card follows a revision into the chat (E8).
+      _meta: PROPOSAL_CARD_TOOL_META,
+    },
+    async (args, ctx: ServerContext) => reviseProposalResult(args, principalOf(ctx)),
+  );
+}
+
+/** The card's two app-only tools (MCP Apps visibility `["app"]`), registered only for a claude.ai grant. */
+function registerProposalAppTools(server: McpServer): void {
   server.registerTool(
     "check_proposal_edits",
     {
@@ -782,17 +804,5 @@ export function registerProposalEditor(server: McpServer): void {
       _meta: APP_ONLY_META,
     },
     async (args, ctx: ServerContext) => saveProposalEditsResult(args, principalOf(ctx)),
-  );
-  server.registerTool(
-    "revise_proposal",
-    {
-      title: "Cambiar lugares de una propuesta",
-      description: REVISE_PROPOSAL_DESCRIPTION,
-      inputSchema: REVISE_PROPOSAL_INPUT,
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
-      // The card follows a revision into the chat (E8).
-      _meta: PROPOSAL_CARD_TOOL_META,
-    },
-    async (args, ctx: ServerContext) => reviseProposalResult(args, principalOf(ctx)),
   );
 }

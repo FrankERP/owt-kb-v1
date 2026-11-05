@@ -132,8 +132,16 @@ import { WRITE_REREAD_RULE } from "@/app/mcp/writes/runWriteTool";
 import { NOTHING_WRITTEN, STALE_COPY } from "@/app/mcp/writes/refusals";
 import { serviceError } from "@/app/utils/serviceMutation";
 import * as mcpRoute from "@/app/api/mcp/route";
-import { TOOL_LIST_VERSION } from "@/app/mcp/toolList";
-import { STALE_TOOL_LIST_NOTE, TOOLS_VERSION_ARG } from "@/app/mcp/toolListVersion";
+import {
+  READ_TIER_TOOLS,
+  TOOL_LIST_SCOPES,
+  TOOL_LIST_VERSION,
+  TOOL_LIST_VERSIONS,
+  registerAllTools,
+} from "@/app/mcp/toolList";
+import { APP_ONLY_TOOL_NAMES, EXPECTED_TOOLS_NO_APPS, READ_TIER_TOOL_NAMES } from "@/scripts/mcp-dev-smoke.mjs";
+import { LEGACY_GRANT_CUTOFF } from "@/app/mcp/oauth/grantDocument";
+import { STALE_TOOL_LIST_NOTE, TOOLS_VERSION_ARG, toolListDigest } from "@/app/mcp/toolListVersion";
 import { buildGrantDocument, newGrantId } from "@/app/mcp/oauth/grantDocument";
 import { __clearGrantCache, createGrant, revokeGrant } from "@/app/mcp/oauth/grantStore";
 import { PREVIEW_ORIGIN, PRODUCTION_ORIGIN, resourceFor } from "@/app/mcp/oauth/origin";
@@ -184,8 +192,8 @@ const MODERN_META = {
   "io.modelcontextprotocol/clientInfo": { name: "vitest", version: "0" },
 };
 
-function liveAccess(role: string | null, active = true) {
-  return { active, role, ministries: ["worship"], managesMinistries: [] };
+function liveAccess(role: string | null, active = true, ministries: string[] = ["worship"]) {
+  return { active, role, ministries, managesMinistries: [] };
 }
 
 function stubEnv(env: { vercelEnv?: string; disabled?: string; secret?: string } = {}) {
@@ -195,8 +203,15 @@ function stubEnv(env: { vercelEnv?: string; disabled?: string; secret?: string }
 }
 
 /** A live grant in the in-memory dataset, created by the real grant store. */
-async function liveGrant(opts: { sub?: string; origin?: string } = {}): Promise<string> {
-  const created = await createGrant({ sub: opts.sub ?? MEMBER, clientId: CLIENT_ID, origin: opts.origin ?? PREVIEW_ORIGIN });
+async function liveGrant(
+  opts: { sub?: string; origin?: string; client?: "claude" | "chatgpt" | "loopback" } = {},
+): Promise<string> {
+  const created = await createGrant({
+    sub: opts.sub ?? MEMBER,
+    clientId: CLIENT_ID,
+    origin: opts.origin ?? PREVIEW_ORIGIN,
+    client: opts.client ?? "claude",
+  });
   if (!created.ok) throw new Error("fixture: grant not created");
   return created.grantId;
 }
@@ -521,6 +536,7 @@ describe("/api/mcp — the grant and the live principal (spec O2, R13): 401 inva
         sub: MEMBER,
         clientId: CLIENT_ID,
         origin: PRODUCTION_ORIGIN,
+        client: "claude",
         refreshJti: "j",
         createdAt: new Date().toISOString(),
       }),
@@ -531,7 +547,7 @@ describe("/api/mcp — the grant and the live principal (spec O2, R13): 401 inva
   });
 
   it.each([
-    ["an admin", liveAccess("admin")],
+    ["an admin outside worship", liveAccess("admin", true, ["kids"])],
     ["a content-editor", liveAccess("content-editor")],
     ["a member", liveAccess("member")],
     ["a member with no role", liveAccess(null)],
@@ -914,18 +930,18 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
       const token = await accessToken(await liveGrant());
       const result = await rpcResult(await POST(mcpRequest(rpc("tools/list"), { token })));
       const served = (result.tools as { name: string }[]).map((t) => t.name);
-      expect(recordToolList((server) => registerAllTools(server, { version: "" })).map((t) => t.name)).toEqual(served);
+      expect(recordToolList((server) => registerAllTools(server, { version: "", scope: "full" })).map((t) => t.name)).toEqual(served);
     });
 
     it("the digest covers what a client caches, and ignores the deployment's commit", async () => {
       const { toolListDigest } = await import("@/app/mcp/toolListVersion");
       const { registerAllTools } = await import("@/app/mcp/toolList");
-      expect(toolListDigest((server) => registerAllTools(server, { version: "abc1234" }))).toBe(TOOL_LIST_VERSION);
+      expect(toolListDigest((server) => registerAllTools(server, { version: "abc1234", scope: "full" }))).toBe(TOOL_LIST_VERSION);
       const renamed = toolListDigest((server) => {
         const register = server.registerTool.bind(server) as (name: string, config: { description?: string }, cb: unknown) => unknown;
         (server as unknown as { registerTool: typeof register }).registerTool = (name, config, cb) =>
           register(name, name === "ping" ? { ...config, description: `${config.description} ` } : config, cb);
-        registerAllTools(server, { version: "" });
+        registerAllTools(server, { version: "", scope: "full" });
       });
       expect(renamed).not.toBe(TOOL_LIST_VERSION);
     });
@@ -1006,7 +1022,7 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     expect(auth).toBeDefined();
     expect(auth!.clientId).toBe(clientHashOf(CLIENT_ID));
     expect(auth!.scopes).toEqual([]);
-    expect(auth!.extra).toEqual({ sub: MEMBER, grantId });
+    expect(auth!.extra).toEqual({ sub: MEMBER, grantId, tier: "full" });
     expect(auth!.resource?.href).toBe(resourceFor(PREVIEW_ORIGIN));
     expect(auth!.resourceMetadataUrl).toBe(METADATA_URL);
     expect(typeof auth!.expiresAt).toBe("number");
@@ -1645,6 +1661,179 @@ describe("/api/mcp — no stream outlives the request that was checked (O2/O9)",
 });
 
 // ── failures ───────────────────────────────────────────────────────────────
+
+describe("/api/mcp — three tool lists: who you are (live) and which agent holds the grant (ADR-0083)", () => {
+  type ListedTool = { name: string; annotations?: Record<string, unknown>; _meta?: Record<string, unknown>; inputSchema?: { properties?: Record<string, { description?: string }> } };
+  async function listedTools(token: string, host?: string): Promise<ListedTool[]> {
+    const result = await rpcResult(await POST(mcpRequest(rpc("tools/list"), { token, ...(host ? { host } : {}) })));
+    return result.tools as ListedTool[];
+  }
+  async function rpcError(body: unknown, token: string): Promise<{ code: number; message: string } | undefined> {
+    const message = await rpcResponse(await POST(mcpRequest(body, { token })));
+    return message.error as { code: number; message: string } | undefined;
+  }
+  const NON_READ_TOOLS = EXPECTED_TOOLS.filter((name: string) => !READ_TIER_TOOL_NAMES.includes(name));
+
+  it("the smoke's lists and the module's agree: read = READ_TIER_TOOLS, no-apps = full minus the five app-only tools", () => {
+    expect(READ_TIER_TOOL_NAMES).toEqual([...READ_TIER_TOOLS]);
+    expect(TOOL_LIST_SCOPES).toEqual(["full", "fullNoApps", "read"]);
+    // Counts are derived, never literal (phase 4 grows the full list).
+    expect(EXPECTED_TOOLS_NO_APPS).toHaveLength(EXPECTED_TOOLS.length - APP_ONLY_TOOL_NAMES.length);
+    // None of the phase-4 people tools is a read-tier tool: they list the team's emails.
+    for (const name of MEMBER_TOOL_NAMES) expect(READ_TIER_TOOL_NAMES, name).not.toContain(name);
+  });
+
+  it("the full digest is exactly the one before ADR-0083; the three digests differ", () => {
+    // Pinned against this PR's base (main at 44f6a86b): a Claude connector made before this
+    // release keeps its list and hears no refresh note. Update this pin ONLY when a release changes
+    // the full list on purpose — that release sends every Claude connector the refresh note.
+    expect(TOOL_LIST_VERSIONS.full).toBe("4a0a435e");
+    expect(TOOL_LIST_VERSION).toBe(TOOL_LIST_VERSIONS.full);
+    expect(new Set(Object.values(TOOL_LIST_VERSIONS)).size).toBe(3);
+    for (const scope of TOOL_LIST_SCOPES) {
+      expect(toolListDigest((server) => registerAllTools(server, { version: "x", scope })), scope).toBe(TOOL_LIST_VERSIONS[scope]);
+    }
+  });
+
+  it("a worship admin, on ANY agent, sees exactly the eleven reads: read-only, no card, its own toolsVersion", async () => {
+    h.getMemberAccess.mockResolvedValue(liveAccess("admin"));
+    for (const client of ["claude", "chatgpt", "loopback"] as const) {
+      __clearGrantCache();
+      const tools = await listedTools(await accessToken(await liveGrant({ client })));
+      expect(tools.map((t) => t.name), client).toEqual(READ_TIER_TOOL_NAMES);
+      for (const tool of tools) {
+        expect(tool.annotations, tool.name).toEqual(expectedAnnotations(tool.name));
+        expect(tool.annotations?.readOnlyHint, tool.name).toBe(true);
+        expect(tool._meta?.ui, tool.name).toBeUndefined();
+        expect(tool.inputSchema?.properties?.[TOOLS_VERSION_ARG]?.description, tool.name).toContain(`"${TOOL_LIST_VERSIONS.read}"`);
+      }
+    }
+  });
+
+  it("a worship admin's handler does not know any other tool: every write and app tool is «not found», before any handler", async () => {
+    h.getMemberAccess.mockResolvedValue(liveAccess("admin"));
+    const token = await accessToken(await liveGrant());
+    expect(NON_READ_TOOLS.length).toBeGreaterThan(0);
+    for (const name of NON_READ_TOOLS) {
+      const error = await rpcError(rpc("tools/call", { name, arguments: { toolsVersion: TOOL_LIST_VERSIONS.read } }), token);
+      expect(error, name).toEqual({ code: -32602, message: `Tool ${name} not found` });
+    }
+    // A plausible-looking edit_setlist is refused the same way (the smoke's probe sends {}).
+    const error = await rpcError(
+      rpc("tools/call", { name: "edit_setlist", arguments: { serviceId: "role-1", roleRev: "r", observed: { state: "none" }, rows: [] } }),
+      token,
+    );
+    expect(error?.message).toBe("Tool edit_setlist not found");
+    // A read still runs.
+    const ping = await rpcResult(await POST(mcpRequest(rpc("tools/call", { name: "ping", arguments: {} }), { token })));
+    expect(ping.isError).toBeFalsy();
+  });
+
+  it("a super-admin on a ChatGPT or loopback grant gets every tool but the app-only five, and no card resources", async () => {
+    for (const client of ["chatgpt", "loopback"] as const) {
+      __clearGrantCache();
+      const token = await accessToken(await liveGrant({ client }));
+      const tools = await listedTools(token);
+      expect(tools.map((t) => t.name), client).toEqual(EXPECTED_TOOLS_NO_APPS);
+      for (const tool of tools) {
+        const visibility = (tool._meta?.ui as { visibility?: string[] } | undefined)?.visibility;
+        expect(visibility, tool.name).toBeUndefined();
+        expect(tool.inputSchema?.properties?.[TOOLS_VERSION_ARG]?.description, tool.name).toContain(`"${TOOL_LIST_VERSIONS.fullNoApps}"`);
+      }
+      for (const name of APP_ONLY_TOOL_NAMES) {
+        const error = await rpcError(rpc("tools/call", { name, arguments: {} }), token);
+        expect(error, `${client} ${name}`).toEqual({ code: -32602, message: `Tool ${name} not found` });
+      }
+      // No resources capability, so no resources/list and no card.
+      const init = await rpcResult(await POST(mcpRequest(INITIALIZE, { token })));
+      expect((init.capabilities as Record<string, unknown>).resources, client).toBeUndefined();
+      expect(await rpcError(rpc("resources/list"), token), client).toBeDefined();
+      expect(await rpcError(rpc("resources/read", { uri: PROPOSAL_CARD_URI }), token), client).toBeDefined();
+    }
+  });
+
+  it("a worship admin's handler advertises no resources either", async () => {
+    h.getMemberAccess.mockResolvedValue(liveAccess("admin"));
+    const token = await accessToken(await liveGrant());
+    const init = await rpcResult(await POST(mcpRequest(INITIALIZE, { token })));
+    expect((init.capabilities as Record<string, unknown>).resources).toBeUndefined();
+    expect(init.capabilities).toMatchObject({ tools: { listChanged: false } });
+    expect(await rpcError(rpc("resources/list"), token)).toBeDefined();
+  });
+
+  it("the tier is LIVE: the same grant moves between lists as the role changes, and the principal carries it", async () => {
+    const grantId = await liveGrant();
+    const token = await accessToken(grantId);
+    h.getMemberAccess.mockResolvedValue(liveAccess("admin"));
+    expect((await listedTools(token)).map((t) => t.name)).toEqual(READ_TIER_TOOL_NAMES);
+    expect(h.forwarded.at(-1)!.auth!.extra).toEqual({ sub: MEMBER, grantId, tier: "read" });
+    h.getMemberAccess.mockResolvedValue(liveAccess("super-admin"));
+    expect((await listedTools(token)).map((t) => t.name)).toEqual(EXPECTED_TOOLS);
+    h.getMemberAccess.mockResolvedValue(liveAccess("content-editor"));
+    await expectRefused({ token }, "invalid_token");
+  });
+
+  it("subscriptions/listen is refused on every list (no held streams, O2/O9)", async () => {
+    const cases: [string, ReturnType<typeof liveAccess>, "claude" | "chatgpt"][] = [
+      ["full", liveAccess("super-admin"), "claude"],
+      ["fullNoApps", liveAccess("super-admin"), "chatgpt"],
+      ["read", liveAccess("admin"), "claude"],
+    ];
+    for (const [label, access, client] of cases) {
+      __clearGrantCache();
+      h.getMemberAccess.mockResolvedValue(access);
+      const token = await accessToken(await liveGrant({ client }));
+      const res = await POST(
+        modernRequest("subscriptions/listen", { notifications: { toolsListChanged: true } }, { token, id: 9 }),
+      );
+      expect(res.headers.get("content-type"), label).not.toMatch(/event-stream/);
+      const { done, text } = await readWithin(res, 1000);
+      expect(done, label).toBe(true);
+      const message = JSON.parse(text) as { result?: unknown; error?: { code: number } };
+      expect(message.result, label).toBeUndefined();
+      expect(message.error?.code, label).toBe(-32603);
+    }
+  });
+
+  describe("a grant with no stored client (before ADR-0083)", () => {
+    function legacyGrant(origin: string, createdAt: string): string {
+      const id = newGrantId();
+      const doc = buildGrantDocument({
+        id,
+        sub: MEMBER,
+        clientId: CLIENT_ID,
+        origin,
+        client: "claude",
+        refreshJti: "j",
+        createdAt,
+      }) as unknown as Record<string, unknown>;
+      delete doc.client;
+      h.docs.set(id, { ...doc, _rev: "r1" } as never);
+      return id;
+    }
+    const before = new Date(Date.parse(LEGACY_GRANT_CUTOFF) - 60_000).toISOString();
+    const after = new Date(Date.parse(LEGACY_GRANT_CUTOFF) + 60_000).toISOString();
+
+    it("on production, made before the cutoff, is Claude's: the full list, card included", async () => {
+      stubEnv({ vercelEnv: "production" });
+      const id = legacyGrant(PRODUCTION_ORIGIN, before);
+      const tools = await listedTools(await accessToken(id, { origin: PRODUCTION_ORIGIN }), PRODUCTION_HOST);
+      expect(tools.map((t) => t.name)).toEqual(EXPECTED_TOOLS);
+    });
+
+    it("made after the cutoff, or anywhere but production, fails closed to no app tools", async () => {
+      stubEnv({ vercelEnv: "production" });
+      const late = legacyGrant(PRODUCTION_ORIGIN, after);
+      expect((await listedTools(await accessToken(late, { origin: PRODUCTION_ORIGIN }), PRODUCTION_HOST)).map((t) => t.name)).toEqual(
+        EXPECTED_TOOLS_NO_APPS,
+      );
+      stubEnv();
+      __clearGrantCache();
+      const dev = legacyGrant(PREVIEW_ORIGIN, before);
+      expect((await listedTools(await accessToken(dev))).map((t) => t.name)).toEqual(EXPECTED_TOOLS_NO_APPS);
+    });
+  });
+});
 
 describe("/api/mcp — a server failure is a fixed 500 and never echoes (E1)", () => {
   async function expectServerError(res: Response) {

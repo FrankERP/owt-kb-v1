@@ -25,8 +25,9 @@ export const TOOLS_VERSION_ARG = "toolsVersion";
 export const STALE_TOOL_LIST_NOTE =
   "Aviso del servidor OWT Backstage: la lista de herramientas que tienes guardada es de una versión anterior " +
   "(este resultado sí es válido). Dile al usuario, en una frase y sin repetirlo si ya se lo dijiste en esta " +
-  "conversación, que actualice el conector: Ajustes → Conectores → OWT Backstage → menú «⋯» → «Refresh tools list» " +
-  "(si no aparece, Desconectar y Conectar), y que siga en un chat nuevo.";
+  "conversación, que actualice la lista de herramientas del conector en su app (en Claude: Ajustes → Conectores → " +
+  "OWT Backstage → menú «⋯» → «Refresh tools list»; si no aparece, o en otro agente, desconectar y volver a conectar), " +
+  "y que siga en un chat nuevo.";
 
 type ToolConfig = {
   title?: string;

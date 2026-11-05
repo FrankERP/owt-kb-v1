@@ -20,8 +20,10 @@ import {
   isGrantId,
   newGrantId,
   parseGrantDocument,
+  GRANT_READ_FIELDS,
   type StoredGrant,
 } from "./grantDocument";
+import type { RedirectTargetKind } from "./redirects";
 
 export type { StoredGrant } from "./grantDocument";
 
@@ -59,9 +61,8 @@ export function __clearGrantCache() {
   cache.clear();
 }
 
-const GRANT_QUERY = `*[_type == $type && _id == $id][0]{
-  _id, _rev, sub, clientHash, origin, createdAt, lastRefreshAt, currentRefreshJti, revoked
-}`;
+/** Projects exactly what `parseGrantDocument` reads (`GRANT_READ_FIELDS`), so no field can read back absent by omission. */
+export const GRANT_QUERY = `*[_type == $type && _id == $id][0]{ ${GRANT_READ_FIELDS.join(", ")} }`;
 
 /**
  * Create a live grant for `sub`, bound to the client (stored as its hash) and to
@@ -72,12 +73,14 @@ export async function createGrant(input: {
   sub: string;
   clientId: string;
   origin: string;
+  client: RedirectTargetKind;
 }): Promise<{ ok: true; grantId: string; refreshJti: string } | GrantStoreFailure> {
   const doc = buildGrantDocument({
     id: newGrantId(),
     sub: input.sub,
     clientId: input.clientId,
     origin: input.origin,
+    client: input.client,
     refreshJti: randomUUID(),
     createdAt: new Date().toISOString(),
   });

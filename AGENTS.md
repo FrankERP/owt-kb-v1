@@ -245,9 +245,13 @@ looks wrong** — several exist to stop a plausible-looking change.
   `MCP_OAUTH_SECRET`, and are excluded from `proxy.ts`; `/oauth/authorize` is not, and depends
   on NextAuth's DEFAULT `redirect` callback keeping its query — never add a custom `redirect`
   callback that drops it (`authRedirectCallback.test.ts`; `docs/MCP.md`).
-- **MCP tools register only in `registerAllTools`** (`app/mcp/toolList.ts`): its digest is the
-  `toolsVersion` every model-visible tool asks for, and a stale Claude copy gets a refresh note
-  (ADR-0069). Guidance that depends on an answer goes in the answer, not the description.
+- **Who connects an agent (ADR-0083):** `mcpTierOf` on the LIVE access — super-admin `"full"`, worship
+  admin `"read"` (`READ_TIER_TOOLS`, an allowlist), never stored; the five app-only tools only on a
+  grant whose `client` is `"claude"`; the redirect list stays CLOSED (claude.ai, ChatGPT's stable
+  callback, loopback).
+- **MCP tools register only in `registerAllTools`** (`app/mcp/toolList.ts`): each list's digest
+  (`TOOL_LIST_VERSIONS`, one per handler since ADR-0083) is the `toolsVersion` its model-visible tools
+  ask for, and a stale copy gets a refresh note (ADR-0069). Guidance that depends on an answer goes in the answer, not the description.
 - **The ten admin write paths** (setlists PUT, roles create, roles PATCH, roles DELETE,
   copy-instruments, swap, publish-ready, unpublish, the fairness PUT, the proposals PATCH) delegate everything after
   authorization to `app/utils/*Commit.ts`; MCP writes go only through them (`apply_schedule`: roles

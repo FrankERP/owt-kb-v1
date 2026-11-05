@@ -280,6 +280,7 @@ export const INTERNAL_STUDIO_FIELDS: Readonly<Record<string, readonly string[]>>
     "sub",
     "clientHash",
     "origin",
+    "client",
     "createdAt",
     "lastRefreshAt",
     "currentRefreshJti",

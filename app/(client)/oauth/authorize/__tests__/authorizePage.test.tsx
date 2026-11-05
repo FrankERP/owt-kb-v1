@@ -7,8 +7,9 @@
 // after one of them.
 //
 // What is pinned: the page never mints anything (no code-signing import, no
-// grant store in its closure); a non-super-admin, an impersonating
-// super-admin, or a missing session sees a rejection and is NEVER redirected;
+// grant store in its closure); anyone with no MCP tier (ADR-0083: not a
+// super-admin, not a worship admin), an impersonating user, or a missing
+// session sees a rejection and is NEVER redirected;
 // an unverified client or redirect target renders an error page and is never
 // followed; the self-declared name is labelled unverified and isolated in a
 // `<bdi>`; the form posts every validated field and offers exactly «Permitir»
@@ -51,7 +52,8 @@ import AuthorizePage from "../page";
 import { authorizeFormFields, validateAuthorizeRequest } from "@/app/mcp/oauth/authorizeRequest";
 import { PREVIEW_ORIGIN, PRODUCTION_ORIGIN } from "@/app/mcp/oauth/origin";
 import { s256Challenge } from "@/app/mcp/oauth/pkce";
-import { CLAUDE_AI_REDIRECT_URI } from "@/app/mcp/oauth/redirects";
+import { CLAUDE_AI_REDIRECT_URI, REDIRECT_TARGET_LABEL } from "@/app/mcp/oauth/redirects";
+import { CONSENT_WARNING, TIER_CONSENT_TEXT } from "@/app/mcp/oauth/consentCopy";
 import { signClientId } from "@/app/mcp/oauth/tokens";
 import { walkImportClosure } from "@/app/mcp/oauth/__tests__/importClosure";
 
@@ -62,7 +64,12 @@ const REGISTERED_AT = new Date("2026-09-24T12:00:00Z");
 const NOW = new Date("2026-09-24T12:03:30Z");
 
 const SUPER_ADMIN_SESSION = { user: { sanityId: "frank", role: "super-admin", isImpersonating: false } };
-const liveAccess = (role: string | null, active = true) => ({ active, role, ministries: ["worship"], managesMinistries: [] });
+const liveAccess = (role: string | null, active = true, ministries: string[] = ["worship"]) => ({
+  active,
+  role,
+  ministries,
+  managesMinistries: [],
+});
 
 async function clientId(opts: { origin?: string; clientName?: string; redirectUris?: string[] } = {}) {
   return signClientId({
@@ -139,7 +146,7 @@ describe("/oauth/authorize — consent for a live super-admin", () => {
     expect(html).toContain("<bdi>Claude</bdi>");
     expect(html).toContain(CLAUDE_AI_REDIRECT_URI);
     expect(html).toContain("hace 3 minutos");
-    expect(html).toContain("Aprueba sólo si acabas de iniciar esta conexión en Claude");
+    expect(html).toContain(CONSENT_WARNING);
     expect(h.redirect).not.toHaveBeenCalled();
     expect(h.getMemberAccess).toHaveBeenCalledWith("frank");
   });
@@ -191,6 +198,15 @@ describe("/oauth/authorize — consent for a live super-admin", () => {
     expect(hiddenFields(html)).toContainEqual(["state", 'a%20b&c="d"']);
   });
 
+  it("names the agent the code goes to (from the redirect URI) and what the connection may do (ADR-0083)", async () => {
+    const html = await renderPage(await query());
+    expect(html).toContain("Se conecta a");
+    expect(html).toContain(REDIRECT_TARGET_LABEL.claude);
+    expect(html).toContain("Podrá");
+    expect(html).toContain(TIER_CONSENT_TEXT.full);
+    expect(html).not.toContain(TIER_CONSENT_TEXT.read);
+  });
+
   it("consent is never remembered: the same client, twice, renders the form twice", async () => {
     const q = await query();
     expect(await renderPage(q)).toContain("<form");
@@ -207,15 +223,30 @@ describe("/oauth/authorize — the session: rejection shown here, never redirect
     expect(h.getMemberAccess).not.toHaveBeenCalled();
   });
 
-  it.each(["member", "admin", "content-editor", null])("a live %s is rejected", async (role) => {
+  it.each(["member", "content-editor", null])("a live %s is rejected", async (role) => {
     h.getMemberAccess.mockResolvedValue(liveAccess(role));
     const html = await renderPage(await query());
-    expect(html).toContain("Sólo un super-admin puede autorizar conexiones");
+    expect(html).toContain("Solo los administradores de Alabanza pueden conectar un agente de IA.");
     expectNoConsent(html);
   });
 
-  it("the LIVE role decides, not the session copy", async () => {
+  it("a live admin OUTSIDE worship is rejected (ADR-0083: the read tier is worship's)", async () => {
+    h.getMemberAccess.mockResolvedValue(liveAccess("admin", true, ["kids"]));
+    const html = await renderPage(await query());
+    expect(html).toContain("Solo los administradores de Alabanza pueden conectar un agente de IA.");
+    expectNoConsent(html);
+  });
+
+  it("a live worship admin sees the consent, labelled read-only (ADR-0083)", async () => {
     h.getMemberAccess.mockResolvedValue(liveAccess("admin"));
+    const html = await renderPage(await query());
+    expect(html).toContain("<form");
+    expect(html).toContain(TIER_CONSENT_TEXT.read);
+    expect(html).not.toContain(TIER_CONSENT_TEXT.full);
+  });
+
+  it("the LIVE role decides, not the session copy", async () => {
+    h.getMemberAccess.mockResolvedValue(liveAccess("content-editor"));
     expectNoConsent(await renderPage(await query()));
 
     h.requireActiveSession.mockResolvedValue({ user: { sanityId: "frank", role: "member", isImpersonating: false } });
