@@ -603,6 +603,23 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   the planner's month, drafts included: the ONE file ADR-0022 lets read `kidsSchedule` drafts.
   `PUBLISHED_PERSPECTIVE` is what every Kids planner read passes (`serverClient` is raw otherwise).
 
+### Jóvenes meetings (ADR-0081)
+- **`readMinistryEvents(access, { me, ministry, from, to, mode })`**, **`mayRead(access, event, mode)`**,
+  **`buildMinistryEventQuery`** ([ministryEventReads.ts](../app/utils/ministryEventReads.ts)) — THE
+  one reader of `ministryEvent`, `server-only`: the id prefix, the ministry and the reader's groups
+  as a PARAMETER are in every query, so one group never receives another's meetings. `member` mode
+  for pastors' pages, `editor` for the planner (admins everything, leaders their groups' drafts).
+  Throws `MinistryEventReadUnavailable` without the read token. `mayRead` is the same rule in
+  TypeScript for a server decision on one stored event; never post-filter a wider read.
+  `ministryEventCoverage.test.ts` fails on any other file that names the type.
+- **`eventHeading`**, **`audienceLabel`**, **`seatRoleLabel`**, **`mySeats`**, **`eventDayLabel`**,
+  **`addDaysIso`** ([jovenesEventView.ts](../app/utils/jovenesEventView.ts)) — a meeting's words,
+  pure; never decides access.
+- **`rolloutAllows(feature, access)`**, **`navRolloutAllows(feature, isSuper)`**, **`ROLLOUT`**
+  ([rollout.ts](../app/utils/rollout.ts)) — THE rollout registry (`hidden → superAdmin → admins →
+  all`), keyed by feature name. The server gate is what pages and routes call; the nav copy is
+  cosmetic (the session carries no ministry level, so at `admins` the nav shows the super-admin only).
+
 ### Availability proposals (ADR-0079)
 - **`availabilityConflicts.ts`** ([availabilityConflicts.ts](../app/utils/availabilityConflicts.ts)) —
   the pure core: `findRoleConflicts` (a person seated in any of the five seats on a date in their

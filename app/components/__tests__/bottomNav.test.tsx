@@ -122,8 +122,21 @@ describe("BottomNav", () => {
     mount();
     fireEvent.click(screen.getByRole("button", { name: "Más" }));
     const dialog = screen.getByRole("dialog", { name: "Más" });
-    expect(Array.from(dialog.querySelectorAll("a")).map((a) => a.textContent?.trim())).toEqual(["Oasis Kids", "Admin"]);
+    expect(Array.from(dialog.querySelectorAll("a")).map((a) => a.textContent?.trim())).toEqual(["Oasis Kids", "Jóvenes", "Admin"]);
     expect(screen.getByRole("link", { name: "Oasis Kids" }).getAttribute("href")).toBe("/kids");
+    expect(screen.getByRole("link", { name: "Jóvenes" }).getAttribute("href")).toBe("/jovenes");
+  });
+
+  // Jóvenes' meetings are at rollout stage `superAdmin` (`rollout.ts`).
+  it("in Jóvenes, a super-admin sees the Reuniones tab and the switch to the other two", () => {
+    pathname = "/jovenes";
+    session = { user: { ...worshipUser, role: "super-admin" } };
+    mount();
+    const nav = screen.getByRole("navigation", { name: "Navegación principal" });
+    expect(Array.from(nav.querySelectorAll("a")).map((n) => n.textContent?.trim())).toEqual(["Reuniones"]);
+    fireEvent.click(screen.getByRole("button", { name: "Más" }));
+    const dialog = screen.getByRole("dialog", { name: "Más" });
+    expect(Array.from(dialog.querySelectorAll("a")).map((a) => a.textContent?.trim())).toEqual(["Alabanza", "Oasis Kids"]);
   });
 
   it("in Kids, a super-admin sees Kids' tabs and the switch back to Alabanza — no Admin", () => {
@@ -134,13 +147,13 @@ describe("BottomNav", () => {
     expect(Array.from(nav.querySelectorAll("a")).map((n) => n.textContent?.trim())).toEqual(["Kids", "Planear Kids"]);
     fireEvent.click(screen.getByRole("button", { name: "Más" }));
     const dialog = screen.getByRole("dialog", { name: "Más" });
-    expect(Array.from(dialog.querySelectorAll("a")).map((a) => a.textContent?.trim())).toEqual(["Alabanza"]);
+    expect(Array.from(dialog.querySelectorAll("a")).map((a) => a.textContent?.trim())).toEqual(["Alabanza", "Jóvenes"]);
     expect(screen.getByRole("link", { name: "Alabanza" }).getAttribute("href")).toBe("/");
   });
 
-  // Jóvenes has no screens yet. Its one tab (Kids, which redirects them) is fewer
-  // than two items, so there is no bar at all — pinned so a future tab for them
-  // is a deliberate change.
+  // Jóvenes' meetings reach only the super-admin so far (rollout stage
+  // `superAdmin`), so a Jóvenes-only member has no section and no bar — pinned so
+  // widening the rollout is a deliberate change here too.
   it("renders nothing for a Jóvenes-only member", () => {
     session = { user: { ...worshipUser, ministries: ["jovenes"], managesMinistries: [] } };
     mount();

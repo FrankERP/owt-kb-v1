@@ -95,6 +95,9 @@ export const PROTECTED_STUDIO_TYPES = [
   // Availability conflicts and their proposals (ADR-0079): machine state written only by
   // `app/utils/availabilityFixCommit.ts`. Internal, like `mcpProposal`.
   "availabilityConflict",
+  // Jóvenes' meetings (ADR-0081): dotted ids, read only through `ministryEventReads.ts` and
+  // written only by `ministryEventCommit.ts`, whose audience rules a Studio edit would bypass.
+  "ministryEvent",
 ] as const;
 
 export type ProtectedStudioType = (typeof PROTECTED_STUDIO_TYPES)[number];
@@ -194,6 +197,7 @@ export const INTERNAL_STUDIO_TYPES = [
   "adminChatUsage",
   "mcpProposal",
   "availabilityConflict",
+  "ministryEvent",
 ] as const;
 
 /**
@@ -322,6 +326,21 @@ export const INTERNAL_STUDIO_FIELDS: Readonly<Record<string, readonly string[]>>
     "checkedAt",
     "appliedBy",
     "trigger",
+  ],
+  // Written only by `app/utils/ministryEventCommit.ts` (ADR-0081).
+  ministryEvent: [
+    "ministry",
+    "audience",
+    "kind",
+    "date",
+    "time",
+    "arrival",
+    "title",
+    "seats",
+    "program",
+    "notes",
+    "published",
+    "createdBy",
   ],
 });
 
@@ -586,4 +605,5 @@ export const PROTECTED_STUDIO_TITLES: Readonly<Record<ProtectedStudioType, strin
   mcpProposal: "MCP — Propuestas de mes (solo lectura)",
   serviceThread: "Mensajes del servicio (solo lectura)",
   availabilityConflict: "Conflictos de disponibilidad (solo lectura)",
+  ministryEvent: "Reuniones de Jóvenes (solo lectura)",
 });
