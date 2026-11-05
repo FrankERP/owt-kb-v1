@@ -1,0 +1,137 @@
+# OWT MCP — admin parity, phase 4, slice M: creating and editing people from the chat (plan)
+
+**Status:** DRAFT for the adversarial plan review (critical tier). Nothing built. Parent:
+`2026-11-04-owt-mcp-admin-parity-f4.md` (scope approved by Frank 2026-11-05; D1, D5–D8 there are this
+slice's starting decisions and are refined here). Review approval is not authorization to implement;
+the build follows the release order in CLAUDE.md.
+**Requirement (Frank, 2026-10-21 15:48Z, verbatim):** «Quiero poder hacer todo lo que hago en la
+página como admin, pero desde el chat». Phase 4 row: Miembros — «Crear, editar (Tipo, ministerio,
+rol), desactivar». Role limit (Frank, 2026-11-05 15:01Z and 15:04Z, verbatim): «Puede dar todos los
+roles menos super admin. un admin puede agregar admins, pero no los puede revocar. Solo el super admin
+puede revocarlos» and «Sí, solo el super admin puede hacer esto desde el MCP».
+**Risk tier: critical**, from the ladder: an auth/ACL boundary (a member's `role`, `ministries`,
+`managesMinistries`, `ministryRoles`, `email` and `disabled` decide who signs in and what they may
+do), a production server writer, and a two-document transaction (D6: a member and the shared rules).
+**Out of this slice:** member and song deletes (slice D), rule edits (slice R), photos, passwords,
+login activity, each person's own email preferences.
+
+---
+
+## 1. What changes for Frank
+
+1. «¿Quién está en Jóvenes?» / «Muéstrame a Vale» → `list_members` (the roster, no emails) and
+   `get_member {memberId}` (one person, with email).
+2. «Ponle a Pau Coro en Tipo y quítale Bajo» → `check_member_changes {memberId, edits}` (read-only)
+   answers a before/after of ONLY what changes («Tipo: + Coro», «Instrumentos: − Bajo») plus a
+   `token`. Claude shows it and waits for Frank's word; `save_member_changes {memberId, edits,
+   token}` with the same values writes exactly that, or refuses («Esta persona cambió desde que la
+   revisaste: vuelve a revisarla»).
+3. «Cámbiale el alias a Vale por Valeria» → the check also lists the solver rules that name her by
+   the old text and shows them renamed (the rules card's sentences); the save writes the person and
+   the rules in ONE transaction (D6). The same happens in `/admin`'s editor (the one `/admin`
+   behaviour change, §3 D6).
+4. «Da de alta a estas 8 personas de Jóvenes: …» → `check_new_members {members}` answers each
+   person as it would be created and refuses an email someone already has; `create_members
+   {members, token}` creates all of them in one transaction, and a repeated call never makes a
+   second copy (D7).
+5. «Deshabilita a X» / «Vuelve a habilitar a X» → `set_member_access {memberId, enabled}`, after
+   Claude shows who and waits for Frank's word (D9).
+6. Refused from the chat, with the reason and «hazlo en la página»: granting or removing
+   `super-admin`; lowering an `admin`; disabling an admin or a super-admin; changing an admin's or
+   a super-admin's email; removing management someone holds (a Kids `managesMinistries` entry, a
+   Jóvenes `admin` level) (D8).
+
+No one is notified by any of this (as in `/admin`). Service views and `/me` refresh
+(`revalidateServiceViews`, `revalidatePath("/me")`, as the routes).
+
+## 2. Evidence (`origin/main` ca4a8426)
+
+- **Create.** `POST /api/admin/members` (`app/api/admin/members/route.ts`), super-admin only:
+  name + email required; `role ∈ VALID_ROLES`, default `member`; `validateMinistryWrite` for
+  `ministries`/`managesMinistries` (an explicit `[]` refused; absent = worship); `ministryRoles`
+  validated against the SAME request's `ministries` (`validateMinistryRolesWrite`);
+  `worshipRoleWithoutWorship` refuses `admin`/`content-editor` without worship;
+  `parseMemberInstruments`; `singsAndPlays` boolean; slug from the name; `writeClient.create` with a
+  random id. NO email uniqueness check. `MembersPanel.handleAdd` always sends `ministries`.
+- **Edit.** `PATCH /api/admin/members/[id]`, super-admin only: touched fields only;
+  `memberType` filtered to `MEMBER_TYPES`; `ministryRoles` set whole, or `droppedMinistryRolePaths`
+  unset when `ministries` drops a leveled ministry; the worship-role rule judged on the RESULTING
+  state, and only then the write asserts the read `_rev` (409 «Alguien más cambió a esta persona;
+  recarga.»); otherwise last writer wins. The five email toggles (`notifPrefs.*`).
+  `revalidateServiceViews()` + `revalidatePath("/me")`.
+- **Access.** `PATCH …/[id]/disable`: refuses the operator's own id (token `sanityId` and
+  `__realAdmin`), refuses leaving no enabled super-admin, and writes ONE transaction that asserts
+  every other enabled super-admin's `_rev` (writing their `disabled` back as observed); one
+  conservative retry after a 409. Enabling is a plain revision-asserted set.
+- **Sign-in.** `auth.ts` `getMemberByEmail`: `*[_type == "teamMembers" && lower(email) ==
+  lower($email)][0]` — two documents with one email make sign-in pick one arbitrarily. Production
+  2026-11-05: 0 duplicate emails, 37 members, 2 super-admins, 4 admins, 1 content-editor, 2 with
+  `managesMinistries`, 0 with `ministryRoles`.
+- **Churn.** A member document's `_rev` moves without anyone editing the person:
+  `/api/activity/ping` sets `lastSeen` (≤ once per 30 min per browser session), and `/api/me/*`
+  writes theme, push token, availability, preferences. A token bound to `_rev` would refuse most
+  saves (unlike a song).
+- **Rules name people by text.** `restrictions[].person`, `conflicts[].personA/personB`,
+  `presence[].persons[]` are matched by `rulePersonNamesMember` (`member_name` or `alias`, case-
+  and space-insensitive, `app/utils/memberRuleNames.ts`). A changed alias silently orphans the rule
+  (the 2026-10 Vale incident). CLAUDE.md: no writer sets a rule value except through
+  `solverConfigFromDocument` → `parseSolverConfigWrite` → `solverConfigFields` under `ifRevisionId`.
+- **Who uses the connector.** `app/api/mcp/route.ts` step 6: the bearer's subject must be an
+  existing, enabled `super-admin` (`getMemberAccess`, 30 s cache), so every route's role gate is met.
+- **Ids.** All 37 member ids are UUIDs; nothing found that validates their shape, but calendar
+  feed URLs and Studio links carry them.
+
+## 3. Decisions, and why
+
+| # | Decision | Rejected alternative | Why |
+|---|----------|----------------------|-----|
+| D1 | `app/utils/memberCommit.ts` holds `createMembers`, `patchMember`, `setMemberDisabled` (ADR-0043 `CommitOutcome`). The three routes keep `requireActiveManager`, the super-admin check, the JSON parse and the operator ids, and call it with no `opts`; their tests stay green unchanged except D6's. Whatever the repository's `*Commit`-importer guards require of a route (as `songSaveCommit` needed `withVerificationRunContext`, `DELIVERY_CAPABLE_IMPORTS`, `protectedReadAudit`) is done the same way. | MCP tools that call the routes over HTTP. | One code path (ADR-0066). The bearer is not a NextAuth session. |
+| D2 | Edits by parts, applied by a pure `applyMemberEdits(stored, edits)` to the freshly read person: `set` for `name`, `alias` (`""` clears), `email`, `role`, `singsAndPlays`; `add`/`remove` for `tipo`, `instruments`, `ministries`, `managesMinistries`; `jovenes {level, groups}` or `jovenes: null`. The result is the route's own touched-field body, so the writer validates it exactly as `/admin`. | The chat sends whole arrays, as the form does. | A forgotten Tipo or ministry is a removed one; `ministries` is an access field. |
+| D3 | **The token binds the rendered change, not `_rev`:** token `${iat}.${mac}`, the HMAC (label `mcp-member-edits|`) over `{memberId, edits, lines, iat}`, `lines` = the before/after of every touched field plus every rule D6 renames; dead after 30 minutes. The save re-reads the person (and the rules when D6 applies), re-applies, re-renders, verifies the token, and writes under `ifRevisionId` of THAT fresh read. | Bind `_rev` (as songs, ADR-0077). | `lastSeen` and `/me` writes move `_rev` constantly (§2). A concurrent change to a field Frank saw changes its line and refuses; a change elsewhere is untouched by the patch; the fresh `ifRevisionId` closes the read→write window. |
+| D4 | Every access verdict (worship-role rule, D8's limits, the leveled-ministry rules) is judged on the fresh read inside the commit and asserted by the same `ifRevisionId`. | Judge at check time. | The check is minutes older than the write. |
+| D5 | Email: trimmed, lowercased, one `@`, refused when any other member document (disabled included, drafts excluded) has it case-insensitively; on create and on change, both surfaces. | No check (today). | Sign-in takes the first match (§2). Not transactional: two concurrent writes of one new email can still both land (named in the ADR). |
+| D6 | **A name or alias change renames the rules that name the person** and would stop matching: each rule person text `s` with `rulePersonNamesMember(s, before) && !rulePersonNamesMember(s, after)` becomes `displayMemberName(after)`, unless `s` also names another current member (then it is left and the check says so). One transaction: the member patch and the rules write, each under its own fresh `ifRevisionId`, the rules through `solverConfigFromDocument` → rename → `parseSolverConfigWrite` → `solverConfigFields`. A new name or alias equal to another member's name or alias is refused. Both surfaces; `/admin`'s PATCH answers which rules moved. | Leave rules naming the old text (today). | The Vale incident. One transaction means no state where the person was renamed and the rules were not; refusing a duplicate text keeps a rule from naming two people. |
+| D7 | Create in batches of up to 20 per check. Token `${iat}.${mac}` (label `mcp-member-create|`) over the canonical batch, dead after 30 minutes; person `i`'s id is the first 128 bits of `HMAC(key, "mcp-member-id|" + token + "|" + i)` written in UUID form. `create_members` reads those ids first («ya estaba») and writes ONE transaction of `createIfNotExists`. `ministries` is REQUIRED in the chat (never absent ⇒ worship by accident). | A random id per person (the route); one call per person. | A retry after an unknown outcome must not make second accounts; one transaction leaves no half-loaded batch. UUID-shaped because every existing id is a UUID. |
+| D8 | **The chat grants, never revokes, management** (Frank, Q1): `role` may become `member`, `content-editor` or `admin`; refused when the stored role is `super-admin`, when the stored role is `admin` and the new one is not, or when the new one is `super-admin`; a `managesMinistries` entry may be added, never removed; a Jóvenes level may rise to `admin`, never drop from it (nor `jovenes` leave `ministries` while it is `admin`); an admin's or super-admin's email never changes. Chat-only (an `opts.chat` flag the routes never pass). | Every role from the chat. | A super-admin is who can use the connector; minting one mints write access to everything, and revoking one can lock Frank out. Changing an admin's email hands that account to another Google login. |
+| D9 | `set_member_access {memberId, enabled}` writes through `setMemberDisabled` after Claude shows who and waits (no token: one reversible field, as S1 D3). Refused from the chat: disabling an admin or super-admin (D8), and the route's own refusals hold, the operator being the bearer's member (`principalOf(ctx)`) for «self». | A check/save token pair. | A token adds nothing for one boolean the answer names; enabling again undoes it. |
+| D10 | Reads: `list_members {ministry?, includeDisabled?}` (id, name, alias, Tipo, instruments, «Canta y toca», ministries, Jóvenes level/groups, Kids management, role, disabled; NO email) and `get_member {memberId}` (the same plus email). | Emails in the list. | Frank asked for parity, not a mailing list in the conversation. |
+| D11 | No email-preference fields, no `notifEmail`, no photo, no password from the chat. | Parity on every field. | Each person owns their preferences at `/me`; the rest were excluded in the inventory. |
+
+## 4. Tasks
+
+1. **Extract** `memberCommit.ts` from the three routes, behaviour byte-identical (D1); pin it in
+   `serviceCommitCallers.test.ts` and the protected-write audit; the routes' existing tests pass.
+2. **D5 + D6 in the commit** for both surfaces, with tests: duplicate email refused (case, disabled
+   member), rename moves exactly the rules that would stop matching (restriction, conflict A/B,
+   presence), an ambiguous text is left and reported, the rules write goes through the parse
+   pipeline under `ifRevisionId`, a 409 on either document writes neither, a duplicate
+   name/alias text refused, no solverConfig document → member only.
+3. **Pure** `applyMemberEdits` + `memberChangeLines` (Spanish, the form's labels; `MEMBER_TYPE_LABEL`,
+   `ruleCopy.ts` for rules) and D8's `chatAccessRefusal(stored, next)`, each with tests (every D8
+   row both ways, a no-op edit gives no line).
+4. **Tokens** `app/mcp/members/peopleTokens.ts` on `memberTokenKey` (`app/mcp/monthProposals/memberTokens.ts`, `MCP_OAUTH_SECRET`), canonical
+   JSON, `sameMac`; tests: binding, label separation, age, malformed, UUID shape and stability.
+5. **Tools** `app/mcp/tools/members.ts`: `list_members`, `get_member`, `check_member_changes`,
+   `save_member_changes`, `check_new_members`, `create_members`, `set_member_access`; registered in
+   `registerAllTools`; strict zod; reads `{readOnlyHint: true}`, writes destructive. Tests per
+   refusal: not found, draft id, stale line («cambió»), bad token, expired, D8 rows, a 409, an
+   unknown commit failure answered as an unknown outcome («no sé si se guardó»), a retried create.
+6. **Smoke and digest:** `scripts/mcp-dev-smoke.mjs`, `mcpDevSmoke.test.ts`, `mcpRoute.test.ts`
+   (tool count 45 → 52).
+7. **Docs:** ADR (number at merge) «People are edited from the chat by parts; the chat grants but
+   never revokes management»; `docs/MCP.md`; CLAUDE.md / AGENTS.md / `project-rules.md` write-path
+   line; `docs/UTILITIES_AND_COMPONENTS.md`; `docs/SECRETS.md` (a sixth use of `MCP_OAUTH_SECRET`).
+
+## 5. Release and proof
+
+Gates → one merge-range review → preview, dev alias → PR to main, `gates` → prod alias. Live proof
+with Frank, throwaway data only: create «Prueba MCP» (worship, Tipo voz) from the chat; add a test
+rule naming it in `/admin`; change its alias from the chat and see the rule follow; make it admin;
+see the chat refuse to lower it; disable it in the page; delete it in the page; remove the test
+rule.
+
+## 6. Out of scope
+
+Deletes (slice D). Rule edits (slice R; D6 only renames). Re-keying rules by member id. Admins who
+are not super-admin editing people (Frank, 2026-11-05: only the super-admin, from the MCP). Kids
+volunteers (`/api/kids/*`, paused).

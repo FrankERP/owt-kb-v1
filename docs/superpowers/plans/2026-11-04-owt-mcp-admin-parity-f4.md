@@ -1,6 +1,7 @@
 # OWT MCP — admin parity, phase 4: rules, members and deletes from the chat (scope plan)
 
-**Status:** DRAFT for Frank's scope decision (2026-11-04). Nothing built. Each slice below owns a
+**Status:** SCOPE APPROVED by Frank 2026-11-05 15:01Z (Q1 below; Q2 taken as recommended: M first).
+Nothing built. Each slice below owns a
 critical contract, so each gets its own slice plan and the adversarial plan review
 (`.agents/skills/adversarial-plan-review/`) after Frank approves the scope, as phase 3 did.
 Frank's summary (Spanish): a Claude Doc linked from the thread «MCP de la página».
@@ -69,7 +70,7 @@ surfaces because both call the same module.
 | D5 | Members: check then save, token over `{memberId, rev, changes, lines}`, written under `ifRevisionId` always. | The route's «guard only role/ministries». | Two admins (or a member's own `/me` save) editing at once must not overwrite each other from the chat. |
 | D6 | **An alias or name change renames that person's rules in the same transaction** (member patch + rules patch, both revision-asserted), and the check shows which rules move. Applies to `/admin` too. | Leave the rules naming the old text (today). | The 2026-10 Vale incident. One transaction means no state where the person was renamed and the rules were not. |
 | D7 | Create: a token-keyed id (`teamMembers-mcp-` + hex of the token, as ADR-0077), `createIfNotExists`, and an email that already belongs to someone is refused. Several people in one check. | A random id, no email check (the route). | A retry must not make a second account, and two accounts for one Google email is ambiguous at sign-in. Several at once serves the Jóvenes account load. |
-| D8 | Role: the chat sets `member`, `content-editor` or `admin`; granting or removing `super-admin` stays in the page (Q1). | Every role from the chat. | A super-admin is who can use this connector. A chat that can mint one can mint write access to everything; removing one can lock Frank out. |
+| D8 | Role (Frank, Q1, 2026-11-05): the chat GRANTS `member`, `content-editor` or `admin`, never `super-admin`, and never REVOKES an admin or a super-admin («un admin puede agregar admins, pero no los puede revocar; solo el super admin puede revocarlos»; «solo el super admin puede hacer esto desde el MCP»). Revoking stays in the page. | Every role from the chat. | A super-admin is who can use this connector. A chat that can mint one can mint write access to everything; removing one can lock Frank out. |
 | D9 | Deletes repeat the exact list the check showed (ADR-0072) and delete only what nothing references; the check names each reference by service date or proposal. A referenced song answers a clear refusal on `/admin` too (today an unhandled 500). | Delete and let Content Lake refuse. | Frank sees where a song or person is used before anything is tried. |
 | D10 | A member delete and its pool cleanup are ONE transaction (both surfaces). Rules that name the person are listed by the check and removed only on Frank's word, through slice R. | Today's two writes. | No «deleted, pools stale» state. Rules are Frank's call, not a side effect. |
 | D11 | Notification preferences, photos, passwords and login activity stay out. | Parity on every field. | Each person owns their own preferences at `/me`; the others were excluded in the inventory. |
@@ -89,9 +90,9 @@ Recommended order (Q2): **M → R → D**.
 
 ## 5. Questions for Frank
 
-- **Q1. Roles from the chat:** everything except super-admin (recommended), every role, or no
-  role changes from the chat.
-- **Q2. Order:** members first (recommended: the Jóvenes account load), or rules first.
+- **Q1. Roles from the chat:** Frank 2026-11-05: every role except super-admin; an admin is
+  granted from the chat but never revoked there (D8). The connector stays super-admin only.
+- **Q2. Order:** not answered; taken as recommended (M → R → D), Frank told so 2026-11-05.
 
 ## 6. Release and proof
 
