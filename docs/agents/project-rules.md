@@ -808,6 +808,16 @@ pass.
   importing it. Do not «simplify» it into a wider read plus a TypeScript filter. groq-js does not
   escape the `.` in `path()`, so the matrix avoids ids like `ministryEvent-x`; `mayRead`'s own
   test pins them.
+- **Jóvenes meetings: one writer** (ADR-0081 W1–W9). `ministryEventCommit.ts` is the only module
+  that writes `ministryEvent`, called only by the routes under `app/api/ministries/[ministry]/events`
+  (`serviceCommitCallers.test.ts`; never MCP or the admin assistant). It reads the caller's access
+  FRESH (`fetchMemberAccessFresh`, never the 30 s cache, so a demotion counts on the next write),
+  authorizes against the stored revision it then writes under `ifRevisionId`, and answers 404 —
+  not 403 — for an event the caller may not read, so a leader probing ids learns nothing. A joint
+  meeting is edited and deleted only by its creator and the admins (Frank, 2026-11-04); the
+  encargado or apoyo of a whole-ministry meeting writes its program only. The routes that write a
+  client-supplied id of another type pin it first (`storedRevisionOfType`, `typePin.ts`; W9) —
+  a new route that patches or deletes an id it was handed does the same.
 - **Rollout registry (`app/utils/rollout.ts`).** A feature built but not for everyone yet has
   one entry (`hidden → superAdmin → admins → all`), keyed by a feature name. `rolloutAllows`
   is the SERVER gate each page and route of the feature calls (a page answers 404); the nav's

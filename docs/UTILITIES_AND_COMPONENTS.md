@@ -612,6 +612,24 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   Throws `MinistryEventReadUnavailable` without the read token. `mayRead` is the same rule in
   TypeScript for a server decision on one stored event; never post-filter a wider read.
   `ministryEventCoverage.test.ts` fails on any other file that names the type.
+- **`createMinistryEvent`**, **`updateMinistryEvent`**, **`updateMinistryEventProgram`**,
+  **`deleteMinistryEvent`** ([ministryEventCommit.ts](../app/utils/ministryEventCommit.ts)) — THE one
+  writer of `ministryEvent` (W1–W9), called only by the three route files under
+  `app/api/ministries/[ministry]/events` (`serviceCommitCallers.test.ts`). Fresh access read
+  (`fetchMemberAccessFresh`, `memberAccess.ts`), stored revision authorized and written under
+  `ifRevisionId`, weak references, `EVENT_ERROR` for every refusal. Its matrix is
+  `ministryEventCommit.test.ts` (G4, groq-js).
+- **`storedRevisionOfType(id, type)`** ([typePin.ts](../app/utils/typePin.ts)) — the stored `_rev`
+  of an id only when it is of that type, else `null`. The writers that take a client-supplied id
+  read it first and answer 404 (W9): the song DELETE, the member PATCH/DELETE, photo, set-password.
+- **`saturdayRows`**, **`saturdayForm`**/**`saturdayBody`**, **`programForm`**/**`programBody`**,
+  **`showsProgramEditor`**, **`whatsappRoster`**, **`monthRange`**/**`shiftMonth`**/**`parseMonth`**
+  ([jovenesPlannerModel.ts](../app/utils/jovenesPlannerModel.ts)) — Planear Jóvenes' pure half: the
+  month's rows, the bodies the editors send, which buttons to SHOW (cosmetic), the WhatsApp text.
+  **`readJovenesPeople`** ([jovenesPeople.ts](../app/utils/jovenesPeople.ts)) — the seat picker's
+  list (ids and names). **`sendEventWrite`**/**`writeMessage`**
+  ([eventWrite.ts](../app/components/jovenes/eventWrite.ts)) — the one client caller of the four
+  routes. Components: `SaturdayPlanner`, `ProgramEditor`, `PersonSelect` (`app/components/jovenes/`).
 - **`eventHeading`**, **`audienceLabel`**, **`seatRoleLabel`**, **`mySeats`**, **`eventDayLabel`**,
   **`addDaysIso`** ([jovenesEventView.ts](../app/utils/jovenesEventView.ts)) — a meeting's words,
   pure; never decides access.
