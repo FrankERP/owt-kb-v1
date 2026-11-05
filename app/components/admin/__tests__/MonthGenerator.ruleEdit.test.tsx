@@ -60,10 +60,13 @@ function renderGen(config: SolverConfig, rules: RulesHarness = readyRules(config
   );
 }
 
-/** The pencil that swaps a card for its edit form. */
+/**
+ * The pencil that swaps a card for its edit form. A card is known by its SENTENCE (the Admin
+ * pass dropped the «≠»/«≥1» kind badges — a rule row is the sentence, the pencil and the «×»).
+ */
 function openEditor(cardText: RegExp) {
   const card = screen.getAllByTitle("Editar")
-    .map(b => b.closest("div.rounded-lg") as HTMLElement)
+    .map(b => b.closest("[data-rule-card]") as HTMLElement)
     .find(el => cardText.test(el.textContent ?? ""));
   if (!card) throw new Error(`no rule card matching ${cardText}`);
   fireEvent.click(within(card).getByTitle("Editar"));
@@ -139,7 +142,7 @@ describe("RuleBuilder — editing a rule keeps its id, so the edit survives", ()
   it("edits a conflict rule in place", () => {
     const { container } = renderGen(CONFIG);
 
-    openEditor(/≠/);
+    openEditor(/no coinciden/);
     fireEvent.change(screen.getByDisplayValue("Líder (ambos) (*.Lead)"), { target: { value: "*.BGV" } });
     saveForm();
 
@@ -155,7 +158,7 @@ describe("RuleBuilder — editing a rule keeps its id, so the edit survives", ()
     // Must CHANGE something. What `canAdd` (>= 2 selected) forbids is REMOVING
     // a person from a two-person rule — adding one is not the only edit
     // available, the pattern select is ungated and would work equally well.
-    openEditor(/≥1/);
+    openEditor(/cada semana/);
     // Scoped to the form: `Beto` is also a checkbox in the `Soporte` member
     // pool higher up the panel, and a bare `getByRole` matches both.
     const form = screen.getByText("Al menos uno de (mín. 2)").closest("div.rounded-lg") as HTMLElement;
@@ -188,7 +191,7 @@ describe("RuleBuilder — adding a rule mints a NEW id, independent of the rest"
     const { container } = renderGen(CONFIG, rules);
     addAnaRule();
 
-    expect(container.textContent).toMatch(/Reglas \(4\)/);
+    expect(container.textContent).toMatch(/Reglas · 4/);
     expect(container.textContent).toContain("No líder en sábado");
 
     fireEvent.click(screen.getByRole("button", { name: "Guardar reglas" }));
@@ -214,7 +217,7 @@ describe("RuleBuilder — adding a rule mints a NEW id, independent of the rest"
 
     expect(container.textContent).toContain("Domingos: como máximo 2 al mes");
     expect(container.textContent).toContain("No líder en sábado");   // Ana's, untouched
-    expect(container.textContent).toMatch(/Reglas \(4\)/);
+    expect(container.textContent).toMatch(/Reglas · 4/);
   });
 });
 

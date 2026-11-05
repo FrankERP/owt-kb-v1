@@ -37,7 +37,7 @@ function renderGen(config: SolverConfig, rules: RulesHarness = readyRules(config
   );
   return rules;
 }
-const cards = () => screen.getAllByTitle("Editar").map((b) => b.closest("div.rounded-lg") as HTMLElement);
+const cards = () => screen.getAllByTitle("Editar").map((b) => b.closest("[data-rule-card]") as HTMLElement);
 const openEditor = (index: number) => fireEvent.click(within(cards()[index]).getByTitle("Editar"));
 const saveBar = () => screen.getByRole("button", { name: /Guardar reglas|Guardando|Guardado/ });
 const operators = () => screen.getAllByLabelText("Operador") as HTMLSelectElement[];

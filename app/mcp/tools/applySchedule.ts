@@ -40,7 +40,7 @@ import { createRole } from "@/app/utils/roleCreateCommit";
 import { resolveSolverEngine } from "@/app/utils/solverDeployment";
 import { loadV3PlanSources } from "@/app/utils/v3MonthPlanReads";
 import type { FairnessMonthsPut } from "@/app/utils/fairnessVocabulary";
-import type { DraftPostOutcome, draftCreateBody } from "@/app/utils/monthDraftCreate";
+import { confirmMembersFrom, type DraftPostOutcome, type draftCreateBody } from "@/app/utils/monthDraftCreate";
 import { serviceRefusalLine, type DomainRefusal } from "../writes/refusals";
 import { runWriteTool, type WriteFailureCopy } from "../writes/runWriteTool";
 import { isProposalHandle } from "../monthProposals/handle";
@@ -349,6 +349,7 @@ export async function applyScheduleResult(
           published: false,
           state: { recordsDone: false, createdLocalIds: new Set(obs.created.keys()) },
           currentMonth,
+          members: confirmMembersFrom(sources.members),
           putRecords,
           postDraft,
         }),
@@ -382,6 +383,18 @@ export async function applyScheduleResult(
       const tail = saveFailed ? [L.stateSaveFailed] : [];
 
       // ── The answer, per outcome ──────────────────────────────────────────
+      if (result.kind === "refused_guard" && result.reason === "seat_clash") {
+        // Names and seat labels only (the runner's lines); nothing of this call was written.
+        return refusal(
+          [...head, ...result.lines, L.noWriteThisCall, obs.created.size === 0 ? L.seatClashRevise : L.seatClashResolve, ...existsLine(proposal, obs), ...tail],
+          { code: "invalid_request", detail: "seat_clash" },
+        );
+      }
+      if (result.kind === "refused_guard" && result.reason === "outside_horizon") {
+        return refusal([...head, ...result.lines, L.noWriteThisCall, ...existsLine(proposal, obs), ...tail], {
+          code: "integrity_conflict", detail: "outside_horizon", next: "solve_month",
+        });
+      }
       if (result.kind === "refused_guard") {
         const guard = confirmGuard(months, currentMonth);
         const line = guard?.kind === "ceiling" ? V3_LINES.horizonCeiling(guard.month, guard.limit) : L.guardPast(guard?.month ?? months[0]);

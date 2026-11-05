@@ -59,6 +59,7 @@ export async function PATCH(
     role?: string;
     memberType?: string[];
     instruments?: string[];
+    singsAndPlays?: boolean;
     ministries?: string[];
     managesMinistries?: string[];
     ministryRoles?: unknown;
@@ -100,6 +101,15 @@ export async function PATCH(
     const parsed = parseMemberInstruments(body.instruments);
     if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
     patch.instruments = parsed.value;
+  }
+
+  // «Canta y toca a la vez» (ADR-0078): absent = untouched, like `instruments`;
+  // only a boolean is stored.
+  if (body.singsAndPlays !== undefined) {
+    if (typeof body.singsAndPlays !== "boolean") {
+      return NextResponse.json({ error: "singsAndPlays must be a boolean" }, { status: 400 });
+    }
+    patch.singsAndPlays = body.singsAndPlays;
   }
 
   // Ministry membership/management. The guard is `!== undefined`, so a body that

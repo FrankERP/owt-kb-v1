@@ -565,7 +565,8 @@ describe("MonthGenerator + calendar — unavailability notices follow the column
     composeSpecial(WEDNESDAY, "Bautizos");
     fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
 
-    const notices = screen.getByText(/No disponibles este mes/).parentElement!;
+    // The fold row (ADR-0070): the names sit in the Collapse under the toggle, inside the wrapper.
+    const notices = screen.getByText(/No disponibles este mes/).closest("[data-unavailable]")!;
     // "Dom" is the label `buildUnavailabilityNotices` gives a Sunday entry —
     // its absence is what proves the deselected 2026-08-02 produced none.
     // (A bare "2 ago" check would match "12 ago" and pass vacuously.)

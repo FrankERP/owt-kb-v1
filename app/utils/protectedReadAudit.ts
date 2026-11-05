@@ -31,6 +31,9 @@ export const PROTECTED_TYPES = [
   // read off a non-canonical client is the A2 failure; its one writer is the executor
   // (`PROTECTED_WRITE_EXECUTORS`).
   "fairnessMonth",
+  // The availability proposals' records (ADR-0079): dotted (private) ids, read only through
+  // `operationalClient`, written only by `availabilityFixCommit.ts`.
+  "availabilityConflict",
 ] as const;
 
 export type ProtectedType = (typeof PROTECTED_TYPES)[number];
@@ -350,6 +353,13 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
       "post-commit outbox upsert: writes notificationOutbox documents through writeClient in a module that names sunday_role for the setlist audience query; queues only, never mutates protected content",
     removalOwner:
       "permanent runtime writer (never removed — the post-commit notice-queueing surface itself)",
+  },
+  {
+    file: "app/utils/availabilityFixCommit.ts",
+    operation: "module",
+    reason:
+      "the availability proposals' writer (ADR-0079): writes only its own `availabilityConflict` records through writeClient (guarded `create`, `ifRevisionId` patches) in a module whose seat pre-check names the role types; its one role write is «Aplicar», which DELEGATES to `editRole` (`roleEditCommit.ts`) unchanged. Its reads go through `operationalClient`; `serviceCommitCallers.test.ts` pins its callers",
+    removalOwner: "permanent runtime writer (never removed while the availability proposals exist)",
   },
 ];
 

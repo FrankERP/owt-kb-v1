@@ -166,3 +166,40 @@ describe("MemberForm — declared instruments", () => {
     expect(onSubmit.mock.calls[1][0].instruments).toEqual(["Bass"]);
   });
 });
+
+describe("MemberForm — «Canta y toca a la vez» (ADR-0078)", () => {
+  const singer = { ...baseMember, memberType: ["voz", "instrumento"], instruments: ["EG"] };
+
+  it("shows the box only when Tipo has both Voz and Instrumento", () => {
+    const { queryByRole, getByRole } = render(
+      <MemberForm initial={{ ...baseMember, memberType: ["instrumento"] }} onSubmit={() => {}} onClose={() => {}} loading={false} />,
+    );
+    expect(queryByRole("checkbox", { name: "Canta y toca a la vez" })).toBeNull();
+    fireEvent.click(getByRole("button", { name: "Voz" }));
+    expect(getByRole("checkbox", { name: "Canta y toca a la vez" })).toBeTruthy();
+  });
+
+  it("omits the flag from an edit that never touched it, and sends it when ticked", () => {
+    const onSubmit = vi.fn();
+    const { getByRole } = render(
+      <MemberForm initial={singer} onSubmit={onSubmit} onClose={() => {}} loading={false} />,
+    );
+    fireEvent.click(getByRole("button", { name: "Guardar" }));
+    expect("singsAndPlays" in onSubmit.mock.calls[0][0]).toBe(false);
+    fireEvent.click(getByRole("checkbox", { name: "Canta y toca a la vez" }));
+    fireEvent.click(getByRole("button", { name: "Guardar" }));
+    expect(onSubmit.mock.calls[1][0].singsAndPlays).toBe(true);
+  });
+
+  it("sends false when a stored mark is cleared", () => {
+    const onSubmit = vi.fn();
+    const { getByRole } = render(
+      <MemberForm initial={{ ...singer, singsAndPlays: true }} onSubmit={onSubmit} onClose={() => {}} loading={false} />,
+    );
+    const box = getByRole("checkbox", { name: "Canta y toca a la vez" }) as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    fireEvent.click(box);
+    fireEvent.click(getByRole("button", { name: "Guardar" }));
+    expect(onSubmit.mock.calls[0][0].singsAndPlays).toBe(false);
+  });
+});

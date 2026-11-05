@@ -13,6 +13,7 @@ import {
   type CalendarSpecial,
 } from "./plannerCalendar";
 import { horizonTitle } from "./v3Copy";
+import { SHEET_TITLE } from "@/app/utils/homeHero";
 import Button from "@/app/components/ui/Button";
 import Select from "@/app/components/ui/Select";
 import { WarningIcon } from "@/app/components/ui/icons";
@@ -223,7 +224,7 @@ export default function MonthCalendar({
         identical «Fechas» headings left the admin counting rows to tell November from December.
         The section label and its instructions are the planner's, said once above the stack.
       */}
-      <h3 className="font-label text-xs uppercase tracking-widest text-accent">
+      <h3 className="font-body text-[15px] font-semibold text-ink">
         {horizonTitle([`${year}-${String(month).padStart(2, "0")}`])}
       </h3>
 
@@ -249,7 +250,7 @@ export default function MonthCalendar({
           const tone = selected
             ? dow === 0
               ? "border-accent/50 bg-accent/10 text-accent"
-              : "border-recency-strong/50 bg-recency-strong/10 text-recency-strong"
+              : "border-warning-fg/50 bg-warning-fg/10 text-warning-strong"
             : special
               ? "border-info-fg/50 bg-info-fg/10 text-info-fg"
               : "border-accent/15 text-mono-500 hover:border-accent/40 hover:text-ink-muted";
@@ -277,7 +278,7 @@ export default function MonthCalendar({
               onClick={() => handleDayClick(date)}
               className={`${CELL_BASE} ${tone}`}
             >
-              <span className="font-display text-sm leading-none">{noon(date).getDate()}</span>
+              <span className="font-display text-[17px] font-semibold leading-none">{noon(date).getDate()}</span>
               {/* The name used to sit inside the cell at 8 px — unreadable on a
                   phone. The cell keeps a dot (its tone already says «especial»,
                   the accessible name carries the words) and the «Servicios
@@ -293,9 +294,16 @@ export default function MonthCalendar({
         })}
       </div>
 
+      {/* The legend under the grid (ADR-0070's Admin pass): the three tones as dot + word. */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1 font-body text-[13px] text-ink-dim">
+        <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-accent" />Domingo</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-warning-fg" />Sábado</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-info-fg" />Especial</span>
+      </div>
+
       {existingByDate.size > 0 && (
-        <p className="flex items-center gap-1.5 font-body text-[11px] text-warning-strong">
-          <WarningIcon size={10} />
+        <p className="flex items-center gap-1.5 font-body text-[13px] text-warning-strong">
+          <WarningIcon size={12} />
           ya existe un servicio ese día
         </p>
       )}
@@ -308,8 +316,8 @@ export default function MonthCalendar({
       </Button>
 
       {openDate && (
-        <div className="space-y-2 rounded-lg border border-info-fg/30 bg-info-fg/5 px-3 py-2.5">
-          <p className="font-label text-[11px] uppercase tracking-widest text-info-fg">
+        <div className="space-y-3 border-y border-ink/[0.10] py-4">
+          <p className={SHEET_TITLE}>
             Nuevo servicio especial
           </p>
           <Select
@@ -366,25 +374,30 @@ export default function MonthCalendar({
       )}
 
       {specials.length > 0 && (
-        <ul className="space-y-1" aria-label="Servicios especiales">
+        <ul className="border-t border-ink/[0.10]" aria-label="Servicios especiales">
           {[...specials]
             .sort((a, b) => a.date.localeCompare(b.date))
             .map((s) => (
               <li
                 key={s.date}
-                className="flex items-center justify-between gap-2 rounded-lg border border-info-fg/25 px-3 py-1.5"
+                className="flex min-h-[60px] items-center gap-3 border-b border-ink/[0.10] py-2"
               >
-                <span className="font-body text-xs text-ink-muted">
-                  <span className="text-info-fg">{s.name}</span> — {longDate(s.date)}
+                <span className="min-w-0 flex-1 space-y-0.5">
+                  <span className="block truncate font-body text-[17px] font-semibold leading-tight text-ink">{s.name}</span>
+                  <span className="block font-body text-sm text-ink-dim">
+                    {longDate(s.date)}
+                    {s.countsForFairness !== undefined && (s.countsForFairness ? " · cuenta para equidad" : " · no cuenta para equidad")}
+                  </span>
                 </span>
-                <Button variant="danger" size="lg"
+                <Button variant="icon" tone="danger" size="lg"
                   onClick={() => {
                     setNotice(null);
                     onRemoveSpecial(s.date);
                   }}
                   aria-label={`Quitar servicio especial del ${longDate(s.date)}`}
+                  className="-mr-2"
                 >
-                  Quitar
+                  ✕
                 </Button>
               </li>
             ))}
@@ -392,7 +405,7 @@ export default function MonthCalendar({
       )}
 
       {notice && (
-        <p role="status" className="font-body text-xs text-warning-strong bg-warning-fg/10 rounded-lg px-3 py-2">
+        <p role="status" className="border-l-2 border-warning-fg/60 py-1 pl-4 font-body text-sm text-warning-strong">
           {notice}
         </p>
       )}

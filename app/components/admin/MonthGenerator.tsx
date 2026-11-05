@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTransientValue } from "@/app/utils/useTransientValue";
 import {
   personNameOptions,
@@ -8,7 +8,8 @@ import {
 import type { SolveRequest, SolveResponse } from "@/app/api/admin/solve/route";
 import { DayCard } from "@/app/components/DayCard";
 import { draftToDayCardProps } from "@/app/utils/draftToDayCardProps";
-import { draftCreateBody, newCreationRequestId, runDraftCreateBatch } from "@/app/utils/monthDraftCreate";
+import { confirmMembersFrom, draftCreateBody, draftSeatClashSentences, newCreationRequestId, runDraftCreateBatch } from "@/app/utils/monthDraftCreate";
+import { seatClashSentencesOf } from "@/app/utils/seatClashGuard";
 import { normalizeServiceName } from "@/app/utils/normalizeLabel";
 import { isServiceTime } from "@/app/utils/serviceTime";
 import { WORSHIP_NIGHT_FORMAT, type ServiceFormat } from "@/app/utils/serviceFormat";
@@ -149,6 +150,8 @@ import {
 } from "./storedRoleReadModel";
 import { cdmxCurrentMonth, horizonMonths, monthsEntering, participationMonthsOf, retainInHorizon, weekendDatesOfMonth, type HorizonLength } from "./v3Horizon";
 import { horizonTitle, monthNameCap, monthsList, V3_LINES, V3_ROUTE_COPY, type V3Names } from "./v3Copy";
+import { PAGE_LEDE, PAGE_TITLE, SHEET_TITLE } from "@/app/utils/homeHero";
+import SearchLine from "@/app/components/ui/SearchLine";
 import { runV3Auto, type V3AutoResult } from "./v3AutoRun";
 import {
   countedSpecialIdsOf,
@@ -173,6 +176,7 @@ import type { FairnessLedgerResponse } from "@/app/utils/fairnessVocabulary";
 import type { V3Success } from "./v3Wire";
 import {
   classifyPatchOutcome,
+  storedSaveNotice,
   freezeSaveAttempt,
   reconcileSaveAttempt,
   sameRoleSemantics,
@@ -493,21 +497,25 @@ const DERIVED_HISTORY_READ_ERROR = "No se pudo leer el historial de equidad.";
 const uid = () => Math.random().toString(36).slice(2, 9);
 
 /** The draft create POST, shared by the v2 confirm (unchanged) and the v3 confirm (CF-5: today's mechanism). */
-async function postDraftToRoles(body: unknown): Promise<{ ok: boolean; status: number; error?: string }> {
+async function postDraftToRoles(body: unknown): Promise<{ ok: boolean; status: number; error?: string; seatClashes?: string[] }> {
   const res = await fetch("/api/admin/roles", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   let error: string | undefined;
+  let seatClashes: string[] = [];
   if (!res.ok) {
     try {
-      error = (await res.json())?.error;
+      const parsed = await res.json();
+      error = parsed?.error;
+      // A flag unticked after the page loaded passes the pre-check; the server's sentence still reaches the line.
+      seatClashes = seatClashSentencesOf(parsed);
     } catch {
       error = undefined;
     }
   }
-  return { ok: res.ok, status: res.status, error };
+  return { ok: res.ok, status: res.status, error, ...(seatClashes.length ? { seatClashes } : {}) };
 }
 
 /** «Editar servicio»'s heading: a special by its name, a weekend by its day. */
@@ -596,45 +604,39 @@ function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search,
     : pool;
   const allSelected = pool.length > 0 && pool.every(m => config[field].includes(m._id));
 
+  // One pool: its name (a `<p>`, which `plannerWiringHarness` finds by text), the count beside
+  // it, «Todos/Ninguno», the hairline search and the roster as house checkboxes — the whole
+  // list, never a keyhole (D17). The pools stay OPEN lists rather than the mock's fold rows: a
+  // closed `Collapse` is inert, which would hide the roster from a reader and from every test
+  // that ticks a name, and the list is what the admin came here to set.
   return (
-    <div>
-      <div className="flex items-center justify-between gap-2 mb-1">
-        <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">{label}</p>
-        <button
-          type="button" onClick={onSelectAll} disabled={readOnly}
-          className="font-body font-semibold leading-tight text-xs text-accent/70 hover:text-accent transition-colors"
-        >
-          {allSelected ? "Ninguno" : "Todos"}
-        </button>
+    <div className="space-y-3" data-member-pool={field}>
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-body text-[15px] font-semibold text-ink">{label}</p>
+        <span className="flex items-center gap-2">
+          <span className="font-body text-sm text-ink-dim" data-pool-count="">
+            {config[field].length === 0 ? "Nadie" : `${config[field].length} seleccionado${config[field].length !== 1 ? "s" : ""}`}
+          </span>
+          <Button variant="ghost" size="sm" onClick={onSelectAll} disabled={readOnly}>
+            {allSelected ? "Ninguno" : "Todos"}
+          </Button>
+        </span>
       </div>
-      <input
-        className="w-full px-2 py-1 mb-1 rounded border border-edge-control bg-transparent font-body text-[16px] sm:text-xs focus:outline-none focus:border-accent placeholder-mono-600"
-        placeholder="Buscar..." value={search} onChange={e => onSearch(e.target.value)}
-      />
-      {/*
-        D17: this list used to be `max-h-32 overflow-y-auto` — a keyhole onto up
-        to 10 members. The full-width panel D10 buys has room for the whole
-        list without a nested scroller.
-      */}
-      <div className="rounded border border-accent/10 divide-y divide-accent/5">
-        {visible.length === 0 && <p className="px-2 py-1 font-body text-xs text-mono-600 italic">Sin resultados</p>}
+      <SearchLine label={`Buscar en ${label}`} placeholder="Buscar…" value={search} onChange={onSearch} />
+      <div className="flex flex-wrap gap-x-5 gap-y-1">
+        {visible.length === 0 && <p className="font-body text-sm text-ink-dim">Sin resultados</p>}
         {visible.map(m => (
           <Checkbox
             disabled={readOnly}
             key={m._id}
-            className={`w-full px-2 py-1 text-xs transition-colors ${config[field].includes(m._id) ? "bg-accent/10" : "hover:bg-accent/5"}`}
+            className="min-h-[36px] font-body text-[15px] text-ink-muted"
             checked={config[field].includes(m._id)}
             onChange={() => onToggle(m._id)}
           >
-            <span className="font-body">{dn(m)}</span>
+            <span className={config[field].includes(m._id) ? "text-ink" : undefined}>{dn(m)}</span>
           </Checkbox>
         ))}
       </div>
-      {config[field].length > 0 && (
-        <p className="font-label text-[10px] uppercase tracking-widest text-accent mt-0.5">
-          {config[field].length} seleccionado{config[field].length !== 1 ? "s" : ""}
-        </p>
-      )}
     </div>
   );
 }
@@ -708,6 +710,13 @@ function SentenceText({ parts }: { parts: RuleSentence }) {
   );
 }
 
+/**
+ * A rule is a hairline row (ADR-0070's Admin pass): the sentence in the body face, the edit
+ * pencil and the «×» as 44 px targets at the right. The «×» keeps its glyph as its name — the
+ * tests, and the admin's eye, know it by that.
+ */
+const RULE_ROW = "flex gap-3 border-b border-ink/[0.10] py-2.5";
+
 function RestrictionCard({ r, onDelete, onEdit, onClearSlack, nameIssue, exactOverlapRole, notation }: {
   r: PersonRestriction;
   /**
@@ -731,9 +740,9 @@ function RestrictionCard({ r, onDelete, onEdit, onClearSlack, nameIssue, exactOv
 }) {
   const chips = restrictionChips(r);
   return (
-    <div className="rounded-lg border border-accent/10 bg-surface-sunken/40 px-3 py-2 flex items-start gap-2">
+    <div data-rule-card="" className={`${RULE_ROW} items-start`}>
       <div className="flex-1 min-w-0 space-y-1">
-        <span className="font-label text-[11px] uppercase tracking-widest text-accent/80 font-semibold">{r.person}</span>
+        <span className="font-body text-[15px] font-semibold text-ink">{r.person}</span>
         <div className="flex flex-wrap items-center gap-1.5">
           {chips.map(chip => (
             <Fragment key={chip.key}>
@@ -756,39 +765,43 @@ function RestrictionCard({ r, onDelete, onEdit, onClearSlack, nameIssue, exactOv
           )}
         </div>
         {exactOverlapRole && (
-          <p className="font-body text-[11px] text-negative-fg">{exactOverlapCardMessage(exactOverlapRole)}</p>
+          <p className="font-body text-sm text-negative-fg">{exactOverlapCardMessage(exactOverlapRole)}</p>
         )}
       </div>
-      <button type="button" onClick={onEdit} className="text-mono-600 hover:text-accent transition-colors shrink-0 text-xs leading-none mt-0.5 px-0.5" title="Editar">✎</button>
-      <button type="button" onClick={onDelete} className="text-mono-600 hover:text-negative-fg transition-colors shrink-0 text-sm leading-none mt-0.5">×</button>
+      <RuleRowActions onEdit={onEdit} onDelete={onDelete} />
     </div>
+  );
+}
+
+function RuleRowActions({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
+  return (
+    <span className="flex shrink-0 items-start">
+      <button type="button" onClick={onEdit} className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-ink-dim transition-colors hover:text-accent" title="Editar">✎</button>
+      <button type="button" onClick={onDelete} className="-mr-2 flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-ink-dim transition-colors hover:text-negative-fg">×</button>
+    </span>
   );
 }
 
 function ConflictCard({ r, onDelete, onEdit, notation }: { r: ConflictRule; onDelete: () => void; onEdit: () => void; notation: boolean }) {
   return (
-    <div className="rounded-lg border border-accent/10 bg-surface-sunken/40 px-3 py-2 flex items-center gap-2">
-      <span className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-badge-violet-deep/15 text-badge-violet-fg border border-badge-violet-deep/30 shrink-0">≠</span>
-      <span className="font-body text-sm flex-1 min-w-0" title={conflictNotation(r)}>
+    <div data-rule-card="" className={`${RULE_ROW} items-center`}>
+      <span className="font-body text-[15px] leading-snug flex-1 min-w-0" title={conflictNotation(r)}>
         <SentenceText parts={conflictSentence(r)} />
-        {notation && <code className="ml-2 font-mono text-[10px] text-mono-500">{conflictNotation(r)}</code>}
+        {notation && <code className="ml-2 font-mono text-[11px] text-mono-500">{conflictNotation(r)}</code>}
       </span>
-      <button type="button" onClick={onEdit} className="text-mono-600 hover:text-accent transition-colors shrink-0 text-xs leading-none px-0.5" title="Editar">✎</button>
-      <button type="button" onClick={onDelete} className="text-mono-600 hover:text-negative-fg transition-colors shrink-0 text-sm leading-none">×</button>
+      <RuleRowActions onEdit={onEdit} onDelete={onDelete} />
     </div>
   );
 }
 
 function PresenceCard({ r, onDelete, onEdit, notation }: { r: PresenceRule; onDelete: () => void; onEdit: () => void; notation: boolean }) {
   return (
-    <div className="rounded-lg border border-accent/10 bg-surface-sunken/40 px-3 py-2 flex items-center gap-2">
-      <span className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-positive-deep/15 text-positive-strong border border-positive-deep/30 shrink-0">≥1</span>
-      <span className="font-body text-sm flex-1 min-w-0" title={presenceNotation(r)}>
+    <div data-rule-card="" className={`${RULE_ROW} items-center`}>
+      <span className="font-body text-[15px] leading-snug flex-1 min-w-0" title={presenceNotation(r)}>
         <SentenceText parts={presenceSentence(r)} />
-        {notation && <code className="ml-2 font-mono text-[10px] text-mono-500">{presenceNotation(r)}</code>}
+        {notation && <code className="ml-2 font-mono text-[11px] text-mono-500">{presenceNotation(r)}</code>}
       </span>
-      <button type="button" onClick={onEdit} className="text-mono-600 hover:text-accent transition-colors shrink-0 text-xs leading-none px-0.5" title="Editar">✎</button>
-      <button type="button" onClick={onDelete} className="text-mono-600 hover:text-negative-fg transition-colors shrink-0 text-sm leading-none">×</button>
+      <RuleRowActions onEdit={onEdit} onDelete={onDelete} />
     </div>
   );
 }
@@ -1301,16 +1314,16 @@ function RuleBuilder({ config, onChange, members, source, cadenceNameIssues, eng
         a control that vanishes is the same discoverability bug in miniature, and
         switching forms mid-edit would throw away what was typed.
       */}
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-        <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">
-          Reglas{total > 0 ? ` (${total})` : ""}
-        </p>
-        <span className="flex items-center gap-2 font-body text-[11px] text-mono-500">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-3">
+        <h2 className={SHEET_TITLE}>
+          Reglas{total > 0 ? ` · ${total}` : ""}
+        </h2>
+        <span className="flex items-center gap-2 font-body text-sm text-ink-dim">
           <Switch size="sm" checked={notation} onChange={setNotation} aria-label="Mostrar notación del solver" />
           Mostrar notación del solver
         </span>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="font-label text-[10px] uppercase tracking-widest text-mono-600">
+        <div className="flex basis-full flex-wrap items-center gap-2">
+          <span className="font-body text-sm text-ink-dim">
             Añadir regla
           </span>
           <AddRuleButton
@@ -1408,7 +1421,7 @@ function RuleBuilder({ config, onChange, members, source, cadenceNameIssues, eng
       )}
 
       {total === 0 && !isFormOpen && (
-        <p className="font-body text-xs text-mono-600 italic px-1">Sin reglas configuradas</p>
+        <p className="font-body text-sm text-ink-dim">Sin reglas configuradas</p>
       )}
 
       {/*
@@ -1452,26 +1465,26 @@ function RuleBuilder({ config, onChange, members, source, cadenceNameIssues, eng
       */}
       {source.status === "ready" ? (
         <>
-          <p className="font-body text-[11px] text-mono-500 px-1 pt-1">
+          <p className="font-body text-[13px] leading-snug text-ink-dim">
             Las reglas se guardan en el <span className="text-accent">servidor</span> y las
             comparten todos los administradores. Los cambios de esta pantalla no valen en otras sesiones hasta que pulses{" "}
             <span className="text-mono-400">Guardar reglas</span>.
           </p>
-          <p className="font-body text-[11px] text-mono-500 px-1">
+          <p className="font-body text-[13px] leading-snug text-ink-dim">
             Se aplican como bloqueo duro los patrones excluidos y los conflictos entre dos personas,
             al editar cualquier servicio de este mes. Las{" "}
             <span className="text-mono-400">semanas excluidas</span> se verifican con el calendario completo del mes.
           </p>
         </>
       ) : source.status === "absent" ? (
-        <p className="font-body text-[11px] text-mono-500 px-1 pt-1">
+        <p className="font-body text-[13px] leading-snug text-ink-dim">
           Todavía no hay reglas compartidas en el servidor: estas son las de{" "}
           <span className="text-warning-strong">ejemplo</span> con las que llega la app y no se pueden
           guardar desde aquí. Los patrones excluidos, los conflictos y las semanas excluidas se
           aplican en esta sesión del editor mensual, pero aún no son reglas compartidas.
         </p>
       ) : (
-        <p className="font-body text-[11px] text-mono-500 px-1 pt-1">
+        <p className="font-body text-[13px] leading-snug text-ink-dim">
           <span className="text-warning-strong">
             {source.status === "error"
               ? "No se pudieron cargar las reglas compartidas del servidor."
@@ -1483,7 +1496,7 @@ function RuleBuilder({ config, onChange, members, source, cadenceNameIssues, eng
           configuración cargada en esta sesión.
         </p>
       )}
-      <p className="font-body text-[11px] text-mono-500 px-1">
+      <p className="font-body text-[13px] leading-snug text-ink-dim">
         Los <span className="text-mono-400">topes</span> y la{" "}
         <span className="text-mono-400">presencia</span> solo los resuelve el solver en domingos y
         sábados: en servicios especiales y al asignar a mano no se verifican.
@@ -1506,7 +1519,7 @@ function AddRuleButton({ label, title, tone, disabled, onClick }: {
       onClick={onClick}
       disabled={disabled}
       title={disabled ? "Termina la regla que estás editando primero" : title}
-      className={`font-label text-[11px] uppercase tracking-widest px-2.5 py-1.5 rounded-full border transition-colors disabled:opacity-30 disabled:hover:bg-transparent ${tone}`}
+      className={`font-body font-semibold leading-tight text-sm min-h-[40px] px-4 rounded-full border transition-colors disabled:opacity-30 disabled:hover:bg-transparent ${tone}`}
     >
       {label}
     </button>
@@ -1624,26 +1637,23 @@ function SolverConfigSaveBar({ config, rules }: {
   return (
     <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
       {outdated && (
-        <p role="status" className="font-body text-[11px] text-warning-strong mr-auto">
+        <p role="status" className="font-body text-sm text-warning-strong mr-auto">
           {PLANNER_UPDATED_MESSAGE}
         </p>
       )}
       {error && (
-        <p role="alert" className="font-body text-[11px] text-negative-fg mr-auto">
+        <p role="alert" className="font-body text-sm text-negative-fg mr-auto">
           {error.message}
         </p>
       )}
       {error?.stale && (
-        <button
-          type="button"
-          onClick={rules.reload}
-          className="font-body font-semibold leading-tight text-sm px-3 py-2 rounded-lg border border-accent/30 text-accent hover:bg-accent/10 transition-colors"
-        >
+        <Button variant="secondary" size="lg" onClick={rules.reload}>
           Recargar reglas
-        </button>
+        </Button>
       )}
-      <button
-        type="button"
+      <Button
+        variant="secondary"
+        size="lg"
         onClick={onSave}
         disabled={rev === null || !dirty || saving || outdated}
         // `rev === null` is ONE reason the button is dead and THREE different
@@ -1665,10 +1675,9 @@ function SolverConfigSaveBar({ config, rules }: {
                     ? "Guardar estas reglas para todos los administradores"
                     : undefined
         }
-        className="font-label text-[11px] uppercase tracking-widest px-3 py-2 rounded-lg border border-accent/40 text-accent hover:bg-accent/10 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
       >
         {saving ? "Guardando…" : dirty ? "Guardar reglas" : "Guardado"}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -1966,13 +1975,17 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
   };
 
   return (
-    <div className="space-y-3 p-3 rounded-xl border border-accent/20 bg-accent/5">
-      <p className="font-label text-[11px] uppercase tracking-widest text-accent">Configuración del Solver</p>
-
+    // Two sections, no box (ADR-0070's Admin pass): «Grupos del solver» and «Reglas», each with
+    // the house section title; the solver's name lives in the lede, not above the pools.
+    <div className="space-y-8" data-solver-config="">
       <SolverConfigReloadNotice source={rules.source} onReload={rules.reload} />
 
+      <div className="space-y-3">
+        <h2 className={SHEET_TITLE}>Grupos del solver</h2>
+        <p className="font-body text-sm leading-snug text-ink-dim">Quién puede liderar y quién apoya. Lo que marques aquí vale para todo el mes.</p>
+      </div>
       {/* One pool per row on a phone: three side by side left ~100 px each, and the headings ran into «Todos». */}
-      <div className="grid gap-4 sm:grid-cols-3 sm:gap-3">
+      <div className="grid gap-6 sm:grid-cols-3 sm:gap-6">
         <MemberPool
           field="sundayLeads" label="Líderes Domingo" readOnly={poolsReadOnly}
           pool={sundayPool} config={config}
@@ -2000,11 +2013,11 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
       </div>
 
       {tipoMismatch.length > 0 && (
-        <div className="rounded-lg border border-warning-strong/30 bg-warning-strong/10 px-3 py-2 space-y-1">
-          <p className="font-label text-[10px] uppercase tracking-widest text-warning-strong">
+        <div className="space-y-1.5 border-l-2 border-warning-strong/60 py-1 pl-4">
+          <p className="font-body text-[15px] font-semibold text-warning-strong">
             En un pool sin el Tipo que ese pool pide
           </p>
-          <p className="font-body text-xs text-mono-400">
+          <p className="font-body text-sm text-ink-muted">
             No entran al solver desde el pool. Si alguno se quedó sin «Tipo» y una regla
             todavía lo nombra, el mes no se genera hasta que quites esa regla.
           </p>
@@ -2028,14 +2041,14 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
       )}
 
       {cadenceOutside.length > 0 && (
-        <div className="rounded-lg border border-warning-strong/30 bg-warning-strong/10 px-3 py-2 space-y-1">
-          <p className="font-label text-[10px] uppercase tracking-widest text-warning-strong">
+        <div className="space-y-1.5 border-l-2 border-warning-strong/60 py-1 pl-4">
+          <p className="font-body text-[15px] font-semibold text-warning-strong">
             {CADENCE_OUTSIDE_HEADING}
             {cadencePoolWarningMonths && cadencePoolWarningMonths.length > 0 && ` — ${monthsList(cadencePoolWarningMonths, true)}`}
           </p>
           <ul className="space-y-1">
             {cadenceOutside.map(x => (
-              <li key={x.id} className="font-body text-xs text-mono-400">
+              <li key={x.id} className="font-body text-sm text-ink-muted">
                 {CADENCE_OUTSIDE_SENTENCE[x.reason](x.name)}
               </li>
             ))}
@@ -2447,6 +2460,9 @@ export default function MonthGenerator({
   // can never end up with different rules about what counts as "unsaved" —
   // see `assignmentCount` and the effect below.
   const [pendingDiscard, setPendingDiscard] = useState<"back" | "close" | null>(null);
+  /** «No disponibles este mes», a fold row on the grid step; open by default. */
+  const [unavailOpen, setUnavailOpen] = useState(true);
+  const unavailRegionId = useId();
   const [pushing, setPushing]     = useState(false);
   const [pushError, setPushError] = useState<string | null>(null);
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
@@ -2487,6 +2503,8 @@ export default function MonthGenerator({
     groupFillRegionRef.current?.focus();
   }, [groupFillOpen]);
   const [saveKnownFailures, setSaveKnownFailures] = useState(0);
+  /** «{día}: {frase}» per column the server refused for a seat clash (ADR-0078); every save notice appends them. */
+  const [saveClashLines, setSaveClashLines] = useState<string[]>([]);
   const [pendingSaveAttempts, setPendingSaveAttempts] = useState<Map<string, {
     attempt: FrozenSaveAttempt;
     transport: PatchTransportOutcome;
@@ -3023,16 +3041,16 @@ export default function MonthGenerator({
           return next;
         });
         setPendingSaveAttempts(new Map());
-        setSaveNotice(
-          maintenanceRoleIds.size > 0
-            ? `Se verificaron ${appliedRoleIds.size} cambios; ${maintenanceRoleIds.size} servicio${maintenanceRoleIds.size !== 1 ? "s" : ""} quedó listo para volver a guardar.${saveKnownFailures ? ` ${saveKnownFailures} fue rechazado y conserva sus cambios.` : ""}`
-            : `Cambios guardados y verificados.${saveKnownFailures ? ` ${saveKnownFailures} servicio${saveKnownFailures !== 1 ? "s" : ""} fue rechazado y conserva sus cambios.` : ""}`,
-        );
+        setSaveNotice(storedSaveNotice(
+          { kind: "verified", applied: appliedRoleIds.size, maintenance: maintenanceRoleIds.size, knownFailures: saveKnownFailures },
+          saveClashLines,
+        ));
         setSaveKnownFailures(0);
+        setSaveClashLines([]);
       } else if (outcomes.some(({ outcome }) => outcome.kind === "committedThenSuperseded")) {
-        setSaveNotice("El cambio se guardó, pero otra edición lo reemplazó. Conservamos tu intención sin adoptar la versión remota.");
+        setSaveNotice(storedSaveNotice({ kind: "superseded" }, saveClashLines));
       } else {
-        setSaveNotice("No se pudo confirmar el resultado. Conservamos tus cambios; recarga antes de intentar de nuevo.");
+        setSaveNotice(storedSaveNotice({ kind: "unconfirmed" }, saveClashLines));
       }
       return;
     }
@@ -3045,7 +3063,7 @@ export default function MonthGenerator({
       setTouchedStoredRoleIds(new Set());
       setSwapVerificationPending(false);
     }
-  }, [allStoredTranslations, dirtyStoredColumns.length, invalidStoredColumns.length, pendingSaveAttempts, saveKnownFailures, setSwapToast, storedGenerationKey, storedInventory, storedMode, storedRowsDirty, storedTranslations, swapVerificationPending]);
+  }, [allStoredTranslations, dirtyStoredColumns.length, invalidStoredColumns.length, pendingSaveAttempts, saveClashLines, saveKnownFailures, setSwapToast, storedGenerationKey, storedInventory, storedMode, storedRowsDirty, storedTranslations, swapVerificationPending]);
 
   useEffect(() => {
     const attempt = createAttempt.current;
@@ -3577,8 +3595,10 @@ export default function MonthGenerator({
     setSavingStored(true);
     setSaveNotice(null);
     setSaveKnownFailures(0);
+    setSaveClashLines([]);
     const pending = new Map<string, { attempt: FrozenSaveAttempt; transport: PatchTransportOutcome }>();
     let knownFailures = 0;
+    const clashLines: string[] = [];
     try {
       for (const column of dirtyStoredColumns) {
         const serialized = serializeStoredColumn(column, rows, cells);
@@ -3602,7 +3622,8 @@ export default function MonthGenerator({
         }
         if (transport.kind === "knownFailure") {
           knownFailures += 1;
-          setSaveNotice(`El servidor rechazó ${column.date} (${transport.code}); los demás cambios seguros continuaron.`);
+          for (const sentence of transport.seatClashSentences ?? []) clashLines.push(`${dayLabel(column.date)}: ${sentence}`);
+          setSaveNotice(storedSaveNotice({ kind: "columnRefused", date: column.date, code: transport.code, seatClashSentences: transport.seatClashSentences }));
           continue;
         }
         pending.set(column.roleId, { attempt, transport });
@@ -3610,13 +3631,14 @@ export default function MonthGenerator({
       }
       setPendingSaveAttempts(pending);
       setSaveKnownFailures(knownFailures);
+      setSaveClashLines(clashLines);
       if (pending.size > 0) {
         const reloaded = await storedSource.reload();
         if (!reloaded) {
-          setSaveNotice("No se pudo verificar la recarga. Conservamos tus cambios y no se reintentó el guardado.");
+          setSaveNotice(storedSaveNotice({ kind: "reloadFailed" }, clashLines));
         }
       } else if (knownFailures > 0) {
-        setSaveNotice(`${knownFailures} servicio${knownFailures !== 1 ? "s" : ""} fue rechazado antes de escribir; tus cambios siguen pendientes.`);
+        setSaveNotice(storedSaveNotice({ kind: "allRefused", knownFailures }, clashLines));
       }
     } finally {
       setSavingStored(false);
@@ -3737,11 +3759,13 @@ export default function MonthGenerator({
 
   async function handleRejectedStoredSwap(response: Response, subject: string) {
     let code: string | null = null;
+    let seatClashSentences: string[] = [];
     try {
       const body = await response.json();
       if (body && typeof body === "object" && typeof (body as { error?: unknown }).error === "string") {
         code = (body as { error: string }).error;
       }
+      seatClashSentences = seatClashSentencesOf(body);
     } catch {}
     if (code === "bootstrap_completed_reload" && response.status === 409) {
       pendingSwapExpected.current = null;
@@ -3753,7 +3777,8 @@ export default function MonthGenerator({
     if (code && SWAP_PROVEN_PREWRITE_FAILURES.get(code) === response.status) {
       pendingSwapExpected.current = null;
       setSwapVerificationPending(false);
-      setSwapToast(`No se intercambiaron ${subject} (${code}).`);
+      // A seat clash (ADR-0078) says who and which seats; any other refusal keeps its code.
+      setSwapToast(seatClashSentences.length ? `No se intercambiaron ${subject}: ${seatClashSentences.join(" ")}` : `No se intercambiaron ${subject} (${code}).`);
       return;
     }
     setSwapVerificationPending(true);
@@ -4662,6 +4687,7 @@ export default function MonthGenerator({
         published: publish && months.length === 1,                           // CF-8: never in a 2-month confirm
         state: session.state,
         currentMonth,
+        members: confirmMembersFrom(members),
         putRecords: async (body) => {
           const res = await fetch("/api/admin/fairness/months", {
             method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
@@ -4733,7 +4759,9 @@ export default function MonthGenerator({
       return;
     }
     setV3Confirm({ ...session, state: result.state, retry: result.retry });
-    reportV3(session.key, result.lines);
+    // A seat clash names the cells; the way out (fix the ⚠ cells, or reload after ticking
+    // «Canta y toca a la vez» — the check reads the members loaded with the page) is this caller's.
+    reportV3(session.key, result.kind === "refused_guard" && result.reason === "seat_clash" ? [...result.lines, V3_LINES.seatClashFix] : result.lines);
   }
 
   async function handleConfirm(publish: boolean) {
@@ -4792,9 +4820,17 @@ export default function MonthGenerator({
     if (!toCreateNow.length) return;
     // Solver v3 C6 §5.11: under v3 the confirm writes every horizon month's record first (one PUT),
     // then the drafts month by month — after the SAME gate, nameless-special and preflight re-checks
-    // as today. v2 continues below, byte-identical.
+    // as today. v2 continues below, unchanged except its own seat-clash pre-check (ADR-0078).
     if (isV3) {
       await confirmV3(toCreateNow, publish);
+      return;
+    }
+    // v2's own seat-clash check (ADR-0078), before its first write, with v2's own words (the engines'
+    // copy is never crossed): the server would refuse such a draft anyway, so it is never posted.
+    const memberMap = confirmMembersFrom(members);
+    const clashes = toCreateNow.flatMap((d) => draftSeatClashSentences(d, memberMap).map((sentence) => `${dayLabel(d.date)}: ${sentence}`));
+    if (clashes.length > 0) {
+      setPushError(`${clashes.join(" ")} No se creó nada; arregla esas celdas (⚠) y vuelve a crear. Si acabas de marcar «Canta y toca a la vez», recarga la página.`);
       return;
     }
     setPushing(true);
@@ -4888,9 +4924,11 @@ export default function MonthGenerator({
       // Keep the dialog open and report the partial failure instead of closing
       // as if the whole month was created successfully.
       const conflicts = result.failed.filter(f => f.status === 409).length;
+      const clashSentences = result.failed.flatMap(f => f.seatClashes ?? []);
       setPushError(
         `No se pudieron crear ${result.failed.length} de ${toCreateNow.length} servicios.` +
-        (conflicts ? " Alguien más cambió esas fechas: recarga y revisa." : " Intenta de nuevo."),
+        (clashSentences.length ? ` ${clashSentences.join(" ")}` : "") +
+        (conflicts ? " Alguien más cambió esas fechas: recarga y revisa." : clashSentences.length ? "" : " Intenta de nuevo."),
       );
     }
   }
@@ -5009,9 +5047,39 @@ export default function MonthGenerator({
   ) : null;
   const v3ShownLines = isV3 && v3Report && v3Report.key === horizon.join(",") ? v3Report.lines : [];
 
+  /**
+   * The editor's own page head (ADR-0070's Admin pass, phase 7): the title the parent used
+   * to draw above the panel («Generar mes» / «Editar mes» / «Editar servicio»), the one line
+   * that says what the step holds, and «← Servicios», the way out that used to exist only as
+   * the footer's Cancelar/Cerrar. It runs the SAME guards as that button: the v3 gap dialog,
+   * then the discard prompt (`closeWouldDiscard`), then `onClose`.
+   */
+  const editorTitle = storedMode ? (singleService ? "Editar servicio" : "Editar mes") : "Generar mes";
+  const closeEditor = () => {
+    if (storedTransportActive) return;
+    if (v3HasGaps) { setIncompleteOpen(true); return; }
+    if (closeWouldDiscard) { setPendingDiscard("close"); return; }
+    onClose();
+  };
+  const editorHead = (lede: ReactNode, actions?: ReactNode) => (
+    <div className="space-y-2" data-editor-head="">
+      <Button variant="ghost" size="sm" onClick={closeEditor} disabled={storedTransportActive} className="-ml-2">
+        ← Servicios
+      </Button>
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+        <div className="min-w-0 space-y-3">
+          <h1 className={PAGE_TITLE}>{editorTitle}</h1>
+          <p className={PAGE_LEDE}>{lede}</p>
+        </div>
+        {actions && <div className="flex flex-wrap items-center gap-2 pb-1">{actions}</div>}
+      </div>
+    </div>
+  );
+
   if (step === "config") return (
-    <div className="space-y-5">
+    <div className="space-y-8">
       {incompleteDialog}
+      {editorHead(<>Paso 1 de 2 · <span className="text-ink">fechas y reglas</span></>)}
       {/*
         Mes and Año are one pair, so they share one look: the same label (`Select`'s own), the
         same 44 px height and the same label font. The year stays a typed field (`YearInput`):
@@ -5042,9 +5110,9 @@ export default function MonthGenerator({
         per month so no composer state (or refusal notice) can survive a month
         change and offer a date that is no longer on screen.
       */}
-      <div className="space-y-1">
-        <p className="font-label text-xs uppercase tracking-widest text-mono-500">Fechas</p>
-        <p className="font-body text-xs text-mono-500">
+      <div className="space-y-2">
+        <h2 className={SHEET_TITLE}>Fechas</h2>
+        <p className="font-body text-sm leading-snug text-ink-dim">
           Domingos y sábados se generan por defecto: toca una fecha para quitarla. Toca cualquier otro
           día para crear un servicio especial.
         </p>
@@ -5175,39 +5243,40 @@ export default function MonthGenerator({
 
   // ── Step 2: Grid ─────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="font-label text-xs uppercase tracking-widest text-mono-500">{horizonTitle(horizon)}</p>
-          {singleView ? (
-            <p className="font-body text-sm">
-              {singleColumn ? (
-                <>
-                  <span className="text-accent font-semibold">{singleServiceTitle(singleColumn)}</span>
-                  {" · "}{fmtDate(singleColumn.date)}
-                  {singleColumn.published && <span className="text-mono-500"> · publicado</span>}
-                </>
-              ) : "Cargando servicio…"}
-              {dirtyStoredColumns.length + invalidStoredColumns.length > 0 && <span className="text-warning-soft"> · con cambios</span>}
-            </p>
-          ) : storedMode ? (
-            <p className="font-body text-sm">
-              <span className="text-accent font-semibold">{storedColumns.length}</span> servicio{storedColumns.length !== 1 ? "s" : ""}
-              {dirtyStoredColumns.length + invalidStoredColumns.length > 0 && <span className="text-warning-soft"> · {dirtyStoredColumns.length + invalidStoredColumns.length} con cambios</span>}
-            </p>
-          ) : (
-            <p className="font-body text-sm">
-              <span className="text-accent font-semibold">{toCreate.length}</span> por crear
-              {skippedCount > 0 && <span className="text-mono-500"> · {skippedCount} omitido{skippedCount !== 1 ? "s" : ""}</span>}
-              {notCreatable > 0 && (
-                <span className="text-warning-strong"> · {notCreatable} no disponible{notCreatable !== 1 ? "s" : ""}</span>
-              )}
-            </p>
-          )}
-        </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
+    <div className="space-y-5">
+      {editorHead(
+        singleView ? (
+          <>
+            {singleColumn ? (
+              <>
+                <span className="text-ink">{singleServiceTitle(singleColumn)}</span>
+                {" · "}{fmtDate(singleColumn.date)}
+                {" · "}{singleColumn.published ? "publicado" : "borrador"}
+              </>
+            ) : "Cargando servicio…"}
+            {dirtyStoredColumns.length + invalidStoredColumns.length > 0 && <span className="text-warning-soft"> · con cambios</span>}
+          </>
+        ) : storedMode ? (
+          <>
+            <span className="text-ink">{horizonTitle(horizon)}</span>
+            {" · "}{storedColumns.length} servicio{storedColumns.length !== 1 ? "s" : ""}
+            {dirtyStoredColumns.length + invalidStoredColumns.length > 0 && <span className="text-warning-soft"> · {dirtyStoredColumns.length + invalidStoredColumns.length} con cambios</span>}
+          </>
+        ) : (
+          <>
+            <span className="text-ink">{horizonTitle(horizon)}</span>
+            {" · "}{toCreate.length} por crear
+            {skippedCount > 0 && <> · {skippedCount} omitido{skippedCount !== 1 ? "s" : ""}</>}
+            {notCreatable > 0 && (
+              <span className="text-warning-strong"> · {notCreatable} no disponible{notCreatable !== 1 ? "s" : ""}</span>
+            )}
+          </>
+        ),
+        // Only when a tool will render: an empty actions box still pads the head.
+        !((singleView && onScopeChange) || (storedMode && storedInventory.coherent && !singleView) || !storedMode) ? undefined : (
+        <>
           {singleView && onScopeChange && (
-            <Button variant="secondary" size="md" onClick={() => onScopeChange("month")} disabled={storedTransportActive}>
+            <Button variant="secondary" size="lg" onClick={() => onScopeChange("month")} disabled={storedTransportActive}>
               Ver mes completo
             </Button>
           )}
@@ -5309,17 +5378,18 @@ export default function MonthGenerator({
             </>
           )}
           {!storedMode && (
-            <Button variant="ghost" size="md" onClick={requestBack} disabled={storedTransportActive}>
-              ← Volver
+            <Button variant="ghost" size="md" onClick={requestBack} disabled={storedTransportActive} aria-label="Volver a fechas y reglas">
+              ← Fechas y reglas
             </Button>
           )}
-        </div>
-      </div>
+        </>
+        ),
+      )}
 
       {storedMode && (!storedSource || !storedInventory.coherent) && (
-        <div className="rounded-lg border border-warning-fg/30 bg-warning-fg/10 px-3 py-2.5">
-          <p className="font-body text-sm text-warning-faint">No se puede editar este mes hasta verificar todos los servicios.</p>
-          <p className="mt-1 font-body text-xs text-warning-soft/85">
+        <div className="border-l-2 border-warning-fg/60 py-1 pl-4">
+          <p className="font-body text-[15px] text-warning-faint">No se puede editar este mes hasta verificar todos los servicios.</p>
+          <p className="mt-1 font-body text-sm text-warning-soft/85">
             {storedSource?.rolesStatus === "error" || storedSource?.integrityStatus === "error"
               ? "Falló una fuente de datos. Reintenta la carga."
               : storedInventory.reasons.join(", ") || "Cargando datos…"}
@@ -5333,7 +5403,8 @@ export default function MonthGenerator({
       )}
 
       {storedMode && storedInventory.coherent && !singleView && composerOpen && (
-        <div className="rounded-lg border border-accent/15 bg-accent/5 px-3 py-3">
+        <div className="space-y-4 border-y border-ink/[0.10] py-4" data-month-composer="">
+          <h2 className={SHEET_TITLE}>Nuevo servicio</h2>
           {(
             <div className="grid gap-3 md:grid-cols-[1fr_1fr_1.4fr_auto] md:items-end">
               <Select
@@ -5428,8 +5499,9 @@ export default function MonthGenerator({
       )}
 
       {storedMode && groupFillOpen && (
-        <div ref={groupFillRegionRef} tabIndex={-1} role="region" aria-label="Llenar especiales" className="rounded-lg border border-accent/20 bg-accent/5 px-3 py-2.5 space-y-2">
-          <p className="font-body text-xs text-mono-300">
+        <div ref={groupFillRegionRef} tabIndex={-1} role="region" aria-label="Llenar especiales" className="space-y-3 border-y border-ink/[0.10] py-4">
+          <h2 className={SHEET_TITLE}>Llenar especiales</h2>
+          <p className="font-body text-sm leading-snug text-ink-muted">
             Llena los lugares vacíos de Lead, BGV e instrumentos en los especiales marcados.
             {" "}Solo cuenta la carga dentro de este grupo; los fines de semana no pesan.
             {" "}Lo que ya está asignado no se mueve y nada se guarda hasta «Guardar».
@@ -5464,7 +5536,7 @@ export default function MonthGenerator({
       )}
 
       {storedMode && storedEditBlocked && (
-        <p className="rounded-lg bg-warning-fg/10 px-3 py-2 font-body text-xs text-warning-soft">{storedEditBlocked}</p>
+        <p className="border-l-2 border-warning-fg/60 py-1 pl-4 font-body text-sm text-warning-soft">{storedEditBlocked}</p>
       )}
 
       {/*
@@ -5481,8 +5553,8 @@ export default function MonthGenerator({
         questions or discarding different things.
       */}
       {pendingDiscard && (
-        <div className="rounded-lg border border-warning-fg/30 bg-warning-fg/10 px-3 py-2.5 space-y-2">
-          <p className="font-body text-xs text-warning-soft">
+        <div className="space-y-3 border-l-2 border-warning-fg/60 py-1 pl-4">
+          <p className="font-body text-[15px] text-warning-soft">
             {storedMode
               ? `Cerrar descarta ${dirtyStoredColumns.length + invalidStoredColumns.length} servicio${dirtyStoredColumns.length + invalidStoredColumns.length !== 1 ? "s" : ""} con cambios o resultado pendiente. ¿Continuar?`
               : `${pendingDiscard === "back" ? "Volver a configuración" : "Cerrar"} descarta ${assignmentCount} asignación${assignmentCount !== 1 ? "es" : ""} en este mes. ¿Continuar?`}
@@ -5501,7 +5573,7 @@ export default function MonthGenerator({
         </div>
       )}
 
-      {!storedMode && <div className="flex justify-center">
+      {!storedMode && <div className="flex justify-end">
         <SegmentedControl
           label="Modo"
           tone="filled"
@@ -5552,7 +5624,7 @@ export default function MonthGenerator({
           {storedMode ? (
             // Opened from «⇄ Intercambiar ▾»; this is its way back out.
             <div className="flex items-center justify-between gap-2">
-              <span className="font-label text-xs uppercase tracking-widest text-mono-500">⇄ Equipo completo</span>
+              <span className="font-body text-[15px] font-semibold text-ink-muted">⇄ Equipo completo</span>
               <Button
                 data-swap-toggle=""
                 variant="ghost"
@@ -5582,7 +5654,7 @@ export default function MonthGenerator({
           </Button>
           )}
           <Collapse id={swapRegionId} open={swapOpen} className="flex flex-wrap items-center gap-2 pt-2">
-            <span className="w-full font-body text-xs text-mono-500">Toca dos fechas para intercambiar todo su equipo.</span>
+            <span className="w-full font-body text-sm text-ink-dim">Toca dos fechas para intercambiar todo su equipo.</span>
             {columns.map(col => (
               <Button variant="pill" size="sm" active={swapSel === col.columnId}
                 key={col.columnId}
@@ -5596,13 +5668,13 @@ export default function MonthGenerator({
                 {fmtDate(col.date)}
               </Button>
             ))}
-            {swapSel && <span className="font-label text-[11px] uppercase tracking-widest text-accent animate-pulse">Selecciona otra columna ⇄</span>}
+            {swapSel && <span className="font-body text-sm text-accent animate-pulse">Selecciona otra columna ⇄</span>}
           </Collapse>
         </div>
       )}
 
       {storedMode && !singleView && sectionSwapOpen && (
-        <div className="grid gap-2 rounded-lg border border-accent/15 p-3 md:grid-cols-[0.8fr_1fr_1fr_auto_auto] md:items-end">
+        <div className="grid gap-3 border-y border-ink/[0.10] py-4 md:grid-cols-[0.8fr_1fr_1fr_auto_auto] md:items-end">
           <Select id="mg-section-swap-path" label="Sección" size="md" value={sectionSwapPath} disabled={storedSwapInteractionBlocked} onChange={(event) => setSectionSwapPath(event.target.value as StoredSectionPath)}>
             {STORED_SECTION_OPTIONS.map((option) => <option key={option.path} value={option.path}>{option.label}</option>)}
           </Select>
@@ -5628,8 +5700,8 @@ export default function MonthGenerator({
       )}
 
       {swapToast && (
-        <div className="flex items-center justify-center gap-2 rounded-lg bg-accent/10 px-3 py-1.5">
-          <p className="font-label text-[11px] uppercase tracking-widest text-accent text-center">{swapToast}</p>
+        <div className="flex items-center justify-center gap-3 py-1.5">
+          <p className="font-body text-sm text-accent text-center">{swapToast}</p>
           {storedMode && swapVerificationPending && storedSource && (
             <Button variant="secondary" size="lg" onClick={() => void storedSource.reload()}>
               Recargar y verificar
@@ -5645,18 +5717,32 @@ export default function MonthGenerator({
           if (!byPerson.has(n.name)) byPerson.set(n.name, []);
           byPerson.get(n.name)!.push({ date: n.date, service: n.service });
         }
+        // A fold row, not the orange box it was (ADR-0070's Admin pass): the admin reads it once,
+        // then the month's grid is what matters. Open by default — the names are the point.
         return (
-          <div className="rounded-lg border border-availability-fg/25 bg-availability-fg/10 px-3 py-2.5 space-y-1.5">
-            <p className="font-label text-[11px] uppercase tracking-widest text-availability-strong">
-              No disponibles este mes
-            </p>
-            {Array.from(byPerson.entries()).map(([name, items]) => (
-              <p key={name} className="font-body text-xs text-mono-400">
-                <span className="text-availability-soft font-semibold">{name}</span>
-                {" — "}
-                {items.map(i => `${i.service} ${new Date(i.date + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" })}`).join(", ")}
-              </p>
-            ))}
+          <div className="border-y border-ink/[0.10]" data-unavailable="">
+            <Button
+              variant="ghost"
+              size="md"
+              aria-expanded={unavailOpen}
+              aria-controls={unavailRegionId}
+              onClick={() => setUnavailOpen((open) => !open)}
+              className="w-full justify-between px-0 font-semibold text-ink"
+            >
+              <span className="font-body text-[15px]">No disponibles este mes · {byPerson.size}</span>
+              <svg aria-hidden="true" viewBox="0 0 20 20" className={`h-4 w-4 shrink-0 text-ink-dim transition-transform duration-fast ${unavailOpen ? "rotate-180" : ""}`}>
+                <path d="M6 8l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </Button>
+            <Collapse id={unavailRegionId} open={unavailOpen} className="space-y-1.5 pb-4">
+              {Array.from(byPerson.entries()).map(([name, items]) => (
+                <p key={name} className="font-body text-[15px] text-ink-muted">
+                  <span className="font-semibold text-ink">{name}</span>
+                  {" · "}
+                  {items.map(i => `${i.service} ${new Date(i.date + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" })}`).join(", ")}
+                </p>
+              ))}
+            </Collapse>
           </div>
         );
       })()}
@@ -5859,12 +5945,12 @@ export default function MonthGenerator({
       )}
 
       {(pushError || saveNotice) && (
-        <p className={`font-label text-xs uppercase tracking-widest text-center rounded-lg py-1.5 ${pushError ? "bg-negative-strong/10 text-negative-fg" : "bg-accent/10 text-accent"}`}>
+        <p className={`font-body text-sm text-center py-1.5 ${pushError ? "text-negative-fg" : "text-accent"}`}>
           {pushError ?? saveNotice}
         </p>
       )}
       {storedMode && invalidStoredColumns.length > 0 && (
-        <p className="rounded-lg bg-negative-strong/10 px-3 py-2 font-body text-xs text-negative-muted">
+        <p className="border-l-2 border-negative-strong/60 py-1 pl-4 font-body text-sm text-negative-muted">
           Corrige los datos inválidos antes de guardar: {invalidStoredColumns.map((column) => column.date).join(", ")}.
         </p>
       )}
@@ -5876,8 +5962,8 @@ export default function MonthGenerator({
         STORED documents, and the editor closes when they finish.
       */}
       {storedMode && clearPending && (
-        <div ref={clearRegionRef} tabIndex={-1} role="region" aria-label="Confirmar limpiar mes" aria-live="polite" className="rounded-lg border border-negative-border/50 bg-negative-surface/20 px-3 py-2.5 space-y-2">
-          <p className="font-body text-xs text-negative-fg">
+        <div ref={clearRegionRef} tabIndex={-1} role="region" aria-label="Confirmar limpiar mes" aria-live="polite" className="space-y-3 border-l-2 border-negative-strong/60 py-1 pl-4">
+          <p className="font-body text-[15px] text-negative-fg">
             Eliminar {clearSelection.selected.length} servicio{clearSelection.selected.length !== 1 ? "s" : ""} de {MONTHS[month - 1]} {year}
             {" "}({clearSelection.drafts.length} borrador{clearSelection.drafts.length !== 1 ? "es" : ""}
             {clearIncludePublished && clearSelection.published.length > 0 ? ` + ${clearSelection.published.length} publicado${clearSelection.published.length !== 1 ? "s" : ""}` : ""}).
@@ -5929,7 +6015,7 @@ export default function MonthGenerator({
         */
         <div
           data-stored-save-bar=""
-          className="sticky bottom-[var(--bottom-nav-h,0px)] z-20 -mx-1 flex items-center gap-3 border-t border-accent/15 bg-surface-base px-1 py-3 pr-[calc(var(--assistant-fab-w,0px)+0.25rem)]"
+          className="sticky bottom-[var(--bottom-nav-h,0px)] z-20 -mx-1 flex items-center gap-3 border-t border-ink/[0.10] bg-surface-base px-1 py-3 pr-[calc(var(--assistant-fab-w,0px)+0.25rem)]"
         >
           {/*
             On a phone (measured on dev at 390px) the three did not fit beside the assistant
@@ -5940,7 +6026,7 @@ export default function MonthGenerator({
           <Button variant="secondary" size="lg" onClick={requestBack} disabled={storedTransportActive} className="shrink-0 whitespace-nowrap">
             Cerrar
           </Button>
-          <p aria-live="polite" className="hidden min-w-0 flex-1 text-center font-body text-sm text-mono-500 sm:block">
+          <p aria-live="polite" className="hidden min-w-0 flex-1 text-center font-body text-[15px] text-ink-dim sm:block">
             {(() => {
               const changed = dirtyStoredColumns.length + invalidStoredColumns.length;
               // A rows-only change (an added, still-empty row) touches no service, yet «Cerrar»
@@ -5961,11 +6047,11 @@ export default function MonthGenerator({
       ) : (
         <>
         {isV3 && horizon.length === 2 && toCreate.length > 0 && (
-          <p className="font-body text-xs text-ink-muted">{twoMonthSummaryLine(draftsByMonth(toCreate, horizon))}</p>
+          <p className="font-body text-sm text-ink-muted">{twoMonthSummaryLine(draftsByMonth(toCreate, horizon))}</p>
         )}
         {v3ShownLines.length > 0 && (
           <div data-v3-confirm-report="" className="space-y-1">
-            {v3ShownLines.map((line) => <p key={line} className="font-body text-xs text-negative-fg">{line}</p>)}
+            {v3ShownLines.map((line) => <p key={line} className="font-body text-sm text-negative-fg">{line}</p>)}
             {v3Confirm?.retry && v3Confirm.key === horizon.join(",") && (
               <Button variant="secondary" size="sm" disabled={pushing || autoPending} onClick={() => { void handleConfirm(v3Confirm.publish); }}>
                 {V3_LINES.retry(toCreate.length)}
@@ -5973,28 +6059,26 @@ export default function MonthGenerator({
             )}
           </div>
         )}
-        <div className="flex gap-3">
-          <Button variant="secondary" size="lg"
-            onClick={() => {
-              if (storedTransportActive) return;
-              if (v3HasGaps) { setIncompleteOpen(true); return; }
-              if (closeWouldDiscard) { setPendingDiscard("close"); return; }
-              onClose();
-            }}
-            className="flex-1"
-          >
+        {/*
+          One primary (ADR-0070's Admin pass): «Crear N borradores» is the safe step, so it wears
+          the strong colour; «Crear y publicar» mails the whole team the moment it lands, so it is
+          the secondary of the two — not a weaker action, a louder one.
+        */}
+        <div className="flex flex-wrap items-center gap-3 border-t border-ink/[0.10] pt-4">
+          <Button variant="secondary" size="lg" onClick={closeEditor} className="shrink-0">
             Cancelar
           </Button>
-          {/* The lock's other half (`handleAutoV3`): no v3 confirm starts while a v3 Auto is pending. `isV3 &&` leaves v2's buttons behaving exactly as today. */}
-          <Button variant="primary" size="lg" onClick={() => handleConfirm(false)} disabled={pushing || (isV3 && autoPending) || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1">
-            {pushing ? "Creando..." : `Crear ${toCreate.length} borrador${toCreate.length !== 1 ? "es" : ""}`}
-          </Button>
+          <p className="hidden min-w-0 flex-1 text-center font-body text-[15px] text-ink-dim sm:block">Nada se guarda hasta crear los borradores.</p>
           {/* CF-8: a 2-month confirm creates drafts only — the publish button is absent, not disabled. */}
           {!(isV3 && horizon.length === 2) && (
-          <Button variant="primary" size="lg" onClick={() => handleConfirm(true)} disabled={pushing || (isV3 && autoPending) || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1">
+          <Button variant="secondary" size="lg" onClick={() => handleConfirm(true)} disabled={pushing || (isV3 && autoPending) || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="ml-auto shrink-0 sm:ml-0">
             Crear y publicar
           </Button>
           )}
+          {/* The lock's other half (`handleAutoV3`): no v3 confirm starts while a v3 Auto is pending. `isV3 &&` leaves v2's buttons behaving exactly as today. */}
+          <Button variant="primary" size="lg" onClick={() => handleConfirm(false)} disabled={pushing || (isV3 && autoPending) || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="shrink-0">
+            {pushing ? "Creando..." : `Crear ${toCreate.length} borrador${toCreate.length !== 1 ? "es" : ""}`}
+          </Button>
         </div>
         </>
       )}

@@ -534,7 +534,7 @@ describe("derived history — what happens on the grid while Auto's read is in f
     await waitFor(() => expect(screen.getByRole("button", { name: "Calculando..." })).toBeTruthy());
 
     // Back to the setup step (nothing assigned, so no discard prompt) and on to December.
-    fireEvent.click(screen.getByRole("button", { name: "← Volver" }));
+    fireEvent.click(screen.getByRole("button", { name: "Volver a fechas y reglas" }));
     fireEvent.change(container.querySelector("select") as HTMLSelectElement, { target: { value: "12" } });
 
     await act(async () => {

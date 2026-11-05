@@ -252,6 +252,18 @@ export const teamMembers = defineType({
         "Qué instrumentos toca. Solo se lee para plazas de instrumento; vacío = no se asigna en automático.",
     },
     {
+      // ADR-0078: without it, nobody holds a voice and an instrument on one service.
+      name: "singsAndPlays",
+      title: "Canta y toca a la vez",
+      type: "boolean",
+      hidden: ({ document }) => {
+        const types = (document?.memberType as string[] | undefined) ?? [];
+        return !(types.includes("voz") && types.includes("instrumento"));
+      },
+      description:
+        "Puede tener una voz y un instrumento en el mismo servicio (por ejemplo, dirigir y tocar guitarra). Sin marcar, el planner nunca lo permite.",
+    },
+    {
       name: "profilePhoto",
       title: "Profile Photo",
       type: "image",

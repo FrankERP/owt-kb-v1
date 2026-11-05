@@ -21,6 +21,7 @@ import Fuse from "fuse.js";
 import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
 import Button from "../ui/Button";
+import Checkbox from "../ui/Checkbox";
 import Menu, { MenuItem, MenuSeparator } from "../ui/Menu";
 import Skeleton, { SkeletonGroup } from "../ui/Skeleton";
 import Select from "@/app/components/ui/Select";
@@ -58,6 +59,8 @@ interface Member {
   memberType?: string[];
   /** Declared instrument seats; absent or empty = declares nothing (spec D6). */
   instruments?: string[];
+  /** «Canta y toca a la vez»: may hold a voice and an instrument on one service (ADR-0078). */
+  singsAndPlays?: boolean;
   hasPassword: boolean;
   photoUrl?: string;
   notifPrefs?: Record<string, unknown>;
@@ -86,6 +89,8 @@ interface MemberFormData {
    * field and a new member is not frozen at `[]` for the backfill (spec §4.4).
    */
   instruments?: string[];
+  /** Present only when the admin touched «Canta y toca a la vez» (on CREATE, only when ticked). */
+  singsAndPlays?: boolean;
   /**
    * Only the per-type email toggles the admin actually touched this editing
    * session, sent flat to PATCH. Absent (or empty) when adding, or when
@@ -387,6 +392,8 @@ export function MemberForm({
   // Kept even while `instrumento` is unticked, so re-ticking restores it.
   const [instruments, setInstruments] = useState<string[]>(initial?.instruments ?? []);
   const [touchedInstruments, setTouchedInstruments] = useState(false);
+  const [singsAndPlays, setSingsAndPlays] = useState(initial?.singsAndPlays === true);
+  const [touchedSingsAndPlays, setTouchedSingsAndPlays] = useState(false);
   const toggleInstrument = (value: string) => {
     setInstruments(prev => prev.includes(value) ? prev.filter(i => i !== value) : [...prev, value]);
     setTouchedInstruments(true);
@@ -510,6 +517,7 @@ export function MemberForm({
           ...(initial && touchedPrefFields.size > 0 ? { emailPrefs: touchedEmailPrefs } : {}),
           ...touchedMinistries,
           ...(touchedInstruments && (initial || instruments.length > 0) ? { instruments } : {}),
+          ...(touchedSingsAndPlays && (initial || singsAndPlays) ? { singsAndPlays } : {}),
         });
       }}
       className="space-y-4"
@@ -561,6 +569,20 @@ export function MemberForm({
           </div>
           <p className="font-body text-[11px] text-mono-500">
             Vacío = no se asigna en automático; el planner lo sigue listando como «sin declarar».
+          </p>
+        </div>
+      )}
+      {memberType.includes("voz") && memberType.includes("instrumento") && (
+        <div className="space-y-1">
+          <Checkbox
+            className="font-body text-sm text-mono-300"
+            checked={singsAndPlays}
+            onChange={(e) => { setSingsAndPlays(e.target.checked); setTouchedSingsAndPlays(true); }}
+          >
+            Canta y toca a la vez
+          </Checkbox>
+          <p className="font-body text-[11px] text-mono-500">
+            Sin marcar, nunca tiene una voz y un instrumento en el mismo servicio.
           </p>
         </div>
       )}
@@ -850,13 +872,14 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
       // without them, a Kids volunteer normalizes to `["worship"]` and holds the
       // whole song catalog, schedule, tags and authors until someone remembers a
       // second edit — with no signal to the admin that it happened.
-      const { member_name, alias, email, role: memberRole, memberType, ministries, managesMinistries, ministryRoles, instruments } = data;
+      const { member_name, alias, email, role: memberRole, memberType, ministries, managesMinistries, ministryRoles, instruments, singsAndPlays } = data;
       const res = await fetch("/api/admin/members", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           member_name, alias, email, role: memberRole, memberType, ministries, managesMinistries, ministryRoles,
           ...(instruments !== undefined ? { instruments } : {}),
+          ...(singsAndPlays !== undefined ? { singsAndPlays } : {}),
         }),
       });
       if (res.ok) { setModalOpen(false); setModalError(null); fetchMembers(); showToast("Miembro agregado."); }

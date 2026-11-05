@@ -75,7 +75,7 @@ export type PickVerdict =
 /**
  * The verdict on seating `memberId` in the context's cell. Order is the picker's: already seated,
  * then C3 (an ABSENCE from the list — the `memberType` filter runs before the ranking), then C2
- * (a same-category double, never forceable), then C4 (a hard rule, the only forceable refusal).
+ * (a seat clash — `seatsClash` — never forceable), then C4 (a hard rule, the only forceable refusal).
  * Unavailability is never a refusal: it is a sort penalty (fact 19).
  */
 export function judgePick(ctx: PickContext, memberId: string, candidates: RankedCandidate[] = pickCandidates(ctx)): PickVerdict {

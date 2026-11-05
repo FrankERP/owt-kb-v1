@@ -68,10 +68,21 @@ describe("fillInstruments — balance and alternation", () => {
     expect(occupantsOf(out.cells, COLS[0].columnId, DRUMS)).toEqual(["x", "y"]);
   });
 
-  it("a voice seat on the same column does NOT exclude (D4)", () => {
+  it("a voice seat on the same column does NOT exclude a member marked «Canta y toca a la vez» (D4, ADR-0078)", () => {
     const lead = cell(COLS[0].columnId, "lead", ["a"]);
-    const out = run([{ ...p("a", "Ana", ["Keys"]), memberType: ["voz", "instrumento"] }], [lead]);
+    const out = run([{ ...p("a", "Ana", ["Keys"]), memberType: ["voz", "instrumento"], singsAndPlays: true }], [lead]);
     expect(occupantsOf(out.cells, COLS[0].columnId, KEYS)).toEqual(["a"]);
+  });
+
+  it("never seats an unmarked member already in a voice seat on an instrument (Tony, 2026-11-29)", () => {
+    // The solver put Tony in Coro, then this filler gave him Drums the same Sunday.
+    const coro = cell(COLS[0].columnId, "coro", ["t"]);
+    const tony = { ...p("t", "Tony", ["Drums"]), memberType: ["voz", "instrumento"] };
+    const out = run([tony, p("s", "Samo", ["Drums"])], [coro]);
+    expect(occupantsOf(out.cells, COLS[0].columnId, DRUMS)).toEqual(["s"]);
+    const alone = run([tony], [coro]);
+    expect(occupantsOf(alone.cells, COLS[0].columnId, DRUMS)).toEqual([]);
+    expect(alone.unfilled).toContainEqual({ columnId: COLS[0].columnId, rowId: DRUMS });
   });
 
   it("never seats one member on two instrument rows of one column (same-category block)", () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { addedAssignees, setlistRecipientIds, tomorrowDateStr, assignedMemberRefsQuery } from "../notifyTargets";
+import { addedAssignees, setlistRecipientIds, tomorrowDateStr, assignedMemberRefsQuery, assignedSeatsByRoleQuery } from "../notifyTargets";
 
 describe("assignedMemberRefsQuery", () => {
   const q = assignedMemberRefsQuery("_type == 'x' && week == $w");
@@ -52,5 +52,16 @@ describe("tomorrowDateStr", () => {
   it("returns YYYY-MM-DD for tomorrow in the given tz", () => {
     const s = tomorrowDateStr("America/Mexico_City", new Date("2026-06-16T18:00:00Z"));
     expect(s).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
+describe("assignedSeatsByRoleQuery", () => {
+  it("names the same five seat paths as assignedMemberRefsQuery and keys the day on coalesce(week, date)", () => {
+    const q = assignedSeatsByRoleQuery('_type == "sunday_role"');
+    for (const path of ["Lead[]._ref", "BGVs[]._ref", "Chorus[]._ref", "instruments[].person._ref", "foh_team[].person._ref"]) {
+      expect(q).toContain(path);
+      expect(assignedMemberRefsQuery("x")).toContain(path);
+    }
+    expect(q).toContain('"date": coalesce(week, date)');
   });
 });

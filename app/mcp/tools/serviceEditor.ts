@@ -63,7 +63,6 @@ import { savedWindowFor } from "@/app/components/admin/plannerMonth";
 import { classifyPatchOutcome } from "@/app/components/admin/plannerSaveModel";
 import { effectiveStoredCounts, isStoredColumnPast } from "@/app/components/admin/fairnessToggleModel";
 import type { ServiceRole } from "@/app/components/admin/serviceCardModel";
-import type { V3ConfirmEntry } from "@/app/components/admin/v3Confirm";
 import { isWorshipNightFormat } from "@/app/utils/serviceFormat";
 import { fairnessRecordEnvironment, resolveSolverEngine } from "@/app/utils/solverDeployment";
 import { loadFairnessLedgerWith } from "@/app/utils/fairnessLedgerRead";
@@ -107,6 +106,7 @@ import {
   type TargetJudgement,
 } from "../monthProposals/storedJudge";
 import { PROPOSAL_CARD_TOOL_META } from "../apps/proposalCard";
+import { entryFromRecord } from "../monthProposals/storedEntries";
 import { draftLabel } from "../monthProposals/labels";
 import { kindOfType } from "@/app/components/admin/v3Services";
 import { ROLE_TYPES } from "@/app/utils/serviceReadModel";
@@ -683,22 +683,6 @@ function changeSets(
   return { ok: true, changes };
 }
 
-/** The month's frozen eligibility, from its fairness record (T2.3); none = «sin revisar» where it is needed (E7). */
-function entryFromRecord(record: LogicalRecord): V3ConfirmEntry {
-  return {
-    month: record.month,
-    state: "bound",
-    write: {
-      month: record.month,
-      source: record.source === "auto" ? "auto" : "manual",
-      expectedRev: record.rev,
-      people: record.people.map(({ name: _name, ...p }) => p),
-      presence: record.presence,
-    },
-    expects: ["unchanged"],
-  };
-}
-
 /** The ledger's stored services with each editable service replaced by the board's seats. */
 function storedFairShareAdjust(board: EditorBoard): (stored: { records: LogicalRecord[]; services: LedgerService[] }) => { records: LogicalRecord[]; services: LedgerService[] } {
   return (stored) => {
@@ -1111,7 +1095,8 @@ export async function copyInstrumentsResult(
       if (transport.code === "stale_revision" && now !== "failed" && now !== null && now.rev === baseRev && !sourceMoved) {
         return answer(true, [S.copy.repeat], { ok: false, month: ctx.month, status: "not_saved", next: "repeat_same_call" });
       }
-      return answer(true, [S.copy.recheck(S.reason[transport.code] ?? S.reason.invalid_request)], {
+      const reason = clashReasonOf(transport) ?? S.reason[transport.code] ?? S.reason.invalid_request;
+      return answer(true, [S.copy.recheck(reason)], {
         ok: false,
         month: ctx.month,
         status: "not_saved",
@@ -1128,13 +1113,20 @@ export async function copyInstrumentsResult(
  * A write's outcome as the planner classifies a PATCH (`classifyPatchOutcome`). A maintenance reload
  * (the commit bootstrapped a lock and then refused) wrote nothing to the role: a proven refusal.
  */
-function classifyWrite(outcome: { status: number; body: unknown } | null): { kind: "knownCommitted" } | { kind: "knownFailure"; code: string } | { kind: "unknown" } {
+function classifyWrite(
+  outcome: { status: number; body: unknown } | null,
+): { kind: "knownCommitted" } | { kind: "knownFailure"; code: string; seatClashSentences?: string[] } | { kind: "unknown" } {
   if (!outcome) return { kind: "unknown" };
   const t = classifyPatchOutcome({ status: outcome.status, body: outcome.body });
   if (t.kind === "maintenanceReload") return { kind: "knownFailure", code: "bootstrap_completed_reload" };
   if (t.kind === "knownCommitted") return { kind: "knownCommitted" };
-  if (t.kind === "knownFailure") return { kind: "knownFailure", code: t.code };
+  if (t.kind === "knownFailure") return t;
   return { kind: "unknown" };
+}
+
+/** A seat-clash refusal's sentences as a reason clause (ADR-0078): the copy around it adds its own stop. */
+function clashReasonOf(t: { seatClashSentences?: string[] }): string | undefined {
+  return t.seatClashSentences?.length ? t.seatClashSentences.join(" ").replace(/\.$/, "") : undefined;
 }
 
 type SaveStatus =
@@ -1143,7 +1135,8 @@ type SaveStatus =
   | { kind: "unknown" }
   | { kind: "pending" }
   | { kind: "notSavedRepeat" }
-  | { kind: "notSavedRecheck"; code: string }
+  /** `reason`: the server's seat-clash sentence(s) (ADR-0078), shown instead of the code's copy. */
+  | { kind: "notSavedRecheck"; code: string; reason?: string }
   | { kind: "notSavedGroup" };
 
 function statusText(s: SaveStatus): string {
@@ -1153,7 +1146,7 @@ function statusText(s: SaveStatus): string {
     case "unknown": return S.status.unknown;
     case "pending": return S.status.pending;
     case "notSavedRepeat": return S.status.notSavedRepeat;
-    case "notSavedRecheck": return S.status.notSavedRecheck(S.reason[s.code] ?? S.reason.invalid_request);
+    case "notSavedRecheck": return S.status.notSavedRecheck(s.reason ?? S.reason[s.code] ?? S.reason.invalid_request);
     case "notSavedGroup": return S.status.notSavedGroup;
   }
 }
@@ -1308,7 +1301,7 @@ export async function saveServiceEditsResult(
           let st: SaveStatus;
           if (now !== "failed" && now !== null && sameRoleSemantics(targetSnapshot(now.target), targetSnapshot(s.target))) st = { kind: "already" };
           else if (transport.code === "stale_revision" && now !== "failed" && now !== null && now.rev === s.change.baseRev) st = { kind: "notSavedRepeat" };
-          else st = { kind: "notSavedRecheck", code: transport.code };
+          else st = { kind: "notSavedRecheck", code: transport.code, ...(clashReasonOf(transport) ? { reason: clashReasonOf(transport) } : {}) };
           status.set(id, st);
           if (st.kind === "already") continue;
           if (st.kind === "notSavedRepeat") repeatAdvised = true;

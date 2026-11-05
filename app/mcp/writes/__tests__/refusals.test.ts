@@ -18,7 +18,9 @@ import {
   STALE_COPY,
   admissionRefusal,
   refusalFor,
+  serviceRefusalLine,
 } from "../refusals";
+import { addedSeatClashes, seatClashErrorDetails } from "@/app/utils/seatClashGuard";
 import { WRITE_UNKNOWN_OUTCOME_MESSAGE } from "../runWriteTool";
 
 function refusal(code: ServiceErrorCode, details?: Record<string, unknown>) {
@@ -457,3 +459,35 @@ describe("admissionRefusal", () => {
     });
   });
 });
+
+describe("a seat-clash refusal (ADR-0078)", () => {
+  const clashes = addedSeatClashes(
+    null,
+    { leads: [], bgvs: [], chorus: ["mem-tony"], instruments: [{ instrument: "Drums", personId: "mem-tony" }], foh: [] },
+    new Set(),
+  );
+  const outcome = refusal("invalid_request", seatClashErrorDetails(clashes, new Map([["mem-tony", "Tony"]])));
+
+  it("refusalFor leads with the sentence, not the generic invalid_request copy, and never shows the member id", () => {
+    const result = refusalFor(outcome);
+    const text = textOf(result);
+    expect(text.startsWith("Tony quedaría en Coro y Drums en el mismo servicio")).toBe(true);
+    expect(text.endsWith(NOTHING_WRITTEN)).toBe(true);
+    expect(text).not.toContain("Detalle técnico");
+    expect(result.structuredContent).toMatchObject({ refused: true, code: "invalid_request", detail: "seat_clash" });
+    expect(`${text}${JSON.stringify(result.structuredContent)}`).not.toContain("mem-tony");
+  });
+
+  it("serviceRefusalLine prints the sentence alone, never the ISSUE_COPY fallback beside it", () => {
+    const line = serviceRefusalLine(outcome);
+    expect(line.startsWith("Tony quedaría en Coro y Drums")).toBe(true);
+    expect(line).not.toContain("Una persona quedaría en dos lugares");
+    expect(line).not.toContain("mem-tony");
+  });
+
+  it("without the sentence, the issue still has Spanish copy", () => {
+    const line = serviceRefusalLine(refusal("invalid_request", { issues: ["seat_clash"] }));
+    expect(line).toContain("Una persona quedaría en dos lugares");
+  });
+});
+

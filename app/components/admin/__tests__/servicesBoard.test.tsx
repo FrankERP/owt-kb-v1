@@ -494,7 +494,9 @@ describe("the «Integridad de datos» slot (bloque 4)", () => {
     expect(open.disabled).toBe(false);
     fireEvent.click(open);
     await waitFor(() => expect(screen.queryByTestId("integrity-slot")).toBeNull());
-    expect(screen.getByRole("heading", { level: 1, name: "Generar mes" })).toBeTruthy();
+    // The editor owns its page head (ADR-0070's Admin pass), so the h1 arrives with the
+    // dynamically imported `MonthGenerator` — awaited, not read synchronously.
+    expect(await screen.findByRole("heading", { level: 1, name: "Generar mes" })).toBeTruthy();
   });
 });
 

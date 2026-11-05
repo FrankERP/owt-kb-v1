@@ -49,7 +49,7 @@ function renderGen(config: SolverConfig, members: Members, extra: Partial<Compon
 }
 const card = (text: RegExp) => {
   const el = screen.getAllByTitle("Editar")
-    .map((b) => b.closest("div.rounded-lg") as HTMLElement)
+    .map((b) => b.closest("[data-rule-card]") as HTMLElement)
     .find((e) => text.test(e.textContent ?? ""));
   if (!el) throw new Error(`no rule card matching ${text}`);
   return el;

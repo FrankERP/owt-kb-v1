@@ -8,6 +8,7 @@ import SegmentedControl from "@/app/components/ui/SegmentedControl";
 import { NoteIcon } from "@/app/components/ui/icons";
 import { dateRunParts } from "./adminRowCopy";
 import Skeleton, { SkeletonGroup } from "@/app/components/ui/Skeleton";
+import AvailabilityProposals from "./AvailabilityProposals";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -89,8 +90,9 @@ export default function AvailabilityPanel() {
   // `setLoading(false)` entirely and left the skeleton spinning forever.
   // `serviceReadiness.ts` states the rule this panel has to honour: a failure
   // never means clear.
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  // `quiet`: a refresh after a write from the proposals keeps the panel mounted (no skeleton).
+  const fetchData = useCallback(async (opts?: { quiet?: boolean }) => {
+    if (!opts?.quiet) setLoading(true);
     setError(null);
     try {
       const [rm, rr] = await Promise.all([fetch("/api/admin/members"), fetch("/api/admin/roles")]);
@@ -109,6 +111,7 @@ export default function AvailabilityPanel() {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+  const refreshQuietly = useCallback(() => { void fetchData({ quiet: true }); }, [fetchData]);
 
   const today = new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
   const currentYear = Number(today.slice(0, 4));
@@ -229,45 +232,53 @@ export default function AvailabilityPanel() {
       {/* ── Conflicts view: hairline rows (ADR-0070, the Admin pass PR B) ── */}
       {viewMode === "conflicts" && (
         <div className="space-y-8">
-          {conflicts.length === 0 ? (
-            <p className="font-body text-[15px] text-ink-dim">
-              Nadie asignado tiene marcada una fecha en la que le toca servir.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              <p className="font-body text-[15px] text-ink-dim">
-                Están asignados en fechas que marcaron como no disponibles. Reasígnalos desde Servicios, o déjalo así a propósito.
-              </p>
-              <ul className="border-t border-ink/[0.10]">
-                {conflicts.map(({ role, member }, i) => {
-                  const note = member.unavailabilityNotes?.find(n => n.date === role.date)?.note?.trim();
-                  return (
-                    <li
-                      key={i}
-                      data-availability-conflict=""
-                      className="flex min-h-[64px] flex-wrap items-center gap-x-4 gap-y-1 border-b border-ink/[0.10] py-2.5 sm:flex-nowrap"
-                    >
-                      <span className="w-full font-body text-[17px] font-semibold text-ink sm:w-[140px] sm:shrink-0 sm:truncate">{dn(member)}</span>
-                      <span className="min-w-0 flex-1 font-body text-[15px] text-ink-muted [overflow-wrap:anywhere]">
-                        {"marcó "}
-                        <span className="font-semibold text-negative-fg">{fmtDate(role.date)}</span>
-                        {" como no disponible"}
-                        {note && (
-                          <span className="ml-2.5 inline-flex items-center gap-1.5 text-ink-dim">
-                            <NoteIcon size={14} className="shrink-0" />
-                            {note}
+          {/* The proposals (ADR-0079) own this list. The client-side list below is their fallback:
+              shown only when the proposals read fails or cannot judge, so a failure there never
+              reads as «sin conflictos». */}
+          <AvailabilityProposals
+            onChanged={refreshQuietly}
+            fallback={
+              conflicts.length === 0 ? (
+                <p className="font-body text-[15px] text-ink-dim">
+                  Nadie asignado tiene marcada una fecha en la que le toca servir.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  <p className="font-body text-[15px] text-ink-dim">
+                    Están asignados en fechas que marcaron como no disponibles. Reasígnalos desde Servicios, o déjalo así a propósito.
+                  </p>
+                  <ul className="border-t border-ink/[0.10]">
+                    {conflicts.map(({ role, member }, i) => {
+                      const note = member.unavailabilityNotes?.find(n => n.date === role.date)?.note?.trim();
+                      return (
+                        <li
+                          key={i}
+                          data-availability-conflict=""
+                          className="flex min-h-[64px] flex-wrap items-center gap-x-4 gap-y-1 border-b border-ink/[0.10] py-2.5 sm:flex-nowrap"
+                        >
+                          <span className="w-full font-body text-[17px] font-semibold text-ink sm:w-[140px] sm:shrink-0 sm:truncate">{dn(member)}</span>
+                          <span className="min-w-0 flex-1 font-body text-[15px] text-ink-muted [overflow-wrap:anywhere]">
+                            {"marcó "}
+                            <span className="font-semibold text-negative-fg">{fmtDate(role.date)}</span>
+                            {" como no disponible"}
+                            {note && (
+                              <span className="ml-2.5 inline-flex items-center gap-1.5 text-ink-dim">
+                                <NoteIcon size={14} className="shrink-0" />
+                                {note}
+                              </span>
+                            )}
                           </span>
-                        )}
-                      </span>
-                      <span className="shrink-0 font-body text-sm text-ink-dim">
-                        {role.service_name || SERVICE_LABEL[role._type]}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
+                          <span className="shrink-0 font-body text-sm text-ink-dim">
+                            {role.service_name || SERVICE_LABEL[role._type]}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )
+            }
+          />
 
           {/* Upcoming unavailabilities (not necessarily conflicting): one row per
               member, the dates as one Spanish run («20, 21 y 22 de noviembre»),

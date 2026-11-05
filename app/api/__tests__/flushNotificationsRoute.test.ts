@@ -27,6 +27,7 @@ vi.mock("@/app/utils/outboxSweep", () => ({
   sweepOutbox: (...a: unknown[]) => sweepOutboxMock(...a),
   EMAIL_LIMIT: 40,
   SEND_BUDGET_MS: 40_000,
+  SWEEP_DEADLINE_MS: 45_000,
 }));
 vi.mock("@/app/utils/email", () => ({
   sendEmail: (...a: unknown[]) => sendEmailMock(...a),
@@ -43,6 +44,18 @@ vi.mock("@/sanity/lib/serverClient", () => ({
   serverClient: { fetch: vi.fn() },
   writeClient: { transaction: vi.fn(), patch: vi.fn() },
 }));
+
+// The availability proposals ride layer 1 after the response (ADR-0079); this file asserts only
+// that the tick is queued and that the drain's answer never depends on it.
+const availabilityTickMock = vi.fn();
+const afterCallbacks: Array<() => unknown> = [];
+vi.mock("@/app/utils/availabilityFixCommit", () => ({
+  availabilityTick: (...a: unknown[]) => availabilityTickMock(...a),
+}));
+vi.mock("next/server", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("next/server")>();
+  return { ...mod, after: (fn: () => unknown) => void afterCallbacks.push(fn) };
+});
 
 const SECRET = "cron-secret-for-tests";
 
@@ -131,6 +144,27 @@ describe("layer 1 — /api/cron/flush-notifications", () => {
     const res = await GET(req({ authorization: `Bearer ${SECRET}` }));
     expect(res.status).toBe(200);
     expect(sweepOutboxMock).toHaveBeenCalled();
+  });
+
+  it("queues the availability tick after the drain, and survives its failure", async () => {
+    afterCallbacks.length = 0;
+    const GET = await flushRoute();
+    const res = await GET(req({ authorization: `Bearer ${SECRET}` }));
+    expect(res.status).toBe(200);
+    expect(availabilityTickMock).not.toHaveBeenCalled();
+    expect(afterCallbacks).toHaveLength(1);
+    availabilityTickMock.mockRejectedValueOnce(new Error("boom"));
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(afterCallbacks[0]()).resolves.toBeUndefined();
+    expect(availabilityTickMock).toHaveBeenCalledWith({ startedAt: expect.any(Number) });
+    err.mockRestore();
+  });
+
+  it("does not queue the availability tick for an unauthorized call", async () => {
+    afterCallbacks.length = 0;
+    const GET = await flushRoute();
+    await GET(req({}));
+    expect(afterCallbacks).toHaveLength(0);
   });
 
   it("sweeps at the FULL budget — the derating belongs to layer 2 alone", async () => {
@@ -265,6 +299,87 @@ describe("layer 3 — the daily cron also sweeps", () => {
 
     expect(res.status).toBe(200);
     expect(await bodyField(res, "destroyed")).toEqual({ destroyed: 0, alerted: false });
+  });
+});
+
+describe("layer 3 — the Sunday «Te toca dirigir» reminder (ADR-0080)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const isLeadQuery = (q: unknown) => String(q).includes("setlistProposal");
+
+  it("reads nothing and leaves the sweep's clocks alone on a weekday", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-05T01:30:00Z")); // Wednesday 19:30 CDMX
+    serveReminderFetches({ count: 0, oldest: null });
+    const GET = await remindersRoute();
+    const res = await GET(req({ authorization: `Bearer ${SECRET}` }));
+
+    expect(await bodyField(res, "leadReminders")).toEqual({ ran: false });
+    expect(operationalFetch.mock.calls.some((c) => isLeadQuery(c[0]))).toBe(false);
+    expect(sweepOutboxMock).toHaveBeenCalledWith({});
+  });
+
+  it("emails next week's leads on Sunday evening, before the sweep", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-09T01:30:00Z")); // Sunday 8 nov, 19:30 CDMX
+    operationalFetch.mockImplementation(async (query: string, params: Record<string, unknown>) => {
+      if (isLeadQuery(query)) {
+        expect(params).toMatchObject({ from: "2026-11-09", to: "2026-11-15" });
+        return [{
+          _id: "sun15", _type: "sunday_role", date: "2026-11-15",
+          leads: [{ _id: "m1", name: "Pau", email: "pau@mail.com" }],
+          setlistSongs: 0, proposal: null, pastorMessage: null,
+        }];
+      }
+      if (query.includes("notificationOutbox")) return { count: 0, oldest: null };
+      return [];
+    });
+    const GET = await remindersRoute();
+    const res = await GET(req({ authorization: `Bearer ${SECRET}` }));
+
+    expect(await bodyField(res, "leadReminders")).toMatchObject({ ran: true, planned: 1, emailed: 1, failed: 0 });
+    const reminder = sendEmailMock.mock.calls.find((c) => /Te toca dirigir/.test(String(c[0].subject)));
+    expect(reminder?.[0].to).toBe("pau@mail.com");
+    expect(sendEmailMock.mock.invocationCallOrder[0]).toBeLessThan(sweepOutboxMock.mock.invocationCallOrder[0]);
+  });
+
+  it("skips the sweep (layer 1 drains it) when the reminders left too little time", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-09T01:30:00Z"));
+    operationalFetch.mockImplementation(async (query: string) => {
+      if (isLeadQuery(query)) {
+        vi.setSystemTime(new Date("2026-11-09T01:30:30Z")); // a 30 s read
+        return [];
+      }
+      if (query.includes("notificationOutbox")) return { count: 0, oldest: null };
+      return [];
+    });
+    const GET = await remindersRoute();
+    const res = await GET(req({ authorization: `Bearer ${SECRET}` }));
+
+    expect(res.status).toBe(200);
+    expect(sweepOutboxMock).not.toHaveBeenCalled();
+    expect(await bodyField(res, "sweep")).toEqual({ error: "sweep_skipped_after_lead_reminders" });
+  });
+
+  it("still sweeps when the reminder's read fails", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-09T01:30:00Z"));
+    operationalFetch.mockImplementation(async (query: string) => {
+      if (isLeadQuery(query)) throw new Error("sanity down");
+      if (query.includes("notificationOutbox")) return { count: 0, oldest: null };
+      return [];
+    });
+    const GET = await remindersRoute();
+    const res = await GET(req({ authorization: `Bearer ${SECRET}` }));
+
+    expect(res.status).toBe(200);
+    expect(await bodyField(res, "leadReminders")).toMatchObject({ ran: true, error: "lead_reminder_failed" });
+    expect(sweepOutboxMock).toHaveBeenCalled();
   });
 });
 

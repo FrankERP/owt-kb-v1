@@ -471,7 +471,7 @@ describe("A2 handoff allowlist", () => {
     expect(A2_HANDOFF_ALLOWLIST).toEqual([]);
   });
 
-  it("licenses the nineteen permanent runtime writers for WRITES ONLY, never reads", () => {
+  it("licenses the twenty permanent runtime writers for WRITES ONLY, never reads", () => {
     expect(PROTECTED_RUNTIME_WRITERS.map((e) => `${e.file}#${e.operation}`).sort()).toEqual(
       [
         "app/utils/outboxSweep.ts#module",
@@ -493,6 +493,7 @@ describe("A2 handoff allowlist", () => {
         "app/api/me/proposals/[id]/messages/route.ts#POST",
         "app/api/admin/proposals/[id]/messages/route.ts#POST",
         "app/utils/serviceThreadCommit.ts#module",
+        "app/utils/availabilityFixCommit.ts#module",
       ].sort(),
     );
     // Nothing removes a writer: item 12 must never be "satisfied" by moving reads here.
@@ -722,6 +723,7 @@ describe("git-tracked protected read inventory", () => {
       "setlistProposal",
       "specialIdentityCoordinator",
       "fairnessMonth",
+      "availabilityConflict",
     ]);
   });
 });

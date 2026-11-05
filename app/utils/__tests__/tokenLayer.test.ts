@@ -459,19 +459,26 @@ describe("colour KEYS are colour names, not utility names", () => {
     ).toEqual([]);
   });
 
-  it("`border-edge-control` resolves, and the sign-in inputs still use it", () => {
+  it("`border-edge-control` resolves, and the sign-in inputs carry a drawn rule", () => {
     // The border was the OTHER measured failure — 1.46 dark / 1.42 light — and
     // those fields carry no affordance besides it. A rename or typo emits no CSS
     // and the outline silently disappears; the key-prefix check above catches the
-    // historical mistake, not this direction.
+    // historical mistake, not this direction. The token still boxes the song and
+    // setlist editors' fields; the sign-in inputs moved to Mi perfil's hairline
+    // field (ADR-0070, phase 8), whose one rule is the affordance now — so the
+    // page must import that class, and the class must still draw a bottom rule.
     expect(colourKeys().has("edge-control")).toBe(true);
     const signin = readFileSync(
       path.join(REPO_ROOT, "app/(client)/auth/signin/page.tsx"), "utf8",
     );
     expect(
-      (signin.match(/border-edge-control/g) ?? []).length,
-      "both sign-in inputs must carry the token border",
-    ).toBeGreaterThanOrEqual(1);
+      (signin.match(/HAIRLINE_INPUT_CLASS/g) ?? []).length,
+      "both sign-in inputs must carry the hairline field",
+    ).toBeGreaterThanOrEqual(3);
+    const hairline = readFileSync(
+      path.join(REPO_ROOT, "app/components/ui/hairlineField.ts"), "utf8",
+    );
+    expect(hairline).toMatch(/HAIRLINE_INPUT_CLASS =\s*"[^"]*\bborder-b border-ink\/\[0\.18\]/);
   });
 
   it("every `placeholder:text-*` class in app/ resolves to a declared colour", () => {

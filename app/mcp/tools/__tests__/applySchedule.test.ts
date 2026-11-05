@@ -457,6 +457,66 @@ describe("recovery across calls (step 7)", () => {
   });
 });
 
+describe("ADR-0078 — a seat clash in a draft refuses before any write", () => {
+  async function clashSetup() {
+    const proposal = await solved();
+    // A pinned drummer the solver put in a voice: the first creatable draft's lead also plays Drums.
+    const target = proposal.payload.drafts.find((d) => d.atSolve === "creatable" && d.draft.leads.length > 0)!;
+    target.draft.instruments = [...target.draft.instruments, { id: "slot-drums", instrument: "Drums", personId: target.draft.leads[0] }];
+    return { proposal, w: applyWorld(proposal) };
+  }
+
+  it("names the clash, writes nothing, and points at the proposal — not «ya pasó», not /admin", async () => {
+    const { w } = await clashSetup();
+    const out = await apply(w);
+    expect(out.isError).toBe(true);
+    const text = textOf(out);
+    expect(text).toMatch(/quedaría en Lead y Drums en el mismo servicio/);
+    expect(text).toContain(L.noWriteThisCall);
+    expect(text).toContain(L.seatClashRevise);
+    expect(text).not.toContain("ya pasó");
+    expect(out.structuredContent).toMatchObject({ code: "invalid_request", detail: "seat_clash" });
+    expect(out.structuredContent).not.toHaveProperty("next");
+    expect(w.deps.commitRecords).not.toHaveBeenCalled();
+    expect(w.deps.createRole).not.toHaveBeenCalled();
+  });
+
+  it("once the proposal started applying, says to re-solve (revise_proposal would refuse it)", async () => {
+    const proposal = await solved();
+    const w = applyWorld(proposal, { failFrom: 2 });
+    await apply(w); // the first create lands, the call is killed at the second
+    expect(w.roles).toHaveLength(1);
+    // The last draft by date (creates go oldest first, so it is not the one that landed).
+    const later = proposal.payload.drafts
+      .filter((d) => d.atSolve === "creatable")
+      .map((d) => d.draft)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .at(-1)!;
+    later.chorus = [...later.chorus, "m-ana"];
+    later.instruments = [...later.instruments, { id: "slot-drums", instrument: "Drums", personId: "m-ana" }];
+    const healthy = applyWorld(proposal);
+    healthy.roles = w.roles;
+    const out = await apply(healthy);
+    expect(textOf(out)).toContain(L.seatClashResolve);
+    expect(textOf(out)).not.toContain(L.seatClashRevise);
+    expect(healthy.deps.createRole).not.toHaveBeenCalled();
+  });
+
+  it("a created draft deleted in /admin is not judged again: it is reported deleted, never re-posted", async () => {
+    const { proposal, w } = await setup();
+    await apply(w);
+    const gone = w.roles.shift()!;
+    const draft = proposal.payload.drafts.find((d) => w.proposal!.state.created[d.draft.localId] === gone._id)!.draft;
+    draft.chorus = [...draft.chorus, "m-ana"];
+    draft.instruments = [...draft.instruments, { id: "slot-drums", instrument: "Drums", personId: "m-ana" }];
+    const posted = w.deps.createRole.mock.calls.length;
+    const out = await apply(w);
+    expect(out.structuredContent).not.toMatchObject({ detail: "seat_clash" });
+    expect(textOf(out)).toContain(L.serviceDeleted(draftLabel(draft)));
+    expect(w.deps.createRole.mock.calls.length).toBe(posted);
+  });
+});
+
 describe("R-CALL and key hygiene, over every answer above", () => {
   it("no forbidden claim, no id", () => {
     expect(answers.length).toBeGreaterThan(20);

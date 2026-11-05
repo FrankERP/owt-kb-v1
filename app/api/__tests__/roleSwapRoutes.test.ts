@@ -468,7 +468,7 @@ describe("POST /api/admin/roles/swap — seat swap", () => {
   });
 
   it("asserts both revisions for weekend↔special and for special↔special", async () => {
-    store.roles.push(role(), specialRole(), specialRole({ _id: "role-sp2", _rev: "rev-sp2", date: "2026-08-21", Lead: [ref("d1", "mem-2")] }));
+    store.roles.push(role(), specialRole(), specialRole({ _id: "role-sp2", _rev: "rev-sp2", date: "2026-08-21", Lead: [ref("d1", "mem-2")], instruments: [] }));
     store.locks.push(lockFor("role-1", "2026-08-09", "lock-rev-1"));
     seedAllMembers();
 
@@ -1325,5 +1325,61 @@ describe("POST /api/admin/roles/copy-instruments", () => {
       "roleTarget.sunday_role.2026-08-09@lock-rev-1",
     ]);
     expect(Object.keys(ops[0].set)).toEqual(["instruments"]);
+  });
+});
+
+describe("seat-clash guard on swap and copy-instruments (ADR-0078)", () => {
+  function seed(second: Record<string, unknown>) {
+    store.roles.push(role(), otherRole(second));
+    store.locks.push(lockFor("role-1", "2026-08-09", "lock-rev-1"), lockFor("role-2", "2026-08-16", "lock-rev-2"));
+    seedAllMembers();
+  }
+  function mark(id: string) {
+    store.members = store.members.map((m) => (m._id === id ? { ...m, singsAndPlays: true } : m));
+  }
+  async function expectClashRefusal(res: Response, memberId: string) {
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("invalid_request");
+    expect(body.details.issues).toEqual(["seat_clash"]);
+    expect(body.details.seatClashes.map((c: { memberId: string }) => c.memberId)).toContain(memberId);
+    expect(transactions).toHaveLength(0);
+  }
+
+  // role-1 is led by mem-1; role-2's Chorus holds mem-1 too.
+  const seatSwap = () =>
+    swapPOST(req({ kind: "seat", source: seat("role-1", "rev-1", "instruments", "ai"), target: seat("role-2", "rev-2", "Chorus", "b3") }));
+
+  it("refuses a seat swap that puts role-1's Lead on its own Bajo", async () => {
+    seed({ Chorus: [ref("b3", "mem-1")] });
+    await expectClashRefusal(await seatSwap(), "mem-1");
+  });
+
+  it("allows that seat swap for a member marked «Canta y toca a la vez»", async () => {
+    seed({ Chorus: [ref("b3", "mem-1")] });
+    mark("mem-1");
+    expect((await seatSwap()).status).toBe(200);
+  });
+
+  it("refuses a section swap that brings role-1's Lead onto an instrument", async () => {
+    seed({ instruments: [instrumentSlot("bi", "Teclado", "mem-1")] });
+    const res = await swapPOST(
+      req({ kind: "section", path: "instruments", roles: [{ id: "role-1", rev: "rev-1" }, { id: "role-2", rev: "rev-2" }] }),
+    );
+    await expectClashRefusal(res, "mem-1");
+  });
+
+  it("refuses a team swap that carries an old clash onto the other service", async () => {
+    seed({ Chorus: [ref("b3", "mem-7")] }); // mem-7 already sings and plays Teclado on role-2
+    const res = await swapPOST(
+      req({ kind: "team", roles: [{ id: "role-1", rev: "rev-1" }, { id: "role-2", rev: "rev-2" }] }),
+    );
+    await expectClashRefusal(res, "mem-7");
+  });
+
+  it("refuses copying instruments onto a service where the player already sings", async () => {
+    seed({ Chorus: [ref("b3", "mem-3")] }); // mem-3 plays Bajo on role-1
+    const res = await copyPOST(req({ source: { id: "role-1", rev: "rev-1" }, target: { id: "role-2", rev: "rev-2" } }));
+    await expectClashRefusal(res, "mem-3");
   });
 });

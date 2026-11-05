@@ -54,7 +54,7 @@ function renderGenerator(engine: "v2" | "v3") {
   );
 }
 const card = () =>
-  screen.getAllByTitle("Editar").map((b) => b.closest("div.rounded-lg") as HTMLElement)
+  screen.getAllByTitle("Editar").map((b) => b.closest("[data-rule-card]") as HTMLElement)
     .find((e) => /Ana/.test(e.textContent ?? ""))!;
 
 describe("C1's note follows the engine prop", () => {

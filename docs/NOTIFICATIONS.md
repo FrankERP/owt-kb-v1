@@ -78,7 +78,12 @@ hand-writing a fixture that mirrors them).
 |---|---|---|
 | 1 — primary | **Google Cloud Scheduler**, `*/5` ([ADR-0032](adr/0032-layer-1-runs-on-cloud-scheduler.md); live since 2026-09-10) — plus GitHub Actions, declared `*/5` but starved by this repo's CI volume, kept as an independent second caller — see §"Layer 1 does not run on the schedule it declares" | Scheduler job `flush-notification-outbox` (GCP `eloquent-figure-421401`, `us-central1`) and `.github/workflows/flush-notifications.yml`, both → `/api/cron/flush-notifications` (drains up to 5 sweeps per tick when work is re-pended) |
 | 2 — backstop | opportunistic sweep after any queueing write (not after the MCP saved-service save's inline upserts, above) | end of `commitUpserts()` in `serviceMutationSideEffects.ts` — keeps its report and raises the destroyed-mail alarm |
-| 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` (mails a person about destroyed mail, as layer 2 also does; layer 1 goes red on the same conditions instead — see §"The destroyed-mail alarm") |
+| 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` (mails a person about destroyed mail, as layer 2 also does; layer 1 goes red on the same conditions instead — see §"The destroyed-mail alarm"). On Sundays it first sends «Te toca dirigir» to leads and then runs a derated sweep, or skips it if the reminders overran — see §"«Te toca dirigir»" |
+
+**Layer 1 also carries the availability proposals' tick** (ADR-0079): after the drain has
+answered, `after()` runs `availabilityTick` on every third 5-minute bucket with at least 40 s left;
+it never changes the drain's response, and its failure is only logged. See §"The availability
+conflicts email".
 
 **Layer 1 is load-bearing, not one of three redundant paths.** Layer 2 only
 flushes subjects that have *already* gone quiet, so it can never flush the
@@ -554,6 +559,70 @@ The rules:
 The admin routes ignore the return value. The MCP tools turn it into their `notifications[]`
 report, worded «encolada», never «enviada». **Unpublish queues nothing and runs no sweep**, from
 `/admin` or from the MCP alike (`roleUnpublishCommit.ts`).
+
+## The availability conflicts email — admins only (ADR-0079)
+
+When someone marks a day they already serve on, the availability sweep
+(`app/utils/availabilityFixCommit.ts`) records a proposal and sends ONE email per sweep that claimed
+new events: «Conflictos de disponibilidad (N)», sections «Propuestas» and «Sin reemplazo», a link to
+`/admin?tab=availability` (`availabilityConflictEmail.ts`, the light palette). **It never changes a
+service**, so it queues no role notice; the notices go out only when an admin presses «Aplicar»,
+which saves through `/admin`'s own `editRole` exactly like a hand edit (on a published service the
+person removed and the person added hear about it; on a draft nobody does). An instrument or FOH
+seat nobody can take is proposed as «queda vacío»; applying it notifies only the person removed. A
+proposal that moves a singer up («Lead → Marianne (pasa de BGV), BGV → Liu») changes three people on
+that one service, and «Aplicar» notifies the three as any hand edit would.
+
+- **Audience:** `teamMembers` with `role` admin or super-admin, `disabled != true`, in worship
+  (`WORSHIP_AUDIENCE_GROQ_FILTER`), not the system accounts (`service-account-*`,
+  `member-dev-verify`), with an email, on `EMAIL_ALLOWLIST`, and with the «Propuestas» switch on
+  (`wantsNotification(prefs, "proposals")`). Serial sends; `EMAIL_REDIRECT_TO` honoured.
+- **Not the outbox.** The sweep sends directly, after claiming its records (`notifiedSeq` =
+  `eventSeq` under `ifRevisionId`); a claimed event whose send fails is NOT retried — the claim is
+  the de-duplication. The audience is read before any claim, so a failed audience read claims
+  nothing.
+- **Triggers:** the member's own save (`after()` on `PATCH /api/me/availability`, that member's
+  conflicts only), every third tick of layer 1 (`/api/cron/flush-notifications` runs
+  `availabilityTick` in `after()`, after the drain answered; a cheap seat pre-check first, so a
+  tick with nothing new, nothing unemailed and nothing older than 6 hours reads three small queries
+  and stops; a conflict that cannot be judged is re-checked at most every 6 hours), and «Revisar
+  ahora» in the panel.
+- **Only Production sends** (`fairnessRecordEnvironment`). On Preview the sweep runs dry: no
+  record, no email. But «Aplicar» and «Mantener» pressed on dev write the REAL dataset, like every
+  admin button there.
+- **Kill switch:** `AVAILABILITY_SWEEP_DISABLED=1` (`docs/SECRETS.md`).
+- **No liveness alarm.** A sweep that cannot judge (a raw Studio draft, the engine on v2, no read
+  token) is visible only as «No se pudo revisar» in the panel and in the `[availability-sweep]`
+  logs — an accepted cost (ADR-0079).
+
+## «Te toca dirigir» — the Sunday reminder to leads (ADR-0080)
+
+Every **Sunday at 19:00–19:59 CDMX** the daily cron (`/api/cron/service-reminders`, layer 3)
+emails the leads of the coming week's services that still need songs —
+`sendLeadSongReminders` in `app/utils/leadSongReminder.ts`. It is NOT an outbox notice: no
+debounce, no claim, one direct send per lead.
+
+- **Which services:** published (`published != false`), Monday to the next Sunday, with someone
+  in Lead (`LEAD_REMINDER_SCOPE = "week"` — Saturdays six days ahead and specials on their day;
+  `"sunday"` narrows it to the next Sunday's `sunday_role`).
+- **Silent when** the setlist already has songs (paired `featuredSongs`/`saturdarSongs` by
+  `week`, or a special's own `songs`) or the proposal is `pending` or `approved`. A draft with
+  songs reads «Tu propuesta no se ha enviado»; `changes_requested` reads «Tu propuesta tiene
+  cambios pedidos»; anything else «Te toca dirigir».
+- **Who:** each Lead with an email, app access (`disabled != true`) and inside
+  `EMAIL_ALLOWLIST` whose «Propuestas» preference resolves on (`wantsNotification`, legacy
+  all-email opt-out included; the switch is shown only to admins); the co-lead is named; the
+  pastor's message is included when set. Preview mail goes to `EMAIL_REDIRECT_TO`. A best-effort
+  push (titled by the state, category `reminders`) goes to every lead with access of those
+  services, email or not.
+- **Order and budget:** sends run in parallel BEFORE the sweep; the sweep's deadline is derated
+  by the time spent (`sweepOptionsAfterReminders`), losslessly. With less than
+  `MIN_SWEEP_DEADLINE_MS` (25 s) left the daily sweep is skipped (`notify_daily_sweep_skipped`;
+  `sweep: {error: "sweep_skipped_after_lead_reminders"}`) and layer 1 drains it. The route's JSON carries `leadReminders`
+  (`{ ran: false }` on other days); Vercel logs carry `lead_reminder_run`,
+  `lead_reminder_send_failed` and `lead_reminder_failed`.
+- **No "already sent" marker:** a duplicated cron event sends the reminder twice (ADR-0080).
+  Calling the route by hand on a Sunday with `CRON_SECRET` sends it again too.
 
 ## The liveness alarm
 

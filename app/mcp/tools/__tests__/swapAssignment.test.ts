@@ -338,7 +338,8 @@ const DUP_B = sunday("role-sun-dup-b", "2028-10-22", true, { Lead: [ref("ldb", "
 // `draft_conflict` (stage 1), which the route refuses too (`loadRoleForWrite`).
 const OVERLAID = sunday("role-sun-overlaid", "2028-10-12", true, { Lead: [ref("lov", "mem-juan")] });
 const OVERLAY_DRAFT: TwinDoc = sunday("drafts.role-sun-overlaid", "2028-10-12", true);
-const GHOSTED = sunday("role-sun-ghosted", "2028-10-29", true, { Lead: [ref("lg1", "mem-hugo")] });
+// Its Lead is nobody already on SUN_B, so the Lead swap the route commits adds no seat clash (ADR-0078).
+const GHOSTED = sunday("role-sun-ghosted", "2028-10-29", true, { Lead: [ref("lg1", "mem-lalo")] });
 const GHOST_DRAFT: TwinDoc = sunday("drafts.role-ghost", "2028-10-29", true);
 const SP_X = special("role-sp-x", "2028-10-28", "Retiro de jóvenes", true, { Lead: [ref("lx1", "mem-kike")] });
 const SP_X2 = special("role-sp-x2", "2028-10-28", "  Retiro   de jóvenes ", true, { Lead: [ref("lx2", "mem-lalo")] });

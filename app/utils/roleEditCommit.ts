@@ -70,7 +70,7 @@ import {
 } from "@/app/utils/roleWriteRequest";
 import {
   bootstrapLegacyLock,
-  loadCanonicalMemberIds,
+  loadCanonicalMembers,
   loadCanonicalRole,
   loadDependencies,
   loadLock,
@@ -82,6 +82,7 @@ import {
   type StoredRole,
 } from "@/app/utils/roleWriteOps";
 import type { CommitOutcome } from "@/app/utils/commitOutcome";
+import { addedSeatClashes, clashInputsOf, seatClashErrorDetails } from "@/app/utils/seatClashGuard";
 
 export interface RoleEditOptions {
   /** `"deferred"` (default, the route) or `"inline"` (the MCP save). See the header. */
@@ -114,10 +115,12 @@ export async function editRole(
   options: RoleEditOptions = {},
 ): Promise<CommitOutcome<RoleEditEffects>> {
   // Validate the complete submitted roster before any occupancy, coordination,
-  // legacy bootstrap, or business transaction can run. This is referential
-  // validation only; memberType remains UI guidance, not server policy.
+  // legacy bootstrap, or business transaction can run: referential validation,
+  // plus the seat-clash guard below (ADR-0078). memberType remains UI guidance,
+  // not server policy.
   const wanted = seatAssignees(request.seats);
-  const resolvedMembers = await loadCanonicalMemberIds(wanted);
+  const members = await loadCanonicalMembers(wanted);
+  const resolvedMembers = new Set(members.keys());
   const danglingRefs = wanted.filter((memberId) => !resolvedMembers.has(memberId)).sort();
   if (danglingRefs.length) {
     return refuse(serviceError("integrity_conflict", { details: { danglingRefs } }));
@@ -166,6 +169,17 @@ export async function editRole(
       }),
     );
   }
+  // A pair of seats one person may not hold on this service, ADDED by this
+  // write (ADR-0078): refused before the dependency and occupancy reads, the
+  // legacy bootstrap and the transaction. Judged against the stored roster the
+  // transaction's `ifRevisionId` asserts, so an old clash never blocks an
+  // unrelated edit.
+  const { singsAndPlays, names } = clashInputsOf(members);
+  const clashes = addedSeatClashes(normalizeStoredSeats(role), request.seats, singsAndPlays);
+  if (clashes.length) {
+    return refuse(serviceError("invalid_request", { details: seatClashErrorDetails(clashes, names) }));
+  }
+
   const newDate = request.date;
   const isMove = newDate !== oldDate;
   const isSpecial = roleType === "special_role";

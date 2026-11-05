@@ -18,10 +18,12 @@
 //  1. Eligibility is NEVER re-implemented here. The pool is `rankCandidates`
 //     re-run per placement against `working`, filtered on `eligible` and
 //     `!undeclared`. That single call is what enforces Tipo, availability, and
-//     the same-category rule (a member already on another `instrumento:` row of
-//     this column is `blockedReason`, exactly the C2 refusal the picker and
-//     `moveGate` apply to a human). Round 1 of the review caught a version that
-//     forked this and seated one person on Keys and Drums the same day.
+//     the seat-clash rule (a member already on another `instrumento:` row of
+//     this column, or in one of its voice seats unless marked «Canta y toca a
+//     la vez», is `blockedReason` — `seatsClash`, exactly the C2 refusal the
+//     picker and `moveGate` apply to a human). Round 1 of the review caught a
+//     version that forked this and seated one person on Keys and Drums the
+//     same day; the voice half closes Tony on Coro and Drums (ADR-0078).
 //  2. Vacate happens ONCE, before any counting. A previous Auto's `origin:
 //     "auto"` instrument cells are emptied in one pass over the whole grid, so
 //     `working` never holds a pick this run has not made. Round 2 caught a
@@ -98,7 +100,7 @@ function vacateAutoInstrumentCells(cells: GridCell[], weekendIds: Set<string>): 
 }
 
 /** Instrument seats held per member over the whole grid, all instrument rows, every column. */
-function seatCounts(cells: GridCell[]): Map<string, number> {
+export function seatCounts(cells: GridCell[]): Map<string, number> {
   const out = new Map<string, number>();
   for (const c of cells) {
     if (!isInstrumentRowId(c.rowId)) continue;
@@ -108,7 +110,7 @@ function seatCounts(cells: GridCell[]): Map<string, number> {
 }
 
 /** Members holding ANY instrument row on the given column. */
-function instrumentalistsOn(cells: GridCell[], columnId: string): Set<string> {
+export function instrumentalistsOn(cells: GridCell[], columnId: string): Set<string> {
   const out = new Set<string>();
   for (const c of cells) {
     if (c.columnId !== columnId || !isInstrumentRowId(c.rowId)) continue;
@@ -116,6 +118,18 @@ function instrumentalistsOn(cells: GridCell[], columnId: string): Set<string> {
   }
   return out;
 }
+
+/**
+ * The rows `fillInstruments` may touch (see its comment): a known instrument whose row id is the id
+ * its own label derives. Exported so the availability proposals (ADR-0079) order exactly these rows
+ * as the filler does, and no other.
+ */
+export function isFillableInstrumentRow(r: GridRow): boolean {
+  return isInstrumentRowId(r.id) && isKnownInstrument(r.label) && instrumentSeatDef(r.label).id === r.id;
+}
+
+/** A weekend column: the only columns `fillInstruments` fills. */
+export const isInstrumentFillColumn = (c: GridColumn) => isWeekend(c);
 
 export function fillInstruments(input: FillInstrumentsInput): FillInstrumentsResult {
   const { columns, rows, members, savedWindow, config } = input;
@@ -139,9 +153,7 @@ export function fillInstruments(input: FillInstrumentsInput): FillInstrumentsRes
   // row.id` is what `seatDefForRow(row).id === row.id` must hold for
   // everything the filler touches; a legacy-spelled row then stays manual,
   // with no marker, exactly like a zero-declarer row.
-  const instrumentRows = rows.filter(
-    (r) => isInstrumentRowId(r.id) && isKnownInstrument(r.label) && instrumentSeatDef(r.label).id === r.id,
-  );
+  const instrumentRows = rows.filter(isFillableInstrumentRow);
 
   let previousColumnId: string | null = null;
   for (const column of targets) {

@@ -60,7 +60,7 @@ export const PROPOSAL_PROJECTION = `{
   approval_receipt, last_transition
 }`;
 
-export const CANONICAL_MEMBER_PROJECTION = `{ _id, _rev, member_name, alias, unavailableDates, unavailabilityNotes }`;
+export const CANONICAL_MEMBER_PROJECTION = `{ _id, _rev, member_name, alias, unavailableDates, unavailabilityNotes, singsAndPlays }`;
 
 const DRAFTS_ONLY = `_id in path("drafts.**")`;
 
@@ -644,7 +644,7 @@ export function serviceConversationQuery(roleId: string, threadId: string): Boun
 export function adminMembersQuery(all: boolean): BoundQuery {
   return {
     query: `*[_type == "teamMembers" && ${WORSHIP_MEMBER_GROQ_FILTER}] | order(member_name asc) {
-      _id, member_name, alias, email, role, memberType, instruments, notifPrefs, ministries, managesMinistries,
+      _id, member_name, alias, email, role, memberType, instruments, singsAndPlays, notifPrefs, ministries, managesMinistries,
       disabled,
       $all => { ministryRoles },
       unavailableDates, unavailabilityNotes,

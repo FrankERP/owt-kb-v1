@@ -89,6 +89,7 @@ referenced by every seat, proposal, and login event. **A member's identity in au
 | `notifPrefs` | object | `assignments` (bool, def true), `email` (bool, def true — assignment emails), `setlist` (string: `all`/`assigned`/`off`, def `all`), `proposals` (bool, def true), `reminders` (bool, def true). |
 | `memberType` | array of string | Multi-select: `voz`, `instrumento`, `foh`, `sunday_lead`, `saturday_lead`, `support`. Governs sections + solver pools. |
 | `instruments` | array of string | Declared instrument seats, closed to `DEFAULT_INSTRUMENT_SEATS` (`Bass`, `Keys`, `Drums`, `EG`, `AG`). **Absent or `[]` = declares nothing**: the instrument filler never seats them; the planner still lists them «sin declarar». A refinement of the `instrumento` Tipo, not a second axis (ADR-0029). Hidden in Studio unless Tipo has `instrumento`. Seeded once from seat history by `scripts/backfill-member-instruments.mjs`. |
+| `singsAndPlays` | boolean | «Canta y toca a la vez». **Absent or `false` = never a voice and an instrument on the same service** (`seatsClash`, ADR-0078): the picker, the drag, both fillers and the MCP judges refuse it and the planner grid flags it. Set for those who lead while they play (Frank, Mkz). Edited in Miembros (super-admin; PATCH absent = untouched) and in Studio, hidden there unless Tipo has both `voz` and `instrumento`. |
 | `profilePhoto` | image | `hotspot: true`. |
 | `googlePhotoUrl` | string (hidden) | Synced from Google OAuth each sign-in; fallback photo. |
 | `lastSeen` | datetime (hidden) | Auto-updated by the activity ping. |
