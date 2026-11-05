@@ -724,6 +724,7 @@ describe("git-tracked protected read inventory", () => {
       "specialIdentityCoordinator",
       "fairnessMonth",
       "availabilityConflict",
+      "ministryEvent",
     ]);
   });
 });

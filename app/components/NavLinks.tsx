@@ -80,6 +80,8 @@ export default function NavLinks() {
         ...(access.inKids ? [{ href: "/kids", label: "Kids", active: pathname.startsWith("/kids") && !pathname.startsWith("/kids/admin") }] : []),
         ...(access.managesKids ? [{ href: "/kids/admin", label: "Planear Kids", active: pathname.startsWith("/kids/admin") }] : []),
       ]
+    : section === "jovenes"
+    ? [{ href: "/jovenes", label: "Reuniones", active: pathname.startsWith("/jovenes") }]
     : [];
   return (
     <div role="group" className="hidden lg:flex items-center gap-1 pointer-events-auto" aria-label="Secciones">

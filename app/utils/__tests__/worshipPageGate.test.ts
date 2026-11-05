@@ -26,6 +26,17 @@ vi.mock("../memberAccess", () => ({
   getMemberAccess: (id: string) => getMemberAccess(id),
 }));
 
+// The real registry by default; one test widens the stage to see the landing move.
+const rolloutStage = vi.hoisted(() => ({ override: null as null | boolean }));
+vi.mock("../rollout", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../rollout")>();
+  return {
+    ...real,
+    rolloutAllows: (...args: Parameters<typeof real.rolloutAllows>) =>
+      rolloutStage.override ?? real.rolloutAllows(...args),
+  };
+});
+
 import { requireWorshipPage } from "../worshipPageGate";
 
 /** Runs the gate and reports where it sent the visitor, or null for "rendered". */
@@ -46,6 +57,7 @@ beforeEach(() => {
   requireActiveSession.mockReset();
   requireMinistryMember.mockReset();
   getMemberAccess.mockReset();
+  rolloutStage.override = null;
 });
 
 describe("requireWorshipPage", () => {
@@ -86,6 +98,25 @@ describe("requireWorshipPage", () => {
       active: true, role: "member", ministries: [], managesMinistries: [],
     });
     expect(await gate("/author")).toBe("/me");
+  });
+
+  it("sends a Jóvenes-only member to /me while Jóvenes' rollout has not reached them", async () => {
+    requireActiveSession.mockResolvedValue(activeSession);
+    requireMinistryMember.mockResolvedValue(null);
+    getMemberAccess.mockResolvedValue({
+      active: true, role: "member", ministries: ["jovenes"], managesMinistries: [], ministryRoles: [],
+    });
+    expect(await gate("/")).toBe("/me");
+  });
+
+  it("sends a Jóvenes-only member to /jovenes once the rollout reaches them", async () => {
+    rolloutStage.override = true;
+    requireActiveSession.mockResolvedValue(activeSession);
+    requireMinistryMember.mockResolvedValue(null);
+    getMemberAccess.mockResolvedValue({
+      active: true, role: "member", ministries: ["jovenes"], managesMinistries: [], ministryRoles: [],
+    });
+    expect(await gate("/")).toBe("/jovenes");
   });
 
   it("lets an active worship member render — no redirect at all", async () => {

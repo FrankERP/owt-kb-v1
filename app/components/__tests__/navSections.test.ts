@@ -9,10 +9,21 @@ describe("navSections", () => {
   it("absent ministries are worship (the session copy's contract)", () => {
     expect(availableSections(user({}))).toEqual(["worship"]);
   });
-  it("a super-admin has both; a Jóvenes-only member has none yet", () => {
-    expect(availableSections(user({ role: "super-admin" }))).toEqual(["worship", "kids"]);
+  // Jóvenes is a section only as far as its meetings' rollout reaches (`rollout.ts`, stage
+  // `superAdmin` today): the super-admin has all three, a Jóvenes-only member none yet.
+  it("a super-admin has all three; a Jóvenes-only member has none while the rollout is at superAdmin", () => {
+    expect(availableSections(user({ role: "super-admin" }))).toEqual(["worship", "kids", "jovenes"]);
     expect(availableSections(user({ ministries: ["jovenes"] }))).toEqual([]);
     expect(currentSection("/", user({ ministries: ["jovenes"] }))).toBeNull();
+  });
+  it("/jovenes… is Jóvenes for whoever has the section, and switching there lands on /jovenes", () => {
+    const sup = user({ role: "super-admin" });
+    expect(currentSection("/jovenes", sup)).toBe("jovenes");
+    expect(currentSection("/jovenes/admin", sup)).toBe("jovenes");
+    expect(currentSection("/jovenesx", sup)).toBe("worship");
+    expect(sectionHome("jovenes", sup)).toBe("/jovenes");
+    // Without the section, the page falls back to the person's first one.
+    expect(currentSection("/jovenes", user({ ministries: ["worship", "jovenes"] }))).toBe("worship");
   });
   it("a Kids manager outside Kids still has the Kids section, landing on the planner", () => {
     const a = user({ ministries: ["jovenes"], managesMinistries: ["kids"] });

@@ -34,6 +34,9 @@ export const PROTECTED_TYPES = [
   // The availability proposals' records (ADR-0079): dotted (private) ids, read only through
   // `operationalClient`, written only by `availabilityFixCommit.ts`.
   "availabilityConflict",
+  // Jóvenes' meetings (ADR-0081): dotted (private) ids, read only through `operationalClient` in
+  // `ministryEventReads.ts`, written only by `ministryEventCommit.ts`.
+  "ministryEvent",
 ] as const;
 
 export type ProtectedType = (typeof PROTECTED_TYPES)[number];
@@ -57,6 +60,10 @@ const PROTECTED_FIELDS = [
   "play_key",
   "medley_tag",
   "team_notes",
+  // `ministryEvent` (ADR-0081). Its `seats` is left out on purpose: Kids and the availability
+  // records use that name too.
+  "audience",
+  "program",
 ] as const;
 
 const MUTATION_METHODS = [
