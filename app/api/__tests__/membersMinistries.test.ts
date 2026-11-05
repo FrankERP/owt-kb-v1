@@ -31,6 +31,8 @@ const h = vi.hoisted(() => ({
   revalidatePath: vi.fn(),
 }));
 
+vi.mock("server-only", () => ({}));
+import { routeMemberCommitRead } from "./memberCommitReads";
 vi.mock("@/app/utils/authGuards", () => ({
   requireActiveManager: () => h.requireActiveManager(),
 }));
@@ -43,7 +45,9 @@ vi.mock("@/sanity/lib/serverClient", () => {
   chain.ifRevisionId = (rev: string) => { h.revisions.push(rev); return chain; };
   chain.commit = () => h.commit();
   return {
-    serverClient: { fetch: (q: string, p: unknown) => h.storedFetch(q, p) },
+    serverClient: {
+      fetch: (q: string, p?: Record<string, unknown>) => routeMemberCommitRead(q, p, h.storedFetch),
+    },
     writeClient: {
       patch: () => chain,
       create: (doc: Record<string, unknown>) => h.create(doc),
@@ -326,8 +330,18 @@ describe("members routes — ministryRoles (Jóvenes level and groups)", () => {
       expect(await res.json()).toEqual({ error: "Alguien más cambió a esta persona; recarga." });
     });
 
-    it("a PATCH without role or ministries reads nothing and pins nothing — as before", async () => {
+    // Slice M (D5, D6, D12): a name, alias or email is judged against the stored person, so a PATCH
+    // that carries one reads the person and pins the write to that read. Before slice M this test
+    // said «reads nothing and pins nothing»; a PATCH of none of those still does neither (below).
+    it("a PATCH with an alias reads the person and pins the write to that read", async () => {
       const res = await PATCH(req({ alias: "Ani" }), { params });
+      expect(res.status).toBe(200);
+      expect(h.storedFetch).toHaveBeenCalledTimes(1);
+      expect(h.revisions).toEqual(["rev-1"]);
+    });
+
+    it("a PATCH of none of role, ministries, name, alias or email reads nothing and pins nothing — as before", async () => {
+      const res = await PATCH(req({ memberType: ["voz"], emailSetlist: false }), { params });
       expect(res.status).toBe(200);
       expect(h.storedFetch).not.toHaveBeenCalled();
       expect(h.revisions).toEqual([]);

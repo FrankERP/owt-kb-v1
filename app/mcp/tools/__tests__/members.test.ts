@@ -1,0 +1,211 @@
+// Admin parity phase 4 (slice M): the seven people tools over fakes of their reads and of the people
+// writer (`memberCommit.ts`, whose own half is `memberCommit.test.ts`). Proved here: the checks never
+// write, a save writes only what was checked (the call's MAC first, then the fresh lines through the
+// writer's `verify`), a retry answers «ya estaba», a create is keyed by its token, the access switch
+// names the operator, and an unknown outcome is never worded as «no se escribió nada».
+import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+
+vi.mock("server-only", () => ({}));
+vi.mock("@/sanity/lib/serverClient", () => ({ serverClient: {}, writeClient: {} }));
+vi.mock("@/sanity/lib/operationalClient", () => ({ operationalClient: {}, rawIntegrityClient: {} }));
+vi.mock("@/app/utils/revalidate", () => ({ revalidateServiceViews: () => {} }));
+vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
+
+import type { CallToolResult } from "@modelcontextprotocol/server";
+import { memberView } from "@/app/utils/memberEdits";
+import { PRINCIPAL, textOf } from "./monthToolFixtures";
+import {
+  CHECK_MEMBER_CHANGES_INPUT,
+  checkMemberChangesResult,
+  checkNewMembersResult,
+  createMembersResult,
+  getMemberResult,
+  listMembersResult,
+  saveMemberChangesResult,
+  setMemberAccessResult,
+  type MemberToolDeps,
+} from "../members";
+import { PEOPLE_TOKEN_TTL_S, memberCreateIds } from "../../members/peopleTokens";
+
+const sc = (out: CallToolResult) => out.structuredContent as Record<string, unknown>;
+const KEY = new TextEncoder().encode("k".repeat(48));
+const NOW = 1_800_000_000;
+const LINES = ["Alias: «Vale» → «Valeria»", "Regla: «Vale: Nunca en sábado» → «Valeria: Nunca en sábado»"];
+const EDITS = [{ op: "set" as const, field: "alias" as const, value: "Valeria" }];
+
+type FakeDeps = { [K in keyof MemberToolDeps]: Mock<MemberToolDeps[K]> };
+
+const vale = { id: "vale", view: memberView({ member_name: "Valentina Sosa", alias: "Vale", email: "vale@example.com", role: "member" }) };
+const kidsOnly = { id: "kid", view: memberView({ member_name: "Kiko", email: "kiko@example.com", ministries: ["kids"], disabled: true }) };
+
+function deps(over: Partial<FakeDeps> = {}): FakeDeps {
+  return {
+    people: vi.fn<MemberToolDeps["people"]>(async () => [vale, kidsOnly]),
+    person: vi.fn<MemberToolDeps["person"]>(async (id) => (id === "vale" ? vale : null)),
+    countExisting: vi.fn<MemberToolDeps["countExisting"]>(async () => 0),
+    check: vi.fn<MemberToolDeps["check"]>(async () => ({ ok: true, name: "Vale", lines: LINES, hasDraft: false })),
+    save: vi.fn<MemberToolDeps["save"]>(async (_id, _edits, opts) => {
+      const refused = opts.verify(LINES);
+      if (refused) return { ok: false, status: 409, body: { error: refused, code: "not_the_checked" } };
+      return { ok: true, status: 200, body: { saved: true }, effects: { unchanged: false, lines: LINES, name: "Vale" } };
+    }),
+    planNew: vi.fn<MemberToolDeps["planNew"]>(async (bodies) => ({ ok: true, plan: { docs: bodies as Array<Record<string, unknown>>, lines: ["Persona nueva:", "  Nombre: (sin nombre) → «Ana»"] } })),
+    create: vi.fn<MemberToolDeps["create"]>(async (_b, opts) => {
+      const refused = opts.verify(["Persona nueva:", "  Nombre: (sin nombre) → «Ana»"]);
+      if (refused) return { ok: false, status: 409, body: { error: refused, code: "not_the_checked" } };
+      return { ok: true, status: 200, body: {}, effects: { ids: [...opts.ids], lines: [] } };
+    }),
+    setAccess: vi.fn<MemberToolDeps["setAccess"]>(async () => ({ ok: true, status: 200, body: {}, effects: { changed: true } })),
+    tokenKey: vi.fn<MemberToolDeps["tokenKey"]>(() => ({ ok: true, key: KEY })),
+    nowS: vi.fn<MemberToolDeps["nowS"]>(() => NOW),
+    ...over,
+  };
+}
+
+async function checkedToken(d: FakeDeps, edits = EDITS): Promise<string> {
+  const out = await checkMemberChangesResult({ memberId: "vale", edits }, d);
+  return String(sc(out).token);
+}
+
+let d: FakeDeps;
+beforeEach(() => {
+  d = deps();
+});
+
+describe("list_members / get_member", () => {
+  it("lists without emails, hides disabled people unless asked, filters by ministry name", async () => {
+    const all = sc(await listMembersResult({}, d));
+    expect(all.total).toBe(1);
+    expect(JSON.stringify(all)).not.toContain("@example.com");
+    const kids = sc(await listMembersResult({ ministry: "Oasis Kids", includeDisabled: true }, d));
+    expect((kids.personas as Array<Record<string, unknown>>).map((p) => p.memberId)).toEqual(["kid"]);
+  });
+
+  it("get_member carries the email; a draft id is refused", async () => {
+    expect(JSON.stringify(sc(await getMemberResult({ memberId: "vale" }, d)))).toContain("vale@example.com");
+    expect(textOf(await getMemberResult({ memberId: "drafts.vale" }, d))).toMatch(/borrador/);
+  });
+});
+
+describe("check_member_changes / save_member_changes", () => {
+  it("the input is strict", () => {
+    expect(CHECK_MEMBER_CHANGES_INPUT.safeParse({ memberId: "vale", edits: EDITS, extra: 1 }).success).toBe(false);
+    expect(CHECK_MEMBER_CHANGES_INPUT.safeParse({ memberId: "vale", edits: [{ op: "set", field: "disabled", value: "x" }] }).success).toBe(false);
+  });
+
+  it("the check shows the lines and the proposal note when rules move, and writes nothing", async () => {
+    const out = await checkMemberChangesResult({ memberId: "vale", edits: EDITS }, d);
+    expect(textOf(out)).toContain(LINES[1]);
+    expect(textOf(out)).toMatch(/propuesta de mes abierta/);
+    expect(d.save).not.toHaveBeenCalled();
+  });
+
+  it("the save with the check's token writes; the writer sees the bearer as the actor", async () => {
+    const token = await checkedToken(d);
+    const out = await saveMemberChangesResult({ memberId: "vale", edits: EDITS, token }, PRINCIPAL, d);
+    expect(sc(out)).toMatchObject({ ok: true, saved: true });
+    expect(d.save.mock.calls[0][2].actorId).toBe(PRINCIPAL.sub);
+  });
+
+  it("other edits than the checked ones are refused before the writer", async () => {
+    const token = await checkedToken(d);
+    const out = await saveMemberChangesResult({ memberId: "vale", edits: [{ op: "set", field: "alias", value: "Otra" }], token }, PRINCIPAL, d);
+    expect(sc(out)).toMatchObject({ refused: true, detail: "mismatch" });
+    expect(d.save).not.toHaveBeenCalled();
+  });
+
+  it("fresh lines that differ from the checked ones are refused by the writer's verify", async () => {
+    const token = await checkedToken(d, EDITS);
+    d.save.mockImplementationOnce(async (_id, _e, opts) => {
+      const refused = opts.verify([...LINES, "Ojo: la regla «Gaby» empezaría a aplicarle."]);
+      return refused ? { ok: false, status: 409, body: { error: refused, code: "not_the_checked" } } : { ok: true, status: 200, body: {}, effects: { unchanged: false, lines: [], name: "Vale" } };
+    });
+    const out = await saveMemberChangesResult({ memberId: "vale", edits: EDITS, token }, PRINCIPAL, d);
+    expect(textOf(out)).toMatch(/no son los que se revisaron/);
+  });
+
+  it("an expired token is refused, but a retry of a save that landed still answers «ya estaba guardado»", async () => {
+    const token = await checkedToken(d);
+    d.nowS.mockReturnValue(NOW + PEOPLE_TOKEN_TTL_S + 1);
+    expect(textOf(await saveMemberChangesResult({ memberId: "vale", edits: EDITS, token }, PRINCIPAL, d))).toMatch(/más de 30 minutos/);
+    d.save.mockResolvedValueOnce({ ok: true, status: 200, body: { unchanged: true }, effects: { unchanged: true, lines: [], name: "Vale" } });
+    expect(textOf(await saveMemberChangesResult({ memberId: "vale", edits: EDITS, token }, PRINCIPAL, d))).toMatch(/Ya estaba guardado/);
+  });
+
+  it("a §3.1 refusal from the writer is passed on with «hazlo en la página»", async () => {
+    const token = await checkedToken(d);
+    d.save.mockResolvedValueOnce({ ok: false, status: 403, body: { error: "Desde el chat no se le quita el rol Admin a nadie; hazlo en la página.", code: "chat_access" } });
+    const out = await saveMemberChangesResult({ memberId: "vale", edits: EDITS, token }, PRINCIPAL, d);
+    expect(sc(out)).toMatchObject({ refused: true, code: "forbidden" });
+    expect(textOf(out)).toMatch(/hazlo en la página/);
+  });
+
+  it("a writer that throws is an UNKNOWN outcome, never «no se escribió nada»", async () => {
+    const token = await checkedToken(d);
+    d.save.mockRejectedValueOnce(new Error("network"));
+    const out = await saveMemberChangesResult({ memberId: "vale", edits: EDITS, token }, PRINCIPAL, d);
+    expect(textOf(out)).toMatch(/No sé si se guardó/);
+    expect(textOf(out)).not.toMatch(/No se escribió nada/);
+  });
+
+  it("no bearer → refused before any read", async () => {
+    const out = await saveMemberChangesResult({ memberId: "vale", edits: EDITS, token: "x" }, null, d);
+    expect(sc(out)).toMatchObject({ refused: true, code: "forbidden" });
+    expect(d.save).not.toHaveBeenCalled();
+  });
+});
+
+describe("check_new_members / create_members", () => {
+  const MEMBERS = [{ name: "Ana", email: "Ana@Example.com", ministries: ["Jóvenes"], tipo: ["Voz"] }];
+
+  it("the check maps names to the writer's body (ministries required) and mints a token", async () => {
+    const out = await checkNewMembersResult({ members: MEMBERS }, d);
+    expect(sc(out).token).toEqual(expect.any(String));
+    expect(d.planNew.mock.calls[0][0]).toEqual([{ member_name: "Ana", email: "ana@example.com", memberType: ["voz"], ministries: ["jovenes"] }]);
+  });
+
+  it("creates at the token's ids; a retry where all exist answers «Ya estaban»; some existing is refused", async () => {
+    const token = String(sc(await checkNewMembersResult({ members: MEMBERS }, d)).token);
+    const ids = memberCreateIds(KEY, token, 1);
+    expect(ids[0]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    const out = await createMembersResult({ members: MEMBERS, token }, PRINCIPAL, d);
+    expect(sc(out)).toMatchObject({ created: true, memberIds: ids });
+    expect(d.create.mock.calls[0][1].ids).toEqual(ids);
+
+    d.countExisting.mockResolvedValueOnce(1);
+    expect(textOf(await createMembersResult({ members: MEMBERS, token }, PRINCIPAL, d))).toMatch(/Ya estaban/);
+
+    const two = [...MEMBERS, { name: "Beto", email: "beto@example.com", ministries: ["Alabanza"] }];
+    const token2 = String(sc(await checkNewMembersResult({ members: two }, d)).token);
+    d.countExisting.mockResolvedValueOnce(1);
+    expect(sc(await createMembersResult({ members: two, token: token2 }, PRINCIPAL, d))).toMatchObject({ refused: true, detail: "some_exist" });
+  });
+
+  it("an expired token whose people all exist still answers «Ya estaban»; otherwise it is refused", async () => {
+    const token = String(sc(await checkNewMembersResult({ members: MEMBERS }, d)).token);
+    d.nowS.mockReturnValue(NOW + PEOPLE_TOKEN_TTL_S + 1);
+    d.countExisting.mockResolvedValueOnce(1);
+    expect(textOf(await createMembersResult({ members: MEMBERS, token }, PRINCIPAL, d))).toMatch(/Ya estaban/);
+    expect(textOf(await createMembersResult({ members: MEMBERS, token }, PRINCIPAL, d))).toMatch(/más de 30 minutos/);
+    expect(d.create).not.toHaveBeenCalled();
+  });
+
+  it("a different batch than the checked one is refused", async () => {
+    const token = String(sc(await checkNewMembersResult({ members: MEMBERS }, d)).token);
+    const out = await createMembersResult({ members: [{ ...MEMBERS[0], role: "Admin" }], token }, PRINCIPAL, d);
+    expect(sc(out)).toMatchObject({ refused: true, detail: "mismatch" });
+  });
+});
+
+describe("set_member_access", () => {
+  it("names the person, passes the bearer as the operator and the chat flag", async () => {
+    const out = await setMemberAccessResult({ memberId: "vale", enabled: false }, PRINCIPAL, d);
+    expect(textOf(out)).toMatch(/Vale ya no puede entrar/);
+    expect(d.setAccess).toHaveBeenCalledWith("vale", true, { operatorIds: new Set([PRINCIPAL.sub]), chat: true });
+  });
+
+  it("a writer refusal (a manager) is passed on", async () => {
+    d.setAccess.mockResolvedValueOnce({ ok: false, status: 403, body: { error: "Desde el chat no se deshabilita a quien administra; hazlo en la página.", code: "chat_access" } });
+    expect(textOf(await setMemberAccessResult({ memberId: "vale", enabled: false }, PRINCIPAL, d))).toMatch(/hazlo en la página/);
+  });
+});
