@@ -10,7 +10,7 @@ import type { CallToolResult, McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import type { SolverConfig } from "@/app/components/admin/plannerModel";
-import { conflictSentence, presenceSentence, restrictionChips, sentenceText } from "@/app/components/admin/ruleCopy";
+import { conflictSentence, presenceSentence, restrictionText, sentenceText } from "@/app/components/admin/ruleCopy";
 import type { MemberOption } from "@/app/components/admin/serviceCardModel";
 import { displayMemberName } from "@/app/utils/memberRuleNames";
 import { adminMembersQuery } from "@/app/utils/serviceReadQueries";
@@ -56,12 +56,9 @@ export function presentSolverRules(config: SolverConfig, members: readonly Membe
     const missing = ids.length - names.length;
     return { lista: label, nombres: names.sort((a, b) => a.localeCompare(b, "es")), ...(missing ? { sinMiembro: missing } : {}) };
   });
-  const personas = config.restrictions.map((r) => {
-    // The rules card's own sentences (`ruleCopy.ts`, bloque 2), so a rule reads the same in the
-    // chat as on /admin; a struck-through «Holgura» carries its note.
-    const clauses = restrictionChips(r).map((chip) => (chip.note ? `${chip.text} (${chip.note})` : chip.text));
-    return `${r.person}: ${clauses.length ? clauses.join(" · ") : "sin cláusulas"}`;
-  });
+  // The rules card's own sentences (`ruleCopy.ts`, bloque 2), so a rule reads the same in the chat as
+  // on /admin.
+  const personas = config.restrictions.map(restrictionText);
   const noJuntos = config.conflicts.map((c) => sentenceText(conflictSentence(c)));
   const presencia = config.presence.map((p) => sentenceText(presenceSentence(p)));
   return { listas: pools, personas, noJuntos, presencia };

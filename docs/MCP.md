@@ -152,7 +152,10 @@ setlist proposals (phase 3, S1) adds two more, forty-one in all, registered last
 [Deciding a setlist proposal](#deciding-a-setlist-proposal-admin-parity-phase-3)). Creating and
 editing songs (phase 3, S3) adds four more, forty-five in all, registered last: `check_song_edits`,
 `save_song_edits`, `check_new_song` and `create_song` (see
-[Creating and editing songs](#creating-and-editing-songs-admin-parity-phase-3)). Every tool is
+[Creating and editing songs](#creating-and-editing-songs-admin-parity-phase-3)). People (phase 4,
+slice M) adds seven more, fifty-two in all, registered last: `list_members`, `get_member`,
+`check_member_changes`, `save_member_changes`, `check_new_members`, `create_members` and
+`set_member_access` (see [People](#people-admin-parity-phase-4)). Every tool is
 registered the same way — one file per tool in `app/mcp/tools/`, exporting a
 `register<Tool>(server, deps?)` function that `registerAllTools` (`app/mcp/toolList.ts`) calls,
 the writes after the reads; `app/api/mcp/route.ts` runs it inside its handler init. Every
@@ -1077,6 +1080,55 @@ still verified, and the id it names is read first).
 transaction), `contentPostsWriteRoute.test.ts` (the routes, unchanged, plus the URL clear through the
 real patch serializer), `songChange.test.ts`, `songTokens.test.ts`, the tools' `songEdits.test.ts`,
 `songTools.test.ts` (`full`), `adminChatViews.test.ts` (the assistant never sees it).
+
+### People (admin parity, phase 4)
+
+What `/super-admin` → Personas does («Agregar», «Editar», «Deshabilitar»), from the chat, through the
+same writer: `POST /api/admin/members`, `PATCH /api/admin/members/[id]`,
+`PATCH /api/admin/members/[id]/disable` and `/me`'s `PATCH /api/me` now authorize and call
+`app/utils/memberCommit.ts`, and so do the tools (`app/mcp/tools/members.ts`). Decision record:
+[ADR-0082](adr/0082-people-are-edited-from-the-chat-by-parts-and-the-chat-never-revokes-management.md);
+plan: `docs/superpowers/plans/2026-11-05-owt-mcp-admin-parity-f4m-members.md`. People writes notify
+nobody (no welcome email), from any surface.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `list_members` | `{ministry?, includeDisabled?}` | Everyone (or one ministry) as Personas shows them: `memberId`, name, alias, role, Tipo, instruments, «Canta y toca a la vez», ministries, Jóvenes level and groups, what they manage, disabled. Never an email. Read-only |
+| `get_member` | `{memberId}` | One person, with their email. Read-only |
+| `check_member_changes` | `{memberId, edits[≤30]}` | Applies the edits by parts to the FRESH person (`applyMemberEdits`): `set {field: name/alias/email/role}` (`alias: ""` clears), `singsAndPlays`, `add`/`remove {field: tipo/instruments/ministries/managesMinistries}`, `jovenes {level|null, groups?}`. Runs the writer's own plan (`checkMemberEdits`) and answers the before/after of only what changes, the solver rules a rename would rename, warnings, and a token. Read-only |
+| `save_member_changes` | `{memberId, edits, token}` | Verifies the token's call half (person + edits) FIRST, so a repeat after a landed save answers «ya estaba guardado»; then `saveMemberEdits` re-reads, re-plans and re-renders the lines, which must match the token's result half, and writes the person and any renamed rules in ONE transaction, each under `ifRevisionId`. Destructive (I14) |
+| `check_new_members` | `{members[≤20]}` | Each new person as they would be created (`planNewMembers`, the route's own body), refusals per person («Persona N:»), orphan-rule warnings, and a token valid 30 minutes. Read-only |
+| `create_members` | the same `members` plus `token` | Verifies the token; the ids are HMACs of it in UUID form. All present → «Ya estaban» (even after the 30 minutes); some → refused; otherwise ONE transaction of `createIfNotExists`. Destructive (I14) |
+| `set_member_access` | `{memberId, enabled}` | `setMemberDisabled`, the button's own logic. No token (Frank, 2026-11-05): Claude names the person and waits for the word. Destructive (I14) |
+
+**The chat grants, never revokes, management** (Frank, 2026-11-05). `chatAccessRefusal` /
+`chatAccessToggleRefusal` (`app/utils/memberEdits.ts`), judged on the writer's fresh read: never grant
+or change a super-admin, never lower an admin, never remove a management (Kids or a Jóvenes admin
+level), never change the email of anyone who manages or edits content, never disable a manager,
+never enable a super-admin. A content-editor may be set, lowered or disabled. The routes never apply
+it; the refusal says «hazlo en la página (Super admin → Personas)».
+
+**Three refusals on every surface, judged only on change:** an email any other `teamMembers` document
+has (drafts and disabled people included); a name or alias equal to another member's; and a rename
+that would orphan a solver rule, which is instead renamed in the same transaction by a targeted
+`set` of exactly the person paths (`app/utils/memberRuleRename.ts`). A rule text that also names
+someone else is left and reported. `/me` never names anyone else. A fourth, on `/admin` too since
+this change: an email `/me`'s format check (`MEMBER_EMAIL_RE`) refuses, such as `x@localhost`.
+
+**Admin-surface gates (I15).** Personas' form requires a name of at least two characters and an
+email: **mirror** (`check_member_changes` and `check_new_members` refuse a one-letter name; the
+email is required by the schema and its format refused by the writer). Its `type=email` is
+**inherited** and narrower in the writer (`MEMBER_EMAIL_RE`). Every other Personas gate is the
+route's, so **inherited** by construction: the worship-role rule, `validateMinistryWrite`,
+`validateMinistryRolesWrite`, the self-disable and last-super-admin refusals.
+
+**Unknown outcomes.** A thrown save or access change says to read the person with `get_member` before
+retrying; a thrown create says to repeat `create_members` with the same token.
+
+**Proof.** `memberEdits.test.ts`, `memberRuleRename.test.ts`, `memberCommit.test.ts` (an in-memory
+Content Lake with revision checks), `peopleTokens.test.ts`, the tools' `members.test.ts`, and the
+route tests (`membersMinistries`, `memberInstruments`, `adminMemberVisibility`), unchanged except one
+on purpose: an alias PATCH now reads and pins the person.
 
 ### Admin-surface gates (I15)
 

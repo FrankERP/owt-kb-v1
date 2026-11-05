@@ -18,6 +18,8 @@ const h = vi.hoisted(() => ({
   revalidatePath: vi.fn(),
 }));
 
+vi.mock("server-only", () => ({}));
+import { routeMemberCommitRead } from "./memberCommitReads";
 vi.mock("@/app/utils/authGuards", () => ({
   requireActiveManager: () => h.requireActiveManager(),
 }));
@@ -26,9 +28,15 @@ vi.mock("@/sanity/lib/serverClient", () => {
   const chain: Record<string, unknown> = {};
   chain.setIfMissing = () => chain;
   chain.set = (v: Record<string, unknown>) => { h.sets.push(v); return chain; };
+  chain.unset = () => chain;
+  chain.ifRevisionId = () => chain;
   chain.commit = () => h.commit();
   return {
-    serverClient: { fetch: vi.fn() },
+    // The person read (slice M: an alias PATCH now reads and pins the person) answers a stored member.
+    serverClient: {
+      fetch: (q: string, p?: Record<string, unknown>) =>
+        routeMemberCommitRead(q, p, async () => ({ _id: "member-1", _rev: "rev-1", role: "member", member_name: "M" })),
+    },
     writeClient: {
       patch: () => chain,
       create: (doc: Record<string, unknown>) => h.create(doc),

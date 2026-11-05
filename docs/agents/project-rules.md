@@ -281,7 +281,10 @@ several exist precisely to stop a plausible-looking change.
   `solverConfigFromDocument` → `parseSolverConfigWrite` → `solverConfigFields` under
   `ifRevisionId` — never again an `insert`/`append` of caps or restrictions as the two private
   one-off scripts of 2026-09-29/10-01 did (the member DELETE's pool-array patch and the rule-name
-  repair script's single-`person` patch are the only targeted writers). A rule person has at most
+  repair script's single-`person` patch and a member rename's person-path `set` in
+  `memberCommit.ts` — ADR-0082, exactly the renamed `person`/`personA`/`personB`/`persons` values, each
+  only where the raw value equals the text the reader reads, under the rules' `ifRevisionId` in the
+  person's own transaction — are the only targeted writers). A rule person has at most
   one `==` count per role key: refused at save by `exactCapOverlaps` (by `person` text) and at v3
   build by C2 (by member id). ADR-0049.
 - **The fairness ledger has one definition, and its records one writer** (solver v3 C2,
@@ -486,6 +489,16 @@ several exist precisely to stop a plausible-looking change.
   to the freshly read song, and a lyrics edit needs `lyricsGate` (the stored body round-trips
   losslessly through the editor's text form). `/admin` stays last-writer-wins (no `ifRevisionId` on
   the route): a page loaded before a chat save overwrites it when saved.
+  People's writer is `memberCommit.ts` (admin parity phase 4, ADR-0082): `POST /api/admin/members`,
+  `PATCH /api/admin/members/[id]`, its `disable` PATCH and `/me`'s PATCH keep their session checks and
+  call `createMember`/`patchMember`/`setMemberDisabled`/`patchOwnProfile`; the MCP people tools call
+  `checkMemberEdits`/`saveMemberEdits`/`planNewMembers`/`createMembers`/`setMemberDisabled`. Every
+  surface refuses, on CHANGE only, an email another `teamMembers` document has (drafts and disabled
+  included) and a name or alias equal to another member's; a rename renames the solver rules that
+  would stop naming the person in the same transaction (`memberRuleRename.ts`). The chat edits by
+  parts (`applyMemberEdits`), its tokens bind the rendered change rather than `_rev` (`lastSeen`
+  moves it), and `chatAccessRefusal`/`chatAccessToggleRefusal` keep it from revoking management
+  (Frank, 2026-11-05); the routes never apply that table. `/me` never names anyone else.
   The availability proposals' writer is `availabilityFixCommit.ts` (ADR-0079): the four
   `/api/admin/availability-conflicts` routes (the GET and its `apply`/`keep`/`sweep` POSTs) (`requireActiveManager`, never a content-editor, never
   impersonating), the member's `PATCH /api/me/availability` (its `after()` trigger, that member only)

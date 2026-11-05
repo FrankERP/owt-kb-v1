@@ -43,4 +43,6 @@ export const DELIVERY_CAPABLE_IMPORTS: readonly string[] = [
   "songSaveCommit",
   // ADR-0079: the availability proposals' writer (its admin email, and «Aplicar» through `editRole`).
   "availabilityFixCommit",
+  // Admin parity phase 4 (slice M): the people writer, extracted from the members routes and /me.
+  "memberCommit",
 ];
