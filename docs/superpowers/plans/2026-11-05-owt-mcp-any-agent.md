@@ -23,10 +23,12 @@ super-admin-only unless Frank says otherwise. What an admin may read is Frank's 
 card; this plan is written for the recommended option, «Leer todo lo de Alabanza» (§4), and the
 other read-only option is a strict subset (only the `READ_TIER_TOOLS` list in §4 changes).
 
-**Narrowing, stated:** «cualquier agente» becomes «any agent whose redirect target is on a closed
-list» (§3) — claude.ai, chatgpt.com and any agent that runs on the user's own computer (RFC 8252
-loopback). A hosted agent not on the list (a future web client) is added by a one-line PR. §3 says
-why the list is not opened to every `https` URI.
+**Narrowing, stated:** «cualquier agente» becomes «any agent that can finish the flow on a redirect
+target from a closed list» (§3) — claude.ai, chatgpt.com, and the user's own computer (RFC 8252
+loopback, any port). A hosted agent not on the list (a future web client) is added by a one-line PR.
+An agent that ONLY offers a target outside the list (a custom scheme such as `cursor://`, or a web
+forwarder such as `https://vscode.dev/redirect`) cannot connect; §3 says why the list is not opened
+to every `https` URI and §3.1 which local agents are expected to work and on what evidence.
 
 ## 2. What exists (premises, with pointers)
 
@@ -75,7 +77,7 @@ why the list is not opened to every `https` URI.
 | claude.ai | exactly `CLAUDE_AI_REDIRECT_URI` (unchanged) | «Claude (claude.ai)» |
 | ChatGPT, stable | exactly `https://chatgpt.com/connector_platform_oauth_redirect` | «ChatGPT (chatgpt.com)» |
 | ChatGPT, per-connection | `^https://chatgpt\.com/connector/oauth/[A-Za-z0-9_-]{1,128}$` AND `new URL(uri).href === uri` | «ChatGPT (chatgpt.com)» |
-| Local agent | `isLoopbackRedirectUri` (unchanged rule) — **now also in production** | «Un programa en esta computadora (puerto N)» |
+| Local agent | a loopback URI (§3.1) — **now also in production** | «Un programa en esta computadora» |
 
 A pure `redirectTargetLabel(uri): string | null` beside it returns the label (null ⇔ not allowed);
 it is the ONLY source of the consent screen's «Se conecta a» line.
@@ -83,7 +85,7 @@ it is the ONLY source of the consent screen's «Se conecta a» line.
 **Why loopback in production is safe** (RFC 8252 §7.3/§8.3): the code is delivered to the browser's
 own machine. A remote attacker who registers a loopback client and sends an admin the authorize link
 gets nothing — the code lands on the admin's computer, and without it the attacker's PKCE verifier
-is useless. It is what Claude Code, Codex CLI, Gemini CLI and VS Code use.
+is useless. The same holds for ANY port: whatever listens on the admin's own machine is the admin's.
 
 **Why not «any https URI»:** registration is open (ADR-0039), so an open list lets anyone register
 `https://evil.example/cb`, start a flow, and send the link to an admin; one careless «Permitir»
@@ -103,6 +105,45 @@ named follow-up, not in this plan.
 **Not added:** custom schemes (`cursor://…`, any app can claim one), `https://vscode.dev/redirect`
 (a forwarder whose final target comes from the request), CIMD (ADR-0039 keeps stateless DCR;
 ChatGPT falls back to DCR when `client_id_metadata_document_supported` is absent — it stays absent).
+
+### 3.1 Loopback, registration subsets and port variance
+
+Exact, all-or-nothing matching shuts out real local agents. VS Code's DCR body
+(microsoft/vscode `src/vs/base/common/oauth.ts`, `fetchDynamicRegistration`, fetched 2026-11-05)
+registers `https://insiders.vscode.dev/redirect`, `https://vscode.dev/redirect`, `http://127.0.0.1/`
+and `http://127.0.0.1:33418/` in ONE request; today's register route refuses the whole list when any
+URI is off-list, and `isLoopbackRedirectUri` refuses a port-less loopback. And RFC 8252 §7.3 requires
+the AS to accept any port at request time for a loopback redirect, because a native client binds a
+free port at login. So:
+
+1. **Loopback shape** — `isLoopbackRedirectUri` keeps every rule (`http:`, host exactly `127.0.0.1`
+   or `localhost`, no userinfo, no fragment, printable, canonical `href === uri`) but the port
+   becomes OPTIONAL (`http://127.0.0.1/` is canonical and allowed).
+2. **Registration keeps the allowed subset** (RFC 7591 §3.2.1 lets the server replace requested
+   metadata; the 201 already states what the server registered). `register/route.ts`: the signed
+   client id carries ONLY the URIs that pass `isRedirectUriAllowed`, in request order; the 201's
+   `redirect_uris` is that subset; the registration is refused (`invalid_redirect_uri`) only when
+   the subset is EMPTY. Size/type checks on the raw array are unchanged (1–5 strings). The refused
+   ones are still logged by the widened `shouldLogRefusedRedirect` (one line per request). Nothing
+   off-list is ever signed, so authorize and token never see it as registered.
+3. **Matching** — one pure function in `redirects.ts`,
+   `matchRegisteredRedirect(requested, registered, origin): boolean` =
+   `isRedirectUriAllowed(requested, origin)` AND (`registered.includes(requested)` OR
+   (`isLoopbackRedirectUri(requested)` AND some `r` in `registered` with `isLoopbackRedirectUri(r)`
+   and the same protocol, hostname, pathname and search as `requested` — port ignored, nothing
+   else)). `localhost` and `127.0.0.1` are NOT interchangeable. It replaces the two
+   `client.claims.redirectUris.includes(x) && isRedirectUriAllowed(x, origin)` checks:
+   `authorizeRequest.ts` rule 2 and `token/route.ts` step 3. The code's own binding stays EXACT:
+   `checkCodeBinding` (token step 4) still requires the token request's `redirect_uri` to equal the
+   one the code was minted for (RFC 6749 §4.1.3), so port variance applies to «is it registered»,
+   never to «is it the same request».
+4. **Which local agents are expected to work:** any client whose DCR list contains at least one
+   loopback URI AND that then sends a loopback `redirect_uri` at authorize. VS Code: registers
+   loopback (evidence above), so it registers; whether it then authorizes through loopback or
+   through `vscode.dev/redirect` depends on its own flow choice — **expected, not proven**, checked
+   by hand if an admin wants it. Claude Code, Codex CLI, Gemini CLI: documented as loopback clients
+   by their vendors but their exact DCR bodies were NOT verified here — **expected, not proven**.
+   `docs/MCP.md` says exactly this. Cursor (`cursor://`) is not expected to work.
 
 `shouldLogRefusedRedirect` widens to hosts claude.ai, claude.com, chatgpt.com, openai.com and their
 subdomains (same R11 printable-ASCII and 2048-char guards), so a moved callback is visible.
@@ -147,7 +188,15 @@ keep working unchanged.
 - `/api/mcp` builds two handlers at module scope (`handlers.full`, `handlers.read`), each with its
   own `versionToolList(server, TOOL_LIST_VERSIONS[tier])`, and dispatches on the tier `authenticate`
   returned. `authInfo.extra` gains `tier`. A write tool's name on the read handler is an unknown tool
-  (the SDK's own error); it is never registered there, so no write module runs.
+  (the SDK's own error); it is never registered there, so no write module runs. The read handler's
+  `capabilities` are `{ tools: { listChanged: false } }` only — no `resources` key, since it
+  registers no resource (a route test pins what `resources/list` answers on the read tier).
+- **Known effects, accepted:** the descriptions of `get_service`/`list_services` mention write tools
+  the read tier lacks (changing them would change the `full` digest and send Frank a refresh note
+  for nothing; the model simply cannot call them). `STALE_TOOL_LIST_NOTE` becomes agent-neutral
+  («actualiza la lista de herramientas del conector en tu app (en Claude: …)») — it is answer text,
+  not part of any digest. A client whose model omits the optional `toolsVersion` gets the note on
+  every answer; observed in the live proof, and if ChatGPT does this, a follow-up decides.
 
 **Why a separate tool list and not «register everything, refuse writes in the handler»:** the model
 never sees a tool it can't use (no wasted call, no prompt-injected «call delete_services»); ChatGPT
@@ -156,15 +205,21 @@ in one of 25 tool files cannot leak a write, because the read list is an allowli
 
 **Why a worship admin reads all of these:** each is something that admin already sees in `/admin`
 (§2), and «¿quién puede el 15?» needs availability. Kids and Jóvenes stay out (ministry isolation,
-ADR-0075). What leaves the app: whatever the admin's agent asks for goes to that agent's provider
-(OpenAI for ChatGPT) — the same data the admin could copy from the screen; Frank is told this
-before release.
+ADR-0075). **What leaves the app, told to Frank specifically before release:** whatever the
+admin's agent asks for goes to that agent's provider (OpenAI for ChatGPT), including members'
+free-text unavailability notes (`get_member_availability`), names and seats. **Load:** MCP reads
+have no per-admin cap (the admin assistant's cap is about Anthropic spend, ADR-0060); each read
+costs Sanity API requests on the free plan, so more connected admins means more reads. A per-grant
+rate limit is a named follow-up, triggered if usage shows it.
 
 ## 5. Consent screen and copy
 
-- «Sólo un super-admin…» → «Solo los administradores de Alabanza pueden conectar un agente de IA.»
-  «…conexión con Claude…» → «…conexión con agentes de IA…» (page, metadata, `ERROR_PAGE_TEXT`
-  untouched where not Claude-specific).
+- Every super-admin/Claude-specific line on the page: «Sólo un super-admin puede autorizar
+  conexiones con Claude.» → «Solo los administradores de Alabanza pueden conectar un agente de IA.»;
+  «Necesitas una sesión activa de super-admin para autorizar una conexión.» → «Necesitas una sesión
+  activa de administrador para autorizar una conexión.»; «La conexión con Claude no está disponible
+  en este momento.» → «La conexión con agentes de IA no está disponible en este momento.»
+  (`ERROR_PAGE_TEXT` has no Claude wording and stays.)
 - New fact line «Se conecta a»: `redirectTargetLabel(request.redirectUri)` (verified). The exact
   redirect URI and the unverified client name stay shown as today.
 - New fact line «Podrá»: "full" → «Todo lo que puedes hacer como super-admin, incluido cambiar
@@ -204,8 +259,19 @@ before release.
 5. Token route: admin redeems a code and refreshes; content-editor refused on both grants.
 6. Authorize POST: admin 303 with code; content-editor 403; impersonation still 403.
 7. Consent page: admin sees «Solo leer…» and the target label; content-editor sees the refusal.
-8. Register route: a ChatGPT stable and a per-connection registration succeed in production;
-   a mixed list with one off-list URI is still refused whole.
+8. Register route: a ChatGPT stable and a per-connection registration succeed in production.
+
+9. `redirects.test.ts` + authorize/token: port-less loopback allowed; `matchRegisteredRedirect`
+   matrix (registered `http://127.0.0.1/` matches requested `http://127.0.0.1:54321/`; registered
+   `http://127.0.0.1:33418/cb` does NOT match `…:5/other` or `http://localhost:5/cb`; a non-loopback
+   never matches by port); token step 4 still refuses a code minted for `:5` redeemed with `:6`.
+10. Register: VS Code's exact four-URI body → 201 whose `redirect_uris` are the two loopback ones
+   (and the client id carries only those); an all-off-list body → `invalid_redirect_uri`.
+
+**Intended flips of existing tests** (update them, never the code back): `mcpRoute.test.ts` (an admin
+with worship is now admitted on the read tier), `authorizePage.test.tsx` (an admin now sees the
+consent screen), `redirects.test.ts` and `authorizeRequest.test.ts` (production now allows loopback),
+`register` tests that assert a mixed list is refused whole. Every other existing case stays as is.
 
 Gates: `npx tsc --noEmit`, `npm test`, `npx eslint .` (0 errors). No solver tree touched.
 
@@ -213,21 +279,29 @@ Gates: `npx tsc --noEmit`, `npm test`, `npx eslint .` (0 errors). No solver tree
 
 1. Branch → gates → one merge-range `code-reviewer` (§Review policy) → fixes → gates.
 2. Merge into `preview`, verify the dev alias (alias + SHA). Dev is behind Deployment Protection, so
-   ChatGPT cannot reach it; on dev run `scripts/mcp-dev-smoke.mjs` (loopback client) as Frank:
-   full tier unchanged (`tools/list` = 45).
+   ChatGPT cannot reach it. On dev, `scripts/mcp-dev-smoke.mjs` (loopback client, interactive
+   consent in a browser) run (a) as Frank: full tier unchanged (`tools/list` = 45), and (b) as a
+   worship-admin account (the «Verificador (bot)», role admin): `tools/list` = the 11 reads and a
+   `tools/call edit_setlist` refused as unknown. If (b) can't be run (it needs a browser signed in
+   as that account), say so in the PR; the route tests (§7.4) are then the only pre-production
+   proof of the boundary.
 3. PR to `main`, `gates` green, merge, verify the prod alias + SHA.
 4. **Live proof in production** (needs people): (a) Frank's existing Claude connector still works
    with no refresh note (`ping`); (b) a worship admin (Mkz) adds ChatGPT (developer mode) → consent
    shows «ChatGPT (chatgpt.com)» and «Solo leer…» → «¿Quién sirve el domingo?» answers; his
    `tools/list` has 11 tools; (c) the grant shows in `revoke-mcp-grant.mjs` (dry run).
-   If ChatGPT is refused with `invalid_target` (it sends a `resource` other than
-   `${origin}/api/mcp`), that is a NEW change with its own review, not a hot fix.
-5. **Rollback:** revert the merge (tier gates return to super-admin; any admin grant then fails
-   step 6 with 401 within 30 s), or the kill switch (`docs/MCP.md` «Kill switch») for everything.
+   Any ChatGPT incompatibility found here — `invalid_target` (a `resource` other than
+   `${origin}/api/mcp`), a DCR `token_endpoint_auth_method` other than `none`, an empty
+   `client_secret` field refused by the token route, a redirect form not on the list — is a NEW
+   change with its own review, not a hot fix.
+5. **Rollback, fastest first:** one misbehaving grant → `scripts/revoke-mcp-grant.mjs --id … --apply`
+   (bites ≤ 30 s); everything → the kill switch (`docs/MCP.md` «Kill switch»); the code → revert the
+   merge through a `main` PR (minutes, gated), after which the tier gates return to super-admin and
+   any admin grant fails step 6 with 401 within 30 s.
 
 ## 9. Out of scope (named follow-ups)
 
-Email notice on a new grant; a «Conexiones» screen listing/revoking grants; admin writes; Kids/
+Email notice on a new grant; a per-grant rate limit; a «Conexiones» screen listing/revoking grants; admin writes; Kids/
 Jóvenes reads; `get_service_messages` for admins; CIMD; the proposal card in ChatGPT (MCP Apps
 rendering there is untested; tools already answer in text).
 
