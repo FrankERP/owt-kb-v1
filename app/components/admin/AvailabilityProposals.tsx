@@ -19,6 +19,7 @@ import Button from "@/app/components/ui/Button";
 import Menu, { MenuHeader, MenuItem, MenuSeparator } from "@/app/components/ui/Menu";
 import Skeleton, { SkeletonGroup } from "@/app/components/ui/Skeleton";
 import { SHEET_TITLE } from "@/app/utils/homeHero";
+import { seatClashSentencesOf } from "@/app/utils/seatClashGuard";
 import type { BlockedReason, PanelConflict, PanelRead } from "@/app/utils/availabilityFixCommit";
 import type { NoneReason } from "@/app/utils/availabilityConflicts";
 
@@ -96,7 +97,9 @@ export default function AvailabilityProposals({ fallback, onChanged }: {
       if (res.status === 409) {
         setMessage({ tone: "error", text: CONFLICT_COPY });
       } else if (!res.ok) {
-        setMessage({ tone: "error", text: "No se pudo guardar. Intenta de nuevo." });
+        // A seat clash the save would add (ADR-0078's server guard) says who and which seats.
+        const clashes = seatClashSentencesOf(await res.json().catch(() => null));
+        setMessage({ tone: "error", text: clashes.length ? clashes.join(" ") : "No se pudo guardar. Intenta de nuevo." });
       } else {
         setMessage({ tone: "ok", text: done });
         onChanged();

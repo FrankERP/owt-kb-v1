@@ -588,7 +588,7 @@ else — no other route, page or data path reads this variable.
 otherwise. Not needed in: Preview (it never acts there anyway), `.env.local`, GitHub Actions, the
 iOS build, GCF.**
 
-**Not a secret** — a kill switch, plain config ([ADR-0079](adr/0080-availability-conflicts-are-proposed-one-seat-at-a-time-and-a-person-applies-them.md)).
+**Not a secret** — a kill switch, plain config ([ADR-0079](adr/0079-availability-conflicts-are-proposed-one-seat-at-a-time-and-a-person-applies-them.md)).
 The value `1` stops every AUTOMATIC availability sweep: the member's save trigger and the flush
 cron's tick return before reading anything, and «Revisar ahora» answers dry (it computes, writes no
 record, sends no email). The panel in `/admin › Disponibilidad › Conflictos` still reads, and
@@ -669,7 +669,7 @@ secret.
 | Platform | Role |
 |---|---|
 | Vercel Preview + Production | `app/api/admin/solve/route.ts` sends it as the `X-Api-Key` header — to v2 itself, and to v3 through `app/utils/solverV3Upstream.ts` (solver v3 C6; the path production takes since the 2026-10-15 cutover, ADR-0056 — v2's only after a flip-back). The MCP's `solve_month` (P4, in production since 2026-10-20) calls the same `solveV3`, so it sends the same header from `/api/mcp` |
-| GitHub Actions `solver-v3-ops.yml` → `verify` | Reads `owt-solver-api-key:latest` with `owt-gha-verify` (Secret Accessor on this secret only), masks it, and sends it as `X-Api-Key` for the ping and smoke solve (ADR-0079). Nothing is stored in GitHub |
+| GitHub Actions `solver-v3-ops.yml` → `verify` | Reads `owt-solver-api-key:latest` with `owt-gha-verify` (Secret Accessor on this secret only), masks it, and sends it as `X-Api-Key` for the ping and smoke solve (ADR-0081). Nothing is stored in GitHub |
 | Secret Manager `owt-solver-api-key` | Cloud Build deploys each function with `--set-secrets=OWT_SOLVER_API_KEY=owt-solver-api-key:latest`: v2 from `cloudbuild.yaml` (manual: `scripts/deploy-solver-gcf.sh`), v3 from `gcf_v3/cloudbuild.yaml` (manual: a dispatched `deploy` of `solver-v3-ops.yml`, which re-runs that trigger; first creation and last resort: `scripts/deploy-solver-v3-gcf.sh`) |
 
 **Purpose.** The only barrier on each publicly invokable function (`allUsers` holds

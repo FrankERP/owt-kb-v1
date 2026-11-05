@@ -20,12 +20,9 @@ const SEAT_WRITERS: Record<string, string> = {
   "copyInstrumentsCommit.ts": "copyInstruments",
 };
 
-/**
- * Writers that leave seats alone (remove a whole role, publish, songs, records, threads, Kids), or
- * reach them only through a guarded writer (`availabilityFixCommit` → `editRole`).
- */
+/** Writers that leave seats alone (remove a whole role, publish, songs, records, threads, Kids). */
 const NON_SEAT_WRITERS = [
-  "availabilityFixCommit.ts",
+  "availabilityFixCommit.ts", // writes seats only through editRole («Aplicar», ADR-0079)
   "fairnessMonthCommit.ts",
   "kidsCommit.ts",
   "proposalReviewCommit.ts",

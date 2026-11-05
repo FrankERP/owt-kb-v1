@@ -110,6 +110,15 @@ describe("AvailabilityProposals", () => {
     await waitFor(() => expect(fetchMock.mock.calls.filter(([, init]) => !init?.method).length).toBe(readsBefore + 1));
   });
 
+  it("a seat clash the save would add shows the guard's sentence", async () => {
+    const sentence = "Tony no puede estar en Coro y Drums el mismo servicio.";
+    serve(() => read({ open: [CONFLICT] }), () => ok({ error: "invalid_request", details: { seatClashes: [{ sentence }] } }, 400));
+    render(<AvailabilityProposals fallback={FALLBACK} onChanged={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Aplicar" })).not.toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "Aplicar" }));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain(sentence));
+  });
+
   it("says why there is no proposal, and offers no «Aplicar»", async () => {
     serve(() => read({ open: [{ ...CONFLICT, options: [], none: { reason: "no_candidate", seats: [{ rowId: "bass", seat: "Bajo" }] } }] }));
     render(<AvailabilityProposals fallback={FALLBACK} onChanged={vi.fn()} />);
