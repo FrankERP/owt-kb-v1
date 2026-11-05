@@ -230,7 +230,7 @@ describe("a seat clash in a draft still to create (ADR-0078)", () => {
 
   it("names a member missing from the map with the fallback, never by id", async () => {
     const out = await attempt({ drafts: [clashDraft("n1", "2026-11-01")], months: ["2026-11"] }).run;
-    expect(out.lines[0]).toContain("alguien que ya no está en Miembros");
+    expect(out.lines[0]).toContain("alguien que ya no está en Personas");
     expect(out.lines.join(" ")).not.toContain("m-tony");
   });
 
@@ -245,7 +245,7 @@ describe("a seat clash in a draft still to create (ADR-0078)", () => {
   });
 
   it("a clash only the server saw (a flag unticked after the page loaded) still names who and where", async () => {
-    const sentence = "Tony quedaría en Coro y Drums en el mismo servicio; para cantar y tocar en un servicio, marca «Canta y toca a la vez» en Miembros.";
+    const sentence = "Tony quedaría en Coro y Drums en el mismo servicio; para cantar y tocar en un servicio, marca «Canta y toca a la vez» en Personas (super admin).";
     const post = vi.fn(async (): Promise<DraftPostOutcome> => ({ ok: false, status: 400, error: "invalid_request", seatClashes: [sentence] }));
     const out = await attempt({ drafts: [draft("n1", "2026-11-01")], months: ["2026-11"], postDraft: post as never }).run;
     expect(out).toMatchObject({ kind: "drafts", complete: false });

@@ -259,7 +259,7 @@ describe("countsForFairness in the stored save model (solver v3 C1 §6.1, §6.0)
 });
 
 describe("a seat-clash refusal keeps its reason through every save notice (ADR-0078)", () => {
-  const SENTENCE = "Tony quedaría en Coro y Drums en el mismo servicio; para cantar y tocar en un servicio, marca «Canta y toca a la vez» en Miembros.";
+  const SENTENCE = "Tony quedaría en Coro y Drums en el mismo servicio; para cantar y tocar en un servicio, marca «Canta y toca a la vez» en Personas (super admin).";
   const refusal = { error: "invalid_request", details: { issues: ["seat_clash"], seatClashes: [{ memberId: "m-tony", name: "Tony", seats: ["Coro", "Drums"], sentence: SENTENCE }] } };
   const LINE = `29 nov: ${SENTENCE}`;
 
