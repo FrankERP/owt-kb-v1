@@ -930,18 +930,18 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
       const token = await accessToken(await liveGrant());
       const result = await rpcResult(await POST(mcpRequest(rpc("tools/list"), { token })));
       const served = (result.tools as { name: string }[]).map((t) => t.name);
-      expect(recordToolList((server) => registerAllTools(server, { version: "" })).map((t) => t.name)).toEqual(served);
+      expect(recordToolList((server) => registerAllTools(server, { version: "", scope: "full" })).map((t) => t.name)).toEqual(served);
     });
 
     it("the digest covers what a client caches, and ignores the deployment's commit", async () => {
       const { toolListDigest } = await import("@/app/mcp/toolListVersion");
       const { registerAllTools } = await import("@/app/mcp/toolList");
-      expect(toolListDigest((server) => registerAllTools(server, { version: "abc1234" }))).toBe(TOOL_LIST_VERSION);
+      expect(toolListDigest((server) => registerAllTools(server, { version: "abc1234", scope: "full" }))).toBe(TOOL_LIST_VERSION);
       const renamed = toolListDigest((server) => {
         const register = server.registerTool.bind(server) as (name: string, config: { description?: string }, cb: unknown) => unknown;
         (server as unknown as { registerTool: typeof register }).registerTool = (name, config, cb) =>
           register(name, name === "ping" ? { ...config, description: `${config.description} ` } : config, cb);
-        registerAllTools(server, { version: "" });
+        registerAllTools(server, { version: "", scope: "full" });
       });
       expect(renamed).not.toBe(TOOL_LIST_VERSION);
     });
@@ -1685,14 +1685,14 @@ describe("/api/mcp — three tool lists: who you are (live) and which agent hold
 
   it("the full digest is exactly the one before ADR-0083; the three digests differ", () => {
     // Pinned against this PR's base (main at 44f6a86b): a Claude connector made before this
-    // release keeps its list and hears no refresh note.
+    // release keeps its list and hears no refresh note. Update this pin ONLY when a release changes
+    // the full list on purpose — that release sends every Claude connector the refresh note.
     expect(TOOL_LIST_VERSIONS.full).toBe("4a0a435e");
     expect(TOOL_LIST_VERSION).toBe(TOOL_LIST_VERSIONS.full);
     expect(new Set(Object.values(TOOL_LIST_VERSIONS)).size).toBe(3);
     for (const scope of TOOL_LIST_SCOPES) {
       expect(toolListDigest((server) => registerAllTools(server, { version: "x", scope })), scope).toBe(TOOL_LIST_VERSIONS[scope]);
     }
-    expect(toolListDigest((server) => registerAllTools(server, { version: "x" }))).toBe(TOOL_LIST_VERSIONS.full);
   });
 
   it("a worship admin, on ANY agent, sees exactly the eleven reads: read-only, no card, its own toolsVersion", async () => {

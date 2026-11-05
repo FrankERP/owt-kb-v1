@@ -6,7 +6,7 @@
  *
  * DRY RUN BY DEFAULT.
  *   node --env-file=.env.local scripts/revoke-mcp-grant.mjs
- *     … lists every grant (id, sub, origin, timestamps, revoked state), writes nothing.
+ *     … lists every grant (id, sub, origin, effective agent, timestamps, revoked state), writes nothing.
  *   node --env-file=.env.local scripts/revoke-mcp-grant.mjs --id mcpOauthGrant.<uuid>
  *     … shows exactly what `--id --apply` would revoke, writes nothing.
  *   node --env-file=.env.local scripts/revoke-mcp-grant.mjs --all
@@ -55,6 +55,25 @@ export const GRANT_FIELDS = [
 ];
 
 export const DEFAULT_REASON = "manual";
+
+/** Mirrors `PRODUCTION_ORIGIN` in app/mcp/oauth/origin.ts. */
+export const PRODUCTION_ORIGIN = "https://owt-backstage.vercel.app";
+/** Mirrors `LEGACY_GRANT_CUTOFF` in app/mcp/oauth/grantDocument.ts (ADR-0083). */
+export const LEGACY_GRANT_CUTOFF = "2026-11-05T18:00:00.000Z";
+
+/**
+ * Mirrors `effectiveGrantClient` there: the stored `client`, or — when absent —
+ * `"claude"` only for a production grant created before the cutoff, else
+ * `"loopback"`. Rollback step 0 (ADR-0083) revokes every grant whose EFFECTIVE
+ * client is not `"claude"`, so the dry run prints it. Pure.
+ */
+export function effectiveGrantClient(g) {
+  if (typeof g.client === "string") return g.client;
+  if (g.origin !== PRODUCTION_ORIGIN || typeof g.createdAt !== "string") return "loopback";
+  const created = Date.parse(g.createdAt);
+  if (!Number.isFinite(created)) return "loopback";
+  return created < Date.parse(LEGACY_GRANT_CUTOFF) ? "claude" : "loopback";
+}
 
 const USAGE = "usage: revoke-mcp-grant.mjs [--id <mcpOauthGrant.id> | --all] [--reason <text>] [--apply]";
 
@@ -114,7 +133,7 @@ function formatGrantLine(g) {
   const state = g.revoked ? `revoked (${g.revokedReason ?? "?"} @ ${g.revokedAt ?? "?"})` : "live";
   return (
     `  ${g._id}\n` +
-    `    sub=${g.sub}  origin=${g.origin}  client=${g.client ?? "(sin registrar)"}\n` +
+    `    sub=${g.sub}  origin=${g.origin}  client=${effectiveGrantClient(g)}${g.client == null ? " (sin registrar)" : ""}\n` +
     `    created=${g.createdAt ?? "?"}  lastRefresh=${g.lastRefreshAt ?? "?"}  ${state}`
   );
 }

@@ -1419,6 +1419,11 @@ node --env-file=.env.local scripts/revoke-mcp-grant.mjs --all --apply
 node --env-file=.env.local scripts/revoke-mcp-grant.mjs --id mcpOauthGrant.<uuid> --apply --reason "lost device"
 ```
 
+The dry run prints each grant's EFFECTIVE agent (`client=`, with «(sin registrar)» for a grant made
+before ADR-0083, read by the same rule as `effectiveGrantClient`). **Rolling ADR-0083 back** starts
+by revoking every grant whose effective agent is not `claude` — production writes, so a dry run
+first and Frank's explicit consent — then reverting the PR.
+
 Every non-`--apply` invocation is a dry run that shows exactly what would be revoked. Revocation
 takes effect **within 30 s** (the MCP route's grant cache TTL, `GRANT_CACHE_TTL_MS` in
 `app/mcp/oauth/grantStore.ts`) and needs **no deployment** — the next request bearing that

@@ -80,10 +80,11 @@ function registerReadTools(server: McpServer, deps: { version: string }): void {
 /**
  * The tools (and, on a claude.ai grant, the card resources) of `scope`, in `tools/list` order. Also
  * run once per scope by `toolListDigest`; `version` is the deployment's commit, which only `ping`'s
- * answer carries. `scope` defaults to "full", which is exactly the list before ADR-0083.
+ * answer carries. `scope` is required, so no caller gets the most privileged list by forgetting it;
+ * "full" is exactly the list before ADR-0083.
  */
-export function registerAllTools(server: McpServer, deps: { version: string; scope?: ToolListScope }): void {
-  const scope = deps.scope ?? "full";
+export function registerAllTools(server: McpServer, deps: { version: string; scope: ToolListScope }): void {
+  const scope = deps.scope;
   registerReadTools(server, deps);
   if (scope === "read") return;
   const appsHost = scope === "full";

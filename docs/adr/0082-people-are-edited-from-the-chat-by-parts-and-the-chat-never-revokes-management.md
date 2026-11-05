@@ -101,3 +101,9 @@ at `/me` (`PATCH /api/me`). Four facts shaped the decision:
   values it does not know, so a people edit could silently change a rule.
 - **Every role from the chat**, or protecting only worship admins: Kids and Jóvenes management are
   management too, and two review rounds found paths the per-tool lists missed.
+
+## Addendum — ADR-0083, 2026-11-05
+
+The connector now also admits a worship admin, with a read-only list (`READ_TIER_TOOLS`). None of
+this record's people tools is in it: they stay super-admin only, so the reasoning above («the
+connector is super-admin only») still holds for every tool this record adds.
