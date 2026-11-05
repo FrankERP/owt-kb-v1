@@ -25,6 +25,9 @@ export default function ProgramEditor({ event, people }: { event: MinistryEventV
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [lines, setLines] = useState<LineForm[]>([]);
+  // The revision the lines were opened FROM, held with them: a refresh that brings a newer event
+  // must never let these lines save over it (the encargado and the apoyo edit the same program).
+  const [rev, setRev] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,6 +35,7 @@ export default function ProgramEditor({ event, people }: { event: MinistryEventV
 
   function openEditor() {
     setLines(programForm(event.program));
+    setRev(event.rev);
     setError(null);
     setOpen(true);
   }
@@ -52,7 +56,7 @@ export default function ProgramEditor({ event, people }: { event: MinistryEventV
 
   async function save() {
     if (saving) return;
-    if (!event.rev) {
+    if (!rev) {
       setError("Recarga la página para editar este programa.");
       return;
     }
@@ -60,12 +64,18 @@ export default function ProgramEditor({ event, people }: { event: MinistryEventV
     setError(null);
     try {
       const r = await sendEventWrite("PATCH", programUrl(event.ministry, event._id), {
-        _rev: event.rev,
+        _rev: rev,
         program: programBody(lines),
       });
       if (!r.ok) {
+        if (r.stale) {
+          // Someone saved first: close, so the next open starts from THEIR lines and revision.
+          setOpen(false);
+          toast({ message: `${r.message} Ábrelo de nuevo para ver los cambios.`, tone: "error" });
+          router.refresh();
+          return;
+        }
         setError(r.message);
-        if (r.stale) router.refresh();
         return;
       }
       setOpen(false);

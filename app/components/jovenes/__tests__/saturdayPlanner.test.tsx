@@ -7,12 +7,24 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installMotionTestEnv } from "@/app/components/ui/__tests__/motionTestSetup";
-import { AdminProviders } from "@/app/components/admin/__tests__/providersHarness";
+import type { ReactNode } from "react";
+import { CueDialogProvider } from "@/app/components/ui/CueDialogProvider";
+import { ToastProvider } from "@/app/components/ui/Toast";
 import type { MinistryEventView } from "@/app/utils/ministryEventReads";
 import { saturdayRows } from "@/app/utils/jovenesPlannerModel";
 import SaturdayPlanner from "../SaturdayPlanner";
 import ProgramEditor from "../ProgramEditor";
 import { writeMessage } from "../eventWrite";
+
+// No MotionProvider: a dialog then unmounts the moment it closes (no exit animation to wait out
+// in jsdom), so «closed» is observable — the membersPanelMenu tests do the same.
+function AdminProviders({ children }: { children: ReactNode }) {
+  return (
+    <ToastProvider>
+      <CueDialogProvider>{children}</CueDialogProvider>
+    </ToastProvider>
+  );
+}
 
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
@@ -121,14 +133,27 @@ describe("SaturdayPlanner", () => {
     expect(calls).toEqual([]);
   });
 
-  it("a refusal keeps the editor open with the server's words; a stale one also refreshes", async () => {
+  it("a refusal keeps the editor open with the server's words, and refreshes nothing", async () => {
+    answer = { status: 403, body: { error: "No puedes editar este evento." } };
+    renderPlanner([ev()]);
+    fireEvent.click(screen.getByRole("button", { name: "Editar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    expect(await screen.findByText("No puedes editar este evento.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Guardar" })).toBeTruthy();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  // Review finding (PR C): a stale editor that stayed open saved over the newer meeting on the
+  // second «Guardar». A 409 now closes it, says why, and refreshes.
+  it("a stale save closes the editor with the reason and refreshes — no second save from the snapshot", async () => {
     answer = { status: 409, body: { error: "Alguien más cambió este evento; recarga." } };
     renderPlanner([ev()]);
     fireEvent.click(screen.getByRole("button", { name: "Editar" }));
     fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
-    expect(await screen.findByText("Alguien más cambió este evento; recarga.")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Guardar" })).toBeTruthy();
-    expect(refresh).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    expect((await screen.findAllByText(/Alguien más cambió este evento; recarga\. Ábrela de nuevo/)).length).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(calls).toHaveLength(1);
   });
 
   it("deletes only after the second tap, under the revision it read", async () => {
@@ -173,6 +198,31 @@ describe("ProgramEditor", () => {
         body: { _rev: "rev-1", program: [{ label: "Oración", member: "m2" }] },
       },
     ]);
+  });
+});
+
+describe("ProgramEditor after a stale save", () => {
+  it("closes, and the next open sends the NEW revision with the refreshed lines", async () => {
+    answer = { status: 409, body: { error: "Alguien más cambió este evento; recarga." } };
+    const view = (e: MinistryEventView) => (
+      <AdminProviders>
+        <ProgramEditor event={e} people={people} />
+      </AdminProviders>
+    );
+    const { rerender } = render(view(ev()));
+    fireEvent.click(screen.getByRole("button", { name: "Editar programa" }));
+    fireEvent.click(screen.getByRole("button", { name: "Guardar programa" }));
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    // Closed for real: the dialog's body is gone, not just its button busy.
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    // The refresh brings the other person's line under a new revision.
+    answer = { status: 200, body: { ok: true, id: "x", rev: "rev-3" } };
+    rerender(view(ev({ rev: "rev-2", program: [{ _key: "l9", label: "Dinámica", memberId: null, name: null, mine: false, note: null }] })));
+    fireEvent.click(await screen.findByRole("button", { name: "Editar programa" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Guardar programa" }));
+    await waitFor(() => expect(calls).toHaveLength(2));
+    expect(calls[1].body).toEqual({ _rev: "rev-2", program: [{ _key: "l9", label: "Dinámica" }] });
   });
 });
 

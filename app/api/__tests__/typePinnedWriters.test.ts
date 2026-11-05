@@ -14,6 +14,7 @@ const h = vi.hoisted(() => ({
   requireActiveManager: vi.fn(),
   storedFetch: vi.fn(),
   txOps: [] as Array<[string, string, string | undefined]>,
+  guardOps: [] as Array<[string, unknown]>,
   txCommit: vi.fn(),
   patchedIds: [] as string[],
   patchCommit: vi.fn(),
@@ -30,9 +31,13 @@ vi.mock("@/sanity/lib/serverClient", () => {
   patchChain.set = () => patchChain;
   patchChain.commit = () => h.patchCommit();
   const tx: Record<string, unknown> = {};
-  tx.patch = (id: string, build: (p: { ifRevisionId: (r: string) => unknown; set: () => unknown }) => unknown) => {
+  tx.patch = (id: string, build: (p: { ifRevisionId: (r: string) => unknown; set: (v: unknown) => unknown; unset: (v: unknown) => unknown }) => unknown) => {
     let rev: string | undefined;
-    const p = { ifRevisionId: (r: string) => { rev = r; return p; }, set: () => p };
+    const p = {
+      ifRevisionId: (r: string) => { rev = r; return p; },
+      set: (v: unknown) => { h.guardOps.push(["set", v]); return p; },
+      unset: (v: unknown) => { h.guardOps.push(["unset", v]); return p; },
+    };
     build(p);
     h.txOps.push(["patch", id, rev]);
     return tx;
@@ -56,12 +61,13 @@ vi.mock("@/app/utils/revalidate", () => ({
 const { DELETE: SONG_DELETE } = await import("@/app/api/content/posts/[id]/route");
 const { POST: PHOTO_POST } = await import("@/app/api/admin/members/[id]/photo/route");
 const { POST: SET_PASSWORD } = await import("@/app/api/admin/set-password/route");
-const { storedRevisionOfType } = await import("@/app/utils/typePin");
+const { storedRevisionOfType, storedTypeOf } = await import("@/app/utils/typePin");
 
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) });
 
 beforeEach(() => {
   h.txOps.length = 0;
+  h.guardOps.length = 0;
   h.patchedIds.length = 0;
   h.requireActiveManager.mockReset().mockResolvedValue({ user: { role: "super-admin" } });
   h.storedFetch.mockReset().mockResolvedValue("rev-1");
@@ -82,6 +88,13 @@ describe("storedRevisionOfType", () => {
     expect(await storedRevisionOfType("song-1", "post")).toBeNull();
   });
 
+  it("storedTypeOf answers the stored type, or null when no document has the id", async () => {
+    h.storedFetch.mockResolvedValueOnce("teamMembers").mockResolvedValueOnce(null);
+    expect(await storedTypeOf("m1")).toBe("teamMembers");
+    expect(await storedTypeOf("gone")).toBeNull();
+    expect(h.storedFetch.mock.calls[0]).toEqual(["*[_id == $id][0]._type", { id: "m1" }]);
+  });
+
   it.each([[""], [undefined], [7]])("reads nothing for an id of %j", async (id) => {
     expect(await storedRevisionOfType(id, "post")).toBeNull();
     expect(h.storedFetch).not.toHaveBeenCalled();
@@ -89,23 +102,35 @@ describe("storedRevisionOfType", () => {
 });
 
 describe("DELETE /api/content/posts/[id] deletes songs only", () => {
+  const SONG = { _rev: "rev-1", title: "Grande" };
+
   it("refuses a Jóvenes event id with 404 and writes nothing", async () => {
     h.storedFetch.mockResolvedValue(null);
     const res = await SONG_DELETE({} as NextRequest, ctx(EVENT_ID));
     expect(res.status).toBe(404);
-    expect(h.storedFetch.mock.calls[0][1]).toEqual({ id: EVENT_ID, type: "post" });
+    expect(String(h.storedFetch.mock.calls[0][0])).toContain('_type == "post" && _id == $id');
+    expect(h.storedFetch.mock.calls[0][1]).toEqual({ id: EVENT_ID });
     expect(h.txOps).toEqual([]);
     expect(h.revalidateSongViews).not.toHaveBeenCalled();
   });
 
-  it("deletes a song under the revision it read, in one transaction", async () => {
+  it("deletes a song under the revision it read, its guard setting a real field to its stored value", async () => {
+    h.storedFetch.mockResolvedValue(SONG);
     const res = await SONG_DELETE({} as NextRequest, ctx("song-1"));
     expect(res.status).toBe(200);
     expect(h.txOps).toEqual([["patch", "song-1", "rev-1"], ["delete", "song-1", undefined]]);
+    expect(h.guardOps).toEqual([["set", { title: "Grande" }]]);
     expect(h.revalidateSongViews).toHaveBeenCalledTimes(1);
   });
 
+  it("a song with no title still gets a real guard (an unset of the absent field)", async () => {
+    h.storedFetch.mockResolvedValue({ _rev: "rev-1" });
+    await SONG_DELETE({} as NextRequest, ctx("song-1"));
+    expect(h.guardOps).toEqual([["unset", ["title"]]]);
+  });
+
   it("answers 409 when the song changed between the read and the delete", async () => {
+    h.storedFetch.mockResolvedValue(SONG);
     h.txCommit.mockRejectedValue({
       statusCode: 409,
       details: { type: "mutationError", items: [{ error: { type: "documentRevisionIDDoesNotMatchError" } }] },
@@ -113,6 +138,12 @@ describe("DELETE /api/content/posts/[id] deletes songs only", () => {
     const res = await SONG_DELETE({} as NextRequest, ctx("song-1"));
     expect(res.status).toBe(409);
     expect(h.revalidateSongViews).not.toHaveBeenCalled();
+  });
+
+  it("any other 409 (a song a setlist still references) stays an error, never «someone changed it»", async () => {
+    h.storedFetch.mockResolvedValue(SONG);
+    h.txCommit.mockRejectedValue({ statusCode: 409, details: { type: "mutationError", items: [{ error: { type: "documentHasExistingReferencesError" } }] } });
+    await expect(SONG_DELETE({} as NextRequest, ctx("song-1"))).rejects.toMatchObject({ statusCode: 409 });
   });
 
   it("still refuses a content-editor before reading anything", async () => {

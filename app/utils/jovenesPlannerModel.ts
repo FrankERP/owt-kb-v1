@@ -89,6 +89,8 @@ export function seatNames(e: Pick<MinistryEventView, "seats">, role: string): st
 export type SeatPick = { key: string | null; member: string | null };
 
 export type SaturdayForm = {
+  /** The stored kind of an existing meeting (a `ministry` board stays one); `saturday` for a new one. */
+  kind: string;
   date: string;
   time: string;
   arrival: string;
@@ -113,6 +115,7 @@ export function saturdayForm(date: string, e?: MinistryEventView): SaturdayForm 
     }
   }
   return {
+    kind: e?.kind === "ministry" ? "ministry" : "saturday",
     date: e?.date ?? date,
     time: e ? e.time ?? "" : SATURDAY_DEFAULTS.time,
     arrival: e ? e.arrival ?? "" : SATURDAY_DEFAULTS.arrival,
@@ -144,7 +147,7 @@ export function saturdayBody(form: SaturdayForm): Record<string, unknown> {
   for (const x of form.extra) seats.push({ _key: x.key, role: x.role, member: x.member });
   return {
     audience: { kind: "ministry" },
-    kind: "saturday",
+    kind: form.kind,
     date: form.date,
     time: orNull(form.time),
     arrival: orNull(form.arrival),

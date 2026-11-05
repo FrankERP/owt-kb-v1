@@ -3,7 +3,8 @@ import "server-only";
 // THE ONE WRITER of `ministryEvent` (ADR-0081; plan
 // `docs/superpowers/plans/2026-10-30-jovenes-events-access.md` §5, W1–W9). Its four routes
 // (`/api/ministries/[ministry]/events…`) check the session and the rollout, parse JSON and call
-// these; nothing else imports this module (`ministryEventCallers.test.ts`).
+// these; nothing else imports this module (`serviceCommitCallers.test.ts`; MCP and the admin
+// assistant are refused by `ministryEventCoverage.test.ts`).
 //
 // Every write, in ONE order of refusals (W2), so a refusal never tells a person anything they
 // could not read:

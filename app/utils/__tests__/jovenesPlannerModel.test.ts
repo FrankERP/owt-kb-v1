@@ -108,6 +108,14 @@ describe("the Saturday editor's body", () => {
     ]);
   });
 
+  // Review finding (PR C): every save sent `saturday`, so editing the notes of a quarterly pastors'
+  // board (`kind: "ministry"`) silently turned it into a Saturday.
+  it("an existing meeting keeps its stored kind; a new one is a Saturday", () => {
+    expect(saturdayBody(saturdayForm("2026-11-20", ev({ kind: "ministry" }))).kind).toBe("ministry");
+    expect(saturdayBody(saturdayForm("2026-11-07", ev({ kind: "saturday" }))).kind).toBe("saturday");
+    expect(saturdayBody(saturdayForm("2026-11-07")).kind).toBe("saturday");
+  });
+
   it("a cleared time or note is sent as null (the server unsets it)", () => {
     const f = saturdayForm("2026-11-07", ev({ notes: "Traer Biblia" }));
     f.time = "";

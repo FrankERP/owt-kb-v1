@@ -96,8 +96,15 @@ export default function SaturdayPlanner({
         ? await sendEventWrite("PATCH", eventUrl(MINISTRY, event._id), { ...body, _rev: event.rev })
         : await sendEventWrite("POST", eventsUrl(MINISTRY), { ...body, token });
       if (!r.ok) {
+        if (r.stale) {
+          // A 409 (someone saved first, or this create already landed): close, so the next open
+          // starts from the stored meeting and its revision, never from this snapshot.
+          setEditing(null);
+          toast({ message: `${r.message} Ábrela de nuevo para ver los cambios.`, tone: "error" });
+          router.refresh();
+          return;
+        }
         setError(r.message);
-        if (r.stale) router.refresh();
         return;
       }
       setEditing(null);
@@ -122,8 +129,15 @@ export default function SaturdayPlanner({
     try {
       const r = await sendEventWrite("DELETE", eventUrl(MINISTRY, event._id), { _rev: event.rev });
       if (!r.ok) {
+        if (r.stale) {
+          // A 409 (someone saved first, or this create already landed): close, so the next open
+          // starts from the stored meeting and its revision, never from this snapshot.
+          setEditing(null);
+          toast({ message: `${r.message} Ábrela de nuevo para ver los cambios.`, tone: "error" });
+          router.refresh();
+          return;
+        }
         setError(r.message);
-        if (r.stale) router.refresh();
         return;
       }
       setEditing(null);

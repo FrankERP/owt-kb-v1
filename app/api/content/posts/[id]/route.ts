@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
-import { writeClient } from "@/sanity/lib/serverClient";
+import { serverClient, writeClient } from "@/sanity/lib/serverClient";
 import { revalidateSongViews } from "@/app/utils/revalidate";
 import { patchSong, SONG_ERROR } from "@/app/utils/songSaveCommit";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
-import { storedRevisionOfType } from "@/app/utils/typePin";
 import { sanityConflictKind } from "@/app/utils/roleWriteRequest";
 
 // Wrapped because the module it calls is a `*Commit` (`srVerificationRunContext.test.ts` scans by
@@ -45,17 +44,28 @@ async function deleteHandler(
   // — answers 404 without saying whether it exists, and the delete is pinned to the revision read,
   // so the document judged to be a song is the one deleted.
   const { id } = await params;
-  const rev = await storedRevisionOfType(id, "post");
-  if (!rev) {
+  const stored = await serverClient.fetch<{ _rev?: unknown; title?: unknown } | null>(
+    `*[_type == "post" && _id == $id][0]{ _rev, title }`,
+    { id },
+  );
+  if (!stored || typeof stored._rev !== "string") {
     return NextResponse.json({ error: "Canción no encontrada." }, { status: 404 });
   }
+  const rev = stored._rev;
   try {
     await writeClient
       .transaction()
-      .patch(id, (p) => p.ifRevisionId(rev).set({}))
+      // A revision-asserting no-op (the field set to its stored value), then the delete, in ONE
+      // transaction — `delete` takes no revision precondition (the roles DELETE precedent).
+      .patch(id, (p) => {
+        const guarded = p.ifRevisionId(rev);
+        return typeof stored.title === "string" ? guarded.set({ title: stored.title }) : guarded.unset(["title"]);
+      })
       .delete(id)
       .commit();
   } catch (err) {
+    // Only a moved revision is «someone changed it»; a song a setlist still references fails the
+    // delete with another 409 kind, which stays an error as before.
     if (sanityConflictKind(err) === "revision_mismatch") {
       return NextResponse.json({ error: "Alguien más cambió esta canción; recarga." }, { status: 409 });
     }
