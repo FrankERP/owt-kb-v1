@@ -42,7 +42,7 @@ vi.mock("@/sanity/lib/serverClient", () => {
   chain.set = (v: Record<string, unknown>) => { h.sets.push(v); return chain; };
   chain.commit = () => h.commit();
   return {
-    serverClient: { fetch: vi.fn() },
+    serverClient: { fetch: vi.fn(async () => ({ _rev: "rev-1", role: "member" })) },
     writeClient: {
       patch: (id: string) => { h.patchedIds.push(id); return chain; },
     },

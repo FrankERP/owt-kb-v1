@@ -12,6 +12,7 @@ import { sanityConflictKind } from "@/app/utils/roleWriteRequest";
 import { SOLVER_CONFIG_DOC_ID } from "@/app/utils/solverConfigWriteRequest";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
+import { storedTypeOf } from "@/app/utils/typePin";
 import { revalidatePath } from "next/cache";
 import { NOTIFY_PREF_FIELD, wantsNotification, type NotifyKind } from "@/app/utils/notifyPrefs";
 import {
@@ -139,33 +140,6 @@ export async function PATCH(
     unsetPaths = droppedMinistryRolePaths(body.ministries);
   }
 
-  // A worship management role needs worship, judged on the RESULTING state
-  // (access plan §3.4): `requireActiveManager` reads `role` alone, so a Jóvenes
-  // admin saved as `admin` would be a worship admin. Refused only when the
-  // request CHANGES role or ministries — the form always re-sends `role`, and
-  // refusing an unchanged one would lock an already-inconsistent person out of
-  // every other edit. The verdict rests on the stored state, so the write is
-  // pinned to the revision it read: a concurrent change answers 409, never a
-  // silent read-then-write on a permission field.
-  let readRevision: string | undefined;
-  if (body.role || body.ministries !== undefined) {
-    const stored = await serverClient.fetch<{ _rev?: string; role?: string | null; ministries?: unknown } | null>(
-      `*[_type == "teamMembers" && _id == $id][0]{ _rev, role, ministries }`,
-      { id },
-    );
-    if (!stored || typeof stored._rev !== "string") {
-      return NextResponse.json({ error: "Miembro no encontrado." }, { status: 404 });
-    }
-    const changesRole = !!body.role && body.role !== stored.role;
-    const changesMinistries = body.ministries !== undefined && !sameMinistries(body.ministries, stored.ministries);
-    const nextRole = body.role || stored.role;
-    const nextMinistries = body.ministries ?? stored.ministries;
-    if ((changesRole || changesMinistries) && worshipRoleWithoutWorship(nextRole, nextMinistries)) {
-      return NextResponse.json({ error: WORSHIP_ROLE_NEEDS_WORSHIP }, { status: 400 });
-    }
-    readRevision = stored._rev;
-  }
-
   // The five per-type email toggles, keyed off the same map every sender uses.
   const notifPatch: Record<string, unknown> = {};
   if (typeof body.notifEmail === "boolean") notifPatch["notifPrefs.email"] = body.notifEmail;
@@ -177,6 +151,36 @@ export async function PATCH(
 
   if (Object.keys(patch).length === 0 && Object.keys(notifPatch).length === 0) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+  }
+
+  // A worship management role needs worship, judged on the RESULTING state
+  // (access plan §3.4): `requireActiveManager` reads `role` alone, so a Jóvenes
+  // admin saved as `admin` would be a worship admin. Refused only when the
+  // request CHANGES role or ministries — the form always re-sends `role`, and
+  // refusing an unchanged one would lock an already-inconsistent person out of
+  // every other edit. The verdict rests on the stored state, so the write is
+  // pinned to the revision it read: a concurrent change answers 409, never a
+  // silent read-then-write on a permission field.
+  //
+  // The type-pinned read runs on EVERY patch (W9, ADR-0081): an id that is not a `teamMembers`
+  // answers 404, so this route never patches another type — a Jóvenes event included.
+  let readRevision: string | undefined;
+  const stored = await serverClient.fetch<{ _rev?: string; role?: string | null; ministries?: unknown } | null>(
+    `*[_type == "teamMembers" && _id == $id][0]{ _rev, role, ministries }`,
+    { id },
+  );
+  if (!stored || typeof stored._rev !== "string") {
+    return NextResponse.json({ error: "Miembro no encontrado." }, { status: 404 });
+  }
+  if (body.role || body.ministries !== undefined) {
+    const changesRole = !!body.role && body.role !== stored.role;
+    const changesMinistries = body.ministries !== undefined && !sameMinistries(body.ministries, stored.ministries);
+    const nextRole = body.role || stored.role;
+    const nextMinistries = body.ministries ?? stored.ministries;
+    if ((changesRole || changesMinistries) && worshipRoleWithoutWorship(nextRole, nextMinistries)) {
+      return NextResponse.json({ error: WORSHIP_ROLE_NEEDS_WORSHIP }, { status: 400 });
+    }
+    readRevision = stored._rev;
   }
 
   let mutation = writeClient.patch(id);
@@ -223,9 +227,16 @@ export async function DELETE(
   }
 
   const { id } = await params;
+  // W9 (ADR-0081): this route deletes members only; an id held by ANOTHER type answers 404. An id
+  // no document holds is not refused: «Reintenta la eliminación» after a failed pool cleanup
+  // (below) re-sends a member already deleted, and the retry must still reach the cleanup.
+  const storedType = await storedTypeOf(id);
+  if (storedType !== null && storedType !== "teamMembers") {
+    return NextResponse.json({ error: "Miembro no encontrado." }, { status: 404 });
+  }
 
   try {
-    await writeClient.delete(id);
+    if (storedType !== null) await writeClient.delete(id);
   } catch (err) {
     if (isSanityReferentialIntegrityError(err)) {
       return NextResponse.json(

@@ -21,6 +21,15 @@ export function revalidateKidsViews() {
   revalidatePath("/schedule");
 }
 
+// A ministry's meetings changed (ADR-0081 W7) → its pages and the Calendario. Those pages read
+// the session and are dynamic today; the call keeps a later static page from going stale silently.
+// Only Jóvenes has meetings; another leveled ministry's pages follow the same `/<id>` shape.
+export function revalidateMinistryViews(ministry: string) {
+  revalidatePath(`/${ministry}`);
+  revalidatePath(`/${ministry}/admin`);
+  revalidatePath("/schedule");
+}
+
 // Song content changes → home song list, song pages, the library index.
 // R1 turns `/tag*` and `/author*` into redirects into `/biblioteca`; a redirect
 // holds no cache of its own to invalidate.

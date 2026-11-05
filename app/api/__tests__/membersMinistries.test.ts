@@ -326,11 +326,21 @@ describe("members routes — ministryRoles (Jóvenes level and groups)", () => {
       expect(await res.json()).toEqual({ error: "Alguien más cambió a esta persona; recarga." });
     });
 
-    it("a PATCH without role or ministries reads nothing and pins nothing — as before", async () => {
+    it("a PATCH without role or ministries reads the type but pins no revision", async () => {
       const res = await PATCH(req({ alias: "Ani" }), { params });
       expect(res.status).toBe(200);
-      expect(h.storedFetch).not.toHaveBeenCalled();
+      expect(h.storedFetch).toHaveBeenCalledTimes(1);
+      expect(String(h.storedFetch.mock.calls[0][0])).toContain('_type == "teamMembers"');
       expect(h.revisions).toEqual([]);
+    });
+
+    // W9 (ADR-0081): before the pin, a PATCH with neither role nor ministries patched ANY id —
+    // a Jóvenes event included — outside its commit module.
+    it("an id that is not a member answers 404 even without role or ministries (W9)", async () => {
+      h.storedFetch.mockResolvedValue(null);
+      const res = await PATCH(req({ alias: "Ani" }), { params });
+      expect(res.status).toBe(404);
+      expect(h.commit).not.toHaveBeenCalled();
     });
 
     it("a repeated ministry cannot make a change look like none (review finding)", async () => {
