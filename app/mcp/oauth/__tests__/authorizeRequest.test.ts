@@ -211,24 +211,54 @@ describe("validateAuthorizeRequest — redirect_uri failures render an error pag
       CLAUDE_AI_REDIRECT_URI + "/",
       CLAUDE_AI_REDIRECT_URI + "?x=1",
       CLAUDE_AI_REDIRECT_URI.toUpperCase(),
-      "http://127.0.0.1:51005/callback",
+      "http://127.0.0.1:51004/other", // loopback: only the PORT may differ
+      "http://localhost:51004/callback", // …and localhost is not 127.0.0.1
       "",
     ]) {
       expectErrorPage(await validate(await params({ redirect_uri: bad })), "invalid_redirect_uri");
     }
   });
 
-  it("a redirect_uri on the client's list but OFF this origin's allowlist (a loopback client presented to production)", async () => {
-    // Minted directly for production with a loopback URI — registration would
-    // never issue this, which is exactly why authorize re-checks the allowlist
-    // instead of trusting the client token.
-    const id = await clientId({ origin: PRODUCTION_ORIGIN, redirectUris: [LOOPBACK_URI] });
-    const result = await validateAuthorizeRequest(await params({ client_id: id, redirect_uri: LOOPBACK_URI }), {
+  it("O1: a redirect_uri on the client's list but OFF this origin's allowlist (a client id signed directly)", async () => {
+    // Minted directly with an off-list URI — registration never signs one
+    // (it keeps only the allowed subset), which is exactly why authorize
+    // re-checks the allowlist instead of trusting the client token.
+    const offList = "https://evil.example/cb";
+    for (const origin of [PRODUCTION_ORIGIN, PREVIEW_ORIGIN]) {
+      const id = await clientId({ origin, redirectUris: [offList] });
+      const result = await validateAuthorizeRequest(await params({ client_id: id, redirect_uri: offList }), {
+        origin,
+        key: KEY,
+        now: NOW,
+      });
+      expectErrorPage(result, "invalid_redirect_uri");
+    }
+  });
+
+  it("a loopback redirect_uri may differ from the registered one in its PORT only (RFC 8252 §7.3), production included", async () => {
+    for (const origin of [PRODUCTION_ORIGIN, PREVIEW_ORIGIN]) {
+      const id = await clientId({ origin, redirectUris: ["http://127.0.0.1/", "http://127.0.0.1:33418/"] });
+      for (const asked of ["http://127.0.0.1:54321/", "http://127.0.0.1:33418/", "http://127.0.0.1/"]) {
+        const result = await validateAuthorizeRequest(await params({ client_id: id, redirect_uri: asked }), {
+          origin,
+          key: KEY,
+          now: NOW,
+        });
+        expect(result.kind, `${asked} @ ${origin}`).toBe("render");
+        if (result.kind === "render") expect(result.request.redirectUri).toBe(asked);
+      }
+    }
+  });
+
+  it("the ChatGPT callback is accepted on production when registered", async () => {
+    const chatgpt = "https://chatgpt.com/connector_platform_oauth_redirect";
+    const id = await clientId({ origin: PRODUCTION_ORIGIN, redirectUris: [chatgpt] });
+    const result = await validateAuthorizeRequest(await params({ client_id: id, redirect_uri: chatgpt }), {
       origin: PRODUCTION_ORIGIN,
       key: KEY,
       now: NOW,
     });
-    expectErrorPage(result, "invalid_redirect_uri");
+    expect(result.kind).toBe("render");
   });
 
   it("a duplicated redirect_uri — even two identical valid copies — is refused, never one picked", async () => {
@@ -256,7 +286,7 @@ describe("validateAuthorizeRequest — refused claude-host redirect_uri logging 
     expectErrorPage(await validate(await params({ redirect_uri: nearMiss })), "invalid_redirect_uri");
     expect(warnSpy).toHaveBeenCalledTimes(1);
     const [prefix, logged] = warnSpy.mock.calls[0]!;
-    expect(String(prefix)).toContain("refused redirect_uri from a claude host");
+    expect(String(prefix)).toContain("refused redirect_uri from a known agent host");
     expect(logged).toBe(JSON.stringify(nearMiss));
   });
 

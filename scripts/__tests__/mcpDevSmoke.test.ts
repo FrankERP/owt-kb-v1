@@ -87,6 +87,14 @@ import {
   MEMBER_WRITE_NAMES,
   SONG_WRITE_NAMES,
   SOLVE_MONTH_ANNOTATIONS,
+  APP_ONLY_TOOL_NAMES,
+  BOUNDARY_PROBE_TOOL,
+  checkBoundaryProbe,
+  EXPECT_TIERS,
+  EXPECTED_TOOLS_NO_APPS,
+  expectedToolsForTier,
+  isBoundaryProbe,
+  READ_TIER_TOOL_NAMES,
 } from "../mcp-dev-smoke.mjs";
 
 const KEY = new TextEncoder().encode("a".repeat(MIN_SECRET_BYTES));
@@ -133,7 +141,14 @@ describe("resolveBase", () => {
 
 describe("parseArgs", () => {
   it("defaults: no base override, open/refresh on, await-revocation and reads off", () => {
-    expect(parseArgs([])).toEqual({ base: null, open: true, refresh: true, awaitRevocation: false, reads: false });
+    expect(parseArgs([])).toEqual({
+      base: null,
+      open: true,
+      refresh: true,
+      awaitRevocation: false,
+      reads: false,
+      expectTier: "full",
+    });
   });
 
   it("parses --base, --no-open, --no-refresh, --await-revocation, --reads together", () => {
@@ -145,7 +160,17 @@ describe("parseArgs", () => {
       refresh: false,
       awaitRevocation: true,
       reads: true,
+      expectTier: "full",
     });
+  });
+
+  it("parses --expect-tier full|read (ADR-0083) and refuses anything else", () => {
+    expect(EXPECT_TIERS).toEqual(["full", "read"]);
+    expect(parseArgs(["--expect-tier", "read"]).expectTier).toBe("read");
+    expect(parseArgs(["--expect-tier", "full", "--reads"]).expectTier).toBe("full");
+    for (const bad of [[], ["admin"], ["READ"], ["--reads"]]) {
+      expect(() => parseArgs(["--expect-tier", ...bad]), JSON.stringify(bad)).toThrow(/--expect-tier/);
+    }
   });
 
   it("rejects --base with no value", () => {
@@ -636,17 +661,145 @@ describe("toolCallRequest — DV1: the dev smoke never calls a write tool", () =
     expect([...code.matchAll(/toolCallRequest\(/g)].length).toBeGreaterThanOrEqual(4);
   });
 
-  it("names each write tool exactly once in code — in WRITE_TOOL_NAMES — so nothing else can reach one", () => {
+  it("names each write tool exactly once in code — in WRITE_TOOL_NAMES — so nothing else can reach one (the boundary probe's constant is the one named exception)", () => {
     for (const name of WRITE_TOOL_NAMES) {
-      expect([...code.matchAll(new RegExp(`["'\`]${name}["'\`]`, "g"))], name).toHaveLength(1);
+      const expected = name === BOUNDARY_PROBE_TOOL ? 2 : 1;
+      expect([...code.matchAll(new RegExp(`["'\`]${name}["'\`]`, "g"))], name).toHaveLength(expected);
     }
+    expect(BOUNDARY_PROBE_TOOL).toBe("edit_setlist");
+    expect(code).toMatch(/export const BOUNDARY_PROBE_TOOL = "edit_setlist";/);
     expect(code).toMatch(/export const WRITE_TOOL_NAMES = \["unpublish_service", "publish_service", "swap_assignment", "edit_setlist"\];/);
   });
 
   it("control: a second tools/call planted in the script is caught", () => {
     const planted = `${code}\nconst x = rpc("tools/call", { name: "edit_setlist", arguments: {} });\n`;
     expect([...planted.matchAll(/["'`]tools\/call["'`]/g)]).toHaveLength(2);
-    expect([...planted.matchAll(/["'`]edit_setlist["'`]/g)]).toHaveLength(2);
+    expect([...planted.matchAll(/["'`]edit_setlist["'`]/g)]).toHaveLength(3);
+  });
+});
+
+describe("the read-tier boundary probe (ADR-0083) — the ONE exception to DV1", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("isBoundaryProbe: only edit_setlist, only {} or { toolsVersion: string }, only under --expect-tier read", () => {
+    expect(isBoundaryProbe("edit_setlist", {}, "read")).toBe(true);
+    expect(isBoundaryProbe("edit_setlist", { toolsVersion: "abc" }, "read")).toBe(true);
+    // Any other tier.
+    expect(isBoundaryProbe("edit_setlist", {}, "full")).toBe(false);
+    expect(isBoundaryProbe("edit_setlist", {}, undefined)).toBe(false);
+    // Any other argument shape: a field edit_setlist's schema knows, a stray one, a non-string version, a non-object.
+    for (const args of [
+      { serviceId: "role-1" },
+      { rows: [] },
+      { toolsVersion: "abc", serviceId: "role-1" },
+      { toolsVersion: 1 },
+      { extra: true },
+      [],
+      null,
+      undefined,
+      "{}",
+      Object.create({ serviceId: "role-1" }),
+    ]) {
+      expect(isBoundaryProbe("edit_setlist", args, "read"), JSON.stringify(args)).toBe(false);
+    }
+    // Any other write, or any other name.
+    for (const name of [...WRITE_TOOL_NAMES, ...SERVICE_MESSAGE_TOOL_NAMES, ...MEMBER_TOOL_NAMES, "EDIT_SETLIST", "probe"]) {
+      if (name === "edit_setlist") continue;
+      expect(isBoundaryProbe(name, {}, "read"), name).toBe(false);
+    }
+  });
+
+  it("toolCallRequest builds the probe only under the read tier, and refuses every other write there too", () => {
+    expect(toolCallRequest("edit_setlist", {}, 4, { expectTier: "read" })).toEqual({
+      jsonrpc: "2.0",
+      id: 4,
+      method: "tools/call",
+      params: { name: "edit_setlist", arguments: {} },
+    });
+    expect(() => toolCallRequest("edit_setlist", {})).toThrow(/DV1/);
+    expect(() => toolCallRequest("edit_setlist", {}, 1, { expectTier: "full" })).toThrow(/DV1/);
+    expect(() => toolCallRequest("edit_setlist", { serviceId: "role-1" }, 1, { expectTier: "read" })).toThrow(/DV1/);
+    for (const name of WRITE_TOOL_NAMES.filter((n: string) => n !== "edit_setlist")) {
+      expect(() => toolCallRequest(name, {}, 1, { expectTier: "read" }), name).toThrow(/DV1/);
+    }
+  });
+
+  it("createMcpRequest sends the probe only when bound to the read tier, and refuses any other argument shape before fetch", async () => {
+    const fetchMock = vi.fn(async () => ({ status: 200, headers: new Headers(), text: async () => "{}" }));
+    vi.stubGlobal("fetch", fetchMock);
+    const probe = rpc(TOOLS_CALL_METHOD, { name: "edit_setlist", arguments: {} });
+    const loaded = rpc(TOOLS_CALL_METHOD, { name: "edit_setlist", arguments: { serviceId: "role-1", rows: [] } });
+
+    await expect(createMcpRequest({ origin: "https://example.test", bypass: {} })("t", probe)).rejects.toThrow(/DV1/);
+    await expect(
+      createMcpRequest({ origin: "https://example.test", bypass: {}, expectTier: "full" })("t", probe),
+    ).rejects.toThrow(/DV1/);
+    const readSend = createMcpRequest({ origin: "https://example.test", bypass: {}, expectTier: "read" });
+    await expect(readSend("t", loaded)).rejects.toThrow(/DV1/);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await readSend("t", probe);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("checkBoundaryProbe passes ONLY the SDK's unknown-tool error — a validation error on a registered tool fails", () => {
+    expect(checkBoundaryProbe({ jsonrpc: "2.0", id: 1, error: { code: -32602, message: "Tool edit_setlist not found" } }).ok).toBe(true);
+    // What a REGISTERED edit_setlist answers to {}: the boundary is broken, even though nothing was written.
+    expect(
+      checkBoundaryProbe({
+        jsonrpc: "2.0",
+        id: 1,
+        result: { isError: true, content: [{ type: "text", text: "Input validation error: Invalid arguments for tool edit_setlist" }] },
+      }).ok,
+    ).toBe(false);
+    expect(checkBoundaryProbe({ jsonrpc: "2.0", id: 1, error: { code: -32602, message: "Input validation error" } }).ok).toBe(false);
+    expect(checkBoundaryProbe({ jsonrpc: "2.0", id: 1, result: { content: [] } }).ok).toBe(false);
+    expect(checkBoundaryProbe(null).ok).toBe(false);
+  });
+});
+
+describe("expectedToolsForTier (ADR-0083)", () => {
+  it("full = EXPECTED_TOOLS without the five claude.ai-only app tools (the smoke's grant is a loopback one)", () => {
+    expect(APP_ONLY_TOOL_NAMES).toEqual([
+      "check_proposal_edits",
+      "save_proposal_edits",
+      "check_service_edits_app",
+      "save_service_edits_app",
+      "delete_services_app",
+    ]);
+    for (const name of APP_ONLY_TOOL_NAMES) expect(EXPECTED_TOOLS).toContain(name);
+    expect(expectedToolsForTier("full")).toEqual(EXPECTED_TOOLS_NO_APPS);
+    expect(EXPECTED_TOOLS_NO_APPS).toEqual(EXPECTED_TOOLS.filter((n: string) => !APP_ONLY_TOOL_NAMES.includes(n)));
+    expect(EXPECTED_TOOLS_NO_APPS).toHaveLength(EXPECTED_TOOLS.length - APP_ONLY_TOOL_NAMES.length);
+  });
+
+  it("read = ping and the ten reads, no write of any kind, in EXPECTED_TOOLS' own order", () => {
+    expect(expectedToolsForTier("read")).toEqual(READ_TIER_TOOL_NAMES);
+    expect(READ_TIER_TOOL_NAMES).toEqual([
+      "ping",
+      "get_service",
+      "list_services",
+      "search_songs",
+      "get_song",
+      "get_member_availability",
+      "get_participation",
+      "list_proposals",
+      ...ADMIN_READ_TOOL_NAMES,
+    ]);
+    expect([...READ_TIER_TOOL_NAMES].sort()).toEqual(["ping", ...READ_TOOL_NAMES, ...ADMIN_READ_TOOL_NAMES].sort());
+    expect(READ_TIER_TOOL_NAMES).toEqual(EXPECTED_TOOLS.filter((n: string) => READ_TIER_TOOL_NAMES.includes(n)));
+    for (const name of READ_TIER_TOOL_NAMES) expect(expectedAnnotations(name), name).toEqual(READ_ONLY_ANNOTATIONS);
+    expect(() => expectedToolsForTier("admin")).toThrow();
+  });
+
+  it("checkToolList checks against the list it is given", () => {
+    const listed = (names: string[]) => names.map((name) => ({ name, annotations: expectedAnnotations(name) }));
+    expect(checkToolList(listed(READ_TIER_TOOL_NAMES), READ_TIER_TOOL_NAMES).ok).toBe(true);
+    expect(checkToolList(listed([...READ_TIER_TOOL_NAMES, "edit_setlist"]), READ_TIER_TOOL_NAMES).ok).toBe(false);
+    expect(checkToolList(listed(EXPECTED_TOOLS_NO_APPS), EXPECTED_TOOLS_NO_APPS).ok).toBe(true);
+    expect(checkToolList(listed(EXPECTED_TOOLS), EXPECTED_TOOLS_NO_APPS).ok).toBe(false);
+    // The default is still the claude.ai list.
+    expect(checkToolList(listed(EXPECTED_TOOLS)).ok).toBe(true);
   });
 });
 

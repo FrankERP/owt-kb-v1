@@ -194,3 +194,9 @@ model-visible, read-only `check_service_deletes` and show its lines in the card'
   then only «Volver a leer el mes»; anything else shows the server's words and re-reads from the empty
   edit list. A failed re-read keeps the board locked.
 - Lines the server writes for Claude («llama delete_services…», «repite…») never show on the card.
+
+## Addendum — ADR-0083, 2026-11-05
+
+The app-only tools this record relies on are registered only for a grant whose client is claude.ai.
+Another agent's grant never lists them, so the «host hides them from the model» guarantee holds
+wherever they exist.

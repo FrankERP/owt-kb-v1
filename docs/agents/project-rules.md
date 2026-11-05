@@ -434,11 +434,20 @@ several exist precisely to stop a plausible-looking change.
   on NextAuth's DEFAULT `redirect` callback preserving its query** — never add a custom
   `redirect` callback without keeping that. `authRedirectCallback.test.ts` is the guard. See
   [`docs/MCP.md`](docs/MCP.md).
+- **Who connects an agent, and what it reaches (ADR-0083).** The four gates (consent page, code POST,
+  both token grants, `/api/mcp`) admit `mcpTierOf(access) !== null` on the LIVE access: `"full"` for a
+  super-admin, `"read"` for an `admin` with worship; the tier is never stored. The read list is the
+  allowlist `READ_TIER_TOOLS` — never add a write, a Kids tool or a people tool to it without a
+  reviewed plan. The five app-only tools are registered only for a grant whose `client` is
+  `"claude"` (handler `full`; `fullNoApps` for any other agent), because their safety is the host
+  hiding them. The redirect list is CLOSED (claude.ai, ChatGPT's stable callback, RFC 8252 loopback);
+  never open it to «any https» — registration is open, so that hands codes to strangers.
 - **MCP tools register only in `registerAllTools` (`app/mcp/toolList.ts`), never directly in the
   route.** claude.ai keeps the tool list it read at connect time and does not act on
-  `list_changed`. `TOOL_LIST_VERSION` is a digest of what a client caches (names, descriptions,
-  schemas, annotations, `_meta`), and every model-visible tool takes it back as the optional
-  `toolsVersion`. A call with another value, or none, still runs, and its text ends with
+  `list_changed`. Each of the three lists (`full`, `fullNoApps`, `read`; ADR-0083) has its own digest
+  in `TOOL_LIST_VERSIONS` (`TOOL_LIST_VERSION` is `full`'s) over what a client caches (names,
+  descriptions, schemas, annotations, `_meta`), and every model-visible tool takes its list's back as
+  the optional `toolsVersion`. A call with another value, or none, still runs, and its text ends with
   `STALE_TOOL_LIST_NOTE` («refresh the connector», for the model only: the card drops it), as does the
   SDK's refusal of a stale call's arguments. A tool registered outside `registerAllTools`
   would stay out of the digest. Keep `toolsVersion` optional: making it required would turn the
@@ -547,7 +556,8 @@ several exist precisely to stop a plausible-looking change.
   `super-admin`, or `admin` with the `worship` ministry (`canUseAdminChat`), from the live access
   snapshot, never while impersonating — the spend would land on someone else. Its five tools call
   the MCP read handlers in process (`adminChatServer.ts`); do not give it a write tool, and do not
-  route it through `/api/mcp` (super-admin OAuth, write tools on the same server). Requests are
+  route it through `/api/mcp` (OAuth grants, a different audience per tier, write tools on the same
+  server). Requests are
   plain text only, so a client cannot forge a tool result or a system turn. Spend is priced from the
   API's own token counts, every attempt in `usage.iterations` (`responseCostMicroUsd`; an unknown
   model is charged at the dearer Opus 5 rate); never pass the request's signal to the SDK (an

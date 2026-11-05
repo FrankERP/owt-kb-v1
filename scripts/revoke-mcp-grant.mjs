@@ -45,6 +45,7 @@ export const GRANT_FIELDS = [
   "sub",
   "clientHash",
   "origin",
+  "client",
   "createdAt",
   "lastRefreshAt",
   "currentRefreshJti",
@@ -113,7 +114,7 @@ function formatGrantLine(g) {
   const state = g.revoked ? `revoked (${g.revokedReason ?? "?"} @ ${g.revokedAt ?? "?"})` : "live";
   return (
     `  ${g._id}\n` +
-    `    sub=${g.sub}  origin=${g.origin}\n` +
+    `    sub=${g.sub}  origin=${g.origin}  client=${g.client ?? "(sin registrar)"}\n` +
     `    created=${g.createdAt ?? "?"}  lastRefresh=${g.lastRefreshAt ?? "?"}  ${state}`
   );
 }
@@ -149,7 +150,7 @@ async function main() {
   // Never fetches clientHash or currentRefreshJti — neither is secret, but
   // neither helps the operator, so the output stays minimal.
   const grants = await client.fetch(
-    `*[_type == $type]{ _id, sub, origin, createdAt, lastRefreshAt, revoked, revokedAt, revokedReason } | order(createdAt desc)`,
+    `*[_type == $type]{ _id, sub, origin, client, createdAt, lastRefreshAt, revoked, revokedAt, revokedReason } | order(createdAt desc)`,
     { type: GRANT_TYPE },
   );
 

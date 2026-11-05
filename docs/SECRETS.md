@@ -481,7 +481,7 @@ verifying the instant the new key is live — a rotated secret cannot check a to
 the old one, by construction. That is **that one environment's grants only**: on production, every
 claude.ai connector must be reconnected from Claude; on preview, only dev-smoke runs are affected
 and must re-run the handshake — no claude.ai connector exists there (it cannot pass Deployment
-Protection; see [docs/MCP.md](MCP.md#adding-the-connector-claudeai)). The other environment, and
+Protection; see [docs/MCP.md](MCP.md#adding-the-connector)). The other environment, and
 the rest of the app, are unaffected — nothing here touches a session cookie or any non-MCP route.
 
 ---

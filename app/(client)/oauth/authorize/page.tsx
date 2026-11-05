@@ -14,17 +14,23 @@ import {
   type AuthorizeErrorPageReason,
 } from "@/app/mcp/oauth/authorizeRequest";
 import { registrationAgeLabel } from "@/app/mcp/oauth/registrationAge";
+import { REDIRECT_TARGET_LABEL, redirectTargetKind } from "@/app/mcp/oauth/redirects";
+import { mcpTierOf } from "@/app/mcp/oauth/tier";
+import { CONSENT_WARNING, TIER_CONSENT_TEXT } from "@/app/mcp/oauth/consentCopy";
 
-// The OAuth consent screen (P0 plan step 7, spec O1/O8). claude.ai sends the
-// browser here to connect the MCP connector; the approval itself is a POST to
+// The OAuth consent screen (P0 plan step 7, spec O1/O8). An agent (Claude,
+// ChatGPT, a program on this computer — ADR-0083) sends the browser here to
+// connect the MCP connector; the approval itself is a POST to
 // `/api/oauth/authorize`, the only thing that mints a code. This page mints
 // nothing and redirects only an error, only to a VERIFIED redirect_uri.
 //
-// Registration is open to anyone, so this screen is what stands between a
-// super-admin who opens someone else's authorize link and a silently issued
+// Registration is open to anyone, so this screen is what stands between an
+// admin who opens someone else's authorize link and a silently issued
 // code (the confused-deputy attack). Hence: the client's name is shown as
-// self-declared and unverified, the exact redirect URI and the registration's
-// age are shown, the warning is explicit, and consent is NEVER remembered —
+// self-declared and unverified, the VERIFIED kind of agent («Se conecta a»,
+// from the closed redirect list), the exact redirect URI, the registration's
+// age and what the connection will be able to do («Podrá», by the member's
+// tier) are shown, the warning is explicit, and consent is NEVER remembered —
 // every request renders this page and needs its own «Permitir».
 //
 // Gated by the session middleware (`proxy.ts`), deliberately: a cookie-less
@@ -51,7 +57,7 @@ const ERROR_PAGE_TEXT: Record<AuthorizeErrorPageReason, string> = {
     "La dirección de regreso de esta solicitud no coincide con la que registró la aplicación. No se autorizó nada.",
 };
 
-/** The dt/dd label style, shared by the three facts. */
+/** The dt/dd label style, shared by the facts. */
 const FACT_LABEL = "font-label text-[11px] uppercase tracking-widest text-ink-dim";
 
 function Screen({ title, children }: { title: string; children: ReactNode }) {
@@ -79,7 +85,7 @@ export default async function AuthorizePage({
     if (preflight.response.status === 404) notFound();
     return (
       <Screen title="No disponible">
-        <Message>La conexión con Claude no está disponible en este momento.</Message>
+        <Message>La conexión con agentes de IA no está disponible en este momento.</Message>
       </Screen>
     );
   }
@@ -89,7 +95,7 @@ export default async function AuthorizePage({
   if (!session) {
     return (
       <Screen title="Inicia sesión">
-        <Message>Necesitas una sesión activa de super-admin para autorizar una conexión.</Message>
+        <Message>Necesitas una sesión activa de administrador para autorizar una conexión.</Message>
       </Screen>
     );
   }
@@ -101,10 +107,11 @@ export default async function AuthorizePage({
     );
   }
   const access = await getMemberAccess(session.user.sanityId);
-  if (!access.active || access.role !== "super-admin") {
+  const tier = mcpTierOf(access);
+  if (tier === null) {
     return (
       <Screen title="Sin permiso">
-        <Message>Sólo un super-admin puede autorizar conexiones con Claude.</Message>
+        <Message>Solo los administradores de Alabanza pueden conectar un agente de IA.</Message>
       </Screen>
     );
   }
@@ -120,6 +127,8 @@ export default async function AuthorizePage({
   if (validation.kind === "error-redirect") redirect(validation.location);
 
   const { request, client } = validation;
+  // Verified by the validator (on this origin's closed list), so never null here; the fallback is defensive.
+  const target = redirectTargetKind(request.redirectUri, origin);
   return (
     <Screen title="Autorizar conexión">
       <Message>Una aplicación pide acceso a Backstage con tu cuenta.</Message>
@@ -131,6 +140,16 @@ export default async function AuthorizePage({
           </dd>
         </div>
         <div>
+          <dt className={FACT_LABEL}>Se conecta a</dt>
+          <dd className="mt-1 font-body text-base text-ink">
+            {target !== null ? REDIRECT_TARGET_LABEL[target] : "Desconocido"}
+          </dd>
+        </div>
+        <div>
+          <dt className={FACT_LABEL}>Podrá</dt>
+          <dd className="mt-1 font-body text-sm text-ink">{TIER_CONSENT_TEXT[tier]}</dd>
+        </div>
+        <div>
           <dt className={FACT_LABEL}>Dirección de regreso</dt>
           <dd className="mt-1 font-body text-sm text-ink break-all">{request.redirectUri}</dd>
         </div>
@@ -140,7 +159,7 @@ export default async function AuthorizePage({
         </div>
       </dl>
       <p role="note" className="rounded-lg border border-warning-fg/40 bg-warning-fg/10 px-4 py-3 font-body text-sm text-warning-strong">
-        Aprueba sólo si acabas de iniciar esta conexión en Claude.
+        {CONSENT_WARNING}
       </p>
       <form method="POST" action="/api/oauth/authorize" className="flex gap-3">
         {authorizeFormFields(request).map(([name, value]) => (

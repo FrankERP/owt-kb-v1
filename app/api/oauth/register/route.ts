@@ -12,7 +12,7 @@
 // store, not even transitively for types.
 
 import { mcpRoutePreflight } from "@/app/mcp/oauth/guard";
-import { registrationErrorResponse, jsonNoStore } from "@/app/mcp/oauth/responses";
+import { registrationErrorResponse, jsonNoStore, type RegistrationErrorCode } from "@/app/mcp/oauth/responses";
 import { isRedirectUriAllowed, shouldLogRefusedRedirect } from "@/app/mcp/oauth/redirects";
 import { hasMediaType, readCappedBody } from "@/app/mcp/oauth/requestBody";
 import { signClientId } from "@/app/mcp/oauth/tokens";
@@ -30,7 +30,7 @@ const MAX_CLIENT_NAME_LENGTH = 200;
 const SUPPORTED_GRANT_TYPES = ["authorization_code", "refresh_token"] as const;
 const SUPPORTED_RESPONSE_TYPES = ["code"] as const;
 
-// `client_name` is shown to a super-admin at consent time (unverified), so it
+// `client_name` is shown to an admin at consent time (unverified), so it
 // must reject anything that can reorder or hide what they read — not just
 // C0/C1 control characters (`\p{Cc}`, which the old `[\x00-\x1F\x7F]` only
 // half-covered: it caught C0 but not C1 codes like U+0085/U+009B) but format
@@ -44,6 +44,16 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((v) => typeof v === "string");
 }
 
+/**
+ * A refused registration, with ONE fixed log line naming the error and its fixed description —
+ * never the body or anything the caller sent — so a new agent that cannot register (an
+ * unsupported `token_endpoint_auth_method`, no allowed redirect) is diagnosable from the logs.
+ */
+function refuse(error: RegistrationErrorCode, description?: string): Response {
+  console.warn(`[mcp-oauth] registration refused: ${error}${description !== undefined ? ` (${description})` : ""}`);
+  return registrationErrorResponse(error, description);
+}
+
 export async function POST(request: Request): Promise<Response> {
   const preflight = mcpRoutePreflight(request);
   if (!preflight.ok) return preflight.response;
@@ -52,28 +62,32 @@ export async function POST(request: Request): Promise<Response> {
   // Parameters (e.g. `; charset=utf-8`) are ignored — many JSON-posting HTTP
   // clients add one, and the media type is what matters here.
   if (!hasMediaType(request.headers.get("content-type"), "application/json")) {
-    return registrationErrorResponse("invalid_client_metadata", "Content-Type must be application/json");
+    return refuse("invalid_client_metadata", "Content-Type must be application/json");
   }
 
   // Capped twice: an over-cap DECLARED length is refused before reading
   // anything, and the read stops once more than the cap has actually arrived.
   const bodyRead = await readCappedBody(request, MAX_BODY_BYTES);
   if (!bodyRead.ok) {
-    return registrationErrorResponse("invalid_client_metadata", "request body too large");
+    return refuse("invalid_client_metadata", "request body too large");
   }
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(new TextDecoder().decode(bodyRead.bytes));
   } catch {
-    return registrationErrorResponse("invalid_client_metadata", "malformed JSON");
+    return refuse("invalid_client_metadata", "malformed JSON");
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return registrationErrorResponse("invalid_client_metadata", "request body must be a JSON object");
+    return refuse("invalid_client_metadata", "request body must be a JSON object");
   }
   const body = parsed as Record<string, unknown>;
 
-  // redirect_uris: 1–5 strings, every one on this origin's allowlist.
+  // redirect_uris: 1–5 strings. Only the ones on this origin's allowlist are
+  // registered (RFC 7591 §3.2.1 lets the server replace requested metadata; the
+  // 201 states what was registered): a client that lists a web forwarder next
+  // to its loopback URIs (VS Code) still registers, with the loopback ones.
+  // Nothing off-list is ever signed. No allowed URI at all → refused.
   const redirectUris = body.redirect_uris;
   if (
     !Array.isArray(redirectUris) ||
@@ -81,41 +95,42 @@ export async function POST(request: Request): Promise<Response> {
     redirectUris.length > MAX_REDIRECT_URIS ||
     !redirectUris.every((u): u is string => typeof u === "string")
   ) {
-    return registrationErrorResponse("invalid_client_metadata", "redirect_uris must be an array of 1-5 strings");
+    return refuse("invalid_client_metadata", "redirect_uris must be an array of 1-5 strings");
   }
-  // Check every URI — never short-circuit on the first refusal — so a claude
-  // host near-miss later in the array still gets logged even when an earlier
-  // URI (e.g. a loopback refused on production) is what's refused first. At
-  // most one line per request: only the FIRST refused URI that
-  // `shouldLogRefusedRedirect` accepts is logged.
-  let hasRefusedUri = false;
+  // Check every URI — never short-circuit on the first refusal — so a near-miss
+  // on a known agent host later in the array still gets logged. At most one
+  // line per request: only the FIRST refused URI that `shouldLogRefusedRedirect`
+  // accepts is logged.
+  const allowedUris: string[] = [];
   let loggedRefusal = false;
   for (const uri of redirectUris) {
-    if (isRedirectUriAllowed(uri, origin)) continue;
-    hasRefusedUri = true;
+    if (isRedirectUriAllowed(uri, origin)) {
+      allowedUris.push(uri);
+      continue;
+    }
     if (!loggedRefusal && shouldLogRefusedRedirect(uri)) {
       // Never the client_id, never the body — just the refused URI.
-      console.warn("[mcp-oauth] refused redirect_uri from a claude host:", JSON.stringify(uri));
+      console.warn("[mcp-oauth] refused redirect_uri from a known agent host:", JSON.stringify(uri));
       loggedRefusal = true;
     }
   }
-  if (hasRefusedUri) {
-    return registrationErrorResponse("invalid_redirect_uri");
+  if (allowedUris.length === 0) {
+    return refuse("invalid_redirect_uri");
   }
 
   // token_endpoint_auth_method: only "none" is ever accepted (public clients).
   const authMethod = body.token_endpoint_auth_method;
   if (authMethod !== undefined && authMethod !== "none") {
-    return registrationErrorResponse("invalid_client_metadata", 'token_endpoint_auth_method must be "none"');
+    return refuse("invalid_client_metadata", 'token_endpoint_auth_method must be "none"');
   }
 
   // grant_types / response_types: type-checked only (R14) — never rejected for
   // their CONTENT. The 201 always states what this server actually supports.
   if (body.grant_types !== undefined && !isStringArray(body.grant_types)) {
-    return registrationErrorResponse("invalid_client_metadata", "grant_types must be an array of strings");
+    return refuse("invalid_client_metadata", "grant_types must be an array of strings");
   }
   if (body.response_types !== undefined && !isStringArray(body.response_types)) {
-    return registrationErrorResponse("invalid_client_metadata", "response_types must be an array of strings");
+    return refuse("invalid_client_metadata", "response_types must be an array of strings");
   }
 
   // client_name: optional, shown unverified on the consent page later — reject
@@ -135,7 +150,7 @@ export async function POST(request: Request): Promise<Response> {
       clientNameRaw.length > MAX_CLIENT_NAME_LENGTH ||
       CONTROL_OR_FORMAT_CHAR_RE.test(clientNameRaw)
     ) {
-      return registrationErrorResponse("invalid_client_metadata", "client_name is invalid");
+      return refuse("invalid_client_metadata", "client_name is invalid");
     }
     if (clientNameRaw.trim() !== "") clientName = clientNameRaw;
   }
@@ -145,7 +160,7 @@ export async function POST(request: Request): Promise<Response> {
   const clientId = await signClientId({
     key,
     origin,
-    redirectUris,
+    redirectUris: allowedUris,
     now,
     ...(clientName !== undefined ? { clientName } : {}),
   });
@@ -154,7 +169,7 @@ export async function POST(request: Request): Promise<Response> {
     {
       client_id: clientId,
       client_id_issued_at: issuedAt,
-      redirect_uris: redirectUris,
+      redirect_uris: allowedUris,
       token_endpoint_auth_method: "none",
       grant_types: SUPPORTED_GRANT_TYPES,
       response_types: SUPPORTED_RESPONSE_TYPES,

@@ -103,3 +103,9 @@ rounds 5 and 6; Frank chose «También desde la tarjeta» and «Solo de hoy en a
 - `deleteRole`'s dependency and receipt reads are the route's own, non-strict (`run`/`runRaw` turn a
   malformed answer into `[]`); the chat inherits that from `/admin` unchanged. Making them strict is a
   change to `/admin`'s writer too, left for its own delivery.
+
+## Addendum — ADR-0083, 2026-11-05
+
+The app-only tools this record relies on are registered only for a grant whose client is claude.ai.
+Another agent's grant never lists them, so the «host hides them from the model» guarantee holds
+wherever they exist.

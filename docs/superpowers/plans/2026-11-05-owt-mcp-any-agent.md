@@ -432,7 +432,10 @@ non-blocking items were adopted afterwards and are listed here so the diff revie
    tests derive "today's list" from the base registration and pin the `full` digest against the
    PR's base, not 45/40.
 4. **ADR number** = the next free on both `main` and `preview` at PR time (0084 today: preview has
-   0083); every addendum («since ADR-00xx») uses the real number.
+   0083); every addendum («since ADR-00xx») uses the real number. **Corrected at build:** the
+   number is 0083, because `adrIndex.test.ts` requires consecutive numbers on `main` and records
+   are numbered in the order they reach it; the merge into `preview` moves the solver-ops record
+   there from 0083 to 0084, as the ADR-0082 merge did.
 5. **`maxSubscriptions: 0` and `listChanged: false` on all three handlers**; a route test pins the
    `subscriptions/listen` refusal on each (O2/O9: no held streams).
 6. **Host-dependent human gates.** ADR-0072's «the Claude app's permission prompt is the human gate»
