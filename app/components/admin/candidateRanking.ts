@@ -26,7 +26,7 @@ export interface RankMember {
   memberType?: string[];
   /** Declared instrument seats (spec D6): absent or empty = declares nothing. */
   instruments?: string[];
-  /** «Canta y toca a la vez» (Miembros): may hold a voice and an instrument on
+  /** «Canta y toca a la vez» (Personas): may hold a voice and an instrument on
    *  one service. Absent = no (`seatsClash`, ADR-0078). */
   singsAndPlays?: boolean;
   unavailableDates?: string[];
@@ -261,7 +261,7 @@ export function rankCandidates(input: {
 
 /**
  * C2's sentence. A voice + instrument clash also names the way out — the
- * Miembros checkbox (ADR-0078) — so an admin refused for Frank's twin is told
+ * Personas checkbox (ADR-0078) — so an admin refused for Frank's twin is told
  * how to allow it, not just that it is refused. The picker, the drag notice and
  * the MCP judges all show this string.
  */

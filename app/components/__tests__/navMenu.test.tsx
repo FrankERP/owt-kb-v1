@@ -1,7 +1,9 @@
 /** @vitest-environment jsdom */
-// NavMenu is now an ACCOUNT menu, all widths (M1 follow-up F1): the destinations
-// it used to repeat (Calendario, #Tags, Oasis Kids, Planear Kids, Admin) live in
-// NavLinks/BottomNav now, and NavMenu keeps only Mi semana, Ajustes and Cerrar sesión.
+// NavMenu is an ACCOUNT menu, all widths (M1 follow-up F1): the ministry
+// destinations (Calendario, Oasis Kids, Planear Kids, Admin) live in
+// NavLinks/BottomNav, and NavMenu keeps Mi semana, Disponibilidad, Ajustes,
+// Cerrar sesión — plus Super admin for the super-admin, which belongs to no
+// ministry (2026-10-29).
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MotionProvider } from "@/app/components/ui/MotionProvider";
@@ -40,6 +42,17 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("NavMenu — account menu", () => {
+  it("carries Super admin for the super-admin only (no ministry's nav holds it)", async () => {
+    session = { user: { ...adminUser, role: "super-admin" } };
+    mount();
+    await act(async () => {});
+    fireEvent.click(screen.getByRole("button", { name: /Menú de usuario/ }));
+    const menu = screen.getByRole("menu", { name: "Menú de cuenta" });
+    const items = Array.from(menu.querySelectorAll('[role="menuitem"]')).map((n) => n.textContent?.trim());
+    expect(items).toEqual(["Mi semana", "Disponibilidad", "Ajustes", "Super admin", "Cerrar sesión"]);
+    expect(screen.getByRole("menuitem", { name: "Super admin" }).getAttribute("href")).toBe("/super-admin");
+  });
+
   it("once opened, shows Mi semana, Disponibilidad, Ajustes, Cerrar sesión and none of the retired destinations", async () => {
     mount();
     await act(async () => {});

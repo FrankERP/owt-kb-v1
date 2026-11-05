@@ -82,7 +82,7 @@ export function fohSeatDef(label: string): SeatDef {
  * and the grid flags. Same category always clashes (nobody sings Lead and BGV at
  * once, or plays Keys and Drums). A voice seat and an instrument clash too,
  * unless the member is marked «Canta y toca a la vez» (`singsAndPlays`, set in
- * Miembros): Frank (Lead + EG) and Mkz (Lead + Bass) lead while they play, and
+ * Personas): Frank (Lead + EG) and Mkz (Lead + Bass) lead while they play, and
  * nobody else does — Frank chose «nadie, salvo una lista» on 2026-10-29, after
  * Auto's instrument filler seated Tony on Drums while the solver had him in Coro
  * (2026-11-29; ADR-0078). FOH alongside a voice or an instrument is left as it
@@ -101,11 +101,11 @@ export function seatsClash(
 }
 
 /**
- * The way out of a voice + instrument clash, as words: the Miembros checkbox
+ * The way out of a voice + instrument clash, as words: the Personas checkbox
  * (ADR-0078). ONE constant, so C2's sentence (`clashReason`) and the server's
  * refusal (`seatClashSentence`) cannot drift apart.
  */
-export const SINGS_AND_PLAYS_HINT = "para cantar y tocar en un servicio, marca «Canta y toca a la vez» en Miembros";
+export const SINGS_AND_PLAYS_HINT = "para cantar y tocar en un servicio, marca «Canta y toca a la vez» en Personas (super admin)";
 
 /**
  * Every clashing PAIR among one member's seats on one service, as index pairs

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import Navbar from "@/app/components/Navbar";
 import CalendarView, { ActiveDay } from "@/app/components/CalendarView";
@@ -9,6 +10,10 @@ import { requireWorshipPage } from "@/app/utils/worshipPageGate";
 import { seatPhotos } from "@/app/utils/teamSections";
 import { myNameFromSession } from "@/app/utils/agenda";
 import { pastorMessageBodyOf } from "@/app/utils/serviceThread";
+import { getMemberAccess } from "@/app/utils/memberAccess";
+import { isMinistryMember } from "@/app/utils/ministryAccess";
+import { KIDS_SEATS } from "@/app/utils/kidsTypes";
+import { CALENDAR_VIEW_COOKIE, kidsActiveDay, parseCalendarView, type KidsCalendarRow } from "@/app/utils/calendarMinistry";
 
 export const metadata: Metadata = {
   title: "Calendario — Oasis Worship Team",
@@ -46,6 +51,16 @@ const ROLE_FIELDS = `_id, week,
   Chorus[]->{ member_name, alias, "photo": ${PHOTO} },
   "pastor_message": ${pastorMessageBodyOf("^._id")}`;
 
+// Oasis Kids Sundays, for a member of Kids too (`$withKids` false reads nothing, so a
+// worship-only reader never receives another ministry's days). Published only, and the
+// FILTER is `published == true` like every member-facing `kidsSchedule` read
+// (ADR-0022). Whether the reader is in a seat's pair is decided by member id here;
+// `coalesce` because an empty seat dereferences to null and `$me in null` is null.
+const KIDS_SEAT = (seat: string) => `"${seat}": ${seat}->{ name, "mine": coalesce($me in members[]._ref, false) }`;
+const KIDS_FRAGMENT = `"kids": *[_type == "kidsSchedule" && $withKids && published == true && date >= $weekStart && date <= $limit] | order(date asc) {
+    date, ${KIDS_SEATS.map(KIDS_SEAT).join(", ")}
+  }`;
+
 const SCHEDULE_QUERY = `{
   "sundays":     *[_type == "sunday_role"   && week >= $today && week <= $limit && published != false] | order(week asc)  { ${ROLE_FIELDS} },
   "saturdays":   *[_type == "saturday_role" && week >= $today && week <= $limit && published != false] | order(week asc)  { ${ROLE_FIELDS} },
@@ -56,10 +71,11 @@ const SCHEDULE_QUERY = `{
     songs[]{ play_key, medley_tag, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "bpm": song->bpm, "key": song->key, "leads": leads[]->{ member_name, alias } },
     ${ROLE_FIELDS}
   },
-  "viewer": *[_type == "teamMembers" && _id == $me][0]{ memberType }
+  "viewer": *[_type == "teamMembers" && _id == $me][0]{ memberType },
+  ${KIDS_FRAGMENT}
 }`;
 
-async function getScheduleData(viewMonth: string | null, today: string, me: string) {
+async function getScheduleData(viewMonth: string | null, today: string, me: string, withKids: boolean) {
   let fetchFrom: string;
   let limit: string;
   let weekStart: string;
@@ -94,7 +110,8 @@ async function getScheduleData(viewMonth: string | null, today: string, me: stri
     satSetlists: Setlist[];
     specials: SpecialRole[];
     viewer: { memberType?: string[] } | null;
-  }>(SCHEDULE_QUERY, { today: fetchFrom, limit, weekStart, me });
+    kids: KidsCalendarRow[];
+  }>(SCHEDULE_QUERY, { today: fetchFrom, limit, weekStart, me, withKids });
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -112,7 +129,12 @@ export default async function SchedulePage({
   // strip's marker and the agenda's countdowns can never read a different
   // "now" than the data they describe.
   const today = localToday();
-  const { sundays, saturdays, sunSetlists, satSetlists, specials, viewer } = await getScheduleData(viewMonth, today, session.user.sanityId);
+  // The page is worship-gated, so a Kids member here is in both ministries: they get
+  // the Kids Sundays and the filter. The access read is the 30s-TTL entry the gate
+  // just filled.
+  const withKids = isMinistryMember(await getMemberAccess(session.user.sanityId), "kids");
+  const ministryView = withKids ? parseCalendarView((await cookies()).get(CALENDAR_VIEW_COOKIE)?.value) : undefined;
+  const { sundays, saturdays, sunSetlists, satSetlists, specials, viewer, kids } = await getScheduleData(viewMonth, today, session.user.sanityId, withKids);
 
   // Fail closed on an ambiguous weekend target. A duplicate canonical role or
   // setlist for the same week yields NO entry for that week rather than a
@@ -183,6 +205,15 @@ export default async function SchedulePage({
     });
   });
 
+  // One Kids entry per Sunday: a duplicate date fails closed, like the weekend reads.
+  if (withKids) {
+    const kidsDays = indexUniqueByKey(
+      (Array.isArray(kids) ? kids : []).map(kidsActiveDay).filter((d): d is ActiveDay => d !== null),
+      (d) => d.date,
+    );
+    kidsDays.forEach((entry, dateStr) => push(dateStr, entry));
+  }
+
   return (
     <div>
       <Navbar title="Calendario" />
@@ -200,6 +231,7 @@ export default async function SchedulePage({
           viewerTypes={viewer?.memberType ?? null}
           viewerName={myNameFromSession(session.user)}
           viewerIsAdmin={["super-admin", "admin"].includes(session.user.role)}
+          ministryView={ministryView}
         />
       </div>
     </div>

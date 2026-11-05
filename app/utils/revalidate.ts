@@ -12,11 +12,13 @@ export function revalidateServiceViews() {
 }
 
 // Kids pair / schedule / availability changes → the member view, the planner,
-// and `/me` (which carries the member's own upcoming kids assignments).
+// `/me` (which carries the member's own upcoming kids assignments) and the
+// Calendario (which shows Kids Sundays to a member of both ministries).
 export function revalidateKidsViews() {
   revalidatePath("/kids");
   revalidatePath("/kids/admin");
   revalidatePath("/me");
+  revalidatePath("/schedule");
 }
 
 // Song content changes → home song list, song pages, the library index.

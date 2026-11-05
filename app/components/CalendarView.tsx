@@ -33,6 +33,14 @@
 // sitting in a screenful of blank space. One fade, no height jump, nothing
 // overlapping.
 //
+// The ministry filter (2026-10-29): a member of Alabanza AND Oasis Kids gets «Todos ·
+// Alabanza · Oasis Kids» beside the mode control, and the whole page — the count line,
+// the strip, the agenda, the grid, the legend — reads the FILTERED days, so no surface
+// can count a Sunday the reader chose to hide. Filtering is client-side over what the
+// server already sent (both ministries' days, only to someone in both), so a switch is
+// instant; the choice is written to a cookie the server reads on the next visit
+// (`calendarMinistry.ts`). Nobody in one ministry sees the control.
+//
 // `DayStrip` is keyed on `anchorMonth` because it seeds its own week state from the
 // props once: a month change is a route push that re-renders this component with new
 // props but does NOT remount it, and without the key the strip would keep showing
@@ -52,6 +60,12 @@ import ScheduleHeader from "./ScheduleHeader";
 import CueDialog from "./ui/CueDialog";
 import Presence from "./ui/Presence";
 import SegmentedControl from "./ui/SegmentedControl";
+import KidsDayCard from "./KidsDayCard";
+import { CALENDAR_VIEW_COOKIE, CALENDAR_VIEW_MAX_AGE, CALENDAR_VIEW_OPTIONS, filterActiveDays, type CalendarView as MinistryView } from "../utils/calendarMinistry";
+import type { KidsSeat } from "../utils/kidsTypes";
+
+/** One seat of an Oasis Kids Sunday: the pair standing in it, and whether the viewer is in that pair. */
+export type KidsDaySeat = { seat: KidsSeat; label: string; pair: string | null; mine: boolean };
 
 export type ActiveDay = {
   day: string; // "Sábado" | "Domingo" | any special service name
@@ -68,6 +82,8 @@ export type ActiveDay = {
   roleId?: string;
   /** The service document's `_id` (weekend role or special) — the DayCard's «Mensajes». */
   serviceId?: string;
+  /** Present only on an Oasis Kids Sunday (`kidsActiveDay`), which carries no worship seats. */
+  kids?: { seats: KidsDaySeat[] };
 };
 
 interface Props {
@@ -81,6 +97,10 @@ interface Props {
   viewerTypes?: string[] | null;
   viewerName?: string;
   viewerIsAdmin?: boolean;
+  /** Set only for a member of more than one ministry with a calendar: the remembered
+   *  view the server read from the cookie. Absent, no filter is shown and every day
+   *  in `activeDays` is the reader's one ministry. */
+  ministryView?: MinistryView;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -94,13 +114,29 @@ const LEGEND: ReadonlyArray<readonly [string, string]> = [
   [TONE_RAIL.sat, "Sábado"],
   [TONE_RAIL.sun, "Domingo"],
   [TONE_RAIL.special, "Especial"],
+  [TONE_RAIL.kids, "Oasis Kids"],
   ["bg-positive-fg", "Te toca"],
 ];
 
 // ─── Root component ───────────────────────────────────────────────────────────
 
-export default function CalendarView({ activeDays, viewMonth, todayStr, photos, viewerTypes, viewerName, viewerIsAdmin }: Props) {
+export default function CalendarView({ activeDays: allDays, viewMonth, todayStr, photos, viewerTypes, viewerName, viewerIsAdmin, ministryView }: Props) {
   const [mode, setMode] = useState<"agenda" | "month">("agenda");
+  const [view, setView] = useState<MinistryView>(ministryView ?? "all");
+  const pickView = useCallback((v: MinistryView) => {
+    setView(v);
+    // Remembered on this device for the next visit. A blocked cookie only costs the
+    // memory, never the switch itself.
+    try {
+      const secure = window.location.protocol === "https:" ? "; secure" : "";
+      document.cookie = `${CALENDAR_VIEW_COOKIE}=${v}; path=/; max-age=${CALENDAR_VIEW_MAX_AGE}; samesite=lax${secure}`;
+    } catch { /* ignore */ }
+  }, []);
+  // Without the prop there is nothing to filter: the server sent one ministry.
+  const activeDays = useMemo(
+    () => (ministryView ? filterActiveDays(allDays, view) : allDays),
+    [allDays, ministryView, view],
+  );
   // `false` until the reader actually flips the SegmentedControl: first paint
   // renders at rest (M0b — never `appear` above the fold, ADR-0031), the
   // crossfade exists for switches only (ImpersonationBanner's `activeAtLoad`
@@ -137,6 +173,8 @@ export default function CalendarView({ activeDays, viewMonth, todayStr, photos, 
       });
 
   const isEmpty = Object.keys(activeDays).length === 0;
+  // The Kids dot joins the legend only when a Kids Sunday is on screen.
+  const hasKids = Object.values(activeDays).some((entries) => entries.some((e) => e.kids));
   const emptyMessage = viewMonth
     ? `No hay servicios en ${monthRangeLabel(viewMonth, WINDOW_MONTHS)}.`
     : "No hay servicios próximos.";
@@ -176,7 +214,16 @@ export default function CalendarView({ activeDays, viewMonth, todayStr, photos, 
         myName={myName}
       />
 
-      <div className="mb-8 flex justify-center">
+      <div className="mb-8 flex flex-wrap items-center justify-center gap-3">
+        {ministryView && (
+          <SegmentedControl
+            label="Ministerio"
+            tone="filled"
+            value={view}
+            onChange={pickView}
+            options={CALENDAR_VIEW_OPTIONS}
+          />
+        )}
         <SegmentedControl
           label="Vista"
           tone="filled"
@@ -222,7 +269,7 @@ export default function CalendarView({ activeDays, viewMonth, todayStr, photos, 
                   shows two dots, which needs no explaining. Under the months, where
                   the eye arrives after reading them. */}
               <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-2">
-                {LEGEND.filter(([, label]) => label !== "Te toca" || myName).map(([dot, label]) => (
+                {LEGEND.filter(([, label]) => (label !== "Te toca" || myName) && (label !== "Oasis Kids" || hasKids)).map(([dot, label]) => (
                   <span key={label} className="flex items-center gap-2">
                     <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
                     <span className="font-body text-[13px] text-ink-muted">{label}</span>
@@ -239,7 +286,9 @@ export default function CalendarView({ activeDays, viewMonth, todayStr, photos, 
         <CueDialog open title={dayTitle(selected)} label={dayTitle(selected)} mode="sheet" size="md" onDismiss={dismiss}>
           <div className="max-h-[78svh] space-y-10 overflow-y-auto px-5 pb-8 pt-1 scrollbar-hide">
             {selectedLine && <p className="font-body text-[17px] leading-snug text-ink-dim">{selectedLine}</p>}
-            {selectedEntries.map((d, i) => (
+            {selectedEntries.map((d, i) => d.kids ? (
+              <KidsDayCard key={i} seats={d.kids.seats} />
+            ) : (
               <DayCard
                 key={i}
                 day={d.day}
