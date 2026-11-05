@@ -22,7 +22,7 @@ and, offered «only what I named» or «everything as in the page» (decision ca
 aplicar el mes, reglas y canciones. Personas sigue siendo solo tuyo.» Answers already given on this
 plan (19:54Z, «sí a 1, 2 y 3»): admins may set the «Mensaje del pastor»; the notification-loop and
 phished-admin risks (§4) are accepted for now with the per-person cap and the «new grant» email as
-the first follow-ups — given for the narrower scope; the release message asks him to reconfirm them
+the first follow-ups — given for the narrower scope; he is asked to reconfirm them, with the plan and before the build,
 for this one (§9).
 
 **Read as:** a live worship admin's connection, on any agent, reaches every MCP tool whose `/admin`
@@ -186,8 +186,11 @@ as in the app's planner; on other hosts nobody can force (ADR-0083 §4.1), admin
 
 - `TIER_CONSENT_TEXT.admin`: «Lo mismo que puedes hacer como admin de Alabanza en la página: ver
   y cambiar servicios, equipos, setlists, propuestas, mensajes y canciones; publicar, borrar
-  servicios y generar el mes. Esos cambios avisan al equipo como en la página. No podrá ver ni
-  cambiar personas ni Oasis Kids.»
+  servicios y generar el mes. Esos cambios avisan al equipo como en la página. Verá los nombres,
+  la disponibilidad y las notas del equipo, como en la página. No podrá administrar personas
+  (altas, correos, accesos) ni Oasis Kids.» It names what is excluded, never «no podrá ver
+  personas»: the admin tier reads member names, seats, availability and its free-text notes
+  (ADR-0083, «Data leaves to the agent's provider»).
 - **A grant approved under «Solo leer … No podrá cambiar nada» must not gain writes without a new
   consent.** The grant's own `createdAt` (stored, projected by `GRANT_READ_FIELDS`,
   `grantDocument.ts:157-168`, set once at creation, never by a refresh) separates the two
@@ -208,12 +211,18 @@ as in the app's planner; on other hosts nobody can force (ADR-0083 §4.1), admin
   - So an admin who connected under the read-only wording keeps exactly the list they approved
     (same digest, no refresh note) and gets the rest only by connecting again under the new
     wording. Nobody has to revoke anything.
-  - **Residual window, checked once:** right after the production alias and SHA are verified, the
-    operator lists unrevoked grants, on both origins, whose subject is not a super-admin and whose
-    `createdAt` is within [cutoff, `ready` + 1 h] (a consent page rendered by old code and approved
-    late; the page has no expiry of its own). Any found → Frank is told in the same turn with the
-    revoke dry run; the revoke is a production write and runs only on his explicit word. A page
-    left open longer than that is named as residual.
+  - **Residual window, checked once it has closed:** the window is [cutoff, `ready` + 1 h] (a
+    consent page rendered by old code and approved late; the page has no expiry of its own). Its
+    grants can only exist AFTER the cutoff, which is still in the future when the prod alias is
+    verified, so a check at that moment would always be empty. The check therefore runs once
+    `ready` + 1 h has passed (a scheduled wake-up set at the alias check, never a polling loop):
+    the operator lists unrevoked grants, on both origins, whose subject is not a super-admin and
+    whose `createdAt` is within the window. If `ready` lands after the cutoff (a slow or queued
+    build), a first check of [cutoff, `ready`] also runs at once, at the alias check. Any found →
+    Frank is told in the same turn with the revoke dry run; the revoke is a production write and
+    runs only on his explicit word. A page left open longer than that is named as residual. The
+    live proof does not wait for this check (Mkz connects under the NEW page, so his grant is not
+    the one the window is about).
 - **Rejected:** storing the consented tier or a consent version (ADR-0083 keeps tiers out of
   grants; `createdAt` already carries the boundary); revoking old admin grants at release.
 
@@ -291,7 +300,10 @@ digests once, on purpose: Frank's Claude and his ChatGPT each get one refresh no
   cutoff and its reset on re-release; §3.7; the restated phishing risk and the notification loops
   with Frank's answers; «never always-allow write tools in a local agent» repeated for admins; the
   rollback paragraph of §7. An addendum, not a new ADR: Frank's same decision, in the slices
-  ADR-0083 announced.
+  ADR-0083 announced (the self-addendum shape ADR-0066 already uses). Because the addendum
+  reverses the «read-only» in ADR-0083's title, the title line, the **Status** line (`Accepted,
+  amended 2026-11-05 by its addendum: worship admins write as in the page`) and the README index
+  entry change together; the filename stays, so links hold.
 - `docs/MCP.md`: Tiers table (admin rows and counts), consent text, the smoke's tier and probe,
   status banner, and every line that says the connector is «for one super-admin» (e.g. the
   endpoints section, `docs/MCP.md:1674`). ADR-0062/0066/0072 consequence lines: «app-only tools:
@@ -331,11 +343,14 @@ digests once, on purpose: Frank's Claude and his ChatGPT each get one refresh no
 
 Per CLAUDE.md: gates → one merge-range code review → fixes → gates → `preview` → dev alias + SHA →
 the cutoff commit (branch, then `preview`) → dev smoke on the operator's tier (§3.6 says why not
-the admin tier) → PR to `main` → `gates` → merge → prod alias + SHA → §3.5's window check at once.
+the admin tier) → PR to `main` → `gates` → merge → prod alias + SHA → §3.5's window check, scheduled
+for `ready` + 1 h (plus an immediate one if `ready` is past the cutoff).
 **If the merge will land after the cutoff** (a `strict` update or a slow `gates` run), the cutoff is
-moved later in a new commit and the gates re-run before merging — never merge past it. Frank is told about the one refresh note (§3.7) and asked to reconfirm
-§9's risk answers for this scope (the release does not wait on a reconfirmation he already gave;
-it waits only if he withdraws it).
+moved later in a new commit, and that commit takes the same road as the first cutoff commit:
+branch → gates → `preview` → dev alias + SHA re-verified → only then the PR to `main` updated and
+its `gates` re-run. Auto-merge, if used, is armed only on a commit already seen on dev. Never merge
+past the cutoff. Frank is told about the one refresh note (§3.7). The risk reconfirmation for the
+wider scope is asked with the plan (§9), not at release: the release waits for his answer.
 
 Live proof, with Frank: Mkz connects; the consent shows the admin text; `tools/list` has 35 tools
 (ChatGPT) or 40 (Claude); `list_members` and the Kids tools are absent; Mkz edits the setlist of a
@@ -365,7 +380,11 @@ like any other and admins get it (the app's rules POST admits them).
 
 
 Answered: pastor message yes; risks accepted for now (19:54Z); scope «Todo como en la página»
-(19:55Z). Asked again with the release message, because the scope grew after he answered: the
-phished-admin and notification-loop risks of §4 now cover publishing, deleting, generating and
-songs. Asked with the plan: people and Kids stay out (as the card said for people; Kids by
-ministry); say if Kids should follow a worship admin who is also a Kids manager.
+(19:55Z). **Asked with the plan, and answered before the build starts** (the release cannot
+proceed without them):
+1. Reconfirm the risk acceptance for the wider scope: the phished-admin and notification-loop
+   risks of §4 now cover publishing, deleting, generating and songs, not just setlists and
+   messages.
+2. People and Kids stay out of the admin tier (people as the card said; Kids by ministry), even for
+   a worship admin who also manages Kids — or should Kids follow that admin's Kids management?
+3. «Reglas» is not delivered (above).
