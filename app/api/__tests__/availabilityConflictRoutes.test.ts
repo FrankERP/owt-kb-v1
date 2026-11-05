@@ -86,6 +86,19 @@ describe("the availability-conflict routes' guard", () => {
     expect(h.applyAvailabilityFix).toHaveBeenCalledWith(expect.objectContaining({ replacements }));
   });
 
+  it("passes «Aplicar de todos modos»'s keys through, deduplicated, and refuses an empty, malformed or oversized waiver", async () => {
+    h.session = { user: { sanityId: "m-frank", role: "admin" } };
+    expect((await applyPOST(req({ ...APPLY, waive: ["m:a", "m:a", "s:b"] }))).status).toBe(200);
+    expect(h.applyAvailabilityFix).toHaveBeenCalledWith(expect.objectContaining({ waive: ["m:a", "s:b"] }));
+    h.applyAvailabilityFix.mockClear();
+    for (const waive of [[], [""], "m:a", [1], Array.from({ length: 33 }, (_, i) => `k${i}`)]) {
+      expect((await applyPOST(req({ ...APPLY, waive }))).status).toBe(400);
+    }
+    expect(h.applyAvailabilityFix).not.toHaveBeenCalled();
+    expect((await applyPOST(req(APPLY))).status).toBe(200);
+    expect(h.applyAvailabilityFix.mock.calls[0][0]).not.toHaveProperty("waive");
+  });
+
   it("refuses a malformed body with 400", async () => {
     h.session = { user: { sanityId: "m-frank", role: "admin" } };
     expect((await applyPOST(req({ ...APPLY, replacements: [{ rowId: "coro" }] }))).status).toBe(400);

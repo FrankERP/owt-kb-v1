@@ -325,6 +325,7 @@ export const INTERNAL_STUDIO_FIELDS: Readonly<Record<string, readonly string[]>>
     "updatedAt",
     "checkedAt",
     "appliedBy",
+    "waived",
     "trigger",
   ],
   // Written only by `app/utils/ministryEventCommit.ts` (ADR-0081).

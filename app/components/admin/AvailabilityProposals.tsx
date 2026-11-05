@@ -31,6 +31,9 @@ const NONE_COPY: Record<NoneReason, string> = {
   unchecked: "No se pudo revisar este servicio (falta el registro de equidad del mes, o el servicio no se puede editar).",
 };
 
+/** Nobody passes every rule, but some options break only a few (plan 2026-11-05). */
+const FALLBACK_INTRO = "Nadie pasa todas las reglas. Estas opciones rompen alguna; aplícala solo si estás de acuerdo:";
+
 const BLOCKED_COPY: Record<BlockedReason, string> = {
   no_token: "El servidor no puede leer los registros privados.",
   sources: "No se pudieron leer los servicios o las reglas.",
@@ -136,11 +139,12 @@ export default function AvailabilityProposals({ fallback, onChanged }: {
     }
   }, [reload]);
 
-  const apply = (c: PanelConflict, option: PanelConflict["options"][number]) =>
+  /** `waive` = the break keys of an option that breaks rules, exactly as this read showed them. */
+  const apply = (c: PanelConflict, option: PanelConflict["options"][number], waive?: string[], busyKey = c.recordId) =>
     post(
-      c.recordId,
+      busyKey,
       `${ENDPOINT}/apply`,
-      { roleId: c.roleId, rev: c.roleRev, memberId: c.memberId, replacements: option.seats.map((s) => ({ rowId: s.rowId, to: s.to })) },
+      { roleId: c.roleId, rev: c.roleRev, memberId: c.memberId, replacements: option.seats.map((s) => ({ rowId: s.rowId, to: s.to })), ...(waive ? { waive } : {}) },
       `Aplicado: ${seatRun(option.seats)} el ${c.service}.`,
     );
 
@@ -229,9 +233,24 @@ export default function AvailabilityProposals({ fallback, onChanged }: {
                           ? <>{"Propuesta: "}<span className="font-semibold text-ink">{seatRun(best.seats)}</span></>
                           : <>
                               {c.none?.seats.length ? `${c.none.seats.map((s) => s.seat).join(", ")}: ` : ""}
-                              <span className="text-negative-fg">{NONE_COPY[c.none?.reason ?? "no_candidate"]}</span>
+                              <span className="text-negative-fg">{c.fallbacks?.length ? FALLBACK_INTRO : NONE_COPY[c.none?.reason ?? "no_candidate"]}</span>
                             </>}
                       </p>
+                      {!best && c.fallbacks && c.fallbacks.length > 0 && (
+                        <ol className="mt-2 space-y-3" data-availability-fallbacks="">
+                          {c.fallbacks.map((f, i) => (
+                            <li key={i} className="space-y-1.5 border-l-2 border-ink/[0.10] pl-3">
+                              <p className="font-body text-[15px] font-semibold text-ink [overflow-wrap:anywhere]">{seatRun(f.seats)}</p>
+                              <ul className="list-disc space-y-0.5 pl-5 font-body text-sm text-ink-muted">
+                                {f.breaks.map((b) => <li key={b.key} className="[overflow-wrap:anywhere]">{b.line}</li>)}
+                              </ul>
+                              <Button variant="secondary" size="sm" disabled={disabled} onClick={() => { void apply(c, f, f.breaks.map((b) => b.key), `${c.recordId}#${i}`); }}>
+                                {busy === `${c.recordId}#${i}` ? "Guardando…" : "Aplicar de todos modos"}
+                              </Button>
+                            </li>
+                          ))}
+                        </ol>
+                      )}
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       {best && (

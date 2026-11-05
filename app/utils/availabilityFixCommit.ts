@@ -34,7 +34,7 @@ import { writeClient } from "@/sanity/lib/serverClient";
 import { WORSHIP_AUDIENCE_GROQ_FILTER } from "@/app/ministries";
 import { serviceTodayIso } from "@/app/components/admin/serviceReadiness";
 import type { ServiceRole } from "@/app/components/admin/serviceCardModel";
-import { storedMonthBoard, storedColumn, type StoredMonthBoard } from "@/app/mcp/monthProposals/storedMonthBoard";
+import { storedMonthBoard, storedColumn, type ServiceTarget, type StoredMonthBoard } from "@/app/mcp/monthProposals/storedMonthBoard";
 import type { EditorMember } from "@/app/mcp/monthProposals/revise";
 import { editRole } from "./roleEditCommit";
 import { parseEditRequest, sanityConflictKind } from "./roleWriteRequest";
@@ -52,8 +52,11 @@ import {
   findRoleConflicts,
   horizonMonths,
   isVoiceRow,
+  proposeFallbacks,
   proposeReplacement,
+  type Break,
   type NoneReason,
+  type ProposeInput,
   type Proposal,
   type RoleConflict,
   type SeatChange,
@@ -108,6 +111,8 @@ export interface ConflictRecord {
   updatedAt: string;
   checkedAt?: string;
   appliedBy?: string;
+  /** «Aplicar de todos modos»: the break keys the person knowingly accepted (plan 2026-11-05). */
+  waived?: string[];
   trigger: SweepTrigger | "apply" | "keep";
 }
 
@@ -308,10 +313,12 @@ function heldRows(board: StoredMonthBoard | undefined, roleId: string, memberId:
     .map((r) => r.id);
 }
 
-function propose(j: Judgeable, conflict: RoleConflict, ledger: FairnessLedgerResponse | null, extra: { exclude?: ReadonlyMap<string, ReadonlySet<string>>; only?: ReadonlyMap<string, string | null> } = {}): Proposal {
-  const board = j.boards.get(conflict.date.slice(0, 7))!;
-  return proposeReplacement({
-    board,
+type ProposeExtra = { exclude?: ReadonlyMap<string, ReadonlySet<string>>; only?: ReadonlyMap<string, string | null> };
+
+/** One conflict's inputs to the pure judges, on this read. */
+function proposeInput(j: Judgeable, conflict: RoleConflict, ledger: FairnessLedgerResponse | null, extra: ProposeExtra = {}): ProposeInput {
+  return {
+    board: j.boards.get(conflict.date.slice(0, 7))!,
     roleId: conflict.roleId,
     memberId: conflict.memberId,
     members: j.sources.members as EditorMember[],
@@ -321,7 +328,11 @@ function propose(j: Judgeable, conflict: RoleConflict, ledger: FairnessLedgerRes
     ledger,
     snapshotRole: snapshotRoleOf(j.sources, conflict.roleId),
     ...extra,
-  });
+  };
+}
+
+function propose(j: Judgeable, conflict: RoleConflict, ledger: FairnessLedgerResponse | null, extra: ProposeExtra = {}): Proposal {
+  return proposeReplacement(proposeInput(j, conflict, ledger, extra));
 }
 
 const isEditable = (j: Judgeable, c: RoleConflict) => {
@@ -451,7 +462,7 @@ export async function sweepAvailabilityConflicts(
           updatedAt: nowIso,
           ...(change.checked ? { checkedAt: nowIso } : {}),
           trigger: options.trigger,
-        }, change.reason ? ["appliedBy"] : ["reason", "appliedBy"]);
+        }, change.reason ? ["appliedBy", "waived"] : ["reason", "appliedBy", "waived"]);
       }
     } catch (err) {
       // Another run moved it first (a lost guard): drop the step, the next run re-reads.
@@ -624,8 +635,14 @@ export type ClickOutcome = { ok: true; status: number; body: Record<string, unkn
 
 const refuse = (status: number, error: string, extra: Record<string, unknown> = {}): ClickOutcome => ({ ok: false, status, body: { error, ...extra } });
 
+/**
+ * «Aplicar» and, with `waive`, «Aplicar de todos modos» (plan 2026-11-05 §4): the option nobody
+ * could take cleanly, written only when a fresh read under the same role `_rev` re-derives it with
+ * EXACTLY the shown seats and EXACTLY the shown break keys. A now-clean option is refused (the
+ * panel reloads and shows it as a normal proposal): a waiver is never stretched over a clean change.
+ */
 export async function applyAvailabilityFix(
-  input: { roleId: string; rev: string; memberId: string; replacements: ReadonlyArray<{ rowId: string; to: string | null }>; actor: string },
+  input: { roleId: string; rev: string; memberId: string; replacements: ReadonlyArray<{ rowId: string; to: string | null }>; waive?: readonly string[]; actor: string },
   deps: AvailabilityDeps = defaultAvailabilityDeps(),
 ): Promise<ClickOutcome> {
   const read = await readJudgeable(deps);
@@ -647,12 +664,28 @@ export async function applyAvailabilityFix(
   } catch {
     return refuse(409, "unjudgeable", { reason: "sources" });
   }
+  const matches = (seats: readonly SeatChange[]) =>
+    seats.length === wanted.size && seats.every((s) => wanted.has(s.rowId) && wanted.get(s.rowId) === s.to);
   const proposal = propose(j, conflict, ledger, { only: wanted });
-  if (proposal.kind !== "replace") return refuse(409, "refused", { reason: proposal.reason });
-  if (proposal.seats.length !== wanted.size || !proposal.seats.every((s) => wanted.has(s.rowId) && wanted.get(s.rowId) === s.to)) {
-    return refuse(409, "refused", { reason: "changed" });
+  let chosen: { target: ServiceTarget; seats: SeatChange[] };
+  if (!input.waive) {
+    if (proposal.kind !== "replace") return refuse(409, "refused", { reason: proposal.reason });
+    if (!matches(proposal.seats)) return refuse(409, "refused", { reason: "changed" });
+    chosen = proposal;
+  } else {
+    // A waiver only for what the strict check still refuses, and only for exactly those breaks.
+    if (proposal.kind === "replace" && matches(proposal.seats)) return refuse(409, "refused", { reason: "changed" });
+    const fallback = proposeFallbacks({ ...proposeInput(j, conflict, ledger, { only: wanted }), nameOf: () => "" });
+    if (fallback.kind !== "options") return refuse(409, "refused", { reason: fallback.reason });
+    const option = fallback.options.length === 1 ? fallback.options[0] : null;
+    const shown = new Set(input.waive);
+    const keys = new Set(option?.breaks.map((b) => b.key) ?? []);
+    if (!option || !matches(option.seats) || keys.size === 0 || keys.size !== shown.size || ![...keys].every((k) => shown.has(k))) {
+      return refuse(409, "refused", { reason: "changed" });
+    }
+    chosen = option;
   }
-  const parsed = parseEditRequest({ ...proposal.target, rev: input.rev });
+  const parsed = parseEditRequest({ ...chosen.target, rev: input.rev });
   if (!parsed.ok) return refuse(409, "refused", { reason: "parse" });
   const outcome = await deps.editRole(input.roleId, parsed.value, { notices: "deferred" });
   if (!outcome.ok) return { ok: false, status: outcome.status, body: outcome.body as Record<string, unknown> };
@@ -661,15 +694,17 @@ export async function applyAvailabilityFix(
   const id = conflictRecordId(conflict.roleId, conflict.memberId, conflict.date);
   const record = j.records.find((r) => r._id === id) ?? null;
   const nowIso = new Date(deps.now()).toISOString();
-  const seats = storedSeats(proposal.seats);
+  const seats = storedSeats(chosen.seats);
+  const waived = input.waive ? { waived: [...new Set(input.waive)].sort() } : {};
   let recorded = true;
   try {
-    if (record) await deps.patch(id, record._rev, { status: "applied", seats, appliedBy: input.actor, updatedAt: nowIso, trigger: "apply" }, ["reason"]);
-    else {
+    if (record) {
+      await deps.patch(id, record._rev, { status: "applied", seats, appliedBy: input.actor, ...waived, updatedAt: nowIso, trigger: "apply" }, input.waive ? ["reason"] : ["reason", "waived"]);
+    } else {
       await deps.create({
         _id: id, _type: CONFLICT_TYPE, roleId: conflict.roleId, memberId: conflict.memberId, date: conflict.date, serviceKind: conflict.roleType,
         published: conflict.published, status: "applied", seats, eventSeq: 0, notifiedSeq: 0, firstSeenAt: nowIso, updatedAt: nowIso,
-        appliedBy: input.actor, trigger: "apply",
+        appliedBy: input.actor, ...waived, trigger: "apply",
       });
     }
   } catch {
@@ -710,7 +745,7 @@ export async function setConflictKept(
         updatedAt: nowIso,
         trigger: "keep",
         ...(input.kept ? {} : { seats: [], checkedAt: new Date(0).toISOString() }),
-      }, input.kept ? [] : ["reason"]);
+      }, input.kept ? ["appliedBy", "waived"] : ["reason", "appliedBy", "waived"]);
     }
   } catch (err) {
     if (sanityConflictKind(err)) return refuse(409, "stale_revision");
@@ -735,6 +770,11 @@ export interface PanelConflict {
   options: Array<{ seats: Array<{ rowId: string; seat: string; to: string | null; toName: string | null; movedFrom?: string }> }>;
   /** When there is no proposal: why, and the seats the person holds. */
   none?: { reason: NoneReason; seats: Array<{ rowId: string; seat: string }> };
+  /**
+   * When nobody passes every rule (`no_candidate`): the options that break the fewest, each with the
+   * rules it breaks (plan 2026-11-05). «Aplicar de todos modos» sends the break keys back as `waive`.
+   */
+  fallbacks?: Array<{ seats: PanelConflict["options"][number]["seats"]; breaks: Break[] }>;
 }
 
 export interface PanelRead {
@@ -808,10 +848,22 @@ export async function readConflictPanel(deps: AvailabilityDeps = defaultAvailabi
       if (!named.length) break;
       for (const s of named) exclude.set(s.rowId, new Set([...(exclude.get(s.rowId) ?? []), s.to]));
     }
+    // Nobody passes every rule: the least-bad options, with what each breaks (within the budget).
+    let fallbacks: PanelConflict["fallbacks"];
+    if (first?.kind === "none" && first.reason === "no_candidate" && deps.now() <= budgetEnd) {
+      const f = proposeFallbacks({ ...proposeInput(j, c, ledger), nameOf: name, pastDeadline: () => deps.now() > budgetEnd });
+      if (f.kind === "options") {
+        fallbacks = f.options.map((o) => ({
+          seats: o.seats.map((s) => ({ rowId: s.rowId, seat: seatLabel(s.rowId), to: s.to, toName: s.to === null ? null : name(s.to), ...movedFromOf(o.seats, s) })),
+          breaks: o.breaks,
+        }));
+      }
+    }
     open.push({
       ...base,
       options,
       ...(first && first.kind === "none" ? { none: { reason: first.reason, seats: held.map((rowId) => ({ rowId, seat: seatLabel(rowId) })) } } : {}),
+      ...(fallbacks ? { fallbacks } : {}),
     });
   }
   const since = deps.now() - APPLIED_LIST_MS;
