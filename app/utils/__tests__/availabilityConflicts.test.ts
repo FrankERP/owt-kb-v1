@@ -402,6 +402,29 @@ describe("proposeFallbacks (nobody passes every rule)", () => {
     expect(proposeFallbacks({ ...withZoe, only: new Map([["lead", "m-zoe"]]) })).toEqual({ kind: "none", reason: "no_candidate" });
   });
 
+  it("reads today's availability, not the photo in the month's record: a day someone has since freed does not keep them out", () => {
+    const i = input();
+    // Ana leads no Sunday this month. When November was recorded she had marked the 15th; she has
+    // since unmarked it. Ximena still marks it (her block stays).
+    const ana = lead("m-ana", "Ana");
+    const block = { date: "2026-11-15", unavailable: true, excludedRoles: [] };
+    const people = [...["m-lia", "m-mar", "m-noe", "m-oto", "m-quim"].map(listed), { ...listed("m-xim"), blocks: [block] },
+      { ...listed("m-pau"), roles: { ...ALL_IN, "Sun.Lead": "out" as const } }, { ...listed("m-ana"), blocks: [block] }];
+    const withAna = {
+      ...i,
+      members: [...i.members, ana] as EditorMember[],
+      ledger: ledgerResponse(["2026-11"], { horizon: [{ record: record("2026-11", people), storedServices: 5, recordBinds: true }] }),
+      config: { ...i.config!, sundayLeads: [...i.config!.sundayLeads, "m-ana"] },
+    };
+    // Free today and breaking nothing: a clean proposal, not a waiver option.
+    const out = proposeReplacement(withAna);
+    expect(out.kind).toBe("replace");
+    if (out.kind === "replace") expect(out.seats).toEqual([{ rowId: "lead", from: "m-xim", to: "m-ana" }]);
+    // Still marking the day: never offered (the live check), whatever the record says.
+    const away = { ...withAna, members: withAna.members.map((m) => (m._id === "m-ana" ? { ...m, unavailableDates: ["2026-11-15"] } : m)) };
+    expect(proposeReplacement(away)).toEqual({ kind: "none", reason: "no_candidate" });
+  });
+
   it("stops early past the deadline and never answers an option without a broken rule", () => {
     expect(proposeFallbacks({ ...input(), pastDeadline: () => true })).toEqual({ kind: "none", reason: "no_candidate" });
     const out = proposeFallbacks(input());
