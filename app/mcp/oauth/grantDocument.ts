@@ -171,9 +171,11 @@ export const GRANT_READ_FIELDS = [
  * The moment before which a production grant with no stored `client` is known
  * to be Claude's: until ADR-0083's release, production accepted only the
  * claude.ai redirect. It must precede the first PRODUCTION deployment of the
- * code that writes `client`, and is set in the commit that goes to `main`.
+ * code that writes `client`; set in the commit that went to `main` (2026-11-05, before
+ * that PR merged). A Claude grant made by OLD code after it reads as loopback:
+ * reconnect the connector.
  */
-export const LEGACY_GRANT_CUTOFF = "2026-11-05T18:00:00.000Z";
+export const LEGACY_GRANT_CUTOFF = "2026-11-05T18:35:00.000Z";
 
 /**
  * The kind of agent a grant belongs to, for deciding whether it gets the
