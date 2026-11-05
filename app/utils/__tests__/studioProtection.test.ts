@@ -93,6 +93,8 @@ describe("studio protection policy", () => {
       "serviceThread",
       // The availability proposals' records (ADR-0079): written only by availabilityFixCommit.ts.
       "availabilityConflict",
+      // Jóvenes' meetings (ADR-0081): written only by ministryEventCommit.ts.
+      "ministryEvent",
     ]);
     expect(PROTECTED_STUDIO_TYPES).toContain("saturdarSongs");
     expect(PROTECTED_STUDIO_TYPES as readonly string[]).not.toContain("saturdaySongs");
@@ -118,6 +120,7 @@ describe("studio protection policy", () => {
       "mcpProposal",
       "serviceThread",
       "availabilityConflict",
+      "ministryEvent",
     ]);
   });
 
@@ -201,6 +204,7 @@ describe("studio protection policy", () => {
       "adminChatUsage",
       "mcpProposal",
       "availabilityConflict",
+      "ministryEvent",
     ]);
     for (const type of INTERNAL_STUDIO_TYPES) {
       expect(isInternalStudioType(type)).toBe(true);
@@ -517,6 +521,7 @@ describe("studio config installs the policy", () => {
       mcpProposal: "sanity/schemas/mcpProposal.ts",
       serviceThread: "sanity/schemas/serviceThread.ts",
       availabilityConflict: "sanity/schemas/availabilityConflict.ts",
+      ministryEvent: "sanity/schemas/ministryEvent.ts",
     };
     expect(Object.keys(files).sort()).toEqual([...PROTECTED_STUDIO_TYPES].sort());
     // The two MCP OAuth types declare `name:` as an IMPORTED constant
@@ -567,6 +572,7 @@ describe("studio config installs the policy", () => {
       "sanity/schemas/adminChatUsage.ts",
       "sanity/schemas/mcpProposal.ts",
       "sanity/schemas/availabilityConflict.ts",
+      "sanity/schemas/ministryEvent.ts",
     ]) {
       const src = read(file);
       expect(src, `${file} must be a hidden type`).toMatch(/^\s*hidden:\s*true,\s*$/m);
@@ -590,6 +596,7 @@ describe("studio config installs the policy", () => {
         "adminChatUsage",
         "mcpProposal",
         "availabilityConflict",
+        "ministryEvent",
       ].sort(),
     );
   });

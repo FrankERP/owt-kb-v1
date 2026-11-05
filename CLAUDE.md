@@ -43,7 +43,7 @@ rule changes, change both; if they disagree, this file wins.
   then run the suite with `.venv/bin/python` (the system `python` is 3.13 and refuses global
   installs). Keys reach a session only as network secrets the proxy injects (`docs/SECRETS.md`),
   never as readable variables. The long form lists what still needs the Mac. The solver is
-  verified/re-deployed via `solver-v3-ops.yml` (ADR-0081): ask Frank before dispatching `deploy`;
+  verified/re-deployed via `solver-v3-ops.yml` (ADR-0082): ask Frank before dispatching `deploy`;
   **never approve, reject or bypass a pending deployment**, nor change its environments or the WIF
   setup without his OK — the session acts as `FrankERP`, so this rule is the only gate.
 - **On the Mac — worktrees only when two things must be in flight at once** (`Agent` with
@@ -360,6 +360,10 @@ built on `ministryAccess.ts` over ONE snapshot, `accessFromDoc`); worship pages 
 - **"Tipo" (`memberType`) is the ONLY worship eligibility axis** — an empty Tipo is in no seat
   and no pool. Do not reintroduce a second axis (ADR-0029 removed `retiredFrom`). `disabled`
   removes app ACCESS, not schedulability, and `handleEdit` never writes it.
+- **A Jóvenes group is a security boundary** (ADR-0081): `ministryEvent` has dotted ids and is
+  read ONLY through `readMinistryEvents` (id prefix + the reader's groups as a parameter, audience
+  read closed); never a wider read filtered in TypeScript (`ministryEventCoverage.test.ts`).
+  Unreleased features gate on `rolloutAllows` (`app/utils/rollout.ts`) on the server, not the nav.
 
 ## Continuous improvement
 Run `/loop /improve` — the `/improve` command (`.claude/commands/improve.md`)

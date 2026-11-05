@@ -8,21 +8,21 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 303,
-    "filesScanned": 576,
-    "filesWithColour": 61,
+    "literalRows": 304,
+    "filesScanned": 580,
+    "filesWithColour": 62,
     "byCategory": {
       "2": 2,
       "4": 63,
       "5": 2,
-      "8": 86,
+      "8": 87,
       "9": 10,
       "11": 4,
       "12": 136
     },
     "byDisposition": {
       "exempt": 60,
-      "B": 107,
+      "B": 108,
       "keep": 217,
       "C": 5,
       "D": 13
@@ -107,6 +107,18 @@
       "line": 27,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/(client)/jovenes/page.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 85,
+      "disposition": "B",
+      "reason": null
     },
     {
       "file": "app/(client)/kids/page.tsx",

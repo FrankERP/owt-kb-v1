@@ -47,11 +47,14 @@ import { mcpProposal } from './schemas/mcpProposal';
 // Internal: availability conflicts and their proposals (ADR-0079), written only by
 // app/utils/availabilityFixCommit.ts. See sanity/schemas/availabilityConflict.ts.
 import { availabilityConflict } from './schemas/availabilityConflict';
+// Internal: Jóvenes' meetings (ADR-0081), dotted ids, read only through
+// app/utils/ministryEventReads.ts. See sanity/schemas/ministryEvent.ts.
+import { ministryEvent } from './schemas/ministryEvent';
 // The conversation about a service before its setlist proposal exists (ADR-0065).
 import { serviceThread } from './schemas/serviceThread';
 // Inicio's team photo (ADR-0070): one document, edited in the Studio.
 import { homeSettings } from './schemas/homeSettings';
 
 export const schema: { types: SchemaTypeDefinition[] } = {
-  types: [post, tag, author, featuredSongs, saturdaySongs, saturdayRole, sundayRole, teamMembers, specialRole, loginEvent, setlistProposal, roleTargetLock, roleCreationReceipt, notificationOutbox, specialIdentityCoordinator, solverConfig, fairnessMonth, kidsPair, kidsSchedule, mcpOauthGrant, mcpOauthCodeRedemption, calendarFeed, adminChatUsage, mcpProposal, serviceThread, availabilityConflict, homeSettings],
+  types: [post, tag, author, featuredSongs, saturdaySongs, saturdayRole, sundayRole, teamMembers, specialRole, loginEvent, setlistProposal, roleTargetLock, roleCreationReceipt, notificationOutbox, specialIdentityCoordinator, solverConfig, fairnessMonth, kidsPair, kidsSchedule, mcpOauthGrant, mcpOauthCodeRedemption, calendarFeed, adminChatUsage, mcpProposal, serviceThread, availabilityConflict, ministryEvent, homeSettings],
 }

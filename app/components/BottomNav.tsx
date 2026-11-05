@@ -1,7 +1,8 @@
 "use client";
 
 // The phone tab bar (spec §5.0, §19.1, decision B). Worship tabs: Inicio ·
-// Calendario · Biblioteca. Kids: Kids (+ Planear Kids when managesKids). ONE
+// Calendario · Biblioteca. Kids: Kids (+ Planear Kids when managesKids).
+// Jóvenes: Reuniones (once its rollout reaches the person, ADR-0081). ONE
 // ministry at a time — the page's (`navSections.ts`, Frank 2026-10-29).
 // Plus a «Más» tab and its sheet ONLY when there is something the tabs cannot
 // hold (the switch to the other ministry, Admin in worship) — Tema, Cerrar sesión AND «Yo» all live in
@@ -49,6 +50,8 @@ export default function BottomNav() {
         { href: "/kids", label: "Kids", icon: <KidsIcon />, match: (p) => p === "/kids" },
         ...(access.managesKids ? [{ href: "/kids/admin", label: "Planear Kids", icon: <PlanIcon />, match: (p: string) => p.startsWith("/kids/admin") }] : []),
       ]
+    : section === "jovenes"
+    ? [{ href: "/jovenes", label: "Reuniones", icon: <CalendarIcon />, match: (p) => p.startsWith("/jovenes") }]
     : [];
 
   // «Más» holds only what the tabs cannot fit — the avatar menu (NavMenu) now
@@ -58,7 +61,7 @@ export default function BottomNav() {
     ...otherSections.map((s) => ({
       href: sectionHome(s, access),
       label: SECTION_LABEL[s],
-      icon: s === "kids" ? <KidsIcon /> : <HomeIcon />,
+      icon: s === "kids" ? <KidsIcon /> : s === "jovenes" ? <CalendarIcon /> : <HomeIcon />,
     })),
     // Worship's admin, so it lives in the worship section only.
     ...(section === "worship" && access.isAdmin ? [{ href: "/admin", label: "Admin", icon: <AdminIcon /> }] : []),

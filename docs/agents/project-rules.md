@@ -86,7 +86,7 @@ disagree, `CLAUDE.md` wins and this file is the one to fix.
   set up as network secrets, the canonical copy of the adversarial-plan-review skill and the
   agent definitions under `~/.claude/agents/`. Google-side secret rotations go through Google
   Cloud Shell in the browser, not a laptop. **The production solver is verified and re-deployed
-  from GitHub Actions** (`.github/workflows/solver-v3-ops.yml`, keyless, ADR-0081): `verify` runs
+  from GitHub Actions** (`.github/workflows/solver-v3-ops.yml`, keyless, ADR-0082): `verify` runs
   by itself after every `gcf_v3/**` merge; a session dispatches `verify` (or, after Frank says
   yes in the thread, `deploy`) with the GitHub connector's `actions_run_trigger` and reads the
   result with `get_job_logs`. If the session's token cannot dispatch, Frank runs it from
@@ -803,8 +803,26 @@ pass.
   two items for one ministry fail closed to plain membership. A Jóvenes admin is a member with
   level `admin`; `managesMinistries` never grants a leveled ministry. `levelIn`/`groupsIn`
   answer `null`/`[]` for a non-member and have no super-admin arm — a group guard adds it.
-  Groups (`MINISTRIES.jovenes.groups`) are a security boundary like the ministry; no route
-  guards by group yet (phase 3 adds it with the first Jóvenes document).
+  Groups (`MINISTRIES.jovenes.groups`) are a security boundary like the ministry, enforced
+  by the meetings' one reader (next bullet).
+- **Jóvenes meetings: private by id, one reader, read closed** (ADR-0081; plan
+  `docs/superpowers/plans/2026-10-30-jovenes-events-access.md`). `ministryEvent` ids are
+  `ministryEvent.<uuid>`, so the public dataset never serves them; every read under `app/**` goes
+  through `readMinistryEvents` (`app/utils/ministryEventReads.ts`), whose GROQ carries the id
+  prefix, the ministry and, for a pastor, `published == true` and the audience overlap with
+  their groups as a query PARAMETER. An absent or malformed `audience` is no member's. No
+  token ⇒ it throws (an untokened read would answer «no meetings» with no error). `mayRead` is
+  the same rule in TypeScript for a server decision on one event, held equal to the GROQ by a
+  `groq-js` matrix (`ministryEventReads.test.ts`); `ministryEventCoverage.test.ts` fails on any
+  other file that names the type, on a caching importer, and on MCP or the admin assistant
+  importing it. Do not «simplify» it into a wider read plus a TypeScript filter. groq-js does not
+  escape the `.` in `path()`, so the matrix avoids ids like `ministryEvent-x`; `mayRead`'s own
+  test pins them.
+- **Rollout registry (`app/utils/rollout.ts`).** A feature built but not for everyone yet has
+  one entry (`hidden → superAdmin → admins → all`), keyed by a feature name. `rolloutAllows`
+  is the SERVER gate each page and route of the feature calls (a page answers 404); the nav's
+  `navRolloutAllows` is cosmetic and, since the session carries no ministry level, shows the
+  `admins` stage to the super-admin only. `jovenesEvents` is at `superAdmin`.
 - **Readable ≠ writable (`ASSIGNABLE_MINISTRY_IDS`).** Registering a ministry in `MINISTRIES`
   makes a stored id mean something; only `ASSIGNABLE_MINISTRY_IDS` makes it storable — it feeds
   `validateMinistryWrite("ministries")`, the «Personas» pills and scope bar, and the Studio
