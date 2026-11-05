@@ -78,7 +78,7 @@ hand-writing a fixture that mirrors them).
 |---|---|---|
 | 1 — primary | **Google Cloud Scheduler**, `*/5` ([ADR-0032](adr/0032-layer-1-runs-on-cloud-scheduler.md); live since 2026-09-10) — plus GitHub Actions, declared `*/5` but starved by this repo's CI volume, kept as an independent second caller — see §"Layer 1 does not run on the schedule it declares" | Scheduler job `flush-notification-outbox` (GCP `eloquent-figure-421401`, `us-central1`) and `.github/workflows/flush-notifications.yml`, both → `/api/cron/flush-notifications` (drains up to 5 sweeps per tick when work is re-pended) |
 | 2 — backstop | opportunistic sweep after any queueing write (not after the MCP saved-service save's inline upserts, above) | end of `commitUpserts()` in `serviceMutationSideEffects.ts` — keeps its report and raises the destroyed-mail alarm |
-| 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` (mails a person about destroyed mail, as layer 2 also does; layer 1 goes red on the same conditions instead — see §"The destroyed-mail alarm"). On Sundays it first sends «Te toca dirigir» to leads and runs a derated sweep — see §"«Te toca dirigir»" |
+| 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` (mails a person about destroyed mail, as layer 2 also does; layer 1 goes red on the same conditions instead — see §"The destroyed-mail alarm"). On Sundays it first sends «Te toca dirigir» to leads and then runs a derated sweep, or skips it if the reminders overran — see §"«Te toca dirigir»" |
 
 **Layer 1 also carries the availability proposals' tick** (ADR-0079): after the drain has
 answered, `after()` runs `availabilityTick` on every third 5-minute bucket with at least 40 s left;

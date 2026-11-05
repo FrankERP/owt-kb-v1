@@ -24,7 +24,7 @@ proposal page. The lead's «Propuestas» email preference applies (`wantsNotific
 every email to the same Lead seat). Sends run in parallel (the pool is `SEND_CONCURRENCY` wide),
 BEFORE the sweep, and the sweep's deadline is derated by the time spent
 (`sweepOptionsAfterReminders`); with less than `MIN_SWEEP_DEADLINE_MS` left the daily sweep is
-skipped, since stage 7 could admit nothing and layer 1 drains within five minutes.
+skipped, since stage 7 could not reliably admit a send and layer 1 drains within five minutes.
 
 ## Rejected
 
@@ -51,4 +51,5 @@ skipped, since stage 7 could admit nothing and layer 1 drains within five minute
 The hour is the daily cron's: moving that cron moves the reminder (and the outbox's last-resort
 sweep). Switching to "only Sundays" is one constant. A Sunday run reads Sanity once more and
 spends a few seconds of the route; a failure there is logged (`lead_reminder_failed`) and never
-stops the sweep or the alarms.
+stops the alarms; if the step overruns (a send timeout), that day's sweep is skipped and left to
+layer 1.

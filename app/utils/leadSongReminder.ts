@@ -345,9 +345,9 @@ export async function sendLeadSongReminders(now: Date = new Date()): Promise<Lea
  * is re-pended for layer 1, never consumed.
  *
  * `{}` (the defaults) when nothing ran. `null` = SKIP the sweep: with less than one
- * send timeout plus the read phase left, stage 7 could admit nothing (its check is
- * `elapsed + SEND_TIMEOUT_MS > deadline`), so the sweep would only claim and
- * re-pend. Layer 1 drains the outbox every five minutes anyway.
+ * send timeout plus the read phase left, stage 7 could not reliably admit a send
+ * (its check is `elapsed + SEND_TIMEOUT_MS > deadline`), so the sweep would mostly
+ * claim and re-pend. Layer 1 drains the outbox every five minutes anyway.
  */
 export const MIN_SWEEP_DEADLINE_MS = SEND_TIMEOUT_MS + 5_000;
 
