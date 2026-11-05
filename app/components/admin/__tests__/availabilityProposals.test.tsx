@@ -128,6 +128,32 @@ describe("AvailabilityProposals", () => {
     expect(screen.queryByRole("button", { name: "Aplicar" })).toBeNull();
   });
 
+  it("nobody passes every rule: each option lists what it breaks, and «Aplicar de todos modos» sends those keys", async () => {
+    const fallbacks: PanelConflict["fallbacks"] = [
+      { seats: [{ rowId: "lead", seat: "Lead", to: "jakey", toName: "Jakey" }], breaks: [{ key: "m:cap|jakey", line: "Jakey dirige 2 domingos en noviembre; lo normal es uno." }] },
+      { seats: [{ rowId: "lead", seat: "Lead", to: "lali", toName: "Lali", movedFrom: "Coro" }, { rowId: "coro", seat: "Coro", to: "pau", toName: "Pau" }],
+        breaks: [{ key: "m:cap|lali", line: "Lali dirige 2 domingos en noviembre; lo normal es uno." }, { key: "s:x", line: "Pau: su regla «No coro en domingo»." }] },
+    ];
+    const { posts } = serve(() => read({ open: [{ ...CONFLICT, options: [], none: { reason: "no_candidate", seats: [{ rowId: "lead", seat: "Lead" }] }, fallbacks }] }));
+    render(<AvailabilityProposals fallback={FALLBACK} onChanged={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByText(/Nadie pasa todas las reglas/)).not.toBeNull());
+    expect(screen.queryByText(/Reasígnalo a mano/)).toBeNull();
+    expect(screen.getByText("Lead → Jakey")).not.toBeNull();
+    expect(screen.getByText("Jakey dirige 2 domingos en noviembre; lo normal es uno.")).not.toBeNull();
+    expect(screen.getByText("Lead → Lali (pasa de Coro), Coro → Pau")).not.toBeNull();
+    expect(screen.getByText("Pau: su regla «No coro en domingo».")).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Aplicar" })).toBeNull();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Aplicar de todos modos" })[1]);
+    await waitFor(() => expect(posts).toHaveLength(1));
+    expect(posts[0].body).toEqual({
+      roleId: "role-nov29", rev: "rev-7", memberId: "tony",
+      replacements: [{ rowId: "lead", to: "lali" }, { rowId: "coro", to: "pau" }],
+      waive: ["m:cap|lali", "s:x"],
+    });
+  });
+
   it("falls back to the parent's list when the read fails — never an all-clear", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ok({ error: "unavailable" }, 503)));
     render(<AvailabilityProposals fallback={FALLBACK} onChanged={vi.fn()} />);

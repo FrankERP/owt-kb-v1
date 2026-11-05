@@ -4,13 +4,12 @@
 //
 // It used to live only in the reducer, seeded from the first tab the role can
 // see. So an admin deep in Servicios who refreshed — or who left /admin and
-// came back — was dropped on Miembros mid-task, with no way to link a colleague
-// to the tab they were talking about.
+// came back — was dropped on the first tab mid-task, with no way to link a
+// colleague to the tab they were talking about.
 //
-// The half that is not merely convenience is the role filter. `?tab=members` is
-// a URL an ordinary admin can be handed, or can keep in their own history from
-// a super-admin's screen share, and Miembros is super-admin only. Resolution
-// falls back to a tab they may see rather than honouring it.
+// The half that is not merely convenience is the role filter. A `?tab=` URL can
+// be handed to an admin whose role may not open it. Resolution falls back to a
+// tab they may see rather than honouring it.
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -28,15 +27,15 @@ vi.mock("../IntegrityQueuePanel", () => ({ default: () => null }));
 
 import AdminPanel from "../AdminPanel";
 import { ToastProvider } from "../../ui/Toast";
-// Miembros keeps its four member dialogs MOUNTED (`open={…}`), and a CueDialog
-// throws outside the provider whether or not it is open.
+// Panels keep their dialogs MOUNTED (`open={…}`), and a CueDialog throws outside
+// the provider whether or not it is open.
 import { CueDialogProvider } from "../../ui/CueDialogProvider";
 
 // ─── Resolution (pure) ────────────────────────────────────────────────────────
 
 describe("resolveAdminTab", () => {
   it("falls back to the role's first tab when there is no param", () => {
-    expect(resolveAdminTab(undefined, "super-admin")).toBe("members");
+    expect(resolveAdminTab(undefined, "super-admin")).toBe("services");
     expect(resolveAdminTab(undefined, "admin")).toBe("services");
     expect(resolveAdminTab(undefined, "content-editor")).toBe("content");
   });
@@ -47,15 +46,15 @@ describe("resolveAdminTab", () => {
   });
 
   it("refuses a tab the role may NOT open, rather than honouring the URL", () => {
-    // Miembros is super-admin only. An admin handed this link gets their own
-    // first tab, not the member roster.
+    // An old Miembros link (that tab moved to /super-admin) is no tab at all now.
     expect(resolveAdminTab("members", "admin")).toBe("services");
+    expect(resolveAdminTab("members", "super-admin")).toBe("services");
     expect(resolveAdminTab("services", "content-editor")).toBe("content");
     expect(resolveAdminTab("members", "content-editor")).toBe("content");
   });
 
   it("ignores junk and repeated params instead of guessing", () => {
-    expect(resolveAdminTab("../etc/passwd", "super-admin")).toBe("members");
+    expect(resolveAdminTab("../etc/passwd", "super-admin")).toBe("services");
     expect(resolveAdminTab("", "admin")).toBe("services");
     // `?tab=activity&tab=content` — which one was meant is a guess.
     expect(resolveAdminTab(["activity", "content"], "admin")).toBe("services");
@@ -107,8 +106,8 @@ describe("AdminPanel — the tab in the URL", () => {
   });
 
   it("writes the tab into the URL, so a reload comes back to it", async () => {
-    render(<ToastProvider><CueDialogProvider><AdminPanel role="super-admin" initialTab="members" /></CueDialogProvider></ToastProvider>);
-    await waitFor(() => expect(tabParam()).toBe("members"));
+    render(<ToastProvider><CueDialogProvider><AdminPanel role="super-admin" initialTab="services" /></CueDialogProvider></ToastProvider>);
+    await waitFor(() => expect(tabParam()).toBe("services"));
 
     fireEvent.click(bar().getByRole("button", { name: "Disponibilidad" }));
     await waitFor(() => expect(tabParam()).toBe("availability"));
@@ -117,7 +116,7 @@ describe("AdminPanel — the tab in the URL", () => {
 
   it("rewrites the current history entry instead of pushing a new one", async () => {
     const before = window.history.length;
-    render(<ToastProvider><CueDialogProvider><AdminPanel role="super-admin" initialTab="members" /></CueDialogProvider></ToastProvider>);
+    render(<ToastProvider><CueDialogProvider><AdminPanel role="super-admin" initialTab="services" /></CueDialogProvider></ToastProvider>);
     fireEvent.click(bar().getByRole("button", { name: "Actividad" }));
     await waitFor(() => expect(tabParam()).toBe("activity"));
     // Pushing would make leaving /admin cost one Back press per tab visited.
@@ -139,22 +138,22 @@ describe("AdminPanel — the tab in the URL", () => {
   });
 
   it("follows a link naming the tab the server would have fallen back to", async () => {
-    // Open bare /admin (Miembros is the fallback, named by nothing), move to
-    // Actividad by hand, then follow a colleague's `?tab=members` link. Seeding
+    // Open bare /admin (Servicios is the fallback, named by nothing), move to
+    // Actividad by hand, then follow a colleague's `?tab=services` link. Seeding
     // the comparison from the fallback made that link visibly do nothing.
     const { rerender } = render(
-      <ToastProvider><CueDialogProvider><AdminPanel role="super-admin" initialTab="members" tabNamedInUrl={false} /></CueDialogProvider></ToastProvider>,
+      <ToastProvider><CueDialogProvider><AdminPanel role="super-admin" initialTab="services" tabNamedInUrl={false} /></CueDialogProvider></ToastProvider>,
     );
     fireEvent.click(bar().getByRole("button", { name: "Actividad" }));
     expect(currentTab()).toBe("Actividad");
 
-    rerender(<ToastProvider><CueDialogProvider><AdminPanel role="super-admin" initialTab="members" tabNamedInUrl /></CueDialogProvider></ToastProvider>);
-    expect(currentTab()).toBe("Miembros");
-    await waitFor(() => expect(tabParam()).toBe("members"));
+    rerender(<ToastProvider><CueDialogProvider><AdminPanel role="super-admin" initialTab="services" tabNamedInUrl /></CueDialogProvider></ToastProvider>);
+    expect(currentTab()).toBe("Servicios");
+    await waitFor(() => expect(tabParam()).toBe("services"));
   });
 
   it("treats a link to plain /admin as the no-op it looks like", async () => {
-    // The server falls back to Miembros for bare /admin, so before the
+    // The server falls back to Servicios for bare /admin, so before the
     // `tabNamedInUrl` gate this yanked the admin out of the tab they were
     // working in — but only if they had arrived via a ?tab= URL, which they
     // could not see. Same gesture, two outcomes.
@@ -164,7 +163,7 @@ describe("AdminPanel — the tab in the URL", () => {
     expect(currentTab()).toBe("Actividad");
 
     // What tapping "Admin" delivers: the fallback tab, not named in the URL.
-    rerender(<ToastProvider><CueDialogProvider><AdminPanel role="super-admin" initialTab="members" tabNamedInUrl={false} /></CueDialogProvider></ToastProvider>);
+    rerender(<ToastProvider><CueDialogProvider><AdminPanel role="super-admin" initialTab="services" tabNamedInUrl={false} /></CueDialogProvider></ToastProvider>);
     expect(currentTab()).toBe("Actividad");
     await waitFor(() => expect(tabParam()).toBe("activity"));
   });
@@ -175,28 +174,28 @@ describe("AdminPanel — the tab in the URL", () => {
     // `/admin`, and any router commit while the admin stays here rewrites the
     // URL back to it. Keyed on [tab] the effect would not re-run, and the
     // param would be gone until the next tab press — so a reload would land on
-    // Miembros, which is the whole bug. Simulate that wipe and re-render.
-    const { rerender } = render(<ToastProvider><CueDialogProvider><AdminPanel role="super-admin" initialTab="members" /></CueDialogProvider></ToastProvider>);
+    // the first tab, which is the whole bug. Simulate that wipe and re-render.
+    const { rerender } = render(<ToastProvider><CueDialogProvider><AdminPanel role="super-admin" initialTab="services" /></CueDialogProvider></ToastProvider>);
     fireEvent.click(bar().getByRole("button", { name: "Actividad" }));
     await waitFor(() => expect(tabParam()).toBe("activity"));
 
     window.history.replaceState(window.history.state, "", "/admin");
     expect(tabParam()).toBeNull();
 
-    rerender(<ToastProvider><CueDialogProvider><AdminPanel role="super-admin" initialTab="members" /></CueDialogProvider></ToastProvider>);
+    rerender(<ToastProvider><CueDialogProvider><AdminPanel role="super-admin" initialTab="services" /></CueDialogProvider></ToastProvider>);
     await waitFor(() => expect(tabParam()).toBe("activity"));
     expect(currentTab()).toBe("Actividad");
   });
 
   it("leaves a manually chosen tab alone while the resolved one is unchanged", async () => {
     const { rerender } = render(
-      <ToastProvider><CueDialogProvider><AdminPanel role="super-admin" initialTab="members" tabNamedInUrl /></CueDialogProvider></ToastProvider>,
+      <ToastProvider><CueDialogProvider><AdminPanel role="super-admin" initialTab="services" tabNamedInUrl /></CueDialogProvider></ToastProvider>,
     );
     fireEvent.click(bar().getByRole("button", { name: "Actividad" }));
     expect(currentTab()).toBe("Actividad");
 
     // An unrelated re-render must not yank the admin back to the server's tab.
-    rerender(<ToastProvider><CueDialogProvider><AdminPanel role="super-admin" initialTab="members" tabNamedInUrl /></CueDialogProvider></ToastProvider>);
+    rerender(<ToastProvider><CueDialogProvider><AdminPanel role="super-admin" initialTab="services" tabNamedInUrl /></CueDialogProvider></ToastProvider>);
     expect(currentTab()).toBe("Actividad");
   });
 
@@ -208,7 +207,7 @@ describe("AdminPanel — the tab in the URL", () => {
     // avoids ACTION_RESTORE and its server round-trip on every tab press. See
     // the effect's comment. This pins the choice so it is not flipped silently.
     window.history.replaceState({ __NA: true, marker: "router-state" }, "", "/admin");
-    render(<ToastProvider><CueDialogProvider><AdminPanel role="super-admin" initialTab="members" /></CueDialogProvider></ToastProvider>);
+    render(<ToastProvider><CueDialogProvider><AdminPanel role="super-admin" initialTab="services" /></CueDialogProvider></ToastProvider>);
     fireEvent.click(bar().getByRole("button", { name: "Actividad" }));
     await waitFor(() => expect(tabParam()).toBe("activity"));
     expect(window.history.state).toMatchObject({ __NA: true, marker: "router-state" });

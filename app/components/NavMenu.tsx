@@ -118,6 +118,14 @@ export default function NavMenu() {
       <MenuItem href="/me">Mi semana</MenuItem>
       <MenuItem href="/me/disponibilidad">Disponibilidad</MenuItem>
       <MenuItem href="/me/ajustes">Ajustes</MenuItem>
+      {/* People across every ministry: no ministry's nav holds it (ADR-0075).
+          The session role, so it is gone while impersonating. */}
+      {user.role === "super-admin" && (
+        <>
+          <MenuSeparator />
+          <MenuItem href="/super-admin">Super admin</MenuItem>
+        </>
+      )}
       <MenuSeparator />
       <MenuItem
         onSelect={async () => {

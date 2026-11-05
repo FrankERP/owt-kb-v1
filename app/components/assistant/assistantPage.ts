@@ -55,6 +55,7 @@ const PATH_LABELS: Array<[RegExp, string]> = [
   [/^\/me\/propose\//, "Propuesta de setlist"],
   [/^\/me(\/|$)/, "Mi semana"],
   [/^\/admin(\/|$)/, "Panel de admin"],
+  [/^\/super-admin(\/|$)/, "Personas (super admin)"],
   [/^\/kids\/admin(\/|$)/, "Planear Kids"],
   [/^\/kids(\/|$)/, "Kids"],
 ];

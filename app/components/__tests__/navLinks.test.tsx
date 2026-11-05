@@ -56,6 +56,31 @@ describe("NavLinks", () => {
     expect(links).toEqual(["Calendario", "Biblioteca"]);
   });
 
+  // One ministry at a time (Frank, 2026-10-29: «no me gusta estar en lo de
+  // Worship y ver lo de Kids»).
+  it("in worship, a super-admin sees only worship's links behind an «Alabanza» switcher", () => {
+    session = { user: { ...adminUser, role: "super-admin" } };
+    mount();
+    const nav = screen.getByLabelText("Secciones");
+    expect(Array.from(nav.querySelectorAll("a")).map((n) => n.textContent?.trim())).toEqual(["Calendario", "Biblioteca", "Admin"]);
+    expect(screen.getByRole("button", { name: /Alabanza/ })).toBeTruthy();
+  });
+
+  it("in Kids, the same super-admin sees only Kids' links", () => {
+    pathname = "/kids/admin";
+    session = { user: { ...adminUser, role: "super-admin" } };
+    mount();
+    const nav = screen.getByLabelText("Secciones");
+    expect(Array.from(nav.querySelectorAll("a")).map((n) => n.textContent?.trim())).toEqual(["Kids", "Planear Kids"]);
+    expect(screen.getByRole("button", { name: /Oasis Kids/ })).toBeTruthy();
+  });
+
+  it("a member of ONE ministry gets no switcher", () => {
+    session = { user: adminUser };
+    mount();
+    expect(screen.queryByRole("button", { name: /Alabanza/ })).toBeNull();
+  });
+
   it("renders nothing signed out", () => {
     session = null;
     mount();

@@ -473,7 +473,7 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
 ### Members — mostly **super-admin only**
 | Route | Methods | Auth | Notes |
 |-------|---------|------|-------|
-| `/api/admin/members` | GET, POST | GET admin/super-admin; **POST super-admin** | GET is **ministry-scoped**: `admin`/`content-editor` receive worship members only (`WORSHIP_MEMBER_GROQ_FILTER`), while `super-admin` binds `$all` and receives everyone — they are the only role that can edit `ministries`, so filtering them would make a Kids-only member uneditable through the UI. The Miembros list then offers an Alabanza/Oasis Kids/Todos control, defaulting to Alabanza, filtering client-side. Absent `ministries` counts as worship, so no legacy member is ever hidden. POST create (name+email required), 201. POST and PATCH accept `instruments` (array of strings closed to `DEFAULT_INSTRUMENT_SEATS` after `normalizeSeatName`; duplicates collapse; `[]` stored; absent = untouched) and answer **400** `Instrumento no reconocido: <name>` on any other value. |
+| `/api/admin/members` | GET, POST | GET admin/super-admin; **POST super-admin** | GET is **ministry-scoped**: `admin`/`content-editor` receive worship members only (`WORSHIP_MEMBER_GROQ_FILTER`), while `super-admin` binds `$all` and receives everyone — they are the only role that can edit `ministries`, so filtering them would make a Kids-only member uneditable through the UI. The «Personas» list (`/super-admin`; the `/admin` Miembros tab until 2026-10-29) then offers an Alabanza/Oasis Kids/Todos control, defaulting to Alabanza, filtering client-side. Absent `ministries` counts as worship, so no legacy member is ever hidden. POST create (name+email required), 201. POST and PATCH accept `instruments` (array of strings closed to `DEFAULT_INSTRUMENT_SEATS` after `normalizeSeatName`; duplicates collapse; `[]` stored; absent = untouched) and answer **400** `Instrumento no reconocido: <name>` on any other value. |
 | `/api/admin/members/[id]` | PATCH, DELETE | **super-admin** | PATCH validates role/`memberType`/`instruments`/`ministries`/`managesMinistries` (each applied only when present, so an unrelated edit cannot wipe a privilege), sets `notifPrefs.email` → `revalidateServiceViews()` + `revalidatePath("/me")`. DELETE removes. |
 | `/api/admin/members/[id]/photo` | POST | **super-admin** | Same photo validation as `/api/me/photo`; sets target's `profilePhoto`. (No revalidation.) |
 | `/api/admin/set-password` | POST | **super-admin** | `{sanityMemberId, password}` (≥8) → sets `passwordHash` (cost 12). |
@@ -606,7 +606,9 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
 - **`GET /api/cron/service-reminders`** — **secret-based auth** (`Authorization: Bearer
   <CRON_SECRET>` header or `?secret=`, compared to `process.env.CRON_SECRET`; 403 otherwise —
   **not** session-based). Finds members assigned to **tomorrow's** published services
-  (America/Mexico_City) and pushes a `reminders` notification ("Sirves mañana"). Scheduled by
+  (America/Mexico_City) and pushes a `reminders` notification ("Sirves mañana"). **On a CDMX
+  Sunday** it also emails «Te toca dirigir» to the leads of next week's published services that
+  still need songs (`leadReminders` in the JSON; ADR-0080, `docs/NOTIFICATIONS.md`). Scheduled by
   `vercel.json` at `0 1 * * *` (01:00 UTC daily). The only endpoint scheduled by `vercel.json` —
   Vercel Hobby allows one cron per day, so the other two are driven from outside Vercel — the flush by a Google Cloud Scheduler job plus GitHub Actions (ADR-0032), the probe by hand.
 
