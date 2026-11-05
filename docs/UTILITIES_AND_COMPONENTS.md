@@ -604,11 +604,15 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   service; the panel and email say «(pasa de BGV)»): the fillers' pool via `seatCandidates` → `serverPickCandidates`, their order —
   `orderByEffectiveLoad` for voices, `orderForFill` for the rows `fillInstruments` fills — and at most
   `MAX_TRIED_PER_SEAT` = 8 candidates through the weekend-voice eligibility check, `judgeTarget` and
-  the month gate `compareVerdicts` over `monthCheckVerdict`). Never writes; never calls the solver.
+  the month gate `compareVerdicts` over `monthCheckVerdict`), and `proposeFallbacks` (when a voice
+  seat has nobody: up to `MAX_FALLBACK_OPTIONS` = 4 options that break the fewest rules, each with
+  `breaks` — a stable key «Aplicar de todos modos» sends back as `waive`, and the Spanish line from
+  `v3Copy.ts`/`ruleCopy.ts`). Never writes; never calls the solver.
 - **`availabilityFixCommit.ts`** ([availabilityFixCommit.ts](../app/utils/availabilityFixCommit.ts)) —
   the ONE writer of `availabilityConflict` records, `server-only`: `sweepAvailabilityConflicts`
   (Production acts, elsewhere dry), its triggers `memberTick` / `availabilityTick`,
-  `applyAvailabilityFix` («Aplicar»: re-judge, then `editRole`), `setConflictKept`
+  `applyAvailabilityFix` («Aplicar»: re-judge, then `editRole`; with `waive`, «Aplicar de todos
+  modos»: the option re-derived with exactly those breaks), `setConflictKept`
   («Mantener»/«Deshacer») and `readConflictPanel` (the panel's GET). Every I/O is an injectable
   `AvailabilityDeps`. `transition` is the record table (plan §5.2).
 - **`buildConflictEmail(lines)`** ([availabilityConflictEmail.ts](../app/utils/availabilityConflictEmail.ts))

@@ -5,7 +5,8 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/sanity/env", () => ({ apiVersion: "2024-07-23", dataset: "test", projectId: "test" }));
 vi.mock("next/server", () => ({ after: () => undefined }));
 
-import { ALL_IN, ledgerResponse, record } from "@/app/components/admin/__tests__/v3Fixtures";
+import { ALL_IN, config, ledgerResponse, record } from "@/app/components/admin/__tests__/v3Fixtures";
+import type { SolverConfig } from "@/app/components/admin/plannerModel";
 import type { LogicalRecord } from "@/app/utils/fairnessVocabulary";
 import type { RoleDomainSummary } from "@/app/utils/serviceReadSummary";
 import { snapshot, sources } from "@/app/utils/__tests__/v3MonthPlanFixtures";
@@ -51,7 +52,7 @@ interface World {
 
 let revs = 0;
 
-function world(opts: { rows?: StoredRow[]; members?: EditorMember[]; listed?: string[]; recordPeople?: LogicalRecord["people"] } = {}): World {
+function world(opts: { rows?: StoredRow[]; members?: EditorMember[]; listed?: string[]; recordPeople?: LogicalRecord["people"]; config?: SolverConfig } = {}): World {
   const roles = new Map((opts.rows ?? NOVEMBER()).map((r) => [r._id, r]));
   const members = (opts.members ?? [...MEMBERS, ELSA]).map((m) => ({ ...m, ministries: (m as { ministries?: unknown }).ministries ?? ["worship"] })) as EditorMember[];
   const records = new Map<string, ConflictRecord>();
@@ -72,7 +73,7 @@ function world(opts: { rows?: StoredRow[]; members?: EditorMember[]; listed?: st
       value: sources({
         adminRoles: viaJson(rows()),
         members: members as never,
-        rules: { rev: "rules-rev-1", config: RULES },
+        rules: { rev: "rules-rev-1", config: opts.config ?? RULES },
         snapshot: (() => {
           const snap = snapshot({ roles: viaJson(rows()) });
           (snap.readiness as { roleSummary: RoleDomainSummary }).roleSummary = (summary.current ?? summaryFor)(rows());
@@ -467,6 +468,115 @@ describe("«Aplicar»", () => {
     expect(out).toMatchObject({ ok: true, body: { recorded: false } });
     await sweep(w);
     expect(w.records.get(DANI_SUN1)!.status).toBe("gone");
+  });
+});
+
+describe("«Aplicar de todos modos» (nobody passes every rule)", () => {
+  // Every Sunday leader already leads another Sunday; Ximena, who leads the 15th, marked it.
+  const lead = (id: string, name: string) => ({ _id: id, member_name: `${name} Test`, alias: name, memberType: ["voz", "sunday_lead"], ministries: ["worship"] });
+  const PEOPLE = [lead("m-lia", "Lía"), lead("m-mar", "Mar"), lead("m-noe", "Noé"), lead("m-oto", "Oto"), lead("m-xim", "Ximena"),
+    { _id: "m-pau", member_name: "Pau Test", alias: "Pau", memberType: ["voz", "support"], ministries: ["worship"] }];
+  const XIM15 = conflictRecordId("s15", "m-xim", "2026-11-15");
+  function sundays(): World {
+    const x = world({
+      rows: [
+        storedRow("s1", "sunday_role", "2026-11-01", { leads: ["m-lia"] }),
+        storedRow("s8", "sunday_role", "2026-11-08", { leads: ["m-mar"] }),
+        storedRow("s15", "sunday_role", "2026-11-15", { leads: ["m-xim"], bgvs: ["m-noe"], chorus: ["m-pau"] }),
+        storedRow("s22", "sunday_role", "2026-11-22", { leads: ["m-noe"] }),
+        storedRow("s29", "sunday_role", "2026-11-29", { leads: ["m-oto"] }),
+      ],
+      members: PEOPLE as EditorMember[],
+      recordPeople: PEOPLE.map((m) => (m._id === "m-pau" ? { ...listed(m._id), roles: { ...ALL_IN, "Sun.Lead": "out" as const } } : listed(m._id))),
+      config: config({ sundayLeads: ["m-lia", "m-mar", "m-noe", "m-oto", "m-xim"], support: ["m-pau"] }),
+    });
+    x.unavailable("m-xim", "2026-11-15");
+    return x;
+  }
+  const body = (lia: { seats: Array<{ rowId: string; to: string | null }> }) => lia.seats.map((s) => ({ rowId: s.rowId, to: s.to }));
+
+  it("the panel lists two or more options with their broken rules; applying one with exactly its keys writes once and records them", async () => {
+    w = sundays();
+    await sweep(w);
+    expect(w.records.get(XIM15)).toMatchObject({ status: "none", reason: "no_candidate" });
+    expect(w.sent[0].html).toContain("nadie disponible pasa todas las reglas");
+
+    const read = await readConflictPanel(w.deps);
+    if (!read.ok) throw new Error("expected a read");
+    const c = read.open[0];
+    expect(c.options).toEqual([]);
+    expect(c.fallbacks!.length).toBeGreaterThanOrEqual(2);
+    expect(c.fallbacks![0].breaks[0].line).toMatch(/dirige 2 domingos en noviembre; lo normal es uno\./);
+    const pick = c.fallbacks![0];
+    const waive = pick.breaks.map((b) => b.key);
+
+    // No waiver: the strict «Aplicar» still refuses it.
+    expect(await applyAvailabilityFix({ roleId: "s15", rev: "s15-r1", memberId: "m-xim", replacements: body(pick), actor: "m-frank" }, w.deps))
+      .toMatchObject({ status: 409, body: { error: "refused" } });
+    // A key missing, an extra key: refused, nothing written.
+    if (waive.length > 1) {
+      expect(await applyAvailabilityFix({ roleId: "s15", rev: "s15-r1", memberId: "m-xim", replacements: body(pick), waive: waive.slice(1), actor: "m-frank" }, w.deps))
+        .toMatchObject({ status: 409, body: { error: "refused", reason: "changed" } });
+    }
+    expect(await applyAvailabilityFix({ roleId: "s15", rev: "s15-r1", memberId: "m-xim", replacements: body(pick), waive: [...waive, "m:other"], actor: "m-frank" }, w.deps))
+      .toMatchObject({ status: 409, body: { error: "refused", reason: "changed" } });
+    expect(await applyAvailabilityFix({ roleId: "s15", rev: "s15-r1", memberId: "m-xim", replacements: body(pick), waive: [], actor: "m-frank" }, w.deps))
+      .toMatchObject({ status: 409, body: { error: "refused" } });
+    // Another option's keys with this option's seats: refused.
+    const other = c.fallbacks!.find((f) => f.seats[0].to !== pick.seats[0].to)!;
+    expect(await applyAvailabilityFix({ roleId: "s15", rev: "s15-r1", memberId: "m-xim", replacements: body(pick), waive: other.breaks.map((b) => b.key), actor: "m-frank" }, w.deps))
+      .toMatchObject({ status: 409, body: { error: "refused", reason: "changed" } });
+    expect(w.deps.editRole).not.toHaveBeenCalled();
+
+    const out = await applyAvailabilityFix({ roleId: "s15", rev: "s15-r1", memberId: "m-xim", replacements: body(pick), waive, actor: "m-frank" }, w.deps);
+    expect(out).toMatchObject({ ok: true, body: { recorded: true } });
+    expect(w.deps.editRole).toHaveBeenCalledTimes(1);
+    expect(w.deps.editRole.mock.calls[0][2]).toEqual({ notices: "deferred" });
+    expect(w.roles.get("s15")!.leads.map((x) => x._id)).toEqual([pick.seats[0].to]);
+    expect(w.records.get(XIM15)).toMatchObject({ status: "applied", appliedBy: "m-frank", waived: [...waive].sort() });
+  });
+
+  it("refuses someone who marked the day, and a stale revision, even with matching-looking keys", async () => {
+    w = sundays();
+    w.unavailable("m-oto", "2026-11-15");
+    const read = await readConflictPanel(w.deps);
+    if (!read.ok) throw new Error("expected a read");
+    expect(read.open.find((c) => c.memberId === "m-xim")!.fallbacks!.some((f) => f.seats[0].to === "m-oto")).toBe(false);
+    expect(await applyAvailabilityFix({ roleId: "s15", rev: "s15-r1", memberId: "m-xim", replacements: [{ rowId: "lead", to: "m-oto" }], waive: ["m:sunday_cap_exceeded|m-oto|2026-11|2"], actor: "a" }, w.deps))
+      .toMatchObject({ status: 409, body: { error: "refused" } });
+    const lia = read.open.find((c) => c.memberId === "m-xim")!.fallbacks!.find((f) => f.seats[0].to === "m-lia")!;
+    expect(await applyAvailabilityFix({ roleId: "s15", rev: "old", memberId: "m-xim", replacements: body(lia), waive: lia.breaks.map((b) => b.key), actor: "a" }, w.deps))
+      .toMatchObject({ status: 409, body: { error: "stale_revision" } });
+    expect(w.deps.editRole).not.toHaveBeenCalled();
+  });
+
+  it("a waiver over a change that is now clean is refused: the panel shows it as a normal proposal", async () => {
+    w = sundays();
+    const read = await readConflictPanel(w.deps);
+    if (!read.ok) throw new Error("expected a read");
+    const lia = read.open[0].fallbacks!.find((f) => f.seats[0].to === "m-lia")!;
+    // Lía's other Sunday moves away: she no longer breaks anything on the 15th.
+    const s1 = w.roles.get("s1")!;
+    w.roles.set("s1", { ...s1, leads: [] });
+    expect(await applyAvailabilityFix({ roleId: "s15", rev: "s15-r1", memberId: "m-xim", replacements: body(lia), waive: lia.breaks.map((b) => b.key), actor: "a" }, w.deps))
+      .toMatchObject({ status: 409, body: { error: "refused", reason: "changed" } });
+    expect(w.deps.editRole).not.toHaveBeenCalled();
+  });
+
+  it("a later sweep transition and «Mantener»/«Deshacer» never keep a stale `waived`", async () => {
+    w = sundays();
+    const read = await readConflictPanel(w.deps);
+    if (!read.ok) throw new Error("expected a read");
+    const pick = read.open[0].fallbacks![0];
+    await applyAvailabilityFix({ roleId: "s15", rev: "s15-r1", memberId: "m-xim", replacements: body(pick), waive: pick.breaks.map((b) => b.key), actor: "a" }, w.deps);
+    expect(w.records.get(XIM15)!.waived).toBeDefined();
+    // Ximena is seated on the 15th again: a new event, judged afresh.
+    const s15 = w.roles.get("s15")!;
+    w.roles.set("s15", { ...s15, _rev: "s15-r9", leads: [{ ...s15.leads[0], _id: "m-xim" }] });
+    await sweep(w);
+    expect(w.records.get(XIM15)!.status).toBe("none");
+    expect(w.records.get(XIM15)!.waived).toBeUndefined();
+    expect(w.records.get(XIM15)!.appliedBy).toBeUndefined();
   });
 });
 

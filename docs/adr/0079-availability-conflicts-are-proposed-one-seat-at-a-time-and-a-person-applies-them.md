@@ -36,6 +36,23 @@ never changes a service, draft or published. That plan was approved in rounds 10
   song lead; at most 6 singers × 8 fillers per seat. «Aplicar» accepts that one extra seat and
   refuses unless the re-judged proposal is exactly the one shown. A worship-night song lead gets no pick («song_lead»). A service the
   board cannot edit, a month without its fairness record, or no rules: «sin revisar».
+- **When nobody passes every rule, show the least-bad options and what each breaks** (Frank,
+  2026-11-05, on Rachel's 15 nov: every Sunday leader was away, already on the service, or already
+  leading another Sunday that month: «que entregue 2 o más propuestas y explique por qué rompen las
+  reglas»; plan `docs/superpowers/plans/2026-11-05-availability-fallback-options.md` and its review
+  log). Only for a VOICE seat whose strict search answers «sin reemplazo», and only in the panel
+  (the sweep, its records and the cron stay as they were): `proposeFallbacks` runs the same search
+  relaxed — a taker a personal rule blocks is allowed, a singer may move up — and judges each build
+  against the month with the seat merely emptied. Every new or grown month finding (a second Sunday
+  as Lead, two Sundays in a row, a count rule, a presence or pair rule) and every personal rule
+  broken on the service is one line, in `v3Copy.ts`'s and `ruleCopy.ts`'s Spanish. Never offered:
+  someone who marked that day, a seat clash, someone already serving that service, someone off the
+  month's v3 lists for the seat (unless a personal rule on that seat is what keeps them off, and is
+  shown), a worship night's song lead, an empty voice seat, or a build that breaks nothing. Up to
+  four, fewest breaks first. **«Aplicar de todos modos»** sends the option's break keys as `waive`;
+  the writer first runs the strict check (a now-clean option is refused: reload), then re-derives the
+  option on a fresh read under the same role `_rev` and writes only if its seats AND its break set
+  are exactly the ones shown; the `applied` record keeps the keys in `waived`.
 - **Record and tell** (`app/utils/availabilityFixCommit.ts`, the one writer): an
   `availabilityConflict.<sha256>` record per identity (`proposed`/`none`/`applied`/`kept`/`gone`,
   guarded `create` / `ifRevisionId`), one admin email per sweep that claimed new events
@@ -89,6 +106,13 @@ Accepted costs, told to Frank:
   person's «Revisar ahora» re-judges it at once). The panel's read stops computing alternatives,
   then picks, past a 30 s budget, so a very busy month may show «sin revisar» until a calmer read.
 - «Mantener» and «Aplicar» pressed on dev write the REAL dataset, like every admin button there.
+- «Aplicar de todos modos» writes a change that breaks the rules it lists; there is no switch for it
+  short of a revert (`AVAILABILITY_SWEEP_DISABLED` stops the sweeps, not the clicks). The writer does
+  not look for a rule-clean option that appeared for someone else between the panel's read and the
+  click: the admin chose this one with these breaks. The fallback options cost up to ~26 more month
+  checks per conflict on the panel's read, inside the same 30 s budget (past it they are skipped).
+- An exempt member past the strict search's first 8 is never offered: a build that breaks nothing is
+  not a fallback option, and the strict search orders its pool by its own load median.
 
 Undoing it: set `AVAILABILITY_SWEEP_DISABLED=1` to stop the sweeps; the panel still reads. Removing
 the feature means deleting the four routes, the two triggers and the writer (pinned in
