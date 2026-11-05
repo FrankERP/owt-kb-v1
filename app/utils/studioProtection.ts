@@ -321,6 +321,7 @@ export const INTERNAL_STUDIO_FIELDS: Readonly<Record<string, readonly string[]>>
     "updatedAt",
     "checkedAt",
     "appliedBy",
+    "waived",
     "trigger",
   ],
 });

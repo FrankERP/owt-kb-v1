@@ -140,9 +140,9 @@ export default function AvailabilityProposals({ fallback, onChanged }: {
   }, [reload]);
 
   /** `waive` = the break keys of an option that breaks rules, exactly as this read showed them. */
-  const apply = (c: PanelConflict, option: PanelConflict["options"][number], waive?: string[]) =>
+  const apply = (c: PanelConflict, option: PanelConflict["options"][number], waive?: string[], busyKey = c.recordId) =>
     post(
-      c.recordId,
+      busyKey,
       `${ENDPOINT}/apply`,
       { roleId: c.roleId, rev: c.roleRev, memberId: c.memberId, replacements: option.seats.map((s) => ({ rowId: s.rowId, to: s.to })), ...(waive ? { waive } : {}) },
       `Aplicado: ${seatRun(option.seats)} el ${c.service}.`,
@@ -244,8 +244,8 @@ export default function AvailabilityProposals({ fallback, onChanged }: {
                               <ul className="list-disc space-y-0.5 pl-5 font-body text-sm text-ink-muted">
                                 {f.breaks.map((b) => <li key={b.key} className="[overflow-wrap:anywhere]">{b.line}</li>)}
                               </ul>
-                              <Button variant="secondary" size="sm" disabled={disabled} onClick={() => { void apply(c, f, f.breaks.map((b) => b.key)); }}>
-                                {busy === c.recordId ? "Guardando…" : "Aplicar de todos modos"}
+                              <Button variant="secondary" size="sm" disabled={disabled} onClick={() => { void apply(c, f, f.breaks.map((b) => b.key), `${c.recordId}#${i}`); }}>
+                                {busy === `${c.recordId}#${i}` ? "Guardando…" : "Aplicar de todos modos"}
                               </Button>
                             </li>
                           ))}

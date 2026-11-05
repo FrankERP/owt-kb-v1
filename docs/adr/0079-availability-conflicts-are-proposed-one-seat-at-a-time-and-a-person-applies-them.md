@@ -41,14 +41,14 @@ never changes a service, draft or published. That plan was approved in rounds 10
   leading another Sunday that month: «que entregue 2 o más propuestas y explique por qué rompen las
   reglas»; plan `docs/superpowers/plans/2026-11-05-availability-fallback-options.md` and its review
   log). Only for a VOICE seat whose strict search answers «sin reemplazo», and only in the panel
-  (the sweep, its records and the cron stay as they were): `proposeFallbacks` runs the same search
+  (the sweep and the cron compute no options; the email's «Sin reemplazo» line now points to the app, and the records gain only `waived`, set by «Aplicar de todos modos» and unset by every other transition): `proposeFallbacks` runs the same search
   relaxed — a taker a personal rule blocks is allowed, a singer may move up — and judges each build
   against the month with the seat merely emptied. Every new or grown month finding (a second Sunday
   as Lead, two Sundays in a row, a count rule, a presence or pair rule) and every personal rule
   broken on the service is one line, in `v3Copy.ts`'s and `ruleCopy.ts`'s Spanish. Never offered:
   someone who marked that day, a seat clash, someone already serving that service, someone off the
   month's v3 lists for the seat (unless a personal rule on that seat is what keeps them off, and is
-  shown), a worship night's song lead, an empty voice seat, or a build that breaks nothing. Up to
+  shown; only someone on that seat's pool without the rule, `pooledForRoleKey`), a worship night's song lead, an empty voice seat, or a build that breaks nothing. Up to
   four, fewest breaks first. **«Aplicar de todos modos»** sends the option's break keys as `waive`;
   the writer first runs the strict check (a now-clean option is refused: reload), then re-derives the
   option on a fresh read under the same role `_rev` and writes only if its seats AND its break set

@@ -30,7 +30,8 @@
 
 import { normalizeMinistries } from "@/app/ministries";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
-import type { FairnessLedgerResponse, LogicalRecord } from "@/app/utils/fairnessVocabulary";
+import type { FairnessLedgerResponse, LogicalRecord, RoleKey } from "@/app/utils/fairnessVocabulary";
+import { pooledForRoleKey } from "@/app/utils/fairnessEligibility";
 import { isSpecialRoleType } from "@/app/utils/roleWriteRequest";
 import { isWorshipNightFormat } from "@/app/utils/serviceFormat";
 import type { ServiceRole } from "@/app/components/admin/serviceCardModel";
@@ -502,6 +503,8 @@ function breaksOf(input: {
   baseline: MonthCheckVerdict;
   voices: ReadonlyArray<{ id: string; rowId: string }>;
   nameOf: (id: string) => string;
+  /** On the solver's pool for that seat before any personal rule (`pooledForRoleKey`). */
+  pooled: (id: string, rowId: string) => boolean;
 }): Break[] | null {
   const { propose: p, next, baseline } = input;
   const after = verdictOn(next, input.gate);
@@ -515,8 +518,12 @@ function breaksOf(input: {
   const findings = [...judged.judged.added, ...judged.judged.reforced];
   for (const f of findings) breaks.push({ key: `s:${findingKeyText(f.key)}`, line: findingLine(f, input.config, input.nameOf) });
   const servicePair = findings.some((f) => f.key.kind === "pair");
-  /** A per-seat personal rule for that person on that row: it explains why they are off the lists. */
-  const excused = (v: { id: string; rowId: string }) =>
+  /**
+   * A per-seat personal rule for that person on that row explains why they are off the lists, but
+   * only when they are on the seat's pool without it: a «Soporte» singer with a «No líder en
+   * domingo» rule is off the Lead list anyway, and is never offered as Lead.
+   */
+  const excused = (v: { id: string; rowId: string }) => input.pooled(v.id, v.rowId) &&
     findings.some((f) => f.key.kind !== "pair" && f.key.row === v.rowId && f.key.members.includes(v.id));
 
   const names: V3Names = {
@@ -654,7 +661,7 @@ export function proposeFallbacks(input: ProposeInput & { nameOf: (id: string) =>
       working = other.board;
       seats.push(...other.changes);
     }
-    const breaks = breaksOf({ propose: input, config, gate, weekend, next: working, baseline, voices, nameOf: input.nameOf });
+    const breaks = breaksOf({ propose: input, config, gate, weekend, next: working, baseline, voices, nameOf: input.nameOf, pooled });
     const target = columnTarget(working, roleId, todayIso);
     // Never a waiver option without a broken rule (the strict search owns clean proposals), nor
     // one with more breaks than «Aplicar de todos modos» may waive.
@@ -662,13 +669,21 @@ export function proposeFallbacks(input: ProposeInput & { nameOf: (id: string) =>
     return { option: { target, seats, breaks }, taker: voices[0].id, order: order++, finalBoard: working };
   };
 
+  const day = column.type === "saturday_role" ? "Sat" : "Sun";
+  const memberById = new Map(input.members.map((m) => [m._id, m]));
+  /** On the seat's pool before any personal rule (RES-1, `pooledForRoleKey`). */
+  const pooled = (id: string, rowId: string) => {
+    const m = memberById.get(id);
+    return !!m && pooledForRoleKey(m, config, `${day}.${VOICE_ROLE[rowId]}` as RoleKey);
+  };
   /**
    * Before any limit, keep only who could stand: on the month's v3 eligibility for that seat (it does
-   * not depend on the seats), or blocked there by a personal rule (`breaksOf` decides whether that
-   * rule is what keeps them off). Else low-load singers off the lists would use up the tries.
+   * not depend on the seats), or blocked there by a personal rule while on the seat's pool without it
+   * (`breaksOf` decides whether that rule is what keeps them off). Else low-load singers off the
+   * lists would use up the tries.
    */
   const couldStand = (rowId: string) => (c: RankedCandidate) =>
-    !weekend || !!c.ruleBlockedReason || (baseline.eligibility.get(c.id)?.[roleId] ?? []).includes(VOICE_ROLE[rowId]);
+    !weekend || (baseline.eligibility.get(c.id)?.[roleId] ?? []).includes(VOICE_ROLE[rowId]) || (!!c.ruleBlockedReason && pooled(c.id, rowId));
   const builds: Built[] = [];
   // Direct: someone free takes the seat.
   const pool = seatCandidates({ ...input, working: removed, rowId: voiceRow, relaxed: true })?.filter(couldStand(voiceRow));

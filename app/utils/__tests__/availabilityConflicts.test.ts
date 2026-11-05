@@ -384,6 +384,24 @@ describe("proposeFallbacks (nobody passes every rule)", () => {
     expect(proposeFallbacks({ ...input(), only: new Map([["lead", "m-pau"], ["coro", "m-lia"]]) })).toEqual({ kind: "none", reason: "no_candidate" });
   });
 
+  it("a «Soporte» singer with a «No líder en domingo» rule is still never offered as Lead (her rule does not explain it)", () => {
+    const i = input();
+    // Zoe is free, has no seat this month (lowest load) and is off the Lead list ANYWAY: she is
+    // not on the Sunday Lead pool. Her personal rule must not excuse that.
+    const zoe = { _id: "m-zoe", member_name: "Zoe Test", alias: "Zoe", memberType: ["voz", "support"], ministries: ["worship"] };
+    const people = [...["m-lia", "m-mar", "m-noe", "m-oto", "m-xim", "m-quim"].map(listed), ...["m-pau", "m-zoe"].map((id) => ({ ...listed(id), roles: { ...ALL_IN, "Sun.Lead": "out" as const } }))];
+    const withZoe = {
+      ...i,
+      members: [...i.members, zoe] as EditorMember[],
+      ledger: ledgerResponse(["2026-11"], { horizon: [{ record: record("2026-11", people), storedServices: 5, recordBinds: true }] }),
+      config: { ...i.config!, support: ["m-pau", "m-zoe"], restrictions: [restriction("x-zoe", "Zoe", { excludedPatterns: ["Sun.Lead"] })] },
+    };
+    const out = proposeFallbacks(withZoe);
+    if (out.kind !== "options") throw new Error("expected options");
+    expect(out.options.some((o) => o.seats.some((s) => s.to === "m-zoe" && s.rowId === "lead"))).toBe(false);
+    expect(proposeFallbacks({ ...withZoe, only: new Map([["lead", "m-zoe"]]) })).toEqual({ kind: "none", reason: "no_candidate" });
+  });
+
   it("stops early past the deadline and never answers an option without a broken rule", () => {
     expect(proposeFallbacks({ ...input(), pastDeadline: () => true })).toEqual({ kind: "none", reason: "no_candidate" });
     const out = proposeFallbacks(input());

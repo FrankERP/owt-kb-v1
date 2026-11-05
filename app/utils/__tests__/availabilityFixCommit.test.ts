@@ -358,6 +358,8 @@ describe("«Aplicar»", () => {
     w.unavailable("m-dani", "2026-11-01");
     await sweep(w);
     const rec = w.records.get(DANI_SUN1)!;
+    // A record left with a stale `waived` (an earlier «Aplicar de todos modos»): a strict apply unsets it.
+    w.records.set(DANI_SUN1, { ...rec, waived: ["m:old"] });
     const to = rec.seats[0].to!;
     const out = await applyAvailabilityFix({ roleId: "sun1", rev: "sun1-r1", memberId: "m-dani", replacements: [{ rowId: "coro", to }], actor: "m-frank" }, w.deps);
     expect(out).toMatchObject({ ok: true, body: { recorded: true } });
@@ -366,6 +368,7 @@ describe("«Aplicar»", () => {
     expect(w.roles.get("sun1")!.chorus.map((s) => s._id)).toEqual([to]);
     expect(w.records.get(DANI_SUN1)).toMatchObject({ status: "applied", appliedBy: "m-frank" });
     expect(w.records.get(DANI_SUN1)!.reason).toBeUndefined();
+    expect(w.records.get(DANI_SUN1)!.waived).toBeUndefined();
   });
 
   it("refuses a stale rev, a partial cover and a replacement that no longer passes", async () => {
@@ -550,6 +553,34 @@ describe("«Aplicar de todos modos» (nobody passes every rule)", () => {
     expect(w.deps.editRole).not.toHaveBeenCalled();
   });
 
+  it("never offers nor applies a «Soporte» singer as Lead, even when her own «No líder en domingo» rule could pass for the reason", async () => {
+    const zoe = { _id: "m-zoe", member_name: "Zoe Test", alias: "Zoe", memberType: ["voz", "support"], ministries: ["worship"] };
+    w = world({
+      rows: [
+        storedRow("s1", "sunday_role", "2026-11-01", { leads: ["m-lia"] }),
+        storedRow("s8", "sunday_role", "2026-11-08", { leads: ["m-mar"] }),
+        storedRow("s15", "sunday_role", "2026-11-15", { leads: ["m-xim"], bgvs: ["m-noe"], chorus: ["m-pau"] }),
+        storedRow("s22", "sunday_role", "2026-11-22", { leads: ["m-noe"] }),
+        storedRow("s29", "sunday_role", "2026-11-29", { leads: ["m-oto"] }),
+      ],
+      members: [...PEOPLE, zoe] as EditorMember[],
+      recordPeople: [...PEOPLE, zoe].map((m) => (m._id === "m-pau" || m._id === "m-zoe" ? { ...listed(m._id), roles: { ...ALL_IN, "Sun.Lead": "out" as const } } : listed(m._id))),
+      config: config({
+        sundayLeads: ["m-lia", "m-mar", "m-noe", "m-oto", "m-xim"], support: ["m-pau", "m-zoe"],
+        restrictions: [{ id: "x-zoe", person: "Zoe", excludedPatterns: ["Sun.Lead"], fairness: "none", fairnessSlack: 0, weekExclusions: [], caps: [] }],
+      }),
+    });
+    w.unavailable("m-xim", "2026-11-15");
+    const read = await readConflictPanel(w.deps);
+    if (!read.ok) throw new Error("expected a read");
+    expect(read.open[0].fallbacks!.some((f) => f.seats.some((s) => s.rowId === "lead" && s.to === "m-zoe"))).toBe(false);
+    // The keys her option would carry (her rule on the Lead seat): still refused, nothing written.
+    const key = `s:${JSON.stringify(["exclusion", "restriction[0].pattern[0]", "s15", "lead", ["m-zoe"]])}`;
+    expect(await applyAvailabilityFix({ roleId: "s15", rev: "s15-r1", memberId: "m-xim", replacements: [{ rowId: "lead", to: "m-zoe" }], waive: [key], actor: "a" }, w.deps))
+      .toMatchObject({ status: 409, body: { error: "refused" } });
+    expect(w.deps.editRole).not.toHaveBeenCalled();
+  });
+
   it("a waiver over a change that is now clean is refused: the panel shows it as a normal proposal", async () => {
     w = sundays();
     const read = await readConflictPanel(w.deps);
@@ -563,7 +594,27 @@ describe("«Aplicar de todos modos» (nobody passes every rule)", () => {
     expect(w.deps.editRole).not.toHaveBeenCalled();
   });
 
-  it("a later sweep transition and «Mantener»/«Deshacer» never keep a stale `waived`", async () => {
+  it("«Mantener» and «Deshacer» never keep a stale `appliedBy`/`waived`", async () => {
+    w = sundays();
+    const read = await readConflictPanel(w.deps);
+    if (!read.ok) throw new Error("expected a read");
+    const pick = read.open[0].fallbacks![0];
+    await applyAvailabilityFix({ roleId: "s15", rev: "s15-r1", memberId: "m-xim", replacements: body(pick), waive: pick.breaks.map((b) => b.key), actor: "a" }, w.deps);
+    expect(w.records.get(XIM15)).toMatchObject({ appliedBy: "a", waived: expect.any(Array) });
+    const keep = { roleId: "s15", memberId: "m-xim", date: "2026-11-15", serviceKind: "sunday_role" as const, published: true, actor: "a" };
+    expect(await setConflictKept({ ...keep, kept: true }, w.deps)).toMatchObject({ ok: true });
+    expect(w.records.get(XIM15)).toMatchObject({ status: "kept" });
+    expect(w.records.get(XIM15)!.waived).toBeUndefined();
+    expect(w.records.get(XIM15)!.appliedBy).toBeUndefined();
+    // Put both back as a hand-edited record could have them, then «Deshacer».
+    w.records.set(XIM15, { ...w.records.get(XIM15)!, appliedBy: "a", waived: ["m:old"] });
+    expect(await setConflictKept({ ...keep, kept: false }, w.deps)).toMatchObject({ ok: true });
+    expect(w.records.get(XIM15)).toMatchObject({ status: "none" });
+    expect(w.records.get(XIM15)!.waived).toBeUndefined();
+    expect(w.records.get(XIM15)!.appliedBy).toBeUndefined();
+  });
+
+  it("a later sweep transition never keeps a stale `waived`", async () => {
     w = sundays();
     const read = await readConflictPanel(w.deps);
     if (!read.ok) throw new Error("expected a read");
