@@ -70,17 +70,23 @@ to every `https` URI and §3.1 which local agents are expected to work and on wh
 
 ## 3. Redirect targets (the closed list) — `redirects.ts`
 
-`isRedirectUriAllowed(uri, origin)` becomes, for **every** origin (production, preview, local):
+`isRedirectUriAllowed(uri, origin)` becomes, for each of the three known origins (production, preview,
+local):
 
 | Target | Rule | Shown on consent as |
 |---|---|---|
 | claude.ai | exactly `CLAUDE_AI_REDIRECT_URI` (unchanged) | «Claude (claude.ai)» |
 | ChatGPT, stable | exactly `https://chatgpt.com/connector_platform_oauth_redirect` | «ChatGPT (chatgpt.com)» |
-| ChatGPT, per-connection | `^https://chatgpt\.com/connector/oauth/[A-Za-z0-9_-]{1,128}$` AND `new URL(uri).href === uri` | «ChatGPT (chatgpt.com)» |
 | Local agent | a loopback URI (§3.1) — **now also in production** | «Un programa en esta computadora» |
 
-A pure `redirectTargetLabel(uri): string | null` beside it returns the label (null ⇔ not allowed);
-it is the ONLY source of the consent screen's «Se conecta a» line.
+Any other origin (an unknown `VERCEL_ENV`) still allows nothing, as today. ChatGPT's per-connection
+form `https://chatgpt.com/connector/oauth/{callback_id}` is NOT allowed: OpenAI uses it only for an AS
+without RFC 9207 issuer identification, and ours has it; if the live proof shows otherwise, adding it
+is a new reviewed change (the refused URI is logged, below).
+
+A pure `redirectTargetKind(uri, origin): "claude" | "chatgpt" | "loopback" | null` beside it (null ⇔
+not allowed on that origin) is the ONLY source of the consent screen's «Se conecta a» label and of the grant's `client`
+field (§4.1).
 
 **Why loopback in production is safe** (RFC 8252 §7.3/§8.3): the code is delivered to the browser's
 own machine. A remote attacker who registers a loopback client and sends an admin the authorize link
@@ -163,7 +169,7 @@ export function mcpTierOf(access: MemberAccess): McpTier | null
 
 `access.ministries` is already normalized by `accessFromDoc` (absent ⇒ worship). The "read" rule is
 the same audience as `canUseAdminChat`; a test pins the two predicates equal over the role ×
-ministries matrix (they stay separate functions because they gate different features).
+ministries matrix for ACTIVE members (`canUseAdminChat` does not read `active`) (they stay separate functions because they gate different features).
 
 **The four gates** (§2) replace `role === "super-admin"` with `mcpTierOf(access) !== null`. Each
 keeps its order, its refusal codes and its impersonation check. The tier is **never stored** — not
@@ -191,6 +197,40 @@ keep working unchanged.
   (the SDK's own error); it is never registered there, so no write module runs. The read handler's
   `capabilities` are `{ tools: { listChanged: false } }` only — no `resources` key, since it
   registers no resource (a route test pins what `resources/list` answers on the read tier).
+### 4.1 App-only tools reach claude.ai grants only
+
+Five tools are app-only (`_meta.ui.visibility: ["app"]`): `check_proposal_edits`,
+`save_proposal_edits`, `check_service_edits_app`, `save_service_edits_app`, `delete_services_app`.
+They mint waivers, force seats and save after the card's own confirmation. ADR-0062 Q1 (1), ADR-0066,
+ADR-0072 and `docs/MCP.md` («The guarantee that the model cannot force rests on the host hiding
+app-only tools») rely on the HOST hiding them from the model. Today only claude.ai can hold a
+production token, and it hides them. Once a super-admin can connect ChatGPT or a local agent, that
+host may show them to the model, and a prompt-injected lyric or note could then mint a waiver and
+force a save with no card in between. So the app-only tools follow the CLIENT, not the role:
+
+- **The grant records its client.** `createGrant` (token route, `authorization_code` grant) writes a
+  new field `client: "claude" | "chatgpt" | "loopback"` = `redirectTargetKind(code's redirect URI, origin)`
+  (already verified by token step 3). It is set once and never changed by a refresh (`rotateRefresh`
+  patches only the refresh fields). It is a property of the connection, not of the person: the tier
+  is still never stored.
+- **Absent `client` (every grant minted before this release):** on the production origin it reads
+  as `"claude"` (production allowed only claude.ai until now, so it is true); on any other origin it
+  reads as `"loopback"` (fail closed: the dev smoke's old grants lose the app twins, which the smoke
+  never calls). `loadGrant`'s parse accepts the field absent or one of the three values; any other
+  value → malformed → revoked (existing rule).
+- **Three handlers, not two:** `full` + `client === "claude"` → today's list exactly (45 tools + the
+  card resources; digest pinned to today's); `full` + any other client → today's list WITHOUT the
+  five app-only tools and WITHOUT the card resources (`registerAllTools(server, { version, tier,
+  appsHost })`; the three bundles skip their app twins when `appsHost` is false); `read` → the 11
+  reads, any client. The model-visible tools whose `_meta.ui.resourceUri` points at the card stay as
+  they are; a host without the resource falls back to the text answer (known effect). Without
+  `check_service_edits_app` nothing mints a waiver on such a grant, so nothing can be forced.
+- `docs/MCP.md` and ADR-0062/0066/0072 get a one-line consequence addendum: «since ADR-0083, app-only
+  tools are registered only for grants whose client is claude.ai».
+- The grant type is hidden and read-only in Studio; `documentTypes.ts`'s field list,
+  `docs/DATA_MODEL.md` and `scripts/revoke-mcp-grant.mjs`'s dry-run listing gain `client` (so Frank
+  sees which agent each grant is).
+
 - **Known effects, accepted:** the descriptions of `get_service`/`list_services` mention write tools
   the read tier lacks (changing them would change the `full` digest and send Frank a refresh note
   for nothing; the model simply cannot call them). `STALE_TOOL_LIST_NOTE` becomes agent-neutral
@@ -198,7 +238,8 @@ keep working unchanged.
   not part of any digest. A client whose model omits the optional `toolsVersion` gets the note on
   every answer; observed in the live proof, and if ChatGPT does this, a follow-up decides.
 
-**Why a separate tool list and not «register everything, refuse writes in the handler»:** the model
+**Why a separate tool list and not «register everything, refuse writes in the handler»** (the same
+reasoning drives §4.1): the model
 never sees a tool it can't use (no wasted call, no prompt-injected «call delete_services»); ChatGPT
 treats any tool without `readOnlyHint` as a write and asks for confirmation; and a forgotten refusal
 in one of 25 tool files cannot leak a write, because the read list is an allowlist checked by a test.
@@ -220,7 +261,7 @@ rate limit is a named follow-up, triggered if usage shows it.
   activa de administrador para autorizar una conexión.»; «La conexión con Claude no está disponible
   en este momento.» → «La conexión con agentes de IA no está disponible en este momento.»
   (`ERROR_PAGE_TEXT` has no Claude wording and stays.)
-- New fact line «Se conecta a»: `redirectTargetLabel(request.redirectUri)` (verified). The exact
+- New fact line «Se conecta a»: the label of `redirectTargetKind(request.redirectUri, origin)` (verified). The exact
   redirect URI and the unverified client name stay shown as today.
 - New fact line «Podrá»: "full" → «Todo lo que puedes hacer como super-admin, incluido cambiar
   servicios, setlists y canciones»; "read" → «Solo leer: servicios, canciones, disponibilidad,
@@ -238,16 +279,25 @@ rate limit is a named follow-up, triggered if usage shows it.
 - New ADR (next free number on BOTH `main` and `preview` at PR time; 0083 today): «The connector
   opens to worship admins read-only, and to agents through a closed redirect list», with the
   rejected alternatives (open https list, refuse-in-handler, stored tier, CIMD now).
+- Stale text this change creates, updated in the same PR: `project-rules.md` «The admin
+  assistant…» («super-admin OAuth, write tools on the same server»); `docs/MCP.md` lines that say
+  only a super-admin reaches consent; ADR-0039 Consequences («only a live super-admin session can
+  approve one») as a dated addendum; the «refused redirect_uri from a claude host» log text
+  (register route, `authorizeRequest.ts`); the `redirects.ts` header comment; the smoke's refusal
+  reason; the consequence lines of ADR-0062/0066/0072 (§4.1).
+- The new ADR notes that `localhost` loopback is kept although RFC 8252 §8.3 prefers `127.0.0.1`
+  (harmless here: the code reaches the browser's own machine), so a later "fix" doesn't break clients.
 - `CLAUDE.md` + `docs/agents/project-rules.md` «OAuth/MCP routes» invariant: one line on tiers
-  (live role, `READ_TIER_TOOLS` allowlist, writes never in "read") and the closed redirect list.
+  (live role, `READ_TIER_TOOLS` allowlist, writes never in "read", app-only tools only for a claude.ai
+  grant) and the closed redirect list.
 
 ## 7. Tests (vitest; all existing MCP/OAuth suites stay green)
 
-1. `redirects.test.ts`: per origin, allow the four targets; refuse `http://chatgpt.com/…`,
-   `https://chatgpt.com/connector/oauth/` (empty id), ids with `.`/`%`/`/`, 129 chars,
-   `https://CHATGPT.com/…`, `https://chatgpt.com.evil.example/…`, userinfo, port, query, fragment,
-   trailing slash on the stable URI, `https://vscode.dev/redirect`, `cursor://…`; label for each
-   allowed one, null otherwise; logging host matrix incl. R11 cases for the new hosts.
+1. `redirects.test.ts`: per origin, allow the three targets; refuse `http://chatgpt.com/…`, any
+   `https://chatgpt.com/connector/oauth/…`, `https://CHATGPT.com/…`,
+   `https://chatgpt.com.evil.example/…`, userinfo, port, query, fragment, trailing slash on the
+   stable URI, `https://vscode.dev/redirect`, `cursor://…`; the kind for each allowed one, null
+   otherwise; logging host matrix incl. R11 cases for the new hosts.
 2. `tier.test.ts`: the role × active × ministries matrix; parity with `canUseAdminChat`.
 3. `toolList.test.ts`: read list = `READ_TIER_TOOLS` exactly, in order; every one has
    `readOnlyHint: true` and no `_meta.ui`; the read list has no resource; `full` digest equals the
@@ -259,7 +309,8 @@ rate limit is a named follow-up, triggered if usage shows it.
 5. Token route: admin redeems a code and refreshes; content-editor refused on both grants.
 6. Authorize POST: admin 303 with code; content-editor 403; impersonation still 403.
 7. Consent page: admin sees «Solo leer…» and the target label; content-editor sees the refusal.
-8. Register route: a ChatGPT stable and a per-connection registration succeed in production.
+8. Register route: a ChatGPT stable registration succeeds in production; a per-connection
+   `chatgpt.com/connector/oauth/…` URI is refused (and logged).
 
 9. `redirects.test.ts` + authorize/token: port-less loopback allowed; `matchRegisteredRedirect`
    matrix (registered `http://127.0.0.1/` matches requested `http://127.0.0.1:54321/`; registered
@@ -268,10 +319,26 @@ rate limit is a named follow-up, triggered if usage shows it.
 10. Register: VS Code's exact four-URI body → 201 whose `redirect_uris` are the two loopback ones
    (and the client id carries only those); an all-off-list body → `invalid_redirect_uri`.
 
-**Intended flips of existing tests** (update them, never the code back): `mcpRoute.test.ts` (an admin
-with worship is now admitted on the read tier), `authorizePage.test.tsx` (an admin now sees the
-consent screen), `redirects.test.ts` and `authorizeRequest.test.ts` (production now allows loopback),
-`register` tests that assert a mixed list is refused whole. Every other existing case stays as is.
+11. Grant `client`: written from the code's redirect at the code exchange; kept across refresh;
+   absent → `"claude"` on production, `"loopback"` elsewhere; an unknown value → revoked. Route: a
+   full grant with client `chatgpt`/`loopback` lists 40 tools, none app-only, no resource, and
+   `tools/call save_service_edits_app` is an unknown tool; a full grant with client `claude` (or
+   absent on production) lists today's 45 + resources.
+12. Unknown origin: `isRedirectUriAllowed` and `redirectTargetKind` refuse everything.
+
+**Intended flips of existing tests** (update them, never the code back):
+- admin admitted: `mcpRoute.test.ts` (the `liveAccess("admin")` refusal), `authorizePage.test.tsx`
+  (admin refused), `oauthAuthorizeRoute.test.ts` (admin → 403 cases), `oauthTokenRoute.test.ts`
+  («demoted to admin» → `invalid_grant`; becomes «demoted to content-editor»);
+- production loopback: the `redirects.test.ts`, `authorizeRequest.test.ts`,
+  `oauthRegisterRoute.test.ts`, `oauthTokenRoute.test.ts` and `oauthAuthorizeRoute.test.ts` cases
+  asserting production refuses loopback. **These carry O1 (the redirect is re-checked against the
+  allowlist, never trusted from the client id)**: re-target each to a client id SIGNED DIRECTLY in
+  the test with an off-list URI (e.g. `https://evil.example/cb`) and assert authorize and token still
+  refuse it. Never delete them: once registration signs only allowed URIs the re-check looks
+  redundant, and it is not;
+- register: cases asserting a mixed list is refused whole become «the allowed subset is signed».
+Every other existing case stays as is.
 
 Gates: `npx tsc --noEmit`, `npm test`, `npx eslint .` (0 errors). No solver tree touched.
 
@@ -279,12 +346,16 @@ Gates: `npx tsc --noEmit`, `npm test`, `npx eslint .` (0 errors). No solver tree
 
 1. Branch → gates → one merge-range `code-reviewer` (§Review policy) → fixes → gates.
 2. Merge into `preview`, verify the dev alias (alias + SHA). Dev is behind Deployment Protection, so
-   ChatGPT cannot reach it. On dev, `scripts/mcp-dev-smoke.mjs` (loopback client, interactive
-   consent in a browser) run (a) as Frank: full tier unchanged (`tools/list` = 45), and (b) as a
-   worship-admin account (the «Verificador (bot)», role admin): `tools/list` = the 11 reads and a
-   `tools/call edit_setlist` refused as unknown. If (b) can't be run (it needs a browser signed in
-   as that account), say so in the PR; the route tests (§7.4) are then the only pre-production
-   proof of the boundary.
+   ChatGPT cannot reach it. `scripts/mcp-dev-smoke.mjs` gains `--expect-tier full|read` (default
+   `full`): `full` expects today's list minus the five app-only tools (a loopback grant, §4.1);
+   `read` expects exactly `READ_TIER_TOOLS` and that no write name is listed. Its write-call guard
+   (`toolCallRequest` refuses write names, because dev writes the production dataset) STAYS; the
+   boundary probe is a `tools/call` of `edit_setlist` with arguments that fail schema validation on
+   ANY tier (e.g. `{}`), expecting the unknown-tool error on `read`, so a broken boundary still cannot
+   write. Its production refusal message («no loopback entry») is reworded; the refusal stays (the
+   smoke writes grants). Run (a) as Frank (`full`) and (b) as a worship-admin account (`read`). If
+   (b) can't be run (a browser signed in as that account), say so in the PR; §7.4 is then the only
+   pre-production proof of the boundary.
 3. PR to `main`, `gates` green, merge, verify the prod alias + SHA.
 4. **Live proof in production** (needs people): (a) Frank's existing Claude connector still works
    with no refresh note (`ping`); (b) a worship admin (Mkz) adds ChatGPT (developer mode) → consent
@@ -292,16 +363,21 @@ Gates: `npx tsc --noEmit`, `npm test`, `npx eslint .` (0 errors). No solver tree
    `tools/list` has 11 tools; (c) the grant shows in `revoke-mcp-grant.mjs` (dry run).
    Any ChatGPT incompatibility found here — `invalid_target` (a `resource` other than
    `${origin}/api/mcp`), a DCR `token_endpoint_auth_method` other than `none`, an empty
-   `client_secret` field refused by the token route, a redirect form not on the list — is a NEW
-   change with its own review, not a hot fix.
+   `client_secret` field refused by the token route, a redirect form not on the list, a stale-list
+   note on every answer because the model omits `toolsVersion` — is a NEW change with its own
+   review, not a hot fix.
 5. **Rollback, fastest first:** one misbehaving grant → `scripts/revoke-mcp-grant.mjs --id … --apply`
-   (bites ≤ 30 s); everything → the kill switch (`docs/MCP.md` «Kill switch»); the code → revert the
-   merge through a `main` PR (minutes, gated), after which the tier gates return to super-admin and
-   any admin grant fails step 6 with 401 within 30 s.
+   (bites ≤ 30 s); every admin grant → the same script per id (the dry run lists `sub` and
+   `client`); everything → the kill switch (`docs/MCP.md` «Kill switch»; it needs a redeploy, so it
+   is no faster than a revert); the code → revert the merge through a `main` PR (minutes, gated),
+   after which the tier gates return to super-admin and
+   any admin grant fails step 6 with 401 within 30 s. There is no switch for the read tier alone;
+   accepted, since per-grant revocation covers it.
 
 ## 9. Out of scope (named follow-ups)
 
-Email notice on a new grant; a per-grant rate limit; a «Conexiones» screen listing/revoking grants; admin writes; Kids/
+Email notice on a new grant (the cheapest detector for §3's residual risk, now that every worship
+admin can authorize; offered to Frank as the first follow-up); a per-grant rate limit; a «Conexiones» screen listing/revoking grants; admin writes; Kids/
 Jóvenes reads; `get_service_messages` for admins; CIMD; the proposal card in ChatGPT (MCP Apps
 rendering there is untested; tools already answer in text).
 
