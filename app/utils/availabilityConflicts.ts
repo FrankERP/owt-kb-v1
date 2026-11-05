@@ -639,6 +639,13 @@ export function proposeFallbacks(input: ProposeInput & { nameOf: (id: string) =>
     const judged = judgeTarget({ board, roleId, target, members: [...input.members], config, todayIso });
     return judged.ok ? new Set([...judged.judged.added, ...judged.judged.reforced].map((f) => findingKeyText(f.key))) : null;
   };
+  const day = column.type === "saturday_role" ? "Sat" : "Sun";
+  const memberById = new Map(input.members.map((m) => [m._id, m]));
+  /** On the seat's pool before any personal rule (RES-1, `pooledForRoleKey`). */
+  const pooled = (id: string, rowId: string) => {
+    const m = memberById.get(id);
+    return !!m && pooledForRoleKey(m, config, `${day}.${VOICE_ROLE[rowId]}` as RoleKey);
+  };
   type Built = { option: FallbackOption; taker: string; order: number; finalBoard: EditorBoard };
   let order = 0;
   /** One build finished (the other seats) and judged; `null` = dropped. */
@@ -669,13 +676,6 @@ export function proposeFallbacks(input: ProposeInput & { nameOf: (id: string) =>
     return { option: { target, seats, breaks }, taker: voices[0].id, order: order++, finalBoard: working };
   };
 
-  const day = column.type === "saturday_role" ? "Sat" : "Sun";
-  const memberById = new Map(input.members.map((m) => [m._id, m]));
-  /** On the seat's pool before any personal rule (RES-1, `pooledForRoleKey`). */
-  const pooled = (id: string, rowId: string) => {
-    const m = memberById.get(id);
-    return !!m && pooledForRoleKey(m, config, `${day}.${VOICE_ROLE[rowId]}` as RoleKey);
-  };
   /**
    * Before any limit, keep only who could stand: on the month's v3 eligibility for that seat (it does
    * not depend on the seats), or blocked there by a personal rule while on the seat's pool without it
