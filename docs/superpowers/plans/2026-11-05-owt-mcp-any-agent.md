@@ -413,3 +413,38 @@ The «MCP de la página» thread (phase 4, members/rules/deletes) edits `toolLis
 route. Its new tools are super-admin-only, which is exactly where "full" puts any tool not in
 `READ_TIER_TOOLS`; whichever PR lands second rebases, and the `full` digest pin moves with phase 4's
 own tool additions (the pin is «unchanged BY THIS PR»).
+
+## 11. Adopted after the final approval (NOT reviewed by the plan rounds; the merge-range code review covers them)
+
+Two fresh reviewers approved digest `0e3d401e…ff46` in a row (see the review log). These
+non-blocking items were adopted afterwards and are listed here so the diff review checks them:
+
+1. **Smoke probe, both guards.** `scripts/mcp-dev-smoke.mjs` refuses a write in two places
+   (`toolCallRequest` and the structural DV1 guard in `createMcpRequest`/`mcpRequest`). Both get
+   the SAME narrow exception: tool `edit_setlist`, arguments deep-equal to `{}` (plus an optional
+   `toolsVersion`), and only under `--expect-tier read`. `mcpDevSmoke.test.ts` pins the rule on both.
+2. **`LEGACY_GRANT_CUTOFF`** is set in the commit that goes to the `main` PR (it only has to precede
+   the first PRODUCTION deployment of this code; dev grants never read as Claude anyway), so a
+   Claude grant Frank makes while the PR is on preview still reads as `"claude"`. If a Claude grant
+   ever reads as `"loopback"` (made after the cutoff by old code, e.g. after a revert), the fix is to
+   reconnect the connector; `docs/MCP.md` says so, and live proof (a) checks Frank's grant date.
+3. **Counts are derived, never literal.** Phase 4's member tools are already on `main` (52 tools):
+   tests derive "today's list" from the base registration and pin the `full` digest against the
+   PR's base, not 45/40.
+4. **ADR number** = the next free on both `main` and `preview` at PR time (0084 today: preview has
+   0083); every addendum («since ADR-00xx») uses the real number.
+5. **`maxSubscriptions: 0` and `listChanged: false` on all three handlers**; a route test pins the
+   `subscriptions/listen` refusal on each (O2/O9: no held streams).
+6. **Host-dependent human gates.** ADR-0072's «the Claude app's permission prompt is the human gate»
+   for a model-visible destructive tool holds only on Claude. The new ADR and `docs/MCP.md` say:
+   on another host that gate is whatever that host does; never «always allow» or auto-approve
+   destructive tools in a local agent.
+7. **Rollback step 0 wording:** revoke every grant whose EFFECTIVE client (the §4.1 reading, so a
+   pre-cutoff production grant without `client` is Claude's and is kept) is not `"claude"`. Those
+   revocations are production Sanity writes: dry run first, then Frank's explicit consent.
+8. **One fixed-reason log line** for a register refusal that is not about redirects (e.g.
+   `token_endpoint_auth_method`), never the body, so a failed ChatGPT registration is diagnosable.
+9. **More stale text:** the `CLAUDE.md`/project-rules bullet «MCP tools register only in
+   `registerAllTools` … its digest is the `toolsVersion`» (now one digest per handler); an ADR-0069
+   addendum; the `/api/mcp` header comment (steps 1–6).
+10. **Frank hears before Mkz is told to connect:** ChatGPT compatibility is unproven until §8.4 passes.
