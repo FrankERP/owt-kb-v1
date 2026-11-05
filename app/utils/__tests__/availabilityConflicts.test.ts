@@ -16,9 +16,12 @@ import {
   compareVerdicts,
   findRoleConflicts,
   horizonMonths,
+  MAX_FALLBACK_OPTIONS,
+  proposeFallbacks,
   proposeReplacement,
   type ProposeInput,
 } from "../availabilityConflicts";
+import { config, restriction } from "@/app/components/admin/__tests__/v3Fixtures";
 
 const TODAY = "2026-10-21";
 const WORSHIP = (m: EditorMember) => ({ ...m, ministries: (m as { ministries?: unknown }).ministries ?? ["worship"] });
@@ -235,5 +238,179 @@ describe("compareVerdicts (the month gate)", () => {
     const inst = { family: "pair" as const, rule: "r1", scope: "sun1" };
     expect(compareVerdicts(v({ instances: [inst] }), v())).toBe("ok");
     expect(compareVerdicts(v(), v({ ruleIds: "[]" }))).toBe("reject");
+  });
+});
+
+describe("proposeFallbacks (nobody passes every rule)", () => {
+  // Every Sunday leader already leads another Sunday of the month; Ximena, who leads the 15th,
+  // marked it unavailable; Quim could lead but marked the 15th too. Pau sings Coro (no Lead Tipo).
+  const lead = (id: string, name: string) => ({ _id: id, member_name: `${name} Test`, alias: name, memberType: ["voz", "sunday_lead"], ministries: ["worship"] });
+  const PEOPLE = [lead("m-lia", "Lía"), lead("m-mar", "Mar"), lead("m-noe", "Noé"), lead("m-oto", "Oto"), lead("m-xim", "Ximena"), lead("m-quim", "Quim"),
+    { _id: "m-pau", member_name: "Pau Test", alias: "Pau", memberType: ["voz", "support"], ministries: ["worship"] }];
+  const NAMES = new Map(PEOPLE.map((m) => [m._id, m.alias]));
+  const rows = () => [
+    storedRow("s1", "sunday_role", "2026-11-01", { leads: ["m-lia"] }),
+    storedRow("s8", "sunday_role", "2026-11-08", { leads: ["m-mar"] }),
+    storedRow("s15", "sunday_role", "2026-11-15", { leads: ["m-xim"], bgvs: ["m-noe"], chorus: ["m-pau"] }),
+    storedRow("s22", "sunday_role", "2026-11-22", { leads: ["m-noe"] }),
+    storedRow("s29", "sunday_role", "2026-11-29", { leads: ["m-oto"] }),
+  ];
+  function input(): ProposeInput & { nameOf: (id: string) => string } {
+    const base = inputFor({ rows: rows(), members: PEOPLE as EditorMember[], absent: { roleId: "s15", memberId: "m-xim" }, listed: PEOPLE.map((m) => m._id) });
+    const members = base.members.map((m) => (m._id === "m-quim" ? { ...m, unavailableDates: ["2026-11-15"] } : m));
+    const ids = PEOPLE.filter((m) => m.memberType.includes("sunday_lead")).map((m) => m._id);
+    // The record: Pau is not on the Sunday Lead line (as the solver's lists say).
+    const people = PEOPLE.map((m) => (m._id === "m-pau" ? { ...listed(m._id), roles: { ...ALL_IN, "Sun.Lead": "out" as const } } : listed(m._id)));
+    base.ledger = ledgerResponse(["2026-11"], { horizon: [{ record: record("2026-11", people), storedServices: 5, recordBinds: true }] });
+    return { ...base, members, config: config({ sundayLeads: ids, support: ["m-pau"] }), nameOf: (id) => NAMES.get(id) ?? "?" };
+  }
+
+  it("the strict proposal finds nobody, and the fallback offers two or more options with their broken rules", () => {
+    const i = input();
+    expect(proposeReplacement(i)).toEqual({ kind: "none", reason: "no_candidate" });
+    const out = proposeFallbacks(i);
+    expect(out.kind).toBe("options");
+    if (out.kind !== "options") return;
+    expect(out.options.length).toBeGreaterThanOrEqual(2);
+    expect(out.options.length).toBeLessThanOrEqual(MAX_FALLBACK_OPTIONS);
+    const takers = out.options.map((o) => o.seats[0].to);
+    // Never the absent person, never someone who marked the day.
+    expect(takers).not.toContain("m-xim");
+    expect(takers).not.toContain("m-quim");
+    for (const o of out.options) {
+      expect(o.breaks.length).toBeGreaterThan(0);
+      const name = NAMES.get(o.seats[0].to!)!;
+      expect(o.breaks.map((b) => b.line)).toContain(`${name} dirige 2 domingos en noviembre; lo normal es uno.`);
+      expect(o.target.leads).toEqual([o.seats[0].to]);
+    }
+    // Fewest broken rules first: Lía and Oto break one; Mar also leads two Sundays in a row.
+    expect(out.options[0].breaks).toHaveLength(1);
+    expect(out.options[1].breaks).toHaveLength(1);
+    const mar = out.options.find((o) => o.seats[0].to === "m-mar");
+    expect(mar?.breaks.map((b) => b.line)).toContain("Mar dirige domingos seguidos: 8 y 15 nov.");
+    const counts = out.options.map((o) => o.breaks.length);
+    expect([...counts].sort((a, b) => a - b)).toEqual(counts);
+  });
+
+  it("offers a singer of the same service moving up, with someone free taking their seat", () => {
+    const out = proposeFallbacks(input());
+    if (out.kind !== "options") throw new Error("expected options");
+    const all = proposeFallbacks({ ...input() });
+    expect(all).toEqual(out);
+    const moved = proposeFallbacks({ ...input(), only: new Map([["lead", "m-noe"], ["bgv", "m-lia"]]) });
+    expect(moved.kind).toBe("options");
+    if (moved.kind !== "options") return;
+    expect(moved.options).toHaveLength(1);
+    expect(moved.options[0].seats).toEqual([{ rowId: "lead", from: "m-xim", to: "m-noe" }, { rowId: "bgv", from: "m-noe", to: "m-lia" }]);
+    expect(moved.options[0].breaks.map((b) => b.line)).toEqual(expect.arrayContaining([
+      "Noé dirige 2 domingos en noviembre; lo normal es uno.",
+      "Noé dirige domingos seguidos: 15 y 22 nov.",
+    ]));
+  });
+
+  it("`only` reproduces exactly the option shown, keys included", () => {
+    const out = proposeFallbacks(input());
+    if (out.kind !== "options") throw new Error("expected options");
+    for (const shown of out.options) {
+      const replay = proposeFallbacks({ ...input(), only: new Map(shown.seats.map((s) => [s.rowId, s.to])) });
+      expect(replay).toEqual({ kind: "options", options: [shown] });
+    }
+    // Someone who marked the day is never offered, even when asked for.
+    expect(proposeFallbacks({ ...input(), only: new Map([["lead", "m-quim"]]) })).toEqual({ kind: "none", reason: "no_candidate" });
+  });
+
+  it("a personal rule may be broken too, and its sentence is the explanation", () => {
+    const i = input();
+    const out = proposeFallbacks({ ...i, config: { ...i.config!, restrictions: [restriction("x-oto", "Oto", { excludedPatterns: ["Sun.Lead"] })] } });
+    if (out.kind !== "options") throw new Error("expected options");
+    const oto = out.options.find((o) => o.seats[0].to === "m-oto");
+    expect(oto).toBeDefined();
+    const rule = oto!.breaks.find((b) => b.key.startsWith("s:"));
+    expect(rule?.line).toBe("Oto: su regla «No líder en domingo».");
+    // One more broken rule than Lía's option, so it sorts after it.
+    expect(out.options.indexOf(oto!)).toBeGreaterThan(out.options.findIndex((o) => o.seats[0].to === "m-lia"));
+  });
+
+  it("someone off the lists BECAUSE of a personal rule on that seat is offered, with that rule as the line", () => {
+    const i = input();
+    const people = ["m-lia", "m-mar", "m-noe", "m-oto", "m-xim", "m-quim"].map((id) => (id === "m-oto" ? { ...listed(id), roles: { ...ALL_IN, "Sun.Lead": "out" as const } } : listed(id)));
+    people.push({ ...listed("m-pau"), roles: { ...ALL_IN, "Sun.Lead": "out" as const } });
+    const out = proposeFallbacks({
+      ...i,
+      ledger: ledgerResponse(["2026-11"], { horizon: [{ record: record("2026-11", people), storedServices: 5, recordBinds: true }] }),
+      config: { ...i.config!, restrictions: [restriction("x-oto", "Oto", { excludedPatterns: ["Sun.Lead"] })] },
+    });
+    if (out.kind !== "options") throw new Error("expected options");
+    const oto = out.options.find((o) => o.seats[0].to === "m-oto");
+    expect(oto?.breaks.map((b) => b.line)).toContain("Oto: su regla «No líder en domingo».");
+  });
+
+  it("singers off the Lead lists never use up the tries: with many of them, the leaders are still offered", () => {
+    const i = input();
+    // Nine free support singers with no seats this month sort ahead of the leaders by load.
+    const extra = Array.from({ length: 9 }, (_, k) => ({ _id: `m-s${k}`, member_name: `S${k} Test`, alias: `S${k}`, memberType: ["voz", "support"], ministries: ["worship"] }));
+    const people = [...["m-lia", "m-mar", "m-noe", "m-oto", "m-xim", "m-quim"].map(listed), ...["m-pau", ...extra.map((m) => m._id)].map((id) => ({ ...listed(id), roles: { ...ALL_IN, "Sun.Lead": "out" as const } }))];
+    const out = proposeFallbacks({
+      ...i,
+      members: [...i.members, ...extra] as EditorMember[],
+      ledger: ledgerResponse(["2026-11"], { horizon: [{ record: record("2026-11", people), storedServices: 5, recordBinds: true }] }),
+    });
+    if (out.kind !== "options") throw new Error("expected options");
+    expect(out.options.length).toBeGreaterThanOrEqual(2);
+    expect(out.options.every((o) => ["m-lia", "m-mar", "m-noe", "m-oto"].includes(o.seats[0].to!))).toBe(true);
+  });
+
+  it("a person who also plays: the bass goes to a free bassist even when the Lead taker breaks a personal rule", () => {
+    const i = input();
+    const both = { ...lead("m-xim", "Ximena"), memberType: ["voz", "sunday_lead", "instrumento"], instruments: ["Bass"], singsAndPlays: true };
+    const raul = { _id: "m-raul", member_name: "Raúl Test", alias: "Raúl", memberType: ["instrumento"], instruments: ["Bass"], ministries: ["worship"] };
+    const r = rows();
+    r[2] = storedRow("s15", "sunday_role", "2026-11-15", { leads: ["m-xim"], bgvs: ["m-noe"], chorus: ["m-pau"], instruments: [["Bass", "m-xim"]] });
+    const base = inputFor({ rows: r, members: [...PEOPLE.filter((m) => m._id !== "m-xim"), both, raul] as EditorMember[], absent: { roleId: "s15", memberId: "m-xim" } });
+    const out = proposeFallbacks({
+      ...i, board: base.board, adminRoles: base.adminRoles, members: base.members,
+      config: { ...i.config!, restrictions: [restriction("x-oto", "Oto", { excludedPatterns: ["Sun.Lead"] })] },
+    });
+    if (out.kind !== "options") throw new Error("expected options");
+    const oto = out.options.find((o) => o.seats[0].to === "m-oto");
+    expect(oto?.seats).toEqual([{ rowId: "lead", from: "m-xim", to: "m-oto" }, { rowId: "instrumento:Bass", from: "m-xim", to: "m-raul" }]);
+    for (const o of out.options) expect(o.seats.find((s) => s.rowId === "instrumento:Bass")?.to).toBe("m-raul");
+  });
+
+  it("never offers someone off the solver's lists for the seat (a «Soporte» singer as Lead)", () => {
+    const out = proposeFallbacks(input());
+    if (out.kind !== "options") throw new Error("expected options");
+    expect(out.options.some((o) => o.seats.some((s) => s.rowId === "lead" && s.to === "m-pau"))).toBe(false);
+    expect(proposeFallbacks({ ...input(), only: new Map([["lead", "m-pau"], ["coro", "m-lia"]]) })).toEqual({ kind: "none", reason: "no_candidate" });
+  });
+
+  it("a «Soporte» singer with a «No líder en domingo» rule is still never offered as Lead (her rule does not explain it)", () => {
+    const i = input();
+    // Zoe is free, has no seat this month (lowest load) and is off the Lead list ANYWAY: she is
+    // not on the Sunday Lead pool. Her personal rule must not excuse that.
+    const zoe = { _id: "m-zoe", member_name: "Zoe Test", alias: "Zoe", memberType: ["voz", "support"], ministries: ["worship"] };
+    const people = [...["m-lia", "m-mar", "m-noe", "m-oto", "m-xim", "m-quim"].map(listed), ...["m-pau", "m-zoe"].map((id) => ({ ...listed(id), roles: { ...ALL_IN, "Sun.Lead": "out" as const } }))];
+    const withZoe = {
+      ...i,
+      members: [...i.members, zoe] as EditorMember[],
+      ledger: ledgerResponse(["2026-11"], { horizon: [{ record: record("2026-11", people), storedServices: 5, recordBinds: true }] }),
+      config: { ...i.config!, support: ["m-pau", "m-zoe"], restrictions: [restriction("x-zoe", "Zoe", { excludedPatterns: ["Sun.Lead"] })] },
+    };
+    const out = proposeFallbacks(withZoe);
+    if (out.kind !== "options") throw new Error("expected options");
+    expect(out.options.some((o) => o.seats.some((s) => s.to === "m-zoe" && s.rowId === "lead"))).toBe(false);
+    expect(proposeFallbacks({ ...withZoe, only: new Map([["lead", "m-zoe"]]) })).toEqual({ kind: "none", reason: "no_candidate" });
+  });
+
+  it("stops early past the deadline and never answers an option without a broken rule", () => {
+    expect(proposeFallbacks({ ...input(), pastDeadline: () => true })).toEqual({ kind: "none", reason: "no_candidate" });
+    const out = proposeFallbacks(input());
+    if (out.kind === "options") for (const o of out.options) expect(o.breaks.length).toBeGreaterThan(0);
+  });
+
+  it("is «sin revisar» without the month's record and never runs for a worship night's song lead", () => {
+    expect(proposeFallbacks({ ...input(), ledger: ledgerFor(null) })).toEqual({ kind: "none", reason: "unchecked" });
+    expect(proposeFallbacks({ ...input(), snapshotRole: { format: "worship_night", songs: [{ leads: [{ _ref: "m-xim" }] }] } }))
+      .toEqual({ kind: "none", reason: "song_lead" });
   });
 });

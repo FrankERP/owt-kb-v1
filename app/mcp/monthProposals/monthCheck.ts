@@ -234,6 +234,9 @@ export interface MonthCheckVerdict {
   /** Per person, per service id: the roles the month's eligibility allows. */
   eligibility: ReadonlyMap<string, Readonly<Record<string, readonly V3Role[]>>>;
   ruleIds: string;
+  /** The rules' card labels and the services' labels, by id: to explain a broken rule in Spanish. */
+  ruleLabels?: ReadonlyMap<string, string>;
+  serviceLabels?: ReadonlyMap<string, string>;
 }
 
 export function monthCheckVerdict(input: MonthCheckInput): MonthCheckVerdict {
@@ -247,6 +250,8 @@ export function monthCheckVerdict(input: MonthCheckInput): MonthCheckVerdict {
     missed: judged.verdict.missed,
     eligibility: new Map(judged.request.people.map((p) => [p.id, p.eligibility])),
     ruleIds: JSON.stringify(judged.request.rules),
+    ruleLabels: judged.built.ruleLabels,
+    serviceLabels: judged.built.serviceLabels,
   };
 }
 

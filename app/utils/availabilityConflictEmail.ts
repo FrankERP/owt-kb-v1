@@ -16,7 +16,7 @@ export interface ConflictEmailLine {
 }
 
 const REASON: Record<NonNullable<ConflictEmailLine["reason"]>, string> = {
-  no_candidate: "nadie disponible pasa las reglas",
+  no_candidate: "nadie disponible pasa todas las reglas; en la app verás si hay opciones que rompen alguna y cuál rompe cada una",
   song_lead: "dirige canciones en la noche de alabanza: revísalo a mano",
   unchecked: "no se pudo revisar (falta el registro del mes o el servicio no se puede editar)",
 };

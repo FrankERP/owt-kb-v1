@@ -52,6 +52,12 @@ export const availabilityConflict = defineType({
     { name: "updatedAt", title: "Actualizado", type: "datetime" },
     { name: "checkedAt", title: "Revisado", type: "datetime" },
     { name: "appliedBy", title: "Aplicado por (id)", type: "string" },
+    {
+      name: "waived",
+      title: "Reglas que se rompieron a propósito («Aplicar de todos modos»)",
+      type: "array",
+      of: [{ type: "string" }],
+    },
     { name: "trigger", title: "Origen", type: "string" },
   ],
 });

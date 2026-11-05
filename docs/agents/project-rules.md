@@ -506,6 +506,10 @@ several exist precisely to stop a plausible-looking change.
   role `_rev` the screen showed and calls `editRole` with `notices: "deferred"`, exactly as the
   PATCH does. The pick is the planner fillers' (`serverPickCandidates`, `orderByEffectiveLoad`,
   `orderForFill`) gated by `judgeTarget` and `monthCheckVerdict`; never re-implement either.
+  When a voice seat has nobody, the panel also lists up to four options that break the fewest rules
+  (`proposeFallbacks`, each rule one line); «Aplicar de todos modos» sends their keys as `waive`, and
+  the writer writes only if the strict check still refuses AND a fresh read re-derives exactly those
+  seats and keys (plan 2026-11-05; the applied record keeps them in `waived`).
 - **The MCP proposal editor: the server judges, the card only shows** (ADR-0062). The card
   (`mcp-app/proposal-card/`) holds a list of edits, never a board; every check and save replays the
   whole list from the stored proposal through the planner's own gate. Only `editorBoard.ts` calls
