@@ -16,13 +16,16 @@ import {
   buildLeadSongReminderEmail,
   LEAD_REMINDER_QUERY,
   leadReminderWindow,
+  MIN_SWEEP_DEADLINE_MS,
   planLeadReminders,
+  pushTargetsOf,
   reminderStateOf,
   sweepOptionsAfterReminders,
   weekdayOf,
   type LeadReminderRow,
 } from "../leadSongReminder";
-import { SEND_BUDGET_MS, SWEEP_DEADLINE_MS } from "../outboxSweep";
+import { SWEEP_DEADLINE_MS } from "../outboxSweep";
+import { SEND_TIMEOUT_MS } from "../email";
 
 describe("leadReminderWindow", () => {
   it("is null on every day but Sunday", () => {
@@ -154,6 +157,20 @@ describe("planLeadReminders", () => {
     expect(out.map((p) => p.memberId)).toEqual(["d"]);
   });
 
+  it("honours the lead's «Propuestas» email preference, legacy opt-out included", () => {
+    const out = planLeadReminders(
+      [row({
+        leads: [
+          { _id: "off", name: "A", email: "a@m.com", notifPrefs: { emailProposals: false } },
+          { _id: "legacy", name: "B", email: "b@m.com", notifPrefs: { email: false } },
+          { _id: "on", name: "C", email: "c@m.com", notifPrefs: { email: false, emailProposals: true } },
+        ],
+      })],
+      base,
+    );
+    expect(out.map((p) => p.memberId)).toEqual(["on"]);
+  });
+
   it("labels a special with its name and time", () => {
     const [p] = planLeadReminders(
       [row({ _type: "special_role", service_name: "Noche de alabanza", time: "19:00", leads: [{ _id: "m1", name: "Pau", email: "p@m.com" }] })],
@@ -169,12 +186,32 @@ describe("sweepOptionsAfterReminders", () => {
     expect(sweepOptionsAfterReminders(0)).toEqual({});
   });
 
-  it("charges the time the reminders spent to both sweep clocks", () => {
-    expect(sweepOptionsAfterReminders(3_000)).toEqual({
-      sendBudgetMs: SEND_BUDGET_MS - 3_000,
-      sweepDeadlineMs: SWEEP_DEADLINE_MS - 3_000,
+  it("charges the time the reminders spent to the sweep's deadline only", () => {
+    expect(sweepOptionsAfterReminders(3_000)).toEqual({ sweepDeadlineMs: SWEEP_DEADLINE_MS - 3_000 });
+  });
+
+  it("skips the sweep when too little is left for stage 7 to admit a send", () => {
+    expect(sweepOptionsAfterReminders(SWEEP_DEADLINE_MS - MIN_SWEEP_DEADLINE_MS)).toEqual({
+      sweepDeadlineMs: MIN_SWEEP_DEADLINE_MS,
     });
-    expect(sweepOptionsAfterReminders(120_000)).toEqual({ sendBudgetMs: 1_000, sweepDeadlineMs: 1_000 });
+    expect(sweepOptionsAfterReminders(SWEEP_DEADLINE_MS - MIN_SWEEP_DEADLINE_MS + 1)).toBeNull();
+    expect(MIN_SWEEP_DEADLINE_MS).toBeGreaterThan(SEND_TIMEOUT_MS);
+  });
+});
+
+describe("pushTargetsOf", () => {
+  it("pushes every lead with access of a service that needs songs, once, titled by its state", () => {
+    const targets = pushTargetsOf([
+      { _id: "a", _type: "saturday_role", date: "2026-11-14", setlistSongs: 0, proposal: { status: "changes_requested" },
+        leads: [{ _id: "m1", email: "" }, { _id: "m2", disabled: true }, null] },
+      { _id: "b", _type: "sunday_role", date: "2026-11-15", setlistSongs: 0, proposal: null,
+        leads: [{ _id: "m1" }, { _id: "m3" }] },
+      { _id: "c", _type: "sunday_role", date: "2026-11-15", setlistSongs: 2, proposal: null, leads: [{ _id: "m4" }] },
+    ]);
+    expect([...targets]).toEqual([
+      ["m1", "Tu propuesta tiene cambios pedidos"],
+      ["m3", "Te toca dirigir"],
+    ]);
   });
 });
 
@@ -217,8 +254,8 @@ describe("LEAD_REMINDER_QUERY", () => {
     expect(byId.sun15.setlistSongs).toBe(0);
     expect(byId.sun15.pastorMessage).toBe("Gracia");
     expect(byId.sun15.leads).toEqual([
-      { _id: "m1", name: "Pau", email: "pau@mail.com", disabled: null },
-      { _id: "m2", name: "Marco", email: "mkz@mail.com", disabled: true },
+      { _id: "m1", name: "Pau", email: "pau@mail.com", disabled: null, notifPrefs: null },
+      { _id: "m2", name: "Marco", email: "mkz@mail.com", disabled: true, notifPrefs: null },
     ]);
     expect(byId.sat14.setlistSongs).toBe(1);
     expect(byId.sp12.setlistSongs).toBe(0);

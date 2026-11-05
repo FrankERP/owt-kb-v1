@@ -80,7 +80,7 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   **`leadReminderWindow(...)`**, **`reminderStateOf(...)`**
   ([leadSongReminder.ts](../app/utils/leadSongReminder.ts)) — the Sunday «Te toca dirigir» email to
   the coming week's leads, run only by the daily cron (ADR-0080); `sweepOptionsAfterReminders`
-  derates that cron's sweep by the time it spent.
+  derates that cron's sweep deadline by the time it spent (`null` = skip it); `pushTargetsOf` picks the push audience.
 - **`notifyLeadsAboutServiceMessage(...)`**, **`buildServiceThreadEmail(...)`**
   ([serviceThreadNotify.ts](../app/utils/serviceThreadNotify.ts)) — an admin's message from a service
   card (ADR-0065): push AND email to that service's Lead seat, never the author; «Mensaje del

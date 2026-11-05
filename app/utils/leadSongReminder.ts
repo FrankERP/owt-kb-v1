@@ -10,13 +10,14 @@
 // "already sent" marker and why no opt-out switch: ADR-0080.
 
 import { operationalClient } from "@/sanity/lib/operationalClient";
-import { sendEmail } from "./email";
+import { sendEmail, SEND_TIMEOUT_MS } from "./email";
 import { sendPush } from "./push";
 import { getAllowlist, isEmailAllowed, appBaseUrl, escapeHtml } from "./assignmentEmail";
 import { C, td, tr, shell } from "./emailShell";
 import { serviceIdentity, serviceLabel } from "./emailServiceLabel";
 import { pastorMessageBodyOf } from "./serviceThread";
-import { SEND_BUDGET_MS, SWEEP_DEADLINE_MS, type SweepOptions } from "./outboxSweep";
+import { SWEEP_DEADLINE_MS, type SweepOptions } from "./outboxSweep";
+import { wantsNotification } from "./notifyPrefs";
 
 export const TIMEZONE = "America/Mexico_City";
 
@@ -152,7 +153,13 @@ export interface LeadReminderRow {
   date: string;
   service_name?: unknown;
   time?: unknown;
-  leads?: Array<{ _id: string; name?: string | null; email?: string | null; disabled?: boolean | null } | null> | null;
+  leads?: Array<{
+    _id: string;
+    name?: string | null;
+    email?: string | null;
+    disabled?: boolean | null;
+    notifPrefs?: unknown;
+  } | null> | null;
   setlistSongs?: number | null;
   proposal?: { status?: string | null; songCount?: number | null } | null;
   pastorMessage?: string | null;
@@ -169,7 +176,7 @@ export const LEAD_REMINDER_QUERY = `*[_type in $types && published != false
   | order(coalesce(date, week) asc) {
   _id, _type, service_name, time,
   "date": coalesce(date, week),
-  "leads": Lead[]->{ _id, "name": coalesce(alias, member_name), email, disabled },
+  "leads": Lead[]->{ _id, "name": coalesce(alias, member_name), email, disabled, notifPrefs },
   "setlistSongs": select(
     _type == "sunday_role" => count(*[_type == "featuredSongs" && week == ^.week && count(songs) > 0]),
     _type == "saturday_role" => count(*[_type == "saturdarSongs" && week == ^.week && count(songs) > 0]),
@@ -193,7 +200,10 @@ export interface PlannedReminder {
 /**
  * Rows → the emails to send. A lead without a usable email, outside the
  * allowlist or without app access (`disabled`) is left out: the button would
- * lead nowhere. Co-leads are named in each other's email.
+ * lead nowhere. So is a lead whose «Propuestas» email preference resolves off
+ * (`wantsNotification`, the same gate `serviceThreadNotify` puts on the same
+ * Lead seat — it also honours the legacy all-email opt-out). Co-leads are named
+ * in each other's email.
  */
 export function planLeadReminders(
   rows: LeadReminderRow[],
@@ -212,6 +222,7 @@ export function planLeadReminders(
       seen.add(lead._id);
       const email = lead.email?.trim().toLowerCase();
       if (!email || lead.disabled === true || !isEmailAllowed(email, opts.allow)) continue;
+      if (!wantsNotification(lead.notifPrefs, "proposals")) continue;
       const coLeads = [...new Set(
         leads.filter((l) => l._id !== lead._id).map((l) => (l.name ?? "").trim()).filter(Boolean),
       )];
@@ -224,6 +235,25 @@ export function planLeadReminders(
         link,
       });
       out.push({ memberId: lead._id, email, roleId: row._id, subject, html });
+    }
+  }
+  return out;
+}
+
+/**
+ * Who gets the push, and with which title: every lead with app access of a
+ * service that needs a reminder, whether or not their email went out (push has
+ * its own preference, applied by `sendPush`). A lead of two such services gets
+ * one push, titled by the first (the rows come date-ordered).
+ */
+export function pushTargetsOf(rows: LeadReminderRow[]): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const row of rows) {
+    const state = reminderStateOf({ setlistSongs: row.setlistSongs ?? 0, proposal: row.proposal ?? null });
+    if (!state) continue;
+    for (const lead of row.leads ?? []) {
+      if (!lead?._id || lead.disabled === true || out.has(lead._id)) continue;
+      out.set(lead._id, ASK[state].subject);
     }
   }
   return out;
@@ -279,14 +309,17 @@ export async function sendLeadSongReminders(now: Date = new Date()): Promise<Lea
       }
     });
     // Push as well, best-effort: almost nobody has it on (2026-10), but it costs nothing.
-    const pushed = [...new Set(planned.map((p) => p.memberId))];
-    if (pushed.length) {
-      await sendPush(pushed, "reminders", {
-        title: "Te toca dirigir",
-        body: "Escoge las canciones de tu próximo servicio.",
-        path: "/me",
-      }).catch((err) => console.error("[leadSongReminder] push failed:", err));
+    const byTitle = new Map<string, string[]>();
+    for (const [memberId, title] of pushTargetsOf(rows ?? [])) {
+      byTitle.set(title, [...(byTitle.get(title) ?? []), memberId]);
     }
+    await Promise.allSettled(
+      [...byTitle].map(([title, ids]) =>
+        sendPush(ids, "reminders", { title, body: "Revisa las canciones de tu próximo servicio.", path: "/me" }),
+      ),
+    ).then((rs) => rs.forEach((r) => {
+      if (r.status === "rejected") console.error("[leadSongReminder] push failed:", r.reason);
+    }));
     const report: LeadReminderReport = {
       ran: true,
       services: (rows ?? []).length,
@@ -304,16 +337,24 @@ export async function sendLeadSongReminders(now: Date = new Date()): Promise<Lea
 }
 
 /**
- * The daily sweep's clocks after the reminders spent `elapsedMs` of the route's
+ * The daily sweep's options after the reminders spent `elapsedMs` of the route's
  * `maxDuration` — the same reason layer 2 derates (`SweepOptions.sweepDeadlineMs`):
- * the sweep's clock starts at the top of the SWEEP, so it cannot see time the host
- * route already spent. Lossless: a notice the shorter budget does not reach is
- * re-pended for layer 1, never consumed. `{}` (the defaults) when nothing ran.
+ * that clock runs from the top of the SWEEP, so it cannot see time the host route
+ * already spent. Only the deadline: `sendBudgetMs` is measured from the start of
+ * stage 7 and is unaffected. Lossless: a notice the shorter deadline does not reach
+ * is re-pended for layer 1, never consumed.
+ *
+ * `{}` (the defaults) when nothing ran. `null` = SKIP the sweep: with less than one
+ * send timeout plus the read phase left, stage 7 could admit nothing (its check is
+ * `elapsed + SEND_TIMEOUT_MS > deadline`), so the sweep would only claim and
+ * re-pend. Layer 1 drains the outbox every five minutes anyway.
  */
-export function sweepOptionsAfterReminders(elapsedMs: number | undefined): Pick<SweepOptions, "sendBudgetMs" | "sweepDeadlineMs"> {
+export const MIN_SWEEP_DEADLINE_MS = SEND_TIMEOUT_MS + 5_000;
+
+export function sweepOptionsAfterReminders(
+  elapsedMs: number | undefined,
+): Pick<SweepOptions, "sweepDeadlineMs"> | null {
   if (!elapsedMs || elapsedMs <= 0) return {};
-  return {
-    sendBudgetMs: Math.max(1_000, SEND_BUDGET_MS - elapsedMs),
-    sweepDeadlineMs: Math.max(1_000, SWEEP_DEADLINE_MS - elapsedMs),
-  };
+  const remaining = SWEEP_DEADLINE_MS - elapsedMs;
+  return remaining < MIN_SWEEP_DEADLINE_MS ? null : { sweepDeadlineMs: remaining };
 }

@@ -20,8 +20,11 @@ Sunday it reads every published service from Monday to the next Sunday with some
 each lead of a service that still needs songs: no setlist songs and no proposal `pending` or
 `approved`. A draft with songs or a `changes_requested` proposal gets its own wording. The
 email names the co-lead, carries the pastor's message when there is one, and links the
-proposal page. Sends run in parallel (the pool is `SEND_CONCURRENCY` wide), BEFORE the sweep,
-and the sweep's two clocks are derated by the time spent (`sweepOptionsAfterReminders`).
+proposal page. The lead's «Propuestas» email preference applies (`wantsNotification`, as on
+every email to the same Lead seat). Sends run in parallel (the pool is `SEND_CONCURRENCY` wide),
+BEFORE the sweep, and the sweep's deadline is derated by the time spent
+(`sweepOptionsAfterReminders`); with less than `MIN_SWEEP_DEADLINE_MS` left the daily sweep is
+skipped, since stage 7 could admit nothing and layer 1 drains within five minutes.
 
 ## Rejected
 
@@ -37,10 +40,11 @@ and the sweep's two clocks are derated by the time spent (`sweepOptionsAfterRemi
   chance that week, while the sweep is lossless (an unreached notice is re-pended for layer 1).
 - **Serial sends.** Up to six or so leads × the 20 s `SEND_TIMEOUT_MS` could outlast the
   route; in parallel the step is bounded by one timeout plus the read.
-- **Gating on the «Propuestas» email switch.** That switch is shown only to admins
-  (`EmailPrefToggles`), so a lead could never turn it off, and a new switch is UI for a mail
-  that reaches a person only on the weeks they lead. Allowlist, `disabled` and
-  `EMAIL_REDIRECT_TO` still apply.
+- **A new preference switch.** The reminder reuses «Propuestas» (`emailProposals`, which also
+  honours the legacy all-email opt-out). That row is shown only to admins (`EmailPrefToggles`),
+  so a plain-member lead cannot turn it off from `/me`; a new switch is UI for a mail that
+  reaches a person only on the weeks they lead. Ignoring preferences entirely was the first
+  draft and was dropped in review: it would have been the one member email that skips them.
 
 ## Consequences
 

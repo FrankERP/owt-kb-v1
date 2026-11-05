@@ -345,6 +345,26 @@ describe("layer 3 — the Sunday «Te toca dirigir» reminder (ADR-0080)", () =>
     expect(sendEmailMock.mock.invocationCallOrder[0]).toBeLessThan(sweepOutboxMock.mock.invocationCallOrder[0]);
   });
 
+  it("skips the sweep (layer 1 drains it) when the reminders left too little time", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-09T01:30:00Z"));
+    operationalFetch.mockImplementation(async (query: string) => {
+      if (isLeadQuery(query)) {
+        vi.setSystemTime(new Date("2026-11-09T01:30:30Z")); // a 30 s read
+        return [];
+      }
+      if (query.includes("notificationOutbox")) return { count: 0, oldest: null };
+      return [];
+    });
+    const GET = await remindersRoute();
+    const res = await GET(req({ authorization: `Bearer ${SECRET}` }));
+
+    expect(res.status).toBe(200);
+    expect(sweepOutboxMock).not.toHaveBeenCalled();
+    expect(await bodyField(res, "sweep")).toEqual({ error: "sweep_skipped_after_lead_reminders" });
+  });
+
   it("still sweeps when the reminder's read fails", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     vi.useFakeTimers({ toFake: ["Date"] });

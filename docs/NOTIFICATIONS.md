@@ -610,11 +610,15 @@ debounce, no claim, one direct send per lead.
   songs reads «Tu propuesta no se ha enviado»; `changes_requested` reads «Tu propuesta tiene
   cambios pedidos»; anything else «Te toca dirigir».
 - **Who:** each Lead with an email, app access (`disabled != true`) and inside
-  `EMAIL_ALLOWLIST`; the co-lead is named; the pastor's message is included when set. No
-  preference switch (the «Propuestas» one is admin-only). Preview mail goes to
-  `EMAIL_REDIRECT_TO`. A best-effort push («Te toca dirigir», category `reminders`) rides along.
-- **Order and budget:** sends run in parallel BEFORE the sweep; the sweep is derated by the time
-  spent (`sweepOptionsAfterReminders`), losslessly. The route's JSON carries `leadReminders`
+  `EMAIL_ALLOWLIST` whose «Propuestas» preference resolves on (`wantsNotification`, legacy
+  all-email opt-out included; the switch is shown only to admins); the co-lead is named; the
+  pastor's message is included when set. Preview mail goes to `EMAIL_REDIRECT_TO`. A best-effort
+  push (titled by the state, category `reminders`) goes to every lead with access of those
+  services, email or not.
+- **Order and budget:** sends run in parallel BEFORE the sweep; the sweep's deadline is derated
+  by the time spent (`sweepOptionsAfterReminders`), losslessly. With less than
+  `MIN_SWEEP_DEADLINE_MS` (25 s) left the daily sweep is skipped (`notify_daily_sweep_skipped`;
+  `sweep: {error: "sweep_skipped_after_lead_reminders"}`) and layer 1 drains it. The route's JSON carries `leadReminders`
   (`{ ran: false }` on other days); Vercel logs carry `lead_reminder_run`,
   `lead_reminder_send_failed` and `lead_reminder_failed`.
 - **No "already sent" marker:** a duplicated cron event sends the reminder twice (ADR-0080).

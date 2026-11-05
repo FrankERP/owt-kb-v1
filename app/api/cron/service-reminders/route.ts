@@ -86,11 +86,19 @@ async function getHandler(req: NextRequest) {
   // which is that layer's only signal. Here the caller is Vercel's scheduler and
   // nobody reads the status code.
   let sweep: Awaited<ReturnType<typeof sweepOutbox>> | { error: string };
-  try {
-    sweep = await sweepOutbox(sweepOptionsAfterReminders(leadReminders.elapsedMs));
-  } catch (err) {
-    console.error(JSON.stringify({ event: "notify_daily_sweep_failed" }), err);
-    sweep = { error: "sweep_failed" };
+  const sweepOptions = sweepOptionsAfterReminders(leadReminders.elapsedMs);
+  if (sweepOptions === null) {
+    // The reminders left too little of the route for stage 7 to admit a send;
+    // layer 1 drains the outbox within five minutes (ADR-0080).
+    console.error(JSON.stringify({ event: "notify_daily_sweep_skipped", reason: "lead_reminders_slow", elapsedMs: leadReminders.elapsedMs }));
+    sweep = { error: "sweep_skipped_after_lead_reminders" };
+  } else {
+    try {
+      sweep = await sweepOutbox(sweepOptions);
+    } catch (err) {
+      console.error(JSON.stringify({ event: "notify_daily_sweep_failed" }), err);
+      sweep = { error: "sweep_failed" };
+    }
   }
 
   // AFTER the sweep, and that order is the opposite of the liveness alarm's on
