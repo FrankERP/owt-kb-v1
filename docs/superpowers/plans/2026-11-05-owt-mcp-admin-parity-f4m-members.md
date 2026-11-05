@@ -1,6 +1,9 @@
 # OWT MCP — admin parity, phase 4, slice M: creating and editing people from the chat (plan)
 
-**Status:** DRAFT for the adversarial plan review (critical tier). Nothing built. Parent:
+**Status:** APPROVED (critical tier): two fresh reviewers in a row approved the bytes with SHA-256
+`e7868eca…15e2bb` (commit 2d36570e); review log `2026-11-05-owt-mcp-admin-parity-f4m-members-review-log.md`.
+§7 was added AFTER that approval from the reviewers' non-blocking notes and is NOT reviewed; it overrides
+the sections it names. Nothing built. Parent:
 `2026-11-04-owt-mcp-admin-parity-f4.md` (scope approved by Frank 2026-11-05; D1, D5–D8 there are this
 slice's starting decisions and are refined here). Review approval is not authorization to implement;
 the build follows the release order in CLAUDE.md.
@@ -191,3 +194,37 @@ rule.
 Deletes (slice D). Rule edits (slice R; D6 only renames). Re-keying rules by member id. Admins who
 are not super-admin editing people (Frank, 2026-11-05: only the super-admin, from the MCP). Kids
 volunteers (`/api/kids/*`, paused).
+
+## 7. Post-approval amendments (NOT reviewed; they override the sections they name)
+
+1. **D6 writes a normalized name and proves it.** The new rule text is
+   `normalizeLabel(displayMemberName(after))` (the rules reader's own normalization: NFC, trim,
+   collapsed spaces), and before writing, each renamed text must name exactly the renamed person and
+   no one else; otherwise the save is refused (as the repair script checks before writing). A raw
+   stored value that differs from the reader's text for a path to rename refuses the save; it is never
+   skipped silently.
+2. **D5's email format** is `/me`'s current regex (`/^[^\s@]+@[^\s@]+\.[^\s@]+$/`) on all three
+   surfaces, so `/me` does not change on that point.
+3. **§3.1: a content-editor's email is not changed from the chat** either. Frank's 16:11Z approval
+   covered lowering and disabling a content-editor, not handing song-catalog write access to another
+   address; the conservative reading is taken until Frank says otherwise.
+4. **`/me` refusal texts** (D1) for the two D6 cases that must not show rule text: an in-memory parse
+   issue and an ambiguous text → «No se pudo guardar tu alias; pídele a un administrador que lo
+   cambie». A 409 at `/me` caused only by a change outside alias and email (the member's own `lastSeen`
+   ping) is retried once on a fresh read before answering «Alguien más cambió tu perfil; recarga».
+5. **The ADR also names:** a rename from `/admin` or `/me` moves the rules' revision, so an open
+   `solve_month` proposal must be generated again (only the chat's check warns); a member can learn at
+   `/me` whether an address belongs to someone on the team («Ese correo ya está en uso»), accepted.
+6. **Order of checks.** D3: on a save, the token's MAC and age are verified FIRST; only a valid token
+   reaches the «ya estaba guardado» shortcut. D7: id presence (all / none / some) is decided right after
+   the token's MAC and age, BEFORE the lines are re-rendered, so a successful retry answers «ya
+   estaban» and never trips D12 against the people it created.
+7. **`applyMemberEdits` sends `ministries` with every Jóvenes edit** (`validateMinistryRolesWrite`
+   refuses `ministryRoles` without it, `ministries.ts:216`).
+8. **A stored person without `member_name`** is read as `""` everywhere D6, D12 and D13 compare names
+   (as `sundayCadence.ts` does), never `undefined.toLowerCase()`.
+9. **D12 is shown to Frank** with this slice (it refuses duplicate names and aliases across every
+   ministry, on `/admin`, the chat and `/me`).
+10. **Live proof:** «Prueba MCP» stays admin only for the minutes the refusal step needs, and is
+    disabled right after the alias step, so no notification audience includes it for long.
+
