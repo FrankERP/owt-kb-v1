@@ -47,6 +47,8 @@ const PEOPLE_DOCS: Record<string, MemberAccessDoc> = {
   leaderON: { _id: "l1", ministries: ["jovenes"], ministryRoles: J("leader", ["otro-nivel"]) },
   leaderTwo: { _id: "l2", ministries: ["jovenes"], ministryRoles: J("leader", ["otro-nivel", "emprendedores"]) },
   admin: { _id: "a1", ministries: ["jovenes"], ministryRoles: J("admin", []) },
+  // The super-admin who is also a leader: member mode reads as their groups, editor mode reads all.
+  superLeader: { _id: "s2", role: "super-admin", ministries: ["worship", "jovenes"], ministryRoles: J("leader", ["emprendedores"]) },
   superAdmin: { _id: "s1", role: "super-admin", ministries: ["worship"] },
   inactiveAdmin: { _id: "x1", disabled: true, ministries: ["jovenes"], ministryRoles: J("admin", ["otro-nivel"]) },
   worshipOnly: { _id: "w1", ministries: ["worship"] },
@@ -96,6 +98,9 @@ const EVENTS: Record<string, Record<string, unknown>> = {
   unknownGroup: ev("unknownGroup", { ...PUB, audience: groups("foo") }),
   unknownKind: ev("unknownKind", { ...PUB, audience: { kind: "everyone", groups: ["otro-nivel"] } }),
   audienceString: ev("audienceString", { ...PUB, audience: "ministry" }),
+  audienceArray: ev("audienceArray", { ...PUB, audience: [{ kind: "ministry" }] }),
+  // A valid group among junk still counts; the junk never does.
+  mixedGroups: ev("mixedGroups", { ...PUB, audience: groups("otro-nivel", 3, "otro-nivel", null) }),
   // Never served by the app, to anyone: wrong id shape, wrong type, other ministry.
   undottedId: { ...ev("x", { ...PUB, audience: { kind: "ministry" } }), _id: "jovenes-event-1" },
   draftsId: { ...ev("x", { ...PUB, audience: { kind: "ministry" } }), _id: "drafts.ministryEvent.d1" },
@@ -109,10 +114,10 @@ const KEY_OF_ID = new Map(Object.entries(EVENTS).map(([k, e]) => [e._id as strin
 /** Every well-formed published event of the ministry, as each audience sees it. */
 const SEEN_BY_ALL_MEMBERS = ["ministry", "ministryWithGroups"];
 const PUBLISHED_FOR = {
-  on: [...SEEN_BY_ALL_MEMBERS, "on", "onEm", "onInv"],
+  on: [...SEEN_BY_ALL_MEMBERS, "on", "onEm", "onInv", "mixedGroups"],
   em: [...SEEN_BY_ALL_MEMBERS, "em", "onEm", "invEm"],
-  onInv: [...SEEN_BY_ALL_MEMBERS, "on", "inv", "onEm", "onInv", "invEm"],
-  onEm: [...SEEN_BY_ALL_MEMBERS, "on", "em", "onEm", "onInv", "invEm"],
+  onInv: [...SEEN_BY_ALL_MEMBERS, "on", "inv", "onEm", "onInv", "invEm", "mixedGroups"],
+  onEm: [...SEEN_BY_ALL_MEMBERS, "on", "em", "onEm", "onInv", "invEm", "mixedGroups"],
 };
 /** Every event of the ministry with a valid id, published or not, well-formed or not. */
 const EVERY_JOVENES_EVENT = Object.keys(EVENTS).filter(
@@ -138,6 +143,7 @@ const EXPECTED: Record<string, Partial<Record<MinistryEventMode, string[]>>> = {
   },
   admin: { member: SEEN_BY_ALL_MEMBERS, editor: EVERY_JOVENES_EVENT },
   superAdmin: { member: SEEN_BY_ALL_MEMBERS, editor: EVERY_JOVENES_EVENT },
+  superLeader: { member: PUBLISHED_FOR.em, editor: EVERY_JOVENES_EVENT },
 };
 
 // ── Engine ──────────────────────────────────────────────────────────────────

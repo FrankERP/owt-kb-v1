@@ -103,6 +103,12 @@ describe("/jovenes gates", () => {
     }
     expect(h.readMinistryEvents).not.toHaveBeenCalled();
   });
+
+  it("before the rollout reaches someone, a non-member gets the same 404 as a member — no redirect hint", async () => {
+    h.getMemberAccess.mockResolvedValue({ ...PASTOR, ministries: ["worship"], ministryRoles: [] });
+    h.requireMinistryMember.mockResolvedValue(null);
+    expect(await visit()).toBe("→ 404");
+  });
 });
 
 describe("/jovenes read", () => {

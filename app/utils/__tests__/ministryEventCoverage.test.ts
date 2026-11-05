@@ -15,10 +15,15 @@
 //      `cacheLife`, nor an `export const revalidate` (R6 — the result is one person's).
 //   3. Nothing under `app/mcp/**` or the admin assistant imports the reader or the writer.
 //
-// The scan is INVERTED (all of `app/**` and `sanity/**`, exempt by exception), so a surface added
-// tomorrow in a directory nobody thought of is covered by default. It reads `git ls-files`: stage a
-// new file before running it. It does not see a wrapper module that a page caches (accepted in the
-// plan: none exists, and a page that reads the session is dynamic anyway).
+// The scan is INVERTED (all of `app/**`, `sanity/**` and the root-level sources such as `auth.ts`
+// and `proxy.ts`, exempt by exception), so a surface added tomorrow in a directory nobody thought of
+// is covered by default. It reads `git ls-files`: stage a new file before running it.
+//
+// What it does NOT see, accepted: a wrapper module that a page caches (none exists, and a page that
+// reads the session is dynamic anyway); a type name built at run time. One such reader exists and is
+// accepted by ADR-0081: `sanity/structure.ts` lists every protected type by `_type == $type` from
+// `PROTECTED_STUDIO_TYPES` — the Studio, open to Sanity project members, who read everything anyway.
+// A `_type match "ministry*"` or `string::startsWith(_type, …)` prefix read is flagged below.
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -57,9 +62,12 @@ const CACHE_MARKERS: Array<[string, RegExp]> = [
 const isTest = (f: string) => f.includes("/__tests__/") || /\.test\.[cm]?[jt]sx?$/.test(f);
 
 function sources(): string[] {
-  const out = execFileSync("git", ["ls-files", "app", "sanity"], { cwd: REPO_ROOT, encoding: "utf8" });
+  const out = execFileSync("git", ["ls-files", "app", "sanity", "*.ts", "*.tsx", "*.mjs", "*.js"], { cwd: REPO_ROOT, encoding: "utf8" });
   return out
     .split("\n")
+    // Root-level files only from the bare globs (`auth.ts`, `proxy.ts`, `sanity.config.ts`, …);
+    // `scripts/`, `e2e/`, `gcf*` and friends are not the app.
+    .filter((f) => /^(app|sanity)\//.test(f) || !f.includes("/"))
     .filter((f) => /\.[cm]?[jt]sx?$/.test(f) && !isTest(f));
 }
 
@@ -82,7 +90,13 @@ function importsOf(file: string, code: string): string[] {
 /** Does this (comment-stripped) code name the type outside its import specifiers? */
 function namesType(code: string): boolean {
   const blanked = code.replace(SPECIFIER, (all, lead: string, q: string, spec: string) => `${lead}${q}${" ".repeat(spec.length)}${q}`);
-  return /\bministryEvent\b/.test(blanked) || /\bMINISTRY_EVENT_TYPE\b/.test(blanked);
+  return (
+    /\bministryEvent\b/.test(blanked) ||
+    /\bMINISTRY_EVENT_TYPE\b/.test(blanked) ||
+    // A prefix read reaches the type without spelling it.
+    /_type\s+match\s*["'`]ministry/i.test(blanked) ||
+    /startsWith\(\s*_type\s*,\s*["'`]ministry/i.test(blanked)
+  );
 }
 
 function load(file: string): string {
@@ -112,6 +126,22 @@ describe("G1: ministryEvent read coverage", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("scans the root-level server files too", () => {
+    expect(files).toContain("auth.ts");
+    expect(files).toContain("proxy.ts");
+  });
+
+  // The nav (a "use client" tree) imports `rollout.ts` → `ministryAccess.ts`. `memberAccess.ts`
+  // imports the server Sanity client, so those two may reach it by a TYPE import only, or the
+  // client bundle would carry it.
+  it("the modules the nav imports reach memberAccess by type only", () => {
+    for (const f of ["app/utils/rollout.ts", "app/utils/ministryAccess.ts", "app/components/navSections.ts"]) {
+      const code = load(f);
+      const valueImport = /^\s*import\s+(?!type\b)[^;]*?from\s*["'][^"']*memberAccess["']/m;
+      expect([f, valueImport.test(code)]).toEqual([f, false]);
+    }
+  });
+
   it("neither MCP nor the admin assistant imports the reader or the writer", () => {
     const offenders = files
       .filter((f) => FORBIDDEN_IMPORTERS.some((re) => re.test(f)))
@@ -130,6 +160,8 @@ describe("G1: the scanner itself", () => {
     ['import { readMinistryEvents } from "@/app/utils/ministryEventReads";', false],
     ['const x = await import("./ministryEventReads");', false],
     ['*[_type == "ministryEventSeat"]', false],
+    ['*[_type match "ministry*"]', true],
+    ["*[string::startsWith(_type, 'ministryE')]", true],
   ])("%s → %s", (code, expected) => {
     expect(namesType(code)).toBe(expected);
   });

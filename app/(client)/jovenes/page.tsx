@@ -41,14 +41,15 @@ export default async function JovenesPage() {
   // to `/` could loop), an active non-member to `/`, whose own gate routes them onward.
   const session = await requireActiveSession();
   if (!session) redirect("/auth/signin?callbackUrl=/jovenes");
-  const member = await requireMinistryMember("jovenes");
-  if (!member) redirect("/");
 
   const { sanityId } = session.user;
-  // Free: the same 30 s cache entry the guard just filled.
+  // The membership guard below reads the same 30 s cache entry.
   const access = await getMemberAccess(sanityId);
-  // The rollout holds on the SERVER (plan G6), not only in the nav: 404, as if the page did not exist.
+  // The rollout holds on the SERVER (plan G6), not only in the nav, and FIRST: before it reaches
+  // someone the page answers 404 to everyone alike, so a redirect never hints that it exists.
   if (!rolloutAllows("jovenesEvents", access)) notFound();
+  const member = await requireMinistryMember("jovenes");
+  if (!member) redirect("/");
 
   const today = new Date().toLocaleDateString("sv", { timeZone: TZ });
   let events: MinistryEventView[] = [];
