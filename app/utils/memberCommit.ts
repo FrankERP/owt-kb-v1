@@ -246,10 +246,18 @@ async function planPatch(id: string, body: Record<string, unknown>, surface: Sur
   const needsRead = surface !== "admin" || v.value.touchesRoleOrMinistries || touchesIdentity;
 
   const plan: PatchPlan = { id, stored: null, valid: v.value, before: null, after: null, ruleSets: {}, rulesRev: null, ruleLines: [], notes: [], lines: [] };
-  if (!needsRead) return { ok: true, plan };
 
+  // /admin's «Nothing to update» answers before any read, as the route always did.
+  if (surface === "admin" && Object.keys(v.value.patch).length === 0 && Object.keys(v.value.notifPatch).length === 0) {
+    return refuse(400, "Nothing to update");
+  }
+
+  // The type-pinned read runs on EVERY patch (W9, ADR-0081): an id that is not a `teamMembers` answers
+  // 404, so this writer never patches another type (a Jóvenes event included). Only a patch that is
+  // judged against the stored person (`needsRead`) pins the write to this read's revision.
   const stored = given ?? (await readStored(id));
   if (!stored) return refuse(404, MEMBER_ERROR.notFound);
+  if (!needsRead) return { ok: true, plan };
   plan.stored = stored;
 
   // A worship management role needs worship, judged on the RESULTING state; refused only when the
@@ -374,9 +382,6 @@ export async function patchMember(id: string, raw: unknown, actorId: string): Pr
   const planned = await planPatch(id, body, "admin");
   if (!planned.ok) return planned;
   const { plan } = planned;
-  if (Object.keys(plan.valid.patch).length === 0 && Object.keys(plan.valid.notifPatch).length === 0) {
-    return refuse(400, "Nothing to update");
-  }
   const written = await commitPlan(plan, actorId);
   if (!written.ok) return written;
   revalidatePeople();

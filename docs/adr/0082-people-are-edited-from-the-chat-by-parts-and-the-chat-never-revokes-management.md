@@ -32,7 +32,9 @@ at `/me` (`PATCH /api/me`). Four facts shaped the decision:
   (ADR-0043's `CommitOutcome`): `createMember`, `patchMember`, `setMemberDisabled`, `patchOwnProfile`,
   and the chat's `checkMemberEdits` / `saveMemberEdits` / `planNewMembers` / `createMembers`. The routes
   keep their session checks and JSON parse; their existing assertions pass (one test changed on
-  purpose: an alias PATCH now reads and pins the person).
+  purpose: an alias PATCH now reads and pins the person). Every PATCH reads the person type-pinned first, so an id
+  that is not a `teamMembers` answers 404 (W9, ADR-0081); only a change judged against the stored
+  person pins the write to that read.
 - **Every surface gained three refusals, judged only on CHANGE** (a present field is not a changed
   one; the form re-sends name, alias and email on every save), plus `/me`'s email-format check
   (`MEMBER_EMAIL_RE`) now on `/admin`'s create and edit too (§7.2: `x@localhost`, which the form's
