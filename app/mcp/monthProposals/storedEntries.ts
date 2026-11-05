@@ -1,6 +1,9 @@
 // A saved month's frozen eligibility as the month check's entry, from its fairness record (T2.3).
 // Shared by the MCP saved-month editor (`serviceEditor.ts`) and the availability proposals
-// (`availabilityConflicts.ts`, ADR-0079), so both judge a month against the same entry.
+// (`availabilityConflicts.ts`, ADR-0079), so both judge a month against the same entry, with one
+// difference: the availability proposals first lift a «no disponible» block on a date the person
+// has since unmarked (`withLiveAvailability`), because they ask who can cover TODAY; the editor
+// judges the month as recorded. The editor's lines are warnings, so it never refuses on that gap.
 //
 // Neutral and pure: no I/O, nothing from a `"use client"` module (ADR-0028).
 
