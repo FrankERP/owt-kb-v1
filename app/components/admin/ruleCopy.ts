@@ -212,6 +212,15 @@ export function presenceSentence(r: PresenceRule): RuleSentence {
 
 export const sentenceText = (s: RuleSentence) => s.map((part) => part.text).join(" ");
 
+/**
+ * A person restriction as one line, «Persona: cláusula · cláusula» — the chat's wording of a rules card
+ * (`get_solver_rules`, and the rules a person edit renames). A struck-through «Holgura» carries its note.
+ */
+export function restrictionText(r: PersonRestriction): string {
+  const clauses = restrictionChips(r).map((chip) => (chip.note ? `${chip.text} (${chip.note})` : chip.text));
+  return `${r.person}: ${clauses.length ? clauses.join(" · ") : "sin cláusulas"}`;
+}
+
 /** The notation each card shows behind «Mostrar notación del solver» — `conflictCardLabel`/`presenceCardLabel`'s shape. */
 export const conflictNotation = (c: ConflictRule) => `${c.personA} ≠ ${c.personB} en ${c.pattern}`;
 export const presenceNotation = (r: PresenceRule) => `${r.persons.join(", ")} en ${r.pattern} c/sem`;

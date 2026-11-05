@@ -43,7 +43,7 @@ rule changes, change both; if they disagree, this file wins.
   then run the suite with `.venv/bin/python` (the system `python` is 3.13 and refuses global
   installs). Keys reach a session only as network secrets the proxy injects (`docs/SECRETS.md`),
   never as readable variables. The long form lists what still needs the Mac. The solver is
-  verified/re-deployed via `solver-v3-ops.yml` (ADR-0082): ask Frank before dispatching `deploy`;
+  verified/re-deployed via `solver-v3-ops.yml` (ADR-0083): ask Frank before dispatching `deploy`;
   **never approve, reject or bypass a pending deployment**, nor change its environments or the WIF
   setup without his OK — the session acts as `FrankERP`, so this rule is the only gate.
 - **On the Mac — worktrees only when two things must be in flight at once** (`Agent` with
@@ -173,7 +173,7 @@ looks wrong** — several exist to stop a plausible-looking change.
   drop bumps it (`solverConfigVersion.test.ts`). No writer sets a rule value around
   `solverConfigFromDocument` → `parseSolverConfigWrite` → `solverConfigFields` under
   `ifRevisionId` (the only targeted writers: the member DELETE's pool patch, the rule-name
-  repair script). One `==` count per person per role key (`exactCapOverlaps`; C2). ADR-0049.
+  repair script, a member rename's person-path `set` in `memberCommit.ts`, ADR-0082). One `==` count per person per role key (`exactCapOverlaps`; C2). ADR-0049.
 - **The fairness ledger has one definition, and its records one writer** (ADR-0050).
   `app/utils/fairnessLedger.ts` is the only TS definition of F2–F7 and X1;
   `fixtures/fairness/golden.json` is asserted by vitest and `gcf_v3/tests/test_golden.py` and
@@ -262,6 +262,9 @@ looks wrong** — several exist to stop a plausible-looking change.
   Oasis Kids' in `kidsCommit.ts`, called by the four `/api/kids/*` writes and the MCP Kids tools;
   the song library's in `songSaveCommit.ts`, called by the song and author routes and the MCP song
   tools (edits by parts, a lossless lyrics gate, `ifRevisionId`, a token-keyed create; ADR-0077);
+  people's in `memberCommit.ts`, called by the three `/api/admin/members` routes, `/me`'s PATCH and
+  the MCP people tools (a taken email or name refused, a rename renames its rules in the same
+  transaction, the chat grants but never revokes management; ADR-0082);
   the availability proposals' in `availabilityFixCommit.ts`, called by the four
   `/api/admin/availability-conflicts` routes, the member's availability PATCH and the flush cron,
   never by an MCP tool — its sweep NEVER writes a service, only «Aplicar» does, through `editRole`
