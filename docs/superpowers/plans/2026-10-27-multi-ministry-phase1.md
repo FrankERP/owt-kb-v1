@@ -1,7 +1,7 @@
 # Multi-ministry — phase 1: invisible foundations (plan)
 
 **Status:** IN PROGRESS. Planned 2026-10-27 on Frank's «Dale» (23:20Z). ADR-0075. PR 1 (this file,
-the ADR, the glossary) in production 2026-10-28 (#210, e09a5e93). PR 2 (the read side) in production 2026-10-28 (#212, cea051ba). PR 3 (the write side) in review. The access slice (PRs 2 and 3) is a critical contract with its own plan,
+the ADR, the glossary) in production 2026-10-28 (#210, e09a5e93). PR 2 (the read side) in production 2026-10-28 (#212, cea051ba). PR 3 (the write side) in production 2026-10-29 (#214, 75af75a8). People moved out of worship's /admin to /super-admin «Personas» on Frank's call (2026-10-29), in review. The access slice (PRs 2 and 3) is a critical contract with its own plan,
 `2026-10-27-multi-ministry-phase1-access.md`, APPROVED in adversarial review on 2026-10-27 (four rounds,
 Frank's go-ahead after the churn cap; `…-access-review-log.md`).
 **Requirement (Frank, 2026-10-26 20:26Z, verbatim):** «Puedes ayudarme a planear cómo convertiríamos

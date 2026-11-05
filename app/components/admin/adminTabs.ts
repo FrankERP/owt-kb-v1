@@ -12,7 +12,6 @@ type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
 
 /** Every tab, in bar order, with the roles allowed to see it. */
 export const TAB_CATALOG: ReadonlyArray<{ id: AdminTabId; label: string; roles: OWTRole[] }> = [
-  { id: "members",      label: "Miembros",       roles: ["super-admin"] },
   { id: "services",     label: "Servicios",      roles: ["super-admin", "admin"] },
   { id: "proposals",    label: "Propuestas",     roles: ["super-admin", "admin"] },
   { id: "availability", label: "Disponibilidad", roles: ["super-admin", "admin"] },
@@ -29,10 +28,12 @@ export function visibleAdminTabs(role: OWTRole): ReadonlyArray<{ id: AdminTabId;
 /**
  * Which tab a URL should open.
  *
- * The role filter is the point, not a formality: `?tab=members` is a link an
- * admin can be handed or can keep from their own history, and Miembros is
- * super-admin only. An unknown, absent, or not-permitted value falls back to
- * the first tab this role can see — never to a tab they cannot.
+ * The role filter is the point, not a formality: `?tab=` is a link an admin can
+ * be handed or keep from their own history, and some tabs are not theirs. An
+ * unknown, absent, or not-permitted value falls back to the first tab this role
+ * can see — never to a tab they cannot. (Miembros left this admin for
+ * `/super-admin` on 2026-10-29: people span every ministry, ADR-0075; the
+ * /admin page sends an old `?tab=members` link there.)
  *
  * A repeated param (`?tab=a&tab=b`) arrives as an array; take neither, since
  * which one was meant is a guess.

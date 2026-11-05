@@ -63,7 +63,7 @@ export function clashInputsOf(members: ReadonlyMap<string, { singsAndPlays: bool
 }
 
 /** The name used when a member has neither alias nor `member_name`, or is not in the read. */
-export const UNKNOWN_MEMBER_NAME = "alguien que ya no está en Miembros";
+export const UNKNOWN_MEMBER_NAME = "alguien que ya no está en Personas";
 
 const VOICE_REFS: { path: "leads" | "bgvs" | "chorus"; seat: SeatRef }[] = [
   { path: "leads", seat: { seatId: "lead", label: "Lead", category: "voz" } },
@@ -149,7 +149,7 @@ export function addedSeatClashes(
 
 /**
  * The ONE Spanish sentence for a refused pair. A voice + instrument pair names
- * the way out (the Miembros checkbox), like C2's `clashReason`; two copies of
+ * the way out (the Personas checkbox), like C2's `clashReason`; two copies of
  * one seat read «aparece dos veces en Lead», never «en Lead y Lead».
  */
 export function seatClashSentence(name: string, clash: AddedClash): string {

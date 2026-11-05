@@ -169,7 +169,7 @@ describe("copy_instruments", () => {
   });
 
   it("a seat-clash refusal (ADR-0078) says who and where, as the reason to check again", async () => {
-    const SENTENCE = "Tomás quedaría en Coro y Bass en el mismo servicio; para cantar y tocar en un servicio, marca «Canta y toca a la vez» en Miembros.";
+    const SENTENCE = "Tomás quedaría en Coro y Bass en el mismo servicio; para cantar y tocar en un servicio, marca «Canta y toca a la vez» en Personas (super admin).";
     const w = serviceWorld();
     const args = copyOf(await checkCopy(w, "sun1", "sun8"))!;
     w.deps.copyInstruments.mockResolvedValueOnce({ ok: false, status: 400, body: { error: "invalid_request", details: { issues: ["seat_clash"], seatClashes: [{ memberId: "m-tomas", name: "Tomás", seats: ["Coro", "Bass"], sentence: SENTENCE }] } } });
