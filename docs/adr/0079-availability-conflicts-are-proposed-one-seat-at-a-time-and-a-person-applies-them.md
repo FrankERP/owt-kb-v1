@@ -26,7 +26,11 @@ never changes a service, draft or published. That plan was approved in rounds 10
   else in `rankCandidates`' order), and walk at most 8 candidates through: a weekend voice must be
   on the month's v3 eligibility for that service; the service target is `ok` with no new finding
   (`judgeTarget`); the month gate (`monthCheckVerdict`, `monthCheck.ts`) shows no new or grown
-  protection. All seats or none — except that an instrument or FOH seat nobody passes is proposed
+  protection. Eligibility and the gate read the month's record with TODAY's availability: a
+  «no disponible» block on a date the person has since unmarked is lifted for the judgement
+  (`withLiveAvailability`; the record is never written). The record is a photo of availability on
+  the day the month was confirmed (Frank, 2026-11-05: Marianne freed 14–15 nov and stayed off every
+  option until this). All seats or none — except that an instrument or FOH seat nobody passes is proposed
   EMPTY («queda vacío»; Frank, 2026-10-31: «si no hay nadie para cubrir Bass, se puede quedar
   vacío»), so a person in Lead and Bass still gets a Lead proposal; a voice seat always needs a
   person. **When nobody free fits a voice seat, one singer already on the same service moves up**

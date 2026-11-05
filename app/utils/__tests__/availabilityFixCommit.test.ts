@@ -581,6 +581,34 @@ describe("«Aplicar de todos modos» (nobody passes every rule)", () => {
     expect(w.deps.editRole).not.toHaveBeenCalled();
   });
 
+  it("judges with today's availability: someone who freed the day after the month was recorded is proposed and applied", async () => {
+    const ana = lead("m-ana", "Ana");
+    const block = { date: "2026-11-15", unavailable: true, excludedRoles: [] };
+    w = world({
+      rows: [
+        storedRow("s1", "sunday_role", "2026-11-01", { leads: ["m-lia"] }),
+        storedRow("s8", "sunday_role", "2026-11-08", { leads: ["m-mar"] }),
+        storedRow("s15", "sunday_role", "2026-11-15", { leads: ["m-xim"], bgvs: ["m-noe"], chorus: ["m-pau"] }),
+        storedRow("s22", "sunday_role", "2026-11-22", { leads: ["m-noe"] }),
+        storedRow("s29", "sunday_role", "2026-11-29", { leads: ["m-oto"] }),
+      ],
+      members: [...PEOPLE, ana] as EditorMember[],
+      // The record still has Ana's old «no puedo el 15» (she has since unmarked it).
+      recordPeople: [...PEOPLE, ana].map((m) => (m._id === "m-pau" ? { ...listed(m._id), roles: { ...ALL_IN, "Sun.Lead": "out" as const } }
+        : m._id === "m-ana" ? { ...listed(m._id), blocks: [block] } : listed(m._id))),
+      config: config({ sundayLeads: ["m-lia", "m-mar", "m-noe", "m-oto", "m-xim", "m-ana"], support: ["m-pau"] }),
+    });
+    w.unavailable("m-xim", "2026-11-15");
+    const read = await readConflictPanel(w.deps);
+    if (!read.ok) throw new Error("expected a read");
+    const c = read.open[0];
+    expect(c.options[0].seats).toEqual([expect.objectContaining({ rowId: "lead", to: "m-ana" })]);
+    expect(c.fallbacks).toBeUndefined();
+    expect(await applyAvailabilityFix({ roleId: "s15", rev: "s15-r1", memberId: "m-xim", replacements: [{ rowId: "lead", to: "m-ana" }], actor: "a" }, w.deps))
+      .toMatchObject({ ok: true });
+    expect(w.roles.get("s15")!.leads.map((x) => x._id)).toEqual(["m-ana"]);
+  });
+
   it("a waiver over a change that is now clean is refused: the panel shows it as a normal proposal", async () => {
     w = sundays();
     const read = await readConflictPanel(w.deps);

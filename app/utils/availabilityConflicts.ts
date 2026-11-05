@@ -207,8 +207,31 @@ export interface MonthGateInput {
 const recordOf = (ledger: FairnessLedgerResponse, month: string): LogicalRecord | null =>
   ledger.horizon.find((h) => h.month === month)?.record ?? null;
 
+/**
+ * The month's record with its availability brought up to date: a block that says «no disponible» on
+ * a date the person has since UNMARKED is lifted (its rule exclusions stay). The record is a photo
+ * of availability on the day the month was confirmed; whether someone can cover today is today's
+ * availability (Marianne, 15 nov 2026: marked 14–15 when November was confirmed, then freed them,
+ * and stayed off every option). A NEW absence needs nothing here: no candidate is ever someone who
+ * marks the day. Only for judging: the record itself is never written.
+ */
+function withLiveAvailability(record: LogicalRecord, members: readonly AvailabilityMember[]): LogicalRecord {
+  const off = new Map(members.map((m) => [m._id, new Set((m.unavailableDates ?? []).map((d) => String(d).slice(0, 10)))]));
+  return {
+    ...record,
+    people: record.people.map((p) => {
+      const marked = off.get(p.memberId);
+      // Someone the sources do not list keeps the record as it is (never lift on a missing read).
+      if (!marked) return p;
+      const blocks = p.blocks.flatMap((b) => (!b.unavailable || marked.has(b.date) ? [b] : b.excludedRoles.length ? [{ ...b, unavailable: false }] : []));
+      return blocks.length === p.blocks.length && blocks.every((b, i) => b === p.blocks[i]) ? p : { ...p, blocks };
+    }),
+  };
+}
+
 function verdictOn(board: EditorBoard, gate: MonthGateInput): MonthCheckVerdict {
-  const record = gate.ledger ? recordOf(gate.ledger, gate.month) : null;
+  const stored = gate.ledger ? recordOf(gate.ledger, gate.month) : null;
+  const record = stored ? withLiveAvailability(stored, gate.members) : null;
   const [year, month] = gate.month.split("-").map(Number);
   const onBoard = new Set(board.columns.map((c) => c.columnId));
   return monthCheckVerdict({
