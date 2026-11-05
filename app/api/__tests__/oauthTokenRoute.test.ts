@@ -27,7 +27,7 @@ import * as tokenRoute from "@/app/api/oauth/token/route";
 import { __clearGrantCache } from "@/app/mcp/oauth/grantStore";
 import { PREVIEW_ORIGIN, PRODUCTION_ORIGIN, resourceFor } from "@/app/mcp/oauth/origin";
 import { s256Challenge } from "@/app/mcp/oauth/pkce";
-import { CLAUDE_AI_REDIRECT_URI } from "@/app/mcp/oauth/redirects";
+import { CHATGPT_REDIRECT_URI, CLAUDE_AI_REDIRECT_URI } from "@/app/mcp/oauth/redirects";
 import {
   ACCESS_TOKEN_TTL_SECONDS,
   REFRESH_TOKEN_TTL_SECONDS,
@@ -51,8 +51,8 @@ const PRODUCTION_HOST = "owt-backstage.vercel.app";
 const MEMBER = "frank";
 const FORM = "application/x-www-form-urlencoded";
 
-function liveAccess(role: string | null, active = true) {
-  return { active, role, ministries: ["worship"], managesMinistries: [] };
+function liveAccess(role: string | null, active = true, ministries: string[] = ["worship"]) {
+  return { active, role, ministries, managesMinistries: [] };
 }
 
 function stubEnv(env: { vercelEnv?: string; disabled?: string } = {}) {
@@ -223,6 +223,7 @@ describe("POST /api/oauth/token — authorization_code", () => {
       sub: MEMBER,
       clientHash: clientHashOf(clientId),
       origin: PREVIEW_ORIGIN,
+      client: "claude",
       revoked: false,
       currentRefreshJti: rt.claims.jti,
     });
@@ -277,13 +278,56 @@ describe("POST /api/oauth/token — authorization_code", () => {
     expect(h.creates).toEqual([]);
   });
 
-  it("a redirect_uri equal to the code's but off this origin's allowlist → invalid_grant (loopback on production)", async () => {
+  it("a redirect_uri equal to the code's but off the allowlist → invalid_grant (a directly signed off-list URI)", async () => {
+    // Registration never signs an off-list URI; these are signed by hand to
+    // prove the token endpoint re-checks the allowlist itself.
     stubEnv({ vercelEnv: "production" });
-    const clientId = await mintClient({ origin: PRODUCTION_ORIGIN, redirectUris: [LOOPBACK_URI] });
-    const code = await mintCode(clientId, { origin: PRODUCTION_ORIGIN, redirectUri: LOOPBACK_URI });
-    const res = await POST(post(codeForm({ code, clientId, redirectUri: LOOPBACK_URI }), { host: PRODUCTION_HOST }));
+    const offList = "https://evil.example/cb";
+    const clientId = await mintClient({ origin: PRODUCTION_ORIGIN, redirectUris: [offList] });
+    const code = await mintCode(clientId, { origin: PRODUCTION_ORIGIN, redirectUri: offList });
+    const res = await POST(post(codeForm({ code, clientId, redirectUri: offList }), { host: PRODUCTION_HOST }));
     await expectError(res, "invalid_grant");
     expect(h.creates).toEqual([]);
+  });
+
+  it("the grant records which agent the code went to, from the redirect URI (ADR-0083)", async () => {
+    stubEnv({ vercelEnv: "production" });
+    const cases: [string, string][] = [
+      [CLAUDE_AI_REDIRECT_URI, "claude"],
+      [CHATGPT_REDIRECT_URI, "chatgpt"],
+      [LOOPBACK_URI, "loopback"],
+    ];
+    for (const [redirectUri, kind] of cases) {
+      const clientId = await mintClient({ origin: PRODUCTION_ORIGIN, redirectUris: [redirectUri] });
+      const code = await mintCode(clientId, { origin: PRODUCTION_ORIGIN, redirectUri });
+      const tokens = await expectTokens(
+        await POST(post(codeForm({ code, clientId, redirectUri }), { host: PRODUCTION_HOST })),
+      );
+      const at = await verifyAccessToken(tokens.access_token, { key: KEY, origin: PRODUCTION_ORIGIN });
+      if (!at.ok) throw new Error("unreachable");
+      expect(grantDoc(at.claims.grantId)?.client, redirectUri).toBe(kind);
+    }
+  });
+
+  it("a refresh keeps the grant's client: it is set once, at the code exchange (ADR-0083)", async () => {
+    const { clientId, tokens, grantId } = await exchange();
+    expect(grantDoc(grantId)?.client).toBe("claude");
+    await expectTokens(await POST(post(refreshForm(tokens.refresh_token, clientId))));
+    expect(grantDoc(grantId)?.client).toBe("claude");
+    for (const patch of h.patches) expect(JSON.stringify(patch)).not.toContain('"client"');
+  });
+
+  it("loopback: a port the client did not register is accepted (RFC 8252 §7.3), but the token request must name the code's exact redirect", async () => {
+    // Registered on one port, asked on another: allowed as «registered» (RFC 8252 §7.3)…
+    const clientId = await mintClient({ redirectUris: ["http://127.0.0.1/callback"] });
+    const code = await mintCode(clientId, { redirectUri: LOOPBACK_URI });
+    await expectTokens(await POST(post(codeForm({ code, clientId, redirectUri: LOOPBACK_URI }))));
+    // …but a token request naming a different port than the CODE's is refused by the binding.
+    const code2 = await mintCode(clientId, { redirectUri: LOOPBACK_URI });
+    await expectError(
+      await POST(post(codeForm({ code: code2, clientId, redirectUri: "http://127.0.0.1:9999/callback" }))),
+      "invalid_grant",
+    );
   });
 
   it("a redirect_uri equal to the code's but not one of the client's registered URIs → invalid_grant", async () => {
@@ -538,9 +582,10 @@ describe("POST /api/oauth/token — refresh_token", () => {
 
 // ── the subject, at both grants ────────────────────────────────────────────
 
-describe("POST /api/oauth/token — the subject must still be a live super-admin", () => {
+describe("POST /api/oauth/token — the subject must still have an MCP tier (ADR-0083)", () => {
   const refusals: [string, ReturnType<typeof liveAccess>][] = [
-    ["demoted to admin", liveAccess("admin")],
+    ["demoted to content-editor", liveAccess("content-editor")],
+    ["an admin outside worship", liveAccess("admin", true, ["kids"])],
     ["a member", liveAccess("member")],
     ["no role", liveAccess(null)],
     ["disabled", liveAccess("super-admin", false)],
@@ -553,6 +598,13 @@ describe("POST /api/oauth/token — the subject must still be a live super-admin
     await expectError(await POST(post(codeForm({ code, clientId }))), "invalid_grant");
     expect(h.getMemberAccess).toHaveBeenCalledWith(MEMBER);
     expect(h.creates).toEqual([]);
+  });
+
+  it("a worship admin may redeem a code and refresh (the read tier; the tier itself is never stored)", async () => {
+    h.getMemberAccess.mockResolvedValue(liveAccess("admin"));
+    const { clientId, tokens, grantId } = await exchange();
+    expect(Object.keys(grantDoc(grantId) ?? {}).filter((k) => /tier|role|scope/i.test(k))).toEqual([]);
+    await expectTokens(await POST(post(refreshForm(tokens.refresh_token, clientId))));
   });
 
   it.each(refusals)("refresh_token: %s → invalid_grant, nothing rotated", async (_label, access) => {

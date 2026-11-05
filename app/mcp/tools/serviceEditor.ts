@@ -1364,7 +1364,8 @@ export async function saveServiceEditsResult(
 /** MCP Apps: a tool only the card may call; a host that honours it hides it from the model (ADR-0062 Q1 (1)). */
 const APP_ONLY_META = { ui: { resourceUri: PROPOSAL_CARD_TOOL_META.ui.resourceUri, visibility: ["app"] } } as const;
 
-export function registerServiceEditor(server: McpServer): void {
+/** `appsHost: false` leaves out the card's two app-only twins (a grant whose agent is not claude.ai, ADR-0083). */
+export function registerServiceEditor(server: McpServer, opts: { appsHost?: boolean } = {}): void {
   server.registerTool(
     "check_service_edits",
     {
@@ -1376,17 +1377,19 @@ export function registerServiceEditor(server: McpServer): void {
     },
     async (args, ctx: ServerContext) => checkServiceEditsResult(args, principalOf(ctx)),
   );
-  server.registerTool(
-    "check_service_edits_app",
-    {
-      title: "Revisar cambios a servicios guardados (tarjeta)",
-      description: "Solo para la tarjeta del mes guardado: revisa una lista de cambios sin guardar nada.",
-      inputSchema: CHECK_SERVICE_EDITS_APP_INPUT,
-      annotations: { readOnlyHint: true, openWorldHint: false },
-      _meta: APP_ONLY_META,
-    },
-    async (args, ctx: ServerContext) => checkServiceEditsAppResult(args, principalOf(ctx)),
-  );
+  if (opts.appsHost !== false) {
+    server.registerTool(
+      "check_service_edits_app",
+      {
+        title: "Revisar cambios a servicios guardados (tarjeta)",
+        description: "Solo para la tarjeta del mes guardado: revisa una lista de cambios sin guardar nada.",
+        inputSchema: CHECK_SERVICE_EDITS_APP_INPUT,
+        annotations: { readOnlyHint: true, openWorldHint: false },
+        _meta: APP_ONLY_META,
+      },
+      async (args, ctx: ServerContext) => checkServiceEditsAppResult(args, principalOf(ctx)),
+    );
+  }
   server.registerTool(
     "save_service_edits",
     {
@@ -1399,19 +1402,21 @@ export function registerServiceEditor(server: McpServer): void {
     },
     async (args, ctx: ServerContext) => saveServiceEditsResult(args, principalOf(ctx)),
   );
-  server.registerTool(
-    "save_service_edits_app",
-    {
-      title: "Guardar cambios a servicios (tarjeta)",
-      description: "Solo para la tarjeta del mes guardado: guarda los cambios que la tarjeta revisó y la persona confirmó.",
-      inputSchema: SAVE_SERVICE_EDITS_INPUT,
-      // The same save as `save_service_edits` (one function): it re-checks every change set whoever calls it.
-      // The card asks the person first (ADR-0066 addendum); a host that honours MCP Apps hides it from the model.
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
-      _meta: APP_ONLY_META,
-    },
-    async (args, ctx: ServerContext) => saveServiceEditsResult(args, principalOf(ctx), undefined, "save_service_edits_app"),
-  );
+  if (opts.appsHost !== false) {
+    server.registerTool(
+      "save_service_edits_app",
+      {
+        title: "Guardar cambios a servicios (tarjeta)",
+        description: "Solo para la tarjeta del mes guardado: guarda los cambios que la tarjeta revisó y la persona confirmó.",
+        inputSchema: SAVE_SERVICE_EDITS_INPUT,
+        // The same save as `save_service_edits` (one function): it re-checks every change set whoever calls it.
+        // The card asks the person first (ADR-0066 addendum); a host that honours MCP Apps hides it from the model.
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+        _meta: APP_ONLY_META,
+      },
+      async (args, ctx: ServerContext) => saveServiceEditsResult(args, principalOf(ctx), undefined, "save_service_edits_app"),
+    );
+  }
   server.registerTool(
     "copy_instruments",
     {

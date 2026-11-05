@@ -159,7 +159,8 @@ rotate route, `POST /api/me/calendar-feed`, stays session-gated.
 ## MCP / OAuth
 
 This app is also an MCP server: `GET|POST|DELETE /api/mcp` plus a stateless OAuth 2.1 flow under
-`/api/oauth/*` and `/.well-known/*`, gating a Claude connector to super-admins only. It is a
+`/api/oauth/*` and `/.well-known/*`, gating an AI-agent connector (Claude, ChatGPT, a local program)
+to super-admins (every tool) and worship admins (read-only), from the live role (ADR-0083). It is a
 separate authentication surface from everything above — its own signed tokens
 (`MCP_OAUTH_SECRET`, never `NEXTAUTH_SECRET`), its own origin/audience checks, and its own
 revocation path — documented in full in [`docs/MCP.md`](MCP.md) (the operator runbook) and
@@ -222,8 +223,8 @@ Applied to all routes:
 - **Admin assistant** (`/api/admin/chat`, ADR-0060): stricter than `requireActiveManager` —
   `super-admin`, or `admin` with the `worship` ministry, read from the live access snapshot; never
   while impersonating. The model gets five READ-ONLY tools that call the MCP read handlers in
-  process; there is no write path from a conversation, and the MCP connector (super-admin OAuth,
-  with write tools) is not used. Requests carry plain text only, so a forged `tool_result` or a
+  process; there is no write path from a conversation, and the MCP connector (OAuth grants, with
+  write tools for super-admins) is not used. Requests carry plain text only, so a forged `tool_result` or a
   `system` turn is a `400`. The page context a question carries is ids and labels only, validated
   to a strict shape (`parsePageContext`: a bare pathname, one-line labels, ≤4 refs with plain ids)
   and framed to the model as information, never an instruction — never the screen's text, so

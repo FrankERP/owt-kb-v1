@@ -21,7 +21,7 @@ vi.mock("@/sanity/lib/serverClient", () => ({
 
 import { POST } from "@/app/api/oauth/register/route";
 import { verifyClientId } from "@/app/mcp/oauth/tokens";
-import { CLAUDE_AI_REDIRECT_URI } from "@/app/mcp/oauth/redirects";
+import { CHATGPT_REDIRECT_URI, CLAUDE_AI_REDIRECT_URI } from "@/app/mcp/oauth/redirects";
 import { walkImportClosure } from "@/app/mcp/oauth/__tests__/importClosure";
 
 const SECRET = "s".repeat(32);
@@ -87,17 +87,46 @@ afterEach(() => {
 });
 
 describe("POST /api/oauth/register — allowlisted redirect_uris accepted", () => {
-  it("production accepts only the claude callback", async () => {
+  it("production accepts the claude callback, the ChatGPT callback and a loopback redirect_uri (ADR-0083)", async () => {
     stubEnv({ vercelEnv: "production" });
-    const res = await POST(req({ host: "owt-backstage.vercel.app", body: JSON.stringify({ redirect_uris: [CLAUDE_AI_REDIRECT_URI] }) }));
-    expect(res.status).toBe(201);
+    for (const uri of [CLAUDE_AI_REDIRECT_URI, CHATGPT_REDIRECT_URI, LOOPBACK_URI, "http://127.0.0.1/"]) {
+      const res = await POST(req({ host: "owt-backstage.vercel.app", body: JSON.stringify({ redirect_uris: [uri] }) }));
+      expect(res.status, uri).toBe(201);
+      expect((await res.json()).redirect_uris, uri).toEqual([uri]);
+    }
   });
 
-  it("production refuses a loopback redirect_uri", async () => {
+  it("production refuses ChatGPT's per-connection callback form", async () => {
     stubEnv({ vercelEnv: "production" });
-    const res = await POST(req({ host: "owt-backstage.vercel.app", body: JSON.stringify({ redirect_uris: [LOOPBACK_URI] }) }));
+    const res = await POST(
+      req({
+        host: "owt-backstage.vercel.app",
+        body: JSON.stringify({ redirect_uris: ["https://chatgpt.com/connector/oauth/abc123"] }),
+      }),
+    );
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: "invalid_redirect_uri" });
+  });
+
+  it("a mixed list registers ONLY the allowed subset, in request order (VS Code's body)", async () => {
+    stubEnv({ vercelEnv: "production" });
+    const vscode = [
+      "https://insiders.vscode.dev/redirect",
+      "https://vscode.dev/redirect",
+      "http://127.0.0.1/",
+      "http://127.0.0.1:33418/",
+    ];
+    const res = await POST(
+      req({
+        host: "owt-backstage.vercel.app",
+        body: JSON.stringify({ redirect_uris: vscode, token_endpoint_auth_method: "none" }),
+      }),
+    );
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.redirect_uris).toEqual(["http://127.0.0.1/", "http://127.0.0.1:33418/"]);
+    const verified = await verifyClientId(body.client_id, { key: KEY, origin: PRODUCTION_ORIGIN });
+    expect(verified.ok && verified.claims.redirectUris).toEqual(["http://127.0.0.1/", "http://127.0.0.1:33418/"]);
   });
 
   it("preview accepts the claude callback and a loopback redirect_uri", async () => {
@@ -523,22 +552,47 @@ describe("POST /api/oauth/register — a whitespace-only client_name is ABSENT (
 });
 
 describe("POST /api/oauth/register — refused-redirect logging", () => {
+  /** The warn calls about a refused redirect URI (the fixed refusal line is separate). */
+  const redirectLines = () => warnSpy.mock.calls.filter((c: unknown[]) => String(c[0]).includes("refused redirect_uri"));
+
   it("logs exactly once, JSON.stringify'd, for a refused claude.ai near-miss", async () => {
     stubEnv({ vercelEnv: "preview" });
     const nearMiss = "https://claude.ai/api/mcp/other";
     const res = await POST(req({ body: JSON.stringify({ redirect_uris: [nearMiss] }) }));
     expect(res.status).toBe(400);
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-    const [prefix, logged] = warnSpy.mock.calls[0]!;
-    expect(String(prefix)).toContain("refused redirect_uri from a claude host");
+    expect(redirectLines()).toHaveLength(1);
+    const [prefix, logged] = redirectLines()[0]!;
+    expect(String(prefix)).toContain("refused redirect_uri from a known agent host");
     expect(logged).toBe(JSON.stringify(nearMiss));
   });
 
-  it("never logs a refused non-claude URI", async () => {
+  it("logs a refused chatgpt.com URI too (ChatGPT may move its callback)", async () => {
+    stubEnv({ vercelEnv: "production" });
+    const perConnection = "https://chatgpt.com/connector/oauth/abc123";
+    await POST(req({ host: "owt-backstage.vercel.app", body: JSON.stringify({ redirect_uris: [perConnection] }) }));
+    expect(redirectLines()).toHaveLength(1);
+    expect(redirectLines()[0]![1]).toBe(JSON.stringify(perConnection));
+  });
+
+  it("never logs a refused URI on an unknown host — only the fixed refusal line, with no URI in it", async () => {
     stubEnv({ vercelEnv: "preview" });
     const res = await POST(req({ body: JSON.stringify({ redirect_uris: ["https://evil.example/cb"] }) }));
     expect(res.status).toBe(400);
-    expect(warnSpy).not.toHaveBeenCalled();
+    expect(redirectLines()).toHaveLength(0);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0]!.map(String).join(" ")).toBe("[mcp-oauth] registration refused: invalid_redirect_uri");
+  });
+
+  it("a refusal that is not about redirects logs one fixed line naming the reason (a new agent is diagnosable)", async () => {
+    stubEnv({ vercelEnv: "preview" });
+    const res = await POST(
+      req({ body: JSON.stringify({ redirect_uris: [CLAUDE_AI_REDIRECT_URI], token_endpoint_auth_method: "client_secret_post" }) }),
+    );
+    expect(res.status).toBe(400);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0]!.map(String).join(" ")).toBe(
+      '[mcp-oauth] registration refused: invalid_client_metadata (token_endpoint_auth_method must be "none")',
+    );
   });
 
   it("never logs the client_id or the request body", async () => {
@@ -548,30 +602,41 @@ describe("POST /api/oauth/register — refused-redirect logging", () => {
         body: JSON.stringify({ redirect_uris: ["https://claude.ai/api/mcp/other"], client_name: "should-not-log" }),
       }),
     );
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-    const loggedArgs = warnSpy.mock.calls[0]!.map(String).join(" ");
+    expect(warnSpy).toHaveBeenCalled();
+    const loggedArgs = warnSpy.mock.calls.flat().map(String).join(" ");
     expect(loggedArgs).not.toContain("should-not-log");
   });
 
   it("logs a later claude.ai near-miss even when an earlier URI is refused first (R15 #2)", async () => {
-    // On production, the loopback URI is refused for a reason that has
-    // nothing to do with Claude (loopback is never allowed there) — the OLD
-    // implementation returned on that first refusal and never even looked at
-    // the second URI, so a genuine claude.ai callback change went unlogged.
+    // The first URI is refused for a reason that has nothing to do with
+    // Claude — the OLD implementation returned on that first refusal and never
+    // even looked at the second URI, so a genuine claude.ai callback change
+    // went unlogged.
     stubEnv({ vercelEnv: "production" });
     const nearMiss = "https://claude.ai/api/mcp/new_callback";
     const res = await POST(
       req({
         host: "owt-backstage.vercel.app",
-        body: JSON.stringify({ redirect_uris: ["http://127.0.0.1:5000/cb", nearMiss] }),
+        body: JSON.stringify({ redirect_uris: ["https://evil.example/cb", nearMiss] }),
       }),
     );
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: "invalid_redirect_uri" });
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-    const [prefix, logged] = warnSpy.mock.calls[0]!;
-    expect(String(prefix)).toContain("refused redirect_uri from a claude host");
+    expect(redirectLines()).toHaveLength(1);
+    const [prefix, logged] = redirectLines()[0]!;
+    expect(String(prefix)).toContain("refused redirect_uri from a known agent host");
     expect(logged).toBe(JSON.stringify(nearMiss));
+  });
+
+  it("a near-miss next to an allowed URI is logged, and the allowed one still registers", async () => {
+    stubEnv({ vercelEnv: "production" });
+    const nearMiss = "https://claude.ai/api/mcp/new_callback";
+    const res = await POST(
+      req({ host: "owt-backstage.vercel.app", body: JSON.stringify({ redirect_uris: [nearMiss, CLAUDE_AI_REDIRECT_URI] }) }),
+    );
+    expect(res.status).toBe(201);
+    expect((await res.json()).redirect_uris).toEqual([CLAUDE_AI_REDIRECT_URI]);
+    expect(redirectLines()).toHaveLength(1);
   });
 });
 

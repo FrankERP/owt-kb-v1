@@ -2,8 +2,9 @@
 //
 // The dataset answers unauthenticated PUBLISHED reads, so everything stored is
 // treated as public (spec O5): no token, no secret, no client id — only a member
-// id, a client HASH, the issuing origin, timestamps, the current refresh `jti`
-// and the revocation flag. Both documents use DOTTED ids, which the public
+// id, a client HASH, the issuing origin, the kind of agent it went to
+// (`client`, ADR-0083), timestamps, the current refresh `jti` and the
+// revocation flag. Both documents use DOTTED ids, which the public
 // reader does not see.
 //
 // Every write `grantStore.ts` makes is built here, so the schema (step 3) can
@@ -18,6 +19,8 @@
 
 import { randomUUID } from "node:crypto";
 import { clientHashOf, sha256Hex } from "./tokens";
+import { PRODUCTION_ORIGIN } from "./origin";
+import type { RedirectTargetKind } from "./redirects";
 import {
   CODE_REDEMPTION_FIELD,
   CODE_REDEMPTION_FIELDS,
@@ -60,6 +63,7 @@ export interface NewGrantDocument {
   sub: string;
   clientHash: string;
   origin: string;
+  client: RedirectTargetKind;
   createdAt: string;
   currentRefreshJti: string;
   revoked: false;
@@ -75,6 +79,7 @@ export function buildGrantDocument(input: {
   sub: string;
   clientId: string;
   origin: string;
+  client: RedirectTargetKind;
   refreshJti: string;
   createdAt: string;
 }): NewGrantDocument {
@@ -84,6 +89,7 @@ export function buildGrantDocument(input: {
     sub: input.sub,
     clientHash: clientHashOf(input.clientId),
     origin: input.origin,
+    client: input.client,
     createdAt: input.createdAt,
     currentRefreshJti: input.refreshJti,
     revoked: false,
@@ -128,6 +134,8 @@ export interface StoredGrant {
   sub: string;
   clientHash: string;
   origin: string;
+  /** The stored kind of agent, or null when absent (a grant from before ADR-0083). Read it through `effectiveGrantClient`. */
+  client: RedirectTargetKind | null;
   createdAt: string | null;
   lastRefreshAt: string | null;
   currentRefreshJti: string;
@@ -137,6 +145,50 @@ export interface StoredGrant {
 
 function nonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
+}
+
+const CLIENT_KINDS: readonly RedirectTargetKind[] = ["claude", "chatgpt", "loopback"];
+
+/**
+ * The fields `parseGrantDocument` reads — and so the fields the store's grant
+ * query MUST project (`grantStore.ts` builds its projection from this list). A
+ * field missing from the projection would read back as absent, silently.
+ */
+export const GRANT_READ_FIELDS = [
+  "_id",
+  "_rev",
+  "sub",
+  "clientHash",
+  "origin",
+  "client",
+  "createdAt",
+  "lastRefreshAt",
+  "currentRefreshJti",
+  "revoked",
+] as const;
+
+/**
+ * The moment before which a production grant with no stored `client` is known
+ * to be Claude's: until ADR-0083's release, production accepted only the
+ * claude.ai redirect. It must precede the first PRODUCTION deployment of the
+ * code that writes `client`, and is set in the commit that goes to `main`.
+ */
+export const LEGACY_GRANT_CUTOFF = "2026-11-05T18:00:00.000Z";
+
+/**
+ * The kind of agent a grant belongs to, for deciding whether it gets the
+ * app-only card tools (ADR-0083). The stored `client` when present. When it is
+ * absent, `"claude"` ONLY for a production grant created before
+ * `LEGACY_GRANT_CUTOFF` — anything else (a newer grant, a dev or local grant, an
+ * unreadable `createdAt`) is `"loopback"`, so a read that ever lost `client`
+ * again would withhold the app tools, never hand them to another host.
+ */
+export function effectiveGrantClient(grant: Pick<StoredGrant, "client" | "origin" | "createdAt">): RedirectTargetKind {
+  if (grant.client !== null) return grant.client;
+  if (grant.origin !== PRODUCTION_ORIGIN || grant.createdAt === null) return "loopback";
+  const created = Date.parse(grant.createdAt);
+  if (!Number.isFinite(created)) return "loopback";
+  return created < Date.parse(LEGACY_GRANT_CUTOFF) ? "claude" : "loopback";
 }
 
 /**
@@ -157,12 +209,19 @@ export function parseGrantDocument(raw: unknown): StoredGrant | null {
   ) {
     return null;
   }
+  // `client` is absent on a grant from before ADR-0083; any other value is malformed (→ revoked).
+  let client: RedirectTargetKind | null = null;
+  if (d.client !== undefined && d.client !== null) {
+    if (!CLIENT_KINDS.includes(d.client as RedirectTargetKind)) return null;
+    client = d.client as RedirectTargetKind;
+  }
   return {
     _id: d._id,
     _rev: d._rev,
     sub: d.sub,
     clientHash: d.clientHash,
     origin: d.origin,
+    client,
     createdAt: typeof d.createdAt === "string" ? d.createdAt : null,
     lastRefreshAt: typeof d.lastRefreshAt === "string" ? d.lastRefreshAt : null,
     currentRefreshJti: d.currentRefreshJti,

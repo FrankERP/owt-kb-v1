@@ -160,7 +160,7 @@ const MODERN_META = {
 const DONE_INSIDE_THE_HANDLER = ["revalidatePath /schedule", "after registered", "tool returned"];
 
 async function liveToken(): Promise<string> {
-  const created = await createGrant({ sub: "frank", clientId: "client-id-under-test", origin: PREVIEW_ORIGIN });
+  const created = await createGrant({ sub: "frank", clientId: "client-id-under-test", origin: PREVIEW_ORIGIN, client: "claude" });
   if (!created.ok) throw new Error("fixture: grant not created");
   const { token } = await signAccessToken({ key: KEY, origin: PREVIEW_ORIGIN, sub: "frank", grantId: created.grantId });
   return token;

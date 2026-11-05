@@ -89,3 +89,9 @@ is a reason to.
   as the next free number at the time it was written; it may be renumbered at merge if another ADR
   lands on `main` first, and this paragraph is the marker that renumbering is expected rather than
   an error.
+
+## Addendum — ADR-0083, 2026-11-05
+
+A live super-admin OR a live worship admin may now approve a client (`mcpTierOf`). Production also
+allows ChatGPT's stable callback and RFC 8252 loopback, and registration signs the allowed subset of
+the requested URIs. Registration itself stays stateless DCR.

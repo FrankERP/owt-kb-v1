@@ -4,7 +4,7 @@
 // authorization code. `/oauth/authorize` renders the consent screen; its
 // «Permitir»/«Cancelar» form posts here.
 //
-// Registration is open to anyone, so without this step a super-admin browser
+// Registration is open to anyone, so without this step an admin's browser
 // that opened someone else's authorize link would be issued a code silently
 // (the confused-deputy attack). A code is therefore minted only when ALL of:
 //   - the request is a POST (GET is 405, so no link, prefetch or redirect can
@@ -12,8 +12,9 @@
 //     NextAuth cookie is `SameSite=Lax`, so a cross-site POST has no session;
 //   - the posted fields re-validate from scratch through the SAME validator
 //     the page used (R18) — the page is never trusted;
-//   - the session is live, not impersonating, and the member's LIVE role
-//     (`getMemberAccess`, not the session copy) is `super-admin`;
+//   - the session is live, not impersonating, and the member's LIVE access
+//     (`getMemberAccess`, not the session copy) has a connection tier
+//     (`mcpTierOf`: a super-admin or a worship admin, ADR-0083);
 //   - `decision=allow` was pressed. Nothing is remembered between requests.
 //
 // Gated by the session middleware (`proxy.ts`), deliberately: a cookie-less
@@ -28,6 +29,7 @@
 // a client_id.
 
 import { requireActiveSession } from "@/app/utils/authGuards";
+import { mcpTierOf } from "@/app/mcp/oauth/tier";
 import { getMemberAccess } from "@/app/utils/memberAccess";
 import { authorizationResponseUrl, authorizeErrorLocation, validateAuthorizeRequest } from "@/app/mcp/oauth/authorizeRequest";
 import { mcpRoutePreflight } from "@/app/mcp/oauth/guard";
@@ -96,13 +98,13 @@ export async function POST(request: Request): Promise<Response> {
   const validation = await validateAuthorizeRequest(form, { origin, key });
   if (validation.kind === "error-page") return badRequest("invalid client_id or redirect_uri");
 
-  // 5. The human: a live, non-impersonating super-admin — by the LIVE role.
+  // 5. The human: live, non-impersonating, with a connection tier — by the LIVE access.
   //    Refusals are shown to them, never sent to the client.
   const session = await requireActiveSession();
   if (!session) return jsonNoStore({ error: "unauthorized" }, 401);
   if (session.user.isImpersonating) return jsonNoStore({ error: "forbidden" }, 403);
   const access = await getMemberAccess(session.user.sanityId);
-  if (!access.active || access.role !== "super-admin") return jsonNoStore({ error: "forbidden" }, 403);
+  if (mcpTierOf(access) === null) return jsonNoStore({ error: "forbidden" }, 403);
 
   // 6. Exactly one decision, exactly one of the two buttons.
   const decisions = form.getAll("decision");

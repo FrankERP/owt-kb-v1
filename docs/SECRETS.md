@@ -481,7 +481,7 @@ verifying the instant the new key is live — a rotated secret cannot check a to
 the old one, by construction. That is **that one environment's grants only**: on production, every
 claude.ai connector must be reconnected from Claude; on preview, only dev-smoke runs are affected
 and must re-run the handshake — no claude.ai connector exists there (it cannot pass Deployment
-Protection; see [docs/MCP.md](MCP.md#adding-the-connector-claudeai)). The other environment, and
+Protection; see [docs/MCP.md](MCP.md#adding-the-connector)). The other environment, and
 the rest of the app, are unaffected — nothing here touches a session cookie or any non-MCP route.
 
 ---
@@ -675,7 +675,7 @@ secret.
 | Platform | Role |
 |---|---|
 | Vercel Preview + Production | `app/api/admin/solve/route.ts` sends it as the `X-Api-Key` header — to v2 itself, and to v3 through `app/utils/solverV3Upstream.ts` (solver v3 C6; the path production takes since the 2026-10-15 cutover, ADR-0056 — v2's only after a flip-back). The MCP's `solve_month` (P4, in production since 2026-10-20) calls the same `solveV3`, so it sends the same header from `/api/mcp` |
-| GitHub Actions `solver-v3-ops.yml` → `verify` | Reads `owt-solver-api-key:latest` with `owt-gha-verify` (Secret Accessor on this secret only), masks it, and sends it as `X-Api-Key` for the ping and smoke solve (ADR-0083). Nothing is stored in GitHub |
+| GitHub Actions `solver-v3-ops.yml` → `verify` | Reads `owt-solver-api-key:latest` with `owt-gha-verify` (Secret Accessor on this secret only), masks it, and sends it as `X-Api-Key` for the ping and smoke solve (ADR-0084). Nothing is stored in GitHub |
 | Secret Manager `owt-solver-api-key` | Cloud Build deploys each function with `--set-secrets=OWT_SOLVER_API_KEY=owt-solver-api-key:latest`: v2 from `cloudbuild.yaml` (manual: `scripts/deploy-solver-gcf.sh`), v3 from `gcf_v3/cloudbuild.yaml` (manual: a dispatched `deploy` of `solver-v3-ops.yml`, which re-runs that trigger; first creation and last resort: `scripts/deploy-solver-v3-gcf.sh`) |
 
 **Purpose.** The only barrier on each publicly invokable function (`allUsers` holds
