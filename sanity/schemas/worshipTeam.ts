@@ -126,7 +126,7 @@ export const teamMembers = defineType({
           preview: { select: { title: "ministry", subtitle: "level" } },
         },
       ],
-      description: "Solo lectura: se edita desde Miembros (super-admin).",
+      description: "Solo lectura: se edita desde Personas (super-admin).",
     },
     {
       // `worship` is deliberately NOT offered here — worship management stays with the

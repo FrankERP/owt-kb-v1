@@ -149,7 +149,7 @@ export function addedSeatClashes(
 
 /**
  * The ONE Spanish sentence for a refused pair. A voice + instrument pair names
- * the way out (the Miembros checkbox), like C2's `clashReason`; two copies of
+ * the way out (the Personas checkbox), like C2's `clashReason`; two copies of
  * one seat read «aparece dos veces en Lead», never «en Lead y Lead».
  */
 export function seatClashSentence(name: string, clash: AddedClash): string {
