@@ -59,7 +59,7 @@ export const DEFAULT_REASON = "manual";
 /** Mirrors `PRODUCTION_ORIGIN` in app/mcp/oauth/origin.ts. */
 export const PRODUCTION_ORIGIN = "https://owt-backstage.vercel.app";
 /** Mirrors `LEGACY_GRANT_CUTOFF` in app/mcp/oauth/grantDocument.ts (ADR-0083). */
-export const LEGACY_GRANT_CUTOFF = "2026-11-05T18:00:00.000Z";
+export const LEGACY_GRANT_CUTOFF = "2026-11-05T18:35:00.000Z";
 
 /**
  * Mirrors `effectiveGrantClient` there: the stored `client`, or — when absent —
