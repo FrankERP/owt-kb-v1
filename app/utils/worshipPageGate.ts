@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireActiveSession, requireMinistryMember, type ActiveSession } from "./authGuards";
 import { getMemberAccess } from "./memberAccess";
+import { rolloutAllows } from "./rollout";
 
 /**
  * Page gate for worship-only surfaces. Splits the two ways a visitor can fail:
@@ -38,5 +39,9 @@ export async function requireWorshipPage(callbackPath: string): Promise<NonNulla
   // The read is free: it is the same 30s-TTL cache entry requireMinistryMember
   // just filled.
   const access = await getMemberAccess(session.user.sanityId);
-  redirect(access.ministries.includes("kids") ? "/kids" : "/me");
+  if (access.ministries.includes("kids")) redirect("/kids");
+  // Jóvenes only once its meetings' rollout reaches this person (`rollout.ts`): before that,
+  // `/jovenes` answers 404 and `/me` is the honest landing. /jovenes never sends a member back
+  // here (its non-member branch goes to `/`, and a member is rendered or 404), so no loop.
+  redirect(access.ministries.includes("jovenes") && rolloutAllows("jovenesEvents", access) ? "/jovenes" : "/me");
 }

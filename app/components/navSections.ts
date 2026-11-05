@@ -11,8 +11,9 @@
 // the pages and routes enforce access (ADR-0020).
 
 import { MINISTRIES } from "@/app/ministries";
+import { navRolloutAllows } from "@/app/utils/rollout";
 
-export type NavSection = "worship" | "kids";
+export type NavSection = "worship" | "kids" | "jovenes";
 
 export type NavUser = {
   role?: string | null;
@@ -27,6 +28,8 @@ export type NavAccess = {
   inWorship: boolean;
   inKids: boolean;
   managesKids: boolean;
+  /** In Jóvenes AND its meetings' rollout reaches this person (`rollout.ts`, cosmetic copy). */
+  inJovenes: boolean;
 };
 
 /** The session copy reads `ministries` absent as worship, as it always has. */
@@ -39,37 +42,42 @@ export function navAccess(user: NavUser): NavAccess {
     inWorship: isSuper || ministries.includes("worship"),
     inKids: isSuper || ministries.includes("kids"),
     managesKids: isSuper || (user.managesMinistries ?? []).includes("kids"),
+    inJovenes: (isSuper || ministries.includes("jovenes")) && navRolloutAllows("jovenesEvents", isSuper),
   };
 }
 
-/** The sections this person can switch between, worship first. Jóvenes has no
- *  screens yet, so it is no section yet. */
+/** The sections this person can switch between, worship first. Jóvenes is a
+ *  section once its meetings' rollout reaches the person. */
 export function availableSections(a: NavAccess): NavSection[] {
   return [
     ...(a.inWorship ? (["worship"] as const) : []),
     ...(a.inKids || a.managesKids ? (["kids"] as const) : []),
+    ...(a.inJovenes ? (["jovenes"] as const) : []),
   ];
 }
 
 /**
- * The section the current page belongs to: `/kids…` is Kids, anything else is
+ * The section the current page belongs to: `/kids…` is Kids, `/jovenes…` Jóvenes, anything else is
  * worship. A page that belongs to no ministry (`/me`, `/super-admin`) shows the
  * person's first section. `null` when they have none.
  */
 export function currentSection(pathname: string, a: NavAccess): NavSection | null {
   const sections = availableSections(a);
   if (/^\/kids(\/|$)/.test(pathname) && sections.includes("kids")) return "kids";
+  if (/^\/jovenes(\/|$)/.test(pathname) && sections.includes("jovenes")) return "jovenes";
   return sections[0] ?? null;
 }
 
 export const SECTION_LABEL: Record<NavSection, string> = {
   worship: MINISTRIES.worship.name,
   kids: MINISTRIES.kids.name,
+  jovenes: MINISTRIES.jovenes.name,
 };
 
 /** Where switching to a section lands: its home, or the planner for a Kids
  *  manager who is not a Kids member (management never implies membership). */
 export function sectionHome(section: NavSection, a: NavAccess): string {
   if (section === "worship") return "/";
+  if (section === "jovenes") return "/jovenes";
   return a.inKids ? "/kids" : "/kids/admin";
 }

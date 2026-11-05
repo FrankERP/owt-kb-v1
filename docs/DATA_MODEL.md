@@ -11,14 +11,15 @@ exact strings used in GROQ `_type` filters.
 
 ---
 
-## Registered document types (24)
+## Registered document types (28)
 
 `post`, `tag`, `author`, `featuredSongs`, `saturdarSongs`, `saturday_role`, `sunday_role`,
-`teamMembers`, `special_role`, `loginEvent`, `setlistProposal`, the two Oasis Kids types
-`kidsPair` and `kidsSchedule`, and eleven **internal** types never authored by hand:
+`teamMembers`, `special_role`, `loginEvent`, `setlistProposal`, `serviceThread` (ADR-0065),
+`homeSettings` (ADR-0070), the two Oasis Kids types `kidsPair` and `kidsSchedule`, and thirteen
+**internal** types never authored by hand:
 `roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`, `specialIdentityCoordinator`,
 `solverConfig`, `fairnessMonth`, `mcpOauthGrant`, `mcpOauthCodeRedemption`, `calendarFeed`,
-`adminChatUsage`, `mcpProposal`.
+`adminChatUsage`, `mcpProposal`, `availabilityConflict` (ADR-0079), `ministryEvent` (ADR-0081).
 
 **Not registered** (present but intentionally unused — do not wire in):
 - `sanity/schemas/youtubeType/youtubeType.ts` — object type `youtube`.
@@ -530,6 +531,43 @@ mints every `_key`, the hash and the stamps; Studio governs it read-only like `s
 
 ---
 
+## `ministryEvent` — a Jóvenes meeting (ADR-0081)
+
+One document per meeting of a leveled ministry (today Jóvenes): the Saturday roster, a group's own
+meeting, or a joint meeting of two or three groups
+([`ministryEvent.ts`](../sanity/schemas/ministryEvent.ts); plan
+`docs/superpowers/plans/2026-10-30-jovenes-events-access.md`). The id is
+**`ministryEvent.<uuid>`, dotted on purpose**: the dataset answers anyone without a token, and the
+groups must stay closed to each other («No me gustaría que los pastores de Emprendedores vean el
+calendario de los de Otro Nivel», Frank). Read **only** through
+[`ministryEventReads.ts`](../app/utils/ministryEventReads.ts), which throws without
+`SANITY_API_READ_TOKEN`, carries the id prefix in every query and passes the reader's groups as a
+PARAMETER; `ministryEventCoverage.test.ts` fails on any other file that names the type, and
+`ministryEventReads.test.ts` runs the real GROQ on `groq-js` over a people × events matrix. Written
+only by `ministryEventCommit.ts` (PR C; until it ships, nothing writes the type).
+
+| Field | Meaning |
+|---|---|
+| `ministry` | `"jovenes"` — an id in `LEVELED_MINISTRY_IDS` |
+| `audience` | **Decides who reads it, read CLOSED.** `{ kind: "ministry" }` = every member of the ministry; `{ kind: "groups", groups: [id…] }` = members of at least one of those groups. Absent, malformed, an unknown `kind` or no valid group = no member's (admins still see it, to repair it). |
+| `kind` | `saturday` / `ministry` / `group` / `joint` — display only, never read for access |
+| `date` | `YYYY-MM-DD`, rendered at local noon |
+| `time`, `arrival` | `HH:mm`, display only |
+| `title`, `notes` | free text |
+| `seats[]` | `ministryEventSeat`: `role` (`encargado` / `apoyo` / `comparte`), `member` (**weak** reference) |
+| `program[]` | `ministryEventProgramLine`: `label`, `member?` (weak), `note?` |
+| `published` | boolean, written on every create; members read `published == true` only |
+| `createdBy` | weak reference to the creator, written once at create (a joint meeting is edited only by its creator and the admins) |
+
+Who reads what (`readMinistryEvents`, `mayRead` — the same rule twice, held equal by the test):
+a pastor reads published meetings whose audience is the ministry or includes one of their groups;
+in editor mode a leader also reads the drafts that include a group they lead, and a Jóvenes admin
+or the super-admin reads every meeting of the ministry. Inactive people and non-members read
+nothing, with no query at all. Every member reference is stored **weak** so removing a pastor never
+fails on an old meeting; a dangling seat reads as «Sin asignar». Studio shows the type read-only.
+
+---
+
 ## `tag`, `author` — Taxonomies
 
 - **`tag`** ([`tag.ts`](../sanity/schemas/tag.ts)): `{ name, slug }`. Referenced by `post.tags[]`.
@@ -780,14 +818,16 @@ require a Studio deploy to appear in the Studio UI (the app reads/writes via GRO
 
 The Studio is a *second* writer into the same dataset, so it would otherwise bypass every guard in
 [API_REFERENCE → the protected mutation contract](API_REFERENCE.md#the-protected-mutation-contract).
-**Nineteen** types are closed to it — the six protected service types, the eleven internal types
-(`notificationOutbox` keeps `delete` alone, so an operator can prune a stray entry) **plus** the two
-Oasis Kids types, whose writer is the app (`/api/kids/pairs`, `/api/kids/schedules`):
+**Twenty-two** types are closed to it — the six protected service types, the thirteen internal
+types (`notificationOutbox` keeps `delete` alone, so an operator can prune a stray entry), the two
+Oasis Kids types, whose writer is the app (`/api/kids/pairs`, `/api/kids/schedules`), **plus**
+`serviceThread`, written by its four routes (ADR-0073):
 
 `sunday_role`, `saturday_role`, `special_role`, `featuredSongs`, `saturdarSongs`, `setlistProposal`,
 `roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`, `specialIdentityCoordinator`,
 `solverConfig`, `fairnessMonth`, `kidsPair`, `kidsSchedule`, `mcpOauthGrant`, `mcpOauthCodeRedemption`,
-`calendarFeed`, `adminChatUsage`, `mcpProposal`.
+`calendarFeed`, `adminChatUsage`, `mcpProposal`, `serviceThread`, `availabilityConflict`,
+`ministryEvent`.
 
 `calendarFeed` and `adminChatUsage` are per-member counters, and `mcpProposal` a stored month plan (see their sections above). `mcpOauthGrant` and
 `mcpOauthCodeRedemption` hold OAuth state for the MCP connector (P0 auth): `mcpOauthGrant` is one document per
