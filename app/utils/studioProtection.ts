@@ -95,7 +95,7 @@ export const PROTECTED_STUDIO_TYPES = [
   // Availability conflicts and their proposals (ADR-0079): machine state written only by
   // `app/utils/availabilityFixCommit.ts`. Internal, like `mcpProposal`.
   "availabilityConflict",
-  // Jóvenes' meetings (ADR-0082): dotted ids, read only through `ministryEventReads.ts` and
+  // Jóvenes' meetings (ADR-0081): dotted ids, read only through `ministryEventReads.ts` and
   // written only by `ministryEventCommit.ts`, whose audience rules a Studio edit would bypass.
   "ministryEvent",
 ] as const;
@@ -327,7 +327,7 @@ export const INTERNAL_STUDIO_FIELDS: Readonly<Record<string, readonly string[]>>
     "appliedBy",
     "trigger",
   ],
-  // Written only by `app/utils/ministryEventCommit.ts` (ADR-0082).
+  // Written only by `app/utils/ministryEventCommit.ts` (ADR-0081).
   ministryEvent: [
     "ministry",
     "audience",

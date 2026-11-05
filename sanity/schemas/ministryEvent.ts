@@ -2,7 +2,7 @@ import { defineType } from "sanity";
 
 /**
  * Internal: one meeting of a leveled ministry (today Jóvenes) — the Saturday roster, a group's own
- * meeting, or a joint meeting of two or three groups (ADR-0082; plan
+ * meeting, or a joint meeting of two or three groups (ADR-0081; plan
  * `docs/superpowers/plans/2026-10-30-jovenes-events-access.md`).
  *
  * `_id` is `ministryEvent.<uuid>` — dotted, so an untokened read of the public dataset never

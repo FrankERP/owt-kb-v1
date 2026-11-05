@@ -93,7 +93,7 @@ describe("studio protection policy", () => {
       "serviceThread",
       // The availability proposals' records (ADR-0079): written only by availabilityFixCommit.ts.
       "availabilityConflict",
-      // Jóvenes' meetings (ADR-0082): written only by ministryEventCommit.ts.
+      // Jóvenes' meetings (ADR-0081): written only by ministryEventCommit.ts.
       "ministryEvent",
     ]);
     expect(PROTECTED_STUDIO_TYPES).toContain("saturdarSongs");

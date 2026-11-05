@@ -1,4 +1,4 @@
-// The read contract of `ministryEvent` (ADR-0082; plan
+// The read contract of `ministryEvent` (ADR-0081; plan
 // `docs/superpowers/plans/2026-10-30-jovenes-events-access.md` §4, guards G2 and G3).
 //
 // G3 is the one that matters: the query `readMinistryEvents` builds is PARSED AND EVALUATED with

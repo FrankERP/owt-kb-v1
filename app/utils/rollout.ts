@@ -1,5 +1,5 @@
 // THE rollout registry: how far a feature that is built but not yet for everyone has reached
-// (ADR-0082; plan `docs/superpowers/plans/2026-10-30-jovenes-events-access.md` §7, G6). One entry
+// (ADR-0081; plan `docs/superpowers/plans/2026-10-30-jovenes-events-access.md` §7, G6). One entry
 // per feature, keyed by a FEATURE name (never a Sanity type name, so this file stays outside the
 // type's coverage guard). Moving a stage is a one-line PR through the release order, like any code.
 //

@@ -1,4 +1,4 @@
-# ADR-0082: Ministry events are private by id, read closed by audience, and written by one module
+# ADR-0081: Ministry events are private by id, read closed by audience, and written by one module
 
 **Date:** 2026-11-05 · **Status:** Accepted
 

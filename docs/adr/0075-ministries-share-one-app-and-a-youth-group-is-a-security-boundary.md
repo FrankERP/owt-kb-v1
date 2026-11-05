@@ -93,6 +93,6 @@ Other facts that shaped it: worship's documents carry no ministry field (ADR-001
   so widening what it serves is an access change with its own plan.
 - **Jóvenes goes first, not Kids** (Frank, 2026-10-30: «Quiero que dejemos en pausa lo de kids, me
   interesa más sacar lo de jóvenes»). Decision 4's «Kids moves onto the generic model first» is
-  reversed: Jóvenes is built on the generic `ministryEvent` type (ADR-0082) and Kids stays on its
+  reversed: Jóvenes is built on the generic `ministryEvent` type (ADR-0081) and Kids stays on its
   own types, paused, until it is picked up again; the seeded Kids roster with no accounts was removed
   (2026-10-30, `scripts/remove-seeded-kids-roster.mjs`).

@@ -1,5 +1,5 @@
 // `/jovenes`: its gates (sign-in, membership, the rollout on the SERVER), and that it reads through
-// the one reader in member mode (ADR-0082; plan R1, R4, G6).
+// the one reader in member mode (ADR-0081; plan R1, R4, G6).
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
