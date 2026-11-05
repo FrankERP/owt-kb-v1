@@ -423,6 +423,10 @@ describe("proposeFallbacks (nobody passes every rule)", () => {
     // Still marking the day: never offered (the live check), whatever the record says.
     const away = { ...withAna, members: withAna.members.map((m) => (m._id === "m-ana" ? { ...m, unavailableDates: ["2026-11-15"] } : m)) };
     expect(proposeReplacement(away)).toEqual({ kind: "none", reason: "no_candidate" });
+    // A rule's exclusion on that date stays, even with the day freed: only «no disponible» lifts.
+    const ruled = record("2026-11", people.map((p) => (p.memberId === "m-ana" ? { ...p, blocks: [{ ...block, excludedRoles: ["Sun.Lead" as const] }] } : p)));
+    expect(proposeReplacement({ ...withAna, ledger: ledgerResponse(["2026-11"], { horizon: [{ record: ruled, storedServices: 5, recordBinds: true }] }) }))
+      .toEqual({ kind: "none", reason: "no_candidate" });
   });
 
   it("stops early past the deadline and never answers an option without a broken rule", () => {
