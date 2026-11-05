@@ -19,9 +19,13 @@ Read as: (a) an MCP client other than claude.ai (ChatGPT first, local agents too
 OAuth flow and use the connector; (b) an `admin` (not only `super-admin`) can authorize it with
 their own Backstage account. Standing constraints (Frank, 2026-11-05, other thread): writes about
 people from the MCP are super-admin only; the coordinator's brief keeps EVERY write tool
-super-admin-only unless Frank says otherwise. What an admin may read is Frank's call on a decision
-card; this plan is written for the recommended option, «Leer todo lo de Alabanza» (§4), and the
-other read-only option is a strict subset (only the `READ_TIER_TOOLS` list in §4 changes).
+super-admin-only unless Frank says otherwise. **Frank's decision (card, 2026-11-05 17:28Z):**
+«Leer y algunas escrituras» — an admin reads the worship data and may also edit setlists and write
+service messages. Delivered in two slices: **this plan is slice A** (any agent connects; admins get
+the read tier, §4); **slice B** (admin writes: `edit_setlist` and the service-message tools) gets
+its own plan and critical review, because each write carries its own notification and lead-roster
+rules. Slice B only adds named tools to the admin tier's allowlist; nothing in slice A changes for
+it.
 
 **Narrowing, stated:** «cualquier agente» becomes «any agent that can finish the flow on a redirect
 target from a closed list» (§3) — claude.ai, chatgpt.com, and the user's own computer (RFC 8252
@@ -91,7 +95,10 @@ field (§4.1).
 **Why loopback in production is safe** (RFC 8252 §7.3/§8.3): the code is delivered to the browser's
 own machine. A remote attacker who registers a loopback client and sends an admin the authorize link
 gets nothing — the code lands on the admin's computer, and without it the attacker's PKCE verifier
-is useless. The same holds for ANY port: whatever listens on the admin's own machine is the admin's.
+is useless. **Residual, named in the ADR:** with any port and an attacker-chosen path, the code can
+reach any local service on the admin's machine; one that forwards or publishes request URLs (an open
+redirect, a request log synced elsewhere) could leak it. RFC 8252 accepts this; so does this plan,
+since the consent screen still has to be approved and the code lives 60 s.
 
 **Why not «any https URI»:** registration is open (ADR-0039), so an open list lets anyone register
 `https://evil.example/cb`, start a flow, and send the link to an admin; one careless «Permitir»
@@ -188,7 +195,7 @@ keep working unchanged.
   `get_service_messages` (registered inside the messages bundle with its writes; a later PR may
   split it out). A tool added to the connector later lands in "full" only unless someone adds it
   to the allowlist on purpose.
-- Two digests: `TOOL_LIST_VERSIONS = { full, read }`. **`full` must equal today's
+- Per-handler digests (see §4.1 for the third): `TOOL_LIST_VERSIONS.full` and `.read`. **`full` must equal today's
   `TOOL_LIST_VERSION` byte for byte** (a test pins it against a digest computed with the
   pre-change registration), so Frank's Claude gets no stale-list note from this release.
 - `/api/mcp` builds two handlers at module scope (`handlers.full`, `handlers.read`), each with its
@@ -213,16 +220,25 @@ force a save with no card in between. So the app-only tools follow the CLIENT, n
   (already verified by token step 3). It is set once and never changed by a refresh (`rotateRefresh`
   patches only the refresh fields). It is a property of the connection, not of the person: the tier
   is still never stored.
-- **Absent `client` (every grant minted before this release):** on the production origin it reads
-  as `"claude"` (production allowed only claude.ai until now, so it is true); on any other origin it
-  reads as `"loopback"` (fail closed: the dev smoke's old grants lose the app twins, which the smoke
-  never calls). `loadGrant`'s parse accepts the field absent or one of the three values; any other
-  value → malformed → revoked (existing rule).
+- **The read fetches it.** `loadGrant` reads with an explicit projection (`GRANT_QUERY` in
+  `grantStore.ts`); `client` is ADDED to it. A test pins the projection to the parser: every field
+  `parseGrantDocument` reads appears in `GRANT_QUERY` (the store's existing tests mock `fetch` and
+  would not notice a missing field). `scripts/revoke-mcp-grant.mjs`'s own projection gains `client`
+  too.
+- **Absent `client` fails closed, independent of the projection:** absent reads as `"claude"` ONLY
+  when the grant's origin is production AND its `createdAt` (already projected) is before
+  `LEGACY_GRANT_CUTOFF`, a constant fixed in the PR at a moment before this code can run anywhere
+  (production allowed only claude.ai before then, so those grants are Claude's). Every other absent
+  case — a grant created after the cutoff, or on dev/local — reads as `"loopback"`: no app twins.
+  So a projection that ever drops `client` again costs a new grant the app twins; it never hands them
+  to another host. Any value other than the three kinds → malformed → revoked (existing rule).
 - **Three handlers, not two:** `full` + `client === "claude"` → today's list exactly (45 tools + the
   card resources; digest pinned to today's); `full` + any other client → today's list WITHOUT the
   five app-only tools and WITHOUT the card resources (`registerAllTools(server, { version, tier,
   appsHost })`; the three bundles skip their app twins when `appsHost` is false); `read` → the 11
-  reads, any client. The model-visible tools whose `_meta.ui.resourceUri` points at the card stay as
+  reads, any client. Each handler has its OWN digest (`TOOL_LIST_VERSIONS = { full, fullNoApps,
+  read }`; `full` pinned to today's), and a handler that registers no resource advertises no
+  `resources` capability (`fullNoApps` and `read`; a route test pins `resources/list` on both). The model-visible tools whose `_meta.ui.resourceUri` points at the card stay as
   they are; a host without the resource falls back to the text answer (known effect). Without
   `check_service_edits_app` nothing mints a waiver on such a grant, so nothing can be forced.
 - `docs/MCP.md` and ADR-0062/0066/0072 get a one-line consequence addendum: «since ADR-0083, app-only
@@ -320,7 +336,8 @@ rate limit is a named follow-up, triggered if usage shows it.
    (and the client id carries only those); an all-off-list body → `invalid_redirect_uri`.
 
 11. Grant `client`: written from the code's redirect at the code exchange; kept across refresh;
-   absent → `"claude"` on production, `"loopback"` elsewhere; an unknown value → revoked. Route: a
+   absent → `"claude"` only on production with `createdAt` before `LEGACY_GRANT_CUTOFF`, else
+   `"loopback"`; an unknown value → revoked; `GRANT_QUERY` contains every field the parser reads. Route: a
    full grant with client `chatgpt`/`loopback` lists 40 tools, none app-only, no resource, and
    `tools/call save_service_edits_app` is an unknown tool; a full grant with client `claude` (or
    absent on production) lists today's 45 + resources.
@@ -355,7 +372,11 @@ Gates: `npx tsc --noEmit`, `npm test`, `npx eslint .` (0 errors). No solver tree
    write. Its production refusal message («no loopback entry») is reworded; the refusal stays (the
    smoke writes grants). Run (a) as Frank (`full`) and (b) as a worship-admin account (`read`). If
    (b) can't be run (a browser signed in as that account), say so in the PR; §7.4 is then the only
-   pre-production proof of the boundary.
+   pre-production proof of the boundary. The probe is the ONE exception to `CALLABLE_TOOLS`:
+   `toolCallRequest` allows `edit_setlist` only under `--expect-tier read` and only with arguments
+   deep-equal to `{}` (plus an optional `toolsVersion`), which `edit_setlist`'s strict schema refuses
+   on any tier; `mcpDevSmoke.test.ts` pins that any other argument, tier or write name is still
+   refused.
 3. PR to `main`, `gates` green, merge, verify the prod alias + SHA.
 4. **Live proof in production** (needs people): (a) Frank's existing Claude connector still works
    with no refresh note (`ping`); (b) a worship admin (Mkz) adds ChatGPT (developer mode) → consent
@@ -366,7 +387,12 @@ Gates: `npx tsc --noEmit`, `npm test`, `npx eslint .` (0 errors). No solver tree
    `client_secret` field refused by the token route, a redirect form not on the list, a stale-list
    note on every answer because the model omits `toolsVersion` — is a NEW change with its own
    review, not a hot fix.
-5. **Rollback, fastest first:** one misbehaving grant → `scripts/revoke-mcp-grant.mjs --id … --apply`
+5. **Rollback, fastest first** (a revert is NOT clean on its own: the old code ignores `client`, and
+   the refresh path never re-checks the redirect URI, so a super-admin's ChatGPT/loopback grant made
+   under this release would keep refreshing and get the app-only twins back. Hence step 0):
+   0. Before or with any revert: `revoke-mcp-grant.mjs` dry run (from THIS release's checkout, which
+      lists `client`), then revoke every grant whose `client` is not `"claude"`.
+   Then, fastest first: one misbehaving grant → `scripts/revoke-mcp-grant.mjs --id … --apply`
    (bites ≤ 30 s); every admin grant → the same script per id (the dry run lists `sub` and
    `client`); everything → the kill switch (`docs/MCP.md` «Kill switch»; it needs a redeploy, so it
    is no faster than a revert); the code → revert the merge through a `main` PR (minutes, gated),
@@ -377,7 +403,7 @@ Gates: `npx tsc --noEmit`, `npm test`, `npx eslint .` (0 errors). No solver tree
 ## 9. Out of scope (named follow-ups)
 
 Email notice on a new grant (the cheapest detector for §3's residual risk, now that every worship
-admin can authorize; offered to Frank as the first follow-up); a per-grant rate limit; a «Conexiones» screen listing/revoking grants; admin writes; Kids/
+admin can authorize; offered to Frank as the first follow-up); a per-grant rate limit; a «Conexiones» screen listing/revoking grants; admin writes (slice B, its own plan); Kids/
 Jóvenes reads; `get_service_messages` for admins; CIMD; the proposal card in ChatGPT (MCP Apps
 rendering there is untested; tools already answer in text).
 
