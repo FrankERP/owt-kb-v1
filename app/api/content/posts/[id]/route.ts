@@ -4,6 +4,8 @@ import { writeClient } from "@/sanity/lib/serverClient";
 import { revalidateSongViews } from "@/app/utils/revalidate";
 import { patchSong, SONG_ERROR } from "@/app/utils/songSaveCommit";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
+import { storedRevisionOfType } from "@/app/utils/typePin";
+import { sanityConflictKind } from "@/app/utils/roleWriteRequest";
 
 // Wrapped because the module it calls is a `*Commit` (`srVerificationRunContext.test.ts` scans by
 // import); a song write sends nothing, and an unmarked request behaves as before.
@@ -39,8 +41,26 @@ async function deleteHandler(
     return NextResponse.json({ error: SONG_ERROR.forbidden }, { status: 403 });
   }
 
+  // W9: this route deletes SONGS only. Any other id — a member, a service, a private Jóvenes event
+  // — answers 404 without saying whether it exists, and the delete is pinned to the revision read,
+  // so the document judged to be a song is the one deleted.
   const { id } = await params;
-  await writeClient.delete(id);
+  const rev = await storedRevisionOfType(id, "post");
+  if (!rev) {
+    return NextResponse.json({ error: "Canción no encontrada." }, { status: 404 });
+  }
+  try {
+    await writeClient
+      .transaction()
+      .patch(id, (p) => p.ifRevisionId(rev).set({}))
+      .delete(id)
+      .commit();
+  } catch (err) {
+    if (sanityConflictKind(err) === "revision_mismatch") {
+      return NextResponse.json({ error: "Alguien más cambió esta canción; recarga." }, { status: 409 });
+    }
+    throw err;
+  }
   revalidateSongViews();
   return NextResponse.json({ ok: true });
 }

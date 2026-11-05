@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
+import { storedRevisionOfType } from "@/app/utils/typePin";
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 
@@ -33,6 +34,10 @@ export async function POST(
   }
 
   const { id } = await params;
+  // W9 (ADR-0081): only a member's photo; any other id answers 404 before anything is uploaded.
+  if (!(await storedRevisionOfType(id, "teamMembers"))) {
+    return NextResponse.json({ error: "Miembro no encontrado." }, { status: 404 });
+  }
   const formData = await req.formData();
   const file = formData.get("photo") as File | null;
   if (!file) {
