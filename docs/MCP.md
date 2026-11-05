@@ -1,8 +1,8 @@
 # MCP connector — operator runbook
 
 > **Any agent, admins read-only ([ADR-0083](adr/0083-the-connector-opens-to-worship-admins-read-only-through-a-closed-redirect-list.md)):
-> on `preview` (dev) since 2026-11-05, NOT in production yet.** Once released, ChatGPT and local
-> agents can connect as well as
+> released to production 2026-11-05** (PR [#229](https://github.com/FrankERP/owt-kb-v1/pull/229),
+> `main` `38ee629a`; dev since the same day). ChatGPT and local agents can connect as well as
 > Claude, and a worship admin gets a read-only list. ChatGPT is **unproven** until the production
 > live proof; see [Adding the connector](#adding-the-connector).
 >
