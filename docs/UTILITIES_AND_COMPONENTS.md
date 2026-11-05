@@ -603,7 +603,7 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   the planner's month, drafts included: the ONE file ADR-0022 lets read `kidsSchedule` drafts.
   `PUBLISHED_PERSPECTIVE` is what every Kids planner read passes (`serverClient` is raw otherwise).
 
-### Jóvenes meetings (ADR-0081)
+### Jóvenes meetings (ADR-0082)
 - **`readMinistryEvents(access, { me, ministry, from, to, mode })`**, **`mayRead(access, event, mode)`**,
   **`buildMinistryEventQuery`** ([ministryEventReads.ts](../app/utils/ministryEventReads.ts)) — THE
   one reader of `ministryEvent`, `server-only`: the id prefix, the ministry and the reader's groups

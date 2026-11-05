@@ -1,4 +1,4 @@
-// G1 — who may name `ministryEvent`, and who may import its reader (ADR-0081; plan
+// G1 — who may name `ministryEvent`, and who may import its reader (ADR-0082; plan
 // `docs/superpowers/plans/2026-10-30-jovenes-events-access.md` §6 G1, R1, R6).
 //
 // WHY THIS EXISTS. A Jóvenes meeting is kept from another group ONLY by the GROQ in
@@ -21,7 +21,7 @@
 //
 // What it does NOT see, accepted: a wrapper module that a page caches (none exists, and a page that
 // reads the session is dynamic anyway); a type name built at run time. One such reader exists and is
-// accepted by ADR-0081: `sanity/structure.ts` lists every protected type by `_type == $type` from
+// accepted by ADR-0082: `sanity/structure.ts` lists every protected type by `_type == $type` from
 // `PROTECTED_STUDIO_TYPES` — the Studio, open to Sanity project members, who read everything anyway.
 // A `_type match "ministry*"` or `string::startsWith(_type, …)` prefix read is flagged below.
 

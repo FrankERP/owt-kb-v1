@@ -47,7 +47,7 @@ import { mcpProposal } from './schemas/mcpProposal';
 // Internal: availability conflicts and their proposals (ADR-0079), written only by
 // app/utils/availabilityFixCommit.ts. See sanity/schemas/availabilityConflict.ts.
 import { availabilityConflict } from './schemas/availabilityConflict';
-// Internal: Jóvenes' meetings (ADR-0081), dotted ids, read only through
+// Internal: Jóvenes' meetings (ADR-0082), dotted ids, read only through
 // app/utils/ministryEventReads.ts. See sanity/schemas/ministryEvent.ts.
 import { ministryEvent } from './schemas/ministryEvent';
 // The conversation about a service before its setlist proposal exists (ADR-0065).

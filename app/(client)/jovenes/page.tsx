@@ -28,7 +28,7 @@ const TZ = "America/Mexico_City";
 /** How far ahead the list reaches: a page range, not access (plan R8). */
 const HORIZON_DAYS = 120;
 
-// Every read goes through the ONE reader (ADR-0081): it carries the id prefix, the ministry,
+// Every read goes through the ONE reader (ADR-0082): it carries the id prefix, the ministry,
 // `published == true` and the reader's groups as a parameter, so Otro Nivel never receives
 // Emprendedores' meetings. This page reads the session, so it is dynamic; it exports no
 // `revalidate` and caches nothing (R6, `ministryEventCoverage.test.ts`).

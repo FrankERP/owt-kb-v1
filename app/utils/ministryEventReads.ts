@@ -1,6 +1,6 @@
 import "server-only";
 
-// THE ONE READER of `ministryEvent` (ADR-0081; plan
+// THE ONE READER of `ministryEvent` (ADR-0082; plan
 // `docs/superpowers/plans/2026-10-30-jovenes-events-access.md` §4). Every read of the type under
 // `app/**` goes through `readMinistryEvents`; `ministryEventCoverage.test.ts` fails the build on any
 // other file that names it.

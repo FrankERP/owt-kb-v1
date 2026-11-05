@@ -2,7 +2,7 @@
 
 // The phone tab bar (spec §5.0, §19.1, decision B). Worship tabs: Inicio ·
 // Calendario · Biblioteca. Kids: Kids (+ Planear Kids when managesKids).
-// Jóvenes: Reuniones (once its rollout reaches the person, ADR-0081). ONE
+// Jóvenes: Reuniones (once its rollout reaches the person, ADR-0082). ONE
 // ministry at a time — the page's (`navSections.ts`, Frank 2026-10-29).
 // Plus a «Más» tab and its sheet ONLY when there is something the tabs cannot
 // hold (the switch to the other ministry, Admin in worship) — Tema, Cerrar sesión AND «Yo» all live in

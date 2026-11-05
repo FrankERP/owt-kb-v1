@@ -791,7 +791,7 @@ pass.
   answer `null`/`[]` for a non-member and have no super-admin arm — a group guard adds it.
   Groups (`MINISTRIES.jovenes.groups`) are a security boundary like the ministry, enforced
   by the meetings' one reader (next bullet).
-- **Jóvenes meetings: private by id, one reader, read closed** (ADR-0081; plan
+- **Jóvenes meetings: private by id, one reader, read closed** (ADR-0082; plan
   `docs/superpowers/plans/2026-10-30-jovenes-events-access.md`). `ministryEvent` ids are
   `ministryEvent.<uuid>`, so the public dataset never serves them; every read under `app/**` goes
   through `readMinistryEvents` (`app/utils/ministryEventReads.ts`), whose GROQ carries the id

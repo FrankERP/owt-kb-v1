@@ -19,7 +19,7 @@ exact strings used in GROQ `_type` filters.
 **internal** types never authored by hand:
 `roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`, `specialIdentityCoordinator`,
 `solverConfig`, `fairnessMonth`, `mcpOauthGrant`, `mcpOauthCodeRedemption`, `calendarFeed`,
-`adminChatUsage`, `mcpProposal`, `availabilityConflict` (ADR-0079), `ministryEvent` (ADR-0081).
+`adminChatUsage`, `mcpProposal`, `availabilityConflict` (ADR-0079), `ministryEvent` (ADR-0082).
 
 **Not registered** (present but intentionally unused — do not wire in):
 - `sanity/schemas/youtubeType/youtubeType.ts` — object type `youtube`.
@@ -531,7 +531,7 @@ mints every `_key`, the hash and the stamps; Studio governs it read-only like `s
 
 ---
 
-## `ministryEvent` — a Jóvenes meeting (ADR-0081)
+## `ministryEvent` — a Jóvenes meeting (ADR-0082)
 
 One document per meeting of a leveled ministry (today Jóvenes): the Saturday roster, a group's own
 meeting, or a joint meeting of two or three groups

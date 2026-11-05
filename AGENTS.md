@@ -357,7 +357,7 @@ built on `ministryAccess.ts` over ONE snapshot, `accessFromDoc`); worship pages 
 - **"Tipo" (`memberType`) is the ONLY worship eligibility axis** — an empty Tipo is in no seat
   and no pool. Do not reintroduce a second axis (ADR-0029 removed `retiredFrom`). `disabled`
   removes app ACCESS, not schedulability, and `handleEdit` never writes it.
-- **A Jóvenes group is a security boundary** (ADR-0081): `ministryEvent` has dotted ids and is
+- **A Jóvenes group is a security boundary** (ADR-0082): `ministryEvent` has dotted ids and is
   read ONLY through `readMinistryEvents` (id prefix + the reader's groups as a parameter, audience
   read closed); never a wider read filtered in TypeScript (`ministryEventCoverage.test.ts`).
   Unreleased features gate on `rolloutAllows` (`app/utils/rollout.ts`) on the server, not the nav.
