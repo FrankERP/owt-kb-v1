@@ -27,6 +27,7 @@ vi.mock("@/app/utils/outboxSweep", () => ({
   sweepOutbox: (...a: unknown[]) => sweepOutboxMock(...a),
   EMAIL_LIMIT: 40,
   SEND_BUDGET_MS: 40_000,
+  SWEEP_DEADLINE_MS: 45_000,
 }));
 vi.mock("@/app/utils/email", () => ({
   sendEmail: (...a: unknown[]) => sendEmailMock(...a),
@@ -298,6 +299,67 @@ describe("layer 3 — the daily cron also sweeps", () => {
 
     expect(res.status).toBe(200);
     expect(await bodyField(res, "destroyed")).toEqual({ destroyed: 0, alerted: false });
+  });
+});
+
+describe("layer 3 — the Sunday «Te toca dirigir» reminder (ADR-0080)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const isLeadQuery = (q: unknown) => String(q).includes("setlistProposal");
+
+  it("reads nothing and leaves the sweep's clocks alone on a weekday", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-05T01:30:00Z")); // Wednesday 19:30 CDMX
+    serveReminderFetches({ count: 0, oldest: null });
+    const GET = await remindersRoute();
+    const res = await GET(req({ authorization: `Bearer ${SECRET}` }));
+
+    expect(await bodyField(res, "leadReminders")).toEqual({ ran: false });
+    expect(operationalFetch.mock.calls.some((c) => isLeadQuery(c[0]))).toBe(false);
+    expect(sweepOutboxMock).toHaveBeenCalledWith({});
+  });
+
+  it("emails next week's leads on Sunday evening, before the sweep", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-09T01:30:00Z")); // Sunday 8 nov, 19:30 CDMX
+    operationalFetch.mockImplementation(async (query: string, params: Record<string, unknown>) => {
+      if (isLeadQuery(query)) {
+        expect(params).toMatchObject({ from: "2026-11-09", to: "2026-11-15" });
+        return [{
+          _id: "sun15", _type: "sunday_role", date: "2026-11-15",
+          leads: [{ _id: "m1", name: "Pau", email: "pau@mail.com" }],
+          setlistSongs: 0, proposal: null, pastorMessage: null,
+        }];
+      }
+      if (query.includes("notificationOutbox")) return { count: 0, oldest: null };
+      return [];
+    });
+    const GET = await remindersRoute();
+    const res = await GET(req({ authorization: `Bearer ${SECRET}` }));
+
+    expect(await bodyField(res, "leadReminders")).toMatchObject({ ran: true, planned: 1, emailed: 1, failed: 0 });
+    const reminder = sendEmailMock.mock.calls.find((c) => /Te toca dirigir/.test(String(c[0].subject)));
+    expect(reminder?.[0].to).toBe("pau@mail.com");
+    expect(sendEmailMock.mock.invocationCallOrder[0]).toBeLessThan(sweepOutboxMock.mock.invocationCallOrder[0]);
+  });
+
+  it("still sweeps when the reminder's read fails", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-09T01:30:00Z"));
+    operationalFetch.mockImplementation(async (query: string) => {
+      if (isLeadQuery(query)) throw new Error("sanity down");
+      if (query.includes("notificationOutbox")) return { count: 0, oldest: null };
+      return [];
+    });
+    const GET = await remindersRoute();
+    const res = await GET(req({ authorization: `Bearer ${SECRET}` }));
+
+    expect(res.status).toBe(200);
+    expect(await bodyField(res, "leadReminders")).toMatchObject({ ran: true, error: "lead_reminder_failed" });
+    expect(sweepOutboxMock).toHaveBeenCalled();
   });
 });
 

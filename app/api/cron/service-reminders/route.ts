@@ -5,6 +5,7 @@ import { tomorrowDateStr, assignedMemberRefsQuery } from "@/app/utils/notifyTarg
 import { reportDestroyedMail, reportOutboxLiveness } from "@/app/utils/outboxLiveness";
 import { sweepOutbox } from "@/app/utils/outboxSweep";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
+import { sendLeadSongReminders, sweepOptionsAfterReminders } from "@/app/utils/leadSongReminder";
 
 // The daily cron is the outbox's last-resort flush trigger (§3, Task 11); one
 // sweep can fan out dozens of emails, so give it room to finish.
@@ -45,6 +46,13 @@ async function getHandler(req: NextRequest) {
     path: "/me",
   });
 
+  // Sundays only (CDMX): «Te toca dirigir» to the leads of next week's services
+  // that have no songs yet (ADR-0080). A no-op returning `{ ran: false }` on every
+  // other day, and it never throws. BEFORE the sweep so a busy sweep can never
+  // starve a reminder that has no second chance this week; the sweep is lossless
+  // and is derated below by what this spent.
+  const leadReminders = await sendLeadSongReminders();
+
   // The liveness alarm, BEFORE this request's sweep — and the order is the whole
   // point of the alarm, not a detail. The failure it exists to catch is layer 1
   // being dead: notices then queue all day, every one passes its one-hour
@@ -79,7 +87,7 @@ async function getHandler(req: NextRequest) {
   // nobody reads the status code.
   let sweep: Awaited<ReturnType<typeof sweepOutbox>> | { error: string };
   try {
-    sweep = await sweepOutbox();
+    sweep = await sweepOutbox(sweepOptionsAfterReminders(leadReminders.elapsedMs));
   } catch (err) {
     console.error(JSON.stringify({ event: "notify_daily_sweep_failed" }), err);
     sweep = { error: "sweep_failed" };
@@ -91,5 +99,5 @@ async function getHandler(req: NextRequest) {
   // the JSON below goes to Vercel's scheduler, which reads none of it.
   const destroyed = await reportDestroyedMail(sweep, "El barrido diario");
 
-  return NextResponse.json({ day, ...r, sweep, liveness, destroyed });
+  return NextResponse.json({ day, ...r, leadReminders, sweep, liveness, destroyed });
 }
