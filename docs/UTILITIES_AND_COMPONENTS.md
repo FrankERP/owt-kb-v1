@@ -258,7 +258,8 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   diseño para admins bloque 2, 2026-10-22) — the ONE Spanish wording of a rule: `restrictionChips`
   (one chip per clause of a person restriction, with its tone and the notation it replaced),
   `exclusionSentence`/`weekSentence`/`capSentence`/`capSubject`/`CAP_OP_WORD`, `conflictSentence`/
-  `presenceSentence` (sentences in parts, connectives dimmed) and `patternLabel`/`patternPill` (the
+  `presenceSentence` (sentences in parts, connectives dimmed), `restrictionText` (a person rule as one
+  line, «Vale: Nunca en sábado», for the MCP and the rename lines) and `patternLabel`/`patternPill` (the
   forms' pickers). The rules card, its forms, `EXACT_ROLE_LABEL` and the MCP's `get_solver_rules`
   all read it, so a rule reads the same on `/admin` and in the chat. The notation stays on every
   chip's `title` and behind «Mostrar notación del solver», because the solver's notices and the v3
@@ -587,6 +588,22 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   edits by parts on the fresh song (passages with `all`/`nth`, charts by `_key`, tags and artists by
   name, links by label), returning only the fields they touch. Also `lyricsGate(body)` (lossless and
   NFC), `lyricsRoundTrips`, `resolveAuthor(s)`, `parsesAsKey` + `KEY_HINT`, `validBpm`.
+
+### People writer (shared by Personas, `/me` and the MCP people tools, admin parity phase 4)
+- **`memberCommit.ts`** ([memberCommit.ts](../app/utils/memberCommit.ts)) — the ONLY `teamMembers`
+  writer for a person's profile and access, after authorization (ADR-0043 shape, ADR-0082):
+  `createMember(raw)`, `patchMember(id, raw, actorId)`, `setMemberDisabled(id, disabled, opts)`,
+  `patchOwnProfile(sessionId, raw)` (routes) and `checkMemberEdits`/`saveMemberEdits`/
+  `planNewMembers`/`createMembers` (the chat). Refuses a taken email or name on change; a rename
+  writes the person and its renamed rules in ONE transaction, each under `ifRevisionId`.
+- **`applyMemberEdits(stored, edits)`** ([memberEdits.ts](../app/utils/memberEdits.ts), pure) — the
+  chat's edits by parts on the fresh person, returning only the fields they change (Jóvenes edits
+  always carry `ministries`). Also `memberView`, `memberChangeLines` (the Spanish before/after),
+  `resolveTipo`/`resolveMinistry`/`resolveJovenesGroup`, `holdsManagement`, and the chat's access
+  table `chatAccessRefusal`/`chatAccessToggleRefusal` (grants, never revokes, management).
+- **`planRuleRename(...)`** ([memberRuleRename.ts](../app/utils/memberRuleRename.ts), pure) — the
+  targeted person-path `set` a rename needs, refusing a keyless item, a raw value written unlike its
+  reading, or a NEW parse issue; also `namesChanged`, `nameTakenBy`, `orphanRuleWarnings`.
 
 ### Oasis Kids planner (shared by `/api/kids/*` and the MCP Kids tools, admin parity phase 3)
 - **`kidsCommit.ts`** ([kidsCommit.ts](../app/utils/kidsCommit.ts)) — the ONLY Kids writers, after

@@ -470,6 +470,12 @@ and the song `check_new_song` answered (the new song's id is derived from it). R
 every pending song check: the save or create answers «revisa de nuevo» (or «no es la que se revisó»)
 and writes nothing. A song already created keeps its id; nothing stored holds a token.
 
+**A sixth use: the people tools** (ADR-0082, admin parity phase 4; no new secret or env var).
+`app/mcp/members/peopleTokens.ts` signs `<iat>.<call>.<result>` under `mcp-member-edits-call|`,
+`mcp-member-edits|`, `mcp-member-create-call|` and `mcp-member-create|`, and derives a create's ids
+under `mcp-member-id|`. Rotating the key voids every pending people check (the save or create answers
+«revisa de nuevo» and writes nothing); a person already created keeps their id.
+
 **Blast radius.** Every access and refresh token that environment's routes ever signed stops
 verifying the instant the new key is live — a rotated secret cannot check a token signed under
 the old one, by construction. That is **that one environment's grants only**: on production, every
