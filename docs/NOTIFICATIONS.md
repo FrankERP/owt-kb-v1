@@ -78,7 +78,7 @@ hand-writing a fixture that mirrors them).
 |---|---|---|
 | 1 — primary | **Google Cloud Scheduler**, `*/5` ([ADR-0032](adr/0032-layer-1-runs-on-cloud-scheduler.md); live since 2026-09-10) — plus GitHub Actions, declared `*/5` but starved by this repo's CI volume, kept as an independent second caller — see §"Layer 1 does not run on the schedule it declares" | Scheduler job `flush-notification-outbox` (GCP `eloquent-figure-421401`, `us-central1`) and `.github/workflows/flush-notifications.yml`, both → `/api/cron/flush-notifications` (drains up to 5 sweeps per tick when work is re-pended) |
 | 2 — backstop | opportunistic sweep after any queueing write (not after the MCP saved-service save's inline upserts, above) | end of `commitUpserts()` in `serviceMutationSideEffects.ts` — keeps its report and raises the destroyed-mail alarm |
-| 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` (mails a person about destroyed mail, as layer 2 also does; layer 1 goes red on the same conditions instead — see §"The destroyed-mail alarm") |
+| 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` (mails a person about destroyed mail, as layer 2 also does; layer 1 goes red on the same conditions instead — see §"The destroyed-mail alarm"). On Sundays it first sends «Te toca dirigir» to leads and then runs a derated sweep, or skips it if the reminders overran — see §"«Te toca dirigir»" |
 
 **Layer 1 also carries the availability proposals' tick** (ADR-0079): after the drain has
 answered, `after()` runs `availabilityTick` on every third 5-minute bucket with at least 40 s left;
@@ -594,6 +594,35 @@ that one service, and «Aplicar» notifies the three as any hand edit would.
 - **No liveness alarm.** A sweep that cannot judge (a raw Studio draft, the engine on v2, no read
   token) is visible only as «No se pudo revisar» in the panel and in the `[availability-sweep]`
   logs — an accepted cost (ADR-0079).
+
+## «Te toca dirigir» — the Sunday reminder to leads (ADR-0080)
+
+Every **Sunday at 19:00–19:59 CDMX** the daily cron (`/api/cron/service-reminders`, layer 3)
+emails the leads of the coming week's services that still need songs —
+`sendLeadSongReminders` in `app/utils/leadSongReminder.ts`. It is NOT an outbox notice: no
+debounce, no claim, one direct send per lead.
+
+- **Which services:** published (`published != false`), Monday to the next Sunday, with someone
+  in Lead (`LEAD_REMINDER_SCOPE = "week"` — Saturdays six days ahead and specials on their day;
+  `"sunday"` narrows it to the next Sunday's `sunday_role`).
+- **Silent when** the setlist already has songs (paired `featuredSongs`/`saturdarSongs` by
+  `week`, or a special's own `songs`) or the proposal is `pending` or `approved`. A draft with
+  songs reads «Tu propuesta no se ha enviado»; `changes_requested` reads «Tu propuesta tiene
+  cambios pedidos»; anything else «Te toca dirigir».
+- **Who:** each Lead with an email, app access (`disabled != true`) and inside
+  `EMAIL_ALLOWLIST` whose «Propuestas» preference resolves on (`wantsNotification`, legacy
+  all-email opt-out included; the switch is shown only to admins); the co-lead is named; the
+  pastor's message is included when set. Preview mail goes to `EMAIL_REDIRECT_TO`. A best-effort
+  push (titled by the state, category `reminders`) goes to every lead with access of those
+  services, email or not.
+- **Order and budget:** sends run in parallel BEFORE the sweep; the sweep's deadline is derated
+  by the time spent (`sweepOptionsAfterReminders`), losslessly. With less than
+  `MIN_SWEEP_DEADLINE_MS` (25 s) left the daily sweep is skipped (`notify_daily_sweep_skipped`;
+  `sweep: {error: "sweep_skipped_after_lead_reminders"}`) and layer 1 drains it. The route's JSON carries `leadReminders`
+  (`{ ran: false }` on other days); Vercel logs carry `lead_reminder_run`,
+  `lead_reminder_send_failed` and `lead_reminder_failed`.
+- **No "already sent" marker:** a duplicated cron event sends the reminder twice (ADR-0080).
+  Calling the route by hand on a Sunday with `CRON_SECRET` sends it again too.
 
 ## The liveness alarm
 

@@ -76,6 +76,11 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   ([proposalNotify.ts](../app/utils/proposalNotify.ts)) — on proposal submit, fans out push to
   admins + co-leads and email to admins. The admin email includes the proposed setlist (same
   table as "Setlist listo", no Mov. column) and lead notes when present; push stays one-line.
+- **`sendLeadSongReminders()`**, **`planLeadReminders(...)`**, **`buildLeadSongReminderEmail(...)`**,
+  **`leadReminderWindow(...)`**, **`reminderStateOf(...)`**
+  ([leadSongReminder.ts](../app/utils/leadSongReminder.ts)) — the Sunday «Te toca dirigir» email to
+  the coming week's leads, run only by the daily cron (ADR-0080); `sweepOptionsAfterReminders`
+  derates that cron's sweep deadline by the time it spent (`null` = skip it); `pushTargetsOf` picks the push audience.
 - **`notifyLeadsAboutServiceMessage(...)`**, **`buildServiceThreadEmail(...)`**
   ([serviceThreadNotify.ts](../app/utils/serviceThreadNotify.ts)) — an admin's message from a service
   card (ADR-0065): push AND email to that service's Lead seat, never the author; «Mensaje del
