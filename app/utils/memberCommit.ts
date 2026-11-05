@@ -158,8 +158,9 @@ function validatePatchBody(body: Record<string, unknown>): { ok: true; value: Va
   if (body.role !== undefined && !VALID_ROLES.includes(body.role as string)) return refuse(400, "Invalid role");
 
   const patch: Record<string, unknown> = {};
-  if (typeof body.member_name === "string" && body.member_name.trim()) patch.member_name = body.member_name.trim();
-  if (typeof body.alias === "string") patch.alias = body.alias.trim();
+  // NFC, as the rules reader (`normalizeLabel`) reads names: an NFD name would otherwise never match its rule text.
+  if (typeof body.member_name === "string" && body.member_name.trim()) patch.member_name = body.member_name.trim().normalize("NFC");
+  if (typeof body.alias === "string") patch.alias = body.alias.trim().normalize("NFC");
   if (typeof body.email === "string" && body.email.trim()) patch.email = body.email.trim().toLowerCase();
   if (body.role) patch.role = body.role;
   // Keep only recognised member types (drops unknown values rather than storing them).
@@ -403,7 +404,7 @@ export async function patchOwnProfile(sessionId: string, raw: unknown): Promise<
   const input = fields(raw);
   const body: Record<string, unknown> = {};
   // Guard against a non-string alias (null/number) so .trim() can't throw a 500.
-  if (typeof input.alias === "string") body.alias = input.alias;
+  if (typeof input.alias === "string") body.alias = input.alias.normalize("NFC");
   if (typeof input.email === "string" && input.email.trim()) {
     const email = input.email.trim().toLowerCase();
     // Never store an email that would silently break the assignment-email pipeline.
@@ -526,8 +527,8 @@ function buildCreateDoc(body: Record<string, unknown>): { ok: true; doc: Record<
     ok: true,
     doc: {
       _type: "teamMembers",
-      member_name: member_name.trim(),
-      ...(alias?.trim() ? { alias: alias.trim() } : {}),
+      member_name: member_name.trim().normalize("NFC"),
+      ...(alias?.trim() ? { alias: alias.trim().normalize("NFC") } : {}),
       email: email.trim().toLowerCase(),
       role: role ?? "member",
       memberType: body.memberType ?? [],
@@ -662,6 +663,11 @@ async function commitDisable(targetId: string, targetRev: string, others: SuperA
 
 const TARGET_QUERY = `*[_type == "teamMembers" && _id == $id][0]${STORED_MEMBER_PROJECTION}`;
 
+/** The route's answer for someone already disabled: the three fields it always answered, never the projection. */
+function disabledBody(row: TargetRow): Record<string, unknown> {
+  return { _id: row._id, _rev: row._rev, disabled: row.disabled };
+}
+
 const SELF_DISABLE = "No puedes deshabilitar tu propia cuenta mientras administras.";
 const LAST_SUPER_ADMIN = "Debe quedar al menos un super-admin habilitado.";
 
@@ -704,7 +710,7 @@ export async function setMemberDisabled(
   if (!target?._rev) return refuse(404, "Not found");
   const denied = chatRefusal(target);
   if (denied) return denied;
-  if (target.disabled === true) return { ok: true, status: 200, body: target as unknown as Record<string, unknown>, effects: { changed: false } };
+  if (target.disabled === true) return { ok: true, status: 200, body: disabledBody(target), effects: { changed: false } };
 
   try {
     const doc = await commitDisable(id, target._rev, othersEnabled);
@@ -716,7 +722,7 @@ export async function setMemberDisabled(
     if (!freshTarget?._rev) return refuse(404, "Not found");
     const deniedAgain = chatRefusal(freshTarget);
     if (deniedAgain) return deniedAgain;
-    if (freshTarget.disabled === true) return { ok: true, status: 200, body: freshTarget as unknown as Record<string, unknown>, effects: { changed: false } };
+    if (freshTarget.disabled === true) return { ok: true, status: 200, body: disabledBody(freshTarget), effects: { changed: false } };
     const freshOthers = await serverClient.fetch<SuperAdminRow[]>(
       `*[_type == "teamMembers" && role == "super-admin" && disabled != true && _id != $id]{ _id, _rev, disabled }`,
       { id },

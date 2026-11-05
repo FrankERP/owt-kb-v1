@@ -1112,7 +1112,15 @@ it; the refusal says «hazlo en la página (Super admin → Personas)».
 has (drafts and disabled people included); a name or alias equal to another member's; and a rename
 that would orphan a solver rule, which is instead renamed in the same transaction by a targeted
 `set` of exactly the person paths (`app/utils/memberRuleRename.ts`). A rule text that also names
-someone else is left and reported. `/me` never names anyone else.
+someone else is left and reported. `/me` never names anyone else. A fourth, on `/admin` too since
+this change: an email `/me`'s format check (`MEMBER_EMAIL_RE`) refuses, such as `x@localhost`.
+
+**Admin-surface gates (I15).** Personas' form requires a name of at least two characters and an
+email: **mirror** (`check_member_changes` and `check_new_members` refuse a one-letter name; the
+email is required by the schema and its format refused by the writer). Its `type=email` is
+**inherited** and narrower in the writer (`MEMBER_EMAIL_RE`). Every other Personas gate is the
+route's, so **inherited** by construction: the worship-role rule, `validateMinistryWrite`,
+`validateMinistryRolesWrite`, the self-disable and last-super-admin refusals.
 
 **Unknown outcomes.** A thrown save or access change says to read the person with `get_member` before
 retrying; a thrown create says to repeat `create_members` with the same token.

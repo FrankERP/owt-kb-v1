@@ -34,7 +34,9 @@ at `/me` (`PATCH /api/me`). Four facts shaped the decision:
   keep their session checks and JSON parse; their existing assertions pass (one test changed on
   purpose: an alias PATCH now reads and pins the person).
 - **Every surface gained three refusals, judged only on CHANGE** (a present field is not a changed
-  one; the form re-sends name, alias and email on every save):
+  one; the form re-sends name, alias and email on every save), plus `/me`'s email-format check
+  (`MEMBER_EMAIL_RE`) now on `/admin`'s create and edit too (§7.2: `x@localhost`, which the form's
+  `type=email` accepted, is a 400). Names and aliases are stored NFC, as the rules reader reads them. The three:
   - an email any other `teamMembers` document has, case-insensitively, drafts and disabled people
     included (only the person's own `drafts.<id>` excluded);
   - a name or alias equal to another member's name or alias (trimmed, case-insensitive);
@@ -51,7 +53,9 @@ at `/me` (`PATCH /api/me`). Four facts shaped the decision:
     CLAUDE.md allows (after the member DELETE's pool patch and the repair script).
 - **/me never names anyone else**: «Ese correo ya está en uso», «Ese alias ya lo usa otra persona»,
   «Ese alias no está disponible; elige otro», «No se pudo guardar tu alias; pídele a un administrador
-  que lo cambie». A 409 caused only by the member's own `lastSeen` is retried once.
+  que lo cambie». A 409 is retried once, re-planned from a fresh read, and only when the member's
+  alias and email are still what the first attempt read (a `lastSeen` ping is the usual cause);
+  otherwise «Alguien más cambió tu perfil».
 - **The chat edits by parts** (`applyMemberEdits`, `app/utils/memberEdits.ts`, pure): set name, alias
   (`""` clears), email, role; `singsAndPlays`; add/remove Tipo, instruments, ministries,
   `managesMinistries`; a Jóvenes level and groups (always sent with `ministries`). Ministries are read

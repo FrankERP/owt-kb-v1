@@ -13,6 +13,7 @@ vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import { memberView } from "@/app/utils/memberEdits";
+import { MEMBER_ERROR } from "@/app/utils/memberCommit";
 import { PRINCIPAL, textOf } from "./monthToolFixtures";
 import {
   CHECK_MEMBER_CHANGES_INPUT,
@@ -130,6 +131,21 @@ describe("check_member_changes / save_member_changes", () => {
     expect(textOf(await saveMemberChangesResult({ memberId: "vale", edits: EDITS, token }, PRINCIPAL, d))).toMatch(/más de 30 minutos/);
     d.save.mockResolvedValueOnce({ ok: true, status: 200, body: { unchanged: true }, effects: { unchanged: true, lines: [], name: "Vale" } });
     expect(textOf(await saveMemberChangesResult({ memberId: "vale", edits: EDITS, token }, PRINCIPAL, d))).toMatch(/Ya estaba guardado/);
+  });
+
+  it("a one-letter name is refused before the writer, as Personas' form refuses it (I15)", async () => {
+    const out = await checkMemberChangesResult({ memberId: "vale", edits: [{ op: "set", field: "name", value: " V " }] }, d);
+    expect(textOf(out)).toMatch(/al menos dos letras/);
+    const created = await checkNewMembersResult({ members: [{ name: "Ana", email: "ana@example.com", ministries: ["Alabanza"] }, { name: "B", email: "b@example.com", ministries: ["Alabanza"] }] }, d);
+    expect(textOf(created)).toMatch(/Persona 2: El nombre necesita al menos dos letras/);
+  });
+
+  it("only «someone changed it» is stale; a taken email is a 409 the model must not re-check", async () => {
+    const token = await checkedToken(d);
+    d.save.mockResolvedValueOnce({ ok: false, status: 409, body: { error: MEMBER_ERROR.changed } });
+    expect(sc(await saveMemberChangesResult({ memberId: "vale", edits: EDITS, token }, PRINCIPAL, d))).toMatchObject({ code: "stale_revision" });
+    d.save.mockResolvedValueOnce({ ok: false, status: 409, body: { error: "Ese correo ya lo tiene Pau.", code: "email_taken" } });
+    expect(sc(await saveMemberChangesResult({ memberId: "vale", edits: EDITS, token }, PRINCIPAL, d))).toMatchObject({ code: "invalid_request", detail: "email_taken" });
   });
 
   it("a §3.1 refusal from the writer is passed on with «hazlo en la página»", async () => {

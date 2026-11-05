@@ -24,7 +24,7 @@ import type { ConflictRule, PresenceRule, PersonRestriction, SolverConfig } from
 import { conflictSentence, presenceSentence, restrictionText, sentenceText } from "@/app/components/admin/ruleCopy";
 import { normalizeLabel } from "./normalizeLabel";
 import { displayMemberName, rulePersonNamesMember } from "./memberRuleNames";
-import { parseSolverConfigWrite, solverConfigFromDocument } from "./solverConfigWriteRequest";
+import { exactCapOverlaps, parseSolverConfigWrite, solverConfigFromDocument } from "./solverConfigWriteRequest";
 
 /** A name as the rule matcher takes it; a missing `member_name` reads as `""` (§7.8). */
 export interface PersonNames {
@@ -112,10 +112,18 @@ export function orphanRuleWarnings(rulesDoc: unknown, roster: readonly PersonNam
   return out;
 }
 
-/** The parse issues a config raises, as the rules POST would see them. */
+/**
+ * The parse issues a config raises, as the rules POST would see them, plus every exact-cap overlap by
+ * position: the parser returns early on an item-level issue before it looks for overlaps, so a stored
+ * document with one unrelated issue would otherwise hide a NEW overlap the rename creates. A rename
+ * never reorders items, so positions compare across the two configs.
+ */
 function issuesOf(config: SolverConfig): string[] {
   const parsed = parseSolverConfigWrite(config);
-  return parsed.ok ? [] : parsed.issues;
+  const overlaps = exactCapOverlaps(config).map(
+    (o) => `overlap ${o.first.restriction}.${o.first.cap} ${o.later.restriction}.${o.later.cap} ${o.roles.join(",")}`,
+  );
+  return [...(parsed.ok ? [] : parsed.issues), ...overlaps];
 }
 
 export type RenamePlan =

@@ -338,7 +338,47 @@ describe("the chat (§3.1, D3)", () => {
   });
 });
 
+describe("/me's one retry (§7.4)", () => {
+  it("a write that moved only the revision (a lastSeen ping) is retried once and saved", async () => {
+    h.hooks.beforeCommit = () => { stored("vale").lastSeen = "2026-11-05T18:00:00Z"; stored("vale")._rev = "moved"; };
+    const out = await patchOwnProfile("vale", { alias: "Valeria" });
+    expect(out.status).toBe(200);
+    expect(stored("vale").alias).toBe("Valeria");
+  });
+
+  it("an alias someone else changed meanwhile is never overwritten", async () => {
+    h.hooks.beforeCommit = () => { stored("vale").alias = "Valen"; stored("vale")._rev = "moved"; };
+    const out = await patchOwnProfile("vale", { alias: "Valeria" });
+    expect(out).toMatchObject({ status: 409, body: { error: MEMBER_ERROR.meChanged } });
+    expect(stored("vale").alias).toBe("Valen");
+  });
+
+  it("retries exactly once: a second conflict answers meChanged after two commits", async () => {
+    let commits = 0;
+    Object.defineProperty(h.hooks, "beforeCommit", {
+      configurable: true,
+      get: () => () => { commits++; stored("vale")._rev = `moved-${commits}`; },
+      set: () => {},
+    });
+    try {
+      const out = await patchOwnProfile("vale", { alias: "Valeria" });
+      expect(out).toMatchObject({ status: 409, body: { error: MEMBER_ERROR.meChanged } });
+      expect(commits).toBe(2);
+      expect(stored("vale").alias).toBe("Vale");
+    } finally {
+      Object.defineProperty(h.hooks, "beforeCommit", { configurable: true, writable: true, value: null });
+    }
+  });
+});
+
 describe("setMemberDisabled", () => {
+  it("someone already disabled answers the route's three fields, never the projection", async () => {
+    stored("pau").disabled = true;
+    const out = await setMemberDisabled("pau", true, { operatorIds: new Set(["frank"]) });
+    expect(out).toMatchObject({ ok: true, status: 200 });
+    expect(out.body).toEqual({ _id: "pau", _rev: stored("pau")._rev, disabled: true });
+  });
+
   it("the chat refuses disabling a manager and enabling a super-admin; allows a member", async () => {
     expect(await setMemberDisabled("tony", true, { operatorIds: new Set(["frank"]), chat: true })).toMatchObject({ ok: false, status: 403 });
     put({ _id: "off", member_name: "Off", email: "off@example.com", role: "super-admin", disabled: true });

@@ -590,8 +590,11 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   NFC), `lyricsRoundTrips`, `resolveAuthor(s)`, `parsesAsKey` + `KEY_HINT`, `validBpm`.
 
 ### People writer (shared by Personas, `/me` and the MCP people tools, admin parity phase 4)
-- **`memberCommit.ts`** ([memberCommit.ts](../app/utils/memberCommit.ts)) — the ONLY `teamMembers`
-  writer for a person's profile and access, after authorization (ADR-0043 shape, ADR-0082):
+- **`memberCommit.ts`** ([memberCommit.ts](../app/utils/memberCommit.ts)) — the one writer for what
+  Personas and `/me`'s profile PATCH change (name, alias, email, role, Tipo, instruments, ministries,
+  management, access), after authorization (ADR-0043 shape, ADR-0082). Not every `teamMembers`
+  write: `/api/me/*` (photo, password, preferences), the member DELETE and `auth.ts` (`lastSeen`,
+  the Google photo) write people too. Its functions:
   `createMember(raw)`, `patchMember(id, raw, actorId)`, `setMemberDisabled(id, disabled, opts)`,
   `patchOwnProfile(sessionId, raw)` (routes) and `checkMemberEdits`/`saveMemberEdits`/
   `planNewMembers`/`createMembers` (the chat). Refuses a taken email or name on change; a rename

@@ -91,6 +91,21 @@ describe("planRuleRename (D6)", () => {
     expect(!plan.ok && plan.reason).toBe("new_issue");
   });
 
+  it("a NEW overlap is refused even when the stored rules already carry an unrelated item issue", () => {
+    const cap = (id: string) => ({ _type: "solverCap", _key: id, id, pattern: "Sun.Lead", op: "==", value: 1, relative: false, relOffset: 0 });
+    const doc = rules({
+      restrictions: [
+        restriction("r1", "Vale", { caps: [cap("k1")] }),
+        restriction("r2", "Valentina Sosa", { caps: [cap("k2")] }),
+        restriction("r3", "Pau", { weekExclusions: [{ _type: "solverWeekExclusion", _key: "w1", id: "w1", week: 1.5, pattern: "Sun.*" }] }),
+      ],
+      conflicts: [],
+      presence: [],
+    });
+    const plan = planRuleRename({ rulesDoc: doc, roster, selfId: "vale", before: vale, after: { member_name: "Valentina Sosa", alias: "" } });
+    expect(!plan.ok && plan.reason).toBe("new_issue");
+  });
+
   it("no rules document, or no name change → nothing to write", () => {
     expect(planRuleRename({ rulesDoc: null, roster, selfId: "vale", before: vale, after: { ...vale, alias: "X" } })).toMatchObject({ ok: true, renamed: 0 });
     expect(planRuleRename({ rulesDoc: rules(), roster, selfId: "vale", before: vale, after: { ...vale, alias: "VALE" } })).toMatchObject({ ok: true, renamed: 0 });

@@ -38,7 +38,7 @@ import {
   type MemberEdit,
   type MemberView,
 } from "@/app/utils/memberEdits";
-import { checkMemberEdits, createMembers, planNewMembers, saveMemberEdits, setMemberDisabled } from "@/app/utils/memberCommit";
+import { MEMBER_ERROR, checkMemberEdits, createMembers, planNewMembers, saveMemberEdits, setMemberDisabled } from "@/app/utils/memberCommit";
 import { MEMBER_TYPE_LABEL } from "@/app/utils/memberTypes";
 import { ROLE_LABEL } from "@/app/utils/roleLabel";
 import { isCanonicalDocumentId } from "@/app/utils/roleWriteRequest";
@@ -155,7 +155,9 @@ function commitRefusal(refusal: { status: number; body: object }, notChecked: st
   const code = outcome.body.code === "not_the_checked" ? "invalid_request"
     : outcome.status === 404 ? "not_found"
     : outcome.status === 403 ? "forbidden"
-    : outcome.status === 409 ? "stale_revision"
+    // Only «someone changed the person / the rules» is stale; a taken email or name, a self-disable or the
+    // last super-admin is a 409 too, and a re-check would only repeat it.
+    : outcome.status === 409 && (error === MEMBER_ERROR.changed || error === MEMBER_ERROR.rulesChanged) ? "stale_revision"
     : "invalid_request";
   const text = outcome.body.code === "not_the_checked" ? error || notChecked : error;
   return refuse([text, NOTHING_WRITTEN], { code, detail: typeof outcome.body.code === "string" ? outcome.body.code : String(outcome.status) });
@@ -236,6 +238,10 @@ export function cleanNewMembers(members: readonly NewMember[]): NewMember[] {
     ...(m.jovenes ? { jovenes: { level: m.jovenes.level, ...(m.jovenes.groups?.length ? { groups: m.jovenes.groups.map(line) } : {}) } } : {}),
   }));
 }
+
+/** Personas' form takes a name of at least two characters (`minLength={2}`); the chat mirrors it (I15). */
+export const SHORT_NAME = "El nombre necesita al menos dos letras.";
+const shortName = (name: string) => [...name].length < 2;
 
 const ROLE_WORDS: Record<string, string> = {
   member: "member", miembro: "member",
@@ -394,6 +400,7 @@ export async function checkMemberChangesResult(
       return refusalResult(NO_SECRET);
     }
     const edits = cleanMemberEdits(args.edits);
+    if (edits.some((e) => e.op === "set" && e.field === "name" && shortName(e.value))) return refusalResult(SHORT_NAME);
     const checked = await deps.check(args.memberId, edits);
     if (!checked.ok) {
       if (checked.status === 404) return refusalResult(NOT_FOUND);
@@ -487,6 +494,8 @@ export async function checkNewMembersResult(args: z.infer<typeof CHECK_NEW_MEMBE
       return refusalResult(NO_SECRET);
     }
     const members = cleanNewMembers(args.members);
+    const short = members.findIndex((m) => shortName(m.name));
+    if (short >= 0) return refusalResult(members.length > 1 ? `Persona ${short + 1}: ${SHORT_NAME}` : SHORT_NAME);
     const built = newMemberBodies(members);
     if (!built.ok) return refusalResult(built.message);
     const planned = await deps.planNew(built.bodies, "chat");
