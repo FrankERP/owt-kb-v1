@@ -1,10 +1,12 @@
 # MCP connector — operator runbook
 
 > **Any agent, admins read-only ([ADR-0083](adr/0083-the-connector-opens-to-worship-admins-read-only-through-a-closed-redirect-list.md)):
-> on `preview` (dev) since 2026-11-05, NOT in production yet.** Once released, ChatGPT and local
-> agents can connect as well as
-> Claude, and a worship admin gets a read-only list. ChatGPT is **unproven** until the production
-> live proof; see [Adding the connector](#adding-the-connector).
+> released to production 2026-11-05** (PR [#229](https://github.com/FrankERP/owt-kb-v1/pull/229),
+> `main` `38ee629a`; dev since the same day). ChatGPT and local agents can connect as well as
+> Claude, and a worship admin gets a read-only list. **ChatGPT proven in production 2026-11-05**
+> with Frank's super-admin account (grant `client: "chatgpt"`, `ping` and a read answered); the
+> worship-admin read list is still to be proven with a real admin; see
+> [Adding the connector](#adding-the-connector).
 >
 > **P0 status: released to production 2026-09-24** (PR
 > [#95](https://github.com/FrankERP/owt-kb-v1/pull/95), `main` `c2ca5f7c`). Every P0 route, test and
@@ -1097,7 +1099,11 @@ same writer: `POST /api/admin/members`, `PATCH /api/admin/members/[id]`,
 `app/utils/memberCommit.ts`, and so do the tools (`app/mcp/tools/members.ts`). Decision record:
 [ADR-0082](adr/0082-people-are-edited-from-the-chat-by-parts-and-the-chat-never-revokes-management.md);
 plan: `docs/superpowers/plans/2026-11-05-owt-mcp-admin-parity-f4m-members.md`. People writes notify
-nobody (no welcome email), from any surface.
+nobody (no welcome email), from any surface. **In production since 2026-11-05** (PR #228, `main`
+`44f6a86b`). **Live proof passed 2026-11-06 00:46Z** with Frank, from his Claude: created a throwaway
+«Prueba MCP» (`@example.invalid`, Alabanza, no Tipo), set its alias and the Editor role, lowered it
+back to Miembro, disabled it; an expired check (over 30 minutes) was refused and wrote nothing.
+The throwaway stays in production, disabled; deleting it is Personas' (the connector has no delete).
 
 | Tool | Arguments | What it does |
 |---|---|---|
@@ -1338,7 +1344,7 @@ Only a live, non-impersonating **super-admin or worship admin** can reach step 4
 everyone else sees a refusal screen (no session, wrong role, or impersonation active) and no code
 is issued.
 
-### ChatGPT (developer mode) — unproven until the production live proof
+### ChatGPT (developer mode) — proven in production 2026-11-05
 
 1. In ChatGPT, turn on developer mode and add a connector (app) with the URL above and OAuth
    authentication. Leave the client id and secret EMPTY: it registers itself (DCR).
@@ -1347,9 +1353,11 @@ is issued.
    per-connection form `https://chatgpt.com/connector/oauth/{id}` is refused, and logged.
 3. Steps 3–6 above, in the browser ChatGPT opens. The consent screen shows «ChatGPT (chatgpt.com)».
 
-What has NOT been verified against ChatGPT itself: its exact registration and token bodies, how it
-sends `resource`, and whether its model sends `toolsVersion` (if it does not, every answer carries
-the refresh note). The first real connection is the proof.
+**Proven 2026-11-05 (production):** Frank connected ChatGPT's web app in developer mode with his
+super-admin account. Registration, consent and token exchange went through with no refusal line in
+the logs, the grant was stored as `client: "chatgpt"` (19:24Z), and a `ping` and a services read
+answered in the chat. Still unobserved: whether its model sends `toolsVersion` (if it does not,
+every answer carries the refresh note), and a worship admin's read list from ChatGPT.
 
 ### Local agents (loopback)
 
