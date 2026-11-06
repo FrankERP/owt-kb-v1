@@ -7,6 +7,7 @@ const h = vi.hoisted(() => ({
   requireActiveManager: vi.fn(),
   operationalFetch: vi.fn(),
   delete: vi.fn(),
+  storedFetch: vi.fn(),
   patch: vi.fn(),
   commit: vi.fn(),
   revalidateServiceViews: vi.fn(),
@@ -28,7 +29,7 @@ vi.mock("@/sanity/lib/serverClient", () => {
   chain.commit = () => h.commit();
   h.patch.mockReturnValue(chain);
   return {
-    serverClient: { fetch: vi.fn() },
+    serverClient: { fetch: (...a: unknown[]) => h.storedFetch(...a) },
     writeClient: {
       delete: (...a: unknown[]) => h.delete(...a),
       patch: (...a: unknown[]) => h.patch(...a),
@@ -64,6 +65,28 @@ describe("DELETE /api/admin/members/[id] (P2)", () => {
     h.delete.mockResolvedValue(undefined);
     h.commit.mockResolvedValue({ ok: true });
     h.operationalFetch.mockResolvedValue(null);
+    h.storedFetch.mockResolvedValue("teamMembers");
+  });
+
+  // W9 (ADR-0081): the delete took ANY id; it now deletes members only.
+  it("answers 404 and deletes nothing for an id held by another type (W9)", async () => {
+    h.storedFetch.mockResolvedValue("ministryEvent");
+    const res = await DELETE(req(), ctx("ministryEvent.0f8e6a52-1c1b-4d7e-9a43-6a2b1c0d9e11"));
+    expect(res.status).toBe(404);
+    expect(h.delete).not.toHaveBeenCalled();
+    expect(h.storedFetch.mock.calls[0][1]).toEqual({ id: "ministryEvent.0f8e6a52-1c1b-4d7e-9a43-6a2b1c0d9e11" });
+    expect(h.patch).not.toHaveBeenCalled();
+  });
+
+  // Review finding (PR C): after «Reintenta la eliminación» the member is already gone; refusing
+  // a missing id would leave its id in the solver pools forever.
+  it("a retry for a member already deleted skips the delete and still runs the pool cleanup", async () => {
+    h.storedFetch.mockResolvedValue(null);
+    h.operationalFetch.mockResolvedValue({ _rev: "cfg-1", sundayLeads: ["m1"], saturdayLeads: [], support: [] });
+    const res = await DELETE(req(), ctx("m1"));
+    expect(res.status).toBe(200);
+    expect(h.delete).not.toHaveBeenCalled();
+    expect(h.patch).toHaveBeenCalledWith(SOLVER_CONFIG_DOC_ID);
   });
 
   it("rejects non-super-admin (R13)", async () => {

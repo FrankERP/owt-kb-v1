@@ -67,6 +67,12 @@ const EXPECTED_CALLERS: Record<string, string[]> = {
     "app/api/me/availability/route.ts",
   ],
   copyInstrumentsCommit: ["app/api/admin/roles/copy-instruments/route.ts", "app/mcp/tools/serviceEditor.ts"],
+  // ADR-0081 (G1c): Jóvenes' meetings — the three route files of its four handlers, never MCP.
+  ministryEventCommit: [
+    "app/api/ministries/[ministry]/events/[token]/program/route.ts",
+    "app/api/ministries/[ministry]/events/[token]/route.ts",
+    "app/api/ministries/[ministry]/events/route.ts",
+  ],
   // Admin parity phase 2 (T1): the DELETE route and `delete_services`/`delete_services_app`.
   roleDeleteCommit: ["app/api/admin/roles/[id]/route.ts", "app/mcp/tools/serviceDeletes.ts"],
   roleUnpublishCommit: ["app/api/admin/roles/unpublish/route.ts", "app/mcp/tools/unpublishService.ts"],

@@ -360,7 +360,8 @@ commit module, and W9 closes the writers that take any id without checking its t
   asks of every protected type; `studioProtection.test.ts` covers it.
 - **G6. Live proof on dev before production** (`preview` writes the real dataset, so with Frank's
   consent): one event per audience created through the route as `published: false` with the rollout
-  state at `hidden`, so no pastor can see them, then an untokened dataset query for
+  state at `superAdmin`, so no pastor can see them (at `hidden` the write routes answer 404, so
+  nothing could be created — corrected 2026-11-06 when G6 ran), then an untokened dataset query for
   `*[_type == "ministryEvent"]` answers `[]`, and a tokened one answers them; a tokened
   `"ministryEvent-f" in path("ministryEvent.*")` answers false (the groq-js divergence of G3); the
   test events are deleted through the route afterwards. «Hidden» must hold on the SERVER: the
