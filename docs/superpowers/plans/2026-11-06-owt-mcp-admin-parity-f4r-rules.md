@@ -1,6 +1,6 @@
 # OWT MCP — admin parity, phase 4, slice R: the solver rules from the chat (slice plan)
 
-**Status:** DRAFT (round 2), critical tier (a production writer of a shared document, a full-document
+**Status:** DRAFT (round 3), critical tier (a production writer of a shared document, a full-document
 serializer behind it). Nothing built. Parent: `2026-11-04-owt-mcp-admin-parity-f4.md` (scope approved
 by Frank 2026-11-05 15:01Z). Slice M (people, ADR-0082) shipped 2026-11-05 (PR #228) and its live proof
 passed 2026-11-06 00:46Z; slice M already owns parent D6 (a rename renames its rules).
@@ -20,7 +20,9 @@ por medio», «Fuera del balance total»), «no coinciden» pairs and «cada sem
 shows each changed rule as the rules card words it (`ruleCopy.ts`), before → after, and saves only on
 Frank's word. A save changes the rules for the NEXT month generated: saved months do not move; a month
 whose fairness record already binds (`monthStateOf` = `bound`, `v3MonthSources.ts`) keeps its recorded
-eligibility, so a pool or rule change does not reach it; and an open `solve_month` proposal must be
+eligibility (pools, «nunca», a week free, exact counts, «Mes por medio», «cada semana»), but «al menos» /
+«como máximo» counts and «no coinciden» pairs are read from the current rules for every month generated,
+bound ones included (`v3Rules.ts:8-14`); and an open `solve_month` proposal must be
 generated again (its `rulesRev` no longer matches; `applySchedule.ts:255` already refuses it).
 
 ## 2. Evidence (`origin/main` 8f02e27b)
@@ -73,15 +75,18 @@ generated again (its `rulesRev` no longer matches; `applySchedule.ts:255` alread
 | R6 | Pools take members by name (R5's resolver) and store ids. An ADD must pass `memberFitsPool(m, pool)` (the panel's checkbox list), else «X no tiene el Tipo de Líder Domingo; cámbialo en Personas»; a REMOVE takes anyone in the pool, a stale off-Tipo tick included (the panel's mismatch banner is how it is unticked today). Adding someone already in the pool, or removing someone not in it, is «ya estaba así» (a no-op line, not a refusal). | Ids from the model; any member in any pool. | Members on the wire are names, never ids (ADR-0062's rule for the editor; KH-1 for rules). An off-Tipo id is dropped at solve without a word, so accepting it would tell Frank «guardado» for a change that does nothing. |
 | R7 | **Check then save**, token `mcp-rule-edits|` over `{rev, edits, lines}` (HMAC with `MCP_OAUTH_SECRET`). The token is `<iat>.<mac>` with `iat` (seconds) inside the MAC, as `peopleTokens.ts` does; expired when `now − iat` > 30 minutes or `iat` is more than 60 s in the future, refused with «la revisión venció; revisa de nuevo». The save re-reads, refuses a different `_rev` («Las reglas cambiaron desde la revisión; revisa de nuevo»), re-applies the edits, re-renders the lines and requires them byte-equal to the token's, then writes under `ifRevisionId`. | `rev` alone; a two-half token as slice M. | The rules document's `_rev` moves only when the rules are saved (no `lastSeen` on it), so binding `rev` is safe here, unlike people. Frank compares sentences, so the lines are bound. |
 | R8 | New items get `id = <prefix>-` + 12 hex of HMAC(`MCP_OAUTH_SECRET`, `"mcp-rule-ids|" + rev + "|" + canonicalJson(edits) + "|" + i + "/" + j`), `i` = the edit's position in the list, `j` = the item's position among the items that edit creates (a new card is `j = 0`, its cap `j = 1`); prefixes `r-`, `c-`, `p-`, `cap-`, `we-`. The ids do NOT depend on the token, so the check (which has no token yet) and the save compute the same document; ids never reach a line or the model. | `crypto.randomUUID()` at save; ids from the token. | Deterministic ids keep the save a pure function of `(stored, edits)`, which is what the tests can pin; a retry after a landed save is refused by R7's `rev`, so no duplicate. Ids from the token would be circular (the token binds lines computed from the edited config). |
-| R9 | The check refuses an edit set whose result fails `parseSolverConfigWrite` (e.g. two exact counts for one person on one role, `exactCapOverlaps`), in Spanish, naming the rule. It also refuses an «al menos» above a «como máximo» for the same person and canonical pattern when both are absolute (`al menos 3` next to `como máximo 2`): no month can satisfy both. | Let the save fail; let the solver find the month infeasible. | The check is where Frank decides; a save that fails after his «sí», or a month that cannot be generated, wastes his word. |
-| R11 | **The solver's judgement, before and after.** The check runs `resolveMonthEligibility` on the stored config AND on the edited config, for every month from the current CDMX month through `RECORD_LIMITS.monthsAhead` months ahead, with the planner's roster. A refusal (`person`, `reason`) or issue (`code`, `ruleKey`) that the edited result has and the stored one does not is a NEW problem: the check refuses the whole edit set and words it with the planner's own copy (`V3_RESOLVER_REFUSAL` / `V3_RESOLVER_ISSUE`). Problems the stored rules already have do not block (an edit may be the fix) and are listed as a note «Las reglas ya tienen este problema: …». The save re-runs the same judgement on its fresh read. | R5/R6 alone; judge only the next month. | R5/R6 cover single persons, not combinations (`cadence_and_exact`, a 21st group, a group past 12, an `==` count a relative offset pushes out of range in some month). The solver's own function is the one judge that cannot drift from the solver; the «new only» comparison is slice M's pattern (`memberRuleRename.ts` `issuesOf`). All months, because a relative count can be valid in one month and not another; a bound month never runs the resolver, so over-checking costs nothing but can only refuse more. |
+| R9 | The check refuses an edit set whose result fails `parseSolverConfigWrite` (e.g. two exact counts for one person on one role, `exactCapOverlaps`), in Spanish, naming the rule. It also refuses two absolute counts of one person that no month can satisfy together: for counts on patterns A and B whose roles satisfy `rolesOfPatternV3(A)` ⊆ `rolesOfPatternV3(B)`, a minimum on A («al menos» or «exactamente») above a maximum on B («como máximo» or «exactamente»), e.g. «exactamente 2 domingos» next to «al menos 3 domingos», or «al menos 3 de líder domingo» next to «como máximo 2 domingos». Relative counts and partial overlaps are a known limit: the solver reports such a month as impossible. | Let the save fail; let the solver find the month infeasible. | The check is where Frank decides; a save that fails after his «sí», or a month that cannot be generated, wastes his word. |
+| R11 | **The solver's judgement, before and after.** The check runs `resolveMonthEligibility` on the stored config AND on the edited config, for the next CDMX month, with the planner's roster (the verdict does not depend on the month: absolute counts are compared as written and relative ones resolve to `max(0, weeks − n)` ≤ 5, `plannerModel.ts:811-813`). A refusal (`person`, `reason`) or issue (`code`, `ruleKey`) that the edited result has and the stored one does not is a NEW problem: the check refuses the whole edit set and words it with the planner's own copy (`V3_RESOLVER_REFUSAL` / `V3_RESOLVER_ISSUE`). Problems the stored rules already have do not block (an edit may be the fix) and are listed as a note «Las reglas ya tienen este problema: …». The save re-runs the same judgement on its fresh read. | R5/R6 alone. | R5/R6 cover single persons, not combinations (`cadence_and_exact`, overlapping exact counts, a 21st group, a group past 12). The solver's own function is the one judge that cannot drift from the solver; the «new only» comparison is slice M's pattern (`memberRuleRename.ts` `issuesOf`). The check also adds the panel's warning as a NOTE (never a refusal) when «Mes por medio» names someone outside the Líder Domingo pool (`cadenceOutsideSundayPool`, `sundayCadence.ts:112`): it saves but does nothing until that person leads Sundays. |
+| R12 | **Only the panel's patterns.** The chat writes only the eleven patterns the panel offers (`PATTERNS` / `EXCL_PATTERNS`, `MonthGenerator.tsx:429-449`): Sun.*, Sat.*, \*.\*, Sun.Lead, Sat.Lead, Sun.BGV, Sat.BGV, Sun.Choir, \*.Lead, \*.BGV, \*.LeadBGV. The list moves to ONE exported constant (`RULE_PATTERNS` in `ruleCopy.ts`) that the panel and the chat both read, and a test asserts `rolesOfPatternV3(p)` is non-empty for every entry (`patternRolesV3Sync.test.ts` reads the values; it moves with them). Any other combination is refused at the check in Spanish, naming what to send instead: «domingo, líder o BGV» → «envía dos: domingo líder y domingo BGV»; «sábado, coro» → «no hay coro el sábado». Removing an existing item may name any stored pattern (matched canonically), so a hand-edited oddity can still be taken out. | Any day × seat (15 combinations). | `Sun.LeadBGV`, `Sat.LeadBGV` and `*.Choir`-style spellings expand to no role in both solver expansions (`plannerModel.ts:766-793`), so the rule would be saved, worded by `ruleCopy` as a real sentence («No líder ni BGV en domingo»), and silently ignored (`v3Rules.ts:14-15`), the same «guardado for nothing» R6 prevents. One shared list means the chat and the panel cannot drift. |
 | R10 | No notification, no revalidation (the route has none and needs none). `updatedBy` = the bearer's member id, as the route stamps the session's. | — | Parity. |
 
 ## 4. The edits (`applyRuleEdits(config, edits, roster)`, pure, `app/utils/ruleEdits.ts`)
 
 Patterns on the wire are words, never notation: `{day: "domingo" | "sábado" | "ambos", seat: "líder" |
-"BGV" | "coro" | "líder o BGV" | "todo"}` → `Sun|Sat|*` . `Lead|BGV|Choir|LeadBGV|*`. Matching an
-existing item compares canonical patterns (legacy alias resolved).
+"BGV" | "coro" | "líder o BGV" | "todo"}` → `Sun|Sat|*` . `Lead|BGV|Choir|LeadBGV|*`, and the result must
+be one of R12's eleven patterns (else refused, R12). Matching an existing item compares canonical
+patterns (legacy alias resolved). Counts are whole numbers (`value` an integer 0–31, `minus` an integer
+0–5); a fraction is refused at the check (the solver refuses `not_whole`).
 
 | Edit | Effect |
 |---|---|
@@ -91,12 +96,12 @@ existing item compares canonical patterns (legacy alias resolved).
 | `count {person, pattern, op: "exactamente"|"al menos"|"como máximo", value?: 0–31, relative?: {minus: 0–5}}` | add a cap, or replace the ONE existing cap with that pattern and op. |
 | `removeCount {person, pattern, op}` | remove that cap (none or several → refused). |
 | `cadence {person, alternate: boolean}` | set/clear «Mes por medio». |
-| `balance {person, exempt: boolean}` | `fairness` exempt / none («Holgura» is never written: it is stale under v3; a stored slack is cleared by `exempt:false`). |
+| `balance {person, exempt: boolean}` | `fairness` exempt / none («Holgura» is never written: it is stale under v3; a stored slack is cleared by `exempt:false`). `exempt:false` is a CHANGE (it may name the stored text, no `voz` needed), so a card whose person lost `voz` can still be un-exempted. |
 | `removePerson {person}` | remove the person's whole rule card. |
-| `notTogether {a, b, pattern}` / `removeNotTogether {a, b, pattern?}` | add a conflict / remove the one matching pair (order-free). |
+| `notTogether {a, b, pattern}` / `removeNotTogether {a, b, pattern?}` | add a conflict / remove the one matching pair (order-free). `a` and `b` resolving to the same member is refused (the solver's pair refuses duplicates; `collectV3Rules` would drop it silently). |
 | `together {persons: 2–12 names, pattern}` / `removeTogether {persons, pattern?}` | add a presence group / remove the matching one (set-equal persons). 2–12 is `RECORD_LIMITS.presenceMembersMin/Max`; at most 20 groups is R11's `too_many_presence`. |
 
-Every person named in an ADD edit (`never`, `weekOff`, `count`, `cadence` on, `balance`, `notTogether`, `together`) goes through R5; `pool` adds go through R6. A person edit targets the person's ONE card (the restriction whose text names the member); none → a new
+Every person named in an ADD edit (`never`, `weekOff`, `count`, `cadence` on, `balance` exempt, `notTogether`, `together`) goes through R5; `pool` adds go through R6. A person edit targets the person's ONE card (the restriction whose text names the member); none → a new
 card is created for an add, refused for a remove; several cards for one member → refused with «dos
 reglas nombran a X; únelas en /admin». An edit that changes nothing → «ya estaba así», no line. At most
 30 edits per call.
@@ -119,10 +124,13 @@ reglas nombran a X; únelas en /admin». An edit that changes nothing → «ya e
 - Route tests unchanged and passing (the move is verbatim). New: `ruleEdits.test.ts` (every row of §4,
   R5's matching: a non-worship name, a no-`voz` name, an ambiguous alias; R6: an off-Tipo pool add
   refused, a stale off-Tipo tick removable; R6 no-ops, the several-cards refusal, legacy patterns,
-  R8's ids equal at check and save), `solverConfigCommit.test.ts` (lossless gate, stale `rev`, lines
-  bound, R9: `exactCapOverlaps` and «al menos» above «como máximo» refused at check; R11: «Mes por medio»
-  plus an exact Sun.Lead count, a 21st presence group, a 13-person group, a relative exact count out of
-  range in one month, each refused as NEW; a problem already stored only noted),
+  R8's ids equal at check and save; R12: every day × seat combination outside the eleven refused with
+  its hint, every one of the eleven non-empty under `rolesOfPatternV3`; integers only; `notTogether`
+  with one member twice refused; `balance exempt:false` on a no-`voz` card allowed), `solverConfigCommit.test.ts` (lossless gate, stale `rev`, lines
+  bound, R9: `exactCapOverlaps`, «al menos» above «como máximo», «exactamente 2 domingos» with «al menos 3
+  domingos», a Sun.Lead minimum above a Sun.* maximum, each refused at check; R11: «Mes por medio» plus
+  an exact Sun.Lead count, overlapping exact counts, a 21st presence group, a 13-person group, each
+  refused as NEW; a problem already stored only noted; the cadence-outside-pool note),
   `rules.test.ts` (tools: token, expiry, unknown outcome, no ids in text).
 - Docs in the same delivery: ADR (next free number at merge), `docs/MCP.md`, CLAUDE.md/AGENTS.md and
   `project-rules.md` (write-path list), `docs/UTILITIES_AND_COMPONENTS.md`, `docs/SECRETS.md` (a seventh
@@ -137,7 +145,9 @@ explicit «sí» recorded in the PR, and only on a rule that cannot change any m
 1. Before: `get_solver_rules` (kept as the reference) and `list_proposals` (an open `solve_month`
    proposal needs regenerating after the first save; prove only when none is open, or Frank accepts
    regenerating it).
-2. Frank picks a worship member with Tipo `voz` who has NO rule card yet. Check and save
+2. Frank picks a worship member with Tipo `voz`, already in a pool with Sunday roles (a rule makes its
+   person a solver person, `v3SolveRequest.ts:263`, so someone already planned keeps «Auto plans exactly
+   as before» strict), who has NO rule card yet. Check and save
    `count {person, pattern: domingo/todo, op: "como máximo", value: 31}`: a ceiling no month can reach
    (at most five Sundays), so Auto plans exactly as before while it exists. R11 shows no new problem.
 3. Change it to «como máximo 30» (still unreachable). Check, save.
