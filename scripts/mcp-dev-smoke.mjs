@@ -48,6 +48,13 @@
  *       401 that proves the revocation landed.
  *   node --env-file=.env.local scripts/mcp-dev-smoke.mjs --base http://localhost:3000
  *     … same, against a local `next dev` — no bypass secret needed there.
+ *   node --env-file=.env.local scripts/mcp-dev-smoke.mjs --expect-tier read
+ *     … the same handshake, signed in as a WORSHIP ADMIN (ADR-0083): checks
+ *       the list is exactly the eleven reads, then sends the one boundary
+ *       probe — `edit_setlist` with `{}`, which its schema refuses on any tier
+ *       — and requires the answer «Tool edit_setlist not found». The default,
+ *       `--expect-tier full` (Frank), expects the super-admin list without the
+ *       five claude.ai-only app tools: this script's grant is a loopback one.
  *   … --no-open prints the authorize URL instead of opening it (macOS `open`).
  *   … --no-refresh skips step 8 (the refresh-token round trip).
  *
@@ -58,7 +65,9 @@
  * prefix plus its length.
  *
  * The smoke calls `ping` always, and — only with `--reads` — the seven P1
- * read tools once each. It NEVER calls a write tool, in any mode (DV1): dev
+ * read tools once each. It NEVER calls a write tool, in any mode (DV1) — the
+ * one exception is the read-tier boundary probe (`isBoundaryProbe`), a call
+ * no tier can execute; both guards below consult that one function: dev
  * writes the production dataset, and its mail redirect covers email only.
  * This is enforced twice. STRUCTURALLY: `createMcpRequest` returns the one
  * function this script uses to send anything to `/api/mcp`, and before that
@@ -110,9 +119,15 @@ const TOTAL_STEPS = 10;
 
 // ── pure helpers (unit-tested without any network) ─────────────────────────
 
-/** Parse argv into `{ base, open, refresh, awaitRevocation, reads }`, or throw. Pure. */
+/**
+ * The tiers `--expect-tier` accepts (ADR-0083). The smoke's grant is a loopback one, so
+ * `full` means the super-admin list WITHOUT the claude.ai-only app tools.
+ */
+export const EXPECT_TIERS = Object.freeze(["full", "read"]);
+
+/** Parse argv into `{ base, open, refresh, awaitRevocation, reads, expectTier }`, or throw. Pure. */
 export function parseArgs(argv) {
-  const args = { base: null, open: true, refresh: true, awaitRevocation: false, reads: false };
+  const args = { base: null, open: true, refresh: true, awaitRevocation: false, reads: false, expectTier: "full" };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--base") {
@@ -128,6 +143,11 @@ export function parseArgs(argv) {
       args.awaitRevocation = true;
     } else if (a === "--reads") {
       args.reads = true;
+    } else if (a === "--expect-tier") {
+      const v = argv[i + 1];
+      if (!EXPECT_TIERS.includes(v)) throw new Error(`--expect-tier needs one of: ${EXPECT_TIERS.join(", ")}`);
+      args.expectTier = v;
+      i++;
     } else {
       throw new Error(`Unrecognized argument: ${a}`);
     }
@@ -155,8 +175,8 @@ export function resolveBase(rawBase) {
       ok: false,
       message:
         `Refusing ${PRODUCTION_BASE}: this script is the DEV smoke client only. ` +
-        "Production's redirect-URI allowlist has no loopback entry (app/mcp/oauth/redirects.ts) " +
-        "and its connector is added from claude.ai, never from this script.",
+        "Every run creates a real grant; production's connector is added from the agent's own app " +
+        "(claude.ai, ChatGPT, a local agent), never from this script.",
     };
   }
   if (origin === DEFAULT_BASE) return { ok: true, origin, needsBypass: true };
@@ -410,6 +430,23 @@ export const SONG_TOOL_NAMES = ["check_song_edits", "save_song_edits", "check_ne
 export const SONG_WRITE_NAMES = ["save_song_edits", "create_song"];
 
 /**
+ * Admin parity phase 4 (slice M): people, after the songs. Never called here: the reads list the
+ * team's names and emails, and the writes change who can sign in.
+ */
+export const MEMBER_TOOL_NAMES = [
+  "list_members",
+  "get_member",
+  "check_member_changes",
+  "save_member_changes",
+  "check_new_members",
+  "create_members",
+  "set_member_access",
+];
+
+/** The saves, the create and the access switch: destructive, like every write (I14). */
+export const MEMBER_WRITE_NAMES = ["save_member_changes", "create_members", "set_member_access"];
+
+/**
  * Admin parity phase 1: three reads after the P1 reads (`/admin`'s Equidad, rules and integrity
  * queue). Read-only, so the smoke may call them, but it does not need to.
  */
@@ -435,7 +472,43 @@ export const EXPECTED_TOOLS = [
   ...KIDS_TOOL_NAMES,
   ...PROPOSAL_REVIEW_TOOL_NAMES,
   ...SONG_TOOL_NAMES,
+  ...MEMBER_TOOL_NAMES,
 ];
+
+/**
+ * The five app-only twins (ADR-0062/0066/0072): registered only for a grant whose client is
+ * claude.ai (ADR-0083). The smoke's grant is a loopback one, so it never sees them.
+ */
+export const APP_ONLY_TOOL_NAMES = [
+  "check_proposal_edits",
+  "save_proposal_edits",
+  "check_service_edits_app",
+  "save_service_edits_app",
+  "delete_services_app",
+];
+
+/** The super-admin list on any grant that is not claude.ai's (`fullNoApps`), in order. */
+export const EXPECTED_TOOLS_NO_APPS = EXPECTED_TOOLS.filter((name) => !APP_ONLY_TOOL_NAMES.includes(name));
+
+/** The worship-admin list (`READ_TIER_TOOLS` in `app/mcp/toolList.ts`; a test pins the two), in order. */
+export const READ_TIER_TOOL_NAMES = [
+  "ping",
+  "get_service",
+  "list_services",
+  "search_songs",
+  "get_song",
+  "get_member_availability",
+  "get_participation",
+  "list_proposals",
+  ...ADMIN_READ_TOOL_NAMES,
+];
+
+/** The list a loopback grant of `tier` must see. Pure. */
+export function expectedToolsForTier(tier) {
+  if (tier === "read") return READ_TIER_TOOL_NAMES;
+  if (tier === "full") return EXPECTED_TOOLS_NO_APPS;
+  throw new Error(`unknown tier "${tier}"`);
+}
 
 /** What `ping` and every read tool declare (spec I14). */
 export const READ_ONLY_ANNOTATIONS = Object.freeze({ readOnlyHint: true, openWorldHint: false });
@@ -460,20 +533,21 @@ export const SOLVE_MONTH_ANNOTATIONS = Object.freeze({
 export function expectedAnnotations(name) {
   // A saved version is a private record like solve_month's; the check only reads.
   if (name === "solve_month" || name === "save_proposal_edits" || name === "revise_proposal") return SOLVE_MONTH_ANNOTATIONS;
-  return WRITE_TOOL_NAMES.includes(name) || name === "apply_schedule" || SERVICE_EDITOR_WRITE_NAMES.includes(name) || SERVICE_DELETE_WRITE_NAMES.includes(name) || SERVICE_MESSAGE_WRITE_NAMES.includes(name) || KIDS_WRITE_NAMES.includes(name) || PROPOSAL_REVIEW_WRITE_NAMES.includes(name) || SONG_WRITE_NAMES.includes(name) ? WRITE_ANNOTATIONS : READ_ONLY_ANNOTATIONS;
+  return WRITE_TOOL_NAMES.includes(name) || name === "apply_schedule" || SERVICE_EDITOR_WRITE_NAMES.includes(name) || SERVICE_DELETE_WRITE_NAMES.includes(name) || SERVICE_MESSAGE_WRITE_NAMES.includes(name) || KIDS_WRITE_NAMES.includes(name) || PROPOSAL_REVIEW_WRITE_NAMES.includes(name) || SONG_WRITE_NAMES.includes(name) || MEMBER_WRITE_NAMES.includes(name) ? WRITE_ANNOTATIONS : READ_ONLY_ANNOTATIONS;
 }
 
 /**
- * Checks a `tools/list` result against `EXPECTED_TOOLS`: the exact names, in
- * order, each declaring exactly its own annotations (`expectedAnnotations`) —
- * the same assertion `mcpRoute.test.ts`'s own tools/list test makes. On dev
- * this is the ONLY proof the four writes get: listed, `destructiveHint: true`.
+ * Checks a `tools/list` result against `expected` (default `EXPECTED_TOOLS`; the smoke passes
+ * `expectedToolsForTier`): the exact names, in order, each declaring exactly its own annotations
+ * (`expectedAnnotations`) — the same assertion `mcpRoute.test.ts`'s own tools/list test makes. On
+ * dev this is the ONLY proof the writes get: listed, `destructiveHint: true` — and, on the read
+ * tier, the proof that no write is listed at all.
  * Pure — takes the already-parsed `tools` array, never the network response.
  */
-export function checkToolList(tools) {
+export function checkToolList(tools, expected = EXPECTED_TOOLS) {
   const names = Array.isArray(tools) ? tools.map((t) => (t && typeof t.name === "string" ? t.name : null)) : [];
-  if (JSON.stringify(names) !== JSON.stringify(EXPECTED_TOOLS)) {
-    return { ok: false, message: `expected tools ${JSON.stringify(EXPECTED_TOOLS)}, got ${JSON.stringify(names)}` };
+  if (JSON.stringify(names) !== JSON.stringify(expected)) {
+    return { ok: false, message: `expected tools ${JSON.stringify(expected)}, got ${JSON.stringify(names)}` };
   }
   for (const tool of tools) {
     const expected = expectedAnnotations(tool.name);
@@ -546,6 +620,42 @@ export const CALLABLE_TOOLS = Object.freeze(["ping", ...READ_TOOL_NAMES, ...ADMI
  */
 export const TOOLS_CALL_METHOD = "tools/call";
 
+/** The one write name the read-tier boundary probe may send (ADR-0083). */
+export const BOUNDARY_PROBE_TOOL = "edit_setlist";
+
+/**
+ * Whether a `tools/call` is the read-tier boundary probe — the ONE exception to `CALLABLE_TOOLS`
+ * (ADR-0083): only under `--expect-tier read`, only `edit_setlist`, and only with arguments that
+ * are `{}` or `{ toolsVersion: <string> }`. `edit_setlist`'s strict schema refuses those on ANY
+ * tier (no `serviceId`, `roleRev`, `observed` or `rows`), so even a broken boundary answers a
+ * validation error and writes nothing. Both DV1 guards consult this, never a copy. Pure.
+ */
+export function isBoundaryProbe(name, args, expectTier) {
+  if (expectTier !== "read" || name !== BOUNDARY_PROBE_TOOL) return false;
+  if (args === null || typeof args !== "object" || Array.isArray(args)) return false;
+  if (Object.getPrototypeOf(args) !== Object.prototype) return false;
+  const keys = Object.keys(args);
+  if (keys.length === 0) return true;
+  return keys.length === 1 && keys[0] === "toolsVersion" && typeof args.toolsVersion === "string";
+}
+
+/**
+ * Whether the server's answer to the boundary probe proves the read tier holds: a JSON-RPC
+ * error naming the tool as not found (the SDK's answer for an unregistered tool). A tool
+ * result — even an `isError` one, which is what a validation failure on a REGISTERED tool
+ * looks like — fails the check. `message` is the parsed JSON-RPC message. Pure.
+ */
+export function checkBoundaryProbe(message) {
+  const error = message && typeof message === "object" ? message.error : undefined;
+  if (error && typeof error.message === "string" && error.message === `Tool ${BOUNDARY_PROBE_TOOL} not found`) {
+    return { ok: true };
+  }
+  return {
+    ok: false,
+    message: `expected "${BOUNDARY_PROBE_TOOL}" to be unknown on the read tier, got ${JSON.stringify(message)}`,
+  };
+}
+
 /**
  * The ONE builder of a `tools/call` request in this script — `main()` sends
  * no other. It refuses, by throwing, any tool it is not allowed to call: a
@@ -557,21 +667,24 @@ export const TOOLS_CALL_METHOD = "tools/call";
  * It says nothing about a body built any other way — that is `createMcpRequest`'s
  * job, below.
  */
-export function toolCallRequest(name, args, id = 1) {
+export function toolCallRequest(name, args, id = 1, { expectTier = "full" } = {}) {
+  const probe = isBoundaryProbe(name, args, expectTier);
   if (
-    WRITE_TOOL_NAMES.includes(name) ||
-    MONTH_TOOL_NAMES.includes(name) ||
-    EDITOR_TOOL_NAMES.includes(name) ||
-    SERVICE_EDITOR_TOOL_NAMES.includes(name) ||
-    SERVICE_DELETE_TOOL_NAMES.includes(name) ||
-    SERVICE_MESSAGE_TOOL_NAMES.includes(name) ||
-    KIDS_TOOL_NAMES.includes(name) ||
-    PROPOSAL_REVIEW_TOOL_NAMES.includes(name) ||
-    SONG_TOOL_NAMES.includes(name)
+    !probe &&
+    (WRITE_TOOL_NAMES.includes(name) ||
+      MONTH_TOOL_NAMES.includes(name) ||
+      EDITOR_TOOL_NAMES.includes(name) ||
+      SERVICE_EDITOR_TOOL_NAMES.includes(name) ||
+      SERVICE_DELETE_TOOL_NAMES.includes(name) ||
+      SERVICE_MESSAGE_TOOL_NAMES.includes(name) ||
+      KIDS_TOOL_NAMES.includes(name) ||
+      PROPOSAL_REVIEW_TOOL_NAMES.includes(name) ||
+      SONG_TOOL_NAMES.includes(name) ||
+      MEMBER_TOOL_NAMES.includes(name))
   ) {
     throw new Error(`refusing to call the write tool "${name}": the dev smoke never calls a write tool (DV1)`);
   }
-  if (!CALLABLE_TOOLS.includes(name)) {
+  if (!probe && !CALLABLE_TOOLS.includes(name)) {
     throw new Error(`refusing to call "${name}": the dev smoke calls only ${CALLABLE_TOOLS.join(", ")}`);
   }
   return rpc(TOOLS_CALL_METHOD, { name, arguments: args }, id);
@@ -590,11 +703,12 @@ export function toolCallRequest(name, args, id = 1) {
  * happens to build one today. The factory is pure; the function it returns is
  * the one thing in this file that fetches, and it is refused before it does.
  */
-export function createMcpRequest({ origin, bypass }) {
+export function createMcpRequest({ origin, bypass, expectTier = "full" }) {
   return async function mcpRequest(accessToken, body, protocolVersion) {
     if (body && body.method === TOOLS_CALL_METHOD) {
       const name = body.params && body.params.name;
-      if (!CALLABLE_TOOLS.includes(name)) {
+      const args = body.params && body.params.arguments;
+      if (!CALLABLE_TOOLS.includes(name) && !isBoundaryProbe(name, args, expectTier)) {
         throw new Error(`refusing to send a tools/call naming "${name}": not in CALLABLE_TOOLS (DV1)`);
       }
     }
@@ -839,9 +953,10 @@ async function main() {
   // (above), bound to this run's origin and bypass header. Its own guard is what
   // makes DV1 structural: a `tools/call` naming a write tool is refused here,
   // before any `fetch`, no matter what built the body.
-  const mcpRequest = createMcpRequest({ origin, bypass });
+  const mcpRequest = createMcpRequest({ origin, bypass, expectTier: args.expectTier });
 
-  async function mcpRpc(accessToken, body, protocolVersion) {
+  /** One request to `/api/mcp`, answered 200: the parsed JSON-RPC message (SSE or JSON). */
+  async function mcpMessage(accessToken, body, protocolVersion) {
     const res = await mcpRequest(accessToken, body, protocolVersion);
     if (res.status !== 200) {
       let parsed = null;
@@ -860,6 +975,11 @@ async function main() {
           return messages[0];
         })()
       : JSON.parse(res.text);
+    return message;
+  }
+
+  async function mcpRpc(accessToken, body, protocolVersion) {
+    const message = await mcpMessage(accessToken, body, protocolVersion);
     if (message.error) throw new Error(`MCP error: ${JSON.stringify(message.error)}`);
     return message.result;
   }
@@ -958,7 +1078,12 @@ async function main() {
     pass(`access_token=${redact(tokens.access_token)}, refresh_token=${redact(tokens.refresh_token)}, expires_in=${tokens.expires_in}s`);
 
     // 7. initialize, tools/list, tools/call ping [+ --reads sub-step].
-    begin(7, args.reads ? "initialize, tools/list, tools/call ping, --reads" : "initialize, tools/list, tools/call ping");
+    begin(
+      7,
+      `initialize, tools/list (${args.expectTier} tier), tools/call ping` +
+        (args.expectTier === "read" ? `, ${BOUNDARY_PROBE_TOOL} probe` : "") +
+        (args.reads ? ", --reads" : ""),
+    );
     const initResult = await mcpRpc(tokens.access_token, rpc("initialize", {
       protocolVersion: LEGACY_PROTOCOL_VERSION,
       capabilities: {},
@@ -970,14 +1095,30 @@ async function main() {
     const listResult = await mcpRpc(tokens.access_token, rpc("tools/list"), LEGACY_PROTOCOL_VERSION);
     const tools = listResult.tools ?? [];
     // The plain smoke only needs ping (so it passes against any deployment
-    // from P0 on); --reads needs the full twelve with their annotations: it is
-    // about to call the seven reads, and the listing is the only proof the four
-    // writes get on dev (DV1: none is ever called).
-    const toolsCheck = args.reads ? checkToolList(tools) : checkPingRegistered(tools);
+    // from P0 on); --reads needs the tier's whole list with its annotations: it
+    // is about to call the seven reads, and the listing is the only proof the
+    // writes get on dev (DV1: none is ever called). The read tier always checks
+    // the whole list: proving no write is listed is that run's point (ADR-0083).
+    const strictList = args.reads || args.expectTier === "read";
+    const toolsCheck = strictList ? checkToolList(tools, expectedToolsForTier(args.expectTier)) : checkPingRegistered(tools);
     if (!toolsCheck.ok) throw new Error(toolsCheck.message);
     const callResult = await mcpRpc(tokens.access_token, toolCallRequest("ping", {}), LEGACY_PROTOCOL_VERSION);
     const payload = JSON.parse(callResult.content[0].text);
-    pass(`ping → ${JSON.stringify(payload)}`);
+    // The read-tier boundary probe: a write the read handler must not know.
+    // Its arguments fail edit_setlist's schema on ANY tier, so a broken
+    // boundary answers a validation error and still writes nothing.
+    let probeDetail = "";
+    if (args.expectTier === "read") {
+      const probe = await mcpMessage(
+        tokens.access_token,
+        toolCallRequest(BOUNDARY_PROBE_TOOL, {}, 1, { expectTier: args.expectTier }),
+        LEGACY_PROTOCOL_VERSION,
+      );
+      const probeCheck = checkBoundaryProbe(probe);
+      if (!probeCheck.ok) throw new Error(probeCheck.message);
+      probeDetail = `, ${BOUNDARY_PROBE_TOOL} → not found (read tier holds)`;
+    }
+    pass(`ping → ${JSON.stringify(payload)}${probeDetail}`);
 
     // 7b. --reads: one call per read tool, after ping, before refresh (DV1).
     // list_services runs before get_service, and search_songs before get_song

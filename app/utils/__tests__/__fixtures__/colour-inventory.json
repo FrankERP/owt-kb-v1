@@ -9,7 +9,7 @@
   ],
   "summary": {
     "literalRows": 304,
-    "filesScanned": 593,
+    "filesScanned": 601,
     "filesWithColour": 62,
     "byCategory": {
       "2": 2,
@@ -2228,7 +2228,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1373,
+      "line": 1389,
       "disposition": "B",
       "reason": null
     },
@@ -2240,7 +2240,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1382,
+      "line": 1398,
       "disposition": "B",
       "reason": null
     },
@@ -2252,7 +2252,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1392,
+      "line": 1408,
       "disposition": "B",
       "reason": null
     },
@@ -2264,7 +2264,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1403,
+      "line": 1419,
       "disposition": "B",
       "reason": null
     },
@@ -2276,7 +2276,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1414,
+      "line": 1430,
       "disposition": "B",
       "reason": null
     },

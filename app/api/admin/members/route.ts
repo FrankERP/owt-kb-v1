@@ -1,19 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
-import { writeClient } from "@/sanity/lib/serverClient";
 import { operationalClient } from "@/sanity/lib/operationalClient";
-import {
-  WORSHIP_ROLE_NEEDS_WORSHIP,
-  validateMinistryRolesWrite,
-  validateMinistryWrite,
-  worshipRoleWithoutWorship,
-  ministryRolesForStorage,
-  type MinistryRole,
-} from "@/app/ministries";
 import { adminMembersQuery } from "@/app/utils/serviceReadQueries";
-import { parseMemberInstruments } from "@/app/components/admin/seatModel";
+import { createMember } from "@/app/utils/memberCommit";
+import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
 
-const VALID_ROLES = ["super-admin", "admin", "content-editor", "member"];
+// Wrapped because the module it calls is a `*Commit` (`srVerificationRunContext.test.ts` scans by
+// import); a people write sends nothing, and an unmarked request behaves as before.
+export const POST = withVerificationRunContext(postHandler);
 
 // Reading the member list is needed by the Servicios/Disponibilidad panels (admin-accessible).
 // Creating/editing members stays super-admin only (Miembros section).
@@ -36,7 +30,7 @@ export async function GET() {
   return NextResponse.json(members);
 }
 
-export async function POST(req: NextRequest) {
+async function postHandler(req: NextRequest) {
   const session = await requireActiveManager();
   if (!session) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -45,81 +39,8 @@ export async function POST(req: NextRequest) {
   if (session.user.role !== "super-admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-
-  const body = await req.json() as {
-    member_name?: string;
-    alias?: string;
-    email?: string;
-    role?: string;
-    memberType?: string[];
-    instruments?: string[];
-    singsAndPlays?: boolean;
-    ministries?: string[];
-    managesMinistries?: string[];
-    ministryRoles?: unknown;
-  };
-  const { member_name, alias, email, role, memberType, ministries, managesMinistries } = body;
-
-  if (!member_name?.trim() || !email?.trim()) {
-    return NextResponse.json({ error: "name and email required" }, { status: 400 });
-  }
-  // The same four roles PATCH accepts, so the worship-role rule below judges a
-  // role the app knows.
-  if (role !== undefined && !VALID_ROLES.includes(role)) {
-    return NextResponse.json({ error: "Invalid role" }, { status: 400 });
-  }
-
-  // The SAME validator PATCH uses, so create and edit cannot drift: an
-  // explicitly empty `ministries` is rejected rather than stored, and an
-  // absent one stays absent (absent ⇒ worship by the storage contract; writing
-  // `[]` here would read back as full worship access).
-  for (const field of ["ministries", "managesMinistries"] as const) {
-    if (body[field] === undefined) continue;
-    const error = validateMinistryWrite(field, body[field]);
-    if (error) return NextResponse.json({ error }, { status: 400 });
-  }
-
-  // A level in a leveled ministry (Jóvenes) is validated against the
-  // `ministries` of THIS request, which must name its ministry (ADR-0075).
-  if (body.ministryRoles !== undefined) {
-    const error = validateMinistryRolesWrite(body.ministryRoles, ministries);
-    if (error) return NextResponse.json({ error }, { status: 400 });
-  }
-  // A worship management role needs worship (absent ministries = worship). A
-  // create always "changes" both, so the rule always applies here.
-  if (worshipRoleWithoutWorship(role ?? "member", ministries)) {
-    return NextResponse.json({ error: WORSHIP_ROLE_NEEDS_WORSHIP }, { status: 400 });
-  }
-
-  let instruments: string[] | undefined;
-  if (body.instruments !== undefined) {
-    const parsed = parseMemberInstruments(body.instruments);
-    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
-    instruments = parsed.value;
-  }
-  // «Canta y toca a la vez» (ADR-0078): a boolean or nothing.
-  if (body.singsAndPlays !== undefined && typeof body.singsAndPlays !== "boolean") {
-    return NextResponse.json({ error: "singsAndPlays must be a boolean" }, { status: 400 });
-  }
-
-  const slug = member_name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-
-  const doc = await writeClient.create({
-    _type: "teamMembers",
-    member_name: member_name.trim(),
-    ...(alias?.trim() ? { alias: alias.trim() } : {}),
-    email: email.trim().toLowerCase(),
-    role: role ?? "member",
-    memberType: memberType ?? [],
-    ...(instruments !== undefined ? { instruments } : {}),
-    ...(body.singsAndPlays === true ? { singsAndPlays: true } : {}),
-    ...(ministries !== undefined ? { ministries } : {}),
-    ...(managesMinistries !== undefined ? { managesMinistries } : {}),
-    ...(body.ministryRoles !== undefined
-      ? { ministryRoles: ministryRolesForStorage(body.ministryRoles as MinistryRole[]) }
-      : {}),
-    slug: { _type: "slug", current: slug },
-  });
-
-  return NextResponse.json(doc, { status: 201 });
+  // Everything after authorization is `createMember` (`app/utils/memberCommit.ts`), which the MCP
+  // `create_members` shares: the same validation, plus a refused repeated email (D5) and name (D12).
+  const outcome = await createMember(await req.json());
+  return NextResponse.json(outcome.body, { status: outcome.status });
 }

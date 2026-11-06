@@ -170,7 +170,7 @@ looks wrong** — several exist to stop a plausible-looking change.
   drop bumps it (`solverConfigVersion.test.ts`). No writer sets a rule value around
   `solverConfigFromDocument` → `parseSolverConfigWrite` → `solverConfigFields` under
   `ifRevisionId` (the only targeted writers: the member DELETE's pool patch, the rule-name
-  repair script). One `==` count per person per role key (`exactCapOverlaps`; C2). ADR-0049.
+  repair script, a member rename's person-path `set` in `memberCommit.ts`, ADR-0082). One `==` count per person per role key (`exactCapOverlaps`; C2). ADR-0049.
 - **The fairness ledger has one definition, and its records one writer** (ADR-0050).
   `app/utils/fairnessLedger.ts` is the only TS definition of F2–F7 and X1;
   `fixtures/fairness/golden.json` is asserted by vitest and `gcf_v3/tests/test_golden.py` and
@@ -245,9 +245,13 @@ looks wrong** — several exist to stop a plausible-looking change.
   `MCP_OAUTH_SECRET`, and are excluded from `proxy.ts`; `/oauth/authorize` is not, and depends
   on NextAuth's DEFAULT `redirect` callback keeping its query — never add a custom `redirect`
   callback that drops it (`authRedirectCallback.test.ts`; `docs/MCP.md`).
-- **MCP tools register only in `registerAllTools`** (`app/mcp/toolList.ts`): its digest is the
-  `toolsVersion` every model-visible tool asks for, and a stale Claude copy gets a refresh note
-  (ADR-0069). Guidance that depends on an answer goes in the answer, not the description.
+- **Who connects an agent (ADR-0083):** `mcpTierOf` on the LIVE access — super-admin `"full"`, worship
+  admin `"read"` (`READ_TIER_TOOLS`, an allowlist), never stored; the five app-only tools only on a
+  grant whose `client` is `"claude"`; the redirect list stays CLOSED (claude.ai, ChatGPT's stable
+  callback, loopback).
+- **MCP tools register only in `registerAllTools`** (`app/mcp/toolList.ts`): each list's digest
+  (`TOOL_LIST_VERSIONS`, one per handler since ADR-0083) is the `toolsVersion` its model-visible tools
+  ask for, and a stale copy gets a refresh note (ADR-0069). Guidance that depends on an answer goes in the answer, not the description.
 - **The ten admin write paths** (setlists PUT, roles create, roles PATCH, roles DELETE,
   copy-instruments, swap, publish-ready, unpublish, the fairness PUT, the proposals PATCH) delegate everything after
   authorization to `app/utils/*Commit.ts`; MCP writes go only through them (`apply_schedule`: roles
@@ -259,6 +263,9 @@ looks wrong** — several exist to stop a plausible-looking change.
   Oasis Kids' in `kidsCommit.ts`, called by the four `/api/kids/*` writes and the MCP Kids tools;
   the song library's in `songSaveCommit.ts`, called by the song and author routes and the MCP song
   tools (edits by parts, a lossless lyrics gate, `ifRevisionId`, a token-keyed create; ADR-0077);
+  people's in `memberCommit.ts`, called by the three `/api/admin/members` routes, `/me`'s PATCH and
+  the MCP people tools (a taken email or name refused, a rename renames its rules in the same
+  transaction, the chat grants but never revokes management; ADR-0082);
   the availability proposals' in `availabilityFixCommit.ts`, called by the four
   `/api/admin/availability-conflicts` routes, the member's availability PATCH and the flush cron,
   never by an MCP tool — its sweep NEVER writes a service, only «Aplicar» does, through `editRole`

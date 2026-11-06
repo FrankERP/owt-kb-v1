@@ -321,6 +321,7 @@ unlike the redemption receipt below, nothing about the id is derived from its co
 | `sub` | string | The authorizing member's `teamMembers` `_id`. |
 | `clientHash` | string | `sha256(client_id)` — the RAW client id (a signed DCR token) is never stored. |
 | `origin` | string | The canonical origin that issued the grant (`app/mcp/oauth/origin.ts`) — checked against the token's `iss` on every request (R13). |
+| `client` | string | Which agent holds the grant: `"claude"`, `"chatgpt"` or `"loopback"`, from the code's redirect URI (`redirectTargetKind`), set once at the code exchange and never changed by a refresh (ADR-0083). Decides whether the five app-only tools are listed (only `"claude"`). Absent on grants made before ADR-0083: read as `"claude"` only on production before `LEGACY_GRANT_CUTOFF`, otherwise `"loopback"` (`effectiveGrantClient`); any other value reads as revoked. The member's TIER is never stored here. |
 | `createdAt` | datetime | |
 | `lastRefreshAt` | datetime | Absent until the first refresh. |
 | `currentRefreshJti` | string | The refresh token's single valid `jti`. A refresh presenting any other `jti` is a reuse and revokes the WHOLE grant (spec O4). |

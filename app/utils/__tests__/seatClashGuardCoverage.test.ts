@@ -26,6 +26,7 @@ const NON_SEAT_WRITERS = [
   "fairnessMonthCommit.ts",
   "kidsCommit.ts",
   "ministryEventCommit.ts", // Jóvenes events: its own seats, never a worship role (ADR-0081)
+  "memberCommit.ts", // people: never a role document
   "proposalReviewCommit.ts",
   "publishReadyCommit.ts",
   "roleDeleteCommit.ts",

@@ -467,7 +467,8 @@ export async function deleteServicesResult(
 /** MCP Apps: a tool only the card may call; a host that honours it hides it from the model (ADR-0062 Q1 (1)). */
 const APP_ONLY_META = { ui: { resourceUri: PROPOSAL_CARD_TOOL_META.ui.resourceUri, visibility: ["app"] } } as const;
 
-export function registerServiceDeletes(server: McpServer): void {
+/** `appsHost: false` leaves out `delete_services_app` (a grant whose agent is not claude.ai, ADR-0083). */
+export function registerServiceDeletes(server: McpServer, opts: { appsHost?: boolean } = {}): void {
   server.registerTool(
     "check_service_deletes",
     {
@@ -490,17 +491,19 @@ export function registerServiceDeletes(server: McpServer): void {
     },
     async (args, ctx: ServerContext) => deleteServicesResult(args, principalOf(ctx)),
   );
-  server.registerTool(
-    "delete_services_app",
-    {
-      title: "Borrar servicios (tarjeta)",
-      description: "Solo para la tarjeta del mes guardado: borra los servicios que la tarjeta revisó y la persona confirmó.",
-      inputSchema: DELETE_SERVICES_INPUT,
-      // The same delete as `delete_services` (one function): every check runs whoever calls it. The card
-      // asks the person first (D8); a host that honours MCP Apps hides it from the model.
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
-      _meta: APP_ONLY_META,
-    },
-    async (args, ctx: ServerContext) => deleteServicesResult(args, principalOf(ctx), undefined, "delete_services_app"),
-  );
+  if (opts.appsHost !== false) {
+    server.registerTool(
+      "delete_services_app",
+      {
+        title: "Borrar servicios (tarjeta)",
+        description: "Solo para la tarjeta del mes guardado: borra los servicios que la tarjeta revisó y la persona confirmó.",
+        inputSchema: DELETE_SERVICES_INPUT,
+        // The same delete as `delete_services` (one function): every check runs whoever calls it. The card
+        // asks the person first (D8); a host that honours MCP Apps hides it from the model.
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+        _meta: APP_ONLY_META,
+      },
+      async (args, ctx: ServerContext) => deleteServicesResult(args, principalOf(ctx), undefined, "delete_services_app"),
+    );
+  }
 }

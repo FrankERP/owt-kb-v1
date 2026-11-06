@@ -1,5 +1,13 @@
 # MCP connector — operator runbook
 
+> **Any agent, admins read-only ([ADR-0083](adr/0083-the-connector-opens-to-worship-admins-read-only-through-a-closed-redirect-list.md)):
+> released to production 2026-11-05** (PR [#229](https://github.com/FrankERP/owt-kb-v1/pull/229),
+> `main` `38ee629a`; dev since the same day). ChatGPT and local agents can connect as well as
+> Claude, and a worship admin gets a read-only list. **ChatGPT proven in production 2026-11-05**
+> with Frank's super-admin account (grant `client: "chatgpt"`, `ping` and a read answered); the
+> worship-admin read list is still to be proven with a real admin; see
+> [Adding the connector](#adding-the-connector).
+>
 > **P0 status: released to production 2026-09-24** (PR
 > [#95](https://github.com/FrankERP/owt-kb-v1/pull/95), `main` `c2ca5f7c`). Every P0 route, test and
 > script this document describes is deployed; the core flow (discovery, registration, consent,
@@ -58,8 +66,9 @@ ADR-0062, live proof pending.**
 
 This app exposes itself to Claude as an [MCP](https://modelcontextprotocol.io) server, so Frank
 can ask Claude questions against a live OWT Backstage deployment from his phone or desktop. The
-connector is OAuth-gated end to end: only a super-admin can authorize it, and only super-admin
-tools are exposed — P0 shipped one health check (`ping`); P1 adds seven read-only tools over the
+connector is OAuth-gated end to end: only a super-admin or a worship admin can authorize it
+([tiers](#tiers-who-reaches-what), ADR-0083); a super-admin reaches every tool, a worship admin
+the read-only list — P0 shipped one health check (`ping`); P1 adds seven read-only tools over the
 same service/song/member/proposal data `/admin` shows (released to production 2026-09-25); P3 adds
 four write tools that make the same changes `/admin` makes, through the same domain writers
 ([ADR-0043](adr/0043-admin-writes-delegate-to-commit-modules.md); released to production
@@ -81,10 +90,10 @@ registration is stateless, and [AUTH_AND_SECURITY.md](AUTH_AND_SECURITY.md#mcp--
 | `GET /.well-known/oauth-authorization-server` | No | nothing — **public by design**: fixed metadata, no input | `beforeFiles` rewrite to `app/api/oauth/discovery/authorization-server/route.ts`, which stays gated at its own path |
 | `GET /.well-known/oauth-protected-resource` | No | nothing — **public by design** | rewrite to `app/api/oauth/discovery/protected-resource/route.ts` |
 | `GET /.well-known/oauth-protected-resource/api/mcp` | No | nothing — **public by design** | same rewrite target, path-suffixed RFC 9728 form (what `resourceMetadataUrl` points at) |
-| `POST /api/oauth/register` | No | the **redirect-URI allowlist**; what it returns is a **signed client id** that every later step verifies | stateless DCR — writes nothing (ADR-0039) |
+| `POST /api/oauth/register` | No | the **redirect-URI allowlist** (claude.ai, ChatGPT's stable callback, loopback; ADR-0083); what it returns is a **signed client id** carrying only the allowed subset of the requested URIs, which every later step verifies | stateless DCR — writes nothing (ADR-0039); every refusal logs one fixed reason line |
 | `POST /api/oauth/token` | No | the **signed authorization code plus its PKCE verifier** (or a signed refresh token and its live grant), and the signed client id | the only place grants are created and refresh tokens rotate |
 | `GET \| POST \| DELETE /api/mcp` | No | its own **bearer-token** check, on every request | the MCP endpoint itself |
-| `GET /oauth/authorize` | **Yes** | the session, plus a live, non-impersonating super-admin | the consent screen (a page, not an API route) |
+| `GET /oauth/authorize` | **Yes** | the session, plus a live, non-impersonating super-admin or worship admin (`mcpTierOf`) | the consent screen (a page, not an API route) |
 | `POST /api/oauth/authorize` | **Yes** | the same, plus the same-origin check and the re-validated signed client id | the only thing that mints an authorization code; GET is 405 |
 
 Every route in the table runs the same preflight before anything else (`mcpRoutePreflight`: the
@@ -93,7 +102,7 @@ disponible» or a not-found page on the consent screen). The six routes marked "
 from `proxy.ts` / `MIDDLEWARE_MATCHER` (`app/utils/routeMatcher.ts`) by design — none of them
 reads a session cookie, and each is enforced by what its row names instead. `/oauth/authorize`
 and `/api/oauth/authorize` deliberately stay **gated**: the consent screen needs a real
-super-admin session, and it can afford to sit behind the middleware because NextAuth's
+super-admin or worship-admin session, and it can afford to sit behind the middleware because NextAuth's
 **default** `redirect` callback carries a relative `callbackUrl` (query included) through sign-in
 unchanged — see the invariant in `CLAUDE.md` and the guard test
 `app/utils/__tests__/authRedirectCallback.test.ts`.
@@ -152,7 +161,10 @@ setlist proposals (phase 3, S1) adds two more, forty-one in all, registered last
 [Deciding a setlist proposal](#deciding-a-setlist-proposal-admin-parity-phase-3)). Creating and
 editing songs (phase 3, S3) adds four more, forty-five in all, registered last: `check_song_edits`,
 `save_song_edits`, `check_new_song` and `create_song` (see
-[Creating and editing songs](#creating-and-editing-songs-admin-parity-phase-3)). Every tool is
+[Creating and editing songs](#creating-and-editing-songs-admin-parity-phase-3)). People (phase 4,
+slice M) adds seven more, fifty-two in all, registered last: `list_members`, `get_member`,
+`check_member_changes`, `save_member_changes`, `check_new_members`, `create_members` and
+`set_member_access` (see [People](#people-admin-parity-phase-4)). Every tool is
 registered the same way — one file per tool in `app/mcp/tools/`, exporting a
 `register<Tool>(server, deps?)` function that `registerAllTools` (`app/mcp/toolList.ts`) calls,
 the writes after the reads; `app/api/mcp/route.ts` runs it inside its handler init. Every
@@ -812,7 +824,8 @@ decisions and the rejected alternatives:
 - **Forcing needs the card**, as with proposals: only `check_service_edits_app` mints waiver tokens,
   bound to the service and its revision. A rule the service already broke before the edit is a
   warning; forced again, it is named in the prompt «ya estaba rota antes de este cambio». The
-  guarantee rests on the host hiding app-only tools.
+  guarantee rests on the host hiding app-only tools, which is why they are registered only for a
+  claude.ai grant (ADR-0083).
 - **Time.** Every write races a 45 s hard stop; no group starts after 30 s («pendiente»).
 - **The card** (`mcp-app/proposal-card/useStoredEditor.tsx`) opens on a `check_service_edits`
   answer with its edits and edits seats like the proposal editor. **«Guardar» saves from the card**
@@ -1078,6 +1091,59 @@ transaction), `contentPostsWriteRoute.test.ts` (the routes, unchanged, plus the 
 real patch serializer), `songChange.test.ts`, `songTokens.test.ts`, the tools' `songEdits.test.ts`,
 `songTools.test.ts` (`full`), `adminChatViews.test.ts` (the assistant never sees it).
 
+### People (admin parity, phase 4)
+
+What `/super-admin` → Personas does («Agregar», «Editar», «Deshabilitar»), from the chat, through the
+same writer: `POST /api/admin/members`, `PATCH /api/admin/members/[id]`,
+`PATCH /api/admin/members/[id]/disable` and `/me`'s `PATCH /api/me` now authorize and call
+`app/utils/memberCommit.ts`, and so do the tools (`app/mcp/tools/members.ts`). Decision record:
+[ADR-0082](adr/0082-people-are-edited-from-the-chat-by-parts-and-the-chat-never-revokes-management.md);
+plan: `docs/superpowers/plans/2026-11-05-owt-mcp-admin-parity-f4m-members.md`. People writes notify
+nobody (no welcome email), from any surface. **In production since 2026-11-05** (PR #228, `main`
+`44f6a86b`). **Live proof passed 2026-11-06 00:46Z** with Frank, from his Claude: created a throwaway
+«Prueba MCP» (`@example.invalid`, Alabanza, no Tipo), set its alias and the Editor role, lowered it
+back to Miembro, disabled it; an expired check (over 30 minutes) was refused and wrote nothing.
+The throwaway stays in production, disabled; deleting it is Personas' (the connector has no delete).
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `list_members` | `{ministry?, includeDisabled?}` | Everyone (or one ministry) as Personas shows them: `memberId`, name, alias, role, Tipo, instruments, «Canta y toca a la vez», ministries, Jóvenes level and groups, what they manage, disabled. Never an email. Read-only |
+| `get_member` | `{memberId}` | One person, with their email. Read-only |
+| `check_member_changes` | `{memberId, edits[≤30]}` | Applies the edits by parts to the FRESH person (`applyMemberEdits`): `set {field: name/alias/email/role}` (`alias: ""` clears), `singsAndPlays`, `add`/`remove {field: tipo/instruments/ministries/managesMinistries}`, `jovenes {level|null, groups?}`. Runs the writer's own plan (`checkMemberEdits`) and answers the before/after of only what changes, the solver rules a rename would rename, warnings, and a token. Read-only |
+| `save_member_changes` | `{memberId, edits, token}` | Verifies the token's call half (person + edits) FIRST, so a repeat after a landed save answers «ya estaba guardado»; then `saveMemberEdits` re-reads, re-plans and re-renders the lines, which must match the token's result half, and writes the person and any renamed rules in ONE transaction, each under `ifRevisionId`. Destructive (I14) |
+| `check_new_members` | `{members[≤20]}` | Each new person as they would be created (`planNewMembers`, the route's own body), refusals per person («Persona N:»), orphan-rule warnings, and a token valid 30 minutes. Read-only |
+| `create_members` | the same `members` plus `token` | Verifies the token; the ids are HMACs of it in UUID form. All present → «Ya estaban» (even after the 30 minutes); some → refused; otherwise ONE transaction of `createIfNotExists`. Destructive (I14) |
+| `set_member_access` | `{memberId, enabled}` | `setMemberDisabled`, the button's own logic. No token (Frank, 2026-11-05): Claude names the person and waits for the word. Destructive (I14) |
+
+**The chat grants, never revokes, management** (Frank, 2026-11-05). `chatAccessRefusal` /
+`chatAccessToggleRefusal` (`app/utils/memberEdits.ts`), judged on the writer's fresh read: never grant
+or change a super-admin, never lower an admin, never remove a management (Kids or a Jóvenes admin
+level), never change the email of anyone who manages or edits content, never disable a manager,
+never enable a super-admin. A content-editor may be set, lowered or disabled. The routes never apply
+it; the refusal says «hazlo en la página (Super admin → Personas)».
+
+**Three refusals on every surface, judged only on change:** an email any other `teamMembers` document
+has (drafts and disabled people included); a name or alias equal to another member's; and a rename
+that would orphan a solver rule, which is instead renamed in the same transaction by a targeted
+`set` of exactly the person paths (`app/utils/memberRuleRename.ts`). A rule text that also names
+someone else is left and reported. `/me` never names anyone else. A fourth, on `/admin` too since
+this change: an email `/me`'s format check (`MEMBER_EMAIL_RE`) refuses, such as `x@localhost`.
+
+**Admin-surface gates (I15).** Personas' form requires a name of at least two characters and an
+email: **mirror** (`check_member_changes` and `check_new_members` refuse a one-letter name; the
+email is required by the schema and its format refused by the writer). Its `type=email` is
+**inherited** and narrower in the writer (`MEMBER_EMAIL_RE`). Every other Personas gate is the
+route's, so **inherited** by construction: the worship-role rule, `validateMinistryWrite`,
+`validateMinistryRolesWrite`, the self-disable and last-super-admin refusals.
+
+**Unknown outcomes.** A thrown save or access change says to read the person with `get_member` before
+retrying; a thrown create says to repeat `create_members` with the same token.
+
+**Proof.** `memberEdits.test.ts`, `memberRuleRename.test.ts`, `memberCommit.test.ts` (an in-memory
+Content Lake with revision checks), `peopleTokens.test.ts`, the tools' `members.test.ts`, and the
+route tests (`membersMinistries`, `memberInstruments`, `adminMemberVisibility`), unchanged except one
+on purpose: an alias PATCH now reads and pins the person.
+
 ### Admin-surface gates (I15)
 
 I15 says every write refuses at least what its admin counterpart refuses. The counterpart is the
@@ -1208,15 +1274,50 @@ records they become do), and it is never returned to the model.
 
 ---
 
-## Adding the connector (claude.ai)
+## Adding the connector
 
 **The connector is production-only** (the spec's «Connector origin» decision, D-2026-09-23).
-Dev (`dev-owt-backstage.vercel.app`) sits behind Vercel Deployment Protection, and claude.ai's
-servers carry neither the bypass header nor the bypass cookie, so they cannot reach discovery,
-the token endpoint or `/api/mcp` there — a claude.ai connector pointed at dev fails at its first
+Dev (`dev-owt-backstage.vercel.app`) sits behind Vercel Deployment Protection, and no hosted
+agent's servers (claude.ai's, ChatGPT's) carry the bypass header or cookie, so they cannot reach discovery,
+the token endpoint or `/api/mcp` there — a connector pointed at dev fails at its first
 request. Dev is exercised **only** by the local dev smoke client, `scripts/mcp-dev-smoke.mjs`
 ([below](#dev-smoke-procedure)), which sends the bypass header itself. Lifting the protection
 instead was considered and declined: dev writes the production dataset.
+
+The URL is the same for every agent:
+
+```
+https://owt-backstage.vercel.app/api/mcp
+```
+
+### Tiers: who reaches what
+
+Who you are is read LIVE on every request (`mcpTierOf`, `app/mcp/oauth/tier.ts`, 30 s member
+cache), never stored in the grant or token. Which agent holds the grant is stored once, at the code
+exchange (the grant's `client`, from the redirect URI):
+
+| Who (live) | Agent (grant `client`) | List (`app/mcp/toolList.ts`) |
+|---|---|---|
+| super-admin | claude.ai | `full`: every tool, plus the card and its five app-only tools |
+| super-admin | ChatGPT or a local program | `fullNoApps`: every tool EXCEPT the five app-only tools; no card resources |
+| `admin` with Alabanza | any | `read`: `READ_TIER_TOOLS` only (ping plus ten reads) |
+| anyone else, or disabled | — | refused (consent, code, token, `/api/mcp`) |
+
+- **Why the app-only tools follow the agent.** They mint waivers and save after the card's own
+  confirmation. Their «the model cannot force» guarantee rests on the host hiding them from the
+  model, which claude.ai does and another agent may not.
+- **A grant made before this release** has no `client`. On production, created before
+  `LEGACY_GRANT_CUTOFF`, it reads as Claude's. Any other grant without `client` reads as a loopback
+  one (no app tools). If a Claude connector ever loses the card this way, reconnect it.
+- **A worship admin's tool missing from their list** is an unknown tool to the server
+  (`Tool <name> not found`): it is never registered there, so nothing runs.
+- **What leaves the app.** Whatever a connected admin's agent reads goes to that agent's provider
+  (OpenAI for ChatGPT): names, seats, free-text unavailability notes.
+- **Human gates depend on the host.** Claude asks before a destructive tool unless the user chose
+  «Always allow». Another host's gate is whatever that host does. Never «always allow» or
+  auto-approve destructive tools in a local agent.
+
+### Claude (claude.ai, Desktop, mobile)
 
 1. In claude.ai (web, Desktop or mobile), add a **custom connector** with URL:
    ```
@@ -1229,17 +1330,50 @@ instead was considered and declined: dev writes the production dataset.
 3. **Sign in to Backstage** if you are not already — the consent page is a real app page behind
    the session middleware, so it goes through the ordinary `/auth/signin` flow first if needed.
 4. The consent screen (`/oauth/authorize`) shows the client's self-declared, **unverified** name,
+   «Se conecta a» (the agent, from the verified redirect URI), «Podrá» (what your tier allows),
    the exact redirect URI, and how long ago it was registered. Read it — this screen is what
-   stands between a super-admin and the confused-deputy attack that stateless, open registration
-   makes possible (ADR-0039). Approve only a connection you just started in Claude.
+   stands between an admin and the confused-deputy attack that stateless, open registration
+   makes possible (ADR-0039). Approve only a connection you just started in your agent.
 5. Press **«Permitir»**. This is the only action that mints an authorization code
    (`POST /api/oauth/authorize`) — a GET never does, so no link, prefetch or redirect can trigger
    it.
 6. Claude exchanges the code for tokens and the connector is live. A `ping` call in Claude is the
    quickest proof it worked.
 
-Only a live, non-impersonating **super-admin** can reach step 4 successfully — everyone else sees
-a refusal screen (no session, wrong role, or impersonation active) and no code is issued.
+Only a live, non-impersonating **super-admin or worship admin** can reach step 4 successfully —
+everyone else sees a refusal screen (no session, wrong role, or impersonation active) and no code
+is issued.
+
+### ChatGPT (developer mode) — proven in production 2026-11-05
+
+1. In ChatGPT, turn on developer mode and add a connector (app) with the URL above and OAuth
+   authentication. Leave the client id and secret EMPTY: it registers itself (DCR).
+2. ChatGPT registers `https://chatgpt.com/connector_platform_oauth_redirect`, its stable callback
+   for a server with RFC 9207 issuer identification (which this one advertises). The
+   per-connection form `https://chatgpt.com/connector/oauth/{id}` is refused, and logged.
+3. Steps 3–6 above, in the browser ChatGPT opens. The consent screen shows «ChatGPT (chatgpt.com)».
+
+**Proven 2026-11-05 (production):** Frank connected ChatGPT's web app in developer mode with his
+super-admin account. Registration, consent and token exchange went through with no refusal line in
+the logs, the grant was stored as `client: "chatgpt"` (19:24Z), and a `ping` and a services read
+answered in the chat. Still unobserved: whether its model sends `toolsVersion` (if it does not,
+every answer carries the refresh note), and a worship admin's read list from ChatGPT.
+
+### Local agents (loopback)
+
+A program on your own computer that registers at least one RFC 8252 loopback URI
+(`http://127.0.0.1[:port]/…` or `http://localhost[:port]/…`) and then authorizes through it.
+Registration keeps only the allowed URIs of a mixed list, and the port at authorize may differ from
+the registered one (RFC 8252 §7.3). The consent screen shows «Un programa en esta computadora».
+
+- VS Code registers loopback URIs (its DCR body, read 2026-11-05), so it registers; whether it then
+  authorizes through loopback is **expected, not proven**.
+- Claude Code, Codex CLI, Gemini CLI: documented by their vendors as loopback clients, exact DCR
+  bodies not verified — **expected, not proven**.
+- Cursor (`cursor://` callback) and anything that only offers a web forwarder
+  (`https://vscode.dev/redirect`) cannot connect: the list is closed on purpose (ADR-0083).
+
+
 
 ### Keeping Claude's tool list current
 
@@ -1252,6 +1386,8 @@ list, Claude goes on using its old copy until the connector is refreshed. That h
 - **How the server notices.** `TOOL_LIST_VERSION` (`app/mcp/toolList.ts`) is an 8-character
   digest of what a client caches about each tool: name, title, description, schemas, annotations
   and `_meta`. It does not include the commit, so a release that only changes code keeps it.
+  Since ADR-0083 each list has its own (`TOOL_LIST_VERSIONS`: `full`, `fullNoApps`, `read`);
+  `TOOL_LIST_VERSION` is `full`'s, unchanged by that release.
 - **What a tool carries.** Every model-visible tool takes the optional `toolsVersion`, and its
   description asks Claude to always send that value. App-only tools (the card's twins) don't
   carry it. The handler never sees it.
@@ -1279,7 +1415,7 @@ Grant documents are hidden and read-only in Studio, so the script is the only wa
 without a deployment:
 
 ```bash
-# Dry run — lists every grant (id, sub, origin, timestamps, revoked state). Writes nothing.
+# Dry run — lists every grant (id, sub, origin, agent, timestamps, revoked state). Writes nothing.
 node --env-file=.env.local scripts/revoke-mcp-grant.mjs
 
 # Revoke one grant.
@@ -1291,6 +1427,11 @@ node --env-file=.env.local scripts/revoke-mcp-grant.mjs --all --apply
 # Either --apply form accepts an optional reason (defaults to "manual"):
 node --env-file=.env.local scripts/revoke-mcp-grant.mjs --id mcpOauthGrant.<uuid> --apply --reason "lost device"
 ```
+
+The dry run prints each grant's EFFECTIVE agent (`client=`, with «(sin registrar)» for a grant made
+before ADR-0083, read by the same rule as `effectiveGrantClient`). **Rolling ADR-0083 back** starts
+by revoking every grant whose effective agent is not `claude` — production writes, so a dry run
+first and Frank's explicit consent — then reverting the PR.
 
 Every non-`--apply` invocation is a dry run that shows exactly what would be revoked. Revocation
 takes effect **within 30 s** (the MCP route's grant cache TTL, `GRANT_CACHE_TTL_MS` in
@@ -1354,6 +1495,14 @@ THAT refuses on a tie the pass logs it as an EXPECTED pass, "ambiguous (expected
 `get_member_availability`, `get_participation` and `list_proposals`, printing a PASS/FAIL line per
 tool and a counts-only summary — never a name or any other personal data.
 
+**`--expect-tier full|read`** (ADR-0083, default `full`). The smoke's grant is a loopback one, so
+`full` (Frank) expects every tool except the five claude.ai-only app tools. `read`, run signed in as
+a worship admin, checks the list is exactly `READ_TIER_TOOLS` (always, with or without `--reads`),
+then sends ONE boundary probe: `edit_setlist` with `{}`. That call's schema refuses it on any tier,
+so even a broken boundary writes nothing; the run passes only on the answer «Tool edit_setlist not
+found». It is the only exception to the rule below, allowed by both guards and only under
+`--expect-tier read`.
+
 **The smoke never calls a write tool, in any mode (DV1)**: dev writes the production dataset, and
 its mail redirect covers email only. This is enforced twice. STRUCTURALLY: `createMcpRequest`
 returns the one function the script uses to send anything to `/api/mcp`, and before that function
@@ -1386,6 +1535,9 @@ node --env-file=.env.local scripts/mcp-dev-smoke.mjs --no-open
 
 # Skip the refresh-token round trip (step 8).
 node --env-file=.env.local scripts/mcp-dev-smoke.mjs --no-refresh
+
+# Signed in as a worship admin: the read list, then the edit_setlist boundary probe (ADR-0083).
+node --env-file=.env.local scripts/mcp-dev-smoke.mjs --expect-tier read
 ```
 
 Two safe proof-of-refusal runs — no network call, may be run by anyone, any time:

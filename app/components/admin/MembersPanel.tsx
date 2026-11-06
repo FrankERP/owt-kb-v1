@@ -731,6 +731,18 @@ async function serverError(res: Response, fallback: string): Promise<string> {
 }
 
 // ─── The panel ────────────────────────────────────────────────────────────────
+/**
+ * The edit's toast. A name or alias change renames the solver rules that named the person (slice M,
+ * D6) and may land on a rule that names nobody yet (D12): the PATCH answers both, and the toast says so.
+ */
+function memberUpdatedToast(body: unknown): string {
+  const b = body && typeof body === "object" ? (body as { renamedRules?: unknown; ruleNotes?: unknown }) : {};
+  const n = typeof b.renamedRules === "number" ? b.renamedRules : 0;
+  const notes = Array.isArray(b.ruleNotes) ? b.ruleNotes.filter((x): x is string => typeof x === "string") : [];
+  const head = n === 0 ? "Miembro actualizado." : `Miembro actualizado; ${n === 1 ? "1 regla cambió" : `${n} reglas cambiaron`} de nombre.`;
+  return [head, ...notes].join(" ");
+}
+
 export default function MembersPanel({ role }: { role: OWTRole }) {
   const { update } = useSession();
   const router = useRouter();
@@ -904,8 +916,12 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...rest, ...(emailPrefs ?? {}) }),
       });
-      if (res.ok) { setModalOpen(false); setModalError(null); fetchMembers(); showToast("Miembro actualizado."); }
-      else setModalError(await serverError(res, "Error al actualizar."));
+      if (res.ok) {
+        setModalOpen(false);
+        setModalError(null);
+        fetchMembers();
+        showToast(memberUpdatedToast(await res.json().catch(() => null)));
+      } else setModalError(await serverError(res, "Error al actualizar."));
     } catch {
       setModalError("Error de conexión.");
     } finally {

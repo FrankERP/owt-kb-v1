@@ -281,7 +281,10 @@ several exist precisely to stop a plausible-looking change.
   `solverConfigFromDocument` → `parseSolverConfigWrite` → `solverConfigFields` under
   `ifRevisionId` — never again an `insert`/`append` of caps or restrictions as the two private
   one-off scripts of 2026-09-29/10-01 did (the member DELETE's pool-array patch and the rule-name
-  repair script's single-`person` patch are the only targeted writers). A rule person has at most
+  repair script's single-`person` patch and a member rename's person-path `set` in
+  `memberCommit.ts` — ADR-0082, exactly the renamed `person`/`personA`/`personB`/`persons` values, each
+  only where the raw value equals the text the reader reads, under the rules' `ifRevisionId` in the
+  person's own transaction — are the only targeted writers). A rule person has at most
   one `==` count per role key: refused at save by `exactCapOverlaps` (by `person` text) and at v3
   build by C2 (by member id). ADR-0049.
 - **The fairness ledger has one definition, and its records one writer** (solver v3 C2,
@@ -431,11 +434,20 @@ several exist precisely to stop a plausible-looking change.
   on NextAuth's DEFAULT `redirect` callback preserving its query** — never add a custom
   `redirect` callback without keeping that. `authRedirectCallback.test.ts` is the guard. See
   [`docs/MCP.md`](docs/MCP.md).
+- **Who connects an agent, and what it reaches (ADR-0083).** The four gates (consent page, code POST,
+  both token grants, `/api/mcp`) admit `mcpTierOf(access) !== null` on the LIVE access: `"full"` for a
+  super-admin, `"read"` for an `admin` with worship; the tier is never stored. The read list is the
+  allowlist `READ_TIER_TOOLS` — never add a write, a Kids tool or a people tool to it without a
+  reviewed plan. The five app-only tools are registered only for a grant whose `client` is
+  `"claude"` (handler `full`; `fullNoApps` for any other agent), because their safety is the host
+  hiding them. The redirect list is CLOSED (claude.ai, ChatGPT's stable callback, RFC 8252 loopback);
+  never open it to «any https» — registration is open, so that hands codes to strangers.
 - **MCP tools register only in `registerAllTools` (`app/mcp/toolList.ts`), never directly in the
   route.** claude.ai keeps the tool list it read at connect time and does not act on
-  `list_changed`. `TOOL_LIST_VERSION` is a digest of what a client caches (names, descriptions,
-  schemas, annotations, `_meta`), and every model-visible tool takes it back as the optional
-  `toolsVersion`. A call with another value, or none, still runs, and its text ends with
+  `list_changed`. Each of the three lists (`full`, `fullNoApps`, `read`; ADR-0083) has its own digest
+  in `TOOL_LIST_VERSIONS` (`TOOL_LIST_VERSION` is `full`'s) over what a client caches (names,
+  descriptions, schemas, annotations, `_meta`), and every model-visible tool takes its list's back as
+  the optional `toolsVersion`. A call with another value, or none, still runs, and its text ends with
   `STALE_TOOL_LIST_NOTE` («refresh the connector», for the model only: the card drops it), as does the
   SDK's refusal of a stale call's arguments. A tool registered outside `registerAllTools`
   would stay out of the digest. Keep `toolsVersion` optional: making it required would turn the
@@ -486,6 +498,16 @@ several exist precisely to stop a plausible-looking change.
   to the freshly read song, and a lyrics edit needs `lyricsGate` (the stored body round-trips
   losslessly through the editor's text form). `/admin` stays last-writer-wins (no `ifRevisionId` on
   the route): a page loaded before a chat save overwrites it when saved.
+  People's writer is `memberCommit.ts` (admin parity phase 4, ADR-0082): `POST /api/admin/members`,
+  `PATCH /api/admin/members/[id]`, its `disable` PATCH and `/me`'s PATCH keep their session checks and
+  call `createMember`/`patchMember`/`setMemberDisabled`/`patchOwnProfile`; the MCP people tools call
+  `checkMemberEdits`/`saveMemberEdits`/`planNewMembers`/`createMembers`/`setMemberDisabled`. Every
+  surface refuses, on CHANGE only, an email another `teamMembers` document has (drafts and disabled
+  included) and a name or alias equal to another member's; a rename renames the solver rules that
+  would stop naming the person in the same transaction (`memberRuleRename.ts`). The chat edits by
+  parts (`applyMemberEdits`), its tokens bind the rendered change rather than `_rev` (`lastSeen`
+  moves it), and `chatAccessRefusal`/`chatAccessToggleRefusal` keep it from revoking management
+  (Frank, 2026-11-05); the routes never apply that table. `/me` never names anyone else.
   The availability proposals' writer is `availabilityFixCommit.ts` (ADR-0079): the four
   `/api/admin/availability-conflicts` routes (the GET and its `apply`/`keep`/`sweep` POSTs) (`requireActiveManager`, never a content-editor, never
   impersonating), the member's `PATCH /api/me/availability` (its `after()` trigger, that member only)
@@ -534,7 +556,8 @@ several exist precisely to stop a plausible-looking change.
   `super-admin`, or `admin` with the `worship` ministry (`canUseAdminChat`), from the live access
   snapshot, never while impersonating — the spend would land on someone else. Its five tools call
   the MCP read handlers in process (`adminChatServer.ts`); do not give it a write tool, and do not
-  route it through `/api/mcp` (super-admin OAuth, write tools on the same server). Requests are
+  route it through `/api/mcp` (OAuth grants, a different audience per tier, write tools on the same
+  server). Requests are
   plain text only, so a client cannot forge a tool result or a system turn. Spend is priced from the
   API's own token counts, every attempt in `usage.iterations` (`responseCostMicroUsd`; an unknown
   model is charged at the dearer Opus 5 rate); never pass the request's signal to the SDK (an
