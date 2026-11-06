@@ -1099,7 +1099,11 @@ same writer: `POST /api/admin/members`, `PATCH /api/admin/members/[id]`,
 `app/utils/memberCommit.ts`, and so do the tools (`app/mcp/tools/members.ts`). Decision record:
 [ADR-0082](adr/0082-people-are-edited-from-the-chat-by-parts-and-the-chat-never-revokes-management.md);
 plan: `docs/superpowers/plans/2026-11-05-owt-mcp-admin-parity-f4m-members.md`. People writes notify
-nobody (no welcome email), from any surface.
+nobody (no welcome email), from any surface. **In production since 2026-11-05** (PR #228, `main`
+`44f6a86b`). **Live proof passed 2026-11-06 00:46Z** with Frank, from his Claude: created a throwaway
+«Prueba MCP» (`@example.invalid`, Alabanza, no Tipo), set its alias and the Editor role, lowered it
+back to Miembro, disabled it; an expired check (over 30 minutes) was refused and wrote nothing.
+The throwaway stays in production, disabled; deleting it is Personas' (the connector has no delete).
 
 | Tool | Arguments | What it does |
 |---|---|---|
