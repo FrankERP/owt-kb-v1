@@ -25,8 +25,8 @@ const NON_SEAT_WRITERS = [
   "availabilityFixCommit.ts", // writes seats only through editRole («Aplicar», ADR-0079)
   "fairnessMonthCommit.ts",
   "kidsCommit.ts",
-  "ministryEventCommit.ts", // Jóvenes events: its own seats, never a worship role (ADR-0081)
   "memberCommit.ts", // people: never a role document
+  "ministryEventCommit.ts", // Jóvenes events: its own seats, never a worship role (ADR-0081)
   "proposalReviewCommit.ts",
   "publishReadyCommit.ts",
   "roleDeleteCommit.ts",
