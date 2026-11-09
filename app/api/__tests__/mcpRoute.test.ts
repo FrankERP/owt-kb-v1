@@ -1843,11 +1843,12 @@ describe("/api/mcp — five tool lists: who you are (live), which agent holds th
     }
   });
 
-  it("a worship admin's live grant made now (before the cutoff) sees exactly the eleven reads on ANY agent: slice A's list and digest", async () => {
+  it("a worship admin's grant made before the cutoff sees exactly the eleven reads on ANY agent: slice A's list and digest", async () => {
     h.getMemberAccess.mockResolvedValue(liveAccess("admin"));
     for (const client of ["claude", "chatgpt", "loopback"] as const) {
       __clearGrantCache();
-      const tools = await listedTools(await accessToken(await liveGrant({ client })));
+      // Seeded relative to the cutoff, never the clock: the suite holds with the placeholder and the real value.
+      const tools = await listedTools(await accessToken(grantAt(BEFORE_CUTOFF, client)));
       expect(tools.map((t) => t.name), client).toEqual(READ_TIER_TOOL_NAMES);
       for (const tool of tools) {
         expect(tool.annotations, tool.name).toEqual(expectedAnnotations(tool.name));

@@ -327,8 +327,9 @@ export async function planV3Month(input: V3MonthPlanInput, deps: V3MonthPlanDeps
     skipSpecialIds: countedSpecialIdsOf(columns),
   });
   const drafts = cellsToDrafts(filled.cells, columns, new Set(), previewDrafts, adminRoles);
-  // M15 narrowed by I5: a super-admin's members read binds `all: true`, so kids-only members
-  // are in it; their unavailability is not worship's to report.
+  // M15 narrowed by I5: a super-admin's members read binds `all: true` (`readsAllMembers`), so
+  // kids-only members are in it; their unavailability is not worship's to report. A worship
+  // admin's read is already worship-only at the query; this filter keeps both answers the same.
   const worship = members.filter((mm) => normalizeMinistries(mm.ministries).includes("worship"));
 
   return {

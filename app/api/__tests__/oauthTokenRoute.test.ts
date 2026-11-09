@@ -600,7 +600,7 @@ describe("POST /api/oauth/token — the subject must still have an MCP tier (ADR
     expect(h.creates).toEqual([]);
   });
 
-  it("a worship admin may redeem a code and refresh (the read tier; the tier itself is never stored)", async () => {
+  it("a worship admin may redeem a code and refresh (the admin tier; the tier itself is never stored)", async () => {
     h.getMemberAccess.mockResolvedValue(liveAccess("admin"));
     const { clientId, tokens, grantId } = await exchange();
     expect(Object.keys(grantDoc(grantId) ?? {}).filter((k) => /tier|role|scope/i.test(k))).toEqual([]);

@@ -106,20 +106,25 @@ describe.each(TIERS)("every month tool's member read: %s", (_label, principal) =
 });
 
 describe("source guard (§3.4b, note 8)", () => {
-  it("no code under app/** passes a literal `true` to adminMembersQuery", () => {
+  it("no code under app/** passes a literal `true` to adminMembersQuery, and only the availability sweep pins allMembers: true", () => {
     const root = join(__dirname, "../../../..");
     const hits: string[] = [];
+    const pinned: string[] = [];
     const walk = (dir: string) => {
       for (const name of readdirSync(dir)) {
         const p = join(dir, name);
         if (statSync(p).isDirectory()) {
           if (name !== "__tests__" && name !== "node_modules") walk(p);
         } else if (/\.(ts|tsx)$/.test(name) && !/\.test\.tsx?$/.test(name)) {
-          if (/adminMembersQuery\(\s*true\s*\)/.test(readFileSync(p, "utf8"))) hits.push(relative(root, p));
+          // Code only: comments may name the pinned scope.
+          const source = readFileSync(p, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+          if (/adminMembersQuery\(\s*true\s*\)/.test(source)) hits.push(relative(root, p));
+          if (/allMembers:\s*true/.test(source)) pinned.push(relative(root, p));
         }
       }
     };
     walk(join(root, "app"));
     expect(hits).toEqual([]);
+    expect(pinned).toEqual(["app/utils/availabilityFixCommit.ts"]);
   });
 });

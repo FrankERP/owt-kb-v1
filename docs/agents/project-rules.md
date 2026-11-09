@@ -453,7 +453,7 @@ several exist precisely to stop a plausible-looking change.
   model-visible tool annotated `destructiveHint: true` gets `PERSON_CONFIRMS_RULE` appended at
   registration (`confirmingServer`); the only unruled model-visible non-read tools are `solve_month`
   and `revise_proposal`. The five app-only tools are registered only for a grant whose `client` is
-  `"claude"` (handler `full`; `fullNoApps` for any other agent), because their safety is the host
+  `"claude"` (handlers `full` and `admin`; `fullNoApps` and `adminNoApps` for any other agent), because their safety is the host
   hiding them. The redirect list is CLOSED (claude.ai, ChatGPT's stable callback, RFC 8252 loopback);
   never open it to «any https» — registration is open, so that hands codes to strangers.
 - **MCP tools register only in `registerAllTools` (`app/mcp/toolList.ts`), never directly in the

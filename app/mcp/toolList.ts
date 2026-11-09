@@ -166,7 +166,8 @@ function registerReadTools(server: McpServer, deps: { version: string }): void {
  * The tools (and, on a claude.ai grant, the card resources) of `scope`, in `tools/list` order. Also
  * run once per scope by `toolListDigest`; `version` is the deployment's commit, which only `ping`'s
  * answer carries. `scope` is required, so no caller gets the most privileged list by forgetting it;
- * "full" is exactly the list before ADR-0083.
+ * "full" lists exactly the names it listed before ADR-0083 (its write descriptions gained
+ * `PERSON_CONFIRMS_RULE` with the addendum).
  */
 export function registerAllTools(target: McpServer, deps: { version: string; scope: ToolListScope }): void {
   const scope = deps.scope;
@@ -215,7 +216,8 @@ export const TOOL_LIST_SCOPES: readonly ToolListScope[] = ["full", "fullNoApps",
 /**
  * The digest of each tool list this deployment serves (ADR-0069, one per scope since ADR-0083).
  * Every model-visible tool asks for it back as `toolsVersion`, so a client still holding an older
- * copy of ITS list is told to refresh. `full` is exactly the digest before ADR-0083.
+ * copy of ITS list is told to refresh. `full` moved once with ADR-0083's addendum
+ * (`PERSON_CONFIRMS_RULE`); `adminRead` equals slice A's `read` digest.
  */
 export const TOOL_LIST_VERSIONS: Readonly<Record<ToolListScope, string>> = {
   full: toolListDigest((server) => registerAllTools(server, { version: "", scope: "full" })),
