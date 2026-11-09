@@ -491,3 +491,40 @@ proceed without them):
 2. ~~People and Kids stay out of the admin tier, even for a worship admin who also manages Kids?~~
    **Answered 2026-11-09 20:32Z: yes** («kids ahorita no juega»). Kids stays super-admin only.
 3. «Reglas» is not delivered (above).
+
+## 10. Added after the final approval (un-reviewed; the merge-range code review checks them)
+
+The plan above was approved by two sequential fresh reviewers on digest `f0d618462233`
+(rounds 10 and 11, commit 772232ca; `2026-11-05-owt-mcp-admin-writes-review-log.md`). Frank chose
+(2026-11-09 21:15Z, decision card «Confirmar y luego agregar notas») to add their non-blocking
+notes after that approval instead of reopening the review. Each one only narrows a case, adds a
+test or corrects documentation; none widens what an admin reaches.
+
+1. **A fix-forward is a re-release.** If the production build after the merge fails and a fix
+   commit is needed, that commit moves `ADMIN_WRITES_CUTOFF` like a revert or rollback does (§3.5),
+   so `ready` never lands after the cutoff by way of a failed build.
+2. **Name resolution for admins** (ADR addendum line): with `allMembers: false`, a seated member of
+   another ministry is no longer found by name in an admin's service edits
+   (`serviceEditor.ts:541`, audience = worship or seated); tokens and stored seats are unaffected,
+   and the page behaves the same.
+3. **Twin tests get a `"full"` context.** The twin harness runs as a super-admin with no MCP
+   context (`app/mcp/writes/__tests__/twinRun.ts:255-256`); once `readsAllMembers` fails closed,
+   any twin that reaches `loadV3PlanSources` sets `extra.tier: "full"`, so the twins keep comparing
+   like with like.
+4. **Waiver tokens, restated with delete tokens.** `waiverToken` is keyed by service, `baseRev` and
+   finding, not by principal (`serviceEditor.ts:658, 1242`). The ADR addendum restates it next to
+   ADR-0072's delete tokens: any principal who reaches the check can mint their own, so binding it
+   to a principal would add nothing; it is no wider than the page.
+5. **`docs/MCP.md:1674` keeps its reason.** That line explains why the route has no
+   service-readiness wrapper. The rewrite keeps the reason true without «one super-admin»: MCP
+   answers 404 on `verify/service-readiness` (`origin.ts`), so an MCP call is never a verification
+   run.
+6. **Live-proof leftover.** The live proof picks a draft that already has a conversation
+   (`serviceThread`); otherwise the first `send_service_message` creates one
+   (`createIfNotExists`) and deleting the message leaves it empty — named in the report if it
+   happens.
+7. **Compute loops.** §4 also names repeated `solve_month` calls (function time and solver runs)
+   by an admin's agent; same follow-up as the per-person notification cap (§8).
+8. **Source guard wording** (§3.4b): no call site under `app/**` passes a literal `true` to
+   `adminMembersQuery`; `true` reaches it only as the sweep's explicit `{ allMembers: true }`
+   through `loadV3PlanSources`.
