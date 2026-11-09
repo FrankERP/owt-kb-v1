@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { MinistryEventView } from "../ministryEventReads";
 import {
+  canCreateGroupEvent,
+  canEditGroupEvent,
+  editLosesAccess,
+  groupEventBody,
+  groupEventForm,
+  groupEventProblem,
+  groupEvents,
   monthRange,
   parseMonth,
   programBody,
@@ -177,5 +184,83 @@ describe("whatsappRoster", () => {
 
   it("an empty month is the header alone", () => {
     expect(whatsappRoster("2026-11", saturdayRows("2026-11", []))).toBe("*Rol de Jóvenes — noviembre de 2026*");
+  });
+});
+
+describe("the groups' calendars (PR D)", () => {
+  const admin = { me: "a", isManager: true, led: [] };
+  const leader = { me: "l", isManager: false, led: ["otro-nivel"] };
+  const one = (g: string, over: Partial<MinistryEventView> = {}) =>
+    ev({ audience: { kind: "groups", groups: [g] }, kind: "group", ...over });
+  const joint = (over: Partial<MinistryEventView> = {}) =>
+    ev({ audience: { kind: "groups", groups: ["otro-nivel", "emprendedores"] }, kind: "joint", ...over });
+
+  it("lists the month's group meetings by date and time, never a whole-ministry one", () => {
+    const list = groupEvents("2026-11", [
+      one("otro-nivel", { _id: "b", date: "2026-11-12", time: "19:00" }),
+      ev({ _id: "sat", date: "2026-11-07" }),
+      one("otro-nivel", { _id: "a", date: "2026-11-12", time: "18:00" }),
+      joint({ _id: "c", date: "2026-11-03", time: null }),
+      one("otro-nivel", { _id: "dec", date: "2026-12-01" }),
+    ]);
+    expect(list.map((e) => e._id)).toEqual(["c", "a", "b"]);
+  });
+
+  it("«Editar»: an admin on any; a leader on a one-group meeting of their group; a joint one only its creator", () => {
+    expect(canEditGroupEvent(one("invencibles"), admin)).toBe(true);
+    expect(canEditGroupEvent(one("otro-nivel"), leader)).toBe(true);
+    expect(canEditGroupEvent(one("invencibles"), leader)).toBe(false);
+    expect(canEditGroupEvent(joint({ createdById: "l" }), leader)).toBe(true);
+    expect(canEditGroupEvent(joint({ createdById: "other" }), leader)).toBe(false);
+    // The creator who no longer leads any of its groups has lost it too.
+    expect(canEditGroupEvent(joint({ createdById: "l" }), { ...leader, led: ["invencibles"] })).toBe(false);
+    expect(canEditGroupEvent(ev(), leader)).toBe(false);
+  });
+
+  it("«Nueva reunión de grupo»: an admin or a leader of a group", () => {
+    expect(canCreateGroupEvent(admin)).toBe(true);
+    expect(canCreateGroupEvent(leader)).toBe(true);
+    expect(canCreateGroupEvent({ me: "m", isManager: false, led: [] })).toBe(false);
+  });
+
+  it("a new meeting starts for the leader's first group, unpublished; an existing one keeps its fields", () => {
+    expect(groupEventForm("2026-11-10", leader)).toEqual({
+      date: "2026-11-10", time: "", title: "", notes: "", groups: ["otro-nivel"], published: false,
+    });
+    expect(groupEventForm("2026-11-10", admin).groups).toEqual([]);
+    const f = groupEventForm("2026-11-01", leader, joint({ date: "2026-11-20", time: "19:30", title: "Campamento", published: true }));
+    expect([f.date, f.time, f.title, f.groups, f.published]).toEqual(["2026-11-20", "19:30", "Campamento", ["otro-nivel", "emprendedores"], true]);
+  });
+
+  it("says what would stop a save: no date, no group, or a leader without one of their own", () => {
+    const f = groupEventForm("2026-11-10", leader);
+    expect(groupEventProblem(f, leader)).toBeNull();
+    expect(groupEventProblem({ ...f, date: "" }, leader)).toBe("Elige la fecha.");
+    expect(groupEventProblem({ ...f, groups: [] }, leader)).toBe("Elige al menos un grupo.");
+    expect(groupEventProblem({ ...f, groups: ["invencibles"] }, leader)).toBe("Incluye uno de tus grupos.");
+    expect(groupEventProblem({ ...f, groups: ["invencibles"] }, admin)).toBeNull();
+  });
+
+  it("sends the groups in registry order with no kind (the writer derives it), cleared fields as null", () => {
+    const body = groupEventBody({ date: "2026-11-10", time: " ", title: " Campamento ", notes: "", groups: ["emprendedores", "otro-nivel"], published: true });
+    expect(body).toEqual({
+      audience: { kind: "groups", groups: ["otro-nivel", "emprendedores"] },
+      date: "2026-11-10",
+      time: null,
+      title: "Campamento",
+      notes: null,
+      published: true,
+    });
+    expect(body).not.toHaveProperty("kind");
+  });
+
+  it("warns a leader who would share someone else's one-group meeting, and nobody else", () => {
+    const mine = one("otro-nivel", { createdById: "other" });
+    const shared = { ...groupEventForm("", leader, mine), groups: ["otro-nivel", "invencibles"] };
+    expect(editLosesAccess(mine, shared, leader)).toBe(true);
+    expect(editLosesAccess(one("otro-nivel", { createdById: "l" }), shared, leader)).toBe(false);
+    expect(editLosesAccess(mine, shared, admin)).toBe(false);
+    expect(editLosesAccess(null, shared, leader)).toBe(false);
+    expect(editLosesAccess(mine, { ...shared, groups: ["otro-nivel"] }, leader)).toBe(false);
   });
 });

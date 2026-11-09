@@ -9,6 +9,7 @@
 
 import type { MinistryEventLine, MinistryEventSeat, MinistryEventView } from "./ministryEventReads";
 import { eventDayLabel } from "./jovenesEventView";
+import { MINISTRIES } from "@/app/ministries";
 
 /** The Saturday meeting's usual times (Frank, 2026-10-30: «Junta a las 18:10, llegada como a las 17:30»). */
 export const SATURDAY_DEFAULTS = { time: "18:10", arrival: "17:30" } as const;
@@ -186,6 +187,100 @@ export function showsProgramEditor(e: Pick<MinistryEventView, "audience" | "seat
   if (isManager) return true;
   if (!isMinistryWide(e)) return false;
   return e.seats.some((s: MinistryEventSeat) => s.mine && (s.role === "encargado" || s.role === "apoyo"));
+}
+
+// ── The groups' calendars (PR D) ────────────────────────────────────────────
+
+/** Jóvenes' groups in registry order: the editor's checkboxes and the calendar's labels. */
+export const JOVENES_GROUPS: ReadonlyArray<{ id: string; name: string }> = MINISTRIES.jovenes.groups;
+
+/** Who is looking at the planner, as the buttons need it. Cosmetic: the writer decides again. */
+export type PlannerViewer = { me: string; isManager: boolean; led: readonly string[] };
+
+/** The month's meetings of one or more groups (never the whole-ministry ones), by date then time. */
+export function groupEvents(month: string, events: readonly MinistryEventView[]): MinistryEventView[] {
+  const { from, to } = monthRange(month);
+  return events
+    .filter((e) => e.audience?.kind === "groups" && e.date >= from && e.date <= to)
+    .sort((a, b) => (a.date === b.date ? (a.time ?? "").localeCompare(b.time ?? "") : a.date < b.date ? -1 : 1));
+}
+
+/**
+ * Show «Editar» on a group meeting? The writer's W3 in the viewer's terms: an admin on any; a
+ * leader on a one-group meeting of a group they lead; a joint meeting only to its creator while
+ * they still lead one of its groups (Frank, 2026-11-04).
+ */
+export function canEditGroupEvent(e: Pick<MinistryEventView, "audience" | "createdById">, v: PlannerViewer): boolean {
+  if (v.isManager) return true;
+  if (e.audience?.kind !== "groups" || e.audience.groups.length === 0) return false;
+  const groups = e.audience.groups;
+  if (groups.length === 1) return v.led.includes(groups[0]);
+  return e.createdById === v.me && groups.some((g) => v.led.includes(g));
+}
+
+/** Show «Nueva reunión de grupo»? An admin, or a leader of at least one group. */
+export function canCreateGroupEvent(v: PlannerViewer): boolean {
+  return v.isManager || v.led.length > 0;
+}
+
+export type GroupEventForm = {
+  date: string;
+  time: string;
+  title: string;
+  notes: string;
+  groups: string[];
+  published: boolean;
+};
+
+/** The form for an existing group meeting, or a new one on `date` for the viewer's first group. */
+export function groupEventForm(date: string, v: PlannerViewer, e?: MinistryEventView): GroupEventForm {
+  const groups = e?.audience?.kind === "groups" ? [...e.audience.groups] : v.led.length ? [v.led[0]] : [];
+  return {
+    date: e?.date ?? date,
+    time: e?.time ?? "",
+    title: e?.title ?? "",
+    notes: e?.notes ?? "",
+    groups,
+    published: e?.published ?? false,
+  };
+}
+
+/**
+ * What would stop this form before it is sent, in words, or `null`. The same rules the writer
+ * applies (W3), said earlier: one to three groups, and a leader keeps one of their own in it.
+ */
+export function groupEventProblem(form: GroupEventForm, v: PlannerViewer): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(form.date)) return "Elige la fecha.";
+  if (form.groups.length === 0) return "Elige al menos un grupo.";
+  if (!v.isManager && !form.groups.some((g) => v.led.includes(g))) return "Incluye uno de tus grupos.";
+  return null;
+}
+
+/**
+ * The body the create (POST, with `token`) and the edit (PATCH, with `_rev`) send. No `kind`: the
+ * writer derives it from the groups (one ⇒ `group`, more ⇒ `joint`, D3). A cleared field is null.
+ */
+export function groupEventBody(form: GroupEventForm): Record<string, unknown> {
+  const order = JOVENES_GROUPS.map((g) => g.id);
+  return {
+    audience: { kind: "groups", groups: [...new Set(form.groups)].sort((a, b) => order.indexOf(a) - order.indexOf(b)) },
+    date: form.date,
+    time: orNull(form.time),
+    title: orNull(form.title),
+    notes: orNull(form.notes),
+    published: form.published,
+  };
+}
+
+/**
+ * Will saving this edit take the meeting out of the viewer's hands? A leader who is not its
+ * creator and shares a one-group meeting with another group: a joint meeting is its creator's
+ * and the admins' (plan §8). The editor says so before they save.
+ */
+export function editLosesAccess(e: Pick<MinistryEventView, "audience" | "createdById"> | null, form: GroupEventForm, v: PlannerViewer): boolean {
+  if (!e || v.isManager) return false;
+  const after = { audience: { kind: "groups" as const, groups: form.groups }, createdById: e.createdById };
+  return canEditGroupEvent(e, v) && !canEditGroupEvent(after, v);
 }
 
 // ── «Copiar para WhatsApp» ──────────────────────────────────────────────────

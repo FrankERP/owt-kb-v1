@@ -393,6 +393,12 @@ commit module, and W9 closes the writers that take any id without checking its t
 4. PR D — group calendars, joint events, «Jóvenes» in the Calendario filter (reads through R1).
    `/schedule` is worship-gated today (`requireWorshipPage`), so PR D also decides how a
    Jóvenes-only pastor reaches the Calendario; that is a page gate, outside this contract.
+   **Decided in PR D (2026-11-09):** `/schedule` stays worship-gated. A Jóvenes-only pastor does
+   not reach it: the gate already sends them to `/jovenes`, which lists every meeting they may see
+   and is their calendar. Only a member of Alabanza and Jóvenes gets «Jóvenes» in the Calendario
+   filter, read through R1 in member mode over the page's own window; `/schedule` loses its inert
+   `revalidate = 60` (R6). The groups' calendars live in Planear Jóvenes, below the Saturday table;
+   their buttons mirror W3 and the writer decides.
 5. PR E — the bulk account script (dry run, `--apply`, Frank's consent), when Frank sends the list.
 
 Each PR: release order of CLAUDE.md (dev alias verified, `gates`, one fresh code review per merge
