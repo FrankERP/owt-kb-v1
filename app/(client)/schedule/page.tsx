@@ -86,7 +86,10 @@ const SCHEDULE_QUERY = `{
   ${KIDS_FRAGMENT}
 }`;
 
-async function getScheduleData(viewMonth: string | null, today: string, me: string, withKids: boolean) {
+type ScheduleWindow = { fetchFrom: string; limit: string; weekStart: string };
+
+/** The page's date window, computed once so the worship read and the Jóvenes read share it. */
+function scheduleWindow(viewMonth: string | null, today: string): ScheduleWindow {
   let fetchFrom: string;
   let limit: string;
   let weekStart: string;
@@ -110,7 +113,10 @@ async function getScheduleData(viewMonth: string | null, today: string, me: stri
     const daysToMon = dow === 0 ? -6 : 1 - dow;
     weekStart = new Date(Date.UTC(y, m - 1, d + daysToMon)).toISOString().slice(0, 10);
   }
+  return { fetchFrom, limit, weekStart };
+}
 
+async function getScheduleData({ fetchFrom, limit, weekStart }: ScheduleWindow, me: string, withKids: boolean) {
   // Canonical (published-perspective) client: a `drafts.*` overlay is never a
   // live calendar entry. Application draft gating (`published != false`) stays in
   // the role filters above — it is a separate, member-visibility concern.
@@ -122,7 +128,7 @@ async function getScheduleData(viewMonth: string | null, today: string, me: stri
     specials: SpecialRole[];
     viewer: { memberType?: string[] } | null;
     kids: KidsCalendarRow[];
-  }>(SCHEDULE_QUERY, { today: fetchFrom, limit, weekStart, me, withKids }).then((data) => ({ ...data, range: { from: weekStart, to: limit } }));
+  }>(SCHEDULE_QUERY, { today: fetchFrom, limit, weekStart, me, withKids });
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -151,21 +157,24 @@ export default async function SchedulePage({
   const withJovenes = rolloutAllows("jovenesEvents", access) && isMinistryMember(access, "jovenes");
   const extras: ExtraCalendarMinistry[] = [...(withKids ? ["kids" as const] : []), ...(withJovenes ? ["jovenes" as const] : [])];
   const ministryView = extras.length ? parseCalendarView((await cookies()).get(CALENDAR_VIEW_COOKIE)?.value, extras) : undefined;
-  const { sundays, saturdays, sunSetlists, satSetlists, specials, viewer, kids, range } = await getScheduleData(viewMonth, today, session.user.sanityId, withKids);
+  const span = scheduleWindow(viewMonth, today);
 
   // The ONE reader, in member mode: published meetings for the whole ministry or one of the
-  // reader's groups, over the same window as the worship days (R1, R8).
-  let jovenes: MinistryEventView[] = [];
-  let jovenesUnavailable = false;
-  if (withJovenes) {
+  // reader's groups, over the same window as the specials (R1, R8). It runs beside the worship
+  // read, not after it: each is a round trip to Sanity in Europe.
+  const readJovenes = async (): Promise<{ events: MinistryEventView[]; unavailable: boolean }> => {
+    if (!withJovenes) return { events: [], unavailable: false };
     try {
-      jovenes = await readMinistryEvents(access, { me: session.user.sanityId, ministry: "jovenes", from: range.from, to: range.to, mode: "member" });
+      const events = await readMinistryEvents(access, { me: session.user.sanityId, ministry: "jovenes", from: span.weekStart, to: span.limit, mode: "member" });
+      return { events, unavailable: false };
     } catch (e) {
       // No read token: say so under the calendar, never show «no meetings» (R4).
       if (!(e instanceof MinistryEventReadUnavailable)) throw e;
-      jovenesUnavailable = true;
+      return { events: [], unavailable: true };
     }
-  }
+  };
+  const [{ sundays, saturdays, sunSetlists, satSetlists, specials, viewer, kids }, { events: jovenes, unavailable: jovenesUnavailable }] =
+    await Promise.all([getScheduleData(span, session.user.sanityId, withKids), readJovenes()]);
 
   // Fail closed on an ambiguous weekend target. A duplicate canonical role or
   // setlist for the same week yields NO entry for that week rather than a

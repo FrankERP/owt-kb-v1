@@ -28,13 +28,14 @@ function Row({ person, detail }: { person: JovenesDayPerson; detail?: string | n
   );
 }
 
-export default function JovenesDayCard({ title, entry }: { title: string; entry: JovenesDayEntry }) {
+/** `time` is shown when the sheet holds more than one entry: its own line then carries no clock
+ *  (a Saturday with both the worship service and the Jóvenes meeting), as `DayCard identity`. */
+export default function JovenesDayCard({ title, entry, time }: { title: string; entry: JovenesDayEntry; time?: string | null }) {
   return (
     <section aria-label={title}>
       <h3 className={`${SHEET_TITLE} pb-1`}>{title}</h3>
       <p className="pb-2.5 font-body text-[15px] text-ink-muted">
-        {entry.audience}
-        {entry.arrival && ` · llegada ${entry.arrival}`}
+        {[time, entry.audience, entry.arrival ? `llegada ${entry.arrival}` : null].filter(Boolean).join(" · ")}
       </p>
       {entry.seats.length > 0 && (
         <ul className="divide-y divide-ink/[0.10] border-y border-ink/[0.10]">

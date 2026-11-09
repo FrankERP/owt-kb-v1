@@ -10,6 +10,7 @@ import {
   type MinistryEventView,
 } from "@/app/utils/ministryEventReads";
 import { rolloutAllows } from "@/app/utils/rollout";
+import { isGroupId } from "@/app/ministries";
 import { groupEvents, monthRange, parseMonth, saturdayRows, type PlannerViewer } from "@/app/utils/jovenesPlannerModel";
 import { readJovenesPeople } from "@/app/utils/jovenesPeople";
 import Navbar from "@/app/components/Navbar";
@@ -63,7 +64,7 @@ export default async function JovenesPlannerPage({ searchParams }: { searchParam
   const viewer: PlannerViewer = {
     me: sanityId,
     isManager,
-    led: levelIn(access, "jovenes") === "leader" ? groupsIn(access, "jovenes") : [],
+    led: levelIn(access, "jovenes") === "leader" ? groupsIn(access, "jovenes").filter((g) => isGroupId("jovenes", g)) : [],
   };
   const defaultDate = month === today.slice(0, 7) ? today : `${month}-01`;
 

@@ -25,9 +25,10 @@ export const TONE_RAIL: Record<Tone, string> = {
   // musical key only (ADR-0071) and green is «tú». A Kids Sunday is another
   // ministry's day, not a fourth kind of worship service.
   kids: "bg-ink-dim",
-  // The same reasoning for Jóvenes: another neutral, a step lighter, so a day that holds
-  // both (someone in all three ministries) still shows two dots that differ.
-  jovenes: "bg-mono-400",
+  // The same reasoning for Jóvenes: another neutral from the ink family, a clear step
+  // stronger than Kids' in both themes (lighter on dark, darker on light), so a day that
+  // holds both (someone in all three ministries) still shows two dots that differ.
+  jovenes: "bg-ink-muted",
 };
 
 export function serviceTone(e: Pick<ActiveDay, "day" | "roleId" | "kids" | "jovenes">): Tone {
@@ -115,7 +116,8 @@ export function serviceClock(e: Pick<ActiveDay, "day" | "roleId" | "time" | "kid
 export type AgendaRow = { key: string; date: string; entry: ActiveDay; tone: Tone; conflicts: number; summary: string; monthStart: string | null };
 
 // Kids runs during the Sunday service, so it lists right after it, before a special.
-// Jóvenes lists last: its meetings are another ministry's, and a day rarely holds both.
+// Jóvenes lists last: its meetings are another ministry's. A Saturday often holds both the
+// worship service and the Jóvenes meeting, and the service leads.
 const ORDER: Record<Tone, number> = { sat: 0, sun: 1, kids: 2, special: 3, jovenes: 4 };
 
 export function agendaRows(activeDays: Record<string, ActiveDay[]>): AgendaRow[] {

@@ -309,7 +309,7 @@ export default function CalendarView({ activeDays: allDays, viewMonth, todayStr,
             {selectedEntries.map((d, i) => d.kids ? (
               <KidsDayCard key={i} seats={d.kids.seats} />
             ) : d.jovenes ? (
-              <JovenesDayCard key={i} title={d.day} entry={d.jovenes} />
+              <JovenesDayCard key={i} title={d.day} entry={d.jovenes} time={selectedEntries.length > 1 ? d.time : null} />
             ) : (
               <DayCard
                 key={i}
