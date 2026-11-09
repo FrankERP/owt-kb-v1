@@ -35,7 +35,7 @@ import { newProposalHandle } from "../monthProposals/handle";
 import { buildProposal } from "../monthProposals/proposalDocument";
 import { createProposal, sweepExpired } from "../monthProposals/proposalStore";
 import { solveReport } from "../monthProposals/reports";
-import { principalOf, type McpPrincipal } from "../monthProposals/principal";
+import { monthPrincipalOf, type MonthPrincipal } from "../monthProposals/principal";
 import { PROPOSAL_CARD_TOOL_META } from "../apps/proposalCard";
 
 /** D12: no sweep once this much of the call has passed. */
@@ -126,7 +126,7 @@ function refusalLines(lines: readonly string[], content: Record<string, unknown>
 /** The tool's whole behaviour, callable without a server. */
 export async function solveMonthResult(
   args: SolveMonthArgs,
-  principal: McpPrincipal | null,
+  principal: MonthPrincipal | null,
   deps: SolveMonthDeps = defaultSolveMonthDeps(),
 ): Promise<CallToolResult> {
   return runWriteTool(
@@ -148,6 +148,7 @@ export async function solveMonthResult(
       };
       const out = await deps.plan(input, {
         reads: deps.reads,
+        readScope: { allMembers: principal.allMembers },
         readLedger: deps.readLedger,
         solve: deps.solve,
         elapsedMs,
@@ -226,6 +227,6 @@ export function registerSolveMonth(server: McpServer): void {
       // MCP Apps (S1): a host that supports them draws the result as the proposal card.
       _meta: PROPOSAL_CARD_TOOL_META,
     },
-    async (args, ctx: ServerContext) => solveMonthResult(args, principalOf(ctx)),
+    async (args, ctx: ServerContext) => solveMonthResult(args, monthPrincipalOf(ctx)),
   );
 }

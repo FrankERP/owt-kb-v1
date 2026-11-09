@@ -194,6 +194,36 @@ export function effectiveGrantClient(grant: Pick<StoredGrant, "client" | "origin
 }
 
 /**
+ * The moment from which a worship admin's grant was approved under the ADMIN consent text
+ * (`TIER_CONSENT_TEXT.admin`, ADR-0083 addendum). A grant created before it was approved under
+ * «Solo leer … No podrá cambiar nada» and keeps exactly that list (`"adminRead"`) until its holder
+ * connects again. `createdAt` is written once, at the code exchange, and never by a refresh.
+ *
+ * Set in the commit that goes to `main`, to the planned merge time plus ONE HOUR, so grants made by
+ * the old code before the new deployment is ready still read as read-only (fail closed). Until that
+ * commit it is a far-future placeholder: every admin grant is read-only (dev included).
+ *
+ * RESET IT on any re-release after a revert, a Vercel rollback or a failed post-merge build that
+ * needs a fix-forward: while older code serves production, grants are approved under the read-only
+ * page with a `createdAt` past an old cutoff. After a rollback, NEVER re-promote the deployment
+ * that carries the old value; re-release through a new commit with a new cutoff. Moving it later
+ * only fails closed.
+ */
+export const ADMIN_WRITES_CUTOFF = "2099-01-01T00:00:00.000Z";
+
+/**
+ * Which list a worship admin's grant reaches: the admin list only when its `createdAt` parses and is
+ * at or after `ADMIN_WRITES_CUTOFF`; anything else (older, absent, unparseable) is the read-only list
+ * the holder approved. Fail closed. The same rule on every origin.
+ */
+export function adminScopeOf(grant: Pick<StoredGrant, "createdAt">): "admin" | "adminRead" {
+  if (grant.createdAt === null) return "adminRead";
+  const created = Date.parse(grant.createdAt);
+  if (!Number.isFinite(created)) return "adminRead";
+  return created >= Date.parse(ADMIN_WRITES_CUTOFF) ? "admin" : "adminRead";
+}
+
+/**
  * Parse a fetched grant. A missing or malformed document → null (the store
  * treats null as revoked, so deleting OAuth documents can only ever shut
  * access). `revoked` is false only when the stored flag is exactly `false`.

@@ -107,3 +107,6 @@ at `/me` (`PATCH /api/me`). Four facts shaped the decision:
 The connector now also admits a worship admin, with a read-only list (`READ_TIER_TOOLS`). None of
 this record's people tools is in it: they stay super-admin only, so the reasoning above («the
 connector is super-admin only») still holds for every tool this record adds.
+
+ADR-0083's addendum (2026-11-09) gives worship admins the page's worship writes; this record's
+seven tools are in `SUPER_ADMIN_ONLY_TOOLS`, so the same still holds.

@@ -635,7 +635,12 @@ export function serviceConversationQuery(roleId: string, threadId: string): Boun
 /**
  * The member list the admin panels read. Worship admins see worship members only;
  * a super-admin (`all: true`) sees everyone, because they are the only role that
- * can edit `ministries` at all. The caller binds `all`.
+ * can edit `ministries` at all. The caller binds `all` from the LIVE caller: the
+ * members GET from the session's role, the MCP from the live tier
+ * (`readsAllMembers`, through `loadV3PlanSources({ allMembers })` and
+ * `get_solver_rules`). Nothing under `app/**` passes a literal `true`
+ * (`memberReadScope.test.ts`); the availability sweep's `{ allMembers: true }` is
+ * the one pinned caller.
  *
  * `ministryRoles` (a Jóvenes level and groups, ADR-0075) rides only the
  * super-admin arm: the Miembros form is its one editor, and a worship admin's

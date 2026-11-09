@@ -1,6 +1,9 @@
-# ADR-0083: The connector opens to any agent through a closed redirect list, and to worship admins read-only
+# ADR-0083: The connector opens to any agent through a closed redirect list, and to worship admins as in the page
 
-**Date:** 2026-11-05 · **Status:** Accepted
+**Date:** 2026-11-05 · **Status:** Accepted, amended 2026-11-09 by its addendum: worship admins write as in the page
+
+> **Title.** The first slice opened the connector to worship admins read-only; the addendum below
+> gives them the page's worship writes. The filename keeps the first slice's wording so links hold.
 
 > **Numbering.** 0083 because records are numbered in the order they reach `main` (0082 is the last
 > there); `preview`'s solver-ops record moves from 0083 to 0084 when this one merges there, as it
@@ -126,3 +129,95 @@ claude.ai hides them. Another agent may not.
   expects the no-apps list. `--expect-tier read` sends one boundary probe: `edit_setlist` with `{}`,
   which its schema refuses on any tier. That probe is the only exception to «the smoke never calls a
   write», in both of its guards.
+
+## Addendum — worship admins write as in the page, 2026-11-09
+
+Frank, 2026-11-05 (decision card): «Todo como en la página» — every worship write an admin already
+does in `/admin`, through the same writers. People and Oasis Kids stay super-admin only («Personas
+sigue siendo solo tuyo»; 2026-11-09: «kids ahorita no juega»). Admins may set the «Mensaje del
+pastor». Plan (critical tier): `docs/superpowers/plans/2026-11-05-owt-mcp-admin-writes.md`, review
+log beside it. This is the slice the record above announced, so it is an addendum, not a new record.
+
+- **The tier is renamed** `"read"` → `"admin"` (`McpTier = "full" | "admin"`, same predicate, same
+  `canUseAdminChat` parity test). `extra.tier` carries `"admin"`. Nothing stores a tier.
+- **Five scopes, five handlers** (`ToolListScope`), chosen per request in `/api/mcp`:
+
+  | live tier | grant | scope |
+  |---|---|---|
+  | `full` | client `claude` | `full` |
+  | `full` | any other client | `fullNoApps` |
+  | `admin` | `adminScopeOf(grant) === "adminRead"` | `adminRead` (= slice A's read list, same digest) |
+  | `admin` | after the cutoff, client `claude` | `admin` (40 tools, card and resources) |
+  | `admin` | after the cutoff, any other client | `adminNoApps` (35 tools) |
+
+- **One classification, total.** `SUPER_ADMIN_ONLY_TOOLS` (5 Kids + 7 people) and
+  `ADMIN_TIER_TOOLS` (every other tool, written out by name) are literal lists in
+  `app/mcp/toolList.ts`; a test fails until every tool of the full list is in exactly one of them.
+  Admin registrations go through `allowlistedServer`, so a tool added to a shared bundle later
+  reaches no admin until its name is added on purpose. The handlers still do not refuse by tier
+  (the rejection above stands).
+- **Every admin write is the page's write.** Each tool calls the same `*Commit.ts` writer as its
+  `/admin` route, with the same rules, refusals and notifications; no writer changed. The card's
+  forcing is available to an admin on a claude.ai grant, as in the page; on other hosts nobody can
+  force. The writer's per-person rules hold for everyone (only one's own conversation messages).
+- **The member read binds `all` as the page does** (ADR-0075's isolation at the query, not by
+  downstream filters). `adminMembersQuery(true)` turns the worship filter off. The members GET binds
+  it from the live role; the connector now binds it from the live tier through
+  `readsAllMembers(ctx)` (`"full"` → every ministry; `"admin"`, absent or unknown → worship only).
+  `loadV3PlanSources({ allMembers })` takes it as a required parameter (the month tools pass their
+  principal's), and `get_solver_rules` binds it the same way. The availability sweep, which has no
+  MCP caller, is pinned to `{ allMembers: true }`, unchanged. Consequence: an admin's service edits
+  no longer find a seated member of another ministry by NAME; tokens and stored seats are
+  unaffected, and the page behaves the same.
+- **Connections approved under «Solo leer … No podrá cambiar nada» keep that list.** A worship
+  admin's grant reaches the admin list only when its `createdAt` (set once, at the code exchange)
+  parses and is at or after `ADMIN_WRITES_CUTOFF` (`adminScopeOf`, fail closed). The cutoff is the
+  planned merge time plus one hour. **Any re-release after a revert, a Vercel rollback or a failed
+  post-merge build that needs a fix-forward resets it** to just after the re-release; after a
+  rollback the slice-B deployment is never re-promoted (it carries the old cutoff). The residual
+  window [cutoff, max(cutoff, ready) + 1 h] is checked once it has closed, across every origin;
+  a developer's local server still running older code could mint a local grant under the read-only
+  wording later (only super-admins run the app locally today).
+- **Every model-visible write asks the person first.** `PERSON_CONFIRMS_RULE`
+  (`app/mcp/writes/confirmRule.ts`) is appended at registration to every tool with
+  `destructiveHint: true` that the model sees; app-only twins are exempt (the card confirms). The
+  only model-visible tools with neither `readOnlyHint` nor the rule are `solve_month` and
+  `revise_proposal` (each only creates a proposal nobody is told of). `edit_setlist` no longer says
+  «sin confirmación». This moved the `full` and `fullNoApps` digests once (one refresh note each in
+  Frank's Claude and ChatGPT).
+- **Tokens restated.** ADR-0072's delete tokens and the saved-month editor's waiver tokens
+  (`serviceEditor.ts`) are bound to the services' `_rev`s and the findings, not to a principal. A
+  worship admin now reaches those tools too; the conclusion holds, because any principal who reaches
+  the save can mint their own token with the check, so binding it to a principal would add nothing.
+- **The smoke** (`scripts/mcp-dev-smoke.mjs`): `--expect-tier admin` expects the `adminNoApps`
+  list (`read` is refused with a pointer to `admin`). The boundary probe moved from `edit_setlist`
+  to `set_member_access` with `{}`: a super-admin-only people write whose strict schema refuses `{}`
+  before any handler code, so on a wrong tier it is a schema refusal, never a write and never a read
+  of people data. It is still the only exception to «the smoke never calls a write», in both guards.
+- **Consent** (`TIER_CONSENT_TEXT.admin`) says what is handed over: the page's worship work, that
+  changes notify the team as in the page, that the agent sees names, availability and notes, and
+  that it cannot manage people or Oasis Kids.
+
+### Risks, restated (Frank: «ok», 2026-11-09 22:19Z)
+
+- **Everything an admin can break in the page, a misled agent can now break from a chat**:
+  publish (first notices to the whole service), replace setlists and seats, generate and apply a
+  month, delete future services (only with the check's echoed list and token, never a past one),
+  edit songs, approve a proposal. Defences: the rule above, the host's prompt, each tool's own
+  tokens and `_rev` checks, and each writer's refusals. **Never «always allow» or auto-approve write
+  tools in a local agent** — with that on, the rule is the only gate, for admins as for Frank.
+- **A phished admin hands a stranger all of the above.** The «Residual risks, accepted» above leaned
+  partly on admins being read-only; that no longer holds. Remaining: the consent names the agent and
+  the redirect, the closed redirect list, revocation (≤ 30 s).
+- **Notification and compute loops have no limit, as in the page.** A looping agent can repeat a
+  notifying write (free Gmail, ~500 recipients a day for the whole app) or `solve_month`. Named
+  follow-ups: a per-person cap on notifying writes from the MCP, and an email to Frank on every new
+  grant.
+
+### Rollback
+
+Reverting the PR removes admin writes on the next request after the deploy (tier and scope are
+live) and moves the digests again. A Vercel Instant Rollback does the same without a commit; the
+slice-B deployment is then never re-promoted. A later re-release is a new commit with a new
+`ADMIN_WRITES_CUTOFF` and a new window check. `MCP_DISABLED` is the emergency stop; one admin's
+access ends by revoking the grant or changing the role (≤ 30 s).

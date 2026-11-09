@@ -48,11 +48,15 @@
  *       401 that proves the revocation landed.
  *   node --env-file=.env.local scripts/mcp-dev-smoke.mjs --base http://localhost:3000
  *     … same, against a local `next dev` — no bypass secret needed there.
- *   node --env-file=.env.local scripts/mcp-dev-smoke.mjs --expect-tier read
- *     … the same handshake, signed in as a WORSHIP ADMIN (ADR-0083): checks
- *       the list is exactly the eleven reads, then sends the one boundary
- *       probe — `edit_setlist` with `{}`, which its schema refuses on any tier
- *       — and requires the answer «Tool edit_setlist not found». The default,
+ *   node --env-file=.env.local scripts/mcp-dev-smoke.mjs --expect-tier admin
+ *     … the same handshake, signed in as a WORSHIP ADMIN (ADR-0083 and its
+ *       addendum): checks the list is exactly the admin list without the app
+ *       tools (this script's grant is a loopback one), then sends the one
+ *       boundary probe — `set_member_access` with `{}`, a super-admin-only
+ *       people tool whose strict schema refuses that on any tier — and requires
+ *       the answer «Tool set_member_access not found». A grant approved before
+ *       `ADMIN_WRITES_CUTOFF` sees the eleven reads instead, so this mode
+ *       passes only on a deployment whose cutoff has passed. The default,
  *       `--expect-tier full` (Frank), expects the super-admin list without the
  *       five claude.ai-only app tools: this script's grant is a loopback one.
  *   … --no-open prints the authorize URL instead of opening it (macOS `open`).
@@ -66,7 +70,7 @@
  *
  * The smoke calls `ping` always, and — only with `--reads` — the seven P1
  * read tools once each. It NEVER calls a write tool, in any mode (DV1) — the
- * one exception is the read-tier boundary probe (`isBoundaryProbe`), a call
+ * one exception is the admin-tier boundary probe (`isBoundaryProbe`), a call
  * no tier can execute; both guards below consult that one function: dev
  * writes the production dataset, and its mail redirect covers email only.
  * This is enforced twice. STRUCTURALLY: `createMcpRequest` returns the one
@@ -120,10 +124,11 @@ const TOTAL_STEPS = 10;
 // ── pure helpers (unit-tested without any network) ─────────────────────────
 
 /**
- * The tiers `--expect-tier` accepts (ADR-0083). The smoke's grant is a loopback one, so
- * `full` means the super-admin list WITHOUT the claude.ai-only app tools.
+ * The tiers `--expect-tier` accepts (ADR-0083 and its addendum). The smoke's grant is a loopback
+ * one, so `full` means the super-admin list WITHOUT the claude.ai-only app tools, and `admin` the
+ * worship-admin list without them.
  */
-export const EXPECT_TIERS = Object.freeze(["full", "read"]);
+export const EXPECT_TIERS = Object.freeze(["full", "admin"]);
 
 /** Parse argv into `{ base, open, refresh, awaitRevocation, reads, expectTier }`, or throw. Pure. */
 export function parseArgs(argv) {
@@ -145,6 +150,7 @@ export function parseArgs(argv) {
       args.reads = true;
     } else if (a === "--expect-tier") {
       const v = argv[i + 1];
+      if (v === "read") throw new Error("--expect-tier read is now --expect-tier admin (ADR-0083 addendum)");
       if (!EXPECT_TIERS.includes(v)) throw new Error(`--expect-tier needs one of: ${EXPECT_TIERS.join(", ")}`);
       args.expectTier = v;
       i++;
@@ -490,7 +496,10 @@ export const APP_ONLY_TOOL_NAMES = [
 /** The super-admin list on any grant that is not claude.ai's (`fullNoApps`), in order. */
 export const EXPECTED_TOOLS_NO_APPS = EXPECTED_TOOLS.filter((name) => !APP_ONLY_TOOL_NAMES.includes(name));
 
-/** The worship-admin list (`READ_TIER_TOOLS` in `app/mcp/toolList.ts`; a test pins the two), in order. */
+/**
+ * The read list (`READ_TIER_TOOLS` in `app/mcp/toolList.ts`; a test pins the two), in order: what a
+ * worship admin's grant approved before `ADMIN_WRITES_CUTOFF` sees (`adminRead`).
+ */
 export const READ_TIER_TOOL_NAMES = [
   "ping",
   "get_service",
@@ -503,9 +512,21 @@ export const READ_TIER_TOOL_NAMES = [
   ...ADMIN_READ_TOOL_NAMES,
 ];
 
+/**
+ * The tools only a super-admin reaches (`SUPER_ADMIN_ONLY_TOOLS` in `app/mcp/toolList.ts`; a test
+ * pins the two): Oasis Kids and people.
+ */
+export const SUPER_ADMIN_ONLY_TOOL_NAMES = [...KIDS_TOOL_NAMES, ...MEMBER_TOOL_NAMES];
+
+/** The worship-admin list (`ADMIN_TIER_TOOLS` in `app/mcp/toolList.ts`; a test pins the two), in order. */
+export const ADMIN_TIER_TOOL_NAMES = EXPECTED_TOOLS.filter((name) => !SUPER_ADMIN_ONLY_TOOL_NAMES.includes(name));
+
+/** The worship-admin list on any grant that is not claude.ai's (`adminNoApps`), in order. */
+export const ADMIN_TIER_TOOL_NAMES_NO_APPS = ADMIN_TIER_TOOL_NAMES.filter((name) => !APP_ONLY_TOOL_NAMES.includes(name));
+
 /** The list a loopback grant of `tier` must see. Pure. */
 export function expectedToolsForTier(tier) {
-  if (tier === "read") return READ_TIER_TOOL_NAMES;
+  if (tier === "admin") return ADMIN_TIER_TOOL_NAMES_NO_APPS;
   if (tier === "full") return EXPECTED_TOOLS_NO_APPS;
   throw new Error(`unknown tier "${tier}"`);
 }
@@ -620,18 +641,23 @@ export const CALLABLE_TOOLS = Object.freeze(["ping", ...READ_TOOL_NAMES, ...ADMI
  */
 export const TOOLS_CALL_METHOD = "tools/call";
 
-/** The one write name the read-tier boundary probe may send (ADR-0083). */
-export const BOUNDARY_PROBE_TOOL = "edit_setlist";
+/**
+ * The one write name the admin-tier boundary probe may send (ADR-0083 addendum): a super-admin-only
+ * people tool. Not a read such as `list_members`, which would print the team's emails on a wrong
+ * tier: on a wrong tier this answers a schema refusal and nothing else.
+ */
+export const BOUNDARY_PROBE_TOOL = "set_member_access";
 
 /**
- * Whether a `tools/call` is the read-tier boundary probe — the ONE exception to `CALLABLE_TOOLS`
- * (ADR-0083): only under `--expect-tier read`, only `edit_setlist`, and only with arguments that
- * are `{}` or `{ toolsVersion: <string> }`. `edit_setlist`'s strict schema refuses those on ANY
- * tier (no `serviceId`, `roleRev`, `observed` or `rows`), so even a broken boundary answers a
- * validation error and writes nothing. Both DV1 guards consult this, never a copy. Pure.
+ * Whether a `tools/call` is the admin-tier boundary probe — the ONE exception to `CALLABLE_TOOLS`
+ * (ADR-0083 and its addendum, which restates it for this tool): only under `--expect-tier admin`,
+ * only `set_member_access`, and only with arguments that are `{}` or `{ toolsVersion: <string> }`.
+ * `set_member_access`'s strict schema (`{ memberId, enabled }`, both required) refuses those on ANY
+ * tier, so even a broken boundary answers a validation error and writes nothing. Both DV1 guards
+ * consult this, never a copy. Pure.
  */
 export function isBoundaryProbe(name, args, expectTier) {
-  if (expectTier !== "read" || name !== BOUNDARY_PROBE_TOOL) return false;
+  if (expectTier !== "admin" || name !== BOUNDARY_PROBE_TOOL) return false;
   if (args === null || typeof args !== "object" || Array.isArray(args)) return false;
   if (Object.getPrototypeOf(args) !== Object.prototype) return false;
   const keys = Object.keys(args);
@@ -640,7 +666,7 @@ export function isBoundaryProbe(name, args, expectTier) {
 }
 
 /**
- * Whether the server's answer to the boundary probe proves the read tier holds: a JSON-RPC
+ * Whether the server's answer to the boundary probe proves the admin tier holds: a JSON-RPC
  * error naming the tool as not found (the SDK's answer for an unregistered tool). A tool
  * result — even an `isError` one, which is what a validation failure on a REGISTERED tool
  * looks like — fails the check. `message` is the parsed JSON-RPC message. Pure.
@@ -652,7 +678,7 @@ export function checkBoundaryProbe(message) {
   }
   return {
     ok: false,
-    message: `expected "${BOUNDARY_PROBE_TOOL}" to be unknown on the read tier, got ${JSON.stringify(message)}`,
+    message: `expected "${BOUNDARY_PROBE_TOOL}" to be unknown on the admin tier, got ${JSON.stringify(message)}`,
   };
 }
 
@@ -1081,7 +1107,7 @@ async function main() {
     begin(
       7,
       `initialize, tools/list (${args.expectTier} tier), tools/call ping` +
-        (args.expectTier === "read" ? `, ${BOUNDARY_PROBE_TOOL} probe` : "") +
+        (args.expectTier === "admin" ? `, ${BOUNDARY_PROBE_TOOL} probe` : "") +
         (args.reads ? ", --reads" : ""),
     );
     const initResult = await mcpRpc(tokens.access_token, rpc("initialize", {
@@ -1097,18 +1123,19 @@ async function main() {
     // The plain smoke only needs ping (so it passes against any deployment
     // from P0 on); --reads needs the tier's whole list with its annotations: it
     // is about to call the seven reads, and the listing is the only proof the
-    // writes get on dev (DV1: none is ever called). The read tier always checks
-    // the whole list: proving no write is listed is that run's point (ADR-0083).
-    const strictList = args.reads || args.expectTier === "read";
+    // writes get on dev (DV1: none is ever called). The admin tier always checks
+    // the whole list: proving no people or Kids tool is listed is that run's
+    // point (ADR-0083 addendum).
+    const strictList = args.reads || args.expectTier === "admin";
     const toolsCheck = strictList ? checkToolList(tools, expectedToolsForTier(args.expectTier)) : checkPingRegistered(tools);
     if (!toolsCheck.ok) throw new Error(toolsCheck.message);
     const callResult = await mcpRpc(tokens.access_token, toolCallRequest("ping", {}), LEGACY_PROTOCOL_VERSION);
     const payload = JSON.parse(callResult.content[0].text);
-    // The read-tier boundary probe: a write the read handler must not know.
-    // Its arguments fail edit_setlist's schema on ANY tier, so a broken
-    // boundary answers a validation error and still writes nothing.
+    // The admin-tier boundary probe: a people write the admin handler must not
+    // know. Its arguments fail set_member_access's schema on ANY tier, so a
+    // broken boundary answers a validation error and still writes nothing.
     let probeDetail = "";
-    if (args.expectTier === "read") {
+    if (args.expectTier === "admin") {
       const probe = await mcpMessage(
         tokens.access_token,
         toolCallRequest(BOUNDARY_PROBE_TOOL, {}, 1, { expectTier: args.expectTier }),
@@ -1116,7 +1143,7 @@ async function main() {
       );
       const probeCheck = checkBoundaryProbe(probe);
       if (!probeCheck.ok) throw new Error(probeCheck.message);
-      probeDetail = `, ${BOUNDARY_PROBE_TOOL} → not found (read tier holds)`;
+      probeDetail = `, ${BOUNDARY_PROBE_TOOL} → not found (admin tier holds)`;
     }
     pass(`ping → ${JSON.stringify(payload)}${probeDetail}`);
 

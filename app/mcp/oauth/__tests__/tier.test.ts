@@ -14,9 +14,9 @@ describe("mcpTierOf (ADR-0083)", () => {
     }
   });
 
-  it("an admin of worship is read; an admin outside worship is refused", () => {
-    expect(mcpTierOf({ active: true, role: "admin", ministries: ["worship"] })).toBe("read");
-    expect(mcpTierOf({ active: true, role: "admin", ministries: ["worship", "kids"] })).toBe("read");
+  it('an admin of worship is "admin"; an admin outside worship is refused', () => {
+    expect(mcpTierOf({ active: true, role: "admin", ministries: ["worship"] })).toBe("admin");
+    expect(mcpTierOf({ active: true, role: "admin", ministries: ["worship", "kids"] })).toBe("admin");
     expect(mcpTierOf({ active: true, role: "admin", ministries: ["kids"] })).toBeNull();
     expect(mcpTierOf({ active: true, role: "admin", ministries: [] })).toBeNull();
   });

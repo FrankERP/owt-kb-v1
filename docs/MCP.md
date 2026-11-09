@@ -1,5 +1,11 @@
 # MCP connector — operator runbook
 
+> **Worship admins write as in the page ([ADR-0083's addendum](adr/0083-the-connector-opens-to-worship-admins-read-only-through-a-closed-redirect-list.md#addendum--worship-admins-write-as-in-the-page-2026-11-09)):
+> built 2026-11-09 on `claude/project-thread-5fah0x`, NOT released yet.** A worship admin's grant
+> made after `ADMIN_WRITES_CUTOFF` reaches every worship write of `/admin` (`ADMIN_TIER_TOOLS`);
+> people and Oasis Kids stay super-admin only; older admin grants keep the read list. See
+> [Tiers](#tiers-who-reaches-what).
+>
 > **Any agent, admins read-only ([ADR-0083](adr/0083-the-connector-opens-to-worship-admins-read-only-through-a-closed-redirect-list.md)):
 > released to production 2026-11-05** (PR [#229](https://github.com/FrankERP/owt-kb-v1/pull/229),
 > `main` `38ee629a`; dev since the same day). ChatGPT and local agents can connect as well as
@@ -68,7 +74,8 @@ This app exposes itself to Claude as an [MCP](https://modelcontextprotocol.io) s
 can ask Claude questions against a live OWT Backstage deployment from his phone or desktop. The
 connector is OAuth-gated end to end: only a super-admin or a worship admin can authorize it
 ([tiers](#tiers-who-reaches-what), ADR-0083); a super-admin reaches every tool, a worship admin
-the read-only list — P0 shipped one health check (`ping`); P1 adds seven read-only tools over the
+every worship tool of the page (people and Oasis Kids excluded; read-only on a grant made before
+`ADMIN_WRITES_CUTOFF`) — P0 shipped one health check (`ping`); P1 adds seven read-only tools over the
 same service/song/member/proposal data `/admin` shows (released to production 2026-09-25); P3 adds
 four write tools that make the same changes `/admin` makes, through the same domain writers
 ([ADR-0043](adr/0043-admin-writes-delegate-to-commit-modules.md); released to production
@@ -1300,7 +1307,9 @@ exchange (the grant's `client`, from the redirect URI):
 |---|---|---|
 | super-admin | claude.ai | `full`: every tool, plus the card and its five app-only tools |
 | super-admin | ChatGPT or a local program | `fullNoApps`: every tool EXCEPT the five app-only tools; no card resources |
-| `admin` with Alabanza | any | `read`: `READ_TIER_TOOLS` only (ping plus ten reads) |
+| `admin` with Alabanza | claude.ai, grant made at or after `ADMIN_WRITES_CUTOFF` | `admin`: `ADMIN_TIER_TOOLS` (40: every tool except `SUPER_ADMIN_ONLY_TOOLS`), plus the card |
+| `admin` with Alabanza | ChatGPT or a local program, same | `adminNoApps`: the same minus the five app-only tools (35); no card resources |
+| `admin` with Alabanza | any, grant made BEFORE `ADMIN_WRITES_CUTOFF` (or unreadable `createdAt`) | `adminRead`: `READ_TIER_TOOLS` only (ping plus ten reads), what that grant's consent said |
 | anyone else, or disabled | — | refused (consent, code, token, `/api/mcp`) |
 
 - **Why the app-only tools follow the agent.** They mint waivers and save after the card's own
@@ -1311,6 +1320,19 @@ exchange (the grant's `client`, from the redirect URI):
   one (no app tools). If a Claude connector ever loses the card this way, reconnect it.
 - **A worship admin's tool missing from their list** is an unknown tool to the server
   (`Tool <name> not found`): it is never registered there, so nothing runs.
+- **Every tool is classified on purpose** (ADR-0083 addendum). `SUPER_ADMIN_ONLY_TOOLS` is the five
+  Oasis Kids tools and the seven people tools; `ADMIN_TIER_TOOLS` is every other tool, written out by
+  name. A new tool fails `mcpRoute.test.ts` until it is put in one of the two, and reaches no admin
+  until its name is in `ADMIN_TIER_TOOLS` (registration goes through `allowlistedServer`).
+- **An admin's write is the page's write**: the same `*Commit.ts` writer, rules, refusals and
+  notifications as `/admin`. The member read is bound from the live tier as the members GET binds
+  it from the role (`readsAllMembers`: super-admin = every ministry, admin = worship only).
+- **A grant approved under the read-only wording keeps it.** `adminScopeOf` gives the admin list
+  only to a grant whose `createdAt` is at or after `ADMIN_WRITES_CUTOFF`; anything older reads as
+  `adminRead`. The admin reconnects to get the writes. **Any re-release after a revert, a rollback
+  or a fix-forward resets the cutoff**; a rolled-back slice-B deployment is never re-promoted.
+- **Every model-visible write asks first.** `PERSON_CONFIRMS_RULE` (`app/mcp/writes/confirmRule.ts`)
+  closes the description of every model-visible tool annotated `destructiveHint: true`.
 - **What leaves the app.** Whatever a connected admin's agent reads goes to that agent's provider
   (OpenAI for ChatGPT): names, seats, free-text unavailability notes.
 - **Human gates depend on the host.** Claude asks before a destructive tool unless the user chose
@@ -1386,8 +1408,10 @@ list, Claude goes on using its old copy until the connector is refreshed. That h
 - **How the server notices.** `TOOL_LIST_VERSION` (`app/mcp/toolList.ts`) is an 8-character
   digest of what a client caches about each tool: name, title, description, schemas, annotations
   and `_meta`. It does not include the commit, so a release that only changes code keeps it.
-  Since ADR-0083 each list has its own (`TOOL_LIST_VERSIONS`: `full`, `fullNoApps`, `read`);
-  `TOOL_LIST_VERSION` is `full`'s, unchanged by that release.
+  Since ADR-0083 each list has its own (`TOOL_LIST_VERSIONS`: `full`, `fullNoApps`, `admin`,
+  `adminNoApps`, `adminRead`); `TOOL_LIST_VERSION` is `full`'s. ADR-0083's addendum moved `full`
+  and `fullNoApps` once (`PERSON_CONFIRMS_RULE` in the write descriptions: one refresh note per
+  connected agent); `adminRead` equals slice A's `read` digest, so a slice A admin sees no change.
 - **What a tool carries.** Every model-visible tool takes the optional `toolsVersion`, and its
   description asks Claude to always send that value. App-only tools (the card's twins) don't
   carry it. The handler never sees it.
@@ -1495,13 +1519,16 @@ THAT refuses on a tie the pass logs it as an EXPECTED pass, "ambiguous (expected
 `get_member_availability`, `get_participation` and `list_proposals`, printing a PASS/FAIL line per
 tool and a counts-only summary — never a name or any other personal data.
 
-**`--expect-tier full|read`** (ADR-0083, default `full`). The smoke's grant is a loopback one, so
-`full` (Frank) expects every tool except the five claude.ai-only app tools. `read`, run signed in as
-a worship admin, checks the list is exactly `READ_TIER_TOOLS` (always, with or without `--reads`),
-then sends ONE boundary probe: `edit_setlist` with `{}`. That call's schema refuses it on any tier,
-so even a broken boundary writes nothing; the run passes only on the answer «Tool edit_setlist not
-found». It is the only exception to the rule below, allowed by both guards and only under
-`--expect-tier read`.
+**`--expect-tier full|admin`** (ADR-0083 and its addendum, default `full`; `read` is refused with a
+pointer to `admin`). The smoke's grant is a loopback one, so `full` (Frank) expects every tool
+except the five claude.ai-only app tools. `admin`, run signed in as a worship admin on a grant made
+after `ADMIN_WRITES_CUTOFF`, checks the list is exactly `ADMIN_TIER_TOOLS` minus the app-only tools
+(always, with or without `--reads`), then sends ONE boundary probe: `set_member_access` with `{}`,
+a super-admin-only people tool whose strict schema refuses `{}` before any handler code, so even a
+broken boundary writes nothing and reads no people data; the run passes only on the answer «Tool
+set_member_access not found». It is the only exception to the rule below, allowed by both guards and
+only under `--expect-tier admin`. Before release no admin grant can reach the admin list on dev (the
+cutoff is in the future), so this mode is for a post-release run.
 
 **The smoke never calls a write tool, in any mode (DV1)**: dev writes the production dataset, and
 its mail redirect covers email only. This is enforced twice. STRUCTURALLY: `createMcpRequest`
@@ -1536,8 +1563,9 @@ node --env-file=.env.local scripts/mcp-dev-smoke.mjs --no-open
 # Skip the refresh-token round trip (step 8).
 node --env-file=.env.local scripts/mcp-dev-smoke.mjs --no-refresh
 
-# Signed in as a worship admin: the read list, then the edit_setlist boundary probe (ADR-0083).
-node --env-file=.env.local scripts/mcp-dev-smoke.mjs --expect-tier read
+# Signed in as a worship admin (grant after ADMIN_WRITES_CUTOFF): the admin list, then the
+# set_member_access boundary probe (ADR-0083 addendum).
+node --env-file=.env.local scripts/mcp-dev-smoke.mjs --expect-tier admin
 ```
 
 Two safe proof-of-refusal runs — no network call, may be run by anyone, any time:
@@ -1675,7 +1703,8 @@ A few things that look like bugs at first glance and are not:
   is route → the tool modules → the `*Commit` domain modules → the side-effect helpers (push,
   email, the outbox). An exception entry for it would never be exercised and would read as
   coverage that does not exist, so there is none. The route stays unwrapped because an MCP call
-  is bearer-authenticated for one super-admin and is never an SR-verification run. Consequence:
+  is never an SR-verification run: `/api/mcp` answers 404 on `verify/service-readiness`
+  (`app/mcp/oauth/origin.ts`), whoever holds the token. Consequence:
   **an MCP write's delivery evidence carries no run markers** — an evidence gap, not a safety
   hole (blocking never depends on a context; `app/utils/srVerificationRunContext.ts`). What is
   pinned is the property the scan can see: `app/api/__tests__/mcpRoute.test.ts` fails if the
