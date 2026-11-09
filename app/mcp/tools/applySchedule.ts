@@ -48,7 +48,7 @@ import { admitsProposal, PROPOSAL_MAX_WAIVERS, WAIVER_SENTENCE_MAX, type Proposa
 import { loadProposal, sweepExpired, writeState } from "../monthProposals/proposalStore";
 import { observeProposal, phase3Refusals, type ProposalObservation } from "../monthProposals/observe";
 import { draftLabel } from "../monthProposals/labels";
-import { principalOf, type McpPrincipal } from "../monthProposals/principal";
+import { monthPrincipalOf, type MonthPrincipal } from "../monthProposals/principal";
 import { proposalBoard } from "../monthProposals/editorBoard";
 import { sameWaiverItems, waiverItems, type WaiverItem } from "../monthProposals/editorView";
 
@@ -221,7 +221,7 @@ function existsLine(proposal: StoredProposal, obs: ProposalObservation): string[
 /** The tool's whole behaviour, callable without a server. */
 export async function applyScheduleResult(
   args: ApplyScheduleArgs,
-  principal: McpPrincipal | null,
+  principal: MonthPrincipal | null,
   deps: ApplyScheduleDeps = defaultApplyScheduleDeps(),
 ): Promise<CallToolResult> {
   return runWriteTool(
@@ -246,7 +246,7 @@ export async function applyScheduleResult(
       const months = proposal.header.months;
 
       // ── 1. Observe (R-OBS) ───────────────────────────────────────────────
-      const read = await deps.reads();
+      const read = await deps.reads({ allMembers: principal.allMembers });
       if (!read.ok) return refusal([L.sources(read.failed), L.noWriteThisCall], { code: "integrity_conflict", detail: "sources", retry: true });
       const sources = read.value;
       const states = sources.snapshot.readiness.sources;
@@ -455,6 +455,6 @@ export function registerApplySchedule(server: McpServer): void {
       // D13: P3's write annotations.
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     },
-    async (args, ctx: ServerContext) => applyScheduleResult(args, principalOf(ctx)),
+    async (args, ctx: ServerContext) => applyScheduleResult(args, monthPrincipalOf(ctx)),
   );
 }

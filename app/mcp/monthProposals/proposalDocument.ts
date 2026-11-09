@@ -138,7 +138,7 @@ export interface ProposalLineage {
 
 export interface ProposalHeader {
   origin: string;
-  /** The member id (`sub`) of the super-admin who solved it. */
+  /** The member id (`sub`) of the super-admin or worship admin who solved it. */
   principal: string;
   createdAt: string;
   expiresAt: string;

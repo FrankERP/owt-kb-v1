@@ -210,8 +210,8 @@ export const EDIT_SETLIST_DESCRIPTION =
   "las construyas a mano. Rechaza cualquier setlist que /admin no abriría: solo escribe sobre uno en estado none " +
   "o single, nunca sobre ambiguous, draft_overlay, invalid o unknown, ni sobre uno con filas guardadas inválidas " +
   "(sin _key, con _key repetida o con una canción que no existe). Si el servicio o el setlist cambió desde que lo " +
-  "leíste, no escribe nada y lo explica. En un servicio publicado avisa de inmediato, sin " +
-  "confirmación, por push «Setlist de la semana» a los miembros con preferencia de setlist «todos» y a los " +
+  "leíste, no escribe nada y lo explica. En un servicio publicado, al guardar avisa de inmediato " +
+  "por push «Setlist de la semana» a los miembros con preferencia de setlist «todos» y a los " +
   "asignados a un servicio publicado esa semana, y encola un correo agrupado a los participantes (después de " +
   "la ventana de agrupación); un borrador no avisa a nadie. /, /schedule y las páginas de canciones se " +
   "actualizan. La respuesta trae las canciones repetidas en las últimas semanas y, si el setlist quedó tal cual " +

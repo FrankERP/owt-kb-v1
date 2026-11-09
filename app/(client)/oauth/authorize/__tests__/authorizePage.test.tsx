@@ -204,7 +204,7 @@ describe("/oauth/authorize — consent for a live super-admin", () => {
     expect(html).toContain(REDIRECT_TARGET_LABEL.claude);
     expect(html).toContain("Podrá");
     expect(html).toContain(TIER_CONSENT_TEXT.full);
-    expect(html).not.toContain(TIER_CONSENT_TEXT.read);
+    expect(html).not.toContain(TIER_CONSENT_TEXT.admin);
   });
 
   it("consent is never remembered: the same client, twice, renders the form twice", async () => {
@@ -230,19 +230,24 @@ describe("/oauth/authorize — the session: rejection shown here, never redirect
     expectNoConsent(html);
   });
 
-  it("a live admin OUTSIDE worship is rejected (ADR-0083: the read tier is worship's)", async () => {
+  it("a live admin OUTSIDE worship is rejected (ADR-0083: the admin tier is worship's)", async () => {
     h.getMemberAccess.mockResolvedValue(liveAccess("admin", true, ["kids"]));
     const html = await renderPage(await query());
     expect(html).toContain("Solo los administradores de Alabanza pueden conectar un agente de IA.");
     expectNoConsent(html);
   });
 
-  it("a live worship admin sees the consent, labelled read-only (ADR-0083)", async () => {
+  it("a live worship admin sees the consent with the ADMIN text (ADR-0083 addendum)", async () => {
     h.getMemberAccess.mockResolvedValue(liveAccess("admin"));
     const html = await renderPage(await query());
     expect(html).toContain("<form");
-    expect(html).toContain(TIER_CONSENT_TEXT.read);
+    expect(html).toContain(TIER_CONSENT_TEXT.admin);
     expect(html).not.toContain(TIER_CONSENT_TEXT.full);
+    // Slice B: an admin's agent can change things now, and the page says so plainly.
+    expect(html).not.toContain("No podrá cambiar nada");
+    expect(TIER_CONSENT_TEXT.admin).toContain("No podrá administrar personas");
+    expect(TIER_CONSENT_TEXT.admin).toContain("ni Oasis Kids");
+    expect(TIER_CONSENT_TEXT.admin).not.toMatch(/no podrá ver/i);
   });
 
   it("the LIVE role decides, not the session copy", async () => {

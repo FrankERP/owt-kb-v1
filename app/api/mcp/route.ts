@@ -23,14 +23,17 @@
 //   5. the grant belongs to the token's subject and to this origin (R13);
 //   6. the subject is an existing, non-disabled member whose LIVE access has a
 //      connection tier (`mcpTierOf`, `getMemberAccess`, 30 s): a super-admin
-//      ("full") or a worship admin ("read", ADR-0083).
+//      ("full") or a worship admin ("admin", ADR-0083 and its addendum).
 //
-// Then the request goes to ONE of three handlers, each with its own tool list
-// and digest (`toolList.ts`): "read" → `READ_TIER_TOOLS` only, on any agent;
-// "full" on a claude.ai grant → every tool and the card; "full" on any other
-// agent (`effectiveGrantClient`) → every tool except the app-only card tools,
-// whose safety rests on the host hiding them. Neither the tier nor the list is
-// stored: a demotion or a promotion bites within the 30 s member cache.
+// Then the request goes to ONE of five handlers, each with its own tool list
+// and digest (`toolList.ts`): "full" on a claude.ai grant → every tool and the
+// card; "full" on any other agent (`effectiveGrantClient`) → every tool except
+// the app-only card tools, whose safety rests on the host hiding them; "admin"
+// → `ADMIN_TIER_TOOLS` (with the card and its app-only tools only on a
+// claude.ai grant), or `READ_TIER_TOOLS` only on a grant approved under the
+// read-only consent (`adminScopeOf`, before `ADMIN_WRITES_CUTOFF`). Neither the
+// tier nor the list is stored: a demotion or a promotion bites within the 30 s
+// member cache.
 //
 // A refusal from step 2 on is a 401 with the RFC 9728 challenge (R7): no
 // `error` when no bearer token was presented at all (RFC 6750 §3.1 — that
@@ -45,8 +48,8 @@ import type { AuthInfo } from "@modelcontextprotocol/server";
 import { createMcpHandler } from "mcp-handler";
 import { getMemberAccess } from "@/app/utils/memberAccess";
 import { loadGrant } from "@/app/mcp/oauth/grantStore";
-import { effectiveGrantClient } from "@/app/mcp/oauth/grantDocument";
-import { mcpTierOf } from "@/app/mcp/oauth/tier";
+import { adminScopeOf, effectiveGrantClient } from "@/app/mcp/oauth/grantDocument";
+import { type McpTier, mcpTierOf } from "@/app/mcp/oauth/tier";
 import { type McpPreflight, mcpRoutePreflight } from "@/app/mcp/oauth/guard";
 import { resourceMetadataUrl } from "@/app/mcp/oauth/origin";
 import { jsonNoStore, mcpUnauthorizedResponse } from "@/app/mcp/oauth/responses";
@@ -94,9 +97,9 @@ function buildHandler(scope: ToolListScope) {
     },
     {
       serverInfo: SERVER_INFO,
-      // Only the "full" list registers resources (the card), so only it advertises them.
+      // Only the "full" and "admin" lists register resources (the card), so only they advertise them.
       capabilities:
-        scope === "full"
+        scope === "full" || scope === "admin"
           ? { tools: { listChanged: false }, resources: { listChanged: false } }
           : { tools: { listChanged: false } },
       maxSubscriptions: 0,
@@ -108,7 +111,9 @@ function buildHandler(scope: ToolListScope) {
 const mcpHandlers: Readonly<Record<ToolListScope, ReturnType<typeof buildHandler>>> = {
   full: buildHandler("full"),
   fullNoApps: buildHandler("fullNoApps"),
-  read: buildHandler("read"),
+  admin: buildHandler("admin"),
+  adminNoApps: buildHandler("adminNoApps"),
+  adminRead: buildHandler("adminRead"),
 };
 
 /**
@@ -260,7 +265,7 @@ async function authenticate(
   }
   const tier = mcpTierOf(access);
   if (tier === null) return unauthorized("invalid_token");
-  const scope: ToolListScope = tier === "read" ? "read" : effectiveGrantClient(grant) === "claude" ? "full" : "fullNoApps";
+  const scope = toolListScopeOf(tier, grant);
 
   return {
     ok: true,
@@ -275,6 +280,21 @@ async function authenticate(
     },
     scope,
   };
+}
+
+/**
+ * The tool list of a request (ADR-0083 and its addendum): the live tier, then the grant. A worship
+ * admin's grant approved under the read-only consent keeps the read-only list; after it, the client
+ * decides whether the app-only card tools are served, exactly as for a super-admin.
+ */
+function toolListScopeOf(
+  tier: McpTier,
+  grant: Parameters<typeof effectiveGrantClient>[0] & Parameters<typeof adminScopeOf>[0],
+): ToolListScope {
+  const claude = effectiveGrantClient(grant) === "claude";
+  if (tier === "full") return claude ? "full" : "fullNoApps";
+  if (adminScopeOf(grant) === "adminRead") return "adminRead";
+  return claude ? "admin" : "adminNoApps";
 }
 
 async function handle(request: Request): Promise<Response> {

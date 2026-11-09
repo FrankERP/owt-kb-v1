@@ -70,7 +70,7 @@ import type { LedgerService } from "@/app/utils/fairnessLedger";
 import { shiftMonth, type FairnessLedgerResponse, type LogicalRecord, type RecordEnvironment } from "@/app/utils/fairnessVocabulary";
 import { loadV3Ledger, loadV3PlanSources, type V3PlanSources } from "@/app/utils/v3MonthPlanReads";
 import { runWriteTool, type WriteFailureCopy } from "../writes/runWriteTool";
-import { principalOf, type McpPrincipal } from "../monthProposals/principal";
+import { monthPrincipalOf, type MonthPrincipal } from "../monthProposals/principal";
 import { memberTokenKey, type MemberTokenKey, type MemberTokens } from "../monthProposals/memberTokens";
 import { canonicalJson, changeMac, monthMemberTokens, sameMac, waiverToken } from "../monthProposals/changeSetTokens";
 import { findingIsRule, serverPickCandidates, type EditorBoard } from "../monthProposals/editorBoard";
@@ -371,7 +371,7 @@ function personNamer(members: readonly EditorMember[]): (id: string) => string {
 
 async function openMonth(
   month: string,
-  principal: McpPrincipal | null,
+  principal: MonthPrincipal | null,
   deps: ServiceEditorDeps,
 ): Promise<{ ok: true; ctx: MonthContext } | { ok: false; result: CallToolResult }> {
   const fail = (result: CallToolResult) => ({ ok: false as const, result });
@@ -382,7 +382,7 @@ async function openMonth(
     console.error("[mcp-service-editor] member token secret unavailable");
     return fail(refusal([E.noSecret], { code: "integrity_conflict", detail: "no_secret" }));
   }
-  const read = await deps.reads();
+  const read = await deps.reads({ allMembers: principal.allMembers });
   if (!read.ok) return fail(refusal([L.sources(read.failed)], { code: "integrity_conflict", detail: "sources", retry: true }));
   const sources = read.value;
   const states = sources.snapshot.readiness.sources;
@@ -897,7 +897,7 @@ async function checkMonth(
 
 export async function checkServiceEditsResult(
   args: CheckServiceEditsArgs,
-  principal: McpPrincipal | null,
+  principal: MonthPrincipal | null,
   deps: ServiceEditorDeps = defaultServiceEditorDeps(),
 ): Promise<CallToolResult> {
   return runWriteTool(
@@ -929,7 +929,7 @@ export async function checkServiceEditsResult(
 
 export async function checkServiceEditsAppResult(
   args: CheckServiceEditsAppArgs,
-  principal: McpPrincipal | null,
+  principal: MonthPrincipal | null,
   deps: ServiceEditorDeps = defaultServiceEditorDeps(),
 ): Promise<CallToolResult> {
   return runWriteTool(
@@ -1025,7 +1025,7 @@ async function checkCopy(ctx: MonthContext, copy: { from: string; to: string }, 
 
 export async function copyInstrumentsResult(
   args: CopyInstrumentsArgs,
-  principal: McpPrincipal | null,
+  principal: MonthPrincipal | null,
   deps: ServiceEditorDeps = defaultServiceEditorDeps(),
 ): Promise<CallToolResult> {
   return runWriteTool(
@@ -1174,7 +1174,7 @@ interface SortedChange {
 
 export async function saveServiceEditsResult(
   args: SaveServiceEditsArgs,
-  principal: McpPrincipal | null,
+  principal: MonthPrincipal | null,
   deps: ServiceEditorDeps = defaultServiceEditorDeps(),
   tool: "save_service_edits" | "save_service_edits_app" = "save_service_edits",
 ): Promise<CallToolResult> {
@@ -1375,7 +1375,7 @@ export function registerServiceEditor(server: McpServer, opts: { appsHost?: bool
       annotations: { readOnlyHint: true, openWorldHint: false },
       _meta: PROPOSAL_CARD_TOOL_META,
     },
-    async (args, ctx: ServerContext) => checkServiceEditsResult(args, principalOf(ctx)),
+    async (args, ctx: ServerContext) => checkServiceEditsResult(args, monthPrincipalOf(ctx)),
   );
   if (opts.appsHost !== false) {
     server.registerTool(
@@ -1387,7 +1387,7 @@ export function registerServiceEditor(server: McpServer, opts: { appsHost?: bool
         annotations: { readOnlyHint: true, openWorldHint: false },
         _meta: APP_ONLY_META,
       },
-      async (args, ctx: ServerContext) => checkServiceEditsAppResult(args, principalOf(ctx)),
+      async (args, ctx: ServerContext) => checkServiceEditsAppResult(args, monthPrincipalOf(ctx)),
     );
   }
   server.registerTool(
@@ -1400,7 +1400,7 @@ export function registerServiceEditor(server: McpServer, opts: { appsHost?: bool
       // `idempotentHint: false`, as the four P3 writes and apply_schedule do (I14).
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     },
-    async (args, ctx: ServerContext) => saveServiceEditsResult(args, principalOf(ctx)),
+    async (args, ctx: ServerContext) => saveServiceEditsResult(args, monthPrincipalOf(ctx)),
   );
   if (opts.appsHost !== false) {
     server.registerTool(
@@ -1414,7 +1414,7 @@ export function registerServiceEditor(server: McpServer, opts: { appsHost?: bool
         annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
         _meta: APP_ONLY_META,
       },
-      async (args, ctx: ServerContext) => saveServiceEditsResult(args, principalOf(ctx), undefined, "save_service_edits_app"),
+      async (args, ctx: ServerContext) => saveServiceEditsResult(args, monthPrincipalOf(ctx), undefined, "save_service_edits_app"),
     );
   }
   server.registerTool(
@@ -1425,6 +1425,6 @@ export function registerServiceEditor(server: McpServer, opts: { appsHost?: bool
       inputSchema: COPY_INSTRUMENTS_INPUT,
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     },
-    async (args, ctx: ServerContext) => copyInstrumentsResult(args, principalOf(ctx)),
+    async (args, ctx: ServerContext) => copyInstrumentsResult(args, monthPrincipalOf(ctx)),
   );
 }

@@ -224,7 +224,7 @@ const byPosition = (bodies: Record<string, unknown>[]) => bodies.map(({ creation
 
 async function parity(c: Case) {
   h.dataset = [...MEMBER_DOCS, RULES_DOC, ...(c.docs ?? [])];
-  const sources = await loadV3PlanSources();
+  const sources = await loadV3PlanSources({ allMembers: true });
   if (!sources.ok) throw new Error(`reads failed: ${sources.failed.join()}`);
   const roles = await groq<ServiceRole[]>(adminRolesQuery());
   const members = await groq<MemberOption[]>(adminMembersQuery(true));

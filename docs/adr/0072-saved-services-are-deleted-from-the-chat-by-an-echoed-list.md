@@ -97,7 +97,9 @@ rounds 5 and 6; Frank chose «También desde la tarjeta» and «Solo de hoy en a
   `save_service_edits_app` does.
 - A token does not expire and is not bound to who asked: an old check's arguments stay valid while
   every `_rev` is unchanged and no service has passed. Deliberate — the `_rev` binding already makes
-  the list mean what the prompt shows, and only a super-admin principal reaches the tool.
+  the list mean what the prompt shows, and any principal who reaches `delete_services` can mint
+  their own token with `check_service_deletes`, so binding it to a principal would add nothing
+  (restated by ADR-0083's addendum, when worship admins began to reach the tool).
 - A line over the save's 200 characters (a special's name has no cap) is kept with «su nombre es
   demasiado largo», so one long name cannot block the month's other deletes.
 - `deleteRole`'s dependency and receipt reads are the route's own, non-strict (`run`/`runRaw` turn a
@@ -109,3 +111,6 @@ rounds 5 and 6; Frank chose «También desde la tarjeta» and «Solo de hoy en a
 The app-only tools this record relies on are registered only for a grant whose client is claude.ai.
 Another agent's grant never lists them, so the «host hides them from the model» guarantee holds
 wherever they exist.
+
+Since ADR-0083's addendum (2026-11-09), these tools are also registered for a worship admin's
+claude.ai grant made after `ADMIN_WRITES_CUTOFF`; still never for another agent's grant.

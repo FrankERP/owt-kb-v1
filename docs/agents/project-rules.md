@@ -436,15 +436,30 @@ several exist precisely to stop a plausible-looking change.
   [`docs/MCP.md`](docs/MCP.md).
 - **Who connects an agent, and what it reaches (ADR-0083).** The four gates (consent page, code POST,
   both token grants, `/api/mcp`) admit `mcpTierOf(access) !== null` on the LIVE access: `"full"` for a
-  super-admin, `"read"` for an `admin` with worship; the tier is never stored. The read list is the
-  allowlist `READ_TIER_TOOLS` — never add a write, a Kids tool or a people tool to it without a
-  reviewed plan. The five app-only tools are registered only for a grant whose `client` is
+  super-admin, `"admin"` for an `admin` with worship; the tier is never stored. Since the addendum
+  (2026-11-09) an admin's grant made at or after `ADMIN_WRITES_CUTOFF` reaches `ADMIN_TIER_TOOLS`
+  (`admin`, or `adminNoApps` on another agent): every worship write of `/admin`, through the same
+  writers. Older grants (and an unreadable `createdAt`) keep `READ_TIER_TOOLS` (`adminRead`), what
+  their consent said (`adminScopeOf`, fail closed). `SUPER_ADMIN_ONLY_TOOLS` (Oasis Kids + people)
+  never reach an admin. Both lists are literal and every tool of the full list is in exactly one
+  (`mcpRoute.test.ts`), so a new tool must be classified on purpose; admin registrations go through
+  `allowlistedServer`. Never move a Kids or people tool into `ADMIN_TIER_TOOLS` without a reviewed
+  plan. **`ADMIN_WRITES_CUTOFF` is reset on any re-release** (revert, Vercel rollback, a fix-forward
+  after a failed post-merge build), and a rolled-back slice-B deployment is never re-promoted:
+  grants approved under the read-only page while older code served must not gain writes. The month
+  tools and `get_solver_rules` bind the member read from the live tier (`readsAllMembers`: only
+  `"full"` reads every ministry), as the members GET binds it from the role; no code under `app/**`
+  passes a literal `true` to `adminMembersQuery` (guard in `memberReadScope.test.ts`). Every
+  model-visible tool annotated `destructiveHint: true` gets `PERSON_CONFIRMS_RULE` appended at
+  registration (`confirmingServer`); the only unruled model-visible non-read tools are `solve_month`
+  and `revise_proposal`. The five app-only tools are registered only for a grant whose `client` is
   `"claude"` (handler `full`; `fullNoApps` for any other agent), because their safety is the host
   hiding them. The redirect list is CLOSED (claude.ai, ChatGPT's stable callback, RFC 8252 loopback);
   never open it to «any https» — registration is open, so that hands codes to strangers.
 - **MCP tools register only in `registerAllTools` (`app/mcp/toolList.ts`), never directly in the
   route.** claude.ai keeps the tool list it read at connect time and does not act on
-  `list_changed`. Each of the three lists (`full`, `fullNoApps`, `read`; ADR-0083) has its own digest
+  `list_changed`. Each of the five lists (`full`, `fullNoApps`, `admin`, `adminNoApps`, `adminRead`;
+  ADR-0083 and its addendum) has its own digest
   in `TOOL_LIST_VERSIONS` (`TOOL_LIST_VERSION` is `full`'s) over what a client caches (names,
   descriptions, schemas, annotations, `_meta`), and every model-visible tool takes its list's back as
   the optional `toolsVersion`. A call with another value, or none, still runs, and its text ends with

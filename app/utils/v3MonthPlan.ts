@@ -58,7 +58,7 @@ import type { V3ConfirmEntry } from "@/app/components/admin/v3Confirm";
 import type { V3RunReport } from "@/app/components/admin/v3RunReport";
 import type { V3Names } from "@/app/components/admin/v3Copy";
 import type { V3SolveRequest, V3Success } from "@/app/components/admin/v3Wire";
-import type { V3PlanSources } from "@/app/utils/v3MonthPlanReads";
+import type { V3PlanReadScope, V3PlanSources } from "@/app/utils/v3MonthPlanReads";
 
 /** D1/D5: the soft deadline of a tool call, measured from its handler's start. */
 export const MCP_SOFT_DEADLINE_MS = 52_000;
@@ -79,8 +79,10 @@ export interface V3MonthPlanInput {
 }
 
 export interface V3MonthPlanDeps {
-  /** The four reads (`loadV3PlanSources`). */
-  reads: () => Promise<{ ok: true; value: V3PlanSources } | { ok: false; failed: readonly string[] }>;
+  /** The four reads (`loadV3PlanSources`), called with `readScope`. */
+  reads: (scope: V3PlanReadScope) => Promise<{ ok: true; value: V3PlanSources } | { ok: false; failed: readonly string[] }>;
+  /** Which members the reads return, bound by the tool from its caller's live tier (`readsAllMembers`). */
+  readScope: V3PlanReadScope;
   /** The fairness ledger for the horizon (`loadV3Ledger`); throws on any failure. */
   readLedger: (months: readonly string[]) => Promise<FairnessLedgerResponse>;
   /** The v3 solver (`solveV3`), with this call's timeout. Never throws. */
@@ -198,7 +200,7 @@ export async function planV3Month(input: V3MonthPlanInput, deps: V3MonthPlanDeps
   }
 
   // ── M1: the four reads, every source ready ────────────────────────────────
-  const read = await deps.reads();
+  const read = await deps.reads(deps.readScope);
   if (!read.ok) return { kind: "sources", failed: [...read.failed] };
   const { adminRoles, members, rules, snapshot } = read.value;
   const sources = snapshot.readiness.sources;
