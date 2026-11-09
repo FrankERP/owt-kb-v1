@@ -25,6 +25,7 @@ const h = vi.hoisted(() => ({
   readMinistryEvents: vi.fn(),
   readJovenesPeople: vi.fn(),
   planner: vi.fn(),
+  groups: vi.fn(),
   rolloutOpen: false,
 }));
 vi.mock("@/app/utils/authGuards", () => ({ requireActiveSession: () => h.requireActiveSession() }));
@@ -39,6 +40,12 @@ vi.mock("@/app/components/jovenes/SaturdayPlanner", () => ({
   default: (props: { month: string; rows: unknown[]; people: unknown[]; canEdit: boolean }) => {
     h.planner(props);
     return `[planner ${props.month} edit=${props.canEdit}]`;
+  },
+}));
+vi.mock("@/app/components/jovenes/GroupCalendar", () => ({
+  default: (props: { events: Array<{ _id: string }>; viewer: unknown; defaultDate: string }) => {
+    h.groups(props);
+    return `[groups ${props.events.map((e) => e._id).join(",")}]`;
   },
 }));
 vi.mock("@/app/utils/rollout", async (orig) => {
@@ -134,5 +141,32 @@ describe("/jovenes/admin read", () => {
     expect(await visit()).toContain("No pudimos leer las reuniones");
     h.readMinistryEvents.mockRejectedValue(new Error("boom"));
     await expect(visit()).rejects.toThrow("boom");
+  });
+});
+
+describe("/jovenes/admin groups' calendars (PR D)", () => {
+  // A month well past the current one, so the new meeting's default date is its first day.
+  const meeting = (id: string, audience: unknown, date = "2031-11-12") => ({
+    _id: id, rev: "r", ministry: "jovenes", audience, kind: "group", date, time: null, arrival: null, title: null,
+    notes: null, published: true, seats: [], program: [], createdById: null, createdByName: null,
+  });
+
+  it("hands the month's group meetings (never the Saturday ones) and who is looking", async () => {
+    h.readMinistryEvents.mockResolvedValue([
+      meeting("sat", { kind: "ministry" }, "2031-11-08"),
+      meeting("g1", { kind: "groups", groups: ["otro-nivel"] }),
+    ]);
+    expect(await visit("2031-11")).toContain("[groups g1]");
+    expect(h.groups.mock.calls[0][0].viewer).toEqual({ me: "s1", isManager: true, led: [] });
+    expect(h.groups.mock.calls[0][0].defaultDate).toBe("2031-11-01");
+  });
+
+  it("a leader's view names the groups they lead; a new meeting starts today in the current month", async () => {
+    h.rolloutOpen = true;
+    h.getMemberAccess.mockResolvedValue(role("leader", ["otro-nivel", "invencibles"]));
+    await visit();
+    const today = new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
+    expect(h.groups.mock.calls[0][0].viewer).toEqual({ me: "s1", isManager: false, led: ["otro-nivel", "invencibles"] });
+    expect(h.groups.mock.calls[0][0].defaultDate).toBe(today);
   });
 });

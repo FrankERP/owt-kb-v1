@@ -34,7 +34,8 @@
 // overlapping.
 //
 // The ministry filter (2026-10-29): a member of Alabanza AND Oasis Kids gets «Todos ·
-// Alabanza · Oasis Kids» beside the mode control, and the whole page — the count line,
+// Alabanza · Oasis Kids» beside the mode control (and «Jóvenes» too for a member of
+// Jóvenes once its rollout reaches them, PR D), and the whole page — the count line,
 // the strip, the agenda, the grid, the legend — reads the FILTERED days, so no surface
 // can count a Sunday the reader chose to hide. Filtering is client-side over what the
 // server already sent (both ministries' days, only to someone in both), so a switch is
@@ -61,7 +62,8 @@ import CueDialog from "./ui/CueDialog";
 import Presence from "./ui/Presence";
 import SegmentedControl from "./ui/SegmentedControl";
 import KidsDayCard from "./KidsDayCard";
-import { CALENDAR_VIEW_COOKIE, CALENDAR_VIEW_MAX_AGE, CALENDAR_VIEW_OPTIONS, filterActiveDays, type CalendarView as MinistryView } from "../utils/calendarMinistry";
+import JovenesDayCard from "./JovenesDayCard";
+import { CALENDAR_VIEW_COOKIE, CALENDAR_VIEW_MAX_AGE, calendarViewOptions, filterActiveDays, type CalendarView as MinistryView, type ExtraCalendarMinistry } from "../utils/calendarMinistry";
 import type { KidsSeat } from "../utils/kidsTypes";
 
 /** One seat of an Oasis Kids Sunday: the pair standing in it, and whether the viewer is in that pair. */
@@ -84,6 +86,20 @@ export type ActiveDay = {
   serviceId?: string;
   /** Present only on an Oasis Kids Sunday (`kidsActiveDay`), which carries no worship seats. */
   kids?: { seats: KidsDaySeat[] };
+  /** Present only on a Jóvenes meeting (`jovenesActiveDay`), which carries no worship seats. */
+  jovenes?: JovenesDayEntry;
+};
+
+/** A person on a Jóvenes meeting, «mine» decided by member id on the server. */
+export type JovenesDayPerson = { key: string; label: string; name: string | null; mine: boolean };
+/** A published Jóvenes meeting the reader may see (ADR-0081), as the Calendario shows it. */
+export type JovenesDayEntry = {
+  id: string;
+  audience: string;
+  arrival: string | null;
+  seats: JovenesDayPerson[];
+  program: Array<JovenesDayPerson & { note: string | null }>;
+  notes: string | null;
 };
 
 interface Props {
@@ -101,6 +117,8 @@ interface Props {
    *  view the server read from the cookie. Absent, no filter is shown and every day
    *  in `activeDays` is the reader's one ministry. */
   ministryView?: MinistryView;
+  /** The ministries beside Alabanza the server sent days for, which the control offers. */
+  ministryExtras?: readonly ExtraCalendarMinistry[];
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -115,12 +133,13 @@ const LEGEND: ReadonlyArray<readonly [string, string]> = [
   [TONE_RAIL.sun, "Domingo"],
   [TONE_RAIL.special, "Especial"],
   [TONE_RAIL.kids, "Oasis Kids"],
+  [TONE_RAIL.jovenes, "Jóvenes"],
   ["bg-positive-fg", "Te toca"],
 ];
 
 // ─── Root component ───────────────────────────────────────────────────────────
 
-export default function CalendarView({ activeDays: allDays, viewMonth, todayStr, photos, viewerTypes, viewerName, viewerIsAdmin, ministryView }: Props) {
+export default function CalendarView({ activeDays: allDays, viewMonth, todayStr, photos, viewerTypes, viewerName, viewerIsAdmin, ministryView, ministryExtras = ["kids"] }: Props) {
   const [mode, setMode] = useState<"agenda" | "month">("agenda");
   const [view, setView] = useState<MinistryView>(ministryView ?? "all");
   const pickView = useCallback((v: MinistryView) => {
@@ -175,6 +194,7 @@ export default function CalendarView({ activeDays: allDays, viewMonth, todayStr,
   const isEmpty = Object.keys(activeDays).length === 0;
   // The Kids dot joins the legend only when a Kids Sunday is on screen.
   const hasKids = Object.values(activeDays).some((entries) => entries.some((e) => e.kids));
+  const hasJovenes = Object.values(activeDays).some((entries) => entries.some((e) => e.jovenes));
   const emptyMessage = viewMonth
     ? `No hay servicios en ${monthRangeLabel(viewMonth, WINDOW_MONTHS)}.`
     : "No hay servicios próximos.";
@@ -221,7 +241,7 @@ export default function CalendarView({ activeDays: allDays, viewMonth, todayStr,
             tone="filled"
             value={view}
             onChange={pickView}
-            options={CALENDAR_VIEW_OPTIONS}
+            options={calendarViewOptions(ministryExtras)}
           />
         )}
         <SegmentedControl
@@ -269,7 +289,7 @@ export default function CalendarView({ activeDays: allDays, viewMonth, todayStr,
                   shows two dots, which needs no explaining. Under the months, where
                   the eye arrives after reading them. */}
               <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-2">
-                {LEGEND.filter(([, label]) => (label !== "Te toca" || myName) && (label !== "Oasis Kids" || hasKids)).map(([dot, label]) => (
+                {LEGEND.filter(([, label]) => (label !== "Te toca" || myName) && (label !== "Oasis Kids" || hasKids) && (label !== "Jóvenes" || hasJovenes)).map(([dot, label]) => (
                   <span key={label} className="flex items-center gap-2">
                     <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
                     <span className="font-body text-[13px] text-ink-muted">{label}</span>
@@ -288,6 +308,8 @@ export default function CalendarView({ activeDays: allDays, viewMonth, todayStr,
             {selectedLine && <p className="font-body text-[17px] leading-snug text-ink-dim">{selectedLine}</p>}
             {selectedEntries.map((d, i) => d.kids ? (
               <KidsDayCard key={i} seats={d.kids.seats} />
+            ) : d.jovenes ? (
+              <JovenesDayCard key={i} title={d.day} entry={d.jovenes} />
             ) : (
               <DayCard
                 key={i}

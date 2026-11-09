@@ -3,22 +3,23 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireActiveSession } from "@/app/utils/authGuards";
 import { getMemberAccess } from "@/app/utils/memberAccess";
-import { isMinistryManager, isMinistryMember, levelIn } from "@/app/utils/ministryAccess";
+import { groupsIn, isMinistryManager, isMinistryMember, levelIn } from "@/app/utils/ministryAccess";
 import {
   MinistryEventReadUnavailable,
   readMinistryEvents,
   type MinistryEventView,
 } from "@/app/utils/ministryEventReads";
 import { rolloutAllows } from "@/app/utils/rollout";
-import { monthRange, parseMonth, saturdayRows } from "@/app/utils/jovenesPlannerModel";
+import { groupEvents, monthRange, parseMonth, saturdayRows, type PlannerViewer } from "@/app/utils/jovenesPlannerModel";
 import { readJovenesPeople } from "@/app/utils/jovenesPeople";
 import Navbar from "@/app/components/Navbar";
 import SaturdayPlanner from "@/app/components/jovenes/SaturdayPlanner";
+import GroupCalendar from "@/app/components/jovenes/GroupCalendar";
 import { revealProps } from "@/app/utils/reveal";
 
 export const metadata: Metadata = {
   title: "Planear Jóvenes — Backstage",
-  description: "El rol del sábado de Jóvenes por mes.",
+  description: "El rol del sábado de Jóvenes y el calendario de cada grupo, por mes.",
 };
 
 const TZ = "America/Mexico_City";
@@ -26,8 +27,9 @@ const TZ = "America/Mexico_City";
 // Planear Jóvenes (ADR-0081, plan §7.3 PR C). Its ONE read is `readMinistryEvents` in EDITOR
 // mode, so an admin sees drafts and a leader sees the published meetings plus their groups'
 // drafts — never another group's. The page reads the session and is dynamic; it caches nothing
-// (R6). Admins edit the Saturday roster here; a leader sees it (their groups' calendars arrive
-// with PR D). Every write is decided again by `ministryEventCommit.ts`.
+// (R6). Admins edit the Saturday roster here; a leader sees it. Below it, the groups' calendars
+// (PR D): a leader creates and edits their groups' meetings, an admin everyone's. Every write is
+// decided again by `ministryEventCommit.ts`.
 
 export default async function JovenesPlannerPage({ searchParams }: { searchParams: Promise<{ mes?: string | string[] }> }) {
   const session = await requireActiveSession();
@@ -56,6 +58,14 @@ export default async function JovenesPlannerPage({ searchParams }: { searchParam
     unavailable = true;
   }
   const people = isManager ? await readJovenesPeople() : [];
+  // The buttons' view of who is looking (cosmetic). The groups a leader leads are the groups the
+  // writer counts for them (W3).
+  const viewer: PlannerViewer = {
+    me: sanityId,
+    isManager,
+    led: levelIn(access, "jovenes") === "leader" ? groupsIn(access, "jovenes") : [],
+  };
+  const defaultDate = month === today.slice(0, 7) ? today : `${month}-01`;
 
   return (
     <div>
@@ -72,9 +82,14 @@ export default async function JovenesPlannerPage({ searchParams }: { searchParam
             No pudimos leer las reuniones en este momento. Intenta de nuevo más tarde.
           </p>
         ) : (
-          <div {...revealProps(1)}>
-            <SaturdayPlanner month={month} rows={saturdayRows(month, events)} people={people} canEdit={isManager} />
-          </div>
+          <>
+            <div {...revealProps(1)}>
+              <SaturdayPlanner month={month} rows={saturdayRows(month, events)} people={people} canEdit={isManager} />
+            </div>
+            <div {...revealProps(2)}>
+              <GroupCalendar events={groupEvents(month, events)} viewer={viewer} defaultDate={defaultDate} />
+            </div>
+          </>
         )}
       </div>
     </div>
