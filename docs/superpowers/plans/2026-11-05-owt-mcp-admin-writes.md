@@ -385,6 +385,6 @@ proceed without them):
 1. Reconfirm the risk acceptance for the wider scope: the phished-admin and notification-loop
    risks of §4 now cover publishing, deleting, generating and songs, not just setlists and
    messages.
-2. People and Kids stay out of the admin tier (people as the card said; Kids by ministry), even for
-   a worship admin who also manages Kids — or should Kids follow that admin's Kids management?
+2. ~~People and Kids stay out of the admin tier, even for a worship admin who also manages Kids?~~
+   **Answered 2026-11-09 20:32Z: yes** («kids ahorita no juega»). Kids stays super-admin only.
 3. «Reglas» is not delivered (above).
