@@ -485,9 +485,9 @@ like any other and admins get it (the app's rules POST admits them).
 Answered: pastor message yes; risks accepted for now (19:54Z); scope «Todo como en la página»
 (19:55Z). **Asked with the plan, and answered before the build starts** (the release cannot
 proceed without them):
-1. Reconfirm the risk acceptance for the wider scope: the phished-admin and notification-loop
-   risks of §4 now cover publishing, deleting, generating and songs, not just setlists and
-   messages.
+1. ~~Reconfirm the risk acceptance for the wider scope~~ (the phished-admin and notification-loop
+   risks of §4 now cover publishing, deleting, generating and songs). **Answered 2026-11-09
+   22:19Z: «ok»**, after the risks were explained in the thread.
 2. ~~People and Kids stay out of the admin tier, even for a worship admin who also manages Kids?~~
    **Answered 2026-11-09 20:32Z: yes** («kids ahorita no juega»). Kids stays super-admin only.
 3. «Reglas» is not delivered (above).
