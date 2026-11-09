@@ -203,20 +203,41 @@ ministry could change an admin's answer against the admin's own `/admin` planner
 tools to admins without changing the binding would break ADR-0075's two-way isolation at the
 query, so **this slice binds it as the page does**:
 
-- New pure `readsAllMembers(extra)` in `app/mcp/monthProposals/principal.ts` (beside `principalOf`): `extra?.tier === "full"`; anything
-  else (`"admin"`, absent, unknown) → `false`. Fail closed to worship-only. `"full"` is exactly
-  the live super-admin (`mcpTierOf`), the same predicate the members GET binds.
-- `loadV3PlanSources({ allMembers })` and `get_solver_rules`' member read take it as a parameter;
-  each caller passes `readsAllMembers(ctx.authInfo?.extra)`. A super-admin's reads are byte-identical
-  to today (still `true`); an admin's equal the page's (`false`).
+- New pure `readsAllMembers(ctx)` in `app/mcp/monthProposals/principal.ts`, beside `principalOf`
+  and reading the same path (`ctx?.http?.authInfo?.extra?.tier`, `principal.ts:14`):
+  `=== "full"` → `true`; anything else (`"admin"`, absent, unknown) → `false`. Fail closed to
+  worship-only. `"full"` is exactly the live super-admin (`mcpTierOf`), the same predicate the
+  members GET binds.
+- `loadV3PlanSources({ allMembers })` takes the binding as a **required** parameter with no default,
+  and the `reads` dependency type follows it, so `tsc` refuses any call site that does not choose.
+  The callers, every one named (grep of `loadV3PlanSources` and `deps.reads(`):
+  - `solve_month` (`solveMonth.ts:104`; its `reads` is called inside `app/utils/v3MonthPlan.ts:201`,
+    which receives the binding with the deps), `apply_schedule` (`applySchedule.ts:249`), the
+    service editor (`serviceEditor.ts:385`) and the proposal editor at all three of its call sites
+    (`proposalEditor.ts:229, 654, 661`): `readsAllMembers(ctx)`, computed once per handler call and
+    passed to each site.
+  - `get_solver_rules`' own member read (`getSolverRules.ts:37`, not through `loadV3PlanSources`):
+    the same helper.
+  - **The availability sweep, `app/utils/availabilityFixCommit.ts:198, 232, 286`** (ADR-0079; run
+    by the four `/api/admin/availability-conflicts` routes, `/api/me/availability` and the flush
+    cron, never by an MCP tool): pinned to `{ allMembers: true }`, written out at its default deps,
+    so its behaviour is byte-identical to today. It has no MCP context and is not part of this
+    slice's question; whether the sweep should read worship-only is a separate decision, named in
+    §8, not changed here.
+- A super-admin's MCP reads stay byte-identical (still `true`); an admin's equal the page's
+  (`false`); the sweep is unchanged. «No writer changes» (§3.4) holds: the sweep's only edit is
+  writing out the value it already used.
 - This is not the per-handler tier check §3.3 rejects: no tool refuses or hides anything by tier.
   It binds a read's scope from the live role, as the route it mirrors does. So «no tool reads
   `extra.tier`» (§1) becomes «no tool REFUSES by `extra.tier`; one helper binds the member read
   from it».
-- Tests: `readsAllMembers` (full → true; admin, absent, garbage → false); each of the five
-  callers binds `all: false` under an admin context and `true` under full (deps injected, query
-  params asserted); a source guard: no file under `app/mcp/**` or `app/utils/v3MonthPlanReads.ts`
-  calls `adminMembersQuery(true)` with a literal.
+- Tests: `readsAllMembers` (full → true; admin, absent, garbage → false); EVERY call site above
+  (not one per tool) binds `allMembers: false` under an admin context and `true` under full (deps
+  injected, the argument asserted), including the proposal editor's three and `v3MonthPlan.ts:201`;
+  `availabilityFixCommit`'s default deps call `loadV3PlanSources` with `{ allMembers: true }`; a
+  source guard: no file calls `adminMembersQuery(true)` with a literal outside
+  `v3MonthPlanReads.ts` (which receives it as a parameter), and the required parameter makes an
+  unbound call a `tsc` error.
 
 ### 3.5 Consent copy, and connections approved under the old copy
 
@@ -272,7 +293,10 @@ query, so **this slice binds it as the page does**:
     Preview to the dev alias and an unset or `development` env to the local origin (a developer's
     own server on the real dataset); any other preview host (`verify/service-readiness`) fails the
     host check and answers 404. The query reads the one dataset all three share and does not filter
-    by `origin`, so a local grant is listed too.
+    by `origin`, so a local grant is listed too. Residual, named in the ADR addendum: a developer's
+    local server still running pre-slice-B code after the check could mint a local grant under the
+    read-only wording that later gets writes; only super-admins run the app locally today, so no
+    admin can reach it.
 - **Rejected:** storing the consented tier or a consent version (ADR-0083 keeps tiers out of
   grants; `createdAt` already carries the boundary); revoking old admin grants at release.
 
@@ -391,7 +415,7 @@ digests once, on purpose: Frank's Claude and his ChatGPT each get one refresh no
 
 ## 6. Tests (vitest; all existing suites stay green)
 
-- §3.4b's member-read binding tests (helper, five callers, source guard).
+- §3.4b's member-read binding tests (helper, every call site, the sweep pinned to `true`, source guard).
 
 - `tier.test.ts`: `"admin"` replaces `"read"`; `canUseAdminChat` parity kept.
 - `mcpRoute.test.ts`: §3.2's five; scope selection per the §3.1 table (tier × client × cutoff);
@@ -445,7 +469,9 @@ admin's access ends by revoking the grant or changing the role (≤ 30 s).
 
 ## 8. Out of scope (named follow-ups)
 
-A per-person cap on notifying writes from the MCP; an email to Frank when a new grant is created; a
+A per-person cap on notifying writes from the MCP; whether the availability sweep
+(`availabilityFixCommit`) should read worship members only (today, and after this slice, it reads
+every ministry's, `all: true`; §3.4b leaves it as it is); an email to Frank when a new grant is created; a
 «Conexiones» screen; people and Kids for admins; solver-rule writes from the chat (phase 4 slice R,
 not built yet — when built, it is classified like any other tool, and the app admits admins).
 
