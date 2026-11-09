@@ -135,7 +135,9 @@ export const SUPER_ADMIN_ONLY_TOOLS = [
 ```
 
 and `ADMIN_TIER_TOOLS` — the full list minus `SUPER_ADMIN_ONLY_TOOLS`, written out by name in
-`tools/list` order (40 names; `adminNoApps` = the same minus the five app-only twins, 35). Both are
+the order `tools/list` actually returns them (copied from the registered list, not from §2's
+grouping: `registerProposalEditor` registers `check_proposal_edits` and `save_proposal_edits`
+before `revise_proposal`, `proposalEditor.ts:768-769`) (40 names; `adminNoApps` = the same minus the five app-only twins, 35). Both are
 literal arrays, not computed, so adding a tool to the connector changes no admin list by itself.
 
 `registerAllTools`: the two super-admin-only bundles (`registerKids`, `registerMemberTools`) are
@@ -153,7 +155,7 @@ route advertises `resources` for `"full"` and `"admin"` only. The register funct
 existing ones; the admin lists carry byte-identical definitions to the full lists.
 
 **Boundary tests** (`app/api/__tests__/mcpRoute.test.ts`, where ADR-0083's live; the stale
-`toolList.test.ts` reference at `toolList.ts:48` is corrected):
+`toolList.test.ts` reference at `toolList.ts:49` is corrected):
 
 1. **Classification is total:** every name the `full` handler lists is in exactly one of
    `ADMIN_TIER_TOOLS` and `SUPER_ADMIN_ONLY_TOOLS`. A new tool fails this test until someone puts it
@@ -198,32 +200,39 @@ as in the app's planner; on other hosts nobody can force (ADR-0083 §4.1), admin
   - New constant `ADMIN_WRITES_CUTOFF` (ISO) and pure `adminScopeOf(grant)` in `grantDocument.ts`:
     writes only when `createdAt` parses and is `>=` the cutoff; anything else (older, absent,
     unparseable) → `"adminRead"`. Fail closed. Same rule on every origin.
-  - The cutoff is set in the commit that goes to `main`, to the planned merge time plus 15 minutes,
+  - The cutoff is set in the commit that goes to `main`, to the planned merge time plus 1 hour,
     so grants made by the OLD code before the new deploy is `ready` still read as `"adminRead"`
-    (fail closed: an admin who connects in the first minutes after release gets reads until they
-    connect again). A test asserts `ADMIN_WRITES_CUTOFF > LEGACY_GRANT_CUTOFF`. Until that commit
+    (fail closed: an admin who connects in the first hour after release gets reads until they
+    connect again). An hour, not minutes: the road from the cutoff commit to the merge (branch
+    gates, `preview`, the dev alias, the PR's `gates`) can slip, and each slip past the cutoff
+    repeats that road (§7); a wider margin costs only connections that start read-only, which
+    already fail closed, and makes a `ready` later than the cutoff unlikely. A test asserts `ADMIN_WRITES_CUTOFF > LEGACY_GRANT_CUTOFF`. Until that commit
     the branch carries a far-future placeholder, so on dev (the earlier `preview` merge) every
     admin grant is `"adminRead"`; the cutoff commit is then merged into `preview` too.
   - **Any re-release after a revert or a Vercel rollback resets the cutoff** to just after the
     re-release and repeats the window check: while pre-slice-B code serves production, grants are
     made under the read-only wording with a `createdAt` past the old cutoff. Moving it later only
-    fails closed. Said in the constant's comment, §7 and the ADR addendum.
+    fails closed. **After a rollback, the slice-B deployment is never re-promoted** (Vercel
+    «Promote» or a second Instant Rollback onto it): it carries the OLD cutoff, so grants approved
+    under the read-only page while the rollback served would get writes. Re-release only through a
+    new commit with a new cutoff. Said in the constant's comment, §7 and the ADR addendum.
   - So an admin who connected under the read-only wording keeps exactly the list they approved
     (same digest, no refresh note) and gets the rest only by connecting again under the new
     wording. Nobody has to revoke anything.
-  - **Residual window, checked once it has closed:** the window is [cutoff, `ready` + 1 h] (a
-    consent page rendered by old code and approved late; the page has no expiry of its own). Its
-    grants can only exist AFTER the cutoff, which is still in the future when the prod alias is
-    verified, so a check at that moment would always be empty. The check therefore runs once
-    `ready` + 1 h has passed (a scheduled wake-up set at the alias check, never a polling loop):
+  - **Residual window, checked once it has closed:** the window is [cutoff, max(cutoff, `ready`) +
+    1 h] (a consent page rendered by old code and approved late; the page has no expiry of its
+    own). Its grants can only exist AFTER the cutoff, which is still in the future when the prod
+    alias is verified, so a check at that moment would always be empty. The check therefore runs
+    once the window has closed (a scheduled wake-up set at the alias check, never a polling loop):
     the operator lists unrevoked grants, on both origins, whose subject is not a super-admin and
     whose `createdAt` is within the window. If `ready` lands after the cutoff (a slow or queued
-    build), a first check of [cutoff, `ready`] also runs at once, at the alias check. Any found →
-    Frank is told in the same turn with the revoke dry run; the revoke is a production write and
-    runs only on his explicit word. A page left open longer than that is named as residual. The
-    live proof does not wait for this check (Mkz connects under the NEW page, so his grant is not
-    the one the window is about). Who runs it: the releasing thread schedules its own wake-up for
-    `ready` + 1 h at the alias check and writes the pending check to project memory in the same
+    build), a first check of [cutoff, `ready`] also runs at once, at the alias check. The live
+    proof's own grant (Mkz, connected under the NEW page while the thread watched) may fall in the
+    window: it is identified by its subject and time and set aside, by name, in the report. Any
+    other found → Frank is told in the same turn with the revoke dry run; the revoke is a
+    production write and runs only on his explicit word. A page left open longer than that is named
+    as residual. Who runs it: the releasing thread schedules its own wake-up for the window's close
+    at the alias check and writes the pending check to project memory in the same
     turn, so a later thread finds it if this one has ended. Only two origins serve MCP:
     `canonicalOrigin` (`app/mcp/oauth/origin.ts:27-33`) maps Production to the production origin and
     Preview to the dev alias, and any other preview host (`verify/service-readiness`) fails the host
@@ -271,6 +280,9 @@ inmediato», so nothing reads as «don't confirm». App-only twins are exempt (t
 test walks the full handler's tools and reads each REGISTERED description (the concatenated
 string, since `editSetlist.ts:212-214` splits it across literals): every model-visible destructive
 tool's description contains `PERSON_CONFIRMS_RULE`, and no description contains «sin confirmación».
+Its inverse too: the model-visible tools with neither `readOnlyHint: true` nor the rule are exactly
+{`solve_month`, `revise_proposal`}, so a future write annotated `destructiveHint: false` cannot
+skip the rule in silence.
 
 This changes descriptions only — no schema, no behaviour — and moves the `full` and `fullNoApps`
 digests once, on purpose: Frank's Claude and his ChatGPT each get one refresh note after release
@@ -321,6 +333,13 @@ digests once, on purpose: Frank's Claude and his ChatGPT each get one refresh no
   worship admin now reaches it too; the conclusion holds because any principal who reaches
   `delete_services` can mint their own token with `check_service_deletes`, so binding the token to
   a principal would add nothing.
+- Code comments that say the connector is super-admin only, starting with
+  `app/utils/v3MonthPlanReads.ts:6` (it binds `adminMembersQuery(true)` because «the connector is
+  super-admin only»). The binding stays: `true` only adds `ministryRoles` (Jóvenes levels) to the
+  server-side member read (`serviceReadQueries.ts:644-656`, worship-filtered either way), and no
+  admin-tier output prints it; the comment says so instead of the stale reason. This is the one
+  place the admin tier reads differently from the page (an admin's members GET binds `false`),
+  named here so «as in the page» is exact.
 - `CLAUDE.md` + `AGENTS.md` (`agentDocsParity`) + `docs/agents/project-rules.md`: «Who connects an
   agent (ADR-0083)» → worship admin `"admin"`: everything but `SUPER_ADMIN_ONLY_TOOLS`, read-only
   before `ADMIN_WRITES_CUTOFF`; every tool classified; every model-visible write carries
@@ -353,7 +372,7 @@ digests once, on purpose: Frank's Claude and his ChatGPT each get one refresh no
 Per CLAUDE.md: gates → one merge-range code review → fixes → gates → `preview` → dev alias + SHA →
 the cutoff commit (branch, then `preview`) → dev smoke on the operator's tier (§3.6 says why not
 the admin tier) → PR to `main` → `gates` → merge → prod alias + SHA → §3.5's window check, scheduled
-for `ready` + 1 h (plus an immediate one if `ready` is past the cutoff).
+for the window's close (plus an immediate one if `ready` is past the cutoff).
 **If the merge will land after the cutoff** (a `strict` update or a slow `gates` run), the cutoff is
 moved later in a new commit, and that commit takes the same road as the first cutoff commit:
 branch → gates → `preview` → dev alias + SHA re-verified → only then the PR to `main` updated and
@@ -361,7 +380,9 @@ its `gates` re-run. Auto-merge, if used, is armed only on a commit already seen 
 past the cutoff. Frank is told about the one refresh note (§3.7). The risk reconfirmation for the
 wider scope is asked with the plan (§9), not at release: the release waits for his answer.
 
-Live proof, with Frank: Mkz connects AFTER `ADMIN_WRITES_CUTOFF` (a grant made between `ready`
+Live proof, with Frank — a production write by Mkz, so it runs only after Frank says in the thread
+that he agrees to it (CLAUDE.md, production Sanity writes; the draft it touches is restored): Mkz
+connects AFTER `ADMIN_WRITES_CUTOFF` (a grant made between `ready`
 and the cutoff is `adminRead` and shows 11 tools — safe, but a wasted proof); the consent shows the admin text; `tools/list` has 35 tools
 (ChatGPT) or 40 (Claude); `list_members` and the Kids tools are absent; Mkz edits the setlist of a
 DRAFT service he picks — a reorder or a key change of rows that exist, never a removed or added
@@ -374,8 +395,10 @@ empty setlist document instead of «none». If
 Mkz connected under slice A, that old connection shows 11 tools until he reconnects.
 
 **Rollback.** Reverting the PR removes admin writes on the next request after deploy (tier and
-scope are live) and moves the digests again (one more refresh note). A later re-release resets
-`ADMIN_WRITES_CUTOFF` and repeats the window check (§3.5). `MCP_DISABLED` is the emergency stop. One
+scope are live) and moves the digests again (one more refresh note). A Vercel Instant Rollback does
+the same without a commit; after it, the slice-B deployment is never re-promoted (it carries the
+old cutoff, §3.5). A later re-release is a new commit that resets `ADMIN_WRITES_CUTOFF` and repeats
+the window check (§3.5). `MCP_DISABLED` is the emergency stop. One
 admin's access ends by revoking the grant or changing the role (≤ 30 s).
 
 ## 8. Out of scope (named follow-ups)
