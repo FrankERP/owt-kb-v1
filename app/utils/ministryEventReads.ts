@@ -70,6 +70,7 @@ const LEADER_DRAFT_ARM =
 const PERSON = `"memberId": member._ref, "name": member->{ "n": coalesce(alias, member_name) }.n, "mine": member._ref == $me`;
 const PROJECTION = `{
   _id,
+  _rev,
   ministry,
   audience,
   kind,
@@ -160,6 +161,8 @@ export type MinistryEventLine = MinistryEventPerson & { label: string | null; no
 
 export type MinistryEventView = {
   _id: string;
+  /** The revision an editor sends back as `_rev`; a write is refused (409) when it moved. */
+  rev: string | null;
   ministry: string;
   audience: { kind: "ministry" } | { kind: "groups"; groups: string[] } | null;
   kind: string | null;
@@ -204,6 +207,7 @@ function viewOf(row: Record<string, unknown>): MinistryEventView | null {
   const program = Array.isArray(row.program) ? row.program : [];
   return {
     _id: row._id,
+    rev: str(row._rev),
     ministry: String(row.ministry),
     audience: audienceOf(row.audience),
     kind: str(row.kind),

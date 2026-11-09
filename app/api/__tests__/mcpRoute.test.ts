@@ -1683,11 +1683,12 @@ describe("/api/mcp — three tool lists: who you are (live) and which agent hold
     for (const name of MEMBER_TOOL_NAMES) expect(READ_TIER_TOOL_NAMES, name).not.toContain(name);
   });
 
-  it("the full digest is exactly the one before ADR-0083; the three digests differ", () => {
-    // Pinned against this PR's base (main at 44f6a86b): a Claude connector made before this
-    // release keeps its list and hears no refresh note. Update this pin ONLY when a release changes
-    // the full list on purpose — that release sends every Claude connector the refresh note.
-    expect(TOOL_LIST_VERSIONS.full).toBe("4a0a435e");
+  it("the full digest is pinned; the three digests differ", () => {
+    // ADR-0083 shipped with the full digest unchanged (4a0a435e, main at 44f6a86b). Update this pin
+    // ONLY when a release changes the full list on purpose — that release sends every Claude
+    // connector the refresh note. Changed on purpose 2026-11-06 (cf45d5e6): the people tools' grant
+    // rule now says a content-editor may be lowered or disabled, which the live proof found unclear.
+    expect(TOOL_LIST_VERSIONS.full).toBe("cf45d5e6");
     expect(TOOL_LIST_VERSION).toBe(TOOL_LIST_VERSIONS.full);
     expect(new Set(Object.values(TOOL_LIST_VERSIONS)).size).toBe(3);
     for (const scope of TOOL_LIST_SCOPES) {

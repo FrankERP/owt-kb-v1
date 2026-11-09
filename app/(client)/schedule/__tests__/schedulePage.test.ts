@@ -5,10 +5,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactElement } from "react";
 
-const { fetchMock, accessMock, cookieValue } = vi.hoisted(() => ({
+const { fetchMock, accessMock, cookieValue, eventsMock, Unavailable } = vi.hoisted(() => ({
   fetchMock: vi.fn(),
   accessMock: vi.fn(),
   cookieValue: { current: undefined as string | undefined },
+  eventsMock: vi.fn(),
+  Unavailable: class MinistryEventReadUnavailable extends Error {},
 }));
 
 vi.mock("@/app/utils/worshipPageGate", () => ({
@@ -19,13 +21,18 @@ vi.mock("@/sanity/lib/operationalClient", () => ({ operationalClient: { fetch: f
 vi.mock("next/headers", () => ({
   cookies: async () => ({ get: (name: string) => (name === "owt_calendar_view" && cookieValue.current ? { value: cookieValue.current } : undefined) }),
 }));
+vi.mock("@/app/utils/ministryEventReads", () => ({ readMinistryEvents: eventsMock, MinistryEventReadUnavailable: Unavailable }));
 vi.mock("@/app/components/Navbar", () => ({ default: () => null }));
 vi.mock("@/app/components/CalendarView", () => ({ default: () => null }));
 
 import SchedulePage from "../page";
 import CalendarView from "@/app/components/CalendarView";
 
-type ViewProps = { activeDays: Record<string, Array<{ day: string; kids?: unknown }>>; ministryView?: string };
+type ViewProps = {
+  activeDays: Record<string, Array<{ day: string; kids?: unknown; jovenes?: { id: string } }>>;
+  ministryView?: string;
+  ministryExtras?: string[];
+};
 
 /** The props the page hands `CalendarView`, found in the returned tree. */
 function calendarProps(tree: ReactElement): ViewProps {
@@ -55,6 +62,8 @@ const KIDS_ROW = {
 
 beforeEach(() => {
   fetchMock.mockReset();
+  eventsMock.mockReset();
+  eventsMock.mockResolvedValue([]);
   cookieValue.current = undefined;
   fetchMock.mockImplementation(async (_q: string, params: { withKids: boolean }) => ({
     sundays: [{ _id: "sun1", week: "2026-11-01", Lead: [{ member_name: "Ana" }] }],
@@ -68,7 +77,8 @@ beforeEach(() => {
   }));
 });
 
-const render = async () => calendarProps((await SchedulePage({ searchParams: Promise.resolve({}) })) as ReactElement);
+const renderTree = async () => (await SchedulePage({ searchParams: Promise.resolve({}) })) as ReactElement;
+const render = async () => calendarProps(await renderTree());
 
 describe("/schedule — Oasis Kids in the Calendario", () => {
   it("a worship-only reader: the query asks for no Kids days, and no filter is offered", async () => {
@@ -118,5 +128,60 @@ describe("/schedule — Oasis Kids in the Calendario", () => {
     await render();
     const query = fetchMock.mock.calls[0][0] as string;
     expect(query).toMatch(/_type == "kidsSchedule" && \$withKids && published == true/);
+  });
+});
+
+// PR D (ADR-0081): Jóvenes meetings join the Calendario for a member of Alabanza and Jóvenes,
+// once the rollout reaches them, through the ONE reader in member mode.
+describe("/schedule — Jóvenes in the Calendario", () => {
+  const MEETING = {
+    _id: "ministryEvent.a", rev: "r", ministry: "jovenes", audience: { kind: "ministry" }, kind: "saturday",
+    date: "2026-11-07", time: "18:10", arrival: "17:30", title: null, notes: null, published: true,
+    seats: [], program: [], createdById: null, createdByName: null,
+  };
+  const pastor = { active: true, role: "member", ministries: ["worship", "jovenes"], managesMinistries: [], ministryRoles: [{ ministry: "jovenes", level: "member", groups: ["otro-nivel"] }] };
+  const frank = { active: true, role: "super-admin", ministries: ["worship"], managesMinistries: [], ministryRoles: [] };
+
+  it("before the rollout reaches a pastor: no read, no Jóvenes option", async () => {
+    accessMock.mockResolvedValue(pastor);
+    const props = await render();
+    expect(eventsMock).not.toHaveBeenCalled();
+    expect(props.ministryView).toBeUndefined();
+  });
+
+  it("once it reaches them (the super-admin today): member mode, the page's window, and the meeting joins its day", async () => {
+    accessMock.mockResolvedValue(frank);
+    eventsMock.mockResolvedValue([MEETING]);
+    const props = await render();
+    expect(eventsMock).toHaveBeenCalledTimes(1);
+    const [access, opts] = eventsMock.mock.calls[0];
+    expect(access).toBe(frank);
+    expect(opts).toMatchObject({ me: "m1", ministry: "jovenes", mode: "member" });
+    expect(opts.from <= opts.to).toBe(true);
+    expect(props.ministryExtras).toEqual(["kids", "jovenes"]);
+    expect(props.ministryView).toBe("all");
+    expect(props.activeDays["2026-11-07"].map((e) => e.jovenes?.id)).toEqual(["ministryEvent.a"]);
+  });
+
+  it("remembers «Jóvenes» from the cookie only while the reader has it", async () => {
+    cookieValue.current = "jovenes";
+    accessMock.mockResolvedValue(frank);
+    expect((await render()).ministryView).toBe("jovenes");
+    accessMock.mockResolvedValue({ role: "member", ministries: ["worship", "kids"], managesMinistries: [] });
+    expect((await render()).ministryView).toBe("all");
+  });
+
+  it("without the read token it says so instead of showing no meetings", async () => {
+    accessMock.mockResolvedValue(frank);
+    eventsMock.mockRejectedValue(new Unavailable("no token"));
+    const tree = await renderTree();
+    expect(JSON.stringify(tree)).toContain("No pudimos leer las reuniones de Jóvenes");
+    expect(calendarProps(tree).activeDays["2026-11-07"]).toBeUndefined();
+  });
+
+  it("any other read failure is a real failure", async () => {
+    accessMock.mockResolvedValue(frank);
+    eventsMock.mockRejectedValue(new Error("boom"));
+    await expect(renderTree()).rejects.toThrow("boom");
   });
 });

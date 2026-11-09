@@ -5,8 +5,9 @@ import type { ActiveDay } from "../components/CalendarView";
 import { plural } from "./plural";
 import { serviceStartTime, WEEKEND_SERVICE_TIME } from "./calendarFeed";
 
-/** `kids` is an Oasis Kids Sunday, shown only to its members (`calendarMinistry.ts`). */
-export type Tone = "sun" | "sat" | "special" | "kids";
+/** `kids` is an Oasis Kids Sunday and `jovenes` a Jóvenes meeting, each shown only to that
+ *  ministry's members (`calendarMinistry.ts`). */
+export type Tone = "sun" | "sat" | "special" | "kids" | "jovenes";
 
 export function findDuplicates(names: string[]): Set<string> {
   const counts = new Map<string, number>();
@@ -24,10 +25,15 @@ export const TONE_RAIL: Record<Tone, string> = {
   // musical key only (ADR-0071) and green is «tú». A Kids Sunday is another
   // ministry's day, not a fourth kind of worship service.
   kids: "bg-ink-dim",
+  // The same reasoning for Jóvenes: another neutral from the ink family, a clear step
+  // stronger than Kids' in both themes (lighter on dark, darker on light), so a day that
+  // holds both (someone in all three ministries) still shows two dots that differ.
+  jovenes: "bg-ink-muted",
 };
 
-export function serviceTone(e: Pick<ActiveDay, "day" | "roleId" | "kids">): Tone {
+export function serviceTone(e: Pick<ActiveDay, "day" | "roleId" | "kids" | "jovenes">): Tone {
   if (e.kids) return "kids";
+  if (e.jovenes) return "jovenes";
   if (e.roleId) return "special";
   if (e.day === "Sábado") return "sat";
   if (e.day === "Domingo") return "sun";
@@ -50,10 +56,11 @@ export function myNameFromSession(user?: { alias?: string | null; name?: string 
 /** The seat labels where `myName` (already lowercased/trimmed) is seated, in DayCard's
  *  own order and casing: Lead, BGVs, Coro, then each instrument, then each FOH seat. An
  *  empty `myName` (signed out, or no alias/name) seats nobody. */
-export function mySeats(e: Pick<ActiveDay, "leads" | "bgvs" | "chorus" | "instruments" | "fohTeam" | "kids">, myName: string): string[] {
-  // A Kids Sunday decided «mine» by member id on the server; names play no part,
-  // so a member with no name or alias is still «tú» there.
+export function mySeats(e: Pick<ActiveDay, "leads" | "bgvs" | "chorus" | "instruments" | "fohTeam" | "kids" | "jovenes">, myName: string): string[] {
+  // A Kids Sunday and a Jóvenes meeting decided «mine» by member id on the server; names
+  // play no part, so a member with no name or alias is still «tú» there.
   if (e.kids) return e.kids.seats.filter((s) => s.mine).map((s) => s.label);
+  if (e.jovenes) return [...new Set([...e.jovenes.seats, ...e.jovenes.program].filter((s) => s.mine).map((s) => s.label))];
   if (!myName) return [];
   const seated = (name?: string) => !!name && name.toLowerCase().trim() === myName;
   const seats: string[] = [];
@@ -83,6 +90,10 @@ export function summarizeService(e: ActiveDay): string {
     const filled = e.kids.seats.filter((s) => s.pair).map((s) => `${s.label}: ${s.pair}`);
     return filled.length ? filled.join(" · ") : "Sin asignaciones";
   }
+  if (e.jovenes) {
+    const filled = e.jovenes.seats.filter((s) => s.name).map((s) => `${s.label} ${s.name}`);
+    return [e.jovenes.audience, ...filled].join(" · ");
+  }
   const parts: string[] = [];
   if (e.leads?.length) parts.push(`Lead ${e.leads.join(", ")}`);
   for (const s of (e.instruments ?? []).filter((s) => s.person)) parts.push(`${s.label} ${s.person}`);
@@ -94,16 +105,20 @@ export function summarizeService(e: ActiveDay): string {
 /** The clock a row or a day sheet shows beside the service: a weekend at the team's
  *  standing hour, a special at its own valid `time`, else nothing — the feed's ONE rule
  *  (`serviceStartTime`), so the agenda, `/me` and the `.ics` never disagree on it. */
-export function serviceClock(e: Pick<ActiveDay, "day" | "roleId" | "time" | "kids">): string | undefined {
+export function serviceClock(e: Pick<ActiveDay, "day" | "roleId" | "time" | "kids" | "jovenes">): string | undefined {
   // Oasis Kids runs during the Sunday service (an assumption, 2026-10-29).
   if (e.kids) return WEEKEND_SERVICE_TIME.sunday;
+  // A Jóvenes meeting keeps its own stored time (validated HH:mm by its writer), or none.
+  if (e.jovenes) return e.time ?? undefined;
   return serviceStartTime(e.roleId ? "special" : "weekend", e.day, e.time);
 }
 
 export type AgendaRow = { key: string; date: string; entry: ActiveDay; tone: Tone; conflicts: number; summary: string; monthStart: string | null };
 
 // Kids runs during the Sunday service, so it lists right after it, before a special.
-const ORDER: Record<Tone, number> = { sat: 0, sun: 1, kids: 2, special: 3 };
+// Jóvenes lists last: its meetings are another ministry's. A Saturday often holds both the
+// worship service and the Jóvenes meeting, and the service leads.
+const ORDER: Record<Tone, number> = { sat: 0, sun: 1, kids: 2, special: 3, jovenes: 4 };
 
 export function agendaRows(activeDays: Record<string, ActiveDay[]>): AgendaRow[] {
   const rows = Object.entries(activeDays)
@@ -115,7 +130,7 @@ export function agendaRows(activeDays: Record<string, ActiveDay[]>): AgendaRow[]
     const month = date.slice(0, 7);
     const monthStart = month !== lastMonth ? month : null;
     lastMonth = month;
-    return { key: `${date}:${entry.roleId ?? (entry.kids ? "kids" : entry.day)}`, date, entry, tone, conflicts: serviceConflicts(entry), summary: summarizeService(entry), monthStart };
+    return { key: `${date}:${entry.roleId ?? entry.jovenes?.id ?? (entry.kids ? "kids" : entry.day)}`, date, entry, tone, conflicts: serviceConflicts(entry), summary: summarizeService(entry), monthStart };
   });
 }
 
