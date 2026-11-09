@@ -1,5 +1,5 @@
 // Display words for a Jóvenes meeting (ADR-0081). Pure and neutral: the page renders with it and
-// PR C's planner will too. Nothing here decides access — `kind` is display only (plan D3), and the
+// the planner (`/jovenes/admin`) does too. Nothing here decides access — `kind` is display only (plan D3), and the
 // reader (`ministryEventReads.ts`) has already decided who sees the event.
 
 import { MINISTRIES } from "@/app/ministries";
