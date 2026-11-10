@@ -47,7 +47,7 @@ const Navbar = ({ title = "", author = "", cue = true }: Props) => {
               Backstage
             </p>
             <p className="mt-1 hidden font-label text-[10px] uppercase tracking-[0.22em] text-ink-dim sm:block lg:text-[11px]">
-              Oasis Worship Team
+              Oasis
             </p>
           </div>
         </Link>

@@ -267,7 +267,7 @@ export default async function Home() {
   return (
     <div>
       {/* `cue={false}`: the greeting band below carries the countdown. */}
-      <Navbar title="OWT" cue={false} />
+      <Navbar title="Backstage" cue={false} />
 
       {/* The band (ADR-0070, the «Inicio de millones» mock, variant B): the page
           opens on the member's own answer — «Te toca el domingo / Eléctrica ·

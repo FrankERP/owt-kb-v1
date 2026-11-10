@@ -1016,7 +1016,7 @@ Strategy: **wrap the existing Next.js app** (not a React Native rewrite). Full r
 [MOBILE.md](MOBILE.md).
 
 - **`capacitor.config.ts`** — `appId: "com.owtBackstage.app"` (permanent once published),
-  `appName: "OWT Backstage"`, `webDir: "mobile/fallback"`. **Phase 1** (current): online-only
+  `appName: "Backstage"` (was `OWT Backstage` until 2026-11-10), `webDir: "mobile/fallback"`. **Phase 1** (current): online-only
   wrap loading `server.url = "https://owt-backstage.vercel.app"`.
 - **`mobile/fallback/index.html`** — minimal offline shell shown when the remote app is
   unreachable.
