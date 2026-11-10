@@ -82,10 +82,10 @@ export default function DayCardDisclosure({ sheet = false, ...props }: DayCardPr
       // that list mint the same UID for one service, so they must agree on when
       // it starts. `roleId` is only ever set for a special (see above).
       time: serviceStartTime(props.roleId ? "special" : "weekend", props.day, props.time),
-      title: `${props.day} · OWT`,
+      title: `${props.day} · Oasis Worship`,
       description: props.setlist?.songs?.map((s) => s.title).filter(Boolean).join(" · ") || undefined,
     };
-    downloadICS([event], `servicio-owt-${props.date.slice(0, 10)}.ics`);
+    downloadICS([event], `servicio-${props.date.slice(0, 10)}.ics`);
   }
 
   const actions: QuickAction[] = [

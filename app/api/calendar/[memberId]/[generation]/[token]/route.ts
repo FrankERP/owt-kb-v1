@@ -108,6 +108,8 @@ export async function GET(
     return UNAVAILABLE();
   }
   const ics = buildICS(buildFeedEvents(data, canonicalOrigin() ?? ""), feedCalendarName(scope), {
+    // Never rename (not even in the 2026-11-10 «Backstage» rename): a subscriber's calendar matches events by
+    // UID, so a new domain would show every service twice until the old copies age out.
     uidDomain: "owt-backstage",
     refreshMinutes: 180,
   });

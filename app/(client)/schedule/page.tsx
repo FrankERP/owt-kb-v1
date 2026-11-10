@@ -25,7 +25,7 @@ import { MinistryEventReadUnavailable, readMinistryEvents, type MinistryEventVie
 import { rolloutAllows } from "@/app/utils/rollout";
 
 export const metadata: Metadata = {
-  title: "Calendario — Oasis Worship Team",
+  title: "Calendario — Backstage",
   description: "Próximos servicios y asignaciones del equipo de alabanza Oasis.",
 };
 
