@@ -180,3 +180,7 @@ Adopted from the reviewers' non-blocking notes while building:
   fallback expectation moves from «Lugar» to «Asiento».
 - P5 kind drift accepted: a `saturday` meeting moved to a weekday is saved as `ministry` and stays
   `ministry` if moved back (display only, D3).
+- As built (differs from §5's words): «Nueva reunión» starts on the page's `defaultDate` (today in
+  the current month, else the month's FIRST DAY, as the group calendar already did), and warns —
+  without refusing — when that date already has a meeting; the place shows in the meeting's header
+  line (`JovenesDayCard`, `eventLine`), not as a line under the seats.

@@ -144,6 +144,14 @@ describe("SaturdayPlanner", () => {
     });
   });
 
+  it("warns, without refusing, when the new meeting's date already has one", () => {
+    renderPlanner([ev({ date: "2026-11-14" })]);
+    fireEvent.click(screen.getByRole("button", { name: "Nueva reunión" }));
+    expect(screen.queryByText(/Ya hay una reunión ese día/)).toBeNull();
+    fireEvent.change(screen.getByLabelText("Fecha"), { target: { value: "2026-11-14" } });
+    expect(screen.getByText(/Ya hay una reunión ese día/)).toBeTruthy();
+  });
+
   it("a typed seat opens as text and keeps its key; picking a pastor sends the member instead", async () => {
     renderPlanner([ev({ seats: [{ _key: "k1", role: "comparte", memberId: null, name: "Ana", mine: false }], place: "Casa Fam Varela" })]);
     expect(screen.getByText("Casa Fam Varela")).toBeTruthy();

@@ -316,7 +316,7 @@ export default function SaturdayPlanner({
         open={editing !== null}
         mode="sheet"
         size="lg"
-        label={editing ? `Reunión — ${eventDayLabel(editing.form.date)}` : "Reunión"}
+        label={editing && isIsoDay(editing.form.date) ? `Reunión — ${eventDayLabel(editing.form.date)}` : "Reunión"}
         onDismiss={() => !saving && setEditing(null)}
         title={editing?.event ? "Editar reunión" : "Nueva reunión"}
       >
@@ -339,6 +339,13 @@ export default function SaturdayPlanner({
                 value={editing.form.date}
                 onChange={(e) => patchForm({ date: e.target.value })}
               />
+              {/* «Nueva reunión» opens on today: on a day that already has a meeting, the row's
+                  «Editar» is usually what was meant. Said, not refused (two meetings a day is allowed). */}
+              {!editing.event && rows.some((r) => r.date === editing.form.date && r.events.length > 0) && (
+                <span className="mt-1.5 block font-body text-[13px] text-warning-fg">
+                  Ya hay una reunión ese día. Para cambiarla, usa «Editar» en su fila.
+                </span>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
