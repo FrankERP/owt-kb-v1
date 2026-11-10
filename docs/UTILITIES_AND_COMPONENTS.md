@@ -659,7 +659,9 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   list (ids and names). **`sendEventWrite`**/**`writeMessage`**
   ([eventWrite.ts](../app/components/jovenes/eventWrite.ts)) — the one client caller of the four
   routes. Components (`app/components/jovenes/`): `SaturdayPlanner`, `GroupCalendar`, `ProgramEditor`
-  (`compact` = the quiet «Programa» beside a row's «Editar»), `PersonSelect`, and two neutral ones:
+  (`compact` = the quiet «Programa» beside a row's «Editar»), `PersonSelect` (its «Escribir un
+  nombre…» typed mode is OPT-IN via `onTypedName`, passed only by the meeting's seats — never by the
+  program editor, whose lines keep members only), and two neutral ones:
   **`JovenesMeetingBody`** (`MeetingBody.tsx` — a meeting's seats, program and notes as hairline rows
   with «Tú» in green; THE body of both `/jovenes` and the Calendario's `JovenesDayCard`, so a seat is
   never worded or coloured differently between them) and **`MeetingState`** (the planner's «Publicada» /
@@ -667,7 +669,7 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   size="lg"`, never a text input; before sending they ask **`halfTypedClock(ids)`** (`eventWrite.ts`),
   because a native clock left at «18:--» reports `""` and would be saved as «no time».
 - **`eventHeading`**, **`eventName`** (the name under a DATE: `null` for the plain Saturday meeting),
-  **`eventLine`** (name · clock · arrival · audience), **`audienceLabel`**, **`seatRoleLabel`**,
+  **`eventLine`** (name · clock · arrival · place · audience), **`audienceLabel`**, **`seatRoleLabel`**,
   **`eventDayLabel`**, **`dayWords`** («sábado 14 de noviembre» inside a sentence; a heading uses
   `dayTitle` from `agenda.ts`, and neither is ever CSS `capitalize`, which writes «14 De Noviembre»),
   **`meetingsLede`** (`/jovenes`' count line and the reader's next date), **`addDaysIso`**

@@ -122,7 +122,13 @@ export function seatNames(e: Pick<MinistryEventView, "seats">, role: string): st
 
 // ── The Saturday editor ─────────────────────────────────────────────────────
 
-export type SeatPick = { key: string | null; member: string | null };
+/**
+ * One seat column: a member, OR a typed name (someone without an account, or the hosting group —
+ * plan 2026-11-10 P7), or nobody. The view's `name` means two things (a member's live name, or a
+ * typed text), so a pick's typed name is read ONLY from a seat with no member: a member seat never
+ * opens as text and is never saved back as text.
+ */
+export type SeatPick = { key: string | null; member: string | null; name: string | null };
 
 export type SaturdayForm = {
   /** The stored kind of an existing meeting (a `ministry` board stays one); `saturday` for a new one. */
@@ -131,12 +137,18 @@ export type SaturdayForm = {
   time: string;
   arrival: string;
   title: string;
+  place: string;
   notes: string;
   published: boolean;
   /** One pick per column. Extra stored seats (a second apoyo) ride along untouched in `extra`. */
   picks: Record<SaturdaySeat, SeatPick>;
-  extra: Array<{ key: string; role: string; member: string | null }>;
+  extra: Array<{ key: string; role: string; member: string | null; name: string | null }>;
 };
+
+/** A seat's typed name: its text when it holds no member, else nothing (see `SeatPick`). */
+export function typedName(s: Pick<MinistryEventSeat, "memberId" | "name">): string | null {
+  return s.memberId ? null : s.name;
+}
 
 /** The form for an existing meeting, or a new one on `date` with the usual times. */
 export function saturdayForm(date: string, e?: MinistryEventView): SaturdayForm {
@@ -145,9 +157,9 @@ export function saturdayForm(date: string, e?: MinistryEventView): SaturdayForm 
   for (const s of e?.seats ?? []) {
     const role = s.role as SaturdaySeat;
     if ((SATURDAY_SEATS as readonly string[]).includes(s.role ?? "") && picks[role].key === null) {
-      picks[role] = { key: s._key, member: s.memberId };
+      picks[role] = { key: s._key, member: s.memberId, name: typedName(s) };
     } else if (s.role) {
-      extra.push({ key: s._key, role: s.role, member: s.memberId });
+      extra.push({ key: s._key, role: s.role, member: s.memberId, name: typedName(s) });
     }
   }
   return {
@@ -156,6 +168,7 @@ export function saturdayForm(date: string, e?: MinistryEventView): SaturdayForm 
     time: e ? e.time ?? "" : SATURDAY_DEFAULTS.time,
     arrival: e ? e.arrival ?? "" : SATURDAY_DEFAULTS.arrival,
     title: e?.title ?? "",
+    place: e?.place ?? "",
     notes: e?.notes ?? "",
     published: e?.published ?? false,
     picks,
@@ -164,7 +177,7 @@ export function saturdayForm(date: string, e?: MinistryEventView): SaturdayForm 
 }
 
 function empty(): SeatPick {
-  return { key: null, member: null };
+  return { key: null, member: null, name: null };
 }
 
 /**
@@ -177,32 +190,67 @@ function timeProblem(value: string, label: string, example: string): string | nu
   return v && !isServiceTime(v) ? `${label} debe ser HH:mm (por ejemplo ${example}).` : null;
 }
 
-/** What would stop the Saturday form before it is sent, in words, or `null`. */
-export function saturdayProblem(form: Pick<SaturdayForm, "time" | "arrival">): string | null {
+/** A real calendar day as `YYYY-MM-DD` (the native date field hands back that or ""). */
+export function isIsoDay(v: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const d = new Date(v + "T12:00:00Z");
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+}
+
+/** What would stop the meeting form before it is sent, in words, or `null`. */
+export function saturdayProblem(form: Pick<SaturdayForm, "date" | "time" | "arrival">): string | null {
+  if (!isIsoDay(form.date)) return "Elige la fecha.";
   return timeProblem(form.time, "La hora", SATURDAY_DEFAULTS.time) ?? timeProblem(form.arrival, "La llegada", SATURDAY_DEFAULTS.time);
 }
 
 const orNull = (s: string) => (s.trim() ? s.trim() : null);
 
+/** Is this `YYYY-MM-DD` a Saturday (local noon, never a bare `new Date(iso)`)? */
+export function isSaturday(date: string): boolean {
+  return new Date(date + "T12:00:00Z").getUTCDay() === 6;
+}
+
+/**
+ * The kind a whole-ministry meeting is saved with (display only, D3): on a Saturday the form's own
+ * (`saturday` for a new one, the stored one for an edit); on any other day `ministry`, so a Friday
+ * study is never called «Sábado de Jóvenes».
+ */
+export function meetingKind(form: Pick<SaturdayForm, "kind" | "date">): string {
+  return isSaturday(form.date) ? form.kind : "ministry";
+}
+
+/** A seat's body: its member, else its typed name, else nothing (an empty seat is not sent). */
+function seatBody(key: string | null, role: string, member: string | null, name: string | null): Record<string, unknown> | null {
+  const k = key ? { _key: key } : {};
+  if (member) return { ...k, role, member };
+  const typed = name?.trim();
+  return typed ? { ...k, role, name: typed } : null;
+}
+
 /**
  * The body both the create (POST, with `token`) and the edit (PATCH, with `_rev`) send. An empty
- * column sends no seat: a stored seat whose column was cleared is dropped, which is the edit.
+ * column sends no seat: a stored seat whose column was cleared is dropped, which is the edit. A
+ * seat sends a member or a typed name, never both (the writer refuses both).
  */
 export function saturdayBody(form: SaturdayForm): Record<string, unknown> {
   const seats: Array<Record<string, unknown>> = [];
   for (const role of SATURDAY_SEATS) {
     const p = form.picks[role];
-    if (!p.member) continue;
-    seats.push({ ...(p.key ? { _key: p.key } : {}), role, member: p.member });
+    const seat = seatBody(p.key, role, p.member, p.name);
+    if (seat) seats.push(seat);
   }
-  for (const x of form.extra) seats.push({ _key: x.key, role: x.role, member: x.member });
+  for (const x of form.extra) {
+    const seat = seatBody(x.key, x.role, x.member, x.name);
+    if (seat) seats.push(seat);
+  }
   return {
     audience: { kind: "ministry" },
-    kind: form.kind,
+    kind: meetingKind(form),
     date: form.date,
     time: orNull(form.time),
     arrival: orNull(form.arrival),
     title: orNull(form.title),
+    place: orNull(form.place),
     notes: orNull(form.notes),
     published: form.published,
     seats,
@@ -277,6 +325,7 @@ export type GroupEventForm = {
   date: string;
   time: string;
   title: string;
+  place: string;
   notes: string;
   groups: string[];
   published: boolean;
@@ -289,6 +338,7 @@ export function groupEventForm(date: string, v: PlannerViewer, e?: MinistryEvent
     date: e?.date ?? date,
     time: e?.time ?? "",
     title: e?.title ?? "",
+    place: e?.place ?? "",
     notes: e?.notes ?? "",
     groups,
     published: e?.published ?? false,
@@ -317,6 +367,7 @@ export function groupEventBody(form: GroupEventForm): Record<string, unknown> {
     date: form.date,
     time: orNull(form.time),
     title: orNull(form.title),
+    place: orNull(form.place),
     notes: orNull(form.notes),
     published: form.published,
   };
@@ -348,6 +399,7 @@ export function whatsappRoster(month: string, rows: readonly SaturdayRow[]): str
       const when = [e.time, e.arrival ? `llegada ${e.arrival}` : null].filter(Boolean).join(" · ");
       const lines = [`*${capitalize(day)}*${when ? ` — ${when}` : ""}`];
       if (e.title) lines.push(e.title);
+      if (e.place) lines.push(`Lugar: ${e.place}`);
       const label: Record<SaturdaySeat, string> = { encargado: "Encargado", apoyo: "Apoyo", comparte: "Comparte" };
       for (const role of SATURDAY_SEATS) {
         const names = seatNames(e, role);

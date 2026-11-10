@@ -66,3 +66,22 @@ calendario de los de Otro Nivel y viceversa». Two facts decide how:
 - A joint event whose creator stops leading its groups, or is deleted, belongs to the admins.
 - Do not «simplify» the reader into a wider read plus a TypeScript filter, drop the id prefix arm, or
   copy the Kids writer (it stores no `_weak` references and authorizes no audience).
+
+## Addendum — any date, a place, typed seat names (2026-11-10)
+
+Frank: «Que se puedan crear en cualquier fecha», «Ana comparte» (Ana has no account), and a
+«Lugar» column. Plan `docs/superpowers/plans/2026-11-10-jovenes-place-and-names.md` (critical,
+approved by two fresh reviews; log beside it).
+
+- `place` is a one-line display text on the meeting. It decides nothing.
+- A seat holds a member OR a typed `name`, never both. A name is text: never validated against the
+  members, never «Tú», and it grants no program right (W3a matches a member). So a meeting whose
+  Encargado is typed as a group («Emprendedores») gives that group's leaders no program right; its
+  program is the admins'. Program lines keep members only — the typed option is opt-in in
+  `PersonSelect` and the program editor does not pass it.
+- Who reads and who writes is unchanged; a meeting a group hosts is still for all pastors (`audience`
+  ministry, Frank 2026-11-10).
+- Rejected: an account for every guest (Ana would need a Google email and would appear in Personas);
+  free text in Notas (what happened first, and it hid who shares).
+- Rollback: reverting hides typed names («Sin asignar») and the old editor drops them on the next
+  save of that meeting; `place` survives.

@@ -10,6 +10,7 @@ const entry: JovenesDayEntry = {
   id: "ministryEvent.a",
   audience: "Todo Jóvenes",
   arrival: "17:30",
+  place: "Oasis Tlalpan",
   seats: [{ key: "s1", label: "Encargado", name: "Ana", mine: true }],
   program: [{ key: "l1", label: "Dinámica", name: null, mine: false, note: "10 min" }],
   notes: "Traer Biblia",
@@ -18,7 +19,7 @@ const entry: JovenesDayEntry = {
 describe("JovenesDayCard", () => {
   it("shows the time when it is given, then who it is for and the arrival", () => {
     const html = renderToStaticMarkup(<JovenesDayCard title="Sábado de Jóvenes" entry={entry} time="18:10" />);
-    expect(html).toContain("18:10 · Todo Jóvenes · llegada 17:30");
+    expect(html).toContain("18:10 · Todo Jóvenes · llegada 17:30 · Oasis Tlalpan");
   });
   it("leaves the clock to the sheet when it is the day's only entry", () => {
     const html = renderToStaticMarkup(<JovenesDayCard title="Sábado de Jóvenes" entry={entry} />);

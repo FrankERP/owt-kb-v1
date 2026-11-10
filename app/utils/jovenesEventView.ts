@@ -41,9 +41,9 @@ export function eventName(e: Pick<MinistryEventView, "title" | "kind">): string 
   return e.kind === "saturday" ? null : eventHeading(e);
 }
 
-/** The line under a meeting's date: its name (when it has one), the clock, the arrival, who it is for. */
-export function eventLine(e: Pick<MinistryEventView, "title" | "kind" | "time" | "arrival" | "audience">): string {
-  return [eventName(e), e.time, e.arrival ? `llegada ${e.arrival}` : null, audienceLabel(e.audience)]
+/** The line under a meeting's date: its name (when it has one), the clock, the arrival, where, who it is for. */
+export function eventLine(e: Pick<MinistryEventView, "title" | "kind" | "time" | "arrival" | "place" | "audience">): string {
+  return [eventName(e), e.time, e.arrival ? `llegada ${e.arrival}` : null, e.place, audienceLabel(e.audience)]
     .filter(Boolean)
     .join(" · ");
 }
@@ -57,7 +57,7 @@ export function audienceLabel(audience: MinistryEventView["audience"]): string {
 }
 
 export function seatRoleLabel(role: string | null): string {
-  return own(SEAT_ROLE_LABEL, role) ?? role ?? "Lugar";
+  return own(SEAT_ROLE_LABEL, role) ?? role ?? "Asiento";
 }
 
 /** «sábado, 14 de noviembre» as the locale writes it, pinned to local noon (a bare `new Date(iso)` flips the day). */

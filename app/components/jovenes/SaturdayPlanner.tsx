@@ -12,9 +12,10 @@ import { HAIRLINE_INPUT_CLASS, HAIRLINE_LABEL_CLASS } from "@/app/components/ui/
 import type { MinistryEventView } from "@/app/utils/ministryEventReads";
 import { SHEET_TITLE } from "@/app/utils/homeHero";
 import { DOW_SHORT, dayTitle } from "@/app/utils/agenda";
-import { audienceLabel, eventDayLabel, eventName } from "@/app/utils/jovenesEventView";
+import { audienceLabel, dayWords, eventDayLabel, eventName } from "@/app/utils/jovenesEventView";
 import {
   SATURDAY_SEATS,
+  isIsoDay,
   saturdayBody,
   saturdayForm,
   saturdayProblem,
@@ -22,6 +23,8 @@ import {
   whatsappRoster,
   type SaturdayForm,
   type SaturdayRow,
+  type SaturdaySeat,
+  type SeatPick,
 } from "@/app/utils/jovenesPlannerModel";
 import MeetingState from "./MeetingState";
 import PersonSelect, { type JovenesPerson } from "./PersonSelect";
@@ -39,8 +42,9 @@ type Editing = { event: MinistryEventView | null; form: SaturdayForm; token: str
 // bare `1fr` cannot shrink under its content, so one long name or a link in Notas would give that
 // row a template of its own. A leader has no actions and no column for them.
 const COLS_EDIT =
-  "md:grid md:grid-cols-[6.5rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)_10.5rem] md:gap-x-4";
-const COLS_READ = "md:grid md:grid-cols-[6.5rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)] md:gap-x-4";
+  "md:grid md:grid-cols-[6.5rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)_10.5rem] md:gap-x-4";
+const COLS_READ =
+  "md:grid md:grid-cols-[6.5rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)] md:gap-x-4";
 
 /** «sáb»: the weekday beside the day number, from the calendar's own abbreviations. */
 function dow(date: string): string {
@@ -55,9 +59,12 @@ function DayNumber({ date }: { date: string }) {
 }
 
 /**
- * Planear Jóvenes — the Saturday roster as hairline rows by month (Fecha, Encargado, Apoyo, Quién
- * comparte, Notas) and «Copiar para WhatsApp», which replaces the image the team sent. `canEdit`
- * (a Jóvenes admin) only shows the buttons; every write is decided again by the server.
+ * Planear Jóvenes — the roster of whole-ministry meetings as hairline rows by month (Fecha,
+ * Encargado, Apoyo, Quién comparte, Lugar, Notas) and «Copiar para WhatsApp», which replaces the
+ * image the team sent. Every Saturday has a row; «Nueva reunión» creates one on any date (a Friday
+ * study), which then has its own row. A seat holds a pastor or a typed name (someone without an
+ * account, or the hosting group). `canEdit` (a Jóvenes admin) only shows the buttons; every write
+ * is decided again by the server.
  *
  * The month and its arrows live in the page's title (`/jovenes/admin`); this is the section under
  * it. No card per Saturday: a rule between rows, the day number leading, the state as a dot and a
@@ -68,11 +75,14 @@ export default function SaturdayPlanner({
   rows,
   people,
   canEdit,
+  defaultDate,
 }: {
   month: string;
   rows: SaturdayRow[];
   people: JovenesPerson[];
   canEdit: boolean;
+  /** Where «Nueva reunión» starts: today in the current month, else the month's first day. */
+  defaultDate: string;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -93,6 +103,13 @@ export default function SaturdayPlanner({
     setEditing((e) => (e ? { ...e, form: { ...e.form, ...patch } } : e));
   }
 
+  /** One seat column, from the latest state (a typed-mode switch sets member and name in two calls). */
+  function patchPick(role: SaturdaySeat, patch: Partial<SeatPick>) {
+    setEditing((e) =>
+      e ? { ...e, form: { ...e.form, picks: { ...e.form.picks, [role]: { ...e.form.picks[role], ...patch } } } } : e,
+    );
+  }
+
   async function copyRoster() {
     try {
       await navigator.clipboard.writeText(whatsappRoster(month, rows));
@@ -105,7 +122,10 @@ export default function SaturdayPlanner({
   async function save() {
     if (!editing || saving) return;
     const { form, event, token } = editing;
-    const problem = halfTypedClock(["jovenes-saturday-time", "jovenes-saturday-arrival"]) ?? saturdayProblem(form);
+    // The date first: with no date there is nothing to save, whatever the clocks say.
+    const problem = isIsoDay(form.date)
+      ? (halfTypedClock(["jovenes-saturday-time", "jovenes-saturday-arrival"]) ?? saturdayProblem(form))
+      : saturdayProblem(form);
     if (problem) {
       setError(problem);
       return;
@@ -134,8 +154,15 @@ export default function SaturdayPlanner({
         return;
       }
       setEditing(null);
-      toast({ message: event ? "Reunión guardada" : "Reunión creada", tone: "ok" });
-      router.refresh();
+      const elsewhere = form.date.slice(0, 7) !== month;
+      // A meeting saved into another month would vanish from this one: go to its month, and say
+      // the date, so nobody presses «Nueva reunión» again for a duplicate.
+      toast({
+        message: `${event ? "Reunión guardada" : "Reunión creada"}${elsewhere ? ` para el ${dayWords(form.date)}` : ""}`,
+        tone: "ok",
+      });
+      if (elsewhere) router.push(`/jovenes/admin?mes=${form.date.slice(0, 7)}`);
+      else router.refresh();
     } catch {
       setError("No se pudo guardar. Intenta de nuevo.");
     } finally {
@@ -185,9 +212,16 @@ export default function SaturdayPlanner({
         <h2 id="jovenes-saturday-roster" className={SHEET_TITLE}>
           Rol del sábado
         </h2>
-        <Button variant="secondary" size="sm" onClick={copyRoster}>
-          Copiar para WhatsApp
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {canEdit && (
+            <Button variant="secondary" size="sm" onClick={() => open(defaultDate, null)}>
+              Nueva reunión
+            </Button>
+          )}
+          <Button variant="secondary" size="sm" onClick={copyRoster}>
+            Copiar para WhatsApp
+          </Button>
+        </div>
       </header>
 
       {/* Column heads for wide screens; on a phone each row stacks (no sideways scroll). */}
@@ -196,6 +230,7 @@ export default function SaturdayPlanner({
         {SATURDAY_SEATS.map((r) => (
           <span key={r}>{SEAT_LABEL[r]}</span>
         ))}
+        <span>Lugar</span>
         <span>Notas</span>
       </div>
       <ul className="divide-y divide-ink/[0.10] border-y border-ink/[0.10]">
@@ -206,7 +241,7 @@ export default function SaturdayPlanner({
                 <DayNumber date={row.date} />
                 <span className="font-body text-[13px] text-ink-dim md:mt-1.5 md:block">{dow(row.date)}</span>
               </p>
-              <p className="flex-1 font-body text-[15px] italic text-ink-muted md:col-span-4">Sin reunión</p>
+              <p className="flex-1 font-body text-[15px] italic text-ink-muted md:col-span-5">Sin reunión</p>
               {canEdit && (
                 <div className="md:text-right">
                   <Button variant="secondary" size="sm" onClick={() => open(row.date, null)}>
@@ -256,6 +291,10 @@ export default function SaturdayPlanner({
                     );
                   })}
                 </p>
+                <p className={`break-words font-body text-[15px] leading-snug text-ink ${e.place ? "" : "hidden md:block"}`}>
+                  {e.place && <span className="text-ink-dim md:sr-only">Lugar </span>}
+                  {e.place ?? ""}
+                </p>
                 <p className={`whitespace-pre-line break-words font-body text-[15px] leading-snug text-ink-muted ${e.notes ? "" : "hidden md:block"}`}>
                   {e.notes ?? ""}
                 </p>
@@ -286,8 +325,21 @@ export default function SaturdayPlanner({
             {/* What this sheet is about, in the body face under the house title: the date and
                 who the meeting is for. (It used to be a second, smaller title in capitals.) */}
             <p className="font-body text-[17px] leading-snug text-ink-dim">
-              {dayTitle(editing.form.date)} · <span className="text-ink">{audienceLabel({ kind: "ministry" })}</span>
+              {isIsoDay(editing.form.date) && <>{dayTitle(editing.form.date)} · </>}
+              <span className="text-ink">{audienceLabel({ kind: "ministry" })}</span>
             </p>
+            <div>
+              <label htmlFor="jovenes-saturday-date" className={`${HAIRLINE_LABEL_CLASS} mb-1.5 block`}>
+                Fecha
+              </label>
+              <DateField
+                kind="date"
+                size="lg"
+                id="jovenes-saturday-date"
+                value={editing.form.date}
+                onChange={(e) => patchForm({ date: e.target.value })}
+              />
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label htmlFor="jovenes-saturday-time" className={`${HAIRLINE_LABEL_CLASS} mb-1.5 block`}>
@@ -314,6 +366,26 @@ export default function SaturdayPlanner({
                 />
               </div>
             </div>
+            <label className="block">
+              <span className={HAIRLINE_LABEL_CLASS}>Qué</span>
+              <input
+                className={HAIRLINE_INPUT_CLASS}
+                maxLength={80}
+                placeholder="Por ejemplo Estudio «Daniel», Gotcha, Posada"
+                value={editing.form.title}
+                onChange={(e) => patchForm({ title: e.target.value })}
+              />
+            </label>
+            <label className="block">
+              <span className={HAIRLINE_LABEL_CLASS}>Lugar</span>
+              <input
+                className={HAIRLINE_INPUT_CLASS}
+                maxLength={120}
+                placeholder="Por ejemplo Oasis Tlalpan"
+                value={editing.form.place}
+                onChange={(e) => patchForm({ place: e.target.value.replace(/[\r\n\u2028\u2029]/g, " ") })}
+              />
+            </label>
             {SATURDAY_SEATS.map((role) => (
               <div key={role}>
                 <span className={`${HAIRLINE_LABEL_CLASS} mb-1.5 block`}>{SEAT_LABEL[role]}</span>
@@ -322,9 +394,9 @@ export default function SaturdayPlanner({
                   value={editing.form.picks[role].member}
                   people={people}
                   storedName={editing.form.picks[role].key ? names.get(editing.form.picks[role].key!) : null}
-                  onChange={(member) =>
-                    patchForm({ picks: { ...editing.form.picks, [role]: { ...editing.form.picks[role], member } } })
-                  }
+                  onChange={(member) => patchPick(role, { member })}
+                  typedName={editing.form.picks[role].name}
+                  onTypedName={(name) => patchPick(role, { name })}
                 />
               </div>
             ))}

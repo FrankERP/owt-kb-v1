@@ -13,6 +13,9 @@ const CODE_WORDS: Record<string, string> = {
   invalid_program: "Revisa el programa: cada línea necesita un nombre corto.",
   invalid_notes: "Las notas son demasiado largas.",
   invalid_title: "El título es demasiado largo.",
+  invalid_place: "El lugar es demasiado largo o tiene saltos de línea.",
+  invalid_seats: "Revisa a las personas: un nombre corto, de una línea, por casilla.",
+  invalid_date: "Elige la fecha.",
   already_created: "Esta reunión ya estaba creada.",
 };
 

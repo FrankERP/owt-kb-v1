@@ -560,7 +560,8 @@ writes an event.
 | `date` | `YYYY-MM-DD`, rendered at local noon |
 | `time`, `arrival` | `HH:mm`, display only |
 | `title`, `notes` | free text |
-| `seats[]` | `ministryEventSeat`: `role` (`encargado` / `apoyo` / `comparte`), `member` (**weak** reference) |
+| `place` | one line, ≤120 — where it happens («Oasis Tlalpan»), display only (2026-11-10) |
+| `seats[]` | `ministryEventSeat`: `role` (`encargado` / `apoyo` / `comparte`), and EITHER `member` (**weak** reference) OR `name` (one line, ≤60: someone without an account, or the hosting group — text, never validated, never «Tú», no program right; 2026-11-10), never both |
 | `program[]` | `ministryEventProgramLine`: `label`, `member?` (weak), `note?` |
 | `published` | boolean, written on every create; members read `published == true` only |
 | `createdBy` | weak reference to the creator, written once at create (a joint meeting is edited only by its creator and the admins) |
