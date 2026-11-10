@@ -23,7 +23,7 @@ import { MEMBER_AVAILABILITY_QUERY, SERVICE_DATES_QUERY, horizon } from "../quer
 // `requireWorshipPage`, and nothing here reads a member's Tipo or assignments.
 
 export const metadata: Metadata = {
-  title: "Disponibilidad — Oasis Worship Team",
+  title: "Disponibilidad — Backstage",
   description: "Marca los días en que no puedes servir.",
 };
 

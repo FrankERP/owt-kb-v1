@@ -43,7 +43,7 @@ import { CONSENT_WARNING, TIER_CONSENT_TEXT } from "@/app/mcp/oauth/consentCopy"
 // then the request through the SAME validator the POST re-runs (R18).
 
 export const metadata: Metadata = {
-  title: "Autorizar conexión — Oasis Worship Team",
+  title: "Autorizar conexión — Backstage",
   robots: { index: false, follow: false },
 };
 

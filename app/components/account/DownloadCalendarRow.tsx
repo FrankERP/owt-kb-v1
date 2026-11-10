@@ -30,7 +30,7 @@ export default function DownloadCalendarRow({ services }: { services: ICSEvent[]
       <button
         type="button"
         className={ACCOUNT_ROW_CLASS}
-        onClick={() => downloadICS(services, "mis-servicios-owt.ics")}
+        onClick={() => downloadICS(services, "mis-servicios.ics")}
       >
         <AccountRowBody
           title="Descargar mis servicios"

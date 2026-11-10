@@ -25,8 +25,8 @@ import { MinistryEventReadUnavailable, readMinistryEvents, type MinistryEventVie
 import { rolloutAllows } from "@/app/utils/rollout";
 
 export const metadata: Metadata = {
-  title: "Calendario — Oasis Worship Team",
-  description: "Próximos servicios y asignaciones del equipo de alabanza Oasis.",
+  title: "Calendario — Backstage",
+  description: "Próximos servicios, eventos y asignaciones de tus ministerios.",
 };
 
 // No `revalidate` export: the page reads the session (it was already dynamic, so the old
