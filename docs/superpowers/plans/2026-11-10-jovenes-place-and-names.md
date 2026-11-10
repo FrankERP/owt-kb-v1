@@ -158,3 +158,25 @@ writes, CLAUDE.md), fix the meetings already created (first confirming 20 Nov's 
 "Daniel"», Lugar «Oasis Tlalpan», Encargado «Emprendedores», Quién comparte «Ana», notes cleared;
 28 Nov title «Gotcha»; 5 Dec title «Posada Emprendedores», Lugar «Casa Fam Varela», Encargado
 «Emprendedores»; 12 Dec title «Posada general de fin de año»; 14 Nov unchanged.
+
+## 7. Post-approval notes (UN-REVIEWED; approval covers digest 69d8d319 only)
+
+Adopted from the reviewers' non-blocking notes while building:
+
+- The Saturday editor refuses an empty or malformed Fecha before sending («Elige la fecha.»), the
+  sheet's header renders only for a valid date (`dayTitle("")` throws), and `invalid_date` gets
+  words in `CODE_WORDS`.
+- `optionalLine` refuses `\r`, `\n`, U+2028 and U+2029.
+- `invalid_seats` reads «Revisa a las personas: un nombre corto, de una línea, por casilla.» (no
+  «lugar», which now means the place).
+- An `extra` seat with neither member nor typed name is skipped, like a pick.
+- Rollback, said aloud: reverting this release hides typed seat names (they read «Sin asignar»)
+  and the old editor DROPS them on the next save of that meeting; `place` survives (old bodies
+  never send it). The stale-tab window is any super-admin, not only Frank.
+- Docs also touched: `docs/DATA_MODEL.md`, `docs/API_REFERENCE.md` (the body shape), and
+  `INTERNAL_STUDIO_FIELDS.ministryEvent` (`studioProtection.ts`) gains `place`.
+- Tests live where the existing ones are: the program editor's «no typed option» and
+  `writeMessage`'s words in the existing component/eventWrite tests; `jovenesEventView.test.ts`'s
+  fallback expectation moves from «Lugar» to «Asiento».
+- P5 kind drift accepted: a `saturday` meeting moved to a weekday is saved as `ministry` and stays
+  `ministry` if moved back (display only, D3).
