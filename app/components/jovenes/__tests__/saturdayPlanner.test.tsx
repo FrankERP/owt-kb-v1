@@ -124,13 +124,33 @@ describe("SaturdayPlanner", () => {
     });
   });
 
-  it("refuses a malformed time before sending anything", async () => {
+  // The clocks are the house time field (`DateField kind="time"`), not free text: a phone's
+  // digits-only keyboard has no «:», and the native control cannot hold a malformed value at all.
+  // What a malformed one would be told is pinned on the model (`saturdayProblem`).
+  it("the clocks are the house time field, and a changed one is what gets sent", async () => {
     renderPlanner([ev()]);
     fireEvent.click(screen.getByRole("button", { name: "Editar" }));
-    fireEvent.change(screen.getByPlaceholderText("18:10"), { target: { value: "6pm" } });
+    const hora = screen.getByLabelText("Hora") as HTMLInputElement;
+    const llegada = screen.getByLabelText("Llegada") as HTMLInputElement;
+    expect([hora.type, hora.value, llegada.type, llegada.value]).toEqual(["time", "18:10", "time", "17:30"]);
+    fireEvent.change(hora, { target: { value: "19:00" } });
     fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
-    expect(await screen.findByText("La hora debe ser HH:mm (por ejemplo 18:10).")).toBeTruthy();
-    expect(calls).toEqual([]);
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    expect(calls[0].body).toMatchObject({ time: "19:00", arrival: "17:30" });
+  });
+
+  it("says the state of every row, published or not, and a failure in the dialog's own status", async () => {
+    answer = { status: 403, body: { error: "No puedes editar este evento." } };
+    renderPlanner([ev(), ev({ _id: "ministryEvent.b", date: "2026-11-14", published: true })]);
+    expect(screen.getByText("Borrador")).toBeTruthy();
+    expect(screen.getByText("Publicada")).toBeTruthy();
+    fireEvent.click(screen.getAllByRole("button", { name: "Editar" })[0]);
+    // The sheet's title is the house one (an `h2`), with the date in words under it.
+    expect(screen.getByRole("heading", { name: "Editar reunión" })).toBeTruthy();
+    expect(screen.getByText(/Sábado 7 de noviembre/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    // `CueDialogStatus` announces it: the refusal sits in an alert, not in a loose red line.
+    expect((await screen.findByText("No puedes editar este evento.")).closest('[role="alert"]')).toBeTruthy();
   });
 
   it("a refusal keeps the editor open with the server's words, and refreshes nothing", async () => {

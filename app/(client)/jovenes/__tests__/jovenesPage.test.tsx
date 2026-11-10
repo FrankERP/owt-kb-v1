@@ -134,12 +134,21 @@ describe("/jovenes read", () => {
     expect(opts.to > opts.from).toBe(true);
   });
 
-  it("renders a meeting: heading, audience, «Te toca», an empty seat, the program and notes", async () => {
+  it("renders a meeting: the date as heading, its line, «Tú» in the house wording, an empty seat, the program and notes", async () => {
     h.readMinistryEvents.mockResolvedValue([EVENT]);
     const html = await visit();
     expect(html).toContain("Junta de grupos");
     expect(html).toContain("Otro Nivel · Emprendedores");
-    expect(html).toContain("Te toca — Encargado");
+    // The date heads the meeting, capital first and «de» lowercase (CSS `capitalize` raised it).
+    expect(html).toContain("Sábado 14 de noviembre");
+    expect(html).toContain("Junta de grupos · 18:00 · llegada 17:30 · Otro Nivel · Emprendedores");
+    // «Tú», as the Calendario says it, never the old accent chip «Te toca — …»: in the line under
+    // the heading, in the seat's own row, and in the lede.
+    expect(html).toContain("Tú · Encargado");
+    expect(html).toContain("Tú · Frank");
+    expect(html).not.toContain("Te toca");
+    expect(html).toContain("1 reunión por venir");
+    expect(html).toContain("te toca el sábado 14 de noviembre");
     expect(html).toContain("Sin asignar");
     expect(html).toContain("Oración");
     expect(html).toContain("llegada 17:30");
