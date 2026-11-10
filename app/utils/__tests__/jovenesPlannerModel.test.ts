@@ -91,10 +91,22 @@ describe("the planner's head", () => {
     ]);
   });
 
+  it("«con reunión» counts Saturdays only: a board on a Friday is a row, not a fifth Saturday", () => {
+    const rows = saturdayRows("2026-11", [
+      ev({ _id: "a", date: "2026-11-07" }),
+      ev({ _id: "b", date: "2026-11-14" }),
+      ev({ _id: "c", date: "2026-11-21" }),
+      ev({ _id: "d", date: "2026-11-28" }),
+      ev({ _id: "f", date: "2026-11-20", kind: "ministry", title: "Campamento", published: false }),
+    ]);
+    expect(rows).toHaveLength(5);
+    expect(plannerLede("2026-11", rows, []).map((p) => p.text)).toEqual(["4 sábados", "4 con reunión", "1 borrador"]);
+  });
+
   it("an empty month says so and leaves the zero counts out", () => {
     expect(plannerLede("2026-10", saturdayRows("2026-10", []), [])).toEqual([
       { text: "5 sábados", strong: false },
-      { text: "sin reuniones todavía", strong: true },
+      { text: "ninguno con reunión", strong: true },
     ]);
     expect(plannerLede("2026-11", saturdayRows("2026-11", [ev({ published: false })]), []).map((p) => p.text)).toEqual([
       "4 sábados",

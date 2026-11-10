@@ -11,15 +11,18 @@ import type { JovenesDayEntry, JovenesDayPerson } from "../CalendarView";
 
 const ROWS = "divide-y divide-ink/[0.10] border-y border-ink/[0.10]";
 
+// The NAME keeps its width and the label gives: a long note beside it («Dinámica · traer hojas
+// y plumas para todos») wraps on the left instead of squeezing the person to «Tú · Gabri…». Only a
+// name longer than 60% of the row is cut.
 function Row({ person, detail }: { person: JovenesDayPerson; detail?: string | null }) {
   return (
     <li className="flex items-baseline justify-between gap-4 py-3">
-      <span className="font-body text-[15px] text-ink-dim">
+      <span className="min-w-0 break-words font-body text-[15px] leading-snug text-ink-dim">
         {person.label}
         {detail && <span className="text-ink-muted"> · {detail}</span>}
       </span>
       <span
-        className={`min-w-0 truncate text-right font-body text-[17px] ${
+        className={`max-w-[60%] shrink-0 truncate text-right font-body text-[17px] ${
           person.mine ? "font-semibold text-positive-fg" : person.name ? "text-ink" : "italic text-ink-muted"
         }`}
       >
@@ -61,7 +64,7 @@ export default function JovenesMeetingBody({
               l.name || l.mine ? (
                 <Row key={l.key} person={l} detail={l.note} />
               ) : (
-                <li key={l.key} className="py-3 font-body text-[15px] text-ink-dim">
+                <li key={l.key} className="break-words py-3 font-body text-[15px] leading-snug text-ink-dim">
                   {l.label}
                   {l.note && <span className="text-ink-muted"> · {l.note}</span>}
                 </li>
@@ -70,7 +73,7 @@ export default function JovenesMeetingBody({
           </ul>
         </>
       )}
-      {entry.notes && <p className="whitespace-pre-line pt-4 font-body text-[15px] text-ink-muted">{entry.notes}</p>}
+      {entry.notes && <p className="whitespace-pre-line break-words pt-4 font-body text-[15px] text-ink-muted">{entry.notes}</p>}
     </>
   );
 }

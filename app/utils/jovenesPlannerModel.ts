@@ -92,8 +92,9 @@ export function saturdayRows(month: string, events: readonly MinistryEventView[]
 
 /**
  * The planner's lede: the month in four counts, the way every page of the app opens with what
- * matters («4 sábados · 3 con reunión · 2 borradores · 2 de grupo»). `strong` marks the one the
- * page sets in ink. A count of zero is left out, except the meetings: an empty month says so.
+ * matters («4 sábados · 3 con reunión · 2 borradores · 2 de grupo»): the Saturdays, how many of
+ * THEM have a meeting, the drafts of both sections, the group meetings. `strong` marks the one
+ * the page sets in ink. A count of zero is left out, except the meetings: an empty month says so.
  */
 export function plannerLede(
   month: string,
@@ -102,10 +103,13 @@ export function plannerLede(
 ): Array<{ text: string; strong: boolean }> {
   const meetings = rows.flatMap((r) => r.events);
   const drafts = [...meetings, ...groups].filter((e) => !e.published).length;
-  const withMeeting = rows.filter((r) => r.events.length > 0).length;
+  // Saturdays only: a board on a Friday is a row of the table, but «4 sábados · 5 con reunión»
+  // would be a count that cannot be true.
+  const saturdays = saturdaysOfMonth(month);
+  const withMeeting = rows.filter((r) => r.events.length > 0 && saturdays.includes(r.date)).length;
   return [
-    { text: plural(saturdaysOfMonth(month).length, "sábado", "sábados"), strong: false },
-    { text: withMeeting ? `${withMeeting} con reunión` : "sin reuniones todavía", strong: true },
+    { text: plural(saturdays.length, "sábado", "sábados"), strong: false },
+    { text: withMeeting ? `${withMeeting} con reunión` : "ninguno con reunión", strong: true },
     ...(drafts ? [{ text: plural(drafts, "borrador", "borradores"), strong: false }] : []),
     ...(groups.length ? [{ text: `${groups.length} de grupo`, strong: false }] : []),
   ];

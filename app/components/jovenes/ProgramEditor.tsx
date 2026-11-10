@@ -10,7 +10,8 @@ import { useToast } from "@/app/components/ui/Toast";
 import { HAIRLINE_INPUT_CLASS, HAIRLINE_LABEL_CLASS } from "@/app/components/ui/hairlineField";
 import type { MinistryEventView } from "@/app/utils/ministryEventReads";
 import { programBody, programForm, type LineForm } from "@/app/utils/jovenesPlannerModel";
-import { dayWords, eventDayLabel, eventHeading } from "@/app/utils/jovenesEventView";
+import { dayTitle } from "@/app/utils/agenda";
+import { audienceLabel, eventDayLabel, eventName } from "@/app/utils/jovenesEventView";
 import PersonSelect, { type JovenesPerson } from "./PersonSelect";
 import { programUrl, sendEventWrite } from "./eventWrite";
 
@@ -124,7 +125,7 @@ export default function ProgramEditor({
       >
         <div className="flex-1 space-y-5 overflow-y-auto px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:px-6">
           <p className="font-body text-[17px] leading-snug text-ink-dim">
-            {eventHeading(event)} · {dayWords(event.date)}
+            {dayTitle(event.date)} · <span className="text-ink">{eventName(event) ?? audienceLabel(event.audience)}</span>
           </p>
           {lines.length === 0 ? (
             <p className="font-body text-[15px] text-ink-muted">Aún no hay líneas. Agrega la oración, la dinámica y lo demás.</p>

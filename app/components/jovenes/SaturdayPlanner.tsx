@@ -26,7 +26,7 @@ import {
 import MeetingState from "./MeetingState";
 import PersonSelect, { type JovenesPerson } from "./PersonSelect";
 import ProgramEditor from "./ProgramEditor";
-import { eventUrl, eventsUrl, sendEventWrite } from "./eventWrite";
+import { eventUrl, eventsUrl, halfTypedClock, sendEventWrite } from "./eventWrite";
 
 const MINISTRY = "jovenes";
 const SEAT_LABEL = { encargado: "Encargado", apoyo: "Apoyo", comparte: "Quién comparte" } as const;
@@ -35,9 +35,12 @@ type Editing = { event: MinistryEventView | null; form: SaturdayForm; token: str
 
 // One column template for the heads and every row, so they line up: the last column has a FIXED
 // width (it used to be `auto`, and each row is its own grid, so «Crear» and «Editar · Programa»
-// pushed the names to different places). A leader has no actions and no column for them.
-const COLS_EDIT = "md:grid md:grid-cols-[6.5rem_1fr_1fr_1fr_1.4fr_10rem] md:gap-x-4";
-const COLS_READ = "md:grid md:grid-cols-[6.5rem_1fr_1fr_1fr_1.4fr] md:gap-x-4";
+// pushed the names to different places). The others are `minmax(0, …)` for the same reason: a
+// bare `1fr` cannot shrink under its content, so one long name or a link in Notas would give that
+// row a template of its own. A leader has no actions and no column for them.
+const COLS_EDIT =
+  "md:grid md:grid-cols-[6.5rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)_10.5rem] md:gap-x-4";
+const COLS_READ = "md:grid md:grid-cols-[6.5rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)] md:gap-x-4";
 
 /** «sáb»: the weekday beside the day number, from the calendar's own abbreviations. */
 function dow(date: string): string {
@@ -102,7 +105,7 @@ export default function SaturdayPlanner({
   async function save() {
     if (!editing || saving) return;
     const { form, event, token } = editing;
-    const problem = saturdayProblem(form);
+    const problem = halfTypedClock(["jovenes-saturday-time", "jovenes-saturday-arrival"]) ?? saturdayProblem(form);
     if (problem) {
       setError(problem);
       return;
@@ -236,13 +239,13 @@ export default function SaturdayPlanner({
                 </div>
                 {/* One paragraph of running text on a phone («Encargado Ana · Apoyo …»); from `md`
                     the paragraph dissolves and each seat is its own cell under the column heads. */}
-                <p className="font-body text-[17px] leading-snug md:contents">
+                <p className="break-words font-body text-[17px] leading-snug md:contents">
                   {SATURDAY_SEATS.map((role, i) => {
                     const list = seatNames(e, role);
                     // A stored seat whose person is gone reads «Sin asignar» too, and looks it.
                     const filled = e.seats.some((s) => s.role === role && s.name);
                     return (
-                      <span key={role} className="md:relative md:block md:text-[15px]">
+                      <span key={role} className="md:relative md:block md:break-words md:text-[15px]">
                         {i > 0 && <span className="text-ink-muted md:hidden"> · </span>}
                         {/* Read, not shown, from `md`: the column head above is the visible label. */}
                         <span className="text-ink-dim md:sr-only">{SEAT_LABEL[role]} </span>
@@ -253,7 +256,7 @@ export default function SaturdayPlanner({
                     );
                   })}
                 </p>
-                <p className={`whitespace-pre-line font-body text-[15px] leading-snug text-ink-muted ${e.notes ? "" : "hidden md:block"}`}>
+                <p className={`whitespace-pre-line break-words font-body text-[15px] leading-snug text-ink-muted ${e.notes ? "" : "hidden md:block"}`}>
                   {e.notes ?? ""}
                 </p>
                 {canEdit && (

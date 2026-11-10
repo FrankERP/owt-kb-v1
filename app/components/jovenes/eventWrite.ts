@@ -55,3 +55,14 @@ export function tokenOf(id: string): string {
 export const eventsUrl = (ministry: string) => `/api/ministries/${ministry}/events`;
 export const eventUrl = (ministry: string, id: string) => `${eventsUrl(ministry)}/${tokenOf(id)}`;
 export const programUrl = (ministry: string, id: string) => `${eventUrl(ministry, id)}/program`;
+
+/**
+ * A native clock left half typed («18:--» on a desktop) reports `""` as its value, so the form
+ * cannot tell it from a cleared one and would save «no time». The browser can tell (`badInput`),
+ * so the editors ask it before sending: the words to show, or `null`. `ids` are the fields' ids.
+ */
+export function halfTypedClock(ids: readonly string[]): string | null {
+  if (typeof document === "undefined") return null;
+  const half = ids.some((id) => (document.getElementById(id) as HTMLInputElement | null)?.validity?.badInput === true);
+  return half ? "Completa la hora o bórrala." : null;
+}

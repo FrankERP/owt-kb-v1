@@ -96,10 +96,12 @@ export default async function JovenesPlannerPage({ searchParams }: { searchParam
           </Button>
           <div className="mt-2 flex items-end justify-between gap-3">
             {/* The size follows the viewport under 390 px so «Septiembre» still fits beside the
-                arrows (the Calendario header's own measure). The year joins from `md`. */}
+                arrows (the Calendario header's own measure). The year joins from `md`. No
+                `truncate`: with this tight a line height its overflow-hidden would shave the
+                descenders of «Mayo» and «Agosto». */}
             <h1
               aria-label={`${title.name} ${title.year}`}
-              className="min-w-0 truncate font-display text-[clamp(40px,11.8vw,46px)] font-semibold leading-[0.98] tracking-[-0.01em] text-ink md:text-[76px] md:leading-[0.95]"
+              className="min-w-0 font-display text-[clamp(40px,11.8vw,46px)] font-semibold leading-[0.98] tracking-[-0.01em] text-ink md:text-[76px] md:leading-[0.95]"
             >
               {title.name}
               <span className="hidden text-ink-dim md:inline"> {title.year}</span>

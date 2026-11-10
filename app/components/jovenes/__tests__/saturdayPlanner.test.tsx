@@ -139,6 +139,24 @@ describe("SaturdayPlanner", () => {
     expect(calls[0].body).toMatchObject({ time: "19:00", arrival: "17:30" });
   });
 
+  it("refuses a clock that is not HH:mm, or one left half typed, before sending anything", async () => {
+    // A value the native field cannot hold (it reached the form another way): the model's check.
+    renderPlanner([ev({ time: "6pm" })]);
+    fireEvent.click(screen.getByRole("button", { name: "Editar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    expect(await screen.findByText("La hora debe ser HH:mm (por ejemplo 18:10).")).toBeTruthy();
+    expect(calls).toEqual([]);
+    cleanup();
+    // «18:--»: the field reports "" and only the browser knows it is not empty (`badInput`).
+    // Saving it as «no time» would silently drop the clock.
+    renderPlanner([ev()]);
+    fireEvent.click(screen.getByRole("button", { name: "Editar" }));
+    Object.defineProperty(screen.getByLabelText("Llegada"), "validity", { value: { badInput: true } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    expect(await screen.findByText("Completa la hora o bórrala.")).toBeTruthy();
+    expect(calls).toEqual([]);
+  });
+
   it("says the state of every row, published or not, and a failure in the dialog's own status", async () => {
     answer = { status: 403, body: { error: "No puedes editar este evento." } };
     renderPlanner([ev(), ev({ _id: "ministryEvent.b", date: "2026-11-14", published: true })]);

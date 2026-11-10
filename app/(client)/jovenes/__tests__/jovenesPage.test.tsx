@@ -147,6 +147,9 @@ describe("/jovenes read", () => {
     expect(html).toContain("Tú · Encargado");
     expect(html).toContain("Tú · Frank");
     expect(html).not.toContain("Te toca");
+    // The seats sit under their own section title, one level under the date's `h2`.
+    expect(html).toMatch(/<h3[^>]*>Equipo<\/h3>/);
+    expect(html).toMatch(/<h3[^>]*>Programa<\/h3>/);
     expect(html).toContain("1 reunión por venir");
     expect(html).toContain("te toca el sábado 14 de noviembre");
     expect(html).toContain("Sin asignar");

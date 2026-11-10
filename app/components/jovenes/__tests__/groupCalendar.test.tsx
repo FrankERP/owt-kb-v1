@@ -117,8 +117,9 @@ describe("GroupCalendar", () => {
     expect(calls[0].body.audience).toEqual({ kind: "groups", groups: ["otro-nivel", "emprendedores"] });
   });
 
-  // A malformed clock is pinned on the model (`groupEventProblem`): the native time field cannot hold one.
-  it("refuses before sending: no group, a leader without their own group", async () => {
+  // A malformed clock is pinned on the model (`groupEventProblem`): the native time field cannot
+  // hold one. A half-typed one («19:--») it reports as "", so the editor asks the browser.
+  it("refuses before sending: no group, a leader without their own group, a half-typed clock", async () => {
     renderCalendar([]);
     fireEvent.click(screen.getByRole("button", { name: "Nueva reunión de grupo" }));
     fireEvent.click(screen.getByRole("checkbox", { name: "Otro Nivel" }));
@@ -127,6 +128,10 @@ describe("GroupCalendar", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: "Invencibles" }));
     fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
     expect(await screen.findByText("Incluye uno de tus grupos.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Otro Nivel" }));
+    Object.defineProperty(screen.getByLabelText("Hora"), "validity", { value: { badInput: true } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    expect(await screen.findByText("Completa la hora o bórrala.")).toBeTruthy();
     expect(calls).toEqual([]);
   });
 

@@ -649,7 +649,7 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   neither empty nor `HH:mm`, in words), **`programForm`**/**`programBody`**,
   **`showsProgramEditor`**, **`whatsappRoster`**, **`monthRange`**/**`shiftMonth`**/**`parseMonth`**,
   **`monthTitle`** (the month as the page title: name and year apart) and **`plannerLede`** (the
-  page's count line: Saturdays, dates with a meeting, drafts, group meetings),
+  page's count line: Saturdays, how many of them have a meeting, drafts, group meetings),
   and the groups' calendars (PR D): **`groupEvents`**, **`canEditGroupEvent`**/**`canCreateGroupEvent`**
   (the writer's W3 as buttons), **`groupEventForm`**/**`groupEventProblem`**/**`groupEventBody`**,
   **`editLosesAccess`** (a leader about to share someone else's meeting is told first)
@@ -664,7 +664,8 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   with «Tú» in green; THE body of both `/jovenes` and the Calendario's `JovenesDayCard`, so a seat is
   never worded or coloured differently between them) and **`MeetingState`** (the planner's «Publicada» /
   «Borrador» as a dot + word, Servicios' pattern). The editors' clocks are `DateField kind="time"
-  size="lg"`, never a text input.
+  size="lg"`, never a text input; before sending they ask **`halfTypedClock(ids)`** (`eventWrite.ts`),
+  because a native clock left at «18:--» reports `""` and would be saved as «no time».
 - **`eventHeading`**, **`eventName`** (the name under a DATE: `null` for the plain Saturday meeting),
   **`eventLine`** (name · clock · arrival · audience), **`audienceLabel`**, **`seatRoleLabel`**,
   **`eventDayLabel`**, **`dayWords`** («sábado 14 de noviembre» inside a sentence; a heading uses

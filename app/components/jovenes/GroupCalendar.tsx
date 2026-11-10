@@ -26,7 +26,7 @@ import {
   type PlannerViewer,
 } from "@/app/utils/jovenesPlannerModel";
 import MeetingState from "./MeetingState";
-import { eventUrl, eventsUrl, sendEventWrite } from "./eventWrite";
+import { eventUrl, eventsUrl, halfTypedClock, sendEventWrite } from "./eventWrite";
 
 const MINISTRY = "jovenes";
 
@@ -96,7 +96,7 @@ export default function GroupCalendar({
   async function save() {
     if (!editing || saving) return;
     const { form, event, token } = editing;
-    const problem = groupEventProblem(form, viewer);
+    const problem = groupEventProblem(form, viewer) ?? halfTypedClock(["jovenes-group-time"]);
     if (problem) {
       setError(problem);
       return;
@@ -181,7 +181,7 @@ export default function GroupCalendar({
                   {Number(e.date.slice(8))}
                 </span>
                 <div className="min-w-0 space-y-1">
-                  <p className="font-body text-[17px] font-semibold leading-tight text-ink">
+                  <p className="break-words font-body text-[17px] font-semibold leading-tight text-ink">
                     {eventHeading(e)}
                     {e.time && <span className="font-normal tabular-nums text-ink-dim"> · {e.time}</span>}
                   </p>
@@ -191,7 +191,7 @@ export default function GroupCalendar({
                   {joint && (
                     <p className="font-body text-[13px] text-ink-muted">Creada por {e.createdByName ?? "alguien que ya no está"}</p>
                   )}
-                  {e.notes && <p className="whitespace-pre-line font-body text-[15px] leading-snug text-ink-muted">{e.notes}</p>}
+                  {e.notes && <p className="whitespace-pre-line break-words font-body text-[15px] leading-snug text-ink-muted">{e.notes}</p>}
                   <p>
                     <MeetingState published={e.published} />
                   </p>
