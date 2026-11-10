@@ -43,7 +43,7 @@ export default async function BibliotecaPage({
     <div>
       {/* The page's own heading is «Biblioteca» (ADR-0070), so the bar carries the
           brand on phones, as Inicio's does — not the same word twice, a line apart. */}
-      <Navbar title="Biblioteca" />
+      <Navbar title="Backstage" />
       {/* `key` forces a fresh MOUNT on a real navigation to a new `?q=`/`?tag=`
           (the /tag*, /author* redirects land here with params set). The index
           now mirrors ITS OWN state into the URL with `history.replaceState`,

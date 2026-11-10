@@ -26,7 +26,7 @@ import { rolloutAllows } from "@/app/utils/rollout";
 
 export const metadata: Metadata = {
   title: "Calendario — Backstage",
-  description: "Próximos servicios y asignaciones del equipo de alabanza Oasis.",
+  description: "Próximos servicios, eventos y asignaciones de tus ministerios.",
 };
 
 // No `revalidate` export: the page reads the session (it was already dynamic, so the old
