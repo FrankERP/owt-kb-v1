@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireActiveSession } from "@/app/utils/authGuards";
 import { getMemberAccess } from "@/app/utils/memberAccess";
@@ -11,9 +10,21 @@ import {
 } from "@/app/utils/ministryEventReads";
 import { rolloutAllows } from "@/app/utils/rollout";
 import { isGroupId } from "@/app/ministries";
-import { groupEvents, monthRange, parseMonth, saturdayRows, type PlannerViewer } from "@/app/utils/jovenesPlannerModel";
+import {
+  groupEvents,
+  monthRange,
+  monthTitle,
+  parseMonth,
+  plannerLede,
+  saturdayRows,
+  shiftMonth,
+  type PlannerViewer,
+} from "@/app/utils/jovenesPlannerModel";
 import { readJovenesPeople } from "@/app/utils/jovenesPeople";
+import { PAGE_LEDE } from "@/app/utils/homeHero";
 import Navbar from "@/app/components/Navbar";
+import Button from "@/app/components/ui/Button";
+import { ArrowLeftIcon, ChevronLeftIcon, ChevronRightIcon } from "@/app/components/ui/icons";
 import SaturdayPlanner from "@/app/components/jovenes/SaturdayPlanner";
 import GroupCalendar from "@/app/components/jovenes/GroupCalendar";
 import { revealProps } from "@/app/utils/reveal";
@@ -67,30 +78,71 @@ export default async function JovenesPlannerPage({ searchParams }: { searchParam
     led: levelIn(access, "jovenes") === "leader" ? groupsIn(access, "jovenes").filter((g) => isGroupId("jovenes", g)) : [],
   };
   const defaultDate = month === today.slice(0, 7) ? today : `${month}-01`;
+  const rows = saturdayRows(month, events);
+  const groups = groupEvents(month, events);
+  const title = monthTitle(month);
 
   return (
     <div>
       <Navbar title="Planear Jóvenes" />
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 pt-10 pb-16 space-y-6">
-        <div className="flex flex-wrap items-baseline justify-between gap-3" {...revealProps(0)}>
-          <h1 className="font-display text-2xl md:text-3xl font-bold">Rol del sábado</h1>
-          <Link href="/jovenes" className="font-label text-sm text-mono-500 hover:text-accent">
-            Ver reuniones
-          </Link>
-        </div>
+      <div className="mx-auto max-w-5xl px-5 pb-16 pt-10 sm:px-6">
+        {/* The MONTH is the page title, as in the Calendario: it is the one thing that changes
+            here, and its arrows are the round controls that header uses. «Rol del sábado» and
+            «Calendario de grupos» are the two sections under it (2026-11-10). */}
+        <header {...revealProps(0)}>
+          <Button variant="ghost" size="sm" href="/jovenes" className="-ml-3">
+            <ArrowLeftIcon size={13} />
+            Jóvenes
+          </Button>
+          <div className="mt-2 flex items-end justify-between gap-3">
+            {/* The size follows the viewport under 390 px so «Septiembre» still fits beside the
+                arrows (the Calendario header's own measure). The year joins from `md`. No
+                `truncate`: with this tight a line height its overflow-hidden would shave the
+                descenders of «Mayo» and «Agosto». */}
+            <h1
+              aria-label={`${title.name} ${title.year}`}
+              className="min-w-0 font-display text-[clamp(40px,11.8vw,46px)] font-semibold leading-[0.98] tracking-[-0.01em] text-ink md:text-[76px] md:leading-[0.95]"
+            >
+              {title.name}
+              <span className="hidden text-ink-dim md:inline"> {title.year}</span>
+            </h1>
+            <div className="flex shrink-0 items-center gap-2 pb-1.5">
+              <Button href={`/jovenes/admin?mes=${shiftMonth(month, -1)}`} aria-label="Mes anterior" variant="round">
+                <ChevronLeftIcon size={18} />
+              </Button>
+              <Button href={`/jovenes/admin?mes=${shiftMonth(month, 1)}`} aria-label="Mes siguiente" variant="round">
+                <ChevronRightIcon size={18} />
+              </Button>
+            </div>
+          </div>
+          {!unavailable && (
+            <p className={`${PAGE_LEDE} mt-3`}>
+              <span className="md:hidden">{title.year} · </span>
+              {plannerLede(month, rows, groups).map((part, i) => (
+                <span key={part.text}>
+                  {i > 0 && " · "}
+                  <span className={part.strong ? "text-ink" : undefined}>{part.text}</span>
+                </span>
+              ))}
+            </p>
+          )}
+        </header>
         {unavailable ? (
-          <p role="alert" className="rounded-2xl border border-edge-accent-subtle bg-surface-raised p-5 font-body text-sm text-ink-muted">
+          <p
+            role="alert"
+            className="mt-10 border-l-2 border-negative-strong/60 py-1 pl-4 font-body text-[15px] leading-snug text-negative-fg"
+          >
             No pudimos leer las reuniones en este momento. Intenta de nuevo más tarde.
           </p>
         ) : (
-          <>
+          <div className="mt-12 space-y-14">
             <div {...revealProps(1)}>
-              <SaturdayPlanner month={month} rows={saturdayRows(month, events)} people={people} canEdit={isManager} />
+              <SaturdayPlanner month={month} rows={rows} people={people} canEdit={isManager} />
             </div>
             <div {...revealProps(2)}>
-              <GroupCalendar events={groupEvents(month, events)} viewer={viewer} defaultDate={defaultDate} />
+              <GroupCalendar events={groups} viewer={viewer} defaultDate={defaultDate} />
             </div>
-          </>
+          </div>
         )}
       </div>
     </div>

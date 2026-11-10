@@ -124,6 +124,10 @@ describe("jovenesActiveDay", () => {
   it("names the meeting by its title or kind, keeps its time, and says who it is for", () => {
     expect(j.day).toBe("Junta de grupos");
     expect(jovenesActiveDay(meeting({ title: "Campamento" }))!.day).toBe("Campamento");
+    // The plain Saturday meeting is «Jóvenes», as a Kids Sunday is «Oasis Kids»: the row already
+    // sits under a Saturday. With a title it names itself.
+    expect(jovenesActiveDay(meeting({ kind: "saturday", audience: { kind: "ministry" } }))!.day).toBe("Jóvenes");
+    expect(jovenesActiveDay(meeting({ kind: "saturday", title: "Noche de alabanza" }))!.day).toBe("Noche de alabanza");
     expect(j.time).toBe("19:30");
     expect(j.jovenes?.audience).toBe("Otro Nivel · Emprendedores");
     expect(j.jovenes?.seats).toEqual([{ key: "s1", label: "Encargado", name: "Ana", mine: true }]);
@@ -139,6 +143,16 @@ describe("jovenesActiveDay", () => {
     expect(serviceClock(jovenesActiveDay(meeting({ time: null }))!)).toBeUndefined();
     expect(mySeats(j, "")).toEqual(["Encargado"]);
     expect(summarizeService(j)).toBe("Otro Nivel · Emprendedores · Encargado Ana");
+    // Only who is in charge: the other seats are in the sheet, and an empty one says nothing.
+    const full = meeting({
+      seats: [
+        { _key: "s1", role: "encargado", memberId: "m1", name: "Ana", mine: false },
+        { _key: "s2", role: "apoyo", memberId: "m2", name: "Beto", mine: false },
+        { _key: "s3", role: "comparte", memberId: "m3", name: "Caro", mine: false },
+      ],
+    });
+    expect(summarizeService(jovenesActiveDay(full)!)).toBe("Otro Nivel · Emprendedores · Encargado Ana");
+    expect(summarizeService(jovenesActiveDay(meeting({ seats: [] }))!)).toBe("Otro Nivel · Emprendedores");
     const other = jovenesActiveDay(meeting({ _id: "ministryEvent.b" }))!;
     const rows = agendaRows({ "2026-11-04": [j, other, { ...saturday, date: "2026-11-04" }] });
     expect(rows.map((r) => r.tone)).toEqual(["sat", "jovenes", "jovenes"]);

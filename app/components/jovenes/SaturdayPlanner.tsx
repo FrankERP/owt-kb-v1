@@ -1,40 +1,67 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Button from "@/app/components/ui/Button";
 import CueDialog from "@/app/components/ui/CueDialog";
+import CueDialogStatus from "@/app/components/ui/CueDialogStatus";
+import DateField from "@/app/components/ui/DateField";
 import Switch from "@/app/components/ui/Switch";
 import { useToast } from "@/app/components/ui/Toast";
 import { HAIRLINE_INPUT_CLASS, HAIRLINE_LABEL_CLASS } from "@/app/components/ui/hairlineField";
 import type { MinistryEventView } from "@/app/utils/ministryEventReads";
-import { isServiceTime } from "@/app/utils/serviceTime";
-import { eventDayLabel, eventHeading } from "@/app/utils/jovenesEventView";
+import { SHEET_TITLE } from "@/app/utils/homeHero";
+import { DOW_SHORT, dayTitle } from "@/app/utils/agenda";
+import { audienceLabel, eventDayLabel, eventName } from "@/app/utils/jovenesEventView";
 import {
   SATURDAY_SEATS,
-  monthLabel,
   saturdayBody,
   saturdayForm,
+  saturdayProblem,
   seatNames,
-  shiftMonth,
   whatsappRoster,
   type SaturdayForm,
   type SaturdayRow,
 } from "@/app/utils/jovenesPlannerModel";
+import MeetingState from "./MeetingState";
 import PersonSelect, { type JovenesPerson } from "./PersonSelect";
 import ProgramEditor from "./ProgramEditor";
-import { eventUrl, eventsUrl, sendEventWrite } from "./eventWrite";
+import { eventUrl, eventsUrl, halfTypedClock, sendEventWrite } from "./eventWrite";
 
 const MINISTRY = "jovenes";
 const SEAT_LABEL = { encargado: "Encargado", apoyo: "Apoyo", comparte: "Quién comparte" } as const;
 
 type Editing = { event: MinistryEventView | null; form: SaturdayForm; token: string };
 
+// One column template for the heads and every row, so they line up: the last column has a FIXED
+// width (it used to be `auto`, and each row is its own grid, so «Crear» and «Editar · Programa»
+// pushed the names to different places). The others are `minmax(0, …)` for the same reason: a
+// bare `1fr` cannot shrink under its content, so one long name or a link in Notas would give that
+// row a template of its own. A leader has no actions and no column for them.
+const COLS_EDIT =
+  "md:grid md:grid-cols-[6.5rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)_10.5rem] md:gap-x-4";
+const COLS_READ = "md:grid md:grid-cols-[6.5rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)] md:gap-x-4";
+
+/** «sáb»: the weekday beside the day number, from the calendar's own abbreviations. */
+function dow(date: string): string {
+  return DOW_SHORT[new Date(`${date}T12:00:00Z`).getUTCDay()].toLowerCase();
+}
+
+/** The day number in the display face, as a Calendario row leads with it. */
+function DayNumber({ date }: { date: string }) {
+  return (
+    <span className="font-display text-[30px] font-semibold leading-none tabular-nums text-ink">{Number(date.slice(8))}</span>
+  );
+}
+
 /**
- * Planear Jóvenes — the Saturday roster as a table by month (Fecha, Encargado, Apoyo, Quién
+ * Planear Jóvenes — the Saturday roster as hairline rows by month (Fecha, Encargado, Apoyo, Quién
  * comparte, Notas) and «Copiar para WhatsApp», which replaces the image the team sent. `canEdit`
  * (a Jóvenes admin) only shows the buttons; every write is decided again by the server.
+ *
+ * The month and its arrows live in the page's title (`/jovenes/admin`); this is the section under
+ * it. No card per Saturday: a rule between rows, the day number leading, the state as a dot and a
+ * word, and the actions as house buttons (2026-11-10, the «millones» pass of ADR-0070).
  */
 export default function SaturdayPlanner({
   month,
@@ -78,11 +105,10 @@ export default function SaturdayPlanner({
   async function save() {
     if (!editing || saving) return;
     const { form, event, token } = editing;
-    for (const [value, label] of [[form.time, "La hora"], [form.arrival, "La llegada"]] as const) {
-      if (value.trim() && !isServiceTime(value.trim())) {
-        setError(`${label} debe ser HH:mm (por ejemplo 18:10).`);
-        return;
-      }
+    const problem = halfTypedClock(["jovenes-saturday-time", "jovenes-saturday-arrival"]) ?? saturdayProblem(form);
+    if (problem) {
+      setError(problem);
+      return;
     }
     if (event && !event.rev) {
       setError("Recarga la página para editar esta reunión.");
@@ -151,91 +177,101 @@ export default function SaturdayPlanner({
   }
 
   const names = new Map(editing?.event?.seats.map((s) => [s._key, s.name]) ?? []);
+  const cols = canEdit ? COLS_EDIT : COLS_READ;
 
   return (
-    <section className="space-y-5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Link
-            href={`/jovenes/admin?mes=${shiftMonth(month, -1)}`}
-            aria-label="Mes anterior"
-            className="rounded-full px-3 py-1 font-label text-sm text-mono-500 hover:text-accent"
-          >
-            ‹
-          </Link>
-          <h2 className="font-display text-xl md:text-2xl font-bold capitalize text-ink">{monthLabel(month)}</h2>
-          <Link
-            href={`/jovenes/admin?mes=${shiftMonth(month, 1)}`}
-            aria-label="Mes siguiente"
-            className="rounded-full px-3 py-1 font-label text-sm text-mono-500 hover:text-accent"
-          >
-            ›
-          </Link>
-        </div>
-        <Button variant="secondary" size="md" onClick={copyRoster}>
+    <section aria-labelledby="jovenes-saturday-roster">
+      <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pb-3">
+        <h2 id="jovenes-saturday-roster" className={SHEET_TITLE}>
+          Rol del sábado
+        </h2>
+        <Button variant="secondary" size="sm" onClick={copyRoster}>
           Copiar para WhatsApp
         </Button>
       </header>
 
-      <div className="space-y-3">
-        {/* Column heads for wide screens; on a phone each row is its own card (no sideways scroll). */}
-        <div className="hidden md:grid md:grid-cols-[10rem_1fr_1fr_1fr_1.4fr_auto] md:gap-3 px-4 font-label text-[11px] uppercase tracking-widest text-mono-500">
-          <span>Fecha</span>
-          {SATURDAY_SEATS.map((r) => <span key={r}>{SEAT_LABEL[r]}</span>)}
-          <span>Notas</span>
-          <span className="sr-only">Acciones</span>
-        </div>
+      {/* Column heads for wide screens; on a phone each row stacks (no sideways scroll). */}
+      <div aria-hidden="true" className={`hidden pb-2 ${cols} ${HAIRLINE_LABEL_CLASS}`}>
+        <span>Fecha</span>
+        {SATURDAY_SEATS.map((r) => (
+          <span key={r}>{SEAT_LABEL[r]}</span>
+        ))}
+        <span>Notas</span>
+      </div>
+      <ul className="divide-y divide-ink/[0.10] border-y border-ink/[0.10]">
         {rows.map((row) =>
           row.events.length === 0 ? (
-            <div key={row.date} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed border-edge-accent-subtle px-4 py-3">
-              <span className="font-body text-sm capitalize text-ink-muted">{eventDayLabel(row.date)}</span>
-              <span className="font-label text-[11px] uppercase tracking-widest text-mono-600">Sin reunión</span>
+            <li key={row.date} className={`flex items-center justify-between gap-4 py-4 md:items-center ${cols}`}>
+              <p className="flex items-baseline gap-2.5 md:block">
+                <DayNumber date={row.date} />
+                <span className="font-body text-[13px] text-ink-dim md:mt-1.5 md:block">{dow(row.date)}</span>
+              </p>
+              <p className="flex-1 font-body text-[15px] italic text-ink-muted md:col-span-4">Sin reunión</p>
               {canEdit && (
-                <Button variant="pill" size="sm" onClick={() => open(row.date, null)}>
-                  Crear
-                </Button>
+                <div className="md:text-right">
+                  <Button variant="secondary" size="sm" onClick={() => open(row.date, null)}>
+                    Crear
+                  </Button>
+                </div>
               )}
-            </div>
+            </li>
           ) : (
             row.events.map((e) => (
-              <article
-                key={e._id}
-                className="grid gap-2 rounded-2xl border border-edge-accent-subtle bg-surface-raised px-4 py-3 md:grid-cols-[10rem_1fr_1fr_1fr_1.4fr_auto] md:items-start md:gap-3"
-              >
+              <li key={e._id} className={`space-y-2.5 py-4 md:items-start md:space-y-0 ${cols}`}>
                 <div>
-                  <p className="font-body text-sm capitalize text-ink">{eventDayLabel(e.date)}</p>
-                  <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">
-                    {[e.time, e.arrival ? `llegada ${e.arrival}` : null].filter(Boolean).join(" · ") || eventHeading(e)}
-                  </p>
-                  {!e.published && (
-                    <span className="mt-1 inline-block rounded-full border border-warning-fg/40 px-2 py-0.5 font-label text-[10px] uppercase tracking-widest text-warning-fg">
-                      Borrador
+                  <p className="flex items-baseline gap-2.5 md:block">
+                    <DayNumber date={e.date} />
+                    <span className="font-body text-[13px] leading-snug text-ink-dim md:mt-1.5 md:block">
+                      <span className="whitespace-nowrap">{[dow(e.date), e.time].filter(Boolean).join(" · ")}</span>
+                      {e.arrival && (
+                        <>
+                          <span className="md:hidden"> · </span>
+                          <span className="whitespace-nowrap md:block">llegada {e.arrival}</span>
+                        </>
+                      )}
                     </span>
-                  )}
+                  </p>
+                  {/* A board or a titled meeting names itself; the plain Saturday needs no name. */}
+                  {eventName(e) && <p className="mt-1.5 font-body text-[15px] font-semibold leading-snug text-ink">{eventName(e)}</p>}
+                  <p className="mt-1.5">
+                    <MeetingState published={e.published} />
+                  </p>
                 </div>
-                {SATURDAY_SEATS.map((role) => {
-                  const list = seatNames(e, role);
-                  return (
-                    <p key={role} className="font-body text-sm">
-                      <span className="md:hidden font-label text-[11px] uppercase tracking-widest text-mono-500">{SEAT_LABEL[role]}: </span>
-                      <span className={list.length ? "text-ink" : "italic text-mono-600"}>{list.length ? list.join(", ") : "Sin asignar"}</span>
-                    </p>
-                  );
-                })}
-                <p className="whitespace-pre-line font-body text-sm text-ink-muted">{e.notes ?? ""}</p>
+                {/* One paragraph of running text on a phone («Encargado Ana · Apoyo …»); from `md`
+                    the paragraph dissolves and each seat is its own cell under the column heads. */}
+                <p className="break-words font-body text-[17px] leading-snug md:contents">
+                  {SATURDAY_SEATS.map((role, i) => {
+                    const list = seatNames(e, role);
+                    // A stored seat whose person is gone reads «Sin asignar» too, and looks it.
+                    const filled = e.seats.some((s) => s.role === role && s.name);
+                    return (
+                      <span key={role} className="md:relative md:block md:break-words md:text-[15px]">
+                        {i > 0 && <span className="text-ink-muted md:hidden"> · </span>}
+                        {/* Read, not shown, from `md`: the column head above is the visible label. */}
+                        <span className="text-ink-dim md:sr-only">{SEAT_LABEL[role]} </span>
+                        <span className={filled ? "text-ink" : "italic text-ink-muted"}>
+                          {list.length ? list.join(", ") : "Sin asignar"}
+                        </span>
+                      </span>
+                    );
+                  })}
+                </p>
+                <p className={`whitespace-pre-line break-words font-body text-[15px] leading-snug text-ink-muted ${e.notes ? "" : "hidden md:block"}`}>
+                  {e.notes ?? ""}
+                </p>
                 {canEdit && (
-                  <div className="flex flex-wrap gap-2 md:justify-end">
-                    <Button variant="pill" size="sm" onClick={() => open(e.date, e)}>
+                  <div className="flex flex-wrap items-center gap-2 pt-1 md:justify-end md:pt-0">
+                    <Button variant="secondary" size="sm" onClick={() => open(e.date, e)}>
                       Editar
                     </Button>
-                    <ProgramEditor event={e} people={people} />
+                    <ProgramEditor event={e} people={people} compact />
                   </div>
                 )}
-              </article>
+              </li>
             ))
           ),
         )}
-      </div>
+      </ul>
 
       <CueDialog
         open={editing !== null}
@@ -243,44 +279,44 @@ export default function SaturdayPlanner({
         size="lg"
         label={editing ? `Reunión — ${eventDayLabel(editing.form.date)}` : "Reunión"}
         onDismiss={() => !saving && setEditing(null)}
-        title={
-          <span className="block">
-            <span className="block font-display text-base uppercase tracking-wide text-ink">
-              {editing?.event ? "Editar reunión" : "Nueva reunión"}
-            </span>
-            <span className="block font-label text-[11px] uppercase tracking-widest text-mono-500">
-              {editing ? eventDayLabel(editing.form.date) : ""}
-            </span>
-          </span>
-        }
+        title={editing?.event ? "Editar reunión" : "Nueva reunión"}
       >
         {editing && (
-          <div className="flex-1 space-y-4 overflow-y-auto px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="flex-1 space-y-5 overflow-y-auto px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:px-6">
+            {/* What this sheet is about, in the body face under the house title: the date and
+                who the meeting is for. (It used to be a second, smaller title in capitals.) */}
+            <p className="font-body text-[17px] leading-snug text-ink-dim">
+              {dayTitle(editing.form.date)} · <span className="text-ink">{audienceLabel({ kind: "ministry" })}</span>
+            </p>
             <div className="grid grid-cols-2 gap-4">
-              <label className="block">
-                <span className={HAIRLINE_LABEL_CLASS}>Hora</span>
-                <input
-                  className={HAIRLINE_INPUT_CLASS}
-                  inputMode="numeric"
-                  placeholder="18:10"
+              <div>
+                <label htmlFor="jovenes-saturday-time" className={`${HAIRLINE_LABEL_CLASS} mb-1.5 block`}>
+                  Hora
+                </label>
+                <DateField
+                  kind="time"
+                  size="lg"
+                  id="jovenes-saturday-time"
                   value={editing.form.time}
                   onChange={(e) => patchForm({ time: e.target.value })}
                 />
-              </label>
-              <label className="block">
-                <span className={HAIRLINE_LABEL_CLASS}>Llegada</span>
-                <input
-                  className={HAIRLINE_INPUT_CLASS}
-                  inputMode="numeric"
-                  placeholder="17:30"
+              </div>
+              <div>
+                <label htmlFor="jovenes-saturday-arrival" className={`${HAIRLINE_LABEL_CLASS} mb-1.5 block`}>
+                  Llegada
+                </label>
+                <DateField
+                  kind="time"
+                  size="lg"
+                  id="jovenes-saturday-arrival"
                   value={editing.form.arrival}
                   onChange={(e) => patchForm({ arrival: e.target.value })}
                 />
-              </label>
+              </div>
             </div>
             {SATURDAY_SEATS.map((role) => (
-              <div key={role} className="space-y-1">
-                <span className={HAIRLINE_LABEL_CLASS}>{SEAT_LABEL[role]}</span>
+              <div key={role}>
+                <span className={`${HAIRLINE_LABEL_CLASS} mb-1.5 block`}>{SEAT_LABEL[role]}</span>
                 <PersonSelect
                   ariaLabel={SEAT_LABEL[role]}
                   value={editing.form.picks[role].member}
@@ -301,9 +337,10 @@ export default function SaturdayPlanner({
                 onChange={(e) => patchForm({ notes: e.target.value })}
               />
             </label>
-            <div className="flex items-center justify-between gap-3">
-              <span id="jovenes-published" className="font-body text-sm text-ink">
-                Publicada (la ven los pastores)
+            <div className="flex items-center justify-between gap-4 border-t border-ink/[0.10] pt-4">
+              <span id="jovenes-published" className="min-w-0">
+                <span className="block font-body text-[17px] text-ink">Publicada</span>
+                <span className="block font-body text-[13px] text-ink-muted">La ven todos los pastores</span>
               </span>
               <Switch
                 aria-labelledby="jovenes-published"
@@ -311,12 +348,8 @@ export default function SaturdayPlanner({
                 onChange={(published) => patchForm({ published })}
               />
             </div>
-            {error && (
-              <p role="alert" className="font-body text-sm text-negative-fg">
-                {error}
-              </p>
-            )}
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+            {error && <CueDialogStatus tone="error">{error}</CueDialogStatus>}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
               {editing.event ? (
                 confirmDelete ? (
                   <Button variant="danger" size="lg" onClick={remove} busy={saving} busyLabel="Borrando…">

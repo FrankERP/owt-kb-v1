@@ -9,11 +9,14 @@ import {
   groupEventProblem,
   groupEvents,
   monthRange,
+  monthTitle,
   parseMonth,
+  plannerLede,
   programBody,
   programForm,
   saturdayBody,
   saturdayForm,
+  saturdayProblem,
   saturdayRows,
   saturdaysOfMonth,
   shiftMonth,
@@ -64,6 +67,52 @@ describe("months", () => {
   it("lists the Saturdays", () => {
     expect(saturdaysOfMonth("2026-11")).toEqual(["2026-11-07", "2026-11-14", "2026-11-21", "2026-11-28"]);
     expect(saturdaysOfMonth("2026-08")).toEqual(["2026-08-01", "2026-08-08", "2026-08-15", "2026-08-22", "2026-08-29"]);
+  });
+});
+
+describe("the planner's head", () => {
+  it("the month as a title: the name and the year apart, capital first, «de» nowhere", () => {
+    expect(monthTitle("2026-11")).toEqual({ name: "Noviembre", year: "2026" });
+    expect(monthTitle("2027-01")).toEqual({ name: "Enero", year: "2027" });
+  });
+
+  it("the lede counts Saturdays, dates with a meeting, drafts of both sections and group meetings", () => {
+    const rows = saturdayRows("2026-11", [
+      ev({ _id: "a", date: "2026-11-14" }),
+      ev({ _id: "b", date: "2026-11-21" }),
+      ev({ _id: "c", date: "2026-11-28", published: false }),
+    ]);
+    const groups = [{ published: true }, { published: false }];
+    expect(plannerLede("2026-11", rows, groups)).toEqual([
+      { text: "4 sábados", strong: false },
+      { text: "3 con reunión", strong: true },
+      { text: "2 borradores", strong: false },
+      { text: "2 de grupo", strong: false },
+    ]);
+  });
+
+  it("«con reunión» counts Saturdays only: a board on a Friday is a row, not a fifth Saturday", () => {
+    const rows = saturdayRows("2026-11", [
+      ev({ _id: "a", date: "2026-11-07" }),
+      ev({ _id: "b", date: "2026-11-14" }),
+      ev({ _id: "c", date: "2026-11-21" }),
+      ev({ _id: "d", date: "2026-11-28" }),
+      ev({ _id: "f", date: "2026-11-20", kind: "ministry", title: "Campamento", published: false }),
+    ]);
+    expect(rows).toHaveLength(5);
+    expect(plannerLede("2026-11", rows, []).map((p) => p.text)).toEqual(["4 sábados", "4 con reunión", "1 borrador"]);
+  });
+
+  it("an empty month says so and leaves the zero counts out", () => {
+    expect(plannerLede("2026-10", saturdayRows("2026-10", []), [])).toEqual([
+      { text: "5 sábados", strong: false },
+      { text: "ninguno con reunión", strong: true },
+    ]);
+    expect(plannerLede("2026-11", saturdayRows("2026-11", [ev({ published: false })]), []).map((p) => p.text)).toEqual([
+      "4 sábados",
+      "1 con reunión",
+      "1 borrador",
+    ]);
   });
 });
 
@@ -129,6 +178,17 @@ describe("the Saturday editor's body", () => {
     f.notes = "  ";
     const b = saturdayBody(f);
     expect([b.time, b.notes]).toEqual([null, null]);
+  });
+});
+
+describe("the clocks the editors accept", () => {
+  // The sheets use the native time field, which hands back "" or HH:mm; these are the belt for
+  // a value that got in another way. (They were component tests while the fields were free text.)
+  it("the Saturday form: an empty or HH:mm clock passes, anything else names the field", () => {
+    expect(saturdayProblem({ time: "18:10", arrival: "17:30" })).toBeNull();
+    expect(saturdayProblem({ time: "", arrival: " " })).toBeNull();
+    expect(saturdayProblem({ time: "6pm", arrival: "17:30" })).toBe("La hora debe ser HH:mm (por ejemplo 18:10).");
+    expect(saturdayProblem({ time: "18:10", arrival: "5:30" })).toBe("La llegada debe ser HH:mm (por ejemplo 18:10).");
   });
 });
 
@@ -239,6 +299,13 @@ describe("the groups' calendars (PR D)", () => {
     expect(groupEventProblem({ ...f, groups: [] }, leader)).toBe("Elige al menos un grupo.");
     expect(groupEventProblem({ ...f, groups: ["invencibles"] }, leader)).toBe("Incluye uno de tus grupos.");
     expect(groupEventProblem({ ...f, groups: ["invencibles"] }, admin)).toBeNull();
+  });
+
+  it("checks the clock last, after the rules about groups", () => {
+    const f = groupEventForm("2026-11-10", leader);
+    expect(groupEventProblem({ ...f, time: "19:00" }, leader)).toBeNull();
+    expect(groupEventProblem({ ...f, time: "7pm" }, leader)).toBe("La hora debe ser HH:mm (por ejemplo 19:30).");
+    expect(groupEventProblem({ ...f, time: "7pm", groups: [] }, leader)).toBe("Elige al menos un grupo.");
   });
 
   it("sends the groups in registry order with no kind (the writer derives it), cleared fields as null", () => {

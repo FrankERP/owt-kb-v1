@@ -9,6 +9,9 @@
 
 import type { MinistryEventLine, MinistryEventSeat, MinistryEventView } from "./ministryEventReads";
 import { eventDayLabel } from "./jovenesEventView";
+import { isServiceTime } from "./serviceTime";
+import { plural } from "./plural";
+import { MONTH_NAMES_ES } from "./scheduleMonths";
 import { MINISTRIES } from "@/app/ministries";
 
 /** The Saturday meeting's usual times (Frank, 2026-10-30: «Junta a las 18:10, llegada como a las 17:30»). */
@@ -55,6 +58,13 @@ export function monthLabel(month: string): string {
   return new Date(month + "-01T12:00:00").toLocaleDateString("es-MX", { month: "long", year: "numeric" });
 }
 
+/** The month as the planner's page title: «Noviembre» and «2026» apart, because the year is set
+ *  dimmer and only from `md` up (the Calendario's own header does the same). */
+export function monthTitle(month: string): { name: string; year: string } {
+  const [y, m] = month.split("-");
+  return { name: MONTH_NAMES_ES[Number(m) - 1] ?? month, year: y };
+}
+
 /** A whole-ministry meeting (the Saturday table's rows); a group's events belong to PR D's calendars. */
 export function isMinistryWide(e: Pick<MinistryEventView, "audience">): boolean {
   return e.audience?.kind === "ministry";
@@ -78,6 +88,31 @@ export function saturdayRows(month: string, events: readonly MinistryEventView[]
   return [...byDate.entries()]
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([date, list]) => ({ date, events: list }));
+}
+
+/**
+ * The planner's lede: the month in four counts, the way every page of the app opens with what
+ * matters («4 sábados · 3 con reunión · 2 borradores · 2 de grupo»): the Saturdays, how many of
+ * THEM have a meeting, the drafts of both sections, the group meetings. `strong` marks the one
+ * the page sets in ink. A count of zero is left out, except the meetings: an empty month says so.
+ */
+export function plannerLede(
+  month: string,
+  rows: readonly SaturdayRow[],
+  groups: readonly Pick<MinistryEventView, "published">[],
+): Array<{ text: string; strong: boolean }> {
+  const meetings = rows.flatMap((r) => r.events);
+  const drafts = [...meetings, ...groups].filter((e) => !e.published).length;
+  // Saturdays only: a board on a Friday is a row of the table, but «4 sábados · 5 con reunión»
+  // would be a count that cannot be true.
+  const saturdays = saturdaysOfMonth(month);
+  const withMeeting = rows.filter((r) => r.events.length > 0 && saturdays.includes(r.date)).length;
+  return [
+    { text: plural(saturdays.length, "sábado", "sábados"), strong: false },
+    { text: withMeeting ? `${withMeeting} con reunión` : "ninguno con reunión", strong: true },
+    ...(drafts ? [{ text: plural(drafts, "borrador", "borradores"), strong: false }] : []),
+    ...(groups.length ? [{ text: `${groups.length} de grupo`, strong: false }] : []),
+  ];
 }
 
 /** The names in one seat role, in stored order; a seat with no person reads «Sin asignar». */
@@ -130,6 +165,21 @@ export function saturdayForm(date: string, e?: MinistryEventView): SaturdayForm 
 
 function empty(): SeatPick {
   return { key: null, member: null };
+}
+
+/**
+ * A clock that is neither empty nor `HH:mm`, said in words, or `null`. The editors use the
+ * native time field, which only ever hands back one of those two; this is the belt for a value
+ * that reached the form another way (a stored one, a browser without the control).
+ */
+function timeProblem(value: string, label: string, example: string): string | null {
+  const v = value.trim();
+  return v && !isServiceTime(v) ? `${label} debe ser HH:mm (por ejemplo ${example}).` : null;
+}
+
+/** What would stop the Saturday form before it is sent, in words, or `null`. */
+export function saturdayProblem(form: Pick<SaturdayForm, "time" | "arrival">): string | null {
+  return timeProblem(form.time, "La hora", SATURDAY_DEFAULTS.time) ?? timeProblem(form.arrival, "La llegada", SATURDAY_DEFAULTS.time);
 }
 
 const orNull = (s: string) => (s.trim() ? s.trim() : null);
@@ -253,7 +303,7 @@ export function groupEventProblem(form: GroupEventForm, v: PlannerViewer): strin
   if (!/^\d{4}-\d{2}-\d{2}$/.test(form.date)) return "Elige la fecha.";
   if (form.groups.length === 0) return "Elige al menos un grupo.";
   if (!v.isManager && !form.groups.some((g) => v.led.includes(g))) return "Incluye uno de tus grupos.";
-  return null;
+  return timeProblem(form.time, "La hora", "19:30");
 }
 
 /**
