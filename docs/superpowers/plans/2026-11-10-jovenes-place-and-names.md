@@ -37,24 +37,30 @@ stay `audience: { kind: "ministry" }`; nothing here touches who reads a meeting.
 
 ### P1. `place`, a display text
 
-- Body: `place` is an optional text, trimmed, at most `LIMITS.place = 120` characters; absent,
-  `null` or blank ⇒ `null`; not a string or too long ⇒ 400 `invalid_place` (a new `EVENT_ERROR`
-  code). Parsed in `parseEdit` exactly like `title` (`optionalText`).
+- Body: `place` is an optional ONE-LINE text, trimmed, at most `LIMITS.place = 120` characters;
+  absent, `null` or blank ⇒ `null`; not a string, too long, or holding a line break ⇒ 400
+  `invalid_place` (a new `EVENT_ERROR` code). Parsed in `parseEdit` like `title` (`optionalText`)
+  plus the line-break refusal (a new `optionalLine` helper), because the WhatsApp copy is one line
+  per field.
 - Create: stored only when non-null (as `title`, `notes`). PATCH: `place` joins `EDITABLE` and the
   set/unset loop (`["date", "time", "arrival", "title", "notes", "place", "published"]`), so
   `null` unsets it and absent leaves it.
 - The program route reads only `program` (W4) and never touches `place`.
 - Schema: `{ name: "place", title: "Ubicación", type: "string" }` on `ministryEvent` (the Studio
   type is hidden and read-only; no Studio deploy is needed for the app to store it, and the field
-  is declared so the Studio shows it).
+  is declared so the Studio shows it). The seat object's titles change from «Lugares»/«Lugar» to
+  «Asientos»/«Asiento» (and `seatRoleLabel`'s fallback from «Lugar» to «Asiento»), so «Lugar» means
+  only the place.
+- G1b: `place` exists on no other type, so it joins `PROTECTED_FIELDS`
+  (`app/utils/protectedReadAudit.ts`), as the base contract's rule asks.
 - Reader: `place` joins `PROJECTION`; `MinistryEventView.place: string | null` (via `str`).
 - Access: none. It is read by whoever may read the event, like `title`.
 
 ### P2. A seat may hold a typed name instead of a member
 
-- Body: each seat may carry `name`, an optional text, trimmed, at most `LIMITS.name = 60`. A seat
-  with BOTH a `member` and a non-null `name` ⇒ 400 `invalid_seats`; a `name` that is not a string or
-  too long ⇒ 400 `invalid_seats`. A seat with neither stays allowed (an empty seat, as today).
+- Body: each seat may carry `name`, an optional one-line text (`optionalLine`), trimmed, at most
+  `LIMITS.name = 60`. A seat with BOTH a `member` and a non-null `name` ⇒ 400 `invalid_seats`; a
+  `name` that is not a string, too long or holding a line break ⇒ 400 `invalid_seats`. A seat with neither stays allowed (an empty seat, as today).
   `SeatIn` becomes `{ key, role, member, name }`.
 - Stored: `seatDoc` writes `name` (a plain string) when present, and no `member`. Schema: the
   `ministryEventSeat` object gains `{ name: "name", title: "Nombre (sin cuenta)", type: "string" }`.
@@ -90,39 +96,65 @@ stay `audience: { kind: "ministry" }`; nothing here touches who reads a meeting.
 
 ## 4. Guards (tests)
 
-- `ministryEventCommit.test.ts`: `place` on create (stored, trimmed; blank ⇒ absent; 121 chars ⇒
-  400 `invalid_place`); PATCH sets, unsets with `null`, leaves when absent. Seats: `name` stored
+- `ministryEventCommit.test.ts`: `place` on create (stored, trimmed; blank ⇒ absent; 121 chars or a
+  line break ⇒ 400 `invalid_place`); PATCH sets, unsets with `null`, leaves when absent. Seats: `name` stored
   without `member`; `member` + `name` ⇒ 400; 61 chars ⇒ 400; a named seat never reaches `peopleFit`
   (no member read when only names are added); a named encargado gets no program right (403).
 - `ministryEventReads.test.ts` (groq-js): a named seat reads `name` = its text, `memberId` null,
   `mine` false; a member seat still reads the member's alias; `place` reads back.
-- The coverage guards (`ministryEventCoverage.test.ts`, `serviceCommitCallers.test.ts`) unchanged.
+- The coverage guards (`ministryEventCoverage.test.ts`, `serviceCommitCallers.test.ts`) unchanged;
+  `protectedReadAudit`'s own test still passes with `place` added.
+- `jovenesPlannerModel.test.ts` (pure, the client payload): P5's kind (a Saturday keeps the form's
+  kind, another weekday sends `ministry`, a stored `ministry` stays `ministry`); P7's bodies (a pick
+  sends `{ role, member }` or `{ role, name }`, never both; a blank typed name sends no seat; an
+  `extra` member seat whose VIEW name is the member's live name still sends exactly
+  `{ _key, role, member }`; an `extra` typed seat sends `{ _key, role, name }`); `place` in
+  `saturdayBody` and `groupEventBody` (null when cleared); the «Lugar: …» line in `whatsappRoster`;
+  `jovenesDayEntry` carries `place`.
+- `eventWrite.test.ts`: `invalid_place` has its words; `invalid_seats` too.
+- ProgramEditor: a test that its person picker offers no typed-name option (P7).
 
 ## 5. The UI slice (standard; consumes P1–P2)
 
 - P4. **Planear Jóvenes: «Nueva reunión»** button beside «Copiar para WhatsApp» (admins only),
-  opening the same editor with a **Fecha** field (`DateField kind="date"`), default today when in
-  the shown month, else the month's first Saturday. The editor gets Fecha for edits too (a moved
-  meeting is a PATCH of `date`). Row «Crear» stays and prefills its date.
+  opening the same editor with a **Fecha** field (`DateField kind="date"`), default today (CDMX,
+  computed by the server page as today) when in the shown month, else the month's first Saturday.
+  The editor gets Fecha for edits too (a moved meeting is a PATCH of `date`). Row «Crear» stays and
+  prefills its date. A save whose date falls in ANOTHER month navigates to that month
+  (`/jovenes/admin?mes=YYYY-MM`) instead of a bare refresh, and the toast names the date, so the
+  meeting never seems to vanish (and nobody presses «Crear» again for a duplicate).
 - P5. **Kind from the date** (client, `saturdayBody`): a Saturday date keeps the form's kind
   (`saturday` for new, the stored one for an edit); any other weekday sends `ministry`. So a Friday
   meeting is never called «Sábado de Jóvenes».
 - P6. The editor gets **Qué** (title, ≤80) and **Lugar** (place, ≤120) text fields.
-- P7. **Names without an account:** `PersonSelect` gains a last option «Escribir un nombre…»; picking
-  it shows a text input (≤60) under the select. A stored named seat opens in that mode with its
-  text. `SeatPick` becomes `{ key, member, name }`; `saturdayBody` sends `{ role, member }` or
-  `{ role, name }` and skips a seat with neither. `extra` seats carry their `name` through untouched.
+- P7. **Names without an account, in the SEATS only:** `PersonSelect` gains an OPT-IN typed mode
+  (props `typedName` + `onTypedName`), passed only by the seat pickers of the Saturday editor. With
+  it, the select gets a last option «Escribir un nombre…»; picking it shows a one-line text input
+  (≤60) under the select. Its sentinel value never reaches `member`. `ProgramEditor` does not pass
+  the props, so program lines keep members only (§2; `programBody` would drop a typed name with a
+  200). The client rule for the view's overloaded `name` (a member's live name, or a typed text):
+  typed text = `memberId === null ? name : null`, for picks AND `extra`. So a member seat never
+  opens in typed mode. `SeatPick` becomes `{ key, member, name }`; `saturdayBody` sends
+  `{ role, member }` or `{ role, name }`, never both, and skips a seat with neither. `extra` seats
+  send `{ _key, role, member }` or `{ _key, role, name }` by the same rule. A short hint under the
+  typed field says it is for someone without an account (no «Tú», no program right).
 - P8. **Lugar column** in the table (between Quién comparte and Notas; on a phone «Lugar …» in the
   running text), in «Copiar para WhatsApp» («Lugar: …»), in the meeting body shown by the Calendario
   sheet and `/jovenes` (`JovenesDayEntry.place`, a line under the seats), and in the group calendar's
   list and editor (`groupEventForm`/`groupEventBody` gain `place`).
-- P9. Docs: ADR-0081 addendum (place, typed seat names, any-date create), ROUTES/UTILITIES where
-  they describe the planner, CONTEXT if it defines the roster columns.
+- P9. Docs: ADR-0081 addendum (place, typed seat names, any-date create; and, said aloud, a group
+  typed as Encargado gives its leaders no program right: W3a matches a member, so such a meeting's
+  program is the admins'), ROUTES/UTILITIES where they describe the planner, CONTEXT if it defines
+  the roster columns. `eventWrite.ts`'s `CODE_WORDS` gains `invalid_place` («El lugar es demasiado
+  largo o tiene saltos de línea.») and `invalid_seats` («Revisa los nombres: uno por lugar, de una
+  línea.»).
 
 ## 6. Delivery
 
 One PR after PR #234: gates, one merge-range code review, preview (dev, Frank's look), main. Then,
-with Frank's signed-in Chrome, fix the five meetings already created: 20 Nov title «Estudio
+with Frank's signed-in Chrome and his go-ahead on exactly these before → after values (production
+writes, CLAUDE.md), fix the meetings already created (first confirming 20 Nov's stored time is
+20:00, since the roster's «8:00 pm» lived in its notes; 28 Nov's Encargado Goma is already set): 20 Nov title «Estudio
 "Daniel"», Lugar «Oasis Tlalpan», Encargado «Emprendedores», Quién comparte «Ana», notes cleared;
 28 Nov title «Gotcha»; 5 Dec title «Posada Emprendedores», Lugar «Casa Fam Varela», Encargado
 «Emprendedores»; 12 Dec title «Posada general de fin de año»; 14 Nov unchanged.
