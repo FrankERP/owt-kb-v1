@@ -9,7 +9,7 @@ import { serverClient } from "@/sanity/lib/serverClient";
 import { revealProps } from "@/app/utils/reveal";
 import { KIDS_SEATS, type KidsRoom, type KidsSeat } from "@/app/utils/kidsTypes";
 
-export const metadata = { title: "Oasis Kids — Planeación" };
+export const metadata = { title: "Planear Oasis Kids — Backstage" };
 
 // The three reads the planner opens with, in one round trip. They mirror the
 // projections of `/api/kids/pairs`, `/api/kids/schedules` and `/api/kids/members`

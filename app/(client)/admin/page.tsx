@@ -6,7 +6,7 @@ import { resolveAdminTab } from "@/app/components/admin/adminTabs";
 import { resolveSolverEngine } from "@/app/utils/solverDeployment";
 import { SHEET_TITLE } from "@/app/utils/homeHero";
 
-export const metadata = { title: "Admin — Oasis Worship Team" };
+export const metadata = { title: "Admin — Backstage" };
 
 type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
 

@@ -16,7 +16,7 @@ const CmsNavbar = () => {
 					/>
 					<div className="min-w-0 leading-none">
 						<p className="font-display text-base uppercase tracking-[0.12em] text-ink">Backstage</p>
-						<p className="mt-1 font-label text-[10px] uppercase tracking-[0.2em] text-ink-dim">Oasis Worship Team</p>
+						<p className="mt-1 font-label text-[10px] uppercase tracking-[0.2em] text-ink-dim">Oasis</p>
 					</div>
 				</Link>
 				<div className="text-right">

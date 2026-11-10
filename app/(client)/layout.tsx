@@ -15,9 +15,9 @@ import PullToRefresh from "../components/ui/PullToRefresh";
 import AssistantBubble from "../components/assistant/AssistantBubble";
 
 export const metadata: Metadata = {
-  title: "Oasis Worship Team",
+  title: "Backstage",
   applicationName: "Backstage",
-  description: "Knowledge base for the Oasis Worship Team — songs, setlists, and role assignments.",
+  description: "La app de los ministerios de Oasis: servicios, calendario, canciones y equipos.",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [

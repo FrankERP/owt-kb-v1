@@ -30,7 +30,7 @@ import { horizon } from "./queries";
 import { KIDS_SEATS, KIDS_SEAT_LABELS, type KidsSeat } from "@/app/utils/kidsTypes";
 
 export const metadata: Metadata = {
-  title: "Mi perfil — Oasis Worship Team",
+  title: "Mi perfil — Backstage",
   description: "Tus próximos servicios y tu disponibilidad.",
 };
 

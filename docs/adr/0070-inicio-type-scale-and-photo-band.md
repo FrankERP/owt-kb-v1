@@ -186,7 +186,7 @@ pill; «Equipo» is the small-caps title, «Banda» is 17 px sentence case; a sh
   (`.brand-stage-hero`, kept in `brand.css` for the gallery's swatch fixture only), the spaced
   uppercase «BACKSTAGE» and the cyan «Acceso del equipo» label are gone: the page is the same head
   as every other screen — the mark at 72 px (88 from `md`), «Backstage» as the `PAGE_TITLE`, one
-  `PAGE_LEDE` («Oasis Worship Team · inicia sesión para ver tus servicios y canciones.») — over
+  `PAGE_LEDE` («Oasis · inicia sesión para ver tu calendario y lo que te toca.», reworded 2026-11-10 when the app became «Backstage» for every ministry) — over
   «Continuar con Google» as a full-width secondary, «o con tu correo» as a `SHEET_TITLE` between
   hairlines, Correo and Contraseña as Mi perfil's hairline fields (`ui/hairlineField.ts`, 17 px, a
   visible label each instead of an `aria-label`) with a «Mostrar / Ocultar» ghost on the password's
