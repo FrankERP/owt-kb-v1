@@ -107,6 +107,7 @@ function meeting(over: Partial<MinistryEventView> = {}): MinistryEventView {
     arrival: null,
     title: null,
     notes: "Traer Biblia",
+    place: null,
     published: true,
     seats: [{ _key: "s1", role: "encargado", memberId: "m1", name: "Ana", mine: true }],
     program: [
@@ -132,6 +133,15 @@ describe("jovenesActiveDay", () => {
     expect(j.jovenes?.audience).toBe("Otro Nivel · Emprendedores");
     expect(j.jovenes?.seats).toEqual([{ key: "s1", label: "Encargado", name: "Ana", mine: true }]);
     expect(j.jovenes?.program.map((l) => [l.label, l.name, l.note])).toEqual([["Oración", "Beto", null], ["Dinámica", null, "10 min"]]);
+  });
+  it("carries the place and a typed seat name (someone without an account) as they are", () => {
+    const typed = jovenesActiveDay(meeting({
+      place: "Oasis Tlalpan",
+      seats: [{ _key: "s9", role: "comparte", memberId: null, name: "Ana", mine: false }],
+    }))!;
+    expect(typed.jovenes?.place).toBe("Oasis Tlalpan");
+    expect(typed.jovenes?.seats).toEqual([{ key: "s9", label: "Comparte", name: "Ana", mine: false }]);
+    expect(j.jovenes?.place).toBeNull();
   });
   it("drops a meeting whose date cannot be placed", () => {
     expect(jovenesActiveDay(meeting({ date: "x" }))).toBeNull();

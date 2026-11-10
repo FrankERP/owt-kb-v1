@@ -137,7 +137,7 @@ export default async function JovenesPlannerPage({ searchParams }: { searchParam
         ) : (
           <div className="mt-12 space-y-14">
             <div {...revealProps(1)}>
-              <SaturdayPlanner month={month} rows={rows} people={people} canEdit={isManager} />
+              <SaturdayPlanner month={month} rows={rows} people={people} canEdit={isManager} defaultDate={defaultDate} />
             </div>
             <div {...revealProps(2)}>
               <GroupCalendar events={groups} viewer={viewer} defaultDate={defaultDate} />

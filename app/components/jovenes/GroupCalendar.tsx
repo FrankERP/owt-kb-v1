@@ -186,7 +186,7 @@ export default function GroupCalendar({
                     {e.time && <span className="font-normal tabular-nums text-ink-dim"> · {e.time}</span>}
                   </p>
                   <p className="font-body text-[15px] leading-snug text-ink-dim">
-                    {shortDay(e.date)} · {audienceLabel(e.audience)}
+                    {[shortDay(e.date), e.place, audienceLabel(e.audience)].filter(Boolean).join(" · ")}
                   </p>
                   {joint && (
                     <p className="font-body text-[13px] text-ink-muted">Creada por {e.createdByName ?? "alguien que ya no está"}</p>
@@ -256,6 +256,16 @@ export default function GroupCalendar({
                 placeholder="Reunión de grupo"
                 value={editing.form.title}
                 onChange={(e) => patchForm({ title: e.target.value })}
+              />
+            </label>
+            <label className="block">
+              <span className={HAIRLINE_LABEL_CLASS}>Lugar</span>
+              <input
+                className={HAIRLINE_INPUT_CLASS}
+                maxLength={120}
+                placeholder="Por ejemplo Casa Fam Varela"
+                value={editing.form.place}
+                onChange={(e) => patchForm({ place: e.target.value.replace(/[\r\n\u2028\u2029]/g, " ") })}
               />
             </label>
             <fieldset className="space-y-2.5">

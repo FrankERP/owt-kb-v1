@@ -44,6 +44,7 @@ function ev(over: Partial<MinistryEventView> = {}): MinistryEventView {
     arrival: null,
     title: "Célula",
     notes: null,
+    place: null,
     published: false,
     seats: [],
     program: [],
@@ -100,6 +101,7 @@ describe("GroupCalendar", () => {
           date: "2026-11-10",
           time: "19:00",
           title: "Célula",
+          place: null,
           notes: null,
           published: false,
         },
@@ -133,6 +135,16 @@ describe("GroupCalendar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
     expect(await screen.findByText("Completa la hora o bórrala.")).toBeTruthy();
     expect(calls).toEqual([]);
+  });
+
+  it("shows a meeting's place, and sends an edited one", async () => {
+    renderCalendar([ev({ place: "Casa Fam Varela" })]);
+    expect(screen.getByText(/Casa Fam Varela/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Editar" }));
+    fireEvent.change(screen.getByPlaceholderText(/Casa Fam Varela/), { target: { value: "Oasis Tlalpan" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    expect(calls[0].body.place).toBe("Oasis Tlalpan");
   });
 
   it("edits through PATCH under the revision it read", async () => {

@@ -27,7 +27,8 @@ function AdminProviders({ children }: { children: ReactNode }) {
 }
 
 const refresh = vi.fn();
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
+const push = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh, push }) }));
 
 installMotionTestEnv();
 
@@ -49,6 +50,7 @@ function ev(over: Partial<MinistryEventView> = {}): MinistryEventView {
     arrival: "17:30",
     title: null,
     notes: null,
+    place: null,
     published: false,
     seats: [{ _key: "k1", role: "encargado", memberId: "m1", name: "Ana", mine: false }],
     program: [],
@@ -66,6 +68,7 @@ beforeEach(() => {
   calls = [];
   answer = { status: 200, body: { ok: true, id: "x", rev: "rev-2" } };
   refresh.mockReset();
+  push.mockReset();
   vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
     calls.push({ url, method: String(init.method), body: JSON.parse(String(init.body)) });
     return { ok: answer.status < 300, status: answer.status, json: async () => answer.body } as Response;
@@ -80,7 +83,7 @@ afterEach(() => {
 const renderPlanner = (events: MinistryEventView[], canEdit = true) =>
   render(
     <AdminProviders>
-      <SaturdayPlanner month="2026-11" rows={saturdayRows("2026-11", events)} people={people} canEdit={canEdit} />
+      <SaturdayPlanner month="2026-11" rows={saturdayRows("2026-11", events)} people={people} canEdit={canEdit} defaultDate="2026-11-10" />
     </AdminProviders>,
   );
 
@@ -103,12 +106,76 @@ describe("SaturdayPlanner", () => {
           time: "18:10",
           arrival: "17:30",
           title: null,
+          place: null,
           notes: null,
           published: false,
           seats: [{ role: "apoyo", member: "m2" }],
         },
       },
     ]);
+  });
+
+  // Plan 2026-11-10 (Frank: «Que se puedan crear en cualquier fecha», «Ana comparte», «Lugar»).
+  it("«Nueva reunión» creates a Friday meeting with its title, place and typed names", async () => {
+    renderPlanner([]);
+    fireEvent.click(screen.getByRole("button", { name: "Nueva reunión" }));
+    fireEvent.change(screen.getByLabelText("Fecha"), { target: { value: "2026-11-20" } });
+    fireEvent.change(screen.getByLabelText("Hora"), { target: { value: "20:00" } });
+    fireEvent.change(screen.getByLabelText("Llegada"), { target: { value: "" } });
+    fireEvent.change(screen.getByPlaceholderText(/Estudio/), { target: { value: "Estudio «Daniel»" } });
+    fireEvent.change(screen.getByPlaceholderText(/Oasis Tlalpan/), { target: { value: "Oasis Tlalpan" } });
+    fireEvent.change(screen.getByLabelText("Encargado"), { target: { value: "__typed__" } });
+    fireEvent.change(screen.getByLabelText("Encargado: nombre"), { target: { value: "Emprendedores" } });
+    fireEvent.change(screen.getByLabelText("Quién comparte"), { target: { value: "__typed__" } });
+    fireEvent.change(screen.getByLabelText("Quién comparte: nombre"), { target: { value: "Ana" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    expect(calls[0]).toMatchObject({
+      method: "POST",
+      body: {
+        kind: "ministry",
+        date: "2026-11-20",
+        time: "20:00",
+        arrival: null,
+        title: "Estudio «Daniel»",
+        place: "Oasis Tlalpan",
+        seats: [{ role: "encargado", name: "Emprendedores" }, { role: "comparte", name: "Ana" }],
+      },
+    });
+  });
+
+  it("warns, without refusing, when the new meeting's date already has one", () => {
+    renderPlanner([ev({ date: "2026-11-14" })]);
+    fireEvent.click(screen.getByRole("button", { name: "Nueva reunión" }));
+    expect(screen.queryByText(/Ya hay una reunión ese día/)).toBeNull();
+    fireEvent.change(screen.getByLabelText("Fecha"), { target: { value: "2026-11-14" } });
+    expect(screen.getByText(/Ya hay una reunión ese día/)).toBeTruthy();
+  });
+
+  it("a typed seat opens as text and keeps its key; picking a pastor sends the member instead", async () => {
+    renderPlanner([ev({ seats: [{ _key: "k1", role: "comparte", memberId: null, name: "Ana", mine: false }], place: "Casa Fam Varela" })]);
+    expect(screen.getByText("Casa Fam Varela")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Editar" }));
+    expect((screen.getByLabelText("Quién comparte: nombre") as HTMLInputElement).value).toBe("Ana");
+    fireEvent.change(screen.getByLabelText("Quién comparte"), { target: { value: "m2" } });
+    expect(screen.queryByLabelText("Quién comparte: nombre")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    expect(calls[0].body.seats).toEqual([{ _key: "k1", role: "comparte", member: "m2" }]);
+  });
+
+  it("refuses a missing date before sending, and a save into another month goes to that month", async () => {
+    renderPlanner([]);
+    fireEvent.click(screen.getByRole("button", { name: "Nueva reunión" }));
+    fireEvent.change(screen.getByLabelText("Fecha"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    expect(await screen.findByText("Elige la fecha.")).toBeTruthy();
+    expect(calls).toEqual([]);
+    fireEvent.change(screen.getByLabelText("Fecha"), { target: { value: "2026-12-05" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/jovenes/admin?mes=2026-12"));
+    expect(refresh).not.toHaveBeenCalled();
+    expect(calls[0].body.date).toBe("2026-12-05");
   });
 
   it("edits through PATCH under the revision it read, keeping the seat's key", async () => {
@@ -237,6 +304,18 @@ describe("ProgramEditor", () => {
       },
     ]);
   });
+
+  // Plan 2026-11-10 P7: program lines keep members only — a typed name there would be dropped.
+  it("offers no typed name on a program line", () => {
+    render(
+      <AdminProviders>
+        <ProgramEditor event={ev()} people={people} />
+      </AdminProviders>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Editar programa" }));
+    fireEvent.click(screen.getByRole("button", { name: "Agregar línea" }));
+    expect(screen.queryByRole("option", { name: "Escribir un nombre…" })).toBeNull();
+  });
 });
 
 describe("ProgramEditor after a stale save", () => {
@@ -271,5 +350,8 @@ describe("writeMessage", () => {
     expect(writeMessage(400, { error: "invalid_kind" })).toBe("No se pudo guardar. Intenta de nuevo.");
     expect(writeMessage(400, { error: "toString" })).toBe("No se pudo guardar. Intenta de nuevo.");
     expect(writeMessage(401, null)).toBe("Tu sesión terminó; vuelve a entrar.");
+    expect(writeMessage(400, { error: "invalid_place" })).toContain("lugar");
+    expect(writeMessage(400, { error: "invalid_seats" })).toContain("personas");
+    expect(writeMessage(400, { error: "invalid_date" })).toBe("Elige la fecha.");
   });
 });

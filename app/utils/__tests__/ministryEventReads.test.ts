@@ -244,6 +244,28 @@ describe("G3: isolation matrix on the real engine", () => {
     expect(row.program).toEqual([{ _key: "g1", label: "Oración", note: "5 min", memberId: "l1", name: "Lu", mine: false }]);
     expect([row.createdById, row.createdByName, row.published]).toEqual(["l1", "Lu", true]);
   });
+  it("a typed seat name reads as its text, never «mine»; a member's live name wins; the place reads back", async () => {
+    const meeting = ev("typed", {
+      ...PUB,
+      audience: { kind: "ministry" },
+      place: "Oasis Tlalpan",
+      seats: [
+        { _key: "s1", role: "encargado", name: "Emprendedores" },
+        { _key: "s2", role: "comparte", name: "Ana" },
+        { _key: "s3", role: "apoyo", member: { _ref: "p1", _weak: true } },
+        { _key: "s4", role: "apoyo" },
+      ],
+    });
+    h.fetch.mockImplementation((q: string, p?: Record<string, unknown>) => groq(q, p, [meeting, ...MEMBER_DOCS]));
+    const [row] = await readMinistryEvents(PEOPLE.pastorON, { me: "p1", ministry: "jovenes", mode: "member", ...WINDOW });
+    expect(row.place).toBe("Oasis Tlalpan");
+    expect(row.seats).toEqual([
+      { _key: "s1", role: "encargado", memberId: null, name: "Emprendedores", mine: false },
+      { _key: "s2", role: "comparte", memberId: null, name: "Ana", mine: false },
+      { _key: "s3", role: "apoyo", memberId: "p1", name: "Pastor Uno", mine: true },
+      { _key: "s4", role: "apoyo", memberId: null, name: null, mine: false },
+    ]);
+  });
 });
 
 // ── mayRead's id rule, where groq-js and Content Lake disagree ──────────────

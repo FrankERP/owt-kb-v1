@@ -455,3 +455,68 @@ describe("G4: the encargado's program (W3a, W4)", () => {
     expect([out.status, out.body]).toEqual([409, { error: EVENT_ERROR.stale }]);
   });
 });
+
+describe("place and typed seat names (plan 2026-11-10, P1–P2)", () => {
+  it("stores a trimmed place on create, leaves a blank one out, and refuses a long or multi-line one", async () => {
+    expect(stored((await create("admin", { audience: MINISTRY, place: "  Oasis Tlalpan " })).t)!.place).toBe("Oasis Tlalpan");
+    expect(stored((await create("admin", { audience: MINISTRY, place: "   " })).t)!).not.toHaveProperty("place");
+    for (const place of ["x".repeat(121), "Oasis\nTlalpan", "Oasis Tlalpan", 7]) {
+      const { out } = await create("admin", { audience: MINISTRY, place });
+      expect([out.status, out.body]).toEqual([400, { error: EVENT_ERROR.invalidPlace }]);
+    }
+  });
+
+  it("a PATCH sets the place, null unsets it, and absent leaves it", async () => {
+    const { t } = await create("admin", { audience: MINISTRY });
+    expect((await update("admin", t, { place: "Casa Fam Varela" })).status).toBe(200);
+    expect(stored(t)!.place).toBe("Casa Fam Varela");
+    expect((await update("admin", t, { title: "Posada" })).status).toBe(200);
+    expect(stored(t)!.place).toBe("Casa Fam Varela");
+    expect((await update("admin", t, { place: null })).status).toBe(200);
+    expect(stored(t)!).not.toHaveProperty("place");
+  });
+
+  it("the program route never touches the place", async () => {
+    const t = await eventBy("admin", { audience: MINISTRY, published: true, place: "Oasis Tlalpan", seats: [{ role: "encargado", member: "pastorON" }] });
+    expect((await program("pastorON", t, { program: [], place: "Otro" })).status).toBe(200);
+    expect(stored(t)!.place).toBe("Oasis Tlalpan");
+  });
+
+  it("a seat stores a typed name as text, with no member and no validation against the members", async () => {
+    // «worship» is a real person who is NOT in Jóvenes: as a member it is refused, as text it is just text.
+    const { t, out } = await create("admin", {
+      audience: MINISTRY,
+      seats: [{ role: "encargado", name: " Emprendedores " }, { role: "comparte", name: "worship" }],
+    });
+    expect(out.status).toBe(200);
+    const seats = stored(t)!.seats as Record<string, unknown>[];
+    expect(seats.map((s) => [s.role, s.name, s.member])).toEqual([
+      ["encargado", "Emprendedores", undefined],
+      ["comparte", "worship", undefined],
+    ]);
+  });
+
+  it.each([
+    [{ role: "comparte", member: "pastorON", name: "Ana" }],
+    [{ role: "comparte", name: "x".repeat(61) }],
+    [{ role: "comparte", name: "Ana\nMaría" }],
+    [{ role: "comparte", name: 3 }],
+  ])("refuses the seat %j", async (seat) => {
+    const { out } = await create("admin", { audience: MINISTRY, seats: [seat] });
+    expect([out.status, out.body]).toEqual([400, { error: EVENT_ERROR.invalidSeats }]);
+  });
+
+  it("a PATCH turns a member seat into a typed name and back; the member is validated only when added", async () => {
+    const { t } = await create("admin", { audience: MINISTRY, seats: [{ role: "comparte", member: "pastorON" }] });
+    const key = (stored(t)!.seats as { _key: string }[])[0]._key;
+    expect((await update("admin", t, { seats: [{ _key: key, role: "comparte", name: "Ana" }] })).status).toBe(200);
+    expect((stored(t)!.seats as Record<string, unknown>[])[0]).toMatchObject({ _key: key, name: "Ana" });
+    expect((stored(t)!.seats as Record<string, unknown>[])[0]).not.toHaveProperty("member");
+    expect((await update("admin", t, { seats: [{ _key: key, role: "comparte", member: "worship" }] })).body).toEqual({ error: EVENT_ERROR.invalidMember });
+  });
+
+  it("a typed name that reads like a pastor's id grants no program right", async () => {
+    const t = await eventBy("admin", { audience: MINISTRY, published: true, seats: [{ role: "encargado", name: "pastorON" }] });
+    expect((await program("pastorON", t, { program: [] })).body).toEqual({ error: EVENT_ERROR.programForbidden });
+  });
+});

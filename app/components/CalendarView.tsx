@@ -97,6 +97,8 @@ export type JovenesDayEntry = {
   id: string;
   audience: string;
   arrival: string | null;
+  /** Where it happens («Oasis Tlalpan»), or null. */
+  place: string | null;
   seats: JovenesDayPerson[];
   program: Array<JovenesDayPerson & { note: string | null }>;
   notes: string | null;

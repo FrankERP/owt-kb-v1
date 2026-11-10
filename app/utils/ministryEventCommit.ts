@@ -15,7 +15,9 @@ import "server-only";
 //   4. who may write what (W3/W3a) ⇒ 403;
 //   5. the client's revision against the stored one (W2a) ⇒ 409.
 // People are validated only where the write adds or changes them (W5), so an old meeting that
-// names someone who has left stays editable. Every member reference is stored WEAK (D4). Every
+// names someone who has left stays editable. A seat may instead hold a typed name (someone with
+// no account, or the group that hosts): that is text, never a person, so it is never validated,
+// is never «Tú» and grants no program right (plan `2026-11-10-jovenes-place-and-names.md`). Every member reference is stored WEAK (D4). Every
 // write answers `{ ok, id, rev }` and nothing of the meeting (W3b); the screen re-reads through R1.
 
 import { randomUUID } from "node:crypto";
@@ -44,6 +46,7 @@ export const EVENT_ERROR = {
   invalidArrival: "invalid_arrival",
   invalidTitle: "invalid_title",
   invalidNotes: "invalid_notes",
+  invalidPlace: "invalid_place",
   invalidPublished: "invalid_published",
   invalidSeats: "invalid_seats",
   invalidProgram: "invalid_program",
@@ -62,7 +65,7 @@ export type SeatRole = (typeof SEAT_ROLES)[number];
 /** The seats that may write a whole-ministry meeting's program (W3). */
 const PROGRAM_SEATS: readonly string[] = ["encargado", "apoyo"];
 
-export const LIMITS = { seats: 6, lines: 20, label: 60, note: 300, title: 80, notes: 2000 } as const;
+export const LIMITS = { seats: 6, lines: 20, label: 60, note: 300, title: 80, notes: 2000, place: 120, name: 60 } as const;
 
 export type EventAudience = { kind: "ministry" } | { kind: "groups"; groups: string[] };
 export type EventEffects = { id: string; rev: string | null };
@@ -137,6 +140,13 @@ function optionalText(v: unknown, max: number): string | null | undefined {
   return t.length <= max ? t : undefined;
 }
 
+/** A one-line optional text (a place, a typed name): `optionalText` that also refuses a line
+ *  break, because the WhatsApp copy gives each field one line. */
+function optionalLine(v: unknown, max: number): string | null | undefined {
+  const t = optionalText(v, max);
+  return typeof t === "string" && /[\r\n\u2028\u2029]/.test(t) ? undefined : t;
+}
+
 function optionalTime(v: unknown): string | null | undefined {
   if (v === undefined || v === null || v === "") return null;
   return isServiceTime(v) ? v : undefined;
@@ -152,7 +162,9 @@ function optionalKey(v: unknown): string | null | undefined {
   return typeof v === "string" && KEY.test(v) ? v : undefined;
 }
 
-export type SeatIn = { key: string | null; role: SeatRole; member: string | null };
+/** A seat holds a member, a typed name (someone without an account, or a hosting group), or
+ *  nobody — never both (plan 2026-11-10 P2). A name is not a person: it is never validated. */
+export type SeatIn = { key: string | null; role: SeatRole; member: string | null; name: string | null };
 export type LineIn = { key: string | null; label: string; member: string | null; note: string | null };
 
 function parseSeats(raw: unknown): SeatIn[] | Refusal {
@@ -162,11 +174,13 @@ function parseSeats(raw: unknown): SeatIn[] | Refusal {
     if (!plainObject(item)) return refuse(400, EVENT_ERROR.invalidSeats);
     const key = optionalKey(item._key);
     const member = optionalMember(item.member);
-    if (key === undefined || member === undefined) return refuse(400, EVENT_ERROR.invalidSeats);
+    const name = optionalLine(item.name, LIMITS.name);
+    if (key === undefined || member === undefined || name === undefined) return refuse(400, EVENT_ERROR.invalidSeats);
+    if (member && name) return refuse(400, EVENT_ERROR.invalidSeats);
     if (typeof item.role !== "string" || !(SEAT_ROLES as readonly string[]).includes(item.role)) {
       return refuse(400, EVENT_ERROR.invalidSeats);
     }
-    out.push({ key, role: item.role as SeatRole, member });
+    out.push({ key, role: item.role as SeatRole, member, name });
   }
   return duplicateKeys(out) ? refuse(400, EVENT_ERROR.duplicateKey) : out;
 }
@@ -202,6 +216,7 @@ type Edit = {
   arrival?: string | null;
   title?: string | null;
   notes?: string | null;
+  place?: string | null;
   published?: boolean;
   seats?: SeatIn[];
   program?: LineIn[];
@@ -241,6 +256,11 @@ function parseEdit(body: Record<string, unknown>, ministry: MinistryId): Edit | 
     const t = optionalText(body.notes, LIMITS.notes);
     if (t === undefined) return refuse(400, EVENT_ERROR.invalidNotes);
     edit.notes = t;
+  }
+  if (has(body, "place")) {
+    const t = optionalLine(body.place, LIMITS.place);
+    if (t === undefined) return refuse(400, EVENT_ERROR.invalidPlace);
+    edit.place = t;
   }
   if (has(body, "published")) {
     if (typeof body.published !== "boolean") return refuse(400, EVENT_ERROR.invalidPublished);
@@ -402,6 +422,7 @@ const seatDoc = (s: SeatIn & { finalKey: string }) => ({
   _type: "ministryEventSeat",
   role: s.role,
   ...(s.member ? { member: weakRef(s.member) } : {}),
+  ...(s.name ? { name: s.name } : {}),
 });
 const lineDoc = (l: LineIn & { finalKey: string }) => ({
   _key: l.finalKey,
@@ -475,6 +496,7 @@ export async function createMinistryEvent(
     ...(edit.arrival ? { arrival: edit.arrival } : {}),
     ...(edit.title ? { title: edit.title } : {}),
     ...(edit.notes ? { notes: edit.notes } : {}),
+    ...(edit.place ? { place: edit.place } : {}),
     seats: seats.items.map(seatDoc),
     program: program.items.map(lineDoc),
     published: edit.published ?? false,
@@ -496,7 +518,7 @@ export async function createMinistryEvent(
 
 // ── Edit, publish ───────────────────────────────────────────────────────────
 
-const EDITABLE = ["audience", "kind", "date", "time", "arrival", "title", "notes", "published", "seats", "program"];
+const EDITABLE = ["audience", "kind", "date", "time", "arrival", "title", "notes", "place", "published", "seats", "program"];
 
 export async function updateMinistryEvent(
   actorId: string,
@@ -536,7 +558,7 @@ export async function updateMinistryEvent(
   const set: Record<string, unknown> = { audience: audienceDoc(resulting), kind };
   const unset: string[] = [];
   const added: string[] = [];
-  for (const k of ["date", "time", "arrival", "title", "notes", "published"] as const) {
+  for (const k of ["date", "time", "arrival", "title", "notes", "place", "published"] as const) {
     if (!has(body, k)) continue;
     const v = edit[k];
     if (v === null) unset.push(k);

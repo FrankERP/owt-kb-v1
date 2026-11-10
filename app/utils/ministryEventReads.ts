@@ -68,6 +68,10 @@ const LEADER_DRAFT_ARM =
   `published != true && audience.kind == "groups" && count(audience.groups[@ in $led]) > 0`;
 
 const PERSON = `"memberId": member._ref, "name": member->{ "n": coalesce(alias, member_name) }.n, "mine": member._ref == $me`;
+// A seat holds a member OR a typed name (plan 2026-11-10 P2): the member's live name wins, else
+// the seat's own text. Program lines keep members only, so they keep PERSON.
+const SEAT_PERSON =
+  `"memberId": member._ref, "name": coalesce(member->{ "n": coalesce(alias, member_name) }.n, name), "mine": member._ref == $me`;
 const PROJECTION = `{
   _id,
   _rev,
@@ -79,8 +83,9 @@ const PROJECTION = `{
   arrival,
   title,
   notes,
+  place,
   "published": coalesce(published, false),
-  "seats": seats[]{ _key, role, ${PERSON} },
+  "seats": seats[]{ _key, role, ${SEAT_PERSON} },
   "program": program[]{ _key, label, note, ${PERSON} },
   "createdById": createdBy._ref,
   "createdByName": createdBy->{ "n": coalesce(alias, member_name) }.n
@@ -171,7 +176,10 @@ export type MinistryEventView = {
   arrival: string | null;
   title: string | null;
   notes: string | null;
+  /** Where it happens («Oasis Tlalpan»), display only. */
+  place: string | null;
   published: boolean;
+  /** A seat's `name` is its member's live name, or — with `memberId` null — a typed name. */
   seats: MinistryEventSeat[];
   program: MinistryEventLine[];
   createdById: string | null;
@@ -216,6 +224,7 @@ function viewOf(row: Record<string, unknown>): MinistryEventView | null {
     arrival: str(row.arrival),
     title: str(row.title),
     notes: str(row.notes),
+    place: str(row.place),
     published: row.published === true,
     seats: seats.filter(plainObject).map((s, i) => ({ ...person(s as RawPerson, i), role: str(s.role) })),
     program: program
