@@ -449,6 +449,15 @@ failed `deploymentId`, `target: "production"`, `forceNew=1`) was accepted this
 time; the redeploy went `READY` in about 3 minutes and took the alias. Again a
 no-cache retry, so still no observation that separates the two causes.
 
+**Fifth occurrence (2026-11-11, on `preview`) — the first cache-backed retry.** The merge of the
+solver rules from the chat into `preview` (`f79868ac`) failed with the same signature under
+`./app/(admin)/layout.tsx`; the release diff (`976dcdc1..f79868ac`) touched no font, layout, config
+or lockfile. One redeploy of that deployment WITHOUT `forceNew` (Vercel MCP `create_deployment`
+with the failed `deploymentId`, no `target`) restored the build cache from the previous `READY`
+deployment, went `READY` in about 3 minutes and took `dev-owt-backstage`. So a retry that kept the
+cache fixed it: the observation that separates the two causes points to a failed fetch from Google,
+not a bad font entry in the cache. Prefer the cache-backed retry; a no-cache one is not needed.
+
 **Recognising it** — all of these, not some:
 
 - every error sits under `[next]/internal/font/google/`;
