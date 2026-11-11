@@ -2,40 +2,30 @@
 // against `rolesOfPattern`, the ONE v2 map (which `patternRolesSync.test.ts` keeps in
 // step with the solver). The relation is the contract: restricted to v2's five keys the
 // two agree on every pattern, and `Sat.Choir` is added exactly when a pattern covers
-// chorus on Saturday. The pattern set is read from the rule form itself (`PATTERNS` and
-// `EXCL_PATTERNS` in MonthGenerator.tsx), so a new saveable pattern joins this test the
-// day it joins the form.
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+// chorus on Saturday. The saveable set is `RULE_PATTERNS` (`ruleCopy.ts`), which both the rule form
+// (`PATTERNS`, `EXCL_PATTERNS` in MonthGenerator.tsx) and the chat's rule edits read, so a new saveable
+// pattern joins this test the day it joins the list.
 import { describe, expect, it } from "vitest";
 
 import { LEGACY_PATTERN_ALIASES, rolesOfPattern, rolesOfPatternV3 } from "../plannerModel";
+import { EXCLUSION_PATTERN_ORDER, RULE_PATTERNS } from "../ruleCopy";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const FORM = readFileSync(path.join(HERE, "../MonthGenerator.tsx"), "utf8");
-
-/** The quoted pattern values of one `const NAME … = [ … ];` in the rule form. */
-function formList(name: string): string[] {
-  const start = FORM.indexOf(`const ${name}`);
-  if (start === -1) throw new Error(`${name} not found in MonthGenerator.tsx`);
-  const body = FORM.slice(start, FORM.indexOf("];", start));
-  const values = name === "PATTERNS"
-    ? [...body.matchAll(/value:\s*"([^"]+)"/g)].map((m) => m[1])
-    : [...body.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
-  if (values.length === 0) throw new Error(`${name} parsed empty`);
-  return values;
-}
-
-const SAVEABLE = [...new Set([...formList("PATTERNS"), ...formList("EXCL_PATTERNS")])];
+const SAVEABLE: string[] = [...RULE_PATTERNS];
 const ALIASES = [...LEGACY_PATTERN_ALIASES.keys()];
 const SAT_CHOIR_PATTERNS = new Set(["Sat.*", "*.Choir", "*.*", "Sat.Choir", "Choir.*"]);
 const ALL = [...SAVEABLE, ...ALIASES, "Sat.Choir", "*.Choir", "Sun.Lead.X", "", "Sat.LeadBGV", "constructor"];
 
 describe("rolesOfPatternV3 against rolesOfPattern (C2 RES-2)", () => {
-  it("reads a real pattern list from the rule form", () => {
-    expect(SAVEABLE.length).toBeGreaterThanOrEqual(11);
-    expect(SAVEABLE).toContain("*.LeadBGV");
+  it("the saveable list is the eleven patterns, each picker's order covers exactly that set", () => {
+    expect(SAVEABLE).toHaveLength(11);
+    expect(new Set(SAVEABLE).size).toBe(11);
+    expect([...EXCLUSION_PATTERN_ORDER].sort()).toEqual([...SAVEABLE].sort());
+    expect(SAVEABLE).not.toContain("Sun.LeadBGV");
+    expect(SAVEABLE).not.toContain("Sat.LeadBGV");
+  });
+
+  it.each(SAVEABLE)("every saveable pattern %j expands to at least one solver role", (pattern) => {
+    expect(rolesOfPatternV3(pattern).length).toBeGreaterThan(0);
   });
 
   it.each(ALL)("restricted to v2's five keys, equals rolesOfPattern for %j", (pattern) => {

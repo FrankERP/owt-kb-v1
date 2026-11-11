@@ -78,7 +78,7 @@ import Select, { nativeControlClass, useFinePointer } from "@/app/components/ui/
 import SegmentedControl from "@/app/components/ui/SegmentedControl";
 import Switch from "@/app/components/ui/Switch";
 import {
-  CAP_OP_WORD, conflictNotation, conflictSentence, exclusionSentence, patternLabel, patternPill, presenceNotation,
+  CAP_OP_WORD, EXCLUSION_PATTERN_ORDER, RULE_PATTERNS, conflictNotation, conflictSentence, exclusionSentence, patternLabel, patternPill, presenceNotation,
   presenceSentence, capSentence, restrictionChips, SLACK_STALE_NOTE, type RuleChip, type RuleSentence, type RuleTone,
 } from "./ruleCopy";
 import {
@@ -425,28 +425,12 @@ function sameStoredSectionFingerprint(
  * the value is still the solver's pattern, which the conflict and presence pickers
  * append in parentheses so a notice naming `*.Lead` can be matched to an option.
  */
-// A literal, one object per line: `patternRolesV3Sync.test.ts` reads the `value:`s off this source.
-const PATTERNS: Array<{ value: string; label: string }> = [
-  { value: "Sun.*",     label: patternLabel("Sun.*")     },
-  { value: "Sat.*",     label: patternLabel("Sat.*")     },
-  { value: "*.*",       label: patternLabel("*.*")       },
-  { value: "Sun.Lead",  label: patternLabel("Sun.Lead")  },
-  { value: "Sat.Lead",  label: patternLabel("Sat.Lead")  },
-  { value: "Sun.BGV",   label: patternLabel("Sun.BGV")   },
-  { value: "Sat.BGV",   label: patternLabel("Sat.BGV")   },
-  { value: "Sun.Choir", label: patternLabel("Sun.Choir") },
-  { value: "*.Lead",    label: patternLabel("*.Lead")    },
-  { value: "*.BGV",     label: patternLabel("*.BGV")     },
-  { value: "*.LeadBGV", label: patternLabel("*.LeadBGV") },
-];
+// The ONE saveable pattern set lives in `ruleCopy.ts` (`RULE_PATTERNS`), shared with the chat's rule
+// edits; each picker keeps its own order over it.
+const PATTERNS: Array<{ value: string; label: string }> = RULE_PATTERNS.map((value) => ({ value, label: patternLabel(value) }));
 
 // Ordered list for the exclusion pill grid (pill text: `patternPill`)
-const EXCL_PATTERNS = [
-  "Sat.*", "Sun.*", "*.*",
-  "Sun.Lead", "Sun.BGV", "Sun.Choir",
-  "Sat.Lead", "Sat.BGV",
-  "*.Lead", "*.BGV", "*.LeadBGV",
-];
+const EXCL_PATTERNS: readonly string[] = EXCLUSION_PATTERN_ORDER;
 
 const HISTORY_KEY   = "owt_solver_history_v2";
 const MAX_HISTORY   = 6;
