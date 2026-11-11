@@ -113,7 +113,6 @@ function worship(roster: readonly RuleRosterMember[]) {
   return roster.filter((m) => normalizeMinistries(m.ministries).includes("worship"));
 }
 
-/** Up to five worship names that start like `name` (accent- and case-folded). */
 /** How many leading letters two folded words share — «Gabi» and «Gaby» share three. */
 function sharedStart(a: string, b: string): number {
   let i = 0;
@@ -121,6 +120,7 @@ function sharedStart(a: string, b: string): number {
   return i;
 }
 
+/** Up to five worship names that start like `name` (accent- and case-folded). */
 function closeNames(name: string, roster: readonly RuleRosterMember[]): string[] {
   const q = fold(name);
   const out = new Set<string>();
@@ -143,7 +143,7 @@ const refuse = (message: string): never => {
 function unresolvedMessage(name: string, roster: readonly RuleRosterMember[], matches: string[]): string {
   const byId = new Map(roster.map((m) => [m._id, m]));
   if (matches.length > 1) {
-    const names = matches.map((id) => byId.get(id)).filter(Boolean).map((m) => `${(m as RuleRosterMember).member_name}`);
+    const names = matches.map((id) => byId.get(id)).filter(Boolean).map((m) => displayMemberName(m as RuleRosterMember));
     return `«${name}» nombra a más de una persona de Alabanza (${names.join(", ")}): usa el nombre completo.`;
   }
   const close = closeNames(name, roster);
@@ -338,6 +338,7 @@ export function applyRuleEdits(
       switch (e.op) {
         case "pool": {
           const field = POOL_FIELD[e.pool];
+          const addedHere = new Set<string>();
           for (const name of e.add ?? []) {
             const found = resolveRulePersonId(name, [...roster]);
             if (!found.ok) refuse(unresolvedMessage(name, roster, found.matches));
@@ -345,6 +346,7 @@ export function applyRuleEdits(
             if (!memberFitsPool(m, field)) {
               refuse(`${displayMemberName(m)} no tiene el Tipo de ${POOL_LABEL[field]} (Voz y ${POOL_LABEL[field]}); cámbialo en Personas.`);
             }
+            addedHere.add(m._id);
             if (config[field].includes(m._id)) noops.push(`Ya estaba así: ${displayMemberName(m)} ya está en ${POOL_LABEL[field]}.`);
             else {
               config[field].push(m._id);
@@ -352,9 +354,17 @@ export function applyRuleEdits(
             }
           }
           for (const name of e.remove ?? []) {
-            const found = resolveRulePersonId(name, [...roster]);
-            if (!found.ok) refuse(unresolvedMessage(name, roster, found.matches));
-            const m = roster.find((x) => x._id === (found as { id: string }).id) as RuleRosterMember;
+            // R6: a remove takes anyone IN the pool — someone who has since left Alabanza included, whom
+            // the worship-only resolver no longer finds (the panel cannot untick them either).
+            const inPool = roster.filter((x) => config[field].includes(x._id) && [x.member_name, x.alias].some((n) => n && fold(n) === fold(name)));
+            let m: RuleRosterMember;
+            if (inPool.length === 1) m = inPool[0]!;
+            else {
+              const found = resolveRulePersonId(name, [...roster]);
+              if (!found.ok) refuse(unresolvedMessage(name, roster, found.matches));
+              m = roster.find((x) => x._id === (found as { id: string }).id) as RuleRosterMember;
+            }
+            if (addedHere.has(m._id)) refuse(`${displayMemberName(m)} aparece para agregar y para quitar en ${POOL_LABEL[field]}: elige una.`);
             if (!config[field].includes(m._id)) noops.push(`Ya estaba así: ${displayMemberName(m)} no está en ${POOL_LABEL[field]}.`);
             else {
               config[field] = config[field].filter((id) => id !== m._id);
@@ -484,6 +494,8 @@ export function applyRuleEdits(
         }
         case "removeTogether": {
           const people = e.persons.map((n) => personToChange(n, roster, storedTexts()));
+          const keys = people.map((x) => x.member?._id ?? `text:${x.text.trim().toLowerCase()}`);
+          if (new Set(keys).size !== keys.length) refuse("Una persona aparece dos veces en el grupo.");
           const p = e.pattern ? wirePatternCode(e.pattern) : null;
           const matching = config.presence.filter(
             (r) => (p === null || canonical(r.pattern) === p) && r.persons.length === people.length && people.every((x) => r.persons.some((t) => names(x, t))),

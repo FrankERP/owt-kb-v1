@@ -1175,7 +1175,8 @@ removal may name any stored pattern.
 `resolveRulePersonId` (worship members, by name or alias), must have Tipo Voz, and its stored text
 (the display name) must resolve back to that same person; otherwise refused with up to five close
 names. A removal may name an orphaned rule's exact text. Pools take only someone whose Tipo fits
-(`memberFitsPool`); a stale off-Tipo tick can still be removed.
+(`memberFitsPool`); a remove takes anyone in the pool, a stale off-Tipo tick or someone who has left
+Alabanza included. A person repeated in a group, or added and removed in one pool edit, is refused.
 
 **What the check refuses, and what it only notes.** It runs the v3 eligibility resolver on the stored
 and the edited rules for the next CDMX month: a problem only the edited rules have (an unresolved

@@ -266,6 +266,12 @@ describe("pairs and groups (§4, §9.3)", () => {
     expect(refused(base(), [{ op: "together", persons: ["Pau"], pattern: SUN }])).toMatch(/de 2 a 12/);
     expect(refused(base(), [{ op: "together", persons: ["Pau", "Paulina Ríos"], pattern: SUN }])).toMatch(/dos veces/);
   });
+
+  it("removeTogether refuses a repeated person rather than matching a group it does not describe", () => {
+    const stored = base({ presence: [{ id: "p1", persons: ["Pau", "Tony"], pattern: "Sun.*" }] });
+    expect(refused(stored, [{ op: "removeTogether", persons: ["Pau", "Pau"] }])).toMatch(/dos veces/);
+    expect(refused(stored, [{ op: "removeTogether", persons: ["Pau", "Paulina Ríos"] }])).toMatch(/dos veces/);
+  });
 });
 
 describe("pools (R6, R13)", () => {
@@ -303,6 +309,17 @@ describe("pools (R6, R13)", () => {
     expect(refused(base(), [{ op: "pool", pool: "líder domingo", add: ["Gaby"] }])).toMatch(/no tiene el Tipo de Líder Domingo/);
     const r = ok(base({ sundayLeads: ["m-mkz", "m-gaby"] }), [{ op: "pool", pool: "líder domingo", remove: ["Gaby"] }]);
     expect(r.config.sundayLeads).toEqual(["m-mkz"]);
+  });
+
+  it("a remove takes anyone in the pool, someone who has left Alabanza included", () => {
+    const r = ok(base({ support: ["m-gaby", "m-kids"] }), [{ op: "pool", pool: "soporte", remove: ["Karla Kids"] }]);
+    expect(r.config.support).toEqual(["m-gaby"]);
+    expect(r.lines[0]).toMatch(/^Soporte: − Karla Kids/);
+    expect(refused(base(), [{ op: "pool", pool: "soporte", remove: ["Karla Kids"] }])).toMatch(/no nombra a nadie de Alabanza/);
+  });
+
+  it("refuses adding and removing the same person in one pool edit", () => {
+    expect(refused(base(), [{ op: "pool", pool: "soporte", add: ["Tony"], remove: ["Antonio Paz"] }])).toMatch(/agregar y para quitar/);
   });
 
   it("«ya estaba así» for an add already there or a remove not there", () => {

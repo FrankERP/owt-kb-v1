@@ -11,7 +11,8 @@ vi.mock("@/sanity/lib/operationalClient", () => ({ operationalClient: {}, rawInt
 
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import type { RuleEdit } from "@/app/utils/ruleEdits";
-import type { RuleEditsPlan, SaveRuleEditsOutcome } from "@/app/utils/solverConfigCommit";
+import { checkRuleEdits, saveRuleEdits, type RuleEditsDeps, type RuleEditsPlan, type SaveRuleEditsOutcome } from "@/app/utils/solverConfigCommit";
+import { parseSolverConfigWrite } from "@/app/utils/solverConfigWriteRequest";
 import { PRINCIPAL, textOf } from "./monthToolFixtures";
 import { CHECK_RULE_EDITS_INPUT, SAVE_RULE_EDITS_INPUT, checkRuleEditsResult, cleanRuleEdits, saveRuleEditsResult, type RuleToolDeps } from "../rules";
 import { RULE_TOKEN_TTL_S, ruleItemIds } from "../../rules/ruleTokens";
@@ -246,5 +247,48 @@ describe("save_rule_edits", () => {
     expect(out.isError).toBe(true);
     expect(sc(out)).toMatchObject({ code: "forbidden" });
     expect(d.save).not.toHaveBeenCalled();
+  });
+});
+
+describe("KH-1 through the real writer (no fakes between the tool and ruleEdits)", () => {
+  it("check and save over real rules name no member id, rule id or revision, on success and on refusal", async () => {
+    const parsed = parseSolverConfigWrite({
+      sundayLeads: ["m-mkz"],
+      saturdayLeads: [],
+      support: ["m-gaby", "m-pau"],
+      restrictions: [{ id: "r-0-0", person: "Pau", excludedPatterns: ["Sat.*"], fairness: "none", fairnessSlack: 1, weekExclusions: [], caps: [] }],
+      conflicts: [],
+      presence: [],
+    });
+    if (!parsed.ok) throw new Error("fixture");
+    const writes: unknown[] = [];
+    const store: RuleEditsDeps = {
+      loadRaw: async () => ({ _id: "solverConfig", _rev: REV, ...parsed.value.fields }),
+      roster: async () => [
+        { _id: "m-mkz", member_name: "Marco Kuri", alias: "Mkz", memberType: ["voz", "sunday_lead", "saturday_lead"] },
+        { _id: "m-gaby", member_name: "Gabriela Soto", alias: "Gaby", memberType: ["voz", "support"] },
+        { _id: "m-pau", member_name: "Paulina Ríos", alias: "Pau", memberType: ["voz", "support"] },
+      ],
+      write: async (rev, fields) => { writes.push({ rev, fields }); },
+      month: () => "2026-12",
+    };
+    const d = deps({}, {
+      check: vi.fn<RuleToolDeps["check"]>((edits, ids) => checkRuleEdits(edits, ids, store)),
+      save: vi.fn<RuleToolDeps["save"]>((edits, ids, opts) => saveRuleEdits(edits, ids, opts, store)),
+    });
+    const edits: RuleEdit[] = [
+      { op: "never", person: "Gaby", pattern: { day: "domingo", seat: "líder" } },
+      { op: "pool", pool: "líder domingo", remove: ["Mkz"] },
+      { op: "allowAgain", person: "Pau", pattern: { day: "sábado", seat: "todo" } },
+    ];
+    const checked = await checkRuleEditsResult({ edits }, d);
+    expect(checked.isError).toBeFalsy();
+    const saved = await saveRuleEditsResult({ edits, token: String(sc(checked).token) }, PRINCIPAL, d);
+    expect(sc(saved)).toMatchObject({ saved: true });
+    expect(writes).toHaveLength(1);
+    const refusedOut = await checkRuleEditsResult({ edits: [{ op: "never", person: "Nadie", pattern: { day: "domingo", seat: "todo" } }] }, d);
+    expect(refusedOut.isError).toBe(true);
+    expectClean(checked, saved, refusedOut);
+    for (const id of ["m-mkz", "m-pau"]) expect(textOf(checked)).not.toContain(id);
   });
 });
