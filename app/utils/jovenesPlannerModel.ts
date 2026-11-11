@@ -352,6 +352,9 @@ export function groupEventForm(date: string, v: PlannerViewer, e?: MinistryEvent
 export function groupEventProblem(form: GroupEventForm, v: PlannerViewer): string | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(form.date)) return "Elige la fecha.";
   if (form.groups.length === 0) return "Elige al menos un grupo.";
+  // The writer's own bound on a groups audience (`parseAudience`: 1–3); `eventWrite.ts` answers its
+  // `invalid_audience` with the same sentence.
+  if (form.groups.length > 3) return "Elige hasta tres grupos; para todos, usa una reunión de todo Jóvenes.";
   if (!v.isManager && !form.groups.some((g) => v.led.includes(g))) return "Incluye uno de tus grupos.";
   return timeProblem(form.time, "La hora", "19:30");
 }
