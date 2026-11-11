@@ -131,6 +131,11 @@ describe("ledGroupsIn — THE answer to «which groups does this person lead» (
     expect(ledGroupsIn(doc({ role: "super-admin", ministries: ["worship"] }), "jovenes")).toEqual([]);
     expect(ledGroupsIn(leader(), "worship")).toEqual([]);
   });
+  it("never answers a group outside the snapshot's own groups, even from a hand-built snapshot", () => {
+    const a = leader({ leaderOf: ["otro-nivel"] });
+    const forged = { ...a, ministryRoles: a.ministryRoles.map((r) => ({ ...r, groups: ["invencibles"], leaderOf: ["otro-nivel", "invencibles"] })) };
+    expect(ledGroupsIn(forged, "jovenes")).toEqual(["invencibles"]);
+  });
   it("hands out a copy, never the snapshot's own array", () => {
     const a = leader();
     ledGroupsIn(a, "jovenes").push("emprendedores");

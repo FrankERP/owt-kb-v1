@@ -197,8 +197,24 @@ export function keepLeaderOf(
     }
     const before = read.find((r) => r.ministry === item.ministry);
     const raw = rawItems.filter((r) => r.ministry === item.ministry);
+    if (!before) {
+      // The read dropped the stored item (the ministry is not in `ministries`, e.g. unticked in Studio,
+      // or two items name it), yet a stored `leaderOf` may still say «leads only these». Never widen
+      // past it: intersect with every present one that does not name exactly its own stored groups.
+      let led = [...item.groups];
+      for (const r of raw) {
+        if (r.leaderOf === undefined || r.leaderOf === null) continue;
+        const storedLed = Array.isArray(r.leaderOf) ? r.leaderOf.filter((g): g is string => typeof g === "string") : [];
+        const storedGroups = Array.isArray(r.groups) ? r.groups.filter((g): g is string => typeof g === "string") : [];
+        if (r.level === "leader" && sameGroups(storedLed, storedGroups)) continue;
+        led = led.filter((g) => storedLed.includes(g));
+      }
+      if (led.length === 0) return null;
+      out.push({ ...item, leaderOf: led });
+      continue;
+    }
     const storedLeader = before?.level === "leader" && raw.length === 1 && raw[0].leaderOf !== undefined && raw[0].leaderOf !== null;
-    if (!before || !storedLeader || sameGroups(before.leaderOf, before.groups)) {
+    if (!storedLeader || sameGroups(before.leaderOf, before.groups)) {
       out.push({ ...item, leaderOf: [...item.groups] });
       continue;
     }

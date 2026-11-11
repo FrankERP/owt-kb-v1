@@ -53,6 +53,11 @@ const ALLOWED_LINES: Array<{ file: string; line: string; why: string }> = [
     line: 'const storedLeader = before?.level === "leader" && raw.length === 1 && raw[0].leaderOf !== undefined && raw[0].leaderOf !== null;',
     why: "K1 (PR 1 only): whether the stored item names its own led groups; PR 2 deletes it",
   },
+  {
+    file: "app/utils/memberCommit.ts",
+    line: 'if (r.level === "leader" && sameGroups(storedLed, storedGroups)) continue;',
+    why: "K1 (PR 1 only): a stored item the read dropped that said «leads all»; PR 2 deletes it",
+  },
 ];
 
 /** True for a line that compares (or otherwise pairs) a level with the literal `leader`. */

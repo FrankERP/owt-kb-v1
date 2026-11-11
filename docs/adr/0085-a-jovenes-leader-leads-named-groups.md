@@ -52,6 +52,8 @@ code that cannot express a narrowing must never widen one it finds.
   while PR 2 is on `preview`, or after a rollback of PR 2 — keeps, narrows or refuses, never widens.
   K1's one asymmetry: from PR 1's form, a group added to a leader whose stored `leaderOf` is a strict
   subset joins as MEMBER; one added to a leader whose `leaderOf` equals their groups is LED.
+  A stored item the read DROPS (its ministry unticked in Studio, or two items naming it) still never
+  widens: each present `leaderOf` on it that does not equal its own groups is intersected too.
 
 ## Rejected
 

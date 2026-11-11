@@ -111,10 +111,15 @@ if (planned === 0) {
 mkdirSync(BACKUP_DIR, { recursive: true });
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 const listPath = path.join(BACKUP_DIR, `${stamp}-jovenes-leader-of.json`);
-writeFileSync(
-  listPath,
-  JSON.stringify({ rollback: "unset exactly these paths", patches: plan.patches.map(({ id, rev, path: p, leaderOf }) => ({ id, rev, path: p, leaderOf })) }, null, 2),
-);
+// The rollback list names only paths actually WRITTEN: it is saved before the loop as «planned» (so
+// a crash still leaves a record) and rewritten with the written patches once the loop ends or
+// fails, so a later rollback never unsets a path a 409 skipped (another writer may own it by then).
+const saveList = (status, patches) =>
+  writeFileSync(
+    listPath,
+    JSON.stringify({ status, rollback: "unset exactly these paths", patches: patches.map(({ id, rev, path: p, leaderOf }) => ({ id, rev, path: p, leaderOf })) }, null, 2),
+  );
+saveList("planned (not yet written)", plan.patches);
 console.log(`\n  list:    ${planned} path(s) -> ${listPath}`);
 
 const writer = createClient({ projectId, dataset, apiVersion, useCdn: false, token: writeToken });
@@ -132,11 +137,13 @@ for (const p of plan.patches) {
       console.log(`    ✗ ${p.name}${kindTag(p.kind)} (${p.id}): changed since the read (409) — skipped; re-run`);
       continue;
     }
+    saveList("written (stopped by a failure)", written);
     console.error(`\n  WRITE FAILED on ${p.id}: ${err?.message ?? err}\n  Written so far: ${written.length}. Re-run the dry run before anything else.`);
     process.exit(1);
   }
 }
 
+saveList("written", written);
 console.log(`\n  Written: ${written.length} · skipped by 409: ${conflicts.length}`);
 console.log(`  Rollback: unset exactly the paths listed in ${listPath} (changes nothing under L1).`);
 

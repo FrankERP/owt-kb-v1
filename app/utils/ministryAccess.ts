@@ -58,5 +58,6 @@ export function ledGroupsIn(a: Access, ministry: MinistryId): string[] {
   if (!a.ministries.includes(ministry)) return [];
   const item = a.ministryRoles.find((r) => r.ministry === ministry);
   // Fail closed (I4) on a snapshot that did not come through `normalizeMinistryRoles`.
-  return item?.level === "leader" && Array.isArray(item.leaderOf) ? [...item.leaderOf] : [];
+  if (item?.level !== "leader" || !Array.isArray(item.leaderOf) || !Array.isArray(item.groups)) return [];
+  return item.leaderOf.filter((g) => item.groups.includes(g));
 }

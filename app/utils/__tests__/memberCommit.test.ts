@@ -478,6 +478,30 @@ describe("K1 — PR 1's writers keep, narrow or refuse a stored leaderOf; never 
     expect("leaderOf" in storedItem()).toBe(false);
   });
 
+  it("an item the read drops (Jóvenes unticked in Studio) still never widens its stored subset", async () => {
+    put({ _id: "jacob", member_name: "Jacob", email: "jacob@example.com", role: "member", ministries: ["worship"], ministryRoles: [jovenesItem({ level: "leader", groups: [ON, INV], leaderOf: [ON] })] });
+    const res = await patchMember("jacob", { ministries: ["worship", "jovenes"], ministryRoles: [{ ministry: "jovenes", level: "leader", groups: [ON, INV, EM] }] }, "frank");
+    expect(res.status).toBe(200);
+    expect(storedItem().leaderOf).toEqual([ON]);
+  });
+
+  it("a dropped item whose leaderOf equals its groups, or has none, takes the legacy arm; an emptied one answers 409", async () => {
+    const reAdd = (groups: string[]) =>
+      patchMember("jacob", { ministries: ["worship", "jovenes"], ministryRoles: [{ ministry: "jovenes", level: "leader", groups }] }, "frank");
+    const seedDropped = (p: Record<string, unknown>) =>
+      put({ _id: "jacob", member_name: "Jacob", email: "jacob@example.com", role: "member", ministries: ["worship"], ministryRoles: [jovenesItem({ level: "leader", ...p })] });
+    seedDropped({ groups: [ON, INV], leaderOf: [INV, ON] });
+    expect((await reAdd([ON, INV, EM])).status).toBe(200);
+    expect(storedItem().leaderOf).toEqual([ON, INV, EM]);
+    seedDropped({ groups: [ON] });
+    expect((await reAdd([ON, EM])).status).toBe(200);
+    expect(storedItem().leaderOf).toEqual([ON, EM]);
+    seedDropped({ groups: [ON, INV], leaderOf: [INV] });
+    h.writes.length = 0;
+    expect((await reAdd([ON])).status).toBe(409);
+    expect(h.writes).toEqual([]);
+  });
+
   it("a member made leader leads every group the request names", async () => {
     put({ _id: "jacob", member_name: "Jacob", email: "jacob@example.com", ministries: ["jovenes"], ministryRoles: [jovenesItem({ level: "member", groups: [ON], leaderOf: [ON] })] });
     expect((await save("leader", [ON, INV])).status).toBe(200);
