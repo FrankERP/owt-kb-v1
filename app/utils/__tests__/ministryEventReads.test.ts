@@ -35,7 +35,9 @@ import { accessFromDoc, type MemberAccessDoc } from "../memberAccess";
 
 // ── People ──────────────────────────────────────────────────────────────────
 
-const J = (level: string, groups: string[]) => [{ ministry: "jovenes", level, groups }];
+const J = (level: string, groups: string[], leaderOf?: unknown) => [
+  { ministry: "jovenes", level, groups, ...(leaderOf === undefined ? {} : { leaderOf }) },
+];
 
 /** Stored member documents, run through the real normalization the guards read. */
 const PEOPLE_DOCS: Record<string, MemberAccessDoc> = {
@@ -46,6 +48,11 @@ const PEOPLE_DOCS: Record<string, MemberAccessDoc> = {
   pastorUnknownGroup: { _id: "p5", ministries: ["jovenes"], ministryRoles: J("member", ["foo"]) },
   leaderON: { _id: "l1", ministries: ["jovenes"], ministryRoles: J("leader", ["otro-nivel"]) },
   leaderTwo: { _id: "l2", ministries: ["jovenes"], ministryRoles: J("leader", ["otro-nivel", "emprendedores"]) },
+  // Per-group leadership (plan 2026-11-11 §5.2): leads Otro Nivel, is only IN Emprendedores.
+  leadsONinEM: { _id: "l3", ministries: ["jovenes"], ministryRoles: J("leader", ["otro-nivel", "emprendedores"], ["otro-nivel"]) },
+  // A `leader` whose leaderOf is empty (or unusable) is, for every read, a member.
+  leaderLeadsNone: { _id: "l4", ministries: ["jovenes"], ministryRoles: J("leader", ["otro-nivel"], []) },
+  leaderJunkLeaderOf: { _id: "l5", ministries: ["jovenes"], ministryRoles: J("leader", ["otro-nivel"], "otro-nivel") },
   admin: { _id: "a1", ministries: ["jovenes"], ministryRoles: J("admin", []) },
   // The super-admin who is also a leader: member mode reads as their groups, editor mode reads all.
   superLeader: { _id: "s2", role: "super-admin", ministries: ["worship", "jovenes"], ministryRoles: J("leader", ["emprendedores"]) },
@@ -141,6 +148,14 @@ const EXPECTED: Record<string, Partial<Record<MinistryEventMode, string[]>>> = {
     member: PUBLISHED_FOR.onEm,
     editor: [...PUBLISHED_FOR.onEm, "draftON", "draftEM", "draftOnEm", "publishedAbsentON", "publishedStringON"],
   },
+  // Leads Otro Nivel, in Emprendedores: every published meeting of both, drafts of Otro Nivel only
+  // (the joint ON+EM draft includes a group they lead); never the Emprendedores-only draft.
+  leadsONinEM: {
+    member: PUBLISHED_FOR.onEm,
+    editor: [...PUBLISHED_FOR.onEm, "draftON", "draftOnEm", "publishedAbsentON", "publishedStringON"],
+  },
+  leaderLeadsNone: { member: PUBLISHED_FOR.on },
+  leaderJunkLeaderOf: { member: PUBLISHED_FOR.on },
   admin: { member: SEEN_BY_ALL_MEMBERS, editor: EVERY_JOVENES_EVENT },
   superAdmin: { member: SEEN_BY_ALL_MEMBERS, editor: EVERY_JOVENES_EVENT },
   superLeader: { member: PUBLISHED_FOR.em, editor: EVERY_JOVENES_EVENT },
@@ -195,6 +210,19 @@ describe("G3: isolation matrix on the real engine", () => {
       });
     }
   }
+
+  it("leads A, in B: B's draft is not read, B's published meeting is (per-group leadership)", async () => {
+    const editor = await visibleKeys("leadsONinEM", "editor");
+    expect(editor).toContain("em");
+    expect(editor).not.toContain("draftEM");
+    expect(editor).toContain("draftON");
+    expect(await visibleKeys("leadsONinEM", "member")).toContain("em");
+  });
+
+  it("a leader of no group reads nothing in editor mode — no query at all", () => {
+    expect(buildMinistryEventQuery(PEOPLE.leaderLeadsNone, { me: "l4", ministry: "jovenes", mode: "editor", ...WINDOW })).toBeNull();
+    expect(buildMinistryEventQuery(PEOPLE.leaderJunkLeaderOf, { me: "l5", ministry: "jovenes", mode: "editor", ...WINDOW })).toBeNull();
+  });
 
   it("the Otro Nivel leader sees the joint draft but not the Emprendedores-only one, and no pastor sees either", async () => {
     expect(await visibleKeys("leaderON", "editor")).toContain("draftOnEm");
@@ -325,6 +353,10 @@ describe("G2: query shape", () => {
     expect(leader.query).toContain("published != true");
     expect(leader.query).toContain("audience.groups[@ in $led]");
     expect(leader.params.led).toEqual(["otro-nivel"]);
+    // `$groups` is every group they are in; `$led` only the ones they lead.
+    const partial = buildMinistryEventQuery(PEOPLE.leadsONinEM, { ...opts, mode: "editor" })!;
+    expect(partial.params.groups).toEqual(["otro-nivel", "emprendedores"]);
+    expect(partial.params.led).toEqual(["otro-nivel"]);
     const admin = buildMinistryEventQuery(PEOPLE.admin, { ...opts, mode: "editor" })!;
     expect(admin.query).toContain('_id in path("ministryEvent.*")');
     expect(admin.query).not.toContain("$groups");

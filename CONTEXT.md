@@ -41,7 +41,8 @@ _Avoid_: área, equipo (in Jóvenes an «equipo» is one of the pastor teams tha
 the quarterly pastors' meeting, a different thing, not modelled yet)
 
 **Grupo** (de Jóvenes; planned, ADR-0075):
-A part of a ministry that is closed to the others: «Otro Nivel», «Invencibles», «Emprendedores». A
+A part of a ministry that is closed to the others: «Otro Nivel», «Invencibles», «Emprendedores» (by age),
+«Adrenalin» (men) and «Guerreras» (women), added 2026-11-11. A person may be in several. A
 meeting names the groups it belongs to; only their members, the ministry's admins and a super-admin
 see it. A meeting of several groups is one meeting, seen by each of them with its whole team.
 _Avoid_: sub-ministerio, filtro

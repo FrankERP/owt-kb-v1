@@ -16,6 +16,10 @@ const CODE_WORDS: Record<string, string> = {
   invalid_place: "El lugar es demasiado largo o tiene saltos de línea.",
   invalid_seats: "Revisa a las personas: un nombre corto, de una línea, por casilla.",
   invalid_date: "Elige la fecha.",
+  // The writer's 1–3 bound on a groups audience (the form says the same, `groupEventProblem`). The
+  // code also answers an unknown or repeated group and a whole-ministry audience with groups, which
+  // the form never sends; the sentence is accepted for those too (plan 2026-11-11 §11 N8).
+  invalid_audience: "Elige hasta tres grupos; para todos, usa una reunión de todo Jóvenes.",
   already_created: "Esta reunión ya estaba creada.",
 };
 

@@ -197,6 +197,19 @@ describe("/jovenes program editor and «Planear» (cosmetic; the server decides)
     expect(html).not.toContain(">Planear<");
   });
 
+  it("«Planear» for a leader of at least one group; none for a `leader` who leads no group", async () => {
+    h.rolloutOpen = true;
+    const leader = (leaderOf: string[]) => ({
+      ...PASTOR,
+      ministryRoles: [{ ministry: "jovenes", level: "leader", groups: ["otro-nivel", "invencibles"], leaderOf }],
+    });
+    h.readMinistryEvents.mockResolvedValue([EVENT]);
+    h.getMemberAccess.mockResolvedValue(leader(["invencibles"]));
+    expect(await visit()).toContain(">Planear<");
+    h.getMemberAccess.mockResolvedValue(leader([]));
+    expect(await visit()).not.toContain(">Planear<");
+  });
+
   it("nobody who may edit nothing costs a people read", async () => {
     h.rolloutOpen = true;
     h.getMemberAccess.mockResolvedValue(PASTOR);

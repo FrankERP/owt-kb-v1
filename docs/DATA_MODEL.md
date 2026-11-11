@@ -97,6 +97,7 @@ referenced by every seat, proposal, and login event. **A member's identity in au
 | `passwordHash` | string (hidden) | bcrypt. Set via admin API / CLI. Never edit manually. |
 | `unavailableDates` | array of string | ISO `YYYY-MM-DD` the member can't serve. Set from `/me`. |
 | `unavailabilityNotes` | array (hidden) | `{ date, note }` optional reasons per unavailable date. |
+| `ministryRoles` | array of `ministryRole` (read-only in the Studio) | Level per LEVELED ministry (today Jóvenes, ADR-0075): `{ _key = ministry, _type: "ministryRole", ministry, level: member\|leader\|admin, groups: string[], leaderOf?: string[] }`. `groups` = the groups the person BELONGS to; `leaderOf` = the groups they LEAD, a subset of `groups`, stored on a `leader` only ([ADR-0085](adr/0085-a-jovenes-leader-leads-named-groups.md)). Read only through `normalizeMinistryRoles` and `ledGroupsIn`; an absent `leaderOf` on a leader reads as every group until PR 2 (L1), then as none (L2), after `scripts/backfill-jovenes-leader-of.mjs`. Written only by `memberCommit.ts` (K1 decides `leaderOf` in PR 1). |
 
 **Auth note:** `role` and `disabled` are read live (bypassing CDN) through the 30s-TTL cache in
 `memberAccess.ts`, so role changes and the kill switch take effect within ~30 seconds instead

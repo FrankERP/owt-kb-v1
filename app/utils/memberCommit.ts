@@ -36,10 +36,12 @@ import {
   droppedMinistryRolePaths,
   ministryRolesForStorage,
   normalizeMinistries,
+  normalizeMinistryRoles,
   validateMinistryRolesWrite,
   validateMinistryWrite,
   worshipRoleWithoutWorship,
   type MinistryRole,
+  type MinistryRoleWrite,
 } from "@/app/ministries";
 import { parseMemberInstruments } from "@/app/components/admin/seatModel";
 import type { CommitOutcome } from "@/app/utils/commitOutcome";
@@ -152,6 +154,75 @@ interface ValidPatch {
   unsetPaths: string[];
   notifPatch: Record<string, unknown>;
   touchesRoleOrMinistries: boolean;
+  /** The request's validated `ministryRoles`, or null. `planPatch` stores them through K1, after its read. */
+  ministryRoles: MinistryRoleWrite[] | null;
+}
+
+// ── K1: a leader's stored `leaderOf` (PR 1 only; PR 2 deletes it) ────────────
+
+/** The 409 when a request would empty the groups a stored leader leads (plan §7 K1, §11 N7). */
+export const LEADER_OF_KEPT =
+  "Los grupos que lidera esta persona no se pueden cambiar desde aquí. Quítale el nivel de líder, guarda, y vuelve a dárselo.";
+
+const sameGroups = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((g) => b.includes(g));
+
+/**
+ * K1 (plan `2026-11-11-jovenes-per-group-leadership.md` §7, §11 N7; ADR-0085). PR 1's requests carry
+ * `{ ministry, level, groups }` with no `leaderOf`; this decides the `leaderOf` each item is STORED
+ * with, from the stored person (`null` = a create). It keeps, narrows or refuses a stored subset and
+ * never widens one, so PR 1 code — production while PR 2 is on `preview`, or after a rollback of
+ * PR 2 — cannot hand a narrowed leader back every group:
+ *   · not a leader → no `leaderOf` (I2);
+ *   · the stored item is a leader whose `leaderOf` is PRESENT (not absent, `null` or `undefined`) and
+ *     does not name exactly its kept stored groups (as a set) → a stored narrowing: its normalized
+ *     value ∩ the request's groups (a non-array normalizes to `[]`); empty → `null` (the caller's 409);
+ *   · otherwise (a create, not a leader before, a legacy item, or a stored `leaderOf` equal to the
+ *     stored groups, which says «leads all» as a legacy item does) → the request's groups.
+ * PR 1's `memberView` does not show `leaderOf`, so a narrowing here is not in the chat's lines: fail
+ * closed by construction (it only keeps, narrows or refuses).
+ */
+export function keepLeaderOf(
+  items: readonly MinistryRoleWrite[],
+  stored: Pick<StoredMember, "ministries" | "ministryRoles"> | null,
+): MinistryRole[] | null {
+  const read = stored ? normalizeMinistryRoles(stored.ministryRoles, normalizeMinistries(stored.ministries)) : [];
+  const rawItems = stored && Array.isArray(stored.ministryRoles)
+    ? stored.ministryRoles.filter((i): i is Record<string, unknown> => typeof i === "object" && i !== null)
+    : [];
+  const out: MinistryRole[] = [];
+  for (const item of items) {
+    if (item.level !== "leader") {
+      out.push({ ...item, leaderOf: [] });
+      continue;
+    }
+    const before = read.find((r) => r.ministry === item.ministry);
+    const raw = rawItems.filter((r) => r.ministry === item.ministry);
+    if (!before) {
+      // The read dropped the stored item (the ministry is not in `ministries`, e.g. unticked in Studio,
+      // or two items name it), yet a stored `leaderOf` may still say «leads only these». Never widen
+      // past it: intersect with every present one that does not name exactly its own stored groups.
+      let led = [...item.groups];
+      for (const r of raw) {
+        if (r.leaderOf === undefined || r.leaderOf === null) continue;
+        const storedLed = Array.isArray(r.leaderOf) ? r.leaderOf.filter((g): g is string => typeof g === "string") : [];
+        const storedGroups = Array.isArray(r.groups) ? r.groups.filter((g): g is string => typeof g === "string") : [];
+        if (r.level === "leader" && sameGroups(storedLed, storedGroups)) continue;
+        led = led.filter((g) => storedLed.includes(g));
+      }
+      if (led.length === 0) return null;
+      out.push({ ...item, leaderOf: led });
+      continue;
+    }
+    const storedLeader = before?.level === "leader" && raw.length === 1 && raw[0].leaderOf !== undefined && raw[0].leaderOf !== null;
+    if (!storedLeader || sameGroups(before.leaderOf, before.groups)) {
+      out.push({ ...item, leaderOf: [...item.groups] });
+      continue;
+    }
+    const narrowed = item.groups.filter((g) => before.leaderOf.includes(g));
+    if (narrowed.length === 0) return null;
+    out.push({ ...item, leaderOf: narrowed });
+  }
+  return out;
 }
 
 function validatePatchBody(body: Record<string, unknown>): { ok: true; value: ValidPatch } | Refusal {
@@ -189,11 +260,13 @@ function validatePatchBody(body: Record<string, unknown>): { ok: true; value: Va
   }
   // Levels in a leveled ministry (Jóvenes, ADR-0075), validated against THIS request's `ministries`:
   // set whole, or a `ministries` that leaves a leveled ministry out unsets its stale level.
+  // The stored `leaderOf` is decided by `planPatch` from the stored person (K1), never here.
   let unsetPaths: string[] = [];
+  let ministryRoles: MinistryRoleWrite[] | null = null;
   if (body.ministryRoles !== undefined) {
     const error = validateMinistryRolesWrite(body.ministryRoles, body.ministries);
     if (error) return refuse(400, error);
-    patch.ministryRoles = ministryRolesForStorage(body.ministryRoles as MinistryRole[]);
+    ministryRoles = body.ministryRoles as MinistryRoleWrite[];
   } else if (body.ministries !== undefined) {
     unsetPaths = droppedMinistryRolePaths(body.ministries as string[]);
   }
@@ -204,7 +277,7 @@ function validatePatchBody(body: Record<string, unknown>): { ok: true; value: Va
     const field = NOTIFY_PREF_FIELD[kind];
     if (typeof body[field] === "boolean") notifPatch[`notifPrefs.${field}`] = body[field];
   }
-  return { ok: true, value: { patch, unsetPaths, notifPatch, touchesRoleOrMinistries: !!body.role || body.ministries !== undefined } };
+  return { ok: true, value: { patch, unsetPaths, notifPatch, touchesRoleOrMinistries: !!body.role || body.ministries !== undefined, ministryRoles } };
 }
 
 /** Same membership, read through the storage contract (absent = worship), as SETS. */
@@ -243,7 +316,9 @@ async function planPatch(id: string, body: Record<string, unknown>, surface: Sur
   if (!v.ok) return v;
   const { patch } = v.value;
   const touchesIdentity = "member_name" in patch || "alias" in patch || "email" in patch;
-  const needsRead = surface !== "admin" || v.value.touchesRoleOrMinistries || touchesIdentity;
+  // A level always travels with `ministries` (so `touchesRoleOrMinistries`); named on its own anyway:
+  // K1 judges the stored item, and the write must be pinned to the read it judged.
+  const needsRead = surface !== "admin" || v.value.touchesRoleOrMinistries || touchesIdentity || v.value.ministryRoles !== null;
 
   const plan: PatchPlan = { id, stored: null, valid: v.value, before: null, after: null, ruleSets: {}, rulesRev: null, ruleLines: [], notes: [], lines: [] };
 
@@ -268,6 +343,13 @@ async function planPatch(id: string, body: Record<string, unknown>, surface: Sur
   const nextMinistries = body.ministries ?? stored.ministries;
   if ((changesRole || changesMinistries) && worshipRoleWithoutWorship(nextRole, nextMinistries)) {
     return refuse(400, WORSHIP_ROLE_NEEDS_WORSHIP);
+  }
+
+  // K1: the `leaderOf` each level item is stored with, from the person just read (PR 1 only).
+  if (v.value.ministryRoles) {
+    const kept = keepLeaderOf(v.value.ministryRoles, stored);
+    if (!kept) return refuse(409, LEADER_OF_KEPT, { code: "leader_of_kept" });
+    patch.ministryRoles = ministryRolesForStorage(kept);
   }
 
   const afterDoc = resultingDoc(stored, patch as MemberWriteBody);
@@ -541,7 +623,10 @@ function buildCreateDoc(body: Record<string, unknown>): { ok: true; doc: Record<
       ...(body.singsAndPlays === true ? { singsAndPlays: true } : {}),
       ...(body.ministries !== undefined ? { ministries: body.ministries } : {}),
       ...(body.managesMinistries !== undefined ? { managesMinistries: body.managesMinistries } : {}),
-      ...(body.ministryRoles !== undefined ? { ministryRoles: ministryRolesForStorage(body.ministryRoles as MinistryRole[]) } : {}),
+      // A create has no stored person: K1 stores a leader as leading every group given.
+      ...(body.ministryRoles !== undefined
+        ? { ministryRoles: ministryRolesForStorage(keepLeaderOf(body.ministryRoles as MinistryRoleWrite[], null) ?? []) }
+        : {}),
       slug: { _type: "slug", current: slug },
     },
   };

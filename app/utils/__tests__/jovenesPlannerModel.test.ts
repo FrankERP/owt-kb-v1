@@ -371,6 +371,20 @@ describe("the groups' calendars (PR D)", () => {
     expect(groupEventProblem({ ...f, groups: ["invencibles"] }, admin)).toBeNull();
   });
 
+  it("refuses more than three groups, after the empty check and before the own-group one (T5a)", () => {
+    const f = groupEventForm("2026-11-10", leader);
+    const four = ["otro-nivel", "invencibles", "emprendedores", "adrenalin"];
+    expect(groupEventProblem({ ...f, groups: four }, leader)).toBe("Elige hasta tres grupos; para todos, usa una reunión de todo Jóvenes.");
+    expect(groupEventProblem({ ...f, groups: four }, admin)).toBe("Elige hasta tres grupos; para todos, usa una reunión de todo Jóvenes.");
+    expect(groupEventProblem({ ...f, groups: four.slice(0, 3) }, leader)).toBeNull();
+    expect(groupEventProblem({ ...f, groups: [] }, leader)).toBe("Elige al menos un grupo.");
+    // Four groups none of which they lead: the count is said first.
+    expect(groupEventProblem({ ...f, groups: ["invencibles", "emprendedores", "adrenalin", "guerreras"] }, leader)).toBe(
+      "Elige hasta tres grupos; para todos, usa una reunión de todo Jóvenes.",
+    );
+    expect(groupEventProblem({ ...f, groups: ["invencibles"] }, leader)).toBe("Incluye uno de tus grupos.");
+  });
+
   it("checks the clock last, after the rules about groups", () => {
     const f = groupEventForm("2026-11-10", leader);
     expect(groupEventProblem({ ...f, time: "19:00" }, leader)).toBeNull();

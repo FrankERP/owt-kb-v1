@@ -15,10 +15,12 @@ import {
 
 type Field = {
   name: string;
+  title?: string;
+  type?: string;
   validation?: (rule: unknown) => unknown;
   readOnly?: boolean;
   options?: { list?: { value: string }[] };
-  of?: { fields?: Field[] }[];
+  of?: { type?: string; fields?: Field[] }[];
 };
 const fields = (teamMembers as unknown as { fields: Field[] }).fields;
 const field = (name: string) => fields.find((f) => f.name === name)!;
@@ -44,6 +46,13 @@ describe("teamMembers ministry fields ↔ registry", () => {
     expect(values(sub("ministry"))).toEqual(LEVELED_MINISTRY_IDS);
     expect(values(sub("level"))).toEqual([...MINISTRY_LEVELS]);
     expect(values(sub("groups"))).toEqual(LEVELED_MINISTRY_IDS.flatMap((id) => MINISTRIES[id].groups.map((g) => g.id)));
+  });
+  it("`ministryRoles` items list `leaderOf` (the groups led) with the same options as `groups`", () => {
+    const item = (field("ministryRoles").of ?? [])[0];
+    const sub = (n: string) => item.fields!.find((f) => f.name === n);
+    expect(item.fields!.map((f) => f.name)).toEqual(["ministry", "level", "groups", "leaderOf"]);
+    expect(sub("leaderOf")).toMatchObject({ title: "Grupos que lidera", type: "array", of: [{ type: "string" }] });
+    expect(sub("leaderOf")!.options).toEqual(sub("groups")!.options);
   });
 });
 
