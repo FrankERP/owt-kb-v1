@@ -24,7 +24,7 @@ import {
   normalizeMinistryRoles,
   type MinistryId,
   type MinistryLevel,
-  type MinistryRole,
+  type MinistryRoleWrite,
 } from "@/app/ministries";
 import { parseMemberInstruments } from "@/app/components/admin/seatModel";
 import { groupsIn, levelIn } from "./ministryAccess";
@@ -83,7 +83,8 @@ export interface MemberWriteBody {
   singsAndPlays?: boolean;
   ministries?: string[];
   managesMinistries?: string[];
-  ministryRoles?: MinistryRole[];
+  /** PR 1: `{ ministry, level, groups }` only — the writer decides `leaderOf` (K1, `memberCommit.ts`). */
+  ministryRoles?: MinistryRoleWrite[];
 }
 
 const str = (v: unknown): string => (typeof v === "string" ? v : "");

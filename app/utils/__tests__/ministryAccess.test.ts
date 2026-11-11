@@ -5,9 +5,9 @@ import { describe, expect, it, vi } from "vitest";
 
 // accessFromDoc is pure; its module also holds the cached fetch, whose client needs env.
 vi.mock("@/sanity/lib/serverClient", () => ({ serverClient: { fetch: vi.fn() } }));
-import { normalizeMinistryRoles, isGroupId, type MinistryId } from "@/app/ministries";
+import { ABSENT_LEADER_OF, normalizeMinistryRoles, isGroupId, type MinistryId } from "@/app/ministries";
 import { accessFromDoc } from "../memberAccess";
-import { groupsIn, isMinistryManager, isMinistryMember, levelIn } from "../ministryAccess";
+import { groupsIn, isMinistryManager, isMinistryMember, ledGroupsIn, levelIn } from "../ministryAccess";
 
 const J: MinistryId[] = ["jovenes"];
 const item = (p: Record<string, unknown> = {}) => ({
@@ -17,7 +17,7 @@ const item = (p: Record<string, unknown> = {}) => ({
 describe("normalizeMinistryRoles", () => {
   it("reads a valid item", () => {
     expect(normalizeMinistryRoles([item()], J)).toEqual([
-      { ministry: "jovenes", level: "leader", groups: ["otro-nivel"] },
+      { ministry: "jovenes", level: "leader", groups: ["otro-nivel"], leaderOf: ["otro-nivel"] },
     ]);
   });
   it("is [] for anything that is not an array", () => {
@@ -40,7 +40,7 @@ describe("normalizeMinistryRoles", () => {
   it("rule 3: keeps only this ministry's groups, de-duplicated", () => {
     expect(
       normalizeMinistryRoles([item({ groups: ["otro-nivel", "otro-nivel", "worship", "constructor", 7, "invencibles"] })], J),
-    ).toEqual([{ ministry: "jovenes", level: "leader", groups: ["otro-nivel", "invencibles"] }]);
+    ).toEqual([{ ministry: "jovenes", level: "leader", groups: ["otro-nivel", "invencibles"], leaderOf: ["otro-nivel", "invencibles"] }]);
     expect(normalizeMinistryRoles([item({ groups: "otro-nivel" })], J)[0].groups).toEqual([]);
   });
   it("rule 4: two items naming one ministry → both dropped, even if one is malformed", () => {
@@ -56,6 +56,85 @@ describe("normalizeMinistryRoles", () => {
   });
   it("skips non-object entries without failing the rest", () => {
     expect(normalizeMinistryRoles([null, "x", 1, item()], J)).toHaveLength(1);
+  });
+});
+
+// Step 5 (plan 2026-11-11-jovenes-per-group-leadership §4.4): which groups a leader LEADS.
+describe("normalizeMinistryRoles — leaderOf (step 5)", () => {
+  const groups = ["otro-nivel", "invencibles", "adrenalin"];
+  const read = (p: Record<string, unknown>, absent?: "all" | "none") =>
+    normalizeMinistryRoles([item({ groups, ...p })], J, absent)[0];
+
+  it("PR 1 reads with L1: the switch is exported and set to «all»", () => {
+    expect(ABSENT_LEADER_OF).toBe("all");
+  });
+  it("L1: a legacy leader (no key, null, undefined) leads every kept group — today's meaning", () => {
+    expect(read({}).leaderOf).toEqual(groups);
+    expect(read({ leaderOf: null }).leaderOf).toEqual(groups);
+    expect(read({ leaderOf: undefined }).leaderOf).toEqual(groups);
+    expect(read({ groups: ["otro-nivel", "bogus"] }).leaderOf).toEqual(["otro-nivel"]);
+  });
+  it("L2 (the switch PR 2 flips): a legacy leader leads nothing and is still in their groups", () => {
+    expect(read({}, "none")).toEqual({ ministry: "jovenes", level: "leader", groups, leaderOf: [] });
+    expect(read({ leaderOf: null }, "none").leaderOf).toEqual([]);
+  });
+  it("an explicit subset is read as stored, under L1 and L2 alike", () => {
+    for (const absent of ["all", "none"] as const) {
+      expect(read({ leaderOf: ["otro-nivel", "adrenalin"] }, absent).leaderOf).toEqual(["otro-nivel", "adrenalin"]);
+      expect(read({ leaderOf: [] }, absent).leaderOf).toEqual([]);
+    }
+  });
+  it("drops a group outside `groups`, an unknown id, a repeat and a non-string", () => {
+    expect(read({ leaderOf: ["otro-nivel", "emprendedores", "bogus", "otro-nivel", 7, null, "constructor"] }).leaderOf).toEqual(["otro-nivel"]);
+  });
+  it("a present non-array value leads nothing (fail closed, I4)", () => {
+    for (const v of ["otro-nivel", { 0: "otro-nivel" }, 1, true, ""]) {
+      expect(read({ leaderOf: v }).leaderOf, JSON.stringify(v)).toEqual([]);
+      expect(read({ leaderOf: v }).groups).toEqual(groups);
+    }
+  });
+  it("a member or an admin leads nothing, whatever is stored", () => {
+    for (const level of ["member", "admin"]) {
+      for (const leaderOf of [undefined, ["otro-nivel"], groups, "x"]) {
+        expect(read({ level, leaderOf }).leaderOf).toEqual([]);
+      }
+    }
+  });
+  it("duplicate items for one ministry still drop both", () => {
+    expect(normalizeMinistryRoles([item({ leaderOf: ["otro-nivel"] }), item({ leaderOf: [] })], J)).toEqual([]);
+  });
+});
+
+describe("ledGroupsIn — THE answer to «which groups does this person lead» (I3)", () => {
+  const doc = (p: Record<string, unknown>) => accessFromDoc({ _id: "m1", role: "member", ...p });
+  const leader = (p: Record<string, unknown> = {}) =>
+    doc({ ministries: ["jovenes"], ministryRoles: [item({ groups: ["otro-nivel", "invencibles"], ...p })] });
+
+  it("a legacy leader leads all their kept groups (L1)", () => {
+    expect(ledGroupsIn(leader(), "jovenes")).toEqual(["otro-nivel", "invencibles"]);
+  });
+  it("a leader of a subset leads that subset and is still IN the rest", () => {
+    const a = leader({ leaderOf: ["otro-nivel"] });
+    expect(ledGroupsIn(a, "jovenes")).toEqual(["otro-nivel"]);
+    expect(groupsIn(a, "jovenes")).toEqual(["otro-nivel", "invencibles"]);
+    expect(levelIn(a, "jovenes")).toBe("leader");
+  });
+  it("a leader whose leaderOf is empty or unusable leads nothing", () => {
+    expect(ledGroupsIn(leader({ leaderOf: [] }), "jovenes")).toEqual([]);
+    expect(ledGroupsIn(leader({ leaderOf: "otro-nivel" }), "jovenes")).toEqual([]);
+    expect(ledGroupsIn(leader({ leaderOf: ["emprendedores"] }), "jovenes")).toEqual([]);
+  });
+  it("[] for a member, an admin (no admin arm), a non-member and a super-admin with no leader item", () => {
+    expect(ledGroupsIn(leader({ level: "member", leaderOf: ["otro-nivel"] }), "jovenes")).toEqual([]);
+    expect(ledGroupsIn(leader({ level: "admin" }), "jovenes")).toEqual([]);
+    expect(ledGroupsIn(doc({ ministries: ["worship"], ministryRoles: [item()] }), "jovenes")).toEqual([]);
+    expect(ledGroupsIn(doc({ role: "super-admin", ministries: ["worship"] }), "jovenes")).toEqual([]);
+    expect(ledGroupsIn(leader(), "worship")).toEqual([]);
+  });
+  it("hands out a copy, never the snapshot's own array", () => {
+    const a = leader();
+    ledGroupsIn(a, "jovenes").push("emprendedores");
+    expect(ledGroupsIn(a, "jovenes")).toEqual(["otro-nivel", "invencibles"]);
   });
 });
 

@@ -67,12 +67,14 @@ async function visit(mes?: string | string[]): Promise<string> {
 
 const session = { user: { role: "super-admin", sanityId: "s1", email: "x@y.z" } };
 const SUPER = { active: true, role: "super-admin", ministries: ["worship"], managesMinistries: [], ministryRoles: [] };
-const role = (level: string, groups: string[] = ["otro-nivel"]) => ({
+/** A NORMALIZED access snapshot (what `getMemberAccess` returns): a leader leads `leaderOf`,
+ *  which defaults to all their groups (L1's reading of a legacy leader). */
+const role = (level: string, groups: string[] = ["otro-nivel"], leaderOf: string[] = level === "leader" ? groups : []) => ({
   active: true,
   role: "member",
   ministries: ["jovenes"],
   managesMinistries: [],
-  ministryRoles: [{ ministry: "jovenes", level, groups }],
+  ministryRoles: [{ ministry: "jovenes", level, groups, leaderOf }],
 });
 
 beforeEach(() => {
@@ -105,6 +107,13 @@ describe("/jovenes/admin gates", () => {
     expect(await visit()).toBe("→ /jovenes");
     h.getMemberAccess.mockResolvedValue({ ...role("admin", []), active: false });
     expect(await visit()).toBe("→ /");
+    expect(h.readMinistryEvents).not.toHaveBeenCalled();
+  });
+
+  it("once open: a `leader` who leads no group is a pastor here — back to /jovenes, nothing read", async () => {
+    h.rolloutOpen = true;
+    h.getMemberAccess.mockResolvedValue(role("leader", ["otro-nivel", "invencibles"], []));
+    expect(await visit()).toBe("→ /jovenes");
     expect(h.readMinistryEvents).not.toHaveBeenCalled();
   });
 });
@@ -168,5 +177,15 @@ describe("/jovenes/admin groups' calendars (PR D)", () => {
     const today = new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
     expect(h.groups.mock.calls[0][0].viewer).toEqual({ me: "s1", isManager: false, led: ["otro-nivel", "invencibles"] });
     expect(h.groups.mock.calls[0][0].defaultDate).toBe(today);
+  });
+});
+
+describe("/jovenes/admin per-group leadership (plan 2026-11-11 §5.1)", () => {
+  it("a leader of some groups: `viewer.led` is the groups they LEAD, not every group they are in", async () => {
+    h.rolloutOpen = true;
+    h.getMemberAccess.mockResolvedValue(role("leader", ["otro-nivel", "invencibles"], ["otro-nivel"]));
+    await visit();
+    expect(h.groups.mock.calls[0][0].viewer).toEqual({ me: "s1", isManager: false, led: ["otro-nivel"] });
+    expect(h.readMinistryEvents.mock.calls[0][1].mode).toBe("editor");
   });
 });

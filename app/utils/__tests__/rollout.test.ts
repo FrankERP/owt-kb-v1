@@ -11,8 +11,8 @@ const person = (over: Partial<MemberAccess>): MemberAccess => ({
   ...over,
 });
 const superAdmin = person({ role: "super-admin", ministries: ["worship"] });
-const jovenesAdmin = person({ ministryRoles: [{ ministry: "jovenes", level: "admin", groups: [] }] });
-const leader = person({ ministryRoles: [{ ministry: "jovenes", level: "leader", groups: ["otro-nivel"] }] });
+const jovenesAdmin = person({ ministryRoles: [{ ministry: "jovenes", level: "admin", groups: [], leaderOf: [] }] });
+const leader = person({ ministryRoles: [{ ministry: "jovenes", level: "leader", groups: ["otro-nivel"], leaderOf: ["otro-nivel"] }] });
 const pastor = person({});
 const worshipAdmin = person({ role: "admin", ministries: ["worship"] });
 const inactiveSuper = person({ role: "super-admin", active: false });

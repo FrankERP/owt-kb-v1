@@ -45,3 +45,18 @@ export function groupsIn(a: Access, ministry: MinistryId): string[] {
   if (!a.ministries.includes(ministry)) return [];
   return a.ministryRoles.find((r) => r.ministry === ministry)?.groups ?? [];
 }
+
+/**
+ * THE answer to «which groups does this person LEAD» in a leveled ministry (I3; plan
+ * 2026-11-11-jovenes-per-group-leadership §4.4, ADR-0085): `[]` unless they are a member of the
+ * ministry and their level there is `leader`; then the item's normalized `leaderOf` (always a subset
+ * of `groupsIn`). No super-admin or admin arm: callers test `isMinistryManager` first. Every access
+ * decision about leading goes through here, never a comparison of a level with `"leader"`
+ * (`ledGroupsCoverage.test.ts`).
+ */
+export function ledGroupsIn(a: Access, ministry: MinistryId): string[] {
+  if (!a.ministries.includes(ministry)) return [];
+  const item = a.ministryRoles.find((r) => r.ministry === ministry);
+  // Fail closed (I4) on a snapshot that did not come through `normalizeMinistryRoles`.
+  return item?.level === "leader" && Array.isArray(item.leaderOf) ? [...item.leaderOf] : [];
+}

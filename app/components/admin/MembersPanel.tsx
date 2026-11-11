@@ -40,7 +40,7 @@ import {
   normalizeMinistryRoles,
   type MinistryId,
   type MinistryLevel,
-  type MinistryRole,
+  type MinistryRoleWrite,
 } from "@/app/ministries";
 import { interpretMemberDeleteResponse } from "@/app/utils/memberDelete";
 import { MEMBER_TYPES as MEMBER_TYPE_IDS, type MemberType } from "@/app/utils/memberTypes";
@@ -110,9 +110,10 @@ interface MemberFormData {
    * Sent whenever `ministries` is (the route judges a level against the
    * ministries of the same request): one item per ticked leveled ministry,
    * without the stored `_key`/`_type`. Unticking Jóvenes therefore drops its
-   * item, and the route stores what is left.
+   * item, and the route stores what is left. No `leaderOf` (PR 1): the
+   * writer decides it from the stored person (K1, `memberCommit.ts`).
    */
-  ministryRoles?: MinistryRole[];
+  ministryRoles?: MinistryRoleWrite[];
 }
 
 // The table's own abbreviations — deliberately not `MEMBER_TYPE_LABEL`'s full

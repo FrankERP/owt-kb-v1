@@ -62,8 +62,36 @@ export const LEVELED_MINISTRY_IDS: MinistryId[] = ["jovenes"];
 export const MINISTRY_LEVELS = ["member", "leader", "admin"] as const;
 export type MinistryLevel = (typeof MINISTRY_LEVELS)[number];
 
-/** One person's level and groups in one leveled ministry, as the read sees it. */
-export type MinistryRole = { ministry: MinistryId; level: MinistryLevel; groups: string[] };
+/**
+ * One person's level, groups and LED groups in one leveled ministry, as the read sees it. `groups`
+ * are the groups they BELONG to; `leaderOf` the groups they LEAD — always a subset of `groups`, and
+ * `[]` unless `level` is `leader` (plan 2026-11-11-jovenes-per-group-leadership §4, ADR-0085). Read
+ * who leads what through `ledGroupsIn` (`app/utils/ministryAccess.ts`), never a level comparison.
+ */
+export type MinistryRole = { ministry: MinistryId; level: MinistryLevel; groups: string[]; leaderOf: string[] };
+
+/**
+ * What a write REQUEST carries for one item in PR 1: no `leaderOf`. The people writer decides the
+ * stored `leaderOf` itself (K1 in `memberCommit.ts`); a request that sends it is refused (400) until
+ * PR 2 changes the request contract.
+ */
+export type MinistryRoleWrite = Omit<MinistryRole, "leaderOf">;
+
+/**
+ * How the read takes a stored LEADER item with no `leaderOf` (absent = the key is missing, or its
+ * value is `null`/`undefined`; plan §4.4):
+ *   · `"all"`  (L1) — leads every kept group: today's meaning of every stored leader;
+ *   · `"none"` (L2) — leads nothing (still a member of their groups).
+ */
+export type AbsentLeaderOf = "all" | "none";
+
+/**
+ * THE L1/L2 switch. TRANSITIONAL — PR 1 of the per-group leadership plan reads with L1, so PR 1
+ * changes nobody's access. PR 2 flips the read to L2 and deletes this switch, only after the backfill
+ * (`scripts/backfill-jovenes-leader-of.mjs`, which imports it to compare both readings) reports zero
+ * documents whose leadership differs between the two. Do not flip it by hand (ADR-0085).
+ */
+export const ABSENT_LEADER_OF: AbsentLeaderOf = "all";
 
 /**
  * Membership test, NOT `x in MINISTRIES`. The `in` operator walks the prototype
@@ -185,8 +213,16 @@ export function validateMinistryWrite(
  * 3. `groups`: kept only if a group of that ministry; de-duplicated.
  * 4. Two stored items naming one ministry → BOTH dropped, even if one of them is
  *    malformed: there is no guessing which one was meant.
+ * 5. `leaderOf` (the groups they LEAD): `[]` for any level but `leader`, whatever is stored. For a
+ *    leader: an array → its entries that are in the item's kept `groups`, de-duplicated; present but
+ *    not an array → `[]`; ABSENT (no key, `null` or `undefined`) → `absentLeaderOf`: every kept group
+ *    under L1 (PR 1, today's meaning), none under L2. Anything unusable leads nothing (I4).
  */
-export function normalizeMinistryRoles(raw: unknown, ministries: readonly MinistryId[]): MinistryRole[] {
+export function normalizeMinistryRoles(
+  raw: unknown,
+  ministries: readonly MinistryId[],
+  absentLeaderOf: AbsentLeaderOf = ABSENT_LEADER_OF,
+): MinistryRole[] {
   if (!Array.isArray(raw)) return [];
   const items = raw.filter((i): i is Record<string, unknown> => typeof i === "object" && i !== null);
   const named = (m: unknown) => items.filter((i) => i.ministry === m).length;
@@ -197,10 +233,18 @@ export function normalizeMinistryRoles(raw: unknown, ministries: readonly Minist
     if (!isMinistryId(ministry) || !LEVELED_MINISTRY_IDS.includes(ministry)) continue;
     if (!ministries.includes(ministry)) continue;
     if (!isLevel(level)) continue;
-    const kept = Array.isArray(groups) ? groups.filter((g) => isGroupId(ministry, g)) : [];
-    parsed.push({ ministry, level, groups: [...new Set(kept)] });
+    const kept = [...new Set(Array.isArray(groups) ? groups.filter((g) => isGroupId(ministry, g)) : [])];
+    parsed.push({ ministry, level, groups: kept, leaderOf: readLeaderOf(level, item.leaderOf, kept, absentLeaderOf) });
   }
   return parsed;
+}
+
+/** Step 5 of `normalizeMinistryRoles`: the groups a stored item leads, given its KEPT groups. */
+function readLeaderOf(level: MinistryLevel, stored: unknown, kept: readonly string[], absent: AbsentLeaderOf): string[] {
+  if (level !== "leader") return [];
+  if (stored === undefined || stored === null) return absent === "all" ? [...kept] : [];
+  if (!Array.isArray(stored)) return [];
+  return [...new Set(stored.filter((g): g is string => typeof g === "string" && kept.includes(g)))];
 }
 
 /**
@@ -217,7 +261,8 @@ export function normalizeMinistryRoles(raw: unknown, ministries: readonly Minist
  * Strict where `normalizeMinistryRoles` is forgiving: the read drops what it
  * cannot use, the write refuses it, so nothing malformed is ever stored. An item
  * carries exactly `ministry`, `level` and `groups` (the form strips the stored
- * `_key`/`_type`; the route adds them back).
+ * `_key`/`_type`; the route adds them back). No `leaderOf` in PR 1: the writer
+ * decides it from the stored person (K1, `memberCommit.ts`).
  */
 export function validateMinistryRolesWrite(value: unknown, ministries: unknown): string | null {
   if (!Array.isArray(value)) return "Niveles de ministerio inválidos.";
@@ -244,11 +289,13 @@ export function validateMinistryRolesWrite(value: unknown, ministries: unknown):
  * A VALIDATED `ministryRoles` (see above) as stored: `_key` = the ministry, so a
  * person holds at most one item per ministry and a patch can address it as
  * `ministryRoles[_key=="jovenes"]`; `_type` = the Studio's object name, so the
- * Studio never flags the items as unknown.
+ * Studio never flags the items as unknown. `leaderOf` is stored for a `leader`
+ * only, from the item given (I2: a member or admin item stores no `leaderOf` key).
  */
 export function ministryRolesForStorage(items: readonly MinistryRole[]) {
-  return items.map(({ ministry, level, groups }) => ({
+  return items.map(({ ministry, level, groups, leaderOf }) => ({
     _key: ministry, _type: "ministryRole" as const, ministry, level, groups: [...groups],
+    ...(level === "leader" ? { leaderOf: [...leaderOf] } : {}),
   }));
 }
 

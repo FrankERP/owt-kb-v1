@@ -57,9 +57,23 @@ describe("validateMinistryRolesWrite", () => {
 describe("ministryRolesForStorage", () => {
   it("keys each item by its ministry and types it as the Studio object", () => {
     const groups = ["invencibles"];
-    const stored = ministryRolesForStorage([{ ministry: "jovenes", level: "leader", groups }]);
-    expect(stored).toEqual([{ _key: "jovenes", _type: "ministryRole", ministry: "jovenes", level: "leader", groups }]);
+    const leaderOf = ["invencibles"];
+    const stored = ministryRolesForStorage([{ ministry: "jovenes", level: "leader", groups, leaderOf }]);
+    expect(stored).toEqual([{ _key: "jovenes", _type: "ministryRole", ministry: "jovenes", level: "leader", groups, leaderOf }]);
     expect(stored[0].groups).not.toBe(groups);
+    expect(stored[0].leaderOf).not.toBe(leaderOf);
+  });
+  it("stores `leaderOf` for a leader only; a member or admin item carries no key (I2)", () => {
+    const groups = ["otro-nivel", "invencibles"];
+    const leader = ministryRolesForStorage([{ ministry: "jovenes", level: "leader", groups, leaderOf: ["otro-nivel"] }])[0];
+    expect(leader.leaderOf).toEqual(["otro-nivel"]);
+    for (const level of ["member", "admin"] as const) {
+      const [stored] = ministryRolesForStorage([{ ministry: "jovenes", level, groups, leaderOf: ["otro-nivel"] }]);
+      expect(Object.keys(stored).sort()).toEqual(["_key", "_type", "groups", "level", "ministry"]);
+    }
+  });
+  it("PR 1: a request item still carries exactly ministry/level/groups — `leaderOf` is refused (400)", () => {
+    expect(validateMinistryRolesWrite([item({ level: "leader", groups: ["otro-nivel"], leaderOf: ["otro-nivel"] })], J)).toBe("Niveles de ministerio inválidos.");
   });
 });
 

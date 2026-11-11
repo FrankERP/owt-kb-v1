@@ -11,7 +11,7 @@ import { rolloutAllows } from "@/app/utils/rollout";
 import { addDaysIso, eventLine, meetingsLede } from "@/app/utils/jovenesEventView";
 import { jovenesDayEntry } from "@/app/utils/calendarMinistry";
 import { dayTitle, mySeats } from "@/app/utils/agenda";
-import { isMinistryManager, levelIn } from "@/app/utils/ministryAccess";
+import { isMinistryManager, ledGroupsIn } from "@/app/utils/ministryAccess";
 import { showsProgramEditor } from "@/app/utils/jovenesPlannerModel";
 import { readJovenesPeople, type JovenesPerson } from "@/app/utils/jovenesPeople";
 import { PAGE_LEDE, PAGE_TITLE } from "@/app/utils/homeHero";
@@ -73,7 +73,8 @@ export default async function JovenesPage() {
   // «Editar programa» for an admin, and for the encargado or apoyo of a whole-ministry meeting
   // (W3a). Cosmetic: the program PATCH decides again on the stored event.
   const isManager = isMinistryManager(access, "jovenes");
-  const plans = isManager || levelIn(access, "jovenes") === "leader";
+  // «Planear» for a manager or a leader of at least one group (per group, plan 2026-11-11 §5.1).
+  const plans = isManager || ledGroupsIn(access, "jovenes").length > 0;
   const editable = new Set(events.filter((e) => showsProgramEditor(e, isManager)).map((e) => e._id));
   const people = editable.size > 0 ? await readJovenesPeople() : [];
   // One shape for the rows here and in the Calendario's day sheet, and ONE answer to «what is
