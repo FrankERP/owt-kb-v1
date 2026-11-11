@@ -1,4 +1,4 @@
-# ADR-0085: The solver is verified and re-deployed from GitHub Actions with no Google key
+# ADR-0086: The solver is verified and re-deployed from GitHub Actions with no Google key
 
 **Date:** 2026-10-22 · **Status:** Accepted
 
@@ -14,6 +14,8 @@
 > first.
 > Renumbered 0084 → 0085 on `preview` 2026-11-11: the solver rules from the chat (ADR-0084) reach
 > `main` first. Its own branch renumbers to the next free number on `main` before it merges.
+> Renumbered 0085 → 0086 on `preview` 2026-11-11: Jóvenes per-group leadership's ADR-0085
+> reaches `main` first.
 
 ## Context
 

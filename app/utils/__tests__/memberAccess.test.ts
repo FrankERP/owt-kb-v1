@@ -122,7 +122,7 @@ describe("getMemberAccess", () => {
       _id: "m4", disabled: false, role: "member", ministries: ["jovenes"],
       ministryRoles: [{ _key: "jovenes", ministry: "jovenes", level: "leader", groups: ["invencibles", "bogus"] }],
     });
-    const expected = [{ ministry: "jovenes", level: "leader", groups: ["invencibles"] }];
+    const expected = [{ ministry: "jovenes", level: "leader", groups: ["invencibles"], leaderOf: ["invencibles"] }];
     expect((await getMemberAccess("m4")).ministryRoles).toEqual(expected);
     const query = String(fetchMock.mock.calls[0][0]);
     for (const f of ["disabled", "role", "ministries", "managesMinistries", "ministryRoles"]) {
@@ -138,6 +138,13 @@ describe("accessFromDoc", () => {
     const doc = { _id: "m5", disabled: false, role: "admin", ministries: ["worship", "kids"], managesMinistries: ["kids"] };
     fetchMock.mockResolvedValueOnce(doc);
     expect(await getMemberAccess("m5")).toEqual(accessFromDoc(doc));
+  });
+  it("carries a stored leaderOf subset, normalized (per-group leadership)", () => {
+    const a = accessFromDoc({
+      _id: "m6", role: "member", ministries: ["jovenes"],
+      ministryRoles: [{ _key: "jovenes", ministry: "jovenes", level: "leader", groups: ["otro-nivel", "invencibles"], leaderOf: ["invencibles", "emprendedores"] }],
+    });
+    expect(a.ministryRoles).toEqual([{ ministry: "jovenes", level: "leader", groups: ["otro-nivel", "invencibles"], leaderOf: ["invencibles"] }]);
   });
   it("grants nothing for a missing document", () => {
     expect(accessFromDoc(null)).toEqual({

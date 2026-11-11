@@ -17,11 +17,11 @@ import "server-only";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import { LEVELED_MINISTRY_IDS, isGroupId, type MinistryId } from "@/app/ministries";
 import type { MemberAccess } from "./memberAccess";
-import { groupsIn, isMinistryManager, isMinistryMember, levelIn } from "./ministryAccess";
+import { groupsIn, isMinistryManager, isMinistryMember, ledGroupsIn } from "./ministryAccess";
 
 export const MINISTRY_EVENT_TYPE = "ministryEvent";
 
-/** `member`: the pages a pastor sees. `editor`: the planner (admins everything, leaders their drafts). */
+/** `member`: the pages a pastor sees. `editor`: the planner (admins everything, leaders the drafts of the groups they lead). */
 export type MinistryEventMode = "member" | "editor";
 
 /** No read token: the dotted ids would read as «no events» with no error, so the reader refuses. */
@@ -53,7 +53,10 @@ function armFor(access: Access, ministry: MinistryId, mode: MinistryEventMode): 
   const groups = groupsIn(access, ministry).filter((g) => isGroupId(ministry, g));
   if (mode === "member") return { kind: "member", groups };
   if (isMinistryManager(access, ministry)) return { kind: "all" };
-  if (levelIn(access, ministry) === "leader") return { kind: "leader", groups, led: groups };
+  // The leader arm: every group they are IN for published meetings, only the groups they LEAD for
+  // drafts (plan 2026-11-11 §5.1). A `leader` who leads no group is, here, a member: no editor read.
+  const led = ledGroupsIn(access, ministry);
+  if (led.length > 0) return { kind: "leader", groups, led };
   return null;
 }
 

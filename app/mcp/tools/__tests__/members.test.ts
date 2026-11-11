@@ -17,6 +17,7 @@ import { MEMBER_ERROR } from "@/app/utils/memberCommit";
 import { PRINCIPAL, textOf } from "./monthToolFixtures";
 import {
   CHECK_MEMBER_CHANGES_INPUT,
+  CHECK_NEW_MEMBERS_INPUT,
   checkMemberChangesResult,
   checkNewMembersResult,
   createMembersResult,
@@ -223,5 +224,24 @@ describe("set_member_access", () => {
   it("a writer refusal (a manager) is passed on", async () => {
     d.setAccess.mockResolvedValueOnce({ ok: false, status: 403, body: { error: "Desde el chat no se deshabilita a quien administra; hazlo en la página.", code: "chat_access" } });
     expect(textOf(await setMemberAccessResult({ memberId: "vale", enabled: false }, PRINCIPAL, d))).toMatch(/hazlo en la página/);
+  });
+});
+
+describe("the people tools' Jóvenes groups bound follows the registry (T5b)", () => {
+  const five = ["otro-nivel", "invencibles", "emprendedores", "adrenalin", "guerreras"];
+  const six = [...five, "otro-nivel"];
+  const edit = (groups: string[]) => ({ memberId: "vale", edits: [{ op: "jovenes", level: "member", groups }] });
+  const person = (groups: string[]) => ({
+    members: [{ name: "Noemí", email: "noemi@example.com", ministries: ["jovenes"], jovenes: { level: "admin", groups } }],
+  });
+
+  it("the edit op accepts all five groups and refuses a sixth entry", () => {
+    expect(CHECK_MEMBER_CHANGES_INPUT.safeParse(edit(five)).success).toBe(true);
+    expect(CHECK_MEMBER_CHANGES_INPUT.safeParse(edit(six)).success).toBe(false);
+  });
+
+  it("a new person accepts all five groups and refuses a sixth entry", () => {
+    expect(CHECK_NEW_MEMBERS_INPUT.safeParse(person(five)).success).toBe(true);
+    expect(CHECK_NEW_MEMBERS_INPUT.safeParse(person(six)).success).toBe(false);
   });
 });

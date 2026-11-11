@@ -302,7 +302,7 @@ to rotate, nothing to configure in GitHub → Settings → Secrets. If a future 
 needs one, it gets an entry in `docs/SECRETS.md` in the same change.
 
 **Not CI: `solver-v3-ops.yml`.** A separate workflow verifies and re-deploys the production
-solver function with keyless Google access (ADR-0085; `docs/SOLVER_AND_INFRA.md` «Verifying a v3
+solver function with keyless Google access (ADR-0086; `docs/SOLVER_AND_INFRA.md` «Verifying a v3
 deploy»). It is operations, not a gate: `gates` does not and must not depend on it, and branch
 protection does not require it. Each of its runs creates a GitHub Deployment record in the
 `solver-verify` or `solver-deploy` environment; that is not an app release. Its shape is pinned by
@@ -456,6 +456,15 @@ session's own `POST /v13/deployments` (Vercel MCP `create_deployment` with the
 failed `deploymentId`, `target: "production"`, `forceNew=1`) was accepted this
 time; the redeploy went `READY` in about 3 minutes and took the alias. Again a
 no-cache retry, so still no observation that separates the two causes.
+
+**Fifth occurrence (2026-11-11, on `preview`) — the first cache-backed retry.** The merge of the
+solver rules from the chat into `preview` (`f79868ac`) failed with the same signature under
+`./app/(admin)/layout.tsx`; the release diff (`976dcdc1..f79868ac`) touched no font, layout, config
+or lockfile. One redeploy of that deployment WITHOUT `forceNew` (Vercel MCP `create_deployment`
+with the failed `deploymentId`, no `target`) restored the build cache from the previous `READY`
+deployment, went `READY` in about 3 minutes and took `dev-owt-backstage`. So a retry that kept the
+cache fixed it: the observation that separates the two causes points to a failed fetch from Google,
+not a bad font entry in the cache. Prefer the cache-backed retry; a no-cache one is not needed.
 
 **Recognising it** — all of these, not some:
 

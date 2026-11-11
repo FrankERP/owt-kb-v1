@@ -353,5 +353,7 @@ describe("writeMessage", () => {
     expect(writeMessage(400, { error: "invalid_place" })).toContain("lugar");
     expect(writeMessage(400, { error: "invalid_seats" })).toContain("personas");
     expect(writeMessage(400, { error: "invalid_date" })).toBe("Elige la fecha.");
+    // The writer's 1–3 bound on a groups audience, in the form's own words (T5a).
+    expect(writeMessage(400, { error: "invalid_audience" })).toBe("Elige hasta tres grupos; para todos, usa una reunión de todo Jóvenes.");
   });
 });

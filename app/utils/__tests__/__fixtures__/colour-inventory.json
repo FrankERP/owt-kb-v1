@@ -2180,7 +2180,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 266,
+      "line": 267,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2192,6 +2192,18 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
+      "line": 303,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/admin/MembersPanel.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
       "line": 302,
       "disposition": "B",
       "reason": null
@@ -2204,7 +2216,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 301,
+      "line": 1390,
       "disposition": "B",
       "reason": null
     },
@@ -2216,7 +2228,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1389,
+      "line": 1399,
       "disposition": "B",
       "reason": null
     },
@@ -2228,7 +2240,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1398,
+      "line": 1409,
       "disposition": "B",
       "reason": null
     },
@@ -2240,7 +2252,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1408,
+      "line": 1420,
       "disposition": "B",
       "reason": null
     },
@@ -2252,19 +2264,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1419,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/MembersPanel.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 1430,
+      "line": 1431,
       "disposition": "B",
       "reason": null
     },
@@ -2276,7 +2276,7 @@
       "alpha": null,
       "utility": "stroke",
       "carrier": null,
-      "line": 305,
+      "line": 306,
       "disposition": "C",
       "reason": null
     },
@@ -2288,7 +2288,7 @@
       "alpha": null,
       "utility": "text",
       "carrier": null,
-      "line": 300,
+      "line": 301,
       "disposition": "C",
       "reason": null
     },

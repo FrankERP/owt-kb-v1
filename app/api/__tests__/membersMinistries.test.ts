@@ -252,8 +252,23 @@ describe("members routes — ministryRoles (Jóvenes level and groups)", () => {
   it("PATCH stores the items keyed by ministry, with the Studio's _type", async () => {
     const res = await PATCH(req({ ministries: ["worship", "jovenes"], ministryRoles: [leader] }), { params });
     expect(res.status).toBe(200);
-    expect(patchSet().ministryRoles).toEqual([{ _key: "jovenes", _type: "ministryRole", ...leader }]);
+    // A leader leads every group the request names (K1's PR 1 meaning of «Líder»).
+    expect(patchSet().ministryRoles).toEqual([{ _key: "jovenes", _type: "ministryRole", ...leader, leaderOf: leader.groups }]);
     expect(h.unsets).toEqual([]); // set and unset never touch one path in one patch
+  });
+
+  it("PATCH with ministryRoles always reads the person and pins the write to that read (K1 judges the stored item)", async () => {
+    stored({ _rev: "rev-9", ministries: ["jovenes"], ministryRoles: [{ _key: "jovenes", ministry: "jovenes", level: "leader", groups: ["otro-nivel", "invencibles"], leaderOf: ["otro-nivel"] }] });
+    const res = await PATCH(req({ ministries: ["jovenes"], ministryRoles: [leader] }), { params });
+    expect(res.status).toBe(200);
+    expect(h.revisions).toEqual(["rev-9"]);
+    expect(patchSet().ministryRoles).toEqual([{ _key: "jovenes", _type: "ministryRole", ...leader, leaderOf: ["otro-nivel"] }]);
+  });
+
+  it("PATCH refuses a request item that carries leaderOf in PR 1 (the key set is unchanged)", async () => {
+    const res = await PATCH(req({ ministries: ["jovenes"], ministryRoles: [{ ...leader, leaderOf: ["otro-nivel"] }] }), { params });
+    expect(res.status).toBe(400);
+    expect(h.commit).not.toHaveBeenCalled();
   });
 
   it("PATCH refuses ministryRoles without ministries in the SAME request (the absent = worship trap)", async () => {
@@ -384,6 +399,12 @@ describe("members routes — ministryRoles (Jóvenes level and groups)", () => {
         ministries: ["jovenes"],
         ministryRoles: [{ _key: "jovenes", _type: "ministryRole", ...admin }],
       });
+    });
+
+    it("creates a leader leading every group they are given (leaderOf = groups)", async () => {
+      const res = await POST(req({ ...base, ministries: ["jovenes"], ministryRoles: [leader] }));
+      expect(res.status).toBe(201);
+      expect(h.create.mock.calls[0][0].ministryRoles).toEqual([{ _key: "jovenes", _type: "ministryRole", ...leader, leaderOf: leader.groups }]);
     });
 
     it("refuses ministryRoles without ministries", async () => {

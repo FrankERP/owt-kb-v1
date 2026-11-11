@@ -169,13 +169,15 @@ function commitRefusal(refusal: { status: number; body: object }, notChecked: st
 
 const MEMBER_ID = z.string().min(1).max(200);
 const SHORT = z.string().max(200);
+/** A person may be in every Jóvenes group: the bound follows the registry (five since 2026-11-11). */
+const JOVENES_GROUPS = z.array(SHORT).max(MINISTRIES.jovenes.groups.length);
 
 const EDIT = z.discriminatedUnion("op", [
   z.object({ op: z.literal("set"), field: z.enum(MEMBER_SET_FIELDS), value: SHORT }).strict(),
   z.object({ op: z.literal("singsAndPlays"), value: z.boolean() }).strict(),
   z.object({ op: z.literal("add"), field: z.enum(MEMBER_LIST_FIELDS), value: SHORT }).strict(),
   z.object({ op: z.literal("remove"), field: z.enum(MEMBER_LIST_FIELDS), value: SHORT }).strict(),
-  z.object({ op: z.literal("jovenes"), level: z.enum(MINISTRY_LEVELS).nullable(), groups: z.array(SHORT).max(3).optional() }).strict(),
+  z.object({ op: z.literal("jovenes"), level: z.enum(MINISTRY_LEVELS).nullable(), groups: JOVENES_GROUPS.optional() }).strict(),
 ]);
 
 export const MAX_MEMBER_EDITS = 30;
@@ -199,7 +201,7 @@ const NEW_MEMBER = z
     singsAndPlays: z.boolean().optional(),
     ministries: z.array(SHORT).min(1).max(3),
     managesMinistries: z.array(SHORT).max(3).optional(),
-    jovenes: z.object({ level: z.enum(MINISTRY_LEVELS), groups: z.array(SHORT).max(3).optional() }).strict().optional(),
+    jovenes: z.object({ level: z.enum(MINISTRY_LEVELS), groups: JOVENES_GROUPS.optional() }).strict().optional(),
   })
   .strict();
 

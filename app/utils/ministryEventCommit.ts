@@ -25,7 +25,7 @@ import { writeClient } from "@/sanity/lib/serverClient";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import { LEVELED_MINISTRY_IDS, isGroupId, type MinistryId } from "@/app/ministries";
 import { accessFromDoc, fetchMemberAccessFresh, type MemberAccess, type MemberAccessDoc } from "./memberAccess";
-import { groupsIn, isMinistryManager, levelIn } from "./ministryAccess";
+import { groupsIn, isMinistryManager, ledGroupsIn } from "./ministryAccess";
 import { MINISTRY_EVENT_TYPE, MinistryEventReadUnavailable, mayRead, type StoredMinistryEvent } from "./ministryEventReads";
 import { isServiceTime } from "./serviceTime";
 import { revalidateMinistryViews } from "./revalidate";
@@ -298,10 +298,9 @@ export function resolveKind(audience: EventAudience, requested: string | undefin
 
 type Actor = { id: string; access: MemberAccess };
 
+/** The groups the actor LEADS (per group, plan 2026-11-11 §5.1) — never every group they are in. */
 function led(actor: Actor, ministry: MinistryId): string[] {
-  return levelIn(actor.access, ministry) === "leader"
-    ? groupsIn(actor.access, ministry).filter((g) => isGroupId(ministry, g))
-    : [];
+  return ledGroupsIn(actor.access, ministry);
 }
 
 /** A stored `groups` audience's distinct valid groups; `null` for anything else. */

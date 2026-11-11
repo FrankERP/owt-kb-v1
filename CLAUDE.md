@@ -43,7 +43,7 @@ rule changes, change both; if they disagree, this file wins.
   then run the suite with `.venv/bin/python` (the system `python` is 3.13 and refuses global
   installs). Keys reach a session only as network secrets the proxy injects (`docs/SECRETS.md`),
   never as readable variables. The long form lists what still needs the Mac. The solver is
-  verified/re-deployed via `solver-v3-ops.yml` (ADR-0085): ask Frank before dispatching `deploy`;
+  verified/re-deployed via `solver-v3-ops.yml` (ADR-0086): ask Frank before dispatching `deploy`;
   **never approve, reject or bypass a pending deployment**, nor change its environments or the WIF
   setup without his OK — the session acts as `FrankERP`, so this rule is the only gate.
 - **On the Mac — worktrees only when two things must be in flight at once** (`Agent` with
@@ -300,7 +300,7 @@ each one owns, and its rules) and `docs/UTILITIES_AND_COMPONENTS.md`. Most are "
   `revalidateServiceViews`, `buildRuns`/`normalizeMedleyTags`, `extractYouTubeId`,
   `computeParticipation`, `summarizeUnfilledSeats`, `paintsDayCard`, `publishVerdict`,
   `isMemberActive`, `requireActiveSession`/`requireActiveManager`, `accessFromDoc`,
-  `isMinistryMember`/`isMinistryManager`, `normalizeMinistryRoles`, `wantsNotification` (nothing
+  `isMinistryMember`/`isMinistryManager`, `ledGroupsIn`, `normalizeMinistryRoles`, `wantsNotification` (nothing
   reads `notifPrefs` directly), `sweepOutbox`, `shell`/`td`/`C` (email palette),
   `serviceLabel`/`serviceIdentity`, `findDuplicates`/`serviceConflicts`,
   `daysUntil`/`formatCountdown`, `MEMBER_TYPE_LABEL`, `isWorshipNight`, `songLeads.ts`
@@ -366,6 +366,8 @@ built on `ministryAccess.ts` over ONE snapshot, `accessFromDoc`); worship pages 
   read back as worship. A `ministryRoles` level counts only for a ministry named in `ministries`.
 - **Readable ≠ writable:** `ASSIGNABLE_MINISTRY_IDS`, not `ALL_MINISTRY_IDS`, gates every write and
   offer; old code reads a new id as WORSHIP, so never undo its read side while anyone holds it.
+- **Who leads a group is `ledGroupsIn`, never a level comparison** (ADR-0085; `ledGroupsCoverage.test.ts`):
+  a Jóvenes `leader` leads only `leaderOf` (⊆ `groups`); never revert its read side while a narrowed leader exists.
 - **A worship role needs worship:** `admin`/`content-editor` outside Alabanza is refused by the members
   API (on change, pinned with `ifRevisionId`, 409) and the Studio (`worshipRoleWithoutWorship`) —
   `requireActiveManager` reads `role` alone. A `ministryRoles` write carries `ministries` with it.

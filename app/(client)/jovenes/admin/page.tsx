@@ -2,14 +2,13 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { requireActiveSession } from "@/app/utils/authGuards";
 import { getMemberAccess } from "@/app/utils/memberAccess";
-import { groupsIn, isMinistryManager, isMinistryMember, levelIn } from "@/app/utils/ministryAccess";
+import { isMinistryManager, isMinistryMember, ledGroupsIn } from "@/app/utils/ministryAccess";
 import {
   MinistryEventReadUnavailable,
   readMinistryEvents,
   type MinistryEventView,
 } from "@/app/utils/ministryEventReads";
 import { rolloutAllows } from "@/app/utils/rollout";
-import { isGroupId } from "@/app/ministries";
 import {
   groupEvents,
   monthRange,
@@ -53,8 +52,10 @@ export default async function JovenesPlannerPage({ searchParams }: { searchParam
   if (!rolloutAllows("jovenesEvents", access)) notFound();
   if (!access.active || !isMinistryMember(access, "jovenes")) redirect("/");
   const isManager = isMinistryManager(access, "jovenes");
-  // A pastor with no planner level has nothing to plan: back to the meetings list.
-  if (!isManager && levelIn(access, "jovenes") !== "leader") redirect("/jovenes");
+  // The groups this person LEADS (per group, plan 2026-11-11 §5.1); a pastor who leads none — a
+  // `leader` with an empty `leaderOf` included — has nothing to plan: back to the meetings list.
+  const led = ledGroupsIn(access, "jovenes");
+  if (!isManager && led.length === 0) redirect("/jovenes");
 
   const today = new Date().toLocaleDateString("sv", { timeZone: TZ });
   const month = parseMonth((await searchParams).mes, today.slice(0, 7));
@@ -71,12 +72,8 @@ export default async function JovenesPlannerPage({ searchParams }: { searchParam
   }
   const people = isManager ? await readJovenesPeople() : [];
   // The buttons' view of who is looking (cosmetic). The groups a leader leads are the groups the
-  // writer counts for them (W3).
-  const viewer: PlannerViewer = {
-    me: sanityId,
-    isManager,
-    led: levelIn(access, "jovenes") === "leader" ? groupsIn(access, "jovenes").filter((g) => isGroupId("jovenes", g)) : [],
-  };
+  // writer counts for them (W3) — `ledGroupsIn`, the same answer.
+  const viewer: PlannerViewer = { me: sanityId, isManager, led };
   const defaultDate = month === today.slice(0, 7) ? today : `${month}-01`;
   const rows = saturdayRows(month, events);
   const groups = groupEvents(month, events);
