@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireActiveSession, requireMinistryMember } from "@/app/utils/authGuards";
 import { getMemberAccess } from "@/app/utils/memberAccess";
@@ -16,7 +17,11 @@ import {
   mySeats,
   seatRoleLabel,
 } from "@/app/utils/jovenesEventView";
+import { isMinistryManager, levelIn } from "@/app/utils/ministryAccess";
+import { showsProgramEditor } from "@/app/utils/jovenesPlannerModel";
+import { readJovenesPeople, type JovenesPerson } from "@/app/utils/jovenesPeople";
 import Navbar from "@/app/components/Navbar";
+import ProgramEditor from "@/app/components/jovenes/ProgramEditor";
 import { revealProps } from "@/app/utils/reveal";
 
 export const metadata: Metadata = {
@@ -34,7 +39,7 @@ const HORIZON_DAYS = 120;
 // `revalidate` and caches nothing (R6, `ministryEventCoverage.test.ts`).
 //
 // The pastors' list reads in MEMBER mode for everyone, admins included: drafts belong to the
-// planner (PR C), and a page that shows the same thing to every pastor is the one they trust.
+// planner (`/jovenes/admin`), and a page that shows the same thing to every pastor is the one they trust.
 
 export default async function JovenesPage() {
   // The two failure cases stay split, as on /kids: no active session goes to sign-in (sending it
@@ -67,14 +72,25 @@ export default async function JovenesPage() {
     if (!(e instanceof MinistryEventReadUnavailable)) throw e;
     unavailable = true;
   }
+  // «Editar programa» for an admin, and for the encargado or apoyo of a whole-ministry meeting
+  // (W3a). Cosmetic: the program PATCH decides again on the stored event.
+  const isManager = isMinistryManager(access, "jovenes");
+  const plans = isManager || levelIn(access, "jovenes") === "leader";
+  const editable = new Set(events.filter((e) => showsProgramEditor(e, isManager)).map((e) => e._id));
+  const people = editable.size > 0 ? await readJovenesPeople() : [];
 
   return (
     <div>
       <Navbar title="Jóvenes" />
       <div className="mx-auto max-w-4xl px-6 pt-10 pb-16 space-y-8">
-        <h2 className="font-display text-2xl md:text-3xl font-bold" {...revealProps(0)}>
-          Próximas reuniones
-        </h2>
+        <div className="flex flex-wrap items-baseline justify-between gap-3" {...revealProps(0)}>
+          <h2 className="font-display text-2xl md:text-3xl font-bold">Próximas reuniones</h2>
+          {plans && (
+            <Link href="/jovenes/admin" className="font-label text-sm text-mono-500 hover:text-accent">
+              Planear
+            </Link>
+          )}
+        </div>
 
         {unavailable ? (
           <p role="alert" className="rounded-2xl border border-edge-accent-subtle bg-surface-raised p-5 font-body text-sm text-ink-muted" {...revealProps(1)}>
@@ -91,7 +107,7 @@ export default async function JovenesPage() {
         ) : (
           <div className="space-y-5">
             {events.map((e, i) => (
-              <EventCard key={e._id} event={e} index={i} />
+              <EventCard key={e._id} event={e} index={i} people={editable.has(e._id) ? people : null} />
             ))}
           </div>
         )}
@@ -100,7 +116,8 @@ export default async function JovenesPage() {
   );
 }
 
-function EventCard({ event: e, index }: { event: MinistryEventView; index: number }) {
+/** `people` is set only when this reader may edit the program (then the button shows). */
+function EventCard({ event: e, index, people }: { event: MinistryEventView; index: number; people: JovenesPerson[] | null }) {
   const mine = mySeats(e);
   const when = [e.time, e.arrival ? `llegada ${e.arrival}` : null].filter(Boolean).join(" · ");
   return (
@@ -157,6 +174,12 @@ function EventCard({ event: e, index }: { event: MinistryEventView; index: numbe
       )}
 
       {e.notes && <p className="mt-4 whitespace-pre-line font-body text-sm text-ink-muted">{e.notes}</p>}
+
+      {people && (
+        <div className="mt-4">
+          <ProgramEditor event={e} people={people} />
+        </div>
+      )}
     </article>
   );
 }

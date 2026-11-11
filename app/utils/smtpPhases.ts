@@ -106,7 +106,7 @@ function probeMessage(from: string, to: string, bodyBytes: number): string {
     "MIME-Version: 1.0",
     'Content-Type: text/plain; charset="utf-8"',
     "",
-    "Automated timing probe from the OWT Backstage notification system.",
+    "Automated timing probe from the Backstage notification system.",
     "It measures how long this server takes to accept a message. Nothing to do.",
     "",
     filler,

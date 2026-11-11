@@ -13,14 +13,25 @@ import { pastorMessageBodyOf } from "@/app/utils/serviceThread";
 import { getMemberAccess } from "@/app/utils/memberAccess";
 import { isMinistryMember } from "@/app/utils/ministryAccess";
 import { KIDS_SEATS } from "@/app/utils/kidsTypes";
-import { CALENDAR_VIEW_COOKIE, kidsActiveDay, parseCalendarView, type KidsCalendarRow } from "@/app/utils/calendarMinistry";
+import {
+  CALENDAR_VIEW_COOKIE,
+  jovenesActiveDay,
+  kidsActiveDay,
+  parseCalendarView,
+  type ExtraCalendarMinistry,
+  type KidsCalendarRow,
+} from "@/app/utils/calendarMinistry";
+import { MinistryEventReadUnavailable, readMinistryEvents, type MinistryEventView } from "@/app/utils/ministryEventReads";
+import { rolloutAllows } from "@/app/utils/rollout";
 
 export const metadata: Metadata = {
-  title: "Calendario — Oasis Worship Team",
-  description: "Próximos servicios y asignaciones del equipo de alabanza Oasis.",
+  title: "Calendario — Backstage",
+  description: "Próximos servicios, eventos y asignaciones de tus ministerios.",
 };
 
-export const revalidate = 60;
+// No `revalidate` export: the page reads the session (it was already dynamic, so the old
+// `revalidate = 60` was inert), and since PR D it reads Jóvenes meetings, one person's view
+// that must never be cached (ADR-0081 R6, `ministryEventCoverage.test.ts`).
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -75,7 +86,10 @@ const SCHEDULE_QUERY = `{
   ${KIDS_FRAGMENT}
 }`;
 
-async function getScheduleData(viewMonth: string | null, today: string, me: string, withKids: boolean) {
+type ScheduleWindow = { fetchFrom: string; limit: string; weekStart: string };
+
+/** The page's date window, computed once so the worship read and the Jóvenes read share it. */
+function scheduleWindow(viewMonth: string | null, today: string): ScheduleWindow {
   let fetchFrom: string;
   let limit: string;
   let weekStart: string;
@@ -99,7 +113,10 @@ async function getScheduleData(viewMonth: string | null, today: string, me: stri
     const daysToMon = dow === 0 ? -6 : 1 - dow;
     weekStart = new Date(Date.UTC(y, m - 1, d + daysToMon)).toISOString().slice(0, 10);
   }
+  return { fetchFrom, limit, weekStart };
+}
 
+async function getScheduleData({ fetchFrom, limit, weekStart }: ScheduleWindow, me: string, withKids: boolean) {
   // Canonical (published-perspective) client: a `drafts.*` overlay is never a
   // live calendar entry. Application draft gating (`published != false`) stays in
   // the role filters above — it is a separate, member-visibility concern.
@@ -132,9 +149,32 @@ export default async function SchedulePage({
   // The page is worship-gated, so a Kids member here is in both ministries: they get
   // the Kids Sundays and the filter. The access read is the 30s-TTL entry the gate
   // just filled.
-  const withKids = isMinistryMember(await getMemberAccess(session.user.sanityId), "kids");
-  const ministryView = withKids ? parseCalendarView((await cookies()).get(CALENDAR_VIEW_COOKIE)?.value) : undefined;
-  const { sundays, saturdays, sunSetlists, satSetlists, specials, viewer, kids } = await getScheduleData(viewMonth, today, session.user.sanityId, withKids);
+  const access = await getMemberAccess(session.user.sanityId);
+  const withKids = isMinistryMember(access, "kids");
+  // Jóvenes joins once its meetings' rollout reaches this person, on the same snapshot as the
+  // gate (ADR-0081). A Jóvenes-only pastor never gets here: the worship gate sends them to
+  // /jovenes, which is their calendar.
+  const withJovenes = rolloutAllows("jovenesEvents", access) && isMinistryMember(access, "jovenes");
+  const extras: ExtraCalendarMinistry[] = [...(withKids ? ["kids" as const] : []), ...(withJovenes ? ["jovenes" as const] : [])];
+  const ministryView = extras.length ? parseCalendarView((await cookies()).get(CALENDAR_VIEW_COOKIE)?.value, extras) : undefined;
+  const span = scheduleWindow(viewMonth, today);
+
+  // The ONE reader, in member mode: published meetings for the whole ministry or one of the
+  // reader's groups, over the same window as the specials (R1, R8). It runs beside the worship
+  // read, not after it: each is a round trip to Sanity in Europe.
+  const readJovenes = async (): Promise<{ events: MinistryEventView[]; unavailable: boolean }> => {
+    if (!withJovenes) return { events: [], unavailable: false };
+    try {
+      const events = await readMinistryEvents(access, { me: session.user.sanityId, ministry: "jovenes", from: span.weekStart, to: span.limit, mode: "member" });
+      return { events, unavailable: false };
+    } catch (e) {
+      // No read token: say so under the calendar, never show «no meetings» (R4).
+      if (!(e instanceof MinistryEventReadUnavailable)) throw e;
+      return { events: [], unavailable: true };
+    }
+  };
+  const [{ sundays, saturdays, sunSetlists, satSetlists, specials, viewer, kids }, { events: jovenes, unavailable: jovenesUnavailable }] =
+    await Promise.all([getScheduleData(span, session.user.sanityId, withKids), readJovenes()]);
 
   // Fail closed on an ambiguous weekend target. A duplicate canonical role or
   // setlist for the same week yields NO entry for that week rather than a
@@ -214,6 +254,12 @@ export default async function SchedulePage({
     kidsDays.forEach((entry, dateStr) => push(dateStr, entry));
   }
 
+  // Each meeting is its own entry (keyed by id), so two on one day both show.
+  for (const e of jovenes) {
+    const entry = jovenesActiveDay(e);
+    if (entry) push(entry.date, entry);
+  }
+
   return (
     <div>
       <Navbar title="Calendario" />
@@ -232,7 +278,13 @@ export default async function SchedulePage({
           viewerName={myNameFromSession(session.user)}
           viewerIsAdmin={["super-admin", "admin"].includes(session.user.role)}
           ministryView={ministryView}
+          ministryExtras={extras}
         />
+        {jovenesUnavailable && (
+          <p role="alert" className="mt-6 text-center font-body text-sm text-ink-muted">
+            No pudimos leer las reuniones de Jóvenes en este momento.
+          </p>
+        )}
       </div>
     </div>
   );

@@ -12,6 +12,7 @@ import { sanityConflictKind } from "@/app/utils/roleWriteRequest";
 import { SOLVER_CONFIG_DOC_ID } from "@/app/utils/solverConfigWriteRequest";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import { writeClient } from "@/sanity/lib/serverClient";
+import { storedTypeOf } from "@/app/utils/typePin";
 import { revalidatePath } from "next/cache";
 import { patchMember } from "@/app/utils/memberCommit";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
@@ -57,9 +58,16 @@ async function deleteHandler(
   }
 
   const { id } = await params;
+  // W9 (ADR-0081): this route deletes members only; an id held by ANOTHER type answers 404. An id
+  // no document holds is not refused: «Reintenta la eliminación» after a failed pool cleanup
+  // (below) re-sends a member already deleted, and the retry must still reach the cleanup.
+  const storedType = await storedTypeOf(id);
+  if (storedType !== null && storedType !== "teamMembers") {
+    return NextResponse.json({ error: "Miembro no encontrado." }, { status: 404 });
+  }
 
   try {
-    await writeClient.delete(id);
+    if (storedType !== null) await writeClient.delete(id);
   } catch (err) {
     if (isSanityReferentialIntegrityError(err)) {
       return NextResponse.json(

@@ -350,12 +350,34 @@ protection (spec 2026-09-20 decision D2).
 
 ---
 
+## Jóvenes meetings (ADR-0081)
+
+Every route below answers **401** without an active session, then **404** unless the path's
+ministry is `jovenes` AND the `jovenesEvents` rollout reaches the caller (`eventRouteGate`,
+`app/api/ministries/[ministry]/eventRoute.ts`), then hands the body to
+[`ministryEventCommit.ts`](../app/utils/ministryEventCommit.ts), the type's ONE writer, which decides
+everything else on a FRESH read of the caller's access and of the stored event. A body that is not
+JSON reaches it as `null` (400). Refusal order, for every write: the body's shape (400; a missing
+`_rev` is `rev_required`) → inactive (403) → an event the caller may not read in either mode (404
+«Ese evento no existe.», the same as a missing id, so a refusal never confirms one exists) → not
+allowed (403) → stale `_rev` (409 «Alguien más cambió este evento; recarga.»). Success is
+`{ok, id, rev}` and calls `revalidateMinistryViews`. Wrapped in `withVerificationRunContext`; the
+writer sends nothing. MCP and the admin assistant never import it (`ministryEventCoverage.test.ts`).
+
+| Route | Methods | Purpose & rules |
+|-------|---------|-----------------|
+| `/api/ministries/[ministry]/events` | POST | Create. `{token, audience, kind?, date, time?, arrival?, title?, notes?, published?, seats?, program?}`. `token` is a v4 UUID the client mints when the editor opens (lowercased; the id becomes `ministryEvent.<token>`), so a retry names the same meeting: a second create answers 409 `already_created` only to someone who may read it, else 404. A Jóvenes admin creates anything; a leader only a `groups` audience that includes a group they lead (a joint meeting of up to three groups). `createdBy` is the caller, never the body. Every seat and program person must be an active member of the ministry (and, for groups, of one of them) — `invalid_member`. |
+| `/api/ministries/[ministry]/events/[token]` | PATCH, DELETE | PATCH `{_rev, …any editable field}` edits or publishes; arrays are written whole, a stored item keeps its `_key`, an unchanged kept item is not re-validated. DELETE `{_rev}`: a guarded delete (one transaction, an `ifRevisionId` no-op patch then the delete). Who: a Jóvenes admin any meeting; a leader a one-group meeting of a group they lead; a joint meeting only its creator (while leading one of its groups) and the admins. |
+| `/api/ministries/[ministry]/events/[token]/program` | PATCH | `{_rev, program}` — writes ONLY `program`, whatever else the body says. Who: anyone who may edit the meeting, plus the encargado or apoyo of a whole-ministry meeting who may still read it. |
+
+---
+
 ## Content editing — `requireActiveManager` (content-editor **allowed**)
 
 | Route | Methods | Notes |
 |-------|---------|-------|
 | `/api/content/posts` | GET, POST | GET all songs. POST create song (title required; all URLs must be http(s); resolves `authorIds`→names; `textToBody(lyrics)`; builds slug) → `revalidateSongViews()`, 201. **Link rows (`referenceLinks`) go through `normalizeLinkRows`**: a row with neither label nor URL is DROPPED, the way `normalizeChordCharts` drops a blank chart — it used to 400 the whole request and lose every other edit in the form. A row WITH a label and no usable URL still 400s, and the error names the label. |
-| `/api/content/posts/[id]` | PATCH, DELETE | PATCH partial song update (URL validation; **type-guards target is a `post`**). Same `normalizeLinkRows` contract as POST, for `referenceLinks` **and** `tutorials`. **DELETE requires admin/super-admin** (content-editor excluded). Both → `revalidateSongViews()`. |
+| `/api/content/posts/[id]` | PATCH, DELETE | PATCH partial song update (URL validation; **type-guards target is a `post`**). Same `normalizeLinkRows` contract as POST, for `referenceLinks` **and** `tutorials`. **DELETE requires admin/super-admin** (content-editor excluded), and deletes a `post` ONLY: it reads the stored type first (404 «Canción no encontrada.» for any other id, and for a song already deleted — before ADR-0081 W9 it deleted any document and a repeat answered 200) and deletes under the revision it read, its guard setting `title` to the stored value in the same transaction (409 if the revision moved; a song still referenced fails as before). Both → `revalidateSongViews()`. |
 | `/api/content/tags` | GET, POST | POST is **idempotent by slug** — returns the existing doc (200) or creates (201). |
 | `/api/content/authors` | GET, POST | POST idempotent by slug (via `slugifyAuthor`) — existing (200) or created (201). |
 
@@ -474,9 +496,9 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
 | Route | Methods | Auth | Notes |
 |-------|---------|------|-------|
 | `/api/admin/members` | GET, POST | GET admin/super-admin; **POST super-admin** | GET is **ministry-scoped**: `admin`/`content-editor` receive worship members only (`WORSHIP_MEMBER_GROQ_FILTER`), while `super-admin` binds `$all` and receives everyone — they are the only role that can edit `ministries`, so filtering them would make a Kids-only member uneditable through the UI. The «Personas» list (`/super-admin`; the `/admin` Miembros tab until 2026-10-29) then offers an Alabanza/Oasis Kids/Todos control, defaulting to Alabanza, filtering client-side. Absent `ministries` counts as worship, so no legacy member is ever hidden. POST create (name+email required), 201. POST and PATCH accept `instruments` (array of strings closed to `DEFAULT_INSTRUMENT_SEATS` after `normalizeSeatName`; duplicates collapse; `[]` stored; absent = untouched) and answer **400** `Instrumento no reconocido: <name>` on any other value. |
-| `/api/admin/members/[id]` | PATCH, DELETE | **super-admin** | PATCH validates role/`memberType`/`instruments`/`ministries`/`managesMinistries` (each applied only when present, so an unrelated edit cannot wipe a privilege), sets `notifPrefs.email` → `revalidateServiceViews()` + `revalidatePath("/me")`. DELETE removes. |
-| `/api/admin/members/[id]/photo` | POST | **super-admin** | Same photo validation as `/api/me/photo`; sets target's `profilePhoto`. (No revalidation.) |
-| `/api/admin/set-password` | POST | **super-admin** | `{sanityMemberId, password}` (≥8) → sets `passwordHash` (cost 12). |
+| `/api/admin/members/[id]` | PATCH, DELETE | **super-admin** | PATCH validates role/`memberType`/`instruments`/`ministries`/`managesMinistries` (each applied only when present, so an unrelated edit cannot wipe a privilege), sets `notifPrefs.email` → `revalidateServiceViews()` + `revalidatePath("/me")`. DELETE removes. **Both answer 404 «Miembro no encontrado.» for an id held by another type** (ADR-0081 W9: before it, a PATCH without `role`/`ministries` and the DELETE wrote any id). The PATCH also 404s a missing id (it reads the stored member on every request); the DELETE does not — an id no document holds skips the delete and still runs the solver-pool cleanup, so «Reintenta la eliminación» after a failed cleanup finishes it. |
+| `/api/admin/members/[id]/photo` | POST | **super-admin** | Same photo validation as `/api/me/photo`; sets target's `profilePhoto`. (No revalidation.) 404 for an id that is not a `teamMembers`, before any upload (W9). |
+| `/api/admin/set-password` | POST | **super-admin** | `{sanityMemberId, password}` (≥8) → sets `passwordHash` (cost 12). 404 for an id that is not a `teamMembers` (W9). |
 | `/api/admin/login-events` | GET | admin/super-admin | Per-member last login/active, count, providers, recent 20 events. 500 `activity_unavailable` without `SANITY_API_READ_TOKEN`. |
 
 ### Solver

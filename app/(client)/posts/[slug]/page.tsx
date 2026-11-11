@@ -52,9 +52,9 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     `*[_type == "post" && slug.current == $slug][0]{ title, author }`,
     { slug }
   );
-  if (!post?.title) return { title: "Canción — Oasis Worship Team" };
+  if (!post?.title) return { title: "Canción — Backstage" };
   return {
-    title: `${post.title} — Oasis Worship Team`,
+    title: `${post.title} — Backstage`,
     description: post.author ? `${post.title} · ${post.author}` : post.title,
   };
 }

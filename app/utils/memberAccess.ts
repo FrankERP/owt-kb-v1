@@ -90,6 +90,20 @@ export async function getMemberAccess(
 }
 
 /**
+ * The same snapshot with NO cache (ADR-0081 W1): a writer that must see a demotion or a group
+ * change on the very next request reads this, never `getMemberAccess`. Same projection, same
+ * normalization, so the two reads cannot drift. Neither reads nor fills the 30 s cache.
+ */
+export async function fetchMemberAccessFresh(sanityId: string | undefined | null): Promise<MemberAccess> {
+  if (!sanityId) return accessFromDoc(null);
+  const doc = await serverClient.fetch<MemberAccessDoc | null>(
+    `*[_type == "teamMembers" && _id == $id][0]${ACCESS_PROJECTION}`,
+    { id: sanityId },
+  );
+  return accessFromDoc(doc);
+}
+
+/**
  * Live "is this member still allowed in" check, backed by the same 30s TTL cache
  * as getMemberAccess. A member is active iff their teamMembers doc exists and
  * disabled !== true.

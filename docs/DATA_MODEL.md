@@ -545,7 +545,12 @@ calendario de los de Otro Nivel», Frank). Read **only** through
 `SANITY_API_READ_TOKEN`, carries the id prefix in every query and passes the reader's groups as a
 PARAMETER; `ministryEventCoverage.test.ts` fails on any other file that names the type, and
 `ministryEventReads.test.ts` runs the real GROQ on `groq-js` over a people × events matrix. Written
-only by `ministryEventCommit.ts` (PR C; until it ships, nothing writes the type).
+only by [`ministryEventCommit.ts`](../app/utils/ministryEventCommit.ts), called by the four
+`/api/ministries/[ministry]/events*` routes (API_REFERENCE «Jóvenes meetings»): a fresh access read,
+the stored revision authorized and written under `ifRevisionId`, weak references, a client create
+token for the id. The routes that write a client-supplied id of another type (the song DELETE, the
+member PATCH/DELETE, photo and set-password) answer 404 for it (W9, `typePin.ts`), so nothing else
+writes an event.
 
 | Field | Meaning |
 |---|---|

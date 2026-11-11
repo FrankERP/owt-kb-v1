@@ -23,6 +23,8 @@ const h = vi.hoisted(() => ({
   requireMinistryMember: vi.fn(),
   getMemberAccess: vi.fn(),
   readMinistryEvents: vi.fn(),
+  readJovenesPeople: vi.fn(),
+  rolloutOpen: false,
 }));
 vi.mock("@/app/utils/authGuards", () => ({
   requireActiveSession: () => h.requireActiveSession(),
@@ -37,6 +39,15 @@ vi.mock("@/app/utils/ministryEventReads", async () => {
   };
 });
 vi.mock("@/app/components/Navbar", () => ({ default: () => null }));
+vi.mock("@/app/utils/jovenesPeople", () => ({ readJovenesPeople: () => h.readJovenesPeople() }));
+vi.mock("@/app/components/jovenes/ProgramEditor", () => ({
+  default: ({ event, people }: { event: { _id: string }; people: unknown[] }) => `[programa ${event._id} · ${people.length}]`,
+}));
+// The real rollout, unless a row opens it to reach a pastor (the encargado's program button).
+vi.mock("@/app/utils/rollout", async (orig) => {
+  const real = await orig<typeof import("@/app/utils/rollout")>();
+  return { ...real, rolloutAllows: (f: never, a: never) => h.rolloutOpen || real.rolloutAllows(f, a) };
+});
 
 import JovenesPage from "../page";
 import { MinistryEventReadUnavailable } from "@/app/utils/ministryEventReads";
@@ -76,7 +87,9 @@ const EVENT = {
 };
 
 beforeEach(() => {
-  for (const f of Object.values(h)) f.mockReset();
+  for (const f of Object.values(h)) if (typeof f === "function") f.mockReset();
+  h.rolloutOpen = false;
+  h.readJovenesPeople.mockResolvedValue([{ id: "p9", name: "Ana" }]);
   h.requireActiveSession.mockResolvedValue(session);
   h.requireMinistryMember.mockResolvedValue(session);
   h.getMemberAccess.mockResolvedValue(SUPER);
@@ -147,5 +160,37 @@ describe("/jovenes read", () => {
   it("any other failure is not swallowed", async () => {
     h.readMinistryEvents.mockRejectedValue(new Error("boom"));
     await expect(visit()).rejects.toThrow("boom");
+  });
+});
+
+describe("/jovenes program editor and «Planear» (cosmetic; the server decides)", () => {
+  const SATURDAY = { ...EVENT, _id: "ministryEvent.sat", audience: { kind: "ministry" }, kind: "saturday" };
+
+  it("an admin gets «Planear» and the program button on every meeting, with the people list", async () => {
+    h.readMinistryEvents.mockResolvedValue([EVENT, SATURDAY]);
+    const html = await visit();
+    expect(html).toContain("Planear");
+    expect(html).toContain("[programa ministryEvent.a · 1]");
+    expect(html).toContain("[programa ministryEvent.sat · 1]");
+    expect(h.readJovenesPeople).toHaveBeenCalledTimes(1);
+  });
+
+  it("the encargado of a whole-ministry meeting gets the button there only; a pastor gets no «Planear»", async () => {
+    h.rolloutOpen = true;
+    h.getMemberAccess.mockResolvedValue(PASTOR);
+    h.readMinistryEvents.mockResolvedValue([EVENT, SATURDAY]);
+    const html = await visit();
+    expect(html).toContain("[programa ministryEvent.sat · 1]");
+    expect(html).not.toContain("[programa ministryEvent.a");
+    expect(html).not.toContain(">Planear<");
+  });
+
+  it("nobody who may edit nothing costs a people read", async () => {
+    h.rolloutOpen = true;
+    h.getMemberAccess.mockResolvedValue(PASTOR);
+    h.readMinistryEvents.mockResolvedValue([{ ...SATURDAY, seats: [{ ...SATURDAY.seats[0], role: "comparte" }] }]);
+    const html = await visit();
+    expect(html).not.toContain("[programa");
+    expect(h.readJovenesPeople).not.toHaveBeenCalled();
   });
 });
