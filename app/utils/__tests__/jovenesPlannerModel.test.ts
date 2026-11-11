@@ -9,11 +9,14 @@ import {
   groupEventProblem,
   groupEvents,
   monthRange,
+  monthTitle,
   parseMonth,
+  plannerLede,
   programBody,
   programForm,
   saturdayBody,
   saturdayForm,
+  saturdayProblem,
   saturdayRows,
   saturdaysOfMonth,
   shiftMonth,
@@ -33,6 +36,7 @@ function ev(over: Partial<MinistryEventView> = {}): MinistryEventView {
     arrival: "17:30",
     title: null,
     notes: null,
+    place: null,
     published: true,
     seats: [],
     program: [],
@@ -67,6 +71,52 @@ describe("months", () => {
   });
 });
 
+describe("the planner's head", () => {
+  it("the month as a title: the name and the year apart, capital first, «de» nowhere", () => {
+    expect(monthTitle("2026-11")).toEqual({ name: "Noviembre", year: "2026" });
+    expect(monthTitle("2027-01")).toEqual({ name: "Enero", year: "2027" });
+  });
+
+  it("the lede counts Saturdays, dates with a meeting, drafts of both sections and group meetings", () => {
+    const rows = saturdayRows("2026-11", [
+      ev({ _id: "a", date: "2026-11-14" }),
+      ev({ _id: "b", date: "2026-11-21" }),
+      ev({ _id: "c", date: "2026-11-28", published: false }),
+    ]);
+    const groups = [{ published: true }, { published: false }];
+    expect(plannerLede("2026-11", rows, groups)).toEqual([
+      { text: "4 sábados", strong: false },
+      { text: "3 con reunión", strong: true },
+      { text: "2 borradores", strong: false },
+      { text: "2 de grupo", strong: false },
+    ]);
+  });
+
+  it("«con reunión» counts Saturdays only: a board on a Friday is a row, not a fifth Saturday", () => {
+    const rows = saturdayRows("2026-11", [
+      ev({ _id: "a", date: "2026-11-07" }),
+      ev({ _id: "b", date: "2026-11-14" }),
+      ev({ _id: "c", date: "2026-11-21" }),
+      ev({ _id: "d", date: "2026-11-28" }),
+      ev({ _id: "f", date: "2026-11-20", kind: "ministry", title: "Campamento", published: false }),
+    ]);
+    expect(rows).toHaveLength(5);
+    expect(plannerLede("2026-11", rows, []).map((p) => p.text)).toEqual(["4 sábados", "4 con reunión", "1 borrador"]);
+  });
+
+  it("an empty month says so and leaves the zero counts out", () => {
+    expect(plannerLede("2026-10", saturdayRows("2026-10", []), [])).toEqual([
+      { text: "5 sábados", strong: false },
+      { text: "ninguno con reunión", strong: true },
+    ]);
+    expect(plannerLede("2026-11", saturdayRows("2026-11", [ev({ published: false })]), []).map((p) => p.text)).toEqual([
+      "4 sábados",
+      "1 con reunión",
+      "1 borrador",
+    ]);
+  });
+});
+
 describe("saturdayRows", () => {
   it("keeps every Saturday, adds another date's whole-ministry meeting, drops group events and other months", () => {
     const rows = saturdayRows("2026-11", [
@@ -96,6 +146,7 @@ describe("the Saturday editor's body", () => {
       time: "18:10",
       arrival: "17:30",
       title: null,
+      place: null,
       notes: null,
       published: false,
       seats: [],
@@ -106,8 +157,8 @@ describe("the Saturday editor's body", () => {
     const f = saturdayForm("2026-11-07", ev({
       seats: [seat("encargado", "m1", "Ana"), seat("apoyo", "m2", "Beto"), seat("apoyo", "m3", "Caro", false, "k-apoyo-2")],
     }));
-    f.picks.apoyo = { key: f.picks.apoyo.key, member: null };
-    f.picks.comparte = { key: null, member: "m4" };
+    f.picks.apoyo = { key: f.picks.apoyo.key, member: null, name: null };
+    f.picks.comparte = { key: null, member: "m4", name: null };
     expect(saturdayBody(f).seats).toEqual([
       { _key: "k-encargado", role: "encargado", member: "m1" },
       { role: "comparte", member: "m4" },
@@ -123,12 +174,74 @@ describe("the Saturday editor's body", () => {
     expect(saturdayBody(saturdayForm("2026-11-07")).kind).toBe("saturday");
   });
 
+  // Plan 2026-11-10 P7: the view's `name` is a member's live name OR a typed text; only a seat with
+  // no member is typed, so a member seat (extras too) is never saved back as text.
+  it("a seat sends its member or its typed name, never both; a blank typed name sends no seat", () => {
+    const f = saturdayForm("2026-11-07", ev({
+      seats: [
+        seat("encargado", null, "Emprendedores"),
+        seat("apoyo", "m2", "Beto"),
+        seat("apoyo", "m3", "Caro", false, "k-apoyo-2"),
+        seat("encargado", null, "Goma", false, "k-encargado-2"),
+      ],
+    }));
+    expect(f.picks.encargado).toEqual({ key: "k-encargado", member: null, name: "Emprendedores" });
+    expect(f.picks.apoyo).toEqual({ key: "k-apoyo", member: "m2", name: null });
+    f.picks.comparte = { key: null, member: null, name: "  Ana  " };
+    expect(saturdayBody(f).seats).toEqual([
+      { _key: "k-encargado", role: "encargado", name: "Emprendedores" },
+      { _key: "k-apoyo", role: "apoyo", member: "m2" },
+      { role: "comparte", name: "Ana" },
+      { _key: "k-apoyo-2", role: "apoyo", member: "m3" },
+      { _key: "k-encargado-2", role: "encargado", name: "Goma" },
+    ]);
+    f.picks.comparte = { key: null, member: null, name: "   " };
+    f.extra = [];
+    expect(saturdayBody(f).seats).toEqual([
+      { _key: "k-encargado", role: "encargado", name: "Emprendedores" },
+      { _key: "k-apoyo", role: "apoyo", member: "m2" },
+    ]);
+  });
+
+  it("a meeting on another weekday is saved as `ministry`, never as a Saturday", () => {
+    expect(saturdayBody({ ...saturdayForm("2026-11-20"), date: "2026-11-20" }).kind).toBe("ministry");
+    expect(saturdayBody(saturdayForm("2026-11-14")).kind).toBe("saturday");
+    const moved = saturdayForm("2026-11-07", ev({ kind: "saturday" }));
+    expect(saturdayBody({ ...moved, date: "2026-11-20" }).kind).toBe("ministry");
+    expect(saturdayBody({ ...saturdayForm("2026-11-07", ev({ kind: "ministry" })), date: "2026-11-14" }).kind).toBe("ministry");
+  });
+
+  it("carries the place both ways, and a cleared one as null", () => {
+    const f = saturdayForm("2026-11-07", ev({ place: "Oasis Tlalpan" }));
+    expect(f.place).toBe("Oasis Tlalpan");
+    expect(saturdayBody({ ...f, place: " Casa Fam Varela " }).place).toBe("Casa Fam Varela");
+    expect(saturdayBody({ ...f, place: " " }).place).toBeNull();
+  });
+
   it("a cleared time or note is sent as null (the server unsets it)", () => {
     const f = saturdayForm("2026-11-07", ev({ notes: "Traer Biblia" }));
     f.time = "";
     f.notes = "  ";
     const b = saturdayBody(f);
     expect([b.time, b.notes]).toEqual([null, null]);
+  });
+});
+
+describe("the clocks the editors accept", () => {
+  // The sheets use the native time field, which hands back "" or HH:mm; these are the belt for
+  // a value that got in another way. (They were component tests while the fields were free text.)
+  it("the Saturday form: an empty or HH:mm clock passes, anything else names the field", () => {
+    const date = "2026-11-14";
+    expect(saturdayProblem({ date, time: "18:10", arrival: "17:30" })).toBeNull();
+    expect(saturdayProblem({ date, time: "", arrival: " " })).toBeNull();
+    expect(saturdayProblem({ date, time: "6pm", arrival: "17:30" })).toBe("La hora debe ser HH:mm (por ejemplo 18:10).");
+    expect(saturdayProblem({ date, time: "18:10", arrival: "5:30" })).toBe("La llegada debe ser HH:mm (por ejemplo 18:10).");
+  });
+
+  it("the meeting form needs a real date first", () => {
+    for (const date of ["", "2026-02-30", "14/11/2026"]) {
+      expect(saturdayProblem({ date, time: "6pm", arrival: "" })).toBe("Elige la fecha.");
+    }
   });
 });
 
@@ -182,6 +295,23 @@ describe("whatsappRoster", () => {
     );
   });
 
+  it("a Friday meeting with a title, a place and typed names", () => {
+    const rows = saturdayRows("2026-11", [
+      ev({
+        date: "2026-11-20", kind: "ministry", time: "20:00", arrival: null, title: "Estudio «Daniel»", place: "Oasis Tlalpan",
+        seats: [seat("encargado", null, "Emprendedores"), seat("comparte", null, "Ana")],
+      }),
+    ]);
+    expect(whatsappRoster("2026-11", rows).split("\n").slice(2)).toEqual([
+      "*Viernes, 20 de noviembre* — 20:00",
+      "Estudio «Daniel»",
+      "Lugar: Oasis Tlalpan",
+      "Encargado: Emprendedores",
+      "Apoyo: Sin asignar",
+      "Comparte: Ana",
+    ]);
+  });
+
   it("an empty month is the header alone", () => {
     expect(whatsappRoster("2026-11", saturdayRows("2026-11", []))).toBe("*Rol de Jóvenes — noviembre de 2026*");
   });
@@ -225,7 +355,7 @@ describe("the groups' calendars (PR D)", () => {
 
   it("a new meeting starts for the leader's first group, unpublished; an existing one keeps its fields", () => {
     expect(groupEventForm("2026-11-10", leader)).toEqual({
-      date: "2026-11-10", time: "", title: "", notes: "", groups: ["otro-nivel"], published: false,
+      date: "2026-11-10", time: "", title: "", place: "", notes: "", groups: ["otro-nivel"], published: false,
     });
     expect(groupEventForm("2026-11-10", admin).groups).toEqual([]);
     const f = groupEventForm("2026-11-01", leader, joint({ date: "2026-11-20", time: "19:30", title: "Campamento", published: true }));
@@ -241,13 +371,21 @@ describe("the groups' calendars (PR D)", () => {
     expect(groupEventProblem({ ...f, groups: ["invencibles"] }, admin)).toBeNull();
   });
 
+  it("checks the clock last, after the rules about groups", () => {
+    const f = groupEventForm("2026-11-10", leader);
+    expect(groupEventProblem({ ...f, time: "19:00" }, leader)).toBeNull();
+    expect(groupEventProblem({ ...f, time: "7pm" }, leader)).toBe("La hora debe ser HH:mm (por ejemplo 19:30).");
+    expect(groupEventProblem({ ...f, time: "7pm", groups: [] }, leader)).toBe("Elige al menos un grupo.");
+  });
+
   it("sends the groups in registry order with no kind (the writer derives it), cleared fields as null", () => {
-    const body = groupEventBody({ date: "2026-11-10", time: " ", title: " Campamento ", notes: "", groups: ["emprendedores", "otro-nivel"], published: true });
+    const body = groupEventBody({ date: "2026-11-10", time: " ", title: " Campamento ", place: " Casa Varela ", notes: "", groups: ["emprendedores", "otro-nivel"], published: true });
     expect(body).toEqual({
       audience: { kind: "groups", groups: ["otro-nivel", "emprendedores"] },
       date: "2026-11-10",
       time: null,
       title: "Campamento",
+      place: "Casa Varela",
       notes: null,
       published: true,
     });

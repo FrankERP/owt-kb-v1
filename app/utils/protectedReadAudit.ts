@@ -64,6 +64,7 @@ const PROTECTED_FIELDS = [
   // records use that name too.
   "audience",
   "program",
+  "place",
 ] as const;
 
 const MUTATION_METHODS = [

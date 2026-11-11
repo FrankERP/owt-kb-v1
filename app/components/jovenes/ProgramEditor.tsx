@@ -4,11 +4,14 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Button from "@/app/components/ui/Button";
 import CueDialog from "@/app/components/ui/CueDialog";
+import CueDialogStatus from "@/app/components/ui/CueDialogStatus";
+import { ChevronDownIcon, ChevronUpIcon, CloseIcon } from "@/app/components/ui/icons";
 import { useToast } from "@/app/components/ui/Toast";
 import { HAIRLINE_INPUT_CLASS, HAIRLINE_LABEL_CLASS } from "@/app/components/ui/hairlineField";
 import type { MinistryEventView } from "@/app/utils/ministryEventReads";
 import { programBody, programForm, type LineForm } from "@/app/utils/jovenesPlannerModel";
-import { eventDayLabel, eventHeading } from "@/app/utils/jovenesEventView";
+import { dayTitle } from "@/app/utils/agenda";
+import { audienceLabel, eventDayLabel, eventName } from "@/app/utils/jovenesEventView";
 import PersonSelect, { type JovenesPerson } from "./PersonSelect";
 import { programUrl, sendEventWrite } from "./eventWrite";
 
@@ -19,8 +22,21 @@ const MAX_LINES = 20;
  * program (Frank, 2026-10-30). Shown to a Jóvenes admin and to the encargado or apoyo of a
  * whole-ministry meeting; the program PATCH writes ONLY `program`, whatever else it is sent (W4),
  * and decides again on the stored event who may.
+ *
+ * The lines are a numbered list between hairlines, each with its three fields labelled alike and
+ * its order and removal as icon buttons at the side (2026-11-10): a bordered box per line with
+ * three text buttons under it made a five-line program a long form of buttons.
  */
-export default function ProgramEditor({ event, people }: { event: MinistryEventView; people: readonly JovenesPerson[] }) {
+export default function ProgramEditor({
+  event,
+  people,
+  compact = false,
+}: {
+  event: MinistryEventView;
+  people: readonly JovenesPerson[];
+  /** Beside «Editar» in a planner row: a quiet «Programa». It still answers to «Editar programa». */
+  compact?: boolean;
+}) {
   const router = useRouter();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
@@ -90,85 +106,110 @@ export default function ProgramEditor({ event, people }: { event: MinistryEventV
 
   return (
     <>
-      <Button variant="pill" size="sm" onClick={openEditor}>
-        Editar programa
-      </Button>
+      {compact ? (
+        <Button variant="ghost" size="sm" aria-label="Editar programa" onClick={openEditor}>
+          Programa
+        </Button>
+      ) : (
+        <Button variant="secondary" size="sm" onClick={openEditor}>
+          Editar programa
+        </Button>
+      )}
       <CueDialog
         open={open}
         mode="sheet"
         size="lg"
         label={`Programa — ${eventDayLabel(event.date)}`}
         onDismiss={() => !saving && setOpen(false)}
-        title={
-          <span className="block">
-            <span className="block font-display text-base uppercase tracking-wide text-ink">Programa</span>
-            <span className="block font-label text-[11px] uppercase tracking-widest text-mono-500">
-              {eventHeading(event)} · {eventDayLabel(event.date)}
-            </span>
-          </span>
-        }
+        title="Programa"
       >
-        <div className="flex-1 space-y-4 overflow-y-auto px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          {lines.length === 0 && (
-            <p className="font-body text-sm text-mono-500">Aún no hay líneas. Agrega la oración, la dinámica y lo demás.</p>
+        <div className="flex-1 space-y-5 overflow-y-auto px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:px-6">
+          <p className="font-body text-[17px] leading-snug text-ink-dim">
+            {dayTitle(event.date)} · <span className="text-ink">{eventName(event) ?? audienceLabel(event.audience)}</span>
+          </p>
+          {lines.length === 0 ? (
+            <p className="font-body text-[15px] text-ink-muted">Aún no hay líneas. Agrega la oración, la dinámica y lo demás.</p>
+          ) : (
+            <ol className="divide-y divide-ink/[0.10] border-y border-ink/[0.10]">
+              {lines.map((l, i) => (
+                <li key={l.key ?? `new-${i}`} className="grid grid-cols-[1.5rem_minmax(0,1fr)_auto] gap-x-3 py-4">
+                  <span aria-hidden="true" className="pt-5 font-display text-[22px] font-semibold leading-none tabular-nums text-ink">
+                    {i + 1}
+                  </span>
+                  <fieldset className="min-w-0 space-y-4">
+                    <legend className="sr-only">Línea {i + 1}</legend>
+                    <label className="block">
+                      <span className={HAIRLINE_LABEL_CLASS}>Qué</span>
+                      <input
+                        className={HAIRLINE_INPUT_CLASS}
+                        value={l.label}
+                        maxLength={60}
+                        placeholder="Oración, dinámica, alabanza…"
+                        onChange={(e) => edit(i, { label: e.target.value })}
+                      />
+                    </label>
+                    <div>
+                      {/* A visible label like its two neighbours; the control keeps its own name. */}
+                      <span aria-hidden="true" className={`${HAIRLINE_LABEL_CLASS} mb-1.5 block`}>
+                        Quién
+                      </span>
+                      <PersonSelect
+                        ariaLabel={`Quién — línea ${i + 1}`}
+                        value={l.member}
+                        people={people}
+                        storedName={l.key ? names.get(l.key) : null}
+                        onChange={(member) => edit(i, { member })}
+                      />
+                    </div>
+                    <label className="block">
+                      <span className={HAIRLINE_LABEL_CLASS}>Nota</span>
+                      <input
+                        className={HAIRLINE_INPUT_CLASS}
+                        value={l.note}
+                        maxLength={300}
+                        placeholder="Opcional"
+                        onChange={(e) => edit(i, { note: e.target.value })}
+                      />
+                    </label>
+                  </fieldset>
+                  <div className="-mr-2 flex flex-col">
+                    <Button variant="icon" size="lg" aria-label={`Subir línea ${i + 1}`} onClick={() => move(i, -1)} disabled={i === 0}>
+                      <ChevronUpIcon size={16} />
+                    </Button>
+                    <Button
+                      variant="icon"
+                      size="lg"
+                      aria-label={`Bajar línea ${i + 1}`}
+                      onClick={() => move(i, 1)}
+                      disabled={i === lines.length - 1}
+                    >
+                      <ChevronDownIcon size={16} />
+                    </Button>
+                    <Button
+                      variant="icon"
+                      size="lg"
+                      tone="danger"
+                      aria-label={`Quitar línea ${i + 1}`}
+                      onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}
+                    >
+                      <CloseIcon size={16} />
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ol>
           )}
-          {lines.map((l, i) => (
-            <fieldset key={l.key ?? `new-${i}`} className="space-y-2 rounded-xl border border-edge-accent-subtle p-3">
-              <legend className="sr-only">Línea {i + 1}</legend>
-              <label className="block">
-                <span className={HAIRLINE_LABEL_CLASS}>Qué</span>
-                <input
-                  className={HAIRLINE_INPUT_CLASS}
-                  value={l.label}
-                  maxLength={60}
-                  placeholder="Oración, dinámica, alabanza…"
-                  onChange={(e) => edit(i, { label: e.target.value })}
-                />
-              </label>
-              <PersonSelect
-                ariaLabel={`Quién — línea ${i + 1}`}
-                value={l.member}
-                people={people}
-                storedName={l.key ? names.get(l.key) : null}
-                onChange={(member) => edit(i, { member })}
-              />
-              <label className="block">
-                <span className={HAIRLINE_LABEL_CLASS}>Nota</span>
-                <input
-                  className={HAIRLINE_INPUT_CLASS}
-                  value={l.note}
-                  maxLength={300}
-                  onChange={(e) => edit(i, { note: e.target.value })}
-                />
-              </label>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="ghost" size="sm" onClick={() => move(i, -1)} disabled={i === 0}>
-                  Subir
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => move(i, 1)} disabled={i === lines.length - 1}>
-                  Bajar
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}>
-                  Quitar
-                </Button>
-              </div>
-            </fieldset>
-          ))}
           {lines.length < MAX_LINES && (
             <Button
               variant="secondary"
-              size="md"
+              size="sm"
               onClick={() => setLines((ls) => [...ls, { key: null, label: "", member: null, note: "" }])}
             >
               Agregar línea
             </Button>
           )}
-          {error && (
-            <p role="alert" className="font-body text-sm text-negative-fg">
-              {error}
-            </p>
-          )}
-          <div className="flex justify-end gap-2 pt-2">
+          {error && <CueDialogStatus tone="error">{error}</CueDialogStatus>}
+          <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" size="lg" onClick={() => setOpen(false)} disabled={saving}>
               Cancelar
             </Button>

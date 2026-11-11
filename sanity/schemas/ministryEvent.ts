@@ -45,17 +45,20 @@ export const ministryEvent = defineType({
     { name: "time", title: "Hora", type: "string" },
     { name: "arrival", title: "Llegada", type: "string" },
     { name: "title", title: "Título", type: "string" },
+    { name: "place", title: "Ubicación", type: "string" },
     {
       name: "seats",
-      title: "Lugares",
+      title: "Asientos",
       type: "array",
       of: [
         {
           type: "object",
           name: "ministryEventSeat",
           fields: [
-            { name: "role", title: "Lugar", type: "string" },
+            { name: "role", title: "Asiento", type: "string" },
             { name: "member", title: "Persona", ...weakMember },
+            // Someone without an account (or the hosting group), INSTEAD of `member`; never both.
+            { name: "name", title: "Nombre (sin cuenta)", type: "string" },
           ],
         },
       ],

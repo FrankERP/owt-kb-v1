@@ -44,6 +44,7 @@ function ev(over: Partial<MinistryEventView> = {}): MinistryEventView {
     arrival: null,
     title: "Célula",
     notes: null,
+    place: null,
     published: false,
     seats: [],
     program: [],
@@ -83,7 +84,10 @@ describe("GroupCalendar", () => {
   it("a leader creates a meeting for their group through POST, with a create token and no kind", async () => {
     renderCalendar([]);
     fireEvent.click(screen.getByRole("button", { name: "Nueva reunión de grupo" }));
-    fireEvent.change(screen.getByPlaceholderText("19:30"), { target: { value: "19:00" } });
+    // Fecha and Hora are the same house field (`DateField`), one beside the other.
+    expect((screen.getByLabelText("Fecha") as HTMLInputElement).type).toBe("date");
+    expect((screen.getByLabelText("Hora") as HTMLInputElement).type).toBe("time");
+    fireEvent.change(screen.getByLabelText("Hora"), { target: { value: "19:00" } });
     fireEvent.change(screen.getByPlaceholderText("Reunión de grupo"), { target: { value: "Célula" } });
     fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
     await waitFor(() => expect(refresh).toHaveBeenCalled());
@@ -97,6 +101,7 @@ describe("GroupCalendar", () => {
           date: "2026-11-10",
           time: "19:00",
           title: "Célula",
+          place: null,
           notes: null,
           published: false,
         },
@@ -114,7 +119,9 @@ describe("GroupCalendar", () => {
     expect(calls[0].body.audience).toEqual({ kind: "groups", groups: ["otro-nivel", "emprendedores"] });
   });
 
-  it("refuses before sending: no group, a leader without their own group, a malformed time", async () => {
+  // A malformed clock is pinned on the model (`groupEventProblem`): the native time field cannot
+  // hold one. A half-typed one («19:--») it reports as "", so the editor asks the browser.
+  it("refuses before sending: no group, a leader without their own group, a half-typed clock", async () => {
     renderCalendar([]);
     fireEvent.click(screen.getByRole("button", { name: "Nueva reunión de grupo" }));
     fireEvent.click(screen.getByRole("checkbox", { name: "Otro Nivel" }));
@@ -124,10 +131,20 @@ describe("GroupCalendar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
     expect(await screen.findByText("Incluye uno de tus grupos.")).toBeTruthy();
     fireEvent.click(screen.getByRole("checkbox", { name: "Otro Nivel" }));
-    fireEvent.change(screen.getByPlaceholderText("19:30"), { target: { value: "7pm" } });
+    Object.defineProperty(screen.getByLabelText("Hora"), "validity", { value: { badInput: true } });
     fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
-    expect(await screen.findByText("La hora debe ser HH:mm (por ejemplo 19:30).")).toBeTruthy();
+    expect(await screen.findByText("Completa la hora o bórrala.")).toBeTruthy();
     expect(calls).toEqual([]);
+  });
+
+  it("shows a meeting's place, and sends an edited one", async () => {
+    renderCalendar([ev({ place: "Casa Fam Varela" })]);
+    expect(screen.getByText(/Casa Fam Varela/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Editar" }));
+    fireEvent.change(screen.getByPlaceholderText(/Casa Fam Varela/), { target: { value: "Oasis Tlalpan" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    expect(calls[0].body.place).toBe("Oasis Tlalpan");
   });
 
   it("edits through PATCH under the revision it read", async () => {

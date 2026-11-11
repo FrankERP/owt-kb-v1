@@ -14,7 +14,7 @@ import { MINISTRIES } from "../ministries";
 import { KIDS_SEATS, KIDS_SEAT_LABELS, type KidsSeat } from "./kidsTypes";
 import { serviceDayKey } from "./serviceReadSelect";
 import type { MinistryEventView } from "./ministryEventReads";
-import { audienceLabel, eventHeading, seatRoleLabel } from "./jovenesEventView";
+import { audienceLabel, eventName, seatRoleLabel } from "./jovenesEventView";
 
 export type CalendarView = "all" | "worship" | "kids" | "jovenes";
 /** The ministries beside Alabanza that can join the Calendario, in the control's order. */
@@ -85,21 +85,34 @@ export function kidsActiveDay(row: KidsCalendarRow): ActiveDay | null {
   return { day: KIDS_DAY_LABEL, date, kids: { seats } };
 }
 
-/**
- * A Jóvenes meeting as a calendar entry. `e` came from `readMinistryEvents` in MEMBER mode, so it
- * is published and the reader may see it (ADR-0081); «mine» was decided by member id in that
- * query. `null` for a date that cannot be placed.
- */
-export function jovenesActiveDay(e: MinistryEventView): ActiveDay | null {
-  const date = serviceDayKey(e.date);
-  if (!date) return null;
-  const jovenes: JovenesDayEntry = {
+/** The day word of the plain Saturday meeting: the ministry's name, as «Oasis Kids» above. A
+ *  meeting with a title or another kind names itself («Campamento», «Junta de grupos»). */
+export const JOVENES_DAY_LABEL = MINISTRIES.jovenes.name;
+
+/** A meeting's people, program and notes as both the Calendario's day sheet and `/jovenes` show
+ *  them (`JovenesMeetingBody`), so the two can never word a seat differently. */
+export function jovenesDayEntry(e: MinistryEventView): JovenesDayEntry {
+  return {
     id: e._id,
     audience: audienceLabel(e.audience),
     arrival: e.arrival,
+    place: e.place,
     seats: e.seats.map((s) => ({ key: s._key, label: seatRoleLabel(s.role), name: s.name, mine: s.mine })),
     program: e.program.map((l) => ({ key: l._key, label: l.label ?? "—", name: l.memberId ? l.name : null, mine: l.mine, note: l.note })),
     notes: e.notes,
   };
-  return { day: eventHeading(e), date, time: e.time, jovenes };
+}
+
+/**
+ * A Jóvenes meeting as a calendar entry. `e` came from `readMinistryEvents` in MEMBER mode, so it
+ * is published and the reader may see it (ADR-0081); «mine» was decided by member id in that
+ * query. `null` for a date that cannot be placed.
+ *
+ * The Saturday meeting is called «Jóvenes» here (2026-11-10), not «Sábado de Jóvenes»: the row
+ * already sits under a Saturday, and the long name pushed an agenda row to four lines on a phone.
+ */
+export function jovenesActiveDay(e: MinistryEventView): ActiveDay | null {
+  const date = serviceDayKey(e.date);
+  if (!date) return null;
+  return { day: eventName(e) ?? JOVENES_DAY_LABEL, date, time: e.time, jovenes: jovenesDayEntry(e) };
 }
