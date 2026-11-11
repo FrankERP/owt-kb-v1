@@ -735,11 +735,19 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
 - **`isMinistryMember(access, id)`**, **`isMinistryManager(access, id)`**, **`levelIn`**,
   **`groupsIn`** ([ministryAccess.ts](../app/utils/ministryAccess.ts), ADR-0075) — the pure answers
   the ministry guards wrap; never open-code `access.role === "super-admin" || …` again.
-- **`normalizeMinistryRoles(raw, ministries)`**, **`isGroupId(ministry, x)`**,
+- **`ledGroupsIn(access, ministry)`** ([ministryAccess.ts](../app/utils/ministryAccess.ts),
+  ADR-0085) — THE answer to «which groups does this person lead»: `[]` unless a member whose level
+  there is `leader`, then the normalized `leaderOf` (a subset of `groupsIn`). No admin or
+  super-admin arm — test `isMinistryManager` first. Never compare a level with `"leader"` to decide
+  access (`ledGroupsCoverage.test.ts`).
+- **`normalizeMinistryRoles(raw, ministries, absentLeaderOf?)`**, **`isGroupId(ministry, x)`**,
   **`ASSIGNABLE_MINISTRY_IDS`**, **`LEVELED_MINISTRY_IDS`**, **`MINISTRY_LEVELS`**
   ([ministries.ts](../app/ministries.ts)) — the one reading of `teamMembers.ministryRoles` (fails
-  closed), the prototype-safe group check, and the readable-vs-writable split (`ALL_MINISTRY_IDS`
-  reads, `ASSIGNABLE_MINISTRY_IDS` writes and offers).
+  closed; step 5 reads `leaderOf`, with an absent one on a leader read by the transitional
+  `ABSENT_LEADER_OF` switch — L1 «every group» in PR 1, L2 «none» from PR 2, ADR-0085), the
+  prototype-safe group check, and the readable-vs-writable split (`ALL_MINISTRY_IDS`
+  reads, `ASSIGNABLE_MINISTRY_IDS` writes and offers). `MinistryRoleWrite` is a request item
+  (no `leaderOf` in PR 1).
 - **`validateMinistryRolesWrite(value, ministries)`**, **`ministryRolesForStorage(items)`**,
   **`droppedMinistryRolePaths(ministries)`**, **`worshipRoleWithoutWorship(role, ministries)`**
   ([ministries.ts](../app/ministries.ts)) — the members routes' write side of a level (strict,
