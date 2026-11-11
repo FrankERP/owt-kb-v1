@@ -1,6 +1,6 @@
 # OWT MCP — admin parity, phase 4, slice R: the solver rules from the chat (slice plan)
 
-**Status:** REVIEW APPROVED (rounds 4 and 5 on identical bytes, 0e6be0af; log `…-f4r-rules-review-log.md`), awaiting Frank. §9 lists the post-approval changes (un-reviewed). Critical tier (a production writer of a shared document, a full-document
+**Status:** APPROVED by Frank 2026-11-11 00:00Z (decision card); review APPROVED (rounds 4 and 5 on identical bytes, 0e6be0af; log `…-f4r-rules-review-log.md`). BUILDING. §9 lists the post-approval changes (un-reviewed). Critical tier (a production writer of a shared document, a full-document
 serializer behind it). Nothing built. Parent: `2026-11-04-owt-mcp-admin-parity-f4.md` (scope approved
 by Frank 2026-11-05 15:01Z). Slice M (people, ADR-0082) shipped 2026-11-05 (PR #228) and its live proof
 passed 2026-11-06 00:46Z; slice M already owns parent D6 (a rename renames its rules).
