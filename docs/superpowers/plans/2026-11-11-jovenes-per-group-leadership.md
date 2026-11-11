@@ -6,11 +6,11 @@ were added AFTER approval and are un-reviewed. Extends ADR-0075 (levels and grou
 boundary; plan `2026-10-30-jovenes-events-access.md`, R1–R3 and W1–W3a). Branch
 `claude/project-thread-uqw2lr`, on top of `e11dafc49` (the Adrenalin and Guerreras groups).
 
-**Release state (2026-11-11):** PR 1 (T1–T5, T-mig, T-docs 1, the §11 notes that apply) is
-implemented on the branch, gates green, NOT yet reviewed or merged; the backfill has NOT run. The ADR
-is `docs/adr/0085-a-jovenes-leader-leads-named-groups.md` (Proposed). `preview` already holds a
-different unmerged ADR-0085 (the solver redeploy): the merge into `preview` renumbers whichever
-reaches it second to 0086, with its links.
+**Release state (2026-11-11):** PR 1 (T1–T5, T-mig, T-docs 1, the §11 notes that apply) is IN
+PRODUCTION: PR #239, merged as `3ad29ae9`, production alias verified 21:34Z; on dev from `82f696b5`
+(that merge renumbered the preview-only solver-ops ADR to 0086). §7 steps 1–2 done. The backfill
+(step 3) has NOT run: next is its dry run on Frank's Mac, then his consent. The ADR is
+`docs/adr/0085-a-jovenes-leader-leads-named-groups.md` (Proposed until PR 2).
 
 **Critical contract** (CLAUDE.md §Review policy): this changes an auth/ACL boundary (who leads which
 group decides who reads a group's drafts and who writes its meetings), the payload of a production
