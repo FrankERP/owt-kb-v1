@@ -171,7 +171,9 @@ editing songs (phase 3, S3) adds four more, forty-five in all, registered last: 
 [Creating and editing songs](#creating-and-editing-songs-admin-parity-phase-3)). People (phase 4,
 slice M) adds seven more, fifty-two in all, registered last: `list_members`, `get_member`,
 `check_member_changes`, `save_member_changes`, `check_new_members`, `create_members` and
-`set_member_access` (see [People](#people-admin-parity-phase-4)). Every tool is
+`set_member_access` (see [People](#people-admin-parity-phase-4)). The solver rules (phase 4, slice R)
+add two more, fifty-four in all, registered last: `check_rule_edits` and `save_rule_edits` (see
+[Solver rules](#solver-rules-admin-parity-phase-4)). Every tool is
 registered the same way — one file per tool in `app/mcp/tools/`, exporting a
 `register<Tool>(server, deps?)` function that `registerAllTools` (`app/mcp/toolList.ts`) calls,
 the writes after the reads; `app/api/mcp/route.ts` runs it inside its handler init. Every
@@ -1150,6 +1152,58 @@ retrying; a thrown create says to repeat `create_members` with the same token.
 Content Lake with revision checks), `peopleTokens.test.ts`, the tools' `members.test.ts`, and the
 route tests (`membersMinistries`, `memberInstruments`, `adminMemberVisibility`), unchanged except one
 on purpose: an alias PATCH now reads and pins the person.
+
+### Solver rules (admin parity, phase 4)
+
+What `/admin` → «Generar mes» → Reglas does (the three pools and every person, pair and group rule),
+from the chat, through the same writer: `POST /api/admin/solver-config` now authorizes and calls
+`app/utils/solverConfigCommit.ts`, and so do the tools (`app/mcp/tools/rules.ts`). Decision record:
+[ADR-0084](adr/0084-the-solver-rules-are-edited-from-the-chat-by-parts-through-the-panels-writer.md);
+plan: `docs/superpowers/plans/2026-11-06-owt-mcp-admin-parity-f4r-rules.md`. A rules save notifies
+nobody and changes no saved month; it applies to the next month Auto generates. Not on the worship-admin
+read tier (ADR-0083). **Not released yet.**
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `check_rule_edits` | `{edits[≤30]}` | Reads the rules and the planner's roster fresh, refuses a stored document the panel would re-save differently (`losslessRules`), applies the edits by parts (`applyRuleEdits`), judges the result (`judgeRuleEdits`), and answers the lines before → after, the no-ops, the notes and a token valid 30 minutes. Read-only |
+| `save_rule_edits` | `{edits, token}` | Repeats the check on its own fresh read and writes the six rule fields under `ifRevisionId` only when the token matches the fresh revision, the edits and the lines. Nothing would change → «Ya estaba así», no write. Destructive (I14) |
+
+**The edits** (`op`): `pool {pool: líder domingo | líder sábado | soporte, add?, remove?}`; `never` /
+`allowAgain {person, pattern}`; `weekOff` / `weekOn {person, week 1–5, pattern}`; `count {person, pattern,
+limit: exactamente | al menos | como máximo, value 0–31 | relative {minus 0–5}}` (adds, or replaces the
+ONE cap with that pattern and limit); `removeCount`; `cadence {person, alternate}` («Mes por medio»);
+`balance {person, exempt}` («Fuera del balance total»); `removePerson`; `notTogether` /
+`removeNotTogether {a, b, pattern?}`; `together` / `removeTogether {persons 2–12, pattern?}`. A pattern
+is `{day: domingo | sábado | ambos, seat: líder | BGV | coro | líder o BGV | todo}`, and only the eleven
+the panel offers (`RULE_PATTERNS`) are accepted; any other is refused with what to send instead. A
+removal may name any stored pattern.
+
+**People are matched the way the solver matches them.** A name added to a rule goes through
+`resolveRulePersonId` (worship members, by name or alias), must have Tipo Voz, and its stored text
+(the display name) must resolve back to that same person; otherwise refused with up to five close
+names. A removal may name an orphaned rule's exact text. Pools take only someone whose Tipo fits
+(`memberFitsPool`); a remove takes anyone in the pool, a stale off-Tipo tick or someone who has left
+Alabanza included. A person repeated in a group, or added and removed in one pool edit, is refused.
+
+**What the check refuses, and what it only notes.** It runs the v3 eligibility resolver on the stored
+and the edited rules for the next CDMX month: a problem only the edited rules have (an unresolved
+name, «Mes por medio» with an exact Sunday-lead count, two exact counts on one role, a 21st presence
+group…) refuses the whole edit set in the planner's own words; one already stored is a note. Likewise
+two absolute counts no month can satisfy (a minimum above a maximum whose roles contain it), new ones
+only; relative counts are not compared (a known limit, ADR-0084). Notes: «Mes por medio» for someone
+outside Líder Domingo (saves, does nothing yet), and the bound-month note when a balance or cadence
+flag changes.
+
+**Pool lines say what the person can do after** (R13): «Líder Sábado: − Mkz (no cambia nada: sigue en
+Líder Domingo, que también dirige sábados…)», or «(deja de poder: …)» / «(empieza a poder: …)».
+
+**Unknown outcome.** A thrown save says «No sé si se guardó. Lee las reglas con get_solver_rules antes
+de reintentar.» A refused token (other edits, the rules or the team changed, over 30 minutes) writes
+nothing and says to check again.
+
+**Proof.** `ruleEdits.test.ts`, `solverConfigCommit.test.ts`, the tools' `rules.test.ts`,
+`patternRolesV3Sync.test.ts` (the shared pattern list), and `solverConfigRoute.test.ts`, unchanged
+since the move.
 
 ### Admin-surface gates (I15)
 

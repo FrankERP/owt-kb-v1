@@ -29,6 +29,7 @@ import { registerKids } from "./tools/kids";
 import { registerSetlistProposalReview } from "./tools/setlistProposalReview";
 import { registerSongEdits } from "./tools/songEdits";
 import { registerMemberTools } from "./tools/members";
+import { registerRuleTools } from "./tools/rules";
 import { registerProposalCard } from "./apps/proposalCard";
 import { toolListDigest } from "./toolListVersion";
 import { confirmingServer } from "./writes/confirmRule";
@@ -86,6 +87,8 @@ export const SUPER_ADMIN_ONLY_TOOLS = [
   "check_new_members",
   "create_members",
   "set_member_access",
+  "check_rule_edits",
+  "save_rule_edits",
 ] as const;
 
 /**
@@ -205,6 +208,9 @@ export function registerAllTools(target: McpServer, deps: { version: string; sco
   // Admin parity phase 4 (slice M): people, through /admin's own writer (`memberCommit.ts`).
   // Super-admin only (ADR-0082, ADR-0083 addendum).
   if (!adminScope) registerMemberTools(server);
+  // Admin parity phase 4 (slice R): the solver rules, through /admin's own writer (`solverConfigCommit.ts`).
+  // Super-admin only until Frank decides otherwise (ADR-0084).
+  if (!adminScope) registerRuleTools(server);
   // The card (MCP Apps), at a URI that carries its build's digest. Fixed per deployment, like the
   // tools. Only for a claude.ai grant: the card calls the app-only tools.
   if (appsHost) registerProposalCard(server);

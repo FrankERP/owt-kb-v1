@@ -1,4 +1,4 @@
-# ADR-0084: The solver is verified and re-deployed from GitHub Actions with no Google key
+# ADR-0085: The solver is verified and re-deployed from GitHub Actions with no Google key
 
 **Date:** 2026-10-22 · **Status:** Accepted
 
@@ -11,7 +11,9 @@
 > Renumbered 0076 → 0077 → 0078 on `preview` 2026-10-28: admin parity phase 3's proposal decisions
 > (ADR-0076) and song editing (ADR-0077) reached `main` first.
 > Renumbered 0083 → 0084 on `preview` 2026-11-05: the connector's tiers (ADR-0083) reach `main`
-> first. Its own branch renumbers to the next free number on `main` before it merges.
+> first.
+> Renumbered 0084 → 0085 on `preview` 2026-11-11: the solver rules from the chat (ADR-0084) reach
+> `main` first. Its own branch renumbers to the next free number on `main` before it merges.
 
 ## Context
 

@@ -43,7 +43,7 @@ rule changes, change both; if they disagree, this file wins.
   then run the suite with `.venv/bin/python` (the system `python` is 3.13 and refuses global
   installs). Keys reach a session only as network secrets the proxy injects (`docs/SECRETS.md`),
   never as readable variables. The long form lists what still needs the Mac. The solver is
-  verified/re-deployed via `solver-v3-ops.yml` (ADR-0084): ask Frank before dispatching `deploy`;
+  verified/re-deployed via `solver-v3-ops.yml` (ADR-0085): ask Frank before dispatching `deploy`;
   **never approve, reject or bypass a pending deployment**, nor change its environments or the WIF
   setup without his OK — the session acts as `FrankERP`, so this rule is the only gate.
 - **On the Mac — worktrees only when two things must be in flight at once** (`Agent` with
@@ -172,7 +172,7 @@ looks wrong** — several exist to stop a plausible-looking change.
   (`app/utils/solverConfigWriteRequest.ts`), and a field or allowed value an older client would
   drop bumps it (`solverConfigVersion.test.ts`). No writer sets a rule value around
   `solverConfigFromDocument` → `parseSolverConfigWrite` → `solverConfigFields` under
-  `ifRevisionId` (the only targeted writers: the member DELETE's pool patch, the rule-name
+  `ifRevisionId` in `solverConfigCommit.ts` (the rules POST and the chat, ADR-0084; the only targeted writers: the member DELETE's pool patch, the rule-name
   repair script, a member rename's person-path `set` in `memberCommit.ts`, ADR-0082). One `==` count per person per role key (`exactCapOverlaps`; C2). ADR-0049.
 - **The fairness ledger has one definition, and its records one writer** (ADR-0050).
   `app/utils/fairnessLedger.ts` is the only TS definition of F2–F7 and X1;
@@ -272,6 +272,8 @@ looks wrong** — several exist to stop a plausible-looking change.
   people's in `memberCommit.ts`, called by the three `/api/admin/members` routes, `/me`'s PATCH and
   the MCP people tools (a taken email or name refused, a rename renames its rules in the same
   transaction, the chat grants but never revokes management; ADR-0082);
+  the solver rules' in `solverConfigCommit.ts`, called by the rules POST and the MCP rule tools (edits
+  by parts on a fresh read, a lossless gate, only problems the edit ADDS refused; ADR-0084);
   the availability proposals' in `availabilityFixCommit.ts`, called by the four
   `/api/admin/availability-conflicts` routes, the member's availability PATCH and the flush cron,
   never by an MCP tool — its sweep NEVER writes a service, only «Aplicar» does, through `editRole`

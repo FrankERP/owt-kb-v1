@@ -47,4 +47,6 @@ export const DELIVERY_CAPABLE_IMPORTS: readonly string[] = [
   "ministryEventCommit",
   // Admin parity phase 4 (slice M): the people writer, extracted from the members routes and /me.
   "memberCommit",
+  // Admin parity phase 4 (slice R): the solver rules writer, extracted from the rules POST; it sends nothing.
+  "solverConfigCommit",
 ];

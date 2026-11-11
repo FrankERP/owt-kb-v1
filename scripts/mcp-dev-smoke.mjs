@@ -453,6 +453,15 @@ export const MEMBER_TOOL_NAMES = [
 export const MEMBER_WRITE_NAMES = ["save_member_changes", "create_members", "set_member_access"];
 
 /**
+ * Admin parity phase 4 (slice R): the solver rules, after the people. Never called here: the check
+ * reads the team, and the save changes the rules every Auto reads.
+ */
+export const RULE_TOOL_NAMES = ["check_rule_edits", "save_rule_edits"];
+
+/** The save: destructive, like every write (I14). */
+export const RULE_WRITE_NAMES = ["save_rule_edits"];
+
+/**
  * Admin parity phase 1: three reads after the P1 reads (`/admin`'s Equidad, rules and integrity
  * queue). Read-only, so the smoke may call them, but it does not need to.
  */
@@ -479,6 +488,7 @@ export const EXPECTED_TOOLS = [
   ...PROPOSAL_REVIEW_TOOL_NAMES,
   ...SONG_TOOL_NAMES,
   ...MEMBER_TOOL_NAMES,
+  ...RULE_TOOL_NAMES,
 ];
 
 /**
@@ -516,7 +526,7 @@ export const READ_TIER_TOOL_NAMES = [
  * The tools only a super-admin reaches (`SUPER_ADMIN_ONLY_TOOLS` in `app/mcp/toolList.ts`; a test
  * pins the two): Oasis Kids and people.
  */
-export const SUPER_ADMIN_ONLY_TOOL_NAMES = [...KIDS_TOOL_NAMES, ...MEMBER_TOOL_NAMES];
+export const SUPER_ADMIN_ONLY_TOOL_NAMES = [...KIDS_TOOL_NAMES, ...MEMBER_TOOL_NAMES, ...RULE_TOOL_NAMES];
 
 /** The worship-admin list (`ADMIN_TIER_TOOLS` in `app/mcp/toolList.ts`; a test pins the two), in order. */
 export const ADMIN_TIER_TOOL_NAMES = EXPECTED_TOOLS.filter((name) => !SUPER_ADMIN_ONLY_TOOL_NAMES.includes(name));
@@ -554,7 +564,7 @@ export const SOLVE_MONTH_ANNOTATIONS = Object.freeze({
 export function expectedAnnotations(name) {
   // A saved version is a private record like solve_month's; the check only reads.
   if (name === "solve_month" || name === "save_proposal_edits" || name === "revise_proposal") return SOLVE_MONTH_ANNOTATIONS;
-  return WRITE_TOOL_NAMES.includes(name) || name === "apply_schedule" || SERVICE_EDITOR_WRITE_NAMES.includes(name) || SERVICE_DELETE_WRITE_NAMES.includes(name) || SERVICE_MESSAGE_WRITE_NAMES.includes(name) || KIDS_WRITE_NAMES.includes(name) || PROPOSAL_REVIEW_WRITE_NAMES.includes(name) || SONG_WRITE_NAMES.includes(name) || MEMBER_WRITE_NAMES.includes(name) ? WRITE_ANNOTATIONS : READ_ONLY_ANNOTATIONS;
+  return WRITE_TOOL_NAMES.includes(name) || name === "apply_schedule" || SERVICE_EDITOR_WRITE_NAMES.includes(name) || SERVICE_DELETE_WRITE_NAMES.includes(name) || SERVICE_MESSAGE_WRITE_NAMES.includes(name) || KIDS_WRITE_NAMES.includes(name) || PROPOSAL_REVIEW_WRITE_NAMES.includes(name) || SONG_WRITE_NAMES.includes(name) || MEMBER_WRITE_NAMES.includes(name) || RULE_WRITE_NAMES.includes(name) ? WRITE_ANNOTATIONS : READ_ONLY_ANNOTATIONS;
 }
 
 /**
@@ -706,7 +716,8 @@ export function toolCallRequest(name, args, id = 1, { expectTier = "full" } = {}
       KIDS_TOOL_NAMES.includes(name) ||
       PROPOSAL_REVIEW_TOOL_NAMES.includes(name) ||
       SONG_TOOL_NAMES.includes(name) ||
-      MEMBER_TOOL_NAMES.includes(name))
+      MEMBER_TOOL_NAMES.includes(name) ||
+      RULE_TOOL_NAMES.includes(name))
   ) {
     throw new Error(`refusing to call the write tool "${name}": the dev smoke never calls a write tool (DV1)`);
   }

@@ -86,7 +86,7 @@ disagree, `CLAUDE.md` wins and this file is the one to fix.
   set up as network secrets, the canonical copy of the adversarial-plan-review skill and the
   agent definitions under `~/.claude/agents/`. Google-side secret rotations go through Google
   Cloud Shell in the browser, not a laptop. **The production solver is verified and re-deployed
-  from GitHub Actions** (`.github/workflows/solver-v3-ops.yml`, keyless, ADR-0084): `verify` runs
+  from GitHub Actions** (`.github/workflows/solver-v3-ops.yml`, keyless, ADR-0085): `verify` runs
   by itself after every `gcf_v3/**` merge; a session dispatches `verify` (or, after Frank says
   yes in the thread, `deploy`) with the GitHub connector's `actions_run_trigger` and reads the
   result with `get_job_logs`. If the session's token cannot dispatch, Frank runs it from
@@ -287,7 +287,12 @@ several exist precisely to stop a plausible-looking change.
   (`app/utils/solverConfigWriteRequest.ts`), because an older client reads away a field it does
   not know and its next save erases it for everyone. A field **or an allowed value** an older
   client would drop or rewrite bumps the version in the same change; `solverConfigVersion.test.ts`
-  is the tripwire. Any other writer that sets or restores a rule value goes through
+  is the tripwire. The rules POST and the chat's rule tools write through ONE module,
+  `app/utils/solverConfigCommit.ts` (ADR-0084): the POST's body verbatim, and the chat's edits by
+  parts on a fresh read, behind a lossless gate (the stored rules must survive the panel's own round
+  trip), judged by the v3 eligibility resolver (only a problem the edit ADDS is refused), check →
+  save bound by a token over `{rev, edits, lines}`. The eleven patterns the panel offers are ONE list,
+  `RULE_PATTERNS` in `ruleCopy.ts`, read by the panel and the chat. Any other writer that sets or restores a rule value goes through
   `solverConfigFromDocument` → `parseSolverConfigWrite` → `solverConfigFields` under
   `ifRevisionId` — never again an `insert`/`append` of caps or restrictions as the two private
   one-off scripts of 2026-09-29/10-01 did (the member DELETE's pool-array patch and the rule-name
@@ -533,6 +538,13 @@ several exist precisely to stop a plausible-looking change.
   parts (`applyMemberEdits`), its tokens bind the rendered change rather than `_rev` (`lastSeen`
   moves it), and `chatAccessRefusal`/`chatAccessToggleRefusal` keep it from revoking management
   (Frank, 2026-11-05); the routes never apply that table. `/me` never names anyone else.
+  The solver rules' writer is `solverConfigCommit.ts` (admin parity phase 4, ADR-0084): the rules POST
+  keeps its session check and calls `saveSolverConfig` (its old body, verbatim); `check_rule_edits` /
+  `save_rule_edits` call `checkRuleEdits`/`saveRuleEdits`, which apply `ruleEdits.ts`'s edits by parts
+  to a fresh read and write through the same parser, under `ifRevisionId`. Names are matched the way
+  the solver matches them (`resolveRulePersonId`, Tipo Voz, the stored text resolves back to the same
+  person); pools take only a Tipo that fits; only the panel's eleven patterns; a pool line says what
+  the person can do after. Nobody is notified.
   The availability proposals' writer is `availabilityFixCommit.ts` (ADR-0079): the four
   `/api/admin/availability-conflicts` routes (the GET and its `apply`/`keep`/`sweep` POSTs) (`requireActiveManager`, never a content-editor, never
   impersonating), the member's `PATCH /api/me/availability` (its `after()` trigger, that member only)
