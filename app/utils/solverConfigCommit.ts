@@ -162,7 +162,7 @@ export const RULES_MESSAGE = {
 export interface RuleEditsDeps {
   /** The raw stored document (`loadStoredSolverConfig`): `null` = absent; a failed read throws. */
   loadRaw: () => Promise<Record<string, unknown> | null>;
-  /** The planner's roster (`adminMembersQuery(true)`), disabled included. */
+  /** The planner's roster (`adminMembersQuery`, worship members, disabled included). */
   roster: () => Promise<RuleRosterMember[]>;
   /** The one write: the six fields + stamp under `ifRevisionId(rev)`. Throws on failure. */
   write: (rev: string, fields: Record<string, unknown>, actorId: string) => Promise<void>;
@@ -174,7 +174,8 @@ export function defaultRuleEditsDeps(): RuleEditsDeps {
   return {
     loadRaw: loadStoredSolverConfig,
     roster: async () => {
-      const q = adminMembersQuery(true);
+      // `false`: `true` adds only `ministryRoles`, which no rule reads (and no caller passes a literal `true`).
+      const q = adminMembersQuery(false);
       const rows: unknown = await operationalClient.fetch(q.query, q.params);
       if (!Array.isArray(rows)) throw new Error("members");
       return rows as RuleRosterMember[];

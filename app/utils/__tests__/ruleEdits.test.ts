@@ -311,7 +311,7 @@ describe("pools (R6, R13)", () => {
     expect(r.config.sundayLeads).toEqual(["m-mkz"]);
   });
 
-  it("a remove takes anyone in the pool, someone who has left Alabanza included", () => {
+  it("a remove matches the pool's own members first (a roster member outside Alabanza included)", () => {
     const r = ok(base({ support: ["m-gaby", "m-kids"] }), [{ op: "pool", pool: "soporte", remove: ["Karla Kids"] }]);
     expect(r.config.support).toEqual(["m-gaby"]);
     expect(r.lines[0]).toMatch(/^Soporte: − Karla Kids/);

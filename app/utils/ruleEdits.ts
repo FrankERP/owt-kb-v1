@@ -354,8 +354,9 @@ export function applyRuleEdits(
             }
           }
           for (const name of e.remove ?? []) {
-            // R6: a remove takes anyone IN the pool — someone who has since left Alabanza included, whom
-            // the worship-only resolver no longer finds (the panel cannot untick them either).
+            // R6: a remove takes anyone IN the pool, matched among the pool's own members first. The
+            // roster is worship members only, so someone who has left Alabanza is not in it; the solver
+            // ignores their stale id (it keeps worship members), so leaving it is harmless.
             const inPool = roster.filter((x) => config[field].includes(x._id) && [x.member_name, x.alias].some((n) => n && fold(n) === fold(name)));
             let m: RuleRosterMember;
             if (inPool.length === 1) m = inPool[0]!;
