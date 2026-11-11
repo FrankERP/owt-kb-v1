@@ -1,6 +1,8 @@
 # Jóvenes: leadership per group
 
-Status: plan, 2026-11-11. Extends ADR-0075 (levels and groups) and ADR-0081 (a group is a security
+Status: plan, 2026-11-11. **Review: APPROVED** (critical tier; two fresh approvals on digest
+`d8c739c8…5f42`; log `2026-11-11-jovenes-per-group-leadership-review-log.md`). §11 and this line
+were added AFTER approval and are un-reviewed. Extends ADR-0075 (levels and groups) and ADR-0081 (a group is a security
 boundary; plan `2026-10-30-jovenes-events-access.md`, R1–R3 and W1–W3a). Branch
 `claude/project-thread-uqw2lr`, on top of `e11dafc49` (the Adrenalin and Guerreras groups).
 
@@ -155,7 +157,8 @@ is always an array there. `normalizeMinistryRoles` steps 1–4 stand; a fifth is
 
 5. `leaderOf`: for `level !== "leader"` → `[]` whatever is stored. For a leader: an array → its
    entries that are in the item's kept `groups`, de-duplicated; present but not an array → `[]`;
-   **absent** → L1 below.
+   **absent** → L1 below. "Absent" means one thing everywhere (this read, K1, the backfill): the
+   key is not on the item, or its value is `null`/`undefined`. Any other value is "present".
 
 - **L1 (PR 1 only, transitional).** Absent on a leader ⇒ every kept group. This is today's meaning
   of every stored leader, so PR 1 changes nobody's access.
@@ -241,18 +244,38 @@ Invencibles; Milo `member` of Emprendedores; Frank, Gaby/Goma `admin`. Only stor
 
 - Reads every `teamMembers` with `defined(ministryRoles)`, published AND `drafts.*`:
   `{ _id, _rev, member_name, alias, ministries, ministryRoles }`.
-- For each item with `ministry == "jovenes"`, `level == "leader"` and no array `leaderOf`: plans
+- For each item with `ministry == "jovenes"`, `level == "leader"` and `leaderOf` ABSENT (§4.4's
+  one meaning; a present non-array value is NOT planned, it already reads as leading nothing under
+  L1 and L2 alike, and is reported in the skip list): plans
   `set ministryRoles[_key=="<the item's own _key>"].leaderOf = <its groups that are group ids,
   de-duplicated, in registry order>`.
 - Writes nothing for, and REPORTS: a leader whose kept groups are empty (leads nothing today
   either); two items naming one ministry (dropped by the read; a person fixes it); an item with no
   `_key`; a person not in Jóvenes by `ministries` (the level is inert); any `leaderOf` already
-  present (left exactly as it is, subset or not).
+  present, array or not (left exactly as it is, subset or not).
+- Reads with `perspective: "raw"` (explicitly, whatever the client's API-version default), or the
+  `drafts.*` documents silently leave the count.
+- Normalizes by IMPORTING `app/ministries.ts` (it has no imports by design, so Node 22 loads it
+  directly) with an L1/L2 switch exported for the script; `ledGroupsIn` is a few lines over that
+  normalized item and is computed in the lib from it. The normalizer is never re-implemented in
+  `.mjs`.
 - Dry run prints, per person, name · level · groups · `leaderOf` before → after, the skip list, and
   totals. `--apply` commits one patch per document under `ifRevisionId(_rev)`; a 409 is reported
   and that person skipped (re-run). Idempotent: a second run plans nothing.
-- Ends with the CHECK both modes print: the count of Jóvenes leaders (published and drafts) with no
-  array `leaderOf`. PR 2 may not merge to `preview` until this is 0 on production data.
+- Ends with the CHECK both modes print, computed on NORMALIZED reads, not raw items: the number of
+  documents (published and drafts) whose `ledGroupsIn(…, "jovenes")` under L1 differs from under L2.
+  PR 2 may not merge to `preview` until this is 0 on production data, checked by a fresh dry run
+  RIGHT BEFORE that merge (step 4), not only at step 3. Of the skip-list cases only
+  ONE can keep it above 0: a leader item with no `_key` and ≥1 kept group (L1 leads all, L2
+  nothing; the script cannot address it). Each such person needs a consented hand fix before PR 2: a
+  re-save in «Personas» (the Studio array is read-only, `worshipTeam.ts`), which rewrites the item
+  with a `_key`, and K1's legacy branch gives it `leaderOf` = `groups`. The others read the same under L1 and L2 (empty kept groups:
+  nothing both ways; duplicate items: dropped by the read; not in Jóvenes: inert; a present
+  `leaderOf`, array or not: L1 and L2 read it identically).
+- **Where it runs.** Cloud sessions have no `.env.local` and no readable keys (CLAUDE.md), so step 3
+  runs on Frank's Mac in the primary checkout through a Remote Control session, which has
+  `.env.local`. If `docs/SECRETS.md` by then lists a proxy-injected Sanity write token for cloud
+  sessions, it may run there instead; check before step 3, never assume.
 - Never touches `level`, `groups`, `ministries`, or any other field or type.
 
 Frank's consent is asked on the dry run's exact output, and recorded in the PR.
@@ -264,11 +287,14 @@ until §7 step 6 is done. Widening it is its own later PR.
 
 **K1. PR 1's keep rule (in `memberCommit.ts`, deleted by PR 2).** PR 1's requests still carry
 `{ ministry, level, groups }` with no `leaderOf`. What PR 1 stores for a leader:
-- the stored item of that person and ministry has an explicit array `leaderOf` → `leaderOf` :=
-  that ∩ the request's `groups`; if the result is empty → **409** «Esta persona lidera grupos que
-  ya no tendría. Quítale el nivel de líder o edítala desde la versión nueva.», nothing written;
-- otherwise (no stored item, not a leader before, or a legacy item) → `leaderOf` := the request's
-  `groups` (PR 1's meaning of "leader").
+- the stored item of that person and ministry is a leader whose `leaderOf` KEY IS PRESENT (any
+  value, array or not) and does NOT name exactly the item's kept stored `groups` (as a set) → a
+  stored narrowing: `leaderOf` := its normalized value ∩ the request's `groups` (a non-array
+  normalizes to `[]`); if the result is empty → **409** «Esta persona lidera grupos que ya no
+  tendría. Quítale el nivel de líder o edítala desde la versión nueva.», nothing written;
+- otherwise (no stored item, not a leader before, a legacy item with no `leaderOf`, or a stored
+  `leaderOf` equal to the stored `groups`, which says "leads all" exactly as a legacy item does)
+  → `leaderOf` := the request's `groups` (PR 1's meaning of "leader").
 - a create (no stored person) → `leaderOf` := `groups`.
 
 A `ministryRoles` write is already pinned to the read's revision (`touchesRoleOrMinistries` is true
@@ -287,7 +313,9 @@ stored: it keeps it, narrows it, or refuses.
 | 6 | Frank sets the roster (§1), then one read-only pass: every Jóvenes leader with groups and `leaderOf`, checked against his table | The verification is a `list_members`/dry-run read; nothing is written by an agent. |
 
 `e11dafc49` (the two new group ids) rides PR 1, so production knows `adrenalin` and `guerreras`
-before step 6 stores them (its own comment's rule).
+before step 6 stores them (its own comment's rule). Until step 2 is verified, nobody assigns
+`adrenalin` or `guerreras` on dev: production's next full save of that person would drop the
+unknown group.
 
 **Rollback, said aloud.** PR 2 → PR 1: safe (K1; subsets are read correctly; the old form cannot
 show or set them and refuses the one edit that would empty them). PR 1 → today's code, after
@@ -330,9 +358,17 @@ per-group demotion of a joint creator. `jovenesPlannerPage.test.tsx`, `jovenesPa
 **T3. Writers store `leaderOf` (K1).** `memberCommit.ts`: `validatePatchBody` stays pure and
 unchanged in what it accepts; the `leaderOf` each item is stored with is decided in `planPatch`
 from the stored person (K1) and in `buildCreateDoc` (= `groups`); `resultingDoc`/`memberView`
-see the result, so the chat's before/after and its token bind what will be stored.
+see the result. In PR 1 `memberView`/`jovenesText` do not show `leaderOf` yet (T7 adds it), so a
+K1 narrowing does not appear in the chat's before/after lines; that is fail closed (K1 only keeps,
+narrows or refuses), and the PR says so. **Types:** `MinistryRole` gains `leaderOf`, so PR 1 splits
+a write-item type, `MinistryRoleWrite = Omit<MinistryRole, "leaderOf">`, for the two request bodies
+typed `MinistryRole[]` today (`memberEdits.ts` ~295, `MembersPanel.tsx` ~512). PR 1's form and chat
+bodies keep sending `{ ministry, level, groups }`; adding `leaderOf` to a PR 1 body would be
+answered 400 on every Jóvenes edit (unchanged key set) and is the wrong fix.
 Tests — `memberCommit.test.ts`, `membersMinistries.test.ts`, `ministryRolesWrite.test.ts`: each K1
-arm (legacy → all; stored subset kept; narrowed by a removed group; emptied → 409 and no write;
+arm (legacy → all; stored `leaderOf` equal to stored `groups` → the request's groups, so a group
+added from the PR 1 form is led; stored subset kept; non-array present → ∩ of `[]` → 409; narrowed
+by a removed group; emptied → 409 and no write;
 level leader → member removes the key; create); the write is revision-pinned; a request that sends
 `leaderOf` is still refused in PR 1 (key set unchanged).
 
@@ -350,8 +386,11 @@ keeps its 1–3 bound). Tests: `jovenesPlannerModel.test.ts` (four groups → th
 the empty and own-group messages keep their order), the eventWrite words test.
 (b) `app/mcp/tools/members.ts`: both `groups: z.array(SHORT).max(3)` →
 `.max(MINISTRIES.jovenes.groups.length)`. `TOOL_LIST_VERSIONS` is a computed digest
-(`toolListDigest` over `registerAllTools`), so it moves by itself and stale clients get the refresh
-note (ADR-0069); `mcpRoute.test.ts`'s digest tests stay green and no literal is edited. Test in
+(`toolListDigest` over `registerAllTools`, input schemas included), so it moves by itself, but
+`app/api/__tests__/mcpRoute.test.ts` PINS the full digest (`toBe("663bdcc0")`) and fails on
+purpose: update that pin deliberately, with a dated line in its comment, in PR 1 (this change) and
+again in PR 2 (T7). Each of those releases sends every Claude connector the refresh note
+(ADR-0069); say so in the PR. Test in
 `memberTools.test.ts`/`members.test.ts`: five groups accepted, six refused.
 
 **T-docs 1.** ADR (see T10) drafted with PR 1's half; `docs/DATA_MODEL.md` (`leaderOf`),
@@ -387,7 +426,8 @@ lidera (leaderOf); los demás quedan como miembro.» (no default: the chat never
 Guerreras)», «miembro (Emprendedores)». `mcp/tools/members.ts`: `leaderOf` in `EDIT` and
 `NEW_MEMBER` (`.max(MINISTRIES.jovenes.groups.length)`), `personSummary` through the same text,
 the two descriptions («jovenes {level, groups, leaderOf}: leaderOf son los grupos que lidera, parte
-de groups; solo con level leader»). The digest moves by itself. ADR-0082's rule stands untouched: `chatAccessRefusal` protects `admin` (the level), `managesMinistries`
+de groups; solo con level leader»). The digest moves; update the `mcpRoute.test.ts` pin on purpose
+(see T5(b)). ADR-0082's rule stands untouched: `chatAccessRefusal` protects `admin` (the level), `managesMinistries`
 and the roles; it does not protect `leader` today (verified), so the chat may add or remove one
 group's leadership exactly as it may give or take the `leader` level, always through check → save
 with the before/after line. A test pins that a `leaderOf` change alone is never a `chat_access`
@@ -414,7 +454,9 @@ a leader may plan, say «los grupos que lideras».
 
 **T10. Docs.** A new ADR, `docs/adr/0085-a-jovenes-leader-leads-named-groups.md` (the choice
 rejects real alternatives, §4.3, and the L1 → L2 flip and K1 are exactly what a later reader would
-"fix"), linked from ADR-0075 (addendum line) and ADR-0081; `CONTEXT.md` «Nivel» and «Grupo»
+"fix"; it records K1's one asymmetry: from the old form, a group added to a leader whose stored
+`leaderOf` is a strict subset joins as member, while one added to a leader whose `leaderOf` equals
+their groups is led), linked from ADR-0075 (addendum line) and ADR-0081; `CONTEXT.md` «Nivel» and «Grupo»
 (leading is per group; an admin's groups are membership); `docs/MCP.md` (the `jovenes` op and
 `NEW_MEMBER`), `docs/API_REFERENCE.md` (the members body), `docs/DATA_MODEL.md`,
 `docs/ROUTES.md` (`/jovenes/admin`: "leads at least one group"), CLAUDE.md §Auth and
@@ -424,6 +466,8 @@ rejects real alternatives, §4.3, and the L1 → L2 flip and K1 are exactly what
 
 PR 1: `app/ministries.ts`, `app/utils/ministryAccess.ts`, `app/utils/ministryEventCommit.ts`,
 `app/utils/ministryEventReads.ts`, `app/utils/memberCommit.ts`, `app/utils/jovenesPlannerModel.ts`,
+`app/utils/memberEdits.ts` and `app/components/admin/MembersPanel.tsx` (type only:
+`MinistryRoleWrite`, T3),
 `app/(client)/jovenes/page.tsx`, `app/(client)/jovenes/admin/page.tsx`,
 `app/components/jovenes/eventWrite.ts`, `app/mcp/tools/members.ts`,
 `sanity/schemas/worshipTeam.ts`, `scripts/backfill-jovenes-leader-of.mjs`,
@@ -438,8 +482,16 @@ Read and confirmed to need NO change: `memberAccess.ts` (carries the normalized 
 
 ## 9. Compatibility accepted, said aloud
 
-- In PR 1 a leader given a NEW group from the old form, when their stored `leaderOf` is already a
-  subset, joins it as a member (K1 intersects). Fail closed; visible in PR 2's form.
+- In PR 1 a leader given a NEW group from the old form, when their stored `leaderOf` is a strict
+  subset of their stored groups, joins it as a member (K1 intersects). Fail closed; visible in PR
+  2's form. After the backfill (step 3) every leader stores `leaderOf` = `groups`, which K1 reads
+  as legacy, so between steps 3 and 5 the production form keeps its own meaning of «Líder» for
+  everyone whose leadership PR 2 has not narrowed (and nobody's is narrowed before step 6).
+- A Studio draft of a person that predates a later save, if published, restores the draft's older
+  `ministryRoles` (a widening if the save narrowed `leaderOf`). This hazard already exists for
+  every `teamMembers` field (`memberCommit.ts` writes the published document); the backfill covers
+  drafts so none is left legacy, and the chat's check already warns about it (`STUDIO_DRAFT`,
+  `app/mcp/tools/members.ts`: «si alguien lo publica, sobrescribe este cambio»). No change.
 - Between steps 1 and 3 a legacy leader still leads all their groups (L1). That is today.
 - `level` and `leaderOf` can disagree only through a hand edit of the document; the read then
   grants the lesser (I4).
@@ -454,3 +506,49 @@ Read and confirmed to need NO change: `memberAccess.ts` (carries the normalized 
   Invencibles draft he created stays readable to Andy (who leads it) and the admins. OK?
 - **Q4.** Widening `jovenesEvents` past `superAdmin` is deliberately not in this plan. Confirm it
   waits for step 6.
+
+## 11. Post-approval changes (UN-REVIEWED)
+
+Added after the approving rounds, from their non-blocking notes. Approval covers digest
+`d8c739c8…5f42` only; where this section and §1–§10 differ, this section wins and the merge-range
+code review checks it.
+
+- **N1. Never revert PR 1's read side while a narrowed leader exists.** Once the rollout stage
+  widens, a revert of PR 1 reads every leader whose `leaderOf` is narrower than their `groups` as
+  leading all of them. ADR-0085 and `project-rules.md` §Ministries carry the rule, in the words of
+  «Readable ≠ writable»: count those leaders first; never revert while any exists. Same before
+  moving the stage after any rollback of PR 2 (K1's equal-set arm widens from the old form).
+- **N2. PR 2's chat bodies.** With T6's exact key set, `applyMemberEdits` (`memberEdits.ts` ~295)
+  and `newMemberBody` (`mcp/tools/members.ts` ~278–286) ALWAYS send `leaderOf`, `[]` for member and
+  admin. T7's leader rule (no `leaderOf` given → refused) applies to `NEW_MEMBER` as well as the
+  edit op. Tests: a member-level chat create and edit of a Jóvenes person succeed.
+- **N3. The hand fix for a leader item with no `_key`.** An untouched «Personas» form sends no
+  `ministryRoles` (`MembersPanel.tsx` ~510): the runbook says to change and restore the Jóvenes
+  level (or a group) so the row is sent. A `drafts.*` or `versions.*` document with the defect
+  cannot be fixed there; it is discarded, with Frank's consent, before PR 2.
+- **N4. The L1/L2 switch and the script's lifetime.** The switch exported from `app/ministries.ts`
+  exists only in PR 1's tree. The step-4 dry run runs from PR 1's tree (production's code). PR 2
+  deletes the switch, the backfill script, its lib and its test. PR 1 adds a vitest pinning the
+  lib's led-groups result to `ledGroupsIn` on the same fixtures.
+- **N5. Planner copy (T9).** «Incluye uno de tus grupos.» becomes «Incluye uno de los grupos que
+  lideras.» in PR 2; `app/utils/jovenesPlannerModel.ts` joins PR 2's file list and T9's test asserts
+  the new sentence.
+- **N6. Coverage guard scope (T2).** `ledGroupsCoverage.test.ts` scans LEVEL comparisons only
+  (`levelIn(`… `"leader"`, `.level` … `"leader"`), not `arm.kind === "leader"`
+  (`ministryEventReads.ts` 47/112/152). Its allow-list names exact display lines, not whole files,
+  so a future access decision in `MembersPanel.tsx`, `memberEdits.ts` or `members.ts` is caught.
+- **N7. K1 details.** A `null` stored `leaderOf` takes the legacy arm (§4.4's one meaning of
+  absent; "any value" in K1 means any non-null value). The 409 text becomes «Los grupos que lidera
+  esta persona no se pueden cambiar desde aquí. Quítale el nivel de líder, guarda, y vuelve a
+  dárselo.», true after a rollback and for a stored non-array value too.
+- **N8. Said aloud.** A stored leader with zero kept groups reaches `/jovenes/admin` today and is
+  redirected after PR 1: a harmless narrowing, so "PR 1 changes nobody's access" excepts it.
+  `invalid_audience` also answers an unknown or repeated group and a ministry audience with groups;
+  the form prevents those, so «Elige hasta tres grupos…» is accepted for all of them.
+- **N9. Backfill.** Reports `versions.*` (Content Releases) documents beside `drafts.*`. Rollback:
+  unset exactly the `leaderOf` paths in the `--apply` run's list (changes nothing under L1).
+- **N10. Fixtures.** Under L2, every existing fixture storing `level: "leader"` without `leaderOf`
+  leads nothing (the `ministryEventReads` groq-js matrix, `ministryEventCommit`, the page tests,
+  `rollout`). PR 2 adds `leaderOf` to them, keeping each test's intent, rather than flipping
+  expectations.
+- **N11. Cross-reference.** §7 step 1's "the two review fixes (§9)" means T5 (§8).
