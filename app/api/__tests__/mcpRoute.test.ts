@@ -127,7 +127,7 @@ import { songResponder } from "@/app/mcp/reads/__tests__/songFixtures";
 // The dev-smoke script's own expectation of the route's registration — imported,
 // never re-typed, so the two can't drift apart silently (a 9th tool would fail
 // THIS test, not just surface on Frank's next `--reads` run).
-import { ADMIN_READ_TOOL_NAMES, EDITOR_TOOL_NAMES, EXPECTED_TOOLS, MONTH_TOOL_NAMES, SERVICE_DELETE_TOOL_NAMES, SERVICE_EDITOR_TOOL_NAMES, SERVICE_MESSAGE_TOOL_NAMES, KIDS_TOOL_NAMES, PROPOSAL_REVIEW_TOOL_NAMES, SONG_TOOL_NAMES, MEMBER_TOOL_NAMES, WRITE_TOOL_NAMES, expectedAnnotations } from "@/scripts/mcp-dev-smoke.mjs";
+import { ADMIN_READ_TOOL_NAMES, EDITOR_TOOL_NAMES, EXPECTED_TOOLS, MONTH_TOOL_NAMES, SERVICE_DELETE_TOOL_NAMES, SERVICE_EDITOR_TOOL_NAMES, SERVICE_MESSAGE_TOOL_NAMES, KIDS_TOOL_NAMES, PROPOSAL_REVIEW_TOOL_NAMES, SONG_TOOL_NAMES, MEMBER_TOOL_NAMES, RULE_TOOL_NAMES, WRITE_TOOL_NAMES, expectedAnnotations } from "@/scripts/mcp-dev-smoke.mjs";
 import { WRITE_REREAD_RULE } from "@/app/mcp/writes/runWriteTool";
 import { NOTHING_WRITTEN, STALE_COPY } from "@/app/mcp/writes/refusals";
 import { serviceError } from "@/app/utils/serviceMutation";
@@ -650,7 +650,7 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     expect(result.capabilities).toMatchObject({ tools: { listChanged: false } });
   });
 
-  it("tools/list shows exactly the fifty-two tools — ping, the ten reads, the four writes, the two month tools, the three proposal-editor tools, the six saved-month tools, the three delete tools, the five conversation tools, the five Kids tools, the two proposal-decision tools, the four song tools, then the seven people tools — each with its own annotations (I14), strict (I13), described in Spanish", async () => {
+  it("tools/list shows exactly the fifty-four tools — ping, the ten reads, the four writes, the two month tools, the three proposal-editor tools, the six saved-month tools, the three delete tools, the five conversation tools, the five Kids tools, the two proposal-decision tools, the four song tools, then the seven people tools, then the two rule tools — each with its own annotations (I14), strict (I13), described in Spanish", async () => {
     const token = await accessToken(await liveGrant());
     const result = await rpcResult(await POST(mcpRequest(rpc("tools/list"), { token })));
     const tools = result.tools as Record<string, unknown>[];
@@ -673,13 +673,14 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     expect(group(PROPOSAL_REVIEW_TOOL_NAMES)).toEqual(PROPOSAL_REVIEW_TOOL_NAMES);
     expect(group(SONG_TOOL_NAMES)).toEqual(SONG_TOOL_NAMES);
     expect(group(MEMBER_TOOL_NAMES)).toEqual(MEMBER_TOOL_NAMES);
-    expect(EXPECTED_TOOLS).toHaveLength(52);
+    expect(group(RULE_TOOL_NAMES)).toEqual(RULE_TOOL_NAMES);
+    expect(EXPECTED_TOOLS).toHaveLength(54);
     // The same per-tool annotations the smoke checks on dev. Written out here as
     // well, so a change to the smoke's own map cannot quietly redefine what a
     // read or a destructive write declares.
     for (const tool of tools) {
       const name = String(tool.name);
-      const write = (WRITE_TOOL_NAMES as string[]).includes(name) || name === "apply_schedule" || ["save_service_edits", "save_service_edits_app", "copy_instruments", "create_service", "delete_services", "delete_services_app", "send_service_message", "edit_service_message", "set_pastor_message", "set_team_message", "save_kids_sundays", "save_kids_pair", "set_kids_absences", "review_setlist_proposal", "save_song_edits", "create_song", "save_member_changes", "create_members", "set_member_access"].includes(name);
+      const write = (WRITE_TOOL_NAMES as string[]).includes(name) || name === "apply_schedule" || ["save_service_edits", "save_service_edits_app", "copy_instruments", "create_service", "delete_services", "delete_services_app", "send_service_message", "edit_service_message", "set_pastor_message", "set_team_message", "save_kids_sundays", "save_kids_pair", "set_kids_absences", "review_setlist_proposal", "save_song_edits", "create_song", "save_member_changes", "create_members", "set_member_access", "save_rule_edits"].includes(name);
       expect(tool.annotations, name).toEqual(
         name === "solve_month" || name === "save_proposal_edits" || name === "revise_proposal"
           ? { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }
@@ -1681,6 +1682,8 @@ describe("/api/mcp — three tool lists: who you are (live) and which agent hold
     expect(EXPECTED_TOOLS_NO_APPS).toHaveLength(EXPECTED_TOOLS.length - APP_ONLY_TOOL_NAMES.length);
     // None of the phase-4 people tools is a read-tier tool: they list the team's emails.
     for (const name of MEMBER_TOOL_NAMES) expect(READ_TIER_TOOL_NAMES, name).not.toContain(name);
+    // Nor the slice-R rule tools: the save changes what every Auto reads.
+    for (const name of RULE_TOOL_NAMES) expect(READ_TIER_TOOL_NAMES, name).not.toContain(name);
   });
 
   it("the full digest is pinned; the three digests differ", () => {
@@ -1688,7 +1691,8 @@ describe("/api/mcp — three tool lists: who you are (live) and which agent hold
     // ONLY when a release changes the full list on purpose — that release sends every Claude
     // connector the refresh note. Changed on purpose 2026-11-06 (cf45d5e6): the people tools' grant
     // rule now says a content-editor may be lowered or disabled, which the live proof found unclear.
-    expect(TOOL_LIST_VERSIONS.full).toBe("cf45d5e6");
+    // Changed on purpose by slice R (ADR-0084): the two rule tools join the full list.
+    expect(TOOL_LIST_VERSIONS.full).toBe("663bdcc0");
     expect(TOOL_LIST_VERSION).toBe(TOOL_LIST_VERSIONS.full);
     expect(new Set(Object.values(TOOL_LIST_VERSIONS)).size).toBe(3);
     for (const scope of TOOL_LIST_SCOPES) {

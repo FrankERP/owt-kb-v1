@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireActiveManager } from "@/app/utils/authGuards";
-import { sanityConflictKind } from "@/app/utils/roleWriteRequest";
 import { serviceError } from "@/app/utils/serviceMutation";
+import { saveSolverConfig } from "@/app/utils/solverConfigCommit";
+import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
 import { loadStoredSolverConfig, solverConfigGetBody } from "@/app/utils/solverConfigRead";
-import { writeClient } from "@/sanity/lib/serverClient";
-import {
-  SOLVER_CONFIG_DOC_ID,
-  SOLVER_CONFIG_VERSION,
-  parseSolverConfigWrite,
-} from "@/app/utils/solverConfigWriteRequest";
 
 /**
  * The shared planner rule set (P6) — read and update.
@@ -63,7 +58,7 @@ import {
  * revalidation that was never missing.
  */
 
-function reject(res: { status: number; body: unknown }) {
+function send(res: { status: number; body: unknown }) {
   return NextResponse.json(res.body, { status: res.status });
 }
 
@@ -105,7 +100,7 @@ export async function GET() {
  * `parseSolverConfigWrite` is what mints them; the seed script uses the same
  * module, so the two writers cannot drift.
  */
-export async function POST(req: NextRequest) {
+async function postHandler(req: NextRequest) {
   const session = await gate();
   if (!session) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
@@ -113,91 +108,17 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return reject(serviceError("invalid_request", { details: { issues: ["json"] } }));
+    return send(serviceError("invalid_request", { details: { issues: ["json"] } }));
   }
   if (typeof body !== "object" || body === null || Array.isArray(body)) {
-    return reject(serviceError("invalid_request", { details: { issues: ["body"] } }));
+    return send(serviceError("invalid_request", { details: { issues: ["body"] } }));
   }
 
-  // The version guard (C3 §6.2) — after auth and the JSON parse, before `rev`,
-  // the parser and the read: an outdated body is refused with nothing read.
-  const configVersion = (body as Record<string, unknown>).configVersion;
-  if (configVersion !== SOLVER_CONFIG_VERSION) {
-    return reject(
-      serviceError("invalid_request", {
-        message: "Esta pestaña tiene una versión anterior de las reglas. Recarga la página; no se guardó nada.",
-        details: {
-          issues: ["configVersion"],
-          expected: SOLVER_CONFIG_VERSION,
-          received: configVersion === undefined ? null : configVersion,
-        },
-      }),
-    );
-  }
-
-  const rev = (body as Record<string, unknown>).rev;
-  if (typeof rev !== "string" || !rev.length) {
-    return reject(serviceError("invalid_request", { details: { issues: ["rev"] } }));
-  }
-
-  const parsed = parseSolverConfigWrite((body as Record<string, unknown>).config);
-  if (!parsed.ok) {
-    return reject(serviceError("invalid_request", { details: { issues: parsed.issues } }));
-  }
-
-  const stored = await loadStored();
-  if (!stored) {
-    // See the header: only the seed script may mint this document.
-    return reject(
-      serviceError("not_found", {
-        message:
-          "Las reglas compartidas aún no existen. Solo el script de siembra puede crearlas; esta ruta únicamente actualiza.",
-        details: { id: SOLVER_CONFIG_DOC_ID, detail: "create_not_allowed_here" },
-      }),
-    );
-  }
-  if (stored._rev !== rev) {
-    return reject(
-      serviceError("stale_revision", {
-        details: { id: SOLVER_CONFIG_DOC_ID, observed: rev, current: stored._rev ?? null },
-      }),
-    );
-  }
-
-  try {
-    await writeClient
-      .patch(SOLVER_CONFIG_DOC_ID)
-      .ifRevisionId(rev)
-      .set({
-        ...parsed.value.fields,
-        updatedAt: new Date().toISOString(),
-        updatedBy: session.user.sanityId ?? "",
-      })
-      .commit();
-  } catch (err) {
-    // ONLY a genuine Content Lake 409 is a lost race. Everything else — an
-    // expired or missing `SANITY_WRITE_TOKEN`, a network fault, a validation
-    // complaint — must surface as itself.
-    //
-    // Reporting all of them as `stale_revision` is not a harmless
-    // approximation: the message is "Alguien más lo cambió primero. Recarga y
-    // reintenta.", so the admin reloads, gets the SAME `_rev` back (nothing
-    // changed — nothing was written), retries, and fails identically, forever,
-    // with the real cause swallowed by a `catch` that did not even log it. Same
-    // classifier, same reason, as `app/api/admin/roles/[id]/route.ts:283`.
-    if (!sanityConflictKind(err)) throw err;
-    return reject(
-      serviceError("stale_revision", {
-        details: { id: SOLVER_CONFIG_DOC_ID, observed: rev, detail: "commit_conflict" },
-      }),
-    );
-  }
-
-  const after = await loadStored();
-  return NextResponse.json({
-    present: true,
-    rev: after && typeof after._rev === "string" ? after._rev : null,
-    config: parsed.value.config,
-    configVersion: SOLVER_CONFIG_VERSION,
-  });
+  // Everything after auth and the JSON/shape check is the shared writer's (`solverConfigCommit.ts`,
+  // ADR-0084), which the chat's rule edits also write through.
+  return send(await saveSolverConfig(body as Record<string, unknown>, session.user.sanityId ?? ""));
 }
+
+// Wrapped like every route that reaches a `*Commit` module (`srVerificationRunContext.test.ts`), though this
+// writer sends nothing.
+export const POST = withVerificationRunContext(postHandler);

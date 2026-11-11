@@ -111,6 +111,8 @@ const EXPECTED_CALLERS: Record<string, string[]> = {
     "app/api/me/route.ts",
     "app/mcp/tools/members.ts",
   ],
+  // Admin parity phase 4 (slice R): the rules POST and the MCP rule tools (ADR-0084).
+  solverConfigCommit: ["app/api/admin/solver-config/route.ts", "app/mcp/tools/rules.ts"],
   // Solver v3 C2 WR-16 / IF2-23: the ONE mutation path of `fairnessMonth`. Its importer
   // list grows only by a reviewed edit here — C2 adds `fairnessMonthCommit.ts` and
   // `fairnessLedgerRead.ts`; C4 adds its CLI file and its `scripts/lib` core.

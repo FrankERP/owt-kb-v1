@@ -476,6 +476,12 @@ and writes nothing. A song already created keeps its id; nothing stored holds a 
 under `mcp-member-id|`. Rotating the key voids every pending people check (the save or create answers
 «revisa de nuevo» and writes nothing); a person already created keeps their id.
 
+**A seventh use: the solver rule tools** (ADR-0084, admin parity phase 4; no new secret or env var).
+Two more HMACs under their own labels (`app/mcp/rules/ruleTokens.ts`): `mcp-rule-edits|`, over the
+issue time and the rules revision, edit list and lines `check_rule_edits` answered, and `mcp-rule-ids|`,
+the ids of the rule items an edit creates. Rotating the key voids every pending rules check:
+`save_rule_edits` answers «vuelve a revisar» and writes nothing. Stored rules keep their ids.
+
 **Blast radius.** Every access and refresh token that environment's routes ever signed stops
 verifying the instant the new key is live — a rotated secret cannot check a token signed under
 the old one, by construction. That is **that one environment's grants only**: on production, every

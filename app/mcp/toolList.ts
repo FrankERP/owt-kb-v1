@@ -29,6 +29,7 @@ import { registerKids } from "./tools/kids";
 import { registerSetlistProposalReview } from "./tools/setlistProposalReview";
 import { registerSongEdits } from "./tools/songEdits";
 import { registerMemberTools } from "./tools/members";
+import { registerRuleTools } from "./tools/rules";
 import { registerProposalCard } from "./apps/proposalCard";
 import { toolListDigest } from "./toolListVersion";
 
@@ -113,6 +114,8 @@ export function registerAllTools(server: McpServer, deps: { version: string; sco
   registerSongEdits(server);
   // Admin parity phase 4 (slice M): people, through /admin's own writer (`memberCommit.ts`).
   registerMemberTools(server);
+  // Admin parity phase 4 (slice R): the solver rules, through /admin's own writer (`solverConfigCommit.ts`).
+  registerRuleTools(server);
   // The card (MCP Apps), at a URI that carries its build's digest. Fixed per deployment, like the
   // tools. Only for a claude.ai grant: the card calls the app-only tools.
   if (appsHost) registerProposalCard(server);

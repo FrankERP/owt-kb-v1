@@ -611,6 +611,21 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   targeted person-path `set` a rename needs, refusing a keyless item, a raw value written unlike its
   reading, or a NEW parse issue; also `namesChanged`, `nameTakenBy`, `orphanRuleWarnings`.
 
+### Solver rules writer (shared by «Generar mes» → Reglas and the MCP rule tools, admin parity phase 4)
+- **`solverConfigCommit.ts`** ([solverConfigCommit.ts](../app/utils/solverConfigCommit.ts)) — the one
+  writer of `solverConfig` after authorization (ADR-0084): `saveSolverConfig(body, actorId)` (the rules
+  POST's body, verbatim) and `checkRuleEdits`/`saveRuleEdits` (the chat: read, `losslessRules` gate,
+  apply, judge, then ONE six-field `set` under `ifRevisionId`, only when the save's `verify` accepts
+  the fresh rev and lines).
+- **`applyRuleEdits(stored, edits, roster, newId)`** ([ruleEdits.ts](../app/utils/ruleEdits.ts), pure) —
+  the chat's rule edits by parts (pools, never/allowAgain, week off/on, counts, «Mes por medio»,
+  «Fuera del balance total», pairs and groups), people matched as the solver matches them, only
+  `RULE_PATTERNS`; answers the before/after lines (pool lines say what the person can do after), the
+  no-ops and the notes. `judgeRuleEdits(stored, edited, roster, month)` refuses only a contradiction or
+  a v3 eligibility problem the edit ADDS, and returns the ones already stored.
+- **`RULE_PATTERNS`/`EXCLUSION_PATTERN_ORDER`/`isRulePattern`** (`ruleCopy.ts`) — the eleven patterns the
+  rules panel offers, ONE list read by `MonthGenerator`'s pickers and by the chat.
+
 ### Oasis Kids planner (shared by `/api/kids/*` and the MCP Kids tools, admin parity phase 3)
 - **`kidsCommit.ts`** ([kidsCommit.ts](../app/utils/kidsCommit.ts)) — the ONLY Kids writers, after
   authorization (ADR-0043 shape, `CommitOutcome`): `saveKidsSunday(raw)` (one Sunday, WHOLE: an

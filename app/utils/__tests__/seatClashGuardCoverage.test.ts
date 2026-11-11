@@ -33,6 +33,7 @@ const NON_SEAT_WRITERS = [
   "roleUnpublishCommit.ts",
   "serviceThreadCommit.ts",
   "setlistSaveCommit.ts",
+  "solverConfigCommit.ts", // the solver rules: never a role document (ADR-0084)
   "songSaveCommit.ts",
 ];
 
