@@ -24,6 +24,14 @@ export const MINISTRIES = {
       { id: "otro-nivel", name: "Otro Nivel" },
       { id: "invencibles", name: "Invencibles" },
       { id: "emprendedores", name: "Emprendedores" },
+      // Added 2026-11-11 (Frank): the men's and the women's groups, «groups inside
+      // Jóvenes» like the age groups above, with the same closed calendar. A new id
+      // here must reach PRODUCTION before anyone stores it: code that does not know
+      // a group id drops it on read (isGroupId), and the next full write of that
+      // person would then drop it from the document too. `preview` writes the
+      // production dataset, so nothing assigns these ids until prod has this list.
+      { id: "adrenalin", name: "Adrenalin" },
+      { id: "guerreras", name: "Guerreras" },
     ],
   },
 } as const;
