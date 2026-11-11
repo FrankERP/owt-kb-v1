@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireActiveSession, requireMinistryMember } from "@/app/utils/authGuards";
 import { getMemberAccess } from "@/app/utils/memberAccess";
@@ -9,18 +8,17 @@ import {
   type MinistryEventView,
 } from "@/app/utils/ministryEventReads";
 import { rolloutAllows } from "@/app/utils/rollout";
-import {
-  addDaysIso,
-  audienceLabel,
-  eventDayLabel,
-  eventHeading,
-  mySeats,
-  seatRoleLabel,
-} from "@/app/utils/jovenesEventView";
+import { addDaysIso, eventLine, meetingsLede } from "@/app/utils/jovenesEventView";
+import { jovenesDayEntry } from "@/app/utils/calendarMinistry";
+import { dayTitle, mySeats } from "@/app/utils/agenda";
 import { isMinistryManager, levelIn } from "@/app/utils/ministryAccess";
 import { showsProgramEditor } from "@/app/utils/jovenesPlannerModel";
 import { readJovenesPeople, type JovenesPerson } from "@/app/utils/jovenesPeople";
+import { PAGE_LEDE, PAGE_TITLE } from "@/app/utils/homeHero";
+import type { JovenesDayEntry } from "@/app/components/CalendarView";
 import Navbar from "@/app/components/Navbar";
+import Button from "@/app/components/ui/Button";
+import JovenesMeetingBody from "@/app/components/jovenes/MeetingBody";
 import ProgramEditor from "@/app/components/jovenes/ProgramEditor";
 import { revealProps } from "@/app/utils/reveal";
 
@@ -78,36 +76,63 @@ export default async function JovenesPage() {
   const plans = isManager || levelIn(access, "jovenes") === "leader";
   const editable = new Set(events.filter((e) => showsProgramEditor(e, isManager)).map((e) => e._id));
   const people = editable.size > 0 ? await readJovenesPeople() : [];
+  // One shape for the rows here and in the Calendario's day sheet, and ONE answer to «what is
+  // mine on this meeting» (the agenda's `mySeats`: seats and program lines, by member id).
+  const meetings = events.map((event) => {
+    const entry = jovenesDayEntry(event);
+    return { event, entry, mine: mySeats({ jovenes: entry }, "") };
+  });
+  const lede = meetingsLede(meetings.map((m) => ({ date: m.event.date, mine: m.mine.length > 0 })));
 
   return (
     <div>
       <Navbar title="Jóvenes" />
-      <div className="mx-auto max-w-4xl px-6 pt-10 pb-16 space-y-8">
-        <div className="flex flex-wrap items-baseline justify-between gap-3" {...revealProps(0)}>
-          <h2 className="font-display text-2xl md:text-3xl font-bold">Próximas reuniones</h2>
-          {plans && (
-            <Link href="/jovenes/admin" className="font-label text-sm text-mono-500 hover:text-accent">
-              Planear
-            </Link>
+      <div className="mx-auto max-w-3xl px-6 pb-16 pt-10">
+        {/* The page's name in the display face and a lede that says what is coming and what is
+            yours (the «millones» scale, ADR-0070). «Planear» is a house button, not a bare link. */}
+        <header {...revealProps(0)}>
+          <h1 className={PAGE_TITLE}>Jóvenes</h1>
+          {meetings.length > 0 && (
+            <p className={`${PAGE_LEDE} mt-3`}>
+              {lede.count}
+              {lede.mine && (
+                <>
+                  {" · "}
+                  <span className="text-ink">{lede.mine}</span>
+                </>
+              )}
+            </p>
           )}
-        </div>
+          {plans && (
+            <Button href="/jovenes/admin" variant="secondary" size="sm" className="mt-5">
+              Planear
+            </Button>
+          )}
+        </header>
 
         {unavailable ? (
-          <p role="alert" className="rounded-2xl border border-edge-accent-subtle bg-surface-raised p-5 font-body text-sm text-ink-muted" {...revealProps(1)}>
+          <p
+            role="alert"
+            className="mt-10 border-l-2 border-negative-strong/60 py-1 pl-4 font-body text-[15px] leading-snug text-negative-fg"
+            {...revealProps(1)}
+          >
             No pudimos leer las reuniones en este momento. Intenta de nuevo más tarde.
           </p>
-        ) : events.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 py-20 text-mono-600" {...revealProps(1)}>
-            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-              <line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-            </svg>
-            <p className="font-label text-sm uppercase tracking-widest">Aún no hay reuniones publicadas</p>
-          </div>
+        ) : meetings.length === 0 ? (
+          <p className="py-20 text-center font-body text-base text-ink-muted" {...revealProps(1)}>
+            Aún no hay reuniones publicadas.
+          </p>
         ) : (
-          <div className="space-y-5">
-            {events.map((e, i) => (
-              <EventCard key={e._id} event={e} index={i} people={editable.has(e._id) ? people : null} />
+          <div className="mt-12 space-y-14">
+            {meetings.map((m, i) => (
+              <Meeting
+                key={m.event._id}
+                event={m.event}
+                entry={m.entry}
+                mine={m.mine}
+                index={i}
+                people={editable.has(m.event._id) ? people : null}
+              />
             ))}
           </div>
         )}
@@ -116,67 +141,38 @@ export default async function JovenesPage() {
   );
 }
 
-/** `people` is set only when this reader may edit the program (then the button shows). */
-function EventCard({ event: e, index, people }: { event: MinistryEventView; index: number; people: JovenesPerson[] | null }) {
-  const mine = mySeats(e);
-  const when = [e.time, e.arrival ? `llegada ${e.arrival}` : null].filter(Boolean).join(" · ");
+/**
+ * One meeting: the DATE as its heading (what tells four Saturdays apart), a line with its name,
+ * clock and who it is for, «Tú · …» in the app's one green when something on it is the reader's,
+ * then the same hairline rows as the Calendario's day sheet. No frame around it and none inside:
+ * the space between meetings separates them. `people` is set only when this reader may edit the
+ * program (then the button shows).
+ */
+function Meeting({
+  event: e,
+  entry,
+  mine,
+  index,
+  people,
+}: {
+  event: MinistryEventView;
+  entry: JovenesDayEntry;
+  mine: string[];
+  index: number;
+  people: JovenesPerson[] | null;
+}) {
   return (
-    <article
-      className={`rounded-2xl border p-5 ${mine.length > 0 ? "border-accent bg-surface-accent-faint" : "border-edge-accent-subtle bg-surface-raised"}`}
-      {...revealProps(1 + index)}
-    >
-      <header className="flex flex-wrap items-baseline justify-between gap-2">
-        <div className="min-w-0">
-          <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">
-            <span className="capitalize">{eventDayLabel(e.date)}</span>
-            {when && <> · {when}</>}
-          </p>
-          <h3 className="mt-1 font-display text-lg md:text-xl font-bold text-ink">{eventHeading(e)}</h3>
-          <p className="mt-1 font-body text-sm text-ink-muted">{audienceLabel(e.audience)}</p>
-        </div>
-        {mine.length > 0 && (
-          <span className="animate-pop rounded-full border border-accent px-3 py-1 font-label text-[11px] uppercase tracking-widest text-accent">
-            Te toca — {mine.join(" · ")}
-          </span>
-        )}
-      </header>
-
-      {e.seats.length > 0 && (
-        <dl className="mt-4 grid gap-2 sm:grid-cols-2">
-          {e.seats.map((s) => (
-            <div key={s._key} className="flex items-baseline justify-between gap-3 rounded-lg bg-surface-sunken px-3 py-2">
-              <dt className="font-label text-[11px] uppercase tracking-widest text-mono-500">{seatRoleLabel(s.role)}</dt>
-              <dd className={`min-w-0 truncate font-body text-sm ${s.mine ? "text-accent" : s.name ? "text-ink-muted" : "text-mono-600 italic"}`}>
-                {s.name ?? "Sin asignar"}
-              </dd>
-            </div>
-          ))}
-        </dl>
+    <article {...revealProps(1 + index)}>
+      <h2 className="font-display text-[28px] font-semibold leading-none text-ink md:text-[34px]">{dayTitle(e.date)}</h2>
+      <p className="mt-2 font-body text-[15px] leading-snug text-ink-dim">{eventLine(e)}</p>
+      {mine.length > 0 && (
+        <p className="mt-1.5 font-body text-[15px] font-semibold text-positive-fg">Tú · {mine.join(" · ")}</p>
       )}
-
-      {e.program.length > 0 && (
-        <section className="mt-4">
-          <h4 className="font-label text-[11px] uppercase tracking-widest text-mono-500">Programa</h4>
-          <ol className="mt-2 space-y-1">
-            {e.program.map((l) => (
-              <li key={l._key} className="flex flex-wrap items-baseline gap-x-2 font-body text-sm">
-                <span className="text-ink">{l.label ?? "—"}</span>
-                {l.memberId && (
-                  <span className={l.mine ? "text-accent" : l.name ? "text-ink-muted" : "text-mono-600 italic"}>
-                    {l.name ?? "Sin asignar"}
-                  </span>
-                )}
-                {l.note && <span className="text-mono-500">· {l.note}</span>}
-              </li>
-            ))}
-          </ol>
-        </section>
-      )}
-
-      {e.notes && <p className="mt-4 whitespace-pre-line font-body text-sm text-ink-muted">{e.notes}</p>}
-
+      <div className="mt-6">
+        <JovenesMeetingBody entry={entry} teamTitle="Equipo" level={3} />
+      </div>
       {people && (
-        <div className="mt-4">
+        <div className="mt-5">
           <ProgramEditor event={e} people={people} />
         </div>
       )}

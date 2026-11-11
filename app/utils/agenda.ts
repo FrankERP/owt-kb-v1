@@ -4,6 +4,7 @@
 import type { ActiveDay } from "../components/CalendarView";
 import { plural } from "./plural";
 import { serviceStartTime, WEEKEND_SERVICE_TIME } from "./calendarFeed";
+import { SEAT_ROLE_LABEL } from "./jovenesEventView";
 
 /** `kids` is an Oasis Kids Sunday and `jovenes` a Jóvenes meeting, each shown only to that
  *  ministry's members (`calendarMinistry.ts`). */
@@ -39,6 +40,9 @@ export function serviceTone(e: Pick<ActiveDay, "day" | "roleId" | "kids" | "jove
   if (e.day === "Domingo") return "sun";
   return "special";
 }
+
+/** The one Jóvenes seat an agenda row names: who is in charge of the meeting. */
+const JOVENES_LEAD_SEAT = SEAT_ROLE_LABEL.encargado;
 
 const voices = (e: ActiveDay) => [
   ...(e.leads ?? []),
@@ -91,8 +95,10 @@ export function summarizeService(e: ActiveDay): string {
     return filled.length ? filled.join(" · ") : "Sin asignaciones";
   }
   if (e.jovenes) {
-    const filled = e.jovenes.seats.filter((s) => s.name).map((s) => `${s.label} ${s.name}`);
-    return [e.jovenes.audience, ...filled].join(" · ");
+    // Who it is for and who runs it, no more: the row is a glance, and with every seat spelled
+    // out it ran to four lines on a phone (2026-11-10). The sheet behind the row has the rest.
+    const lead = e.jovenes.seats.filter((s) => s.name && s.label === JOVENES_LEAD_SEAT).map((s) => `${s.label} ${s.name}`);
+    return [e.jovenes.audience, ...lead].join(" · ");
   }
   const parts: string[] = [];
   if (e.leads?.length) parts.push(`Lead ${e.leads.join(", ")}`);
