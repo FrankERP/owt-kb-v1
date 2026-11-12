@@ -42,12 +42,15 @@ still one-shot:
 4. **Drop landing** (spec §2.1, not yet built — lands with the drag-and-drop
    phase) — when a dragged chip lands, the target cell flashes the beam edge
    once, 120ms.
-5. **The lit card** (once, 900 ms) — **its one site is the NEXT meeting on `/jovenes`**
-   (`app/components/jovenes/MeetingCard.tsx`, the `featured` card; ADR-0086, 2026-11-12).
-   It was the worship hero's until ADR-0070 (2026-10-23) made that a run sheet with no
-   frame — a border pass needs a border — and for three weeks nothing set `data-lit`.
-   `litCard.test.ts` asserts that file is the ONLY site and that the wrapper sits in the
-   `featured` branch; a second site is an ADR first. After the route reveal the card gets
+5. **The lit card** (once, 900 ms) — **two sites, on two different screens**: the NEXT meeting
+   on `/jovenes` (`app/components/jovenes/MeetingCard.tsx`, the `featured` card; ADR-0086) and
+   the NEXT service on Inicio (`app/components/DayCard.tsx`'s `Lit`, on only where the host
+   passes `lit` — `app/(client)/page.tsx` and nowhere else; ADR-0087). It was the worship hero's
+   until ADR-0070 (2026-10-23) made that a run sheet with no frame — a border pass needs a
+   border — and for three weeks nothing set `data-lit`; ADR-0087 framed the service again.
+   Never two lit cards on one screen. `litCard.test.ts` asserts those two files are the ONLY
+   sites, that each wrapper is conditional, and that Inicio is the one `lit` host; another site
+   is an ADR first. After the route reveal the card gets
    one light pass around its border, then rests. `.brand-lit-card[data-lit]::before`,
    `@keyframes brand-lit-pass`, `--lit-beam`. The wrapper CLIPS and an unmasked conic layer spins
    under the card, so the light only shows in the 1 px gap the wrapper's
@@ -201,7 +204,7 @@ Assert final state, never timing. Wrap in `<MotionProvider>`.
 | `dialogSemantics.test.ts` | Every file that draws a dismissable full-bleed scrim (`bg-scrim` + `inset-0` + `onClick`) carries `role="dialog"`/`aria-modal`/an accessible name/focus management, or is named in an exemption list with a reason. Floor is 1 (`CueDialog` itself) as of M1 Task 1 — `BottomNav`'s hand-rolled scrim was replaced by a `CueDialog` sheet, so its `NOT_A_DIALOG` entry was deleted along with the overlay it exempted; the exemption list is now empty. A stale exemption (naming a file the scan no longer finds) fails its own check. |
 | `labelBudget.test.ts` | Spec §18 (decision N): one eyebrow per surface. Pins seven named labels at their audited counts, by equality — a phase that removes one lowers its number in the same commit. `>Cue<` (0, M0b-1), `>Servicio<` (0, R1 — `DayCard`'s day · date header carries it now), "Índice musical" (0, R1 — `SongSearchList` removed), "títulos" (0, R1 — the home library count removed), "Repertorio" (0, R1 — `PostComponent`'s song-card eyebrow removed), "Backstage operations" (0, R5 Task 1 — `/admin`'s eyebrow removed) and "Acceso autorizado" (0, R5 Task 1 — the status pill removed). All seven are at 0; the file stays as the ratchet a new eyebrow has to argue with. |
 | `redirects.test.ts` | R1 (spec §12.2, decision H): `next.config.mjs`'s `redirects()` folds `/tag`, `/tag/:slug`, `/author`, `/author/:slug` into `/biblioteca` (`?tag=:slug`/`?author=:slug`), all `permanent: true` (308). |
-| `litCard.test.ts` | The one-shot light pass around a card's border (R1, decision Q — see "The beam" above). Cannot see geometry (jsdom), so it pins the CSS contract instead, and that `data-lit` has exactly ONE site: the featured card of `app/components/jovenes/MeetingCard.tsx` (ADR-0086). |
+| `litCard.test.ts` | The one-shot light pass around a card's border (R1, decision Q — see "The beam" above). Cannot see geometry (jsdom), so it pins the CSS contract instead, and that `data-lit` has exactly TWO sites: the featured card of `app/components/jovenes/MeetingCard.tsx` (ADR-0086) and `DayCard`'s `Lit` wrapper, lit by ONE host, Inicio's next service (ADR-0087). |
 | `bottomNavOffsetSync.test.ts` | Names `BottomNav`'s `NAV_H_VAR`/`NAV_CLASS` exports, the `setProperty`/`removeProperty`/`classList` publish-and-clear shapes, `brand.css`'s `--bottom-nav-h` declaration and `html.has-bottom-nav [data-route-main]` padding rule, that every fixed-bottom consumer (`Toast.tsx`, `AudioPlayer.tsx`, `EditSongButton.tsx`) offsets by the variable, and that the client layout mounts `<BottomNav />` inside `<Provider>`. A new fixed-bottom element joins the `it.each` list. |
 | `adminShell.test.tsx` | R5 (spec §12.5, [ADR-0035](adr/0035-the-admin-shell-is-gone.md)): `/admin` has no shell and no panel boxes — no `.brand-admin-shell`/`.brand-admin-tabs`, no `brand-surface` wrapper around a panel body and no second tab bar. A structural ratchet: a new box fails the suite rather than shipping. Its queries are scoped to the rendered container after a flake that saw the previous test's tree. |
 | `adminDynamic.test.ts` | R5 Task 6: a source scan proving each of `ActivityPanel`, `ContentPanel`, `AvailabilityPanel`, `ProposalsPanel`, `MembersPanel` (in `AdminPanel.tsx`) and `MonthGenerator` (in `ServicesPanel.tsx`) is imported through `next/dynamic` in exactly the file allowed to gate it, and statically NOWHERE else under `app/**` — one static import elsewhere pulls the chunk back into the eager graph and silently undoes the −207.8 kB split. |
@@ -614,9 +617,9 @@ cards — see spec Part X for the full ledger; the motion-relevant pieces:
   own; the ONE count on that surface lives in the search placeholder), and "Repertorio"
   (`PostComponent`'s song-card eyebrow — the card itself is gone).
 - **The lit card** (`.brand-lit-card`, `--lit-beam` — see "The beam" above) was the home
-  hero's one-shot border pass until ADR-0070 (the hero lost its frame) and is the next Jóvenes meeting's since ADR-0086; it is the fifth enumerated beam use and the first CSS-only
+  hero's one-shot border pass until ADR-0070 (the hero lost its frame), the next Jóvenes meeting's since ADR-0086, and Inicio's next service's again since ADR-0087 (the service is a framed card); it is the fifth enumerated beam use and the first CSS-only
   one (no `motion` import, so it costs nothing against the bundle budget below). Guarded by
-  `litCard.test.ts`, which reads `brand.css`/`MeetingCard.tsx` as text and cannot see geometry —
+  `litCard.test.ts`, which reads `brand.css`/`MeetingCard.tsx`/`DayCard.tsx` as text and cannot see geometry —
   see the file's own header for what closed that gap.
 - **The letter rail is an INDEX BAR** (`LibraryLetterRail`, F3), not a list of links. It
   shows progress — the letter whose heading is in view carries `aria-current` and the accent,
@@ -1674,3 +1677,34 @@ the day sheet" — there is still no day sheet.
 
 Not animated on purpose: the month map (a picture of the month; a dot that pulsed would claim
 something changed) and the planner's cards beyond the reveal (an admin opens them to work).
+
+### Worship services as cards (2026-11-12, ADR-0087)
+
+Inicio, the Calendario's agenda and `/me` draw a service with the same borrowed motion, and
+nothing new was added to the token or keyframe set:
+
+- **Each card rises with the route reveal** (`revealProps` on its wrapper: the hero, then each
+  «Después» card one step later).
+- **The day's rail draws itself** (`animate-rail-draw`, the same delay formula as a Jóvenes card)
+  on the framed hero and on every folded card. The agenda's rows keep a still rail: a two-month
+  list drawing thirty rails at once is noise, and its rows are not revealed one by one.
+- **Faces and song pictures enter one after another**: `animate-scale-in` with
+  `animation-delay: calc(var(--reveal-i, 0) * 40ms + <160|200>ms + i * 45ms)` set inline
+  (`FaceStack`, `CoverRow`). `scale-in`, not `pop`: `pop` means «this one just changed». The
+  reduced-motion rule collapses both, like every animation here.
+- **The fold is `Collapse` twice, crossed** (`DayCardDisclosure`): `ServiceFacts` closes as the
+  sheet's body opens, its top padding inside the `Collapse`.
+- **Inicio's next service takes the lit pass** (see "The beam", item 5) — `<DayCard … lit />`.
+  Checked in Chromium on 2026-11-12, at 390 px (a 342 × 1413 card) and 1280 px (1232 × 878):
+  the pass paused at 700, 930 and 1150 ms (`getAnimations({ subtree: true })`, `currentTime`)
+  and each frame compared pixel by pixel with the finished card. Every changed pixel lay in the
+  outer 2 px of the wrapper or inside a rounded corner; none on the card's face. The card is far
+  taller than the 257 px hero the rule was first measured on, and the fixed `inset: -800px`
+  still covers it (shorter side 1942 px against a 1454 px diagonal on the phone).
+  `litCard.test.ts` cannot see any of this; repeat the check if the card's radius or the
+  wrapper changes. (The theme gallery collapses every animation to 0.01 ms, so a gallery
+  screenshot shows no pass — restore the duration on `::before` to measure it.)
+- **A song's cover grows 6 % on the row's hover** (`group-hover:scale-[1.06]`,
+  `duration-slow`), clipped by its tile.
+- **Nothing here imports `motion`**: `app/components/service/**` composes `Collapse` and CSS.
+

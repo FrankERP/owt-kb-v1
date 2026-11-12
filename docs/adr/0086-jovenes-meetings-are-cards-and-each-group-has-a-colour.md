@@ -1,6 +1,6 @@
 # ADR-0086: Jóvenes meetings are cards, and each group has a colour of its own
 
-**Date:** 2026-11-12 · **Status:** Accepted
+**Date:** 2026-11-12 · **Status:** Accepted, amended by ADR-0087 (worship services are cards too; the lit pass has a second site)
 
 ## Context
 
