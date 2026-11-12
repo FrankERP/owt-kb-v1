@@ -367,7 +367,8 @@ built on `ministryAccess.ts` over ONE snapshot, `accessFromDoc`); worship pages 
 - **Readable ≠ writable:** `ASSIGNABLE_MINISTRY_IDS`, not `ALL_MINISTRY_IDS`, gates every write and
   offer; old code reads a new id as WORSHIP, so never undo its read side while anyone holds it.
 - **Who leads a group is `ledGroupsIn`, never a level comparison** (ADR-0085; `ledGroupsCoverage.test.ts`):
-  a Jóvenes `leader` leads only `leaderOf` (⊆ `groups`); never revert its read side while a narrowed leader exists.
+  a Jóvenes `leader` leads only `leaderOf` (⊆ `groups`; absent = none, every write names it); never revert its read
+  side while a narrowed leader exists.
 - **A worship role needs worship:** `admin`/`content-editor` outside Alabanza is refused by the members
   API (on change, pinned with `ifRevisionId`, 409) and the Studio (`worshipRoleWithoutWorship`) —
   `requireActiveManager` reads `role` alone. A `ministryRoles` write carries `ministries` with it.

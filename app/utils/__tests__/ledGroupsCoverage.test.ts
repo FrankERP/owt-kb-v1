@@ -40,23 +40,23 @@ const OWNERS = ["app/ministries.ts", "app/utils/ministryAccess.ts"];
 const ALLOWED_LINES: Array<{ file: string; line: string; why: string }> = [
   {
     file: "app/components/admin/MembersPanel.tsx",
-    line: 'if (tickedLeveled.some((id) => levelOf(id).level === "leader" && levelOf(id).groups.length === 0)) {',
-    why: "the form's friendly refusal of a leader with no group; the writer enforces it",
+    line: 'if (sendsMinistries && tickedLeveled.some((id) => levelOf(id).level === "leader" && levelOf(id).leaderOf.length === 0)) {',
+    why: "the form's friendly refusal of a leader who leads no group; the writer enforces it",
   },
   {
-    file: "app/utils/memberCommit.ts",
-    line: 'if (item.level !== "leader") {',
-    why: "K1 (PR 1 only): what a write STORES for a non-leader request item; PR 2 deletes it",
+    file: "app/components/admin/MembersPanel.tsx",
+    line: '{level === "leader" && (',
+    why: "the form shows its «Lidera» pills while «Líder» is selected; display only",
   },
   {
-    file: "app/utils/memberCommit.ts",
-    line: 'const storedLeader = before?.level === "leader" && raw.length === 1 && raw[0].leaderOf !== undefined && raw[0].leaderOf !== null;',
-    why: "K1 (PR 1 only): whether the stored item names its own led groups; PR 2 deletes it",
+    file: "app/utils/memberEdits.ts",
+    line: 'if (level !== "leader") {',
+    why: "the chat's request rule (`resolveJovenesLevel`): a member or admin item carries leaderOf []; the writer enforces it",
   },
   {
-    file: "app/utils/memberCommit.ts",
-    line: 'if (r.level === "leader" && sameGroups(storedLed, storedGroups)) continue;',
-    why: "K1 (PR 1 only): a stored item the read dropped that said «leads all»; PR 2 deletes it",
+    file: "app/utils/memberEdits.ts",
+    line: 'if (j.level === "leader") {',
+    why: "`jovenesText`, the chat's wording of a person's standing; display only",
   },
 ];
 

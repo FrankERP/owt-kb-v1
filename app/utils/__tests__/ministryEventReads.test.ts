@@ -46,16 +46,19 @@ const PEOPLE_DOCS: Record<string, MemberAccessDoc> = {
   pastorTwo: { _id: "p3", ministries: ["jovenes"], ministryRoles: J("member", ["otro-nivel", "invencibles"]) },
   pastorNoGroups: { _id: "p4", ministries: ["jovenes"] },
   pastorUnknownGroup: { _id: "p5", ministries: ["jovenes"], ministryRoles: J("member", ["foo"]) },
-  leaderON: { _id: "l1", ministries: ["jovenes"], ministryRoles: J("leader", ["otro-nivel"]) },
-  leaderTwo: { _id: "l2", ministries: ["jovenes"], ministryRoles: J("leader", ["otro-nivel", "emprendedores"]) },
+  // Leaders who lead every group they are in (§11 N10: stored `leaderOf`, as every stored leader has).
+  leaderON: { _id: "l1", ministries: ["jovenes"], ministryRoles: J("leader", ["otro-nivel"], ["otro-nivel"]) },
+  leaderTwo: { _id: "l2", ministries: ["jovenes"], ministryRoles: J("leader", ["otro-nivel", "emprendedores"], ["otro-nivel", "emprendedores"]) },
   // Per-group leadership (plan 2026-11-11 §5.2): leads Otro Nivel, is only IN Emprendedores.
   leadsONinEM: { _id: "l3", ministries: ["jovenes"], ministryRoles: J("leader", ["otro-nivel", "emprendedores"], ["otro-nivel"]) },
   // A `leader` whose leaderOf is empty (or unusable) is, for every read, a member.
   leaderLeadsNone: { _id: "l4", ministries: ["jovenes"], ministryRoles: J("leader", ["otro-nivel"], []) },
   leaderJunkLeaderOf: { _id: "l5", ministries: ["jovenes"], ministryRoles: J("leader", ["otro-nivel"], "otro-nivel") },
+  // A legacy leader (no `leaderOf` key) leads nothing under L2 (ADR-0085): for every read, a member.
+  leaderLegacy: { _id: "l6", ministries: ["jovenes"], ministryRoles: J("leader", ["otro-nivel"]) },
   admin: { _id: "a1", ministries: ["jovenes"], ministryRoles: J("admin", []) },
   // The super-admin who is also a leader: member mode reads as their groups, editor mode reads all.
-  superLeader: { _id: "s2", role: "super-admin", ministries: ["worship", "jovenes"], ministryRoles: J("leader", ["emprendedores"]) },
+  superLeader: { _id: "s2", role: "super-admin", ministries: ["worship", "jovenes"], ministryRoles: J("leader", ["emprendedores"], ["emprendedores"]) },
   superAdmin: { _id: "s1", role: "super-admin", ministries: ["worship"] },
   inactiveAdmin: { _id: "x1", disabled: true, ministries: ["jovenes"], ministryRoles: J("admin", ["otro-nivel"]) },
   worshipOnly: { _id: "w1", ministries: ["worship"] },
@@ -156,6 +159,7 @@ const EXPECTED: Record<string, Partial<Record<MinistryEventMode, string[]>>> = {
   },
   leaderLeadsNone: { member: PUBLISHED_FOR.on },
   leaderJunkLeaderOf: { member: PUBLISHED_FOR.on },
+  leaderLegacy: { member: PUBLISHED_FOR.on },
   admin: { member: SEEN_BY_ALL_MEMBERS, editor: EVERY_JOVENES_EVENT },
   superAdmin: { member: SEEN_BY_ALL_MEMBERS, editor: EVERY_JOVENES_EVENT },
   superLeader: { member: PUBLISHED_FOR.em, editor: EVERY_JOVENES_EVENT },
@@ -221,6 +225,7 @@ describe("G3: isolation matrix on the real engine", () => {
 
   it("a leader of no group reads nothing in editor mode — no query at all", () => {
     expect(buildMinistryEventQuery(PEOPLE.leaderLeadsNone, { me: "l4", ministry: "jovenes", mode: "editor", ...WINDOW })).toBeNull();
+    expect(buildMinistryEventQuery(PEOPLE.leaderLegacy, { me: "l6", ministry: "jovenes", mode: "editor", ...WINDOW })).toBeNull();
     expect(buildMinistryEventQuery(PEOPLE.leaderJunkLeaderOf, { me: "l5", ministry: "jovenes", mode: "editor", ...WINDOW })).toBeNull();
   });
 

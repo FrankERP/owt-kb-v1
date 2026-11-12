@@ -166,8 +166,8 @@ import { PERSON_CONFIRMS_RULE } from "@/app/mcp/writes/confirmRule";
  * The tool-list digests (ADR-0069), pinned. `SLICE_A_READ_DIGEST` is what a worship admin's slice A
  * connection holds: `adminRead` must keep it, so that connection sees no change and no refresh note.
  */
-const FULL_DIGEST_PIN = "6eddef0c";
-const FULL_NO_APPS_DIGEST_PIN = "0f3fa9e0";
+const FULL_DIGEST_PIN = "25c759eb";
+const FULL_NO_APPS_DIGEST_PIN = "5537beba";
 const ADMIN_DIGEST_PIN = "2210b227";
 const ADMIN_NO_APPS_DIGEST_PIN = "abce26ab";
 const SLICE_A_READ_DIGEST = "f75b2615";
@@ -1767,6 +1767,8 @@ describe("/api/mcp — five tool lists: who you are (live), which agent holds th
     // grant rule) and with slice B (every model-visible write carries PERSON_CONFIRMS_RULE).
     // Changed on purpose 2026-11-11 (per-group leadership PR 1, T5b): the people tools' Jóvenes
     // `groups` bound follows the registry (five groups, was 3). PR 2 (T7) moves it again.
+    // Changed on purpose 2026-11-12 (per-group leadership PR 2, T7): the people tools take `leaderOf`
+    // in the `jovenes` edit op and in a new person, and both descriptions state its rule.
     expect(TOOL_LIST_VERSIONS.full).toBe(FULL_DIGEST_PIN);
     expect(TOOL_LIST_VERSIONS.fullNoApps).toBe(FULL_NO_APPS_DIGEST_PIN);
     expect(TOOL_LIST_VERSIONS.admin).toBe(ADMIN_DIGEST_PIN);

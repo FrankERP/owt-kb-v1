@@ -605,7 +605,9 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
 - **`applyMemberEdits(stored, edits)`** ([memberEdits.ts](../app/utils/memberEdits.ts), pure) — the
   chat's edits by parts on the fresh person, returning only the fields they change (Jóvenes edits
   always carry `ministries`). Also `memberView`, `memberChangeLines` (the Spanish before/after),
-  `resolveTipo`/`resolveMinistry`/`resolveJovenesGroup`, `holdsManagement`, and the chat's access
+  `resolveTipo`/`resolveMinistry`/`resolveJovenesGroup`, `resolveJovenesLevel` (the chat's Jóvenes
+  level as a request item: a leader names `leaderOf`, ADR-0085), `jovenesText` (the one wording of a
+  person's Jóvenes standing, also `personSummary`'s), `holdsManagement`, and the chat's access
   table `chatAccessRefusal`/`chatAccessToggleRefusal` (grants, never revokes, management).
 - **`planRuleRename(...)`** ([memberRuleRename.ts](../app/utils/memberRuleRename.ts), pure) — the
   targeted person-path `set` a rename needs, refusing a keyless item, a raw value written unlike its
@@ -740,14 +742,13 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   there is `leader`, then the normalized `leaderOf` (a subset of `groupsIn`). No admin or
   super-admin arm — test `isMinistryManager` first. Never compare a level with `"leader"` to decide
   access (`ledGroupsCoverage.test.ts`).
-- **`normalizeMinistryRoles(raw, ministries, absentLeaderOf?)`**, **`isGroupId(ministry, x)`**,
+- **`normalizeMinistryRoles(raw, ministries)`**, **`isGroupId(ministry, x)`**,
   **`ASSIGNABLE_MINISTRY_IDS`**, **`LEVELED_MINISTRY_IDS`**, **`MINISTRY_LEVELS`**
   ([ministries.ts](../app/ministries.ts)) — the one reading of `teamMembers.ministryRoles` (fails
-  closed; step 5 reads `leaderOf`, with an absent one on a leader read by the transitional
-  `ABSENT_LEADER_OF` switch — L1 «every group» in PR 1, L2 «none» from PR 2, ADR-0085), the
-  prototype-safe group check, and the readable-vs-writable split (`ALL_MINISTRY_IDS`
-  reads, `ASSIGNABLE_MINISTRY_IDS` writes and offers). `MinistryRoleWrite` is a request item
-  (no `leaderOf` in PR 1).
+  closed; step 5 reads `leaderOf` — an absent or unusable one on a leader leads nothing,
+  ADR-0085), the prototype-safe group check, and the readable-vs-writable split
+  (`ALL_MINISTRY_IDS` reads, `ASSIGNABLE_MINISTRY_IDS` writes and offers). A request item is a
+  whole `MinistryRole` (`leaderOf` always, `[]` unless a leader).
 - **`validateMinistryRolesWrite(value, ministries)`**, **`ministryRolesForStorage(items)`**,
   **`droppedMinistryRolePaths(ministries)`**, **`worshipRoleWithoutWorship(role, ministries)`**
   ([ministries.ts](../app/ministries.ts)) — the members routes' write side of a level (strict,

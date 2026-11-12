@@ -904,16 +904,16 @@ pass.
   every group they are in), the `/jovenes/admin` gate and `viewer.led`, and `/jovenes`' «Planear»
   all call it; a `leader` who leads nothing is a member everywhere. `ledGroupsCoverage.test.ts`
   fails on any other line comparing a level with `"leader"` (an exact-line allow-list for the form's
-  refusal and K1). Membership (`groupsIn`) still decides who fits a seat.
-  - **L1 → L2.** An absent `leaderOf` (no key, `null`) on a leader reads as every kept group in PR 1
-    (L1, `ABSENT_LEADER_OF = "all"`, today's meaning) and as none from PR 2 (L2). PR 2 merges to
-    `preview` only after `scripts/backfill-jovenes-leader-of.mjs` (dry run → Frank's consent →
-    `--apply`) and a FRESH dry run right before that merge prints CHECK = 0. Never flip the switch by
-    hand; PR 2 deletes it with the script.
-  - **K1 (PR 1's writer, `keepLeaderOf` in `memberCommit.ts`).** PR 1's requests carry no
-    `leaderOf` (400 if they do); the writer keeps or narrows a stored subset (∩ the request's
-    groups), refuses 409 when that would be empty, and otherwise stores the request's groups — never
-    widens. A `ministryRoles` write always reads the person and pins the write to that read.
+  refusal and «Lidera» row, the chat's request rule and its wording). Membership (`groupsIn`) still
+  decides who fits a seat.
+  - **An absent `leaderOf` on a leader reads as NOTHING (L2, PR 2).** PR 1 read it as every kept
+    group (L1) while its writers (K1) could not yet be told which groups a leader leads; every stored
+    leader had an explicit `leaderOf` before PR 2 (read 2026-11-12: 7 leaders, drafts included), so
+    the flip changed nobody's access and the backfill PR 1 carried was never run and is deleted.
+  - **What is sent is what is stored.** Every request item carries `leaderOf` (`[]` for a member or
+    admin); the writer stores it as validated, nothing kept from the stored item. PR 1's K1
+    (`keepLeaderOf`) is gone; ADR-0085 records it for a rollback to PR 1. A `ministryRoles` write
+    always reads the person and pins the write to that read.
   - **Never revert PR 1's read side while a narrowed leader exists** — in the words of «Readable ≠
     writable» below: a revert (git, Vercel instant rollback, promoting an older deployment) reads
     every leader whose `leaderOf` is narrower than their `groups` as leading all of them. Count
@@ -923,12 +923,18 @@ pass.
   accepted only with `ministries` in the SAME request, naming every item's ministry — judged
   against the stored value instead, an absent `ministries` (= worship) would let a Jóvenes level
   sit on someone who is no Jóvenes member at all. Strict where the read is forgiving: exactly
-  `ministry`/`level`/`groups`, a leveled ministry, a known level, known and unique groups, one
-  item per ministry, a `leader` with at least one group. Stored by `ministryRolesForStorage`
-  (`_key` = ministry, `_type: "ministryRole"`, `leaderOf` on a leader only, decided by K1 above). A `ministries` sent WITHOUT `ministryRoles`
+  `groups`/`leaderOf`/`level`/`ministry` (a body from an older form, with no `leaderOf`, is 400 —
+  refused, never reinterpreted), a leveled ministry, a known level, known and unique groups, one
+  item per ministry; `leaderOf` known, unique and inside `groups` («Solo puede liderar un grupo al
+  que pertenece.»); a `leader` leads at least one («Un líder necesita liderar al menos un grupo.»),
+  a member or admin none («Solo un líder lidera grupos; un admin ya administra todos.»). Stored by
+  `ministryRolesForStorage` (`_key` = ministry, `_type: "ministryRole"`, `leaderOf` on a leader
+  only). A `ministries` sent WITHOUT `ministryRoles`
   unsets the level of each leveled ministry it leaves out (`droppedMinistryRolePaths`), so a
   stale level cannot revive; set and unset never touch one path in one patch. The «Personas»
-  form sends `ministryRoles` whenever it sends `ministries`, without the stored `_key`/`_type`;
+  form sends `ministryRoles` whenever it sends `ministries`, without the stored `_key`/`_type`,
+  each item with `leaderOf` (its «Lidera» pills under «Grupos», shown with «Líder», offer only the
+  ticked groups and pre-tick nothing; the chat's `jovenes` op must name `leaderOf` for a leader);
   `adminMembersQuery` carries the field only on its super-admin (`$all`) arm, and the Jóvenes
   scope tab is the super-admin's only (`ministryScopeIds`).
 - **A worship role needs worship (`worshipRoleWithoutWorship`).** `requireActiveManager` reads

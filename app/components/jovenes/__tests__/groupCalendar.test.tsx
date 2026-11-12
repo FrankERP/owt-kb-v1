@@ -129,12 +129,24 @@ describe("GroupCalendar", () => {
     expect(await screen.findByText("Elige al menos un grupo.")).toBeTruthy();
     fireEvent.click(screen.getByRole("checkbox", { name: "Invencibles" }));
     fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
-    expect(await screen.findByText("Incluye uno de tus grupos.")).toBeTruthy();
+    expect(await screen.findByText("Incluye uno de los grupos que lideras.")).toBeTruthy();
     fireEvent.click(screen.getByRole("checkbox", { name: "Otro Nivel" }));
     Object.defineProperty(screen.getByLabelText("Hora"), "validity", { value: { badInput: true } });
     fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
     expect(await screen.findByText("Completa la hora o bórrala.")).toBeTruthy();
     expect(calls).toEqual([]);
+  });
+
+  // Per-group leadership (plan 2026-11-11 T9): leads Otro Nivel, is only IN Invencibles.
+  it("a leader of one group sees no «Editar» on a published meeting of a group they are only in", () => {
+    renderCalendar([
+      ev({ _id: "ministryEvent.a", audience: { kind: "groups", groups: ["invencibles"] }, published: true, title: "Célula de Invencibles" }),
+    ]);
+    expect(screen.getByText("Célula de Invencibles")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Editar" })).toBeNull();
+    cleanup();
+    renderCalendar([ev({ published: true })]);
+    expect(screen.getByRole("button", { name: "Editar" })).toBeTruthy();
   });
 
   it("shows a meeting's place, and sends an edited one", async () => {

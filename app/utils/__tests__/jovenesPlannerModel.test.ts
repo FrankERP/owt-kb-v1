@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { normalizeMinistryRoles } from "@/app/ministries";
 import type { MinistryEventView } from "../ministryEventReads";
+import { ledGroupsIn } from "../ministryAccess";
 import {
   canCreateGroupEvent,
   canEditGroupEvent,
@@ -367,7 +369,7 @@ describe("the groups' calendars (PR D)", () => {
     expect(groupEventProblem(f, leader)).toBeNull();
     expect(groupEventProblem({ ...f, date: "" }, leader)).toBe("Elige la fecha.");
     expect(groupEventProblem({ ...f, groups: [] }, leader)).toBe("Elige al menos un grupo.");
-    expect(groupEventProblem({ ...f, groups: ["invencibles"] }, leader)).toBe("Incluye uno de tus grupos.");
+    expect(groupEventProblem({ ...f, groups: ["invencibles"] }, leader)).toBe("Incluye uno de los grupos que lideras.");
     expect(groupEventProblem({ ...f, groups: ["invencibles"] }, admin)).toBeNull();
   });
 
@@ -382,7 +384,7 @@ describe("the groups' calendars (PR D)", () => {
     expect(groupEventProblem({ ...f, groups: ["invencibles", "emprendedores", "adrenalin", "guerreras"] }, leader)).toBe(
       "Elige hasta tres grupos; para todos, usa una reunión de todo Jóvenes.",
     );
-    expect(groupEventProblem({ ...f, groups: ["invencibles"] }, leader)).toBe("Incluye uno de tus grupos.");
+    expect(groupEventProblem({ ...f, groups: ["invencibles"] }, leader)).toBe("Incluye uno de los grupos que lideras.");
   });
 
   it("checks the clock last, after the rules about groups", () => {
@@ -404,6 +406,47 @@ describe("the groups' calendars (PR D)", () => {
       published: true,
     });
     expect(body).not.toHaveProperty("kind");
+  });
+
+  // Per-group leadership (plan 2026-11-11 T9, ADR-0085): the screens take `viewer.led` from
+  // `ledGroupsIn`, so «leads A, in B» is a viewer whose `led` holds A only.
+  describe("leads Otro Nivel, in Invencibles (T9)", () => {
+    const jacob = {
+      me: "j",
+      isManager: false,
+      led: ledGroupsIn(
+        {
+          role: "member",
+          ministries: ["jovenes"],
+          managesMinistries: [],
+          ministryRoles: normalizeMinistryRoles(
+            [{ _key: "jovenes", ministry: "jovenes", level: "leader", groups: ["otro-nivel", "invencibles"], leaderOf: ["otro-nivel"] }],
+            ["jovenes"],
+          ),
+        },
+        "jovenes",
+      ),
+    };
+
+    it("plans only the group they lead: the form starts on it; a form with only the other says so", () => {
+      expect(jacob.led).toEqual(["otro-nivel"]);
+      expect(canCreateGroupEvent(jacob)).toBe(true);
+      const f = groupEventForm("2026-11-10", jacob);
+      expect(f.groups).toEqual(["otro-nivel"]);
+      expect(groupEventProblem({ ...f, groups: ["invencibles"] }, jacob)).toBe("Incluye uno de los grupos que lideras.");
+      expect(groupEventProblem({ ...f, groups: ["otro-nivel", "invencibles"] }, jacob)).toBeNull();
+    });
+
+    it("cannot edit the other group's meeting, published or not; edits their own", () => {
+      expect(canEditGroupEvent(one("invencibles", { published: true }), jacob)).toBe(false);
+      expect(canEditGroupEvent(one("invencibles", { createdById: "j" }), jacob)).toBe(false);
+      expect(canEditGroupEvent(one("otro-nivel"), jacob)).toBe(true);
+    });
+
+    it("editLosesAccess still warns when sharing someone else's meeting of the group they lead", () => {
+      const theirs = one("otro-nivel", { createdById: "other" });
+      expect(editLosesAccess(theirs, { ...groupEventForm("", jacob, theirs), groups: ["otro-nivel", "invencibles"] }, jacob)).toBe(true);
+    });
   });
 
   it("warns a leader who would share someone else's one-group meeting, and nobody else", () => {

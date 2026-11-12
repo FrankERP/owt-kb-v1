@@ -120,7 +120,7 @@ describe("getMemberAccess", () => {
   it("fetches and normalizes ministryRoles, cache hit included (ADR-0075)", async () => {
     fetchMock.mockResolvedValue({
       _id: "m4", disabled: false, role: "member", ministries: ["jovenes"],
-      ministryRoles: [{ _key: "jovenes", ministry: "jovenes", level: "leader", groups: ["invencibles", "bogus"] }],
+      ministryRoles: [{ _key: "jovenes", ministry: "jovenes", level: "leader", groups: ["invencibles", "bogus"], leaderOf: ["invencibles"] }],
     });
     const expected = [{ ministry: "jovenes", level: "leader", groups: ["invencibles"], leaderOf: ["invencibles"] }];
     expect((await getMemberAccess("m4")).ministryRoles).toEqual(expected);
