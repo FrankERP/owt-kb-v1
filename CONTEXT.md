@@ -49,7 +49,7 @@ Being IN a group (`groups`) and LEADING it (`leaderOf`, a subset) are different:
 the groups they lead and is a member of the rest (ADR-0085). An admin's groups are membership only.
 _Avoid_: sub-ministerio, filtro
 
-**Nivel** (`ministryRoles[].level`; planned, phase 1's PR 2):
+**Nivel** (`ministryRoles[].level`):
 What a person may do inside one ministry: `member` (sees their groups' meetings and the joint ones),
 `leader` (also plans the groups named in `leaderOf` — per group, not every group they are in;
 ADR-0085), `admin` (plans every group, whatever their own `groups`). Worship's level is still `role`,

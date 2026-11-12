@@ -3,10 +3,9 @@
 **Date:** 2026-11-11 · **Status:** Accepted (2026-11-12) — PR 1 (the read side and K1, #239, in
 production since 2026-11-11) and PR 2 (the request contract, L2, the form and the chat).
 
-> **Numbering.** 0085 is the next number after `main`'s 0084, which `adrIndex.test.ts` requires
-> on this branch. `preview` already holds a DIFFERENT, unmerged ADR-0085 (the solver redeploy from
-> Actions). Records are numbered in the order they reach `main`: whichever of the two merges into
-> `preview` second renumbers to 0086 at that merge (as ADR-0084 did), with its links.
+> **Numbering.** `preview` held a different, unmerged ADR-0085 (the solver redeploy from Actions).
+> Records are numbered in the order they reach `main`, so that one became 0086 on `preview` when
+> PR 1 merged there (`82f696b5`, 2026-11-11).
 
 ## Context
 
