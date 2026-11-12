@@ -85,3 +85,9 @@ approved by two fresh reviews; log beside it).
   free text in Notas (what happened first, and it hid who shares).
 - Rollback: reverting hides typed names («Sin asignar») and the old editor drops them on the next
   save of that meeting; `place` survives.
+
+## Addendum — «the groups the actor leads» is `ledGroupsIn` (2026-11-12)
+
+- W3's and R3's «groups the actor leads» are `ledGroupsIn(access, "jovenes")` — the groups in the
+  person's `leaderOf` — no longer every group of a `leader`. One led group still suffices to create
+  or retarget a joint meeting. [ADR-0085](0085-a-jovenes-leader-leads-named-groups.md).

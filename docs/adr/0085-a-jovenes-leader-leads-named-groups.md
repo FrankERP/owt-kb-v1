@@ -1,7 +1,7 @@
 # ADR-0085: A Jóvenes leader leads the groups named in `leaderOf`, not every group they are in
 
-**Date:** 2026-11-11 · **Status:** Proposed — PR 1 of 2 (the read side and K1). PR 2 (the request
-contract, L2, the form and the chat) completes it and marks it Accepted.
+**Date:** 2026-11-11 · **Status:** Accepted (2026-11-12) — PR 1 (the read side and K1, #239, in
+production since 2026-11-11) and PR 2 (the request contract, L2, the form and the chat).
 
 > **Numbering.** 0085 is the next number after `main`'s 0084, which `adrIndex.test.ts` requires
 > on this branch. `preview` already holds a DIFFERENT, unmerged ADR-0085 (the solver redeploy from
@@ -39,11 +39,21 @@ code that cannot express a narrowing must never widen one it finds.
   `"leader"` (exact lines allow-listed).
 - **L1 → L2.** An ABSENT `leaderOf` (no key, `null`, `undefined`) on a leader reads as every kept
   group in PR 1 (L1, today's meaning, so PR 1 changes nobody's access) and as NOTHING from PR 2 (L2).
-  The switch is `ABSENT_LEADER_OF` in `app/ministries.ts`; it exists only in PR 1's tree.
-  `scripts/backfill-jovenes-leader-of.mjs` (consented, dry run first) stores `leaderOf` = `groups`
-  on every legacy leader and prints THE CHECK — documents whose led groups differ between L1 and L2.
-  PR 2 merges to `preview` only when a fresh dry run right before that merge prints 0.
-- **K1 (PR 1 only, `keepLeaderOf` in `memberCommit.ts`).** PR 1's requests still carry
+  PR 1's tree held the switch (`ABSENT_LEADER_OF` in `app/ministries.ts`) and a consented backfill
+  (`scripts/backfill-jovenes-leader-of.mjs`, storing `leaderOf` = `groups` on every legacy leader and
+  printing THE CHECK — documents whose led groups differ between L1 and L2). The backfill never ran:
+  a read of production on 2026-11-12 (raw perspective, drafts included) found every stored Jóvenes
+  leader (7) already carrying an explicit `leaderOf` — PR 1's writers had stored it through K1 on the
+  pastors' load — so L1 and L2 read identically. PR 2 deleted the switch, the script, its lib and its
+  test; the check is re-run by a read right before PR 2 reaches `preview`.
+- **PR 2's contract: what is sent is what is stored.** A request item carries EXACTLY `groups`,
+  `leaderOf`, `level`, `ministry` (a PR 1 body is 400, refused, never reinterpreted); `leaderOf` ⊆
+  `groups`, no repeats, at least one for a leader, none for a member or admin. The «Personas» form
+  shows «Lidera» pills (the ticked groups only, none pre-ticked) under «Grupos» while «Líder» is
+  selected; the chat's `jovenes` op and a new person must name `leaderOf` for a leader (never
+  defaulted: the chat does not guess a grant) and always send it (`[]` for a member or admin).
+- **K1 (PR 1 only, `keepLeaderOf` in `memberCommit.ts`; deleted by PR 2, and back if PR 2 is ever
+  rolled back to PR 1).** PR 1's requests still carry
   `{ ministry, level, groups }` (a request with `leaderOf` is 400). The writer decides the stored
   `leaderOf` from the person it read, under that read's `_rev`: a stored leader whose `leaderOf` is
   present and differs from its stored groups keeps it ∩ the request's groups, or the write is refused
@@ -83,11 +93,13 @@ code that cannot express a narrowing must never widen one it finds.
   instant rollback, promoting an older deployment) once the `jovenesEvents` stage widens, count those
   leaders; never revert while any exists. The same count comes before moving the stage after any
   rollback of PR 2 (K1's «leads all» arm widens from the old form).
-- In PR 1 the chat's before/after lines do not show `leaderOf` (PR 2 adds it), so a K1 narrowing is
-  not listed; fail closed, since K1 only keeps, narrows or refuses.
+- In PR 1 the chat's before/after lines did not show `leaderOf`; from PR 2 they do («líder de Otro
+  Nivel y Adrenalin; miembro de Invencibles»), and a change of `leaderOf` alone is a line and a
+  write. Leading a group is not management: the chat may add or remove it (ADR-0082 untouched).
 - A Studio draft of a person older than a later save, if published, restores the draft's older
-  `ministryRoles` — a hazard every `teamMembers` field already has; the backfill covers drafts, and
-  the chat's check warns about drafts.
-- Do not «simplify» K1 into "store the request's groups", do not flip `ABSENT_LEADER_OF` by hand,
-  and do not delete the backfill before PR 2: each is the step that keeps old and new code from
-  widening each other's grants.
+  `ministryRoles` — a hazard every `teamMembers` field already has; the 2026-11-12 read covered
+  drafts, and the chat's check warns about drafts.
+- Do not reintroduce a default for an absent `leaderOf` (on the read, in the chat, or in the form's
+  «Líder»): an absent one leads nothing, and every grant of a group is named. A rollback of PR 2 to
+  PR 1 restores L1 and K1 together: a stored subset is kept, narrowed or refused, never widened (the
+  count above still comes first, for K1's «leads all» arm).

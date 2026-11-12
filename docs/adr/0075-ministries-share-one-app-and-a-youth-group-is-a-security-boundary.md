@@ -104,3 +104,9 @@ Other facts that shaped it: worship's documents carry no ministry field (ADR-001
   full write of that person would drop it from the document), so the pastors' bulk load that uses
   them runs only after the release. A joint meeting still names at most three groups; a meeting
   for everyone uses the ministry audience.
+
+## Addendum — leadership is per group (2026-11-12)
+
+- A Jóvenes `leader` leads only the groups named in `leaderOf` (⊆ `groups`), not every group they
+  are in; `admin` stays ministry-wide and an admin's `groups` are plain membership.
+  [ADR-0085](0085-a-jovenes-leader-leads-named-groups.md).
