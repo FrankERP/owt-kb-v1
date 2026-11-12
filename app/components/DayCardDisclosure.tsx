@@ -1,6 +1,6 @@
 "use client";
 
-// A service that is NOT the next one, as a folded CARD (ADR-0087): the date as a calendar leaf
+// A service that is NOT the next one, as a folded CARD (ADR-0088): the date as a calendar leaf
 // in the day's colour, the day as the card's title, the clock, and — instead of a sentence —
 // who leads as faces, the set as a stack of its songs' pictures, «Tú · EG» with the seat's glyph.
 // A tap opens the ordinary `DayCard` sheet inside the same card. It is the object the Jóvenes

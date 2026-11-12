@@ -78,7 +78,7 @@ export interface DayCardProps {
    */
   hero?: boolean;
   /**
-   * The service card's BODY without a head of its own (ADR-0087): the songs with their
+   * The service card's BODY without a head of its own (ADR-0088): the songs with their
    * covers, the team as faces, the sheet's titles — what an open «Después» card draws,
    * since `DayCardDisclosure` already frames and names the service. `hero` implies it.
    */
@@ -92,7 +92,7 @@ export interface DayCardProps {
   identity?: boolean;
   /**
    * The ONE light pass around the card's border (`.brand-lit-card`, MOTION.md "The beam"):
-   * Inicio's next service only (ADR-0087). Ignored unless the card draws its own frame
+   * Inicio's next service only (ADR-0088). Ignored unless the card draws its own frame
    * (`hero` with `identity`).
    */
   lit?: boolean;
@@ -166,7 +166,7 @@ export function DayCard({ day, date, time, setlist, pastorMessage, leads, myLead
 
   const tone = serviceTone({ day, roleId });
   const toneStyle = SERVICE_TONE[tone];
-  // The service card with a head of its own (ADR-0087): the date as a calendar leaf, the
+  // The service card with a head of its own (ADR-0088): the date as a calendar leaf, the
   // day as the card's title, the clock, «Tú · EG». A sheet whose host already names the
   // service (the calendar's day sheet, an open «Después» card) draws the body alone.
   const framed = hero && identity;
@@ -274,7 +274,7 @@ export function DayCard({ day, date, time, setlist, pastorMessage, leads, myLead
                 );
               }
               // On the sheet a medley is ONE object: its songs share a tinted panel under a
-              // chain-link label, so «these two run together» is seen as a shape (ADR-0087).
+              // chain-link label, so «these two run together» is seen as a shape (ADR-0088).
               if (sheet) {
                 return (
                   <li key={run.songs[0].song._id + "_m"} className="my-1.5 rounded-2xl border border-ink/[0.08] bg-ink/[0.03] px-2 pb-1 pt-2">
@@ -401,7 +401,7 @@ export function DayCard({ day, date, time, setlist, pastorMessage, leads, myLead
   return (
     <>
       {sheet ? (
-        // THE SERVICE AS A CARD (ADR-0087, which supersedes ADR-0070's frameless sheet):
+        // THE SERVICE AS A CARD (ADR-0088, which supersedes ADR-0070's frameless sheet):
         // one object with an edge — the date as a calendar leaf, the day as its title, the
         // clock and «Tú · EG» as icon chips, the day's colour on the rail and the leaf's
         // band — then the songs with their covers and the team as faces. `framed` is that
@@ -628,7 +628,7 @@ function TeamNote({
     };
   }, [expanded, text]);
   return (
-    // An icon tile in the note's own colour (ADR-0087): the pastor's word is found by its
+    // An icon tile in the note's own colour (ADR-0088): the pastor's word is found by its
     // megaphone and the accent, the team's note by its bubble — before the small caps over
     // either are read. No rail down its edge: inside a card the left rail is the DAY's
     // device, and a cyan one here was a second Sunday rail.
@@ -697,7 +697,7 @@ function SongRow({ song, n, onOpen, onQuickActions, dense = false, sheet = false
   // the hook's timer mid-press.
   onQuickActions?: (song: SetlistSong) => void;
   dense?: boolean;
-  /** The service card's run sheet (ADR-0087): the song's picture with its place in the
+  /** The service card's run sheet (ADR-0088): the song's picture with its place in the
    *  set on the corner, a 17 px title, the artist and the tempo under it, the key as a
    *  hairline pill. */
   sheet?: boolean;

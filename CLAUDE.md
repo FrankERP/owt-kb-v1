@@ -266,7 +266,7 @@ looks wrong** — several exist to stop a plausible-looking change.
   ADR-0072; the proposal tools: proposals PATCH, its planner in peek for the check, ADR-0076;
   `serviceCommitCallers.test.ts`). The service conversation's writers live in
   `serviceThreadCommit.ts` too, called by its four routes, the MCP conversation tools (ADR-0073) and the
-  proposal approval's post-commit pastor's-message copy (ADR-0088);
+  proposal approval's post-commit pastor's-message copy (ADR-0087);
   Oasis Kids' in `kidsCommit.ts`, called by the four `/api/kids/*` writes and the MCP Kids tools;
   the song library's in `songSaveCommit.ts`, called by the song and author routes and the MCP song
   tools (edits by parts, a lossless lyrics gate, `ifRevisionId`, a token-keyed create; ADR-0077);
@@ -308,7 +308,7 @@ each one owns, and its rules) and `docs/UTILITIES_AND_COMPONENTS.md`. Most are "
   (`sortedLeadIds` must agree byte for byte on the queue and flush sides), `transpose.ts`,
   `practice.ts`, `rehearsalMixes.ts`, `rehearsalQueue.ts` (the setlist run), `themeColour`,
   `songCoverUrl`/`SONG_COVER_GROQ` (a song's album cover, `post.albumArt` — never the YouTube still),
-  `greetingService`, `SERVICE_TONE` (a service's day colour: rail + date leaf only, ADR-0087).
+  `greetingService`, `SERVICE_TONE` (a service's day colour: rail + date leaf only, ADR-0088).
 - **Planner/solver:** `fillSpecialGroup`/`orderGroup`, `collectPins`/`pinRefusal`/
   `pinHandshakeHolds`, `planClear`, `upcomingMonthPills`/`addMonths`, `trailingSaturday`
   (ADR-0048), `rolesOfPattern`/`rolesOfPatternV3` (`patternRolesSync`/`patternRolesV3Sync`
@@ -336,7 +336,7 @@ each one owns, and its rules) and `docs/UTILITIES_AND_COMPONENTS.md`. Most are "
   picker), `TempoPill` + `createMetronome` (one metronome app-wide), `LyricsAutoscroll`,
   `lyricMarkers.tsx`, `TutorialPoster`, `RehearsalPlayer`/`Waveform` (URLs always
   `/api/audio/[song]/[key]`), `PracticeCluster`.
-- **Service cards (ADR-0087):** `service/Face`/`FaceStack` (a worship member as a photo), `SongCover`/
+- **Service cards (ADR-0088):** `service/Face`/`FaceStack` (a worship member as a photo), `SongCover`/
   `CoverRow`, `ServiceFacts` (the ONE folded summary), `SeatIcon`/`seatIconKind`, `DateTile`.
 - **Availability:** `useAvailability` is the ONLY client-side writer — one hook call per page.
 - **Solver v3 planner (C6, behind the engine prop):** `buildV3SolveRequest` (the ONE v3 request

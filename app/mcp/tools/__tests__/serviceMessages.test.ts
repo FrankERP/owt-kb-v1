@@ -81,7 +81,7 @@ beforeEach(() => {
 });
 
 describe("get_service_messages", () => {
-  it("reports the leads' pastor's message from their proposal, trimmed; null when none (ADR-0088)", async () => {
+  it("reports the leads' pastor's message from their proposal, trimmed; null when none (ADR-0087)", async () => {
     h.loadServiceConversation.mockResolvedValue({
       ...conversation(),
       proposal: { _id: "setlistProposal.x", status: "pending", pastor_message: "  Efesios 2  ", messages: [] },

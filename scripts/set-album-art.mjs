@@ -1,4 +1,4 @@
-// One-off, re-runnable: give songs their ALBUM cover (`post.albumArt`, ADR-0087) from a
+// One-off, re-runnable: give songs their ALBUM cover (`post.albumArt`, ADR-0088) from a
 // list of `{ id, asset, replaces? }` rows, `data/album-art-2026-11-12.json` by default.
 //
 // History of that list (Frank, 2026-11-12). He asked for album covers instead of YouTube

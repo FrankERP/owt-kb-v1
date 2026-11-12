@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-// The lead's «Mensaje del pastor» on the proposal (ADR-0088): offered while the
+// The lead's «Mensaje del pastor» on the proposal (ADR-0087): offered while the
 // service has none, never hidden from the proposal that holds one, honest about
 // not replacing the service's, and re-sent on every save — so the page's own
 // read (`getSharedProposal`) must carry it, or a save would blank it.

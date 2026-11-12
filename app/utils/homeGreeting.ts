@@ -51,7 +51,7 @@ export function firstName(user?: { alias?: string | null; name?: string | null }
 /**
  * The service the greeting is ABOUT: the earliest upcoming one the member is seated in, or
  * null. The same object it was handed, so the page can tell whether that is the card it
- * draws right under the greeting — and then leave the facts to the card (ADR-0087).
+ * draws right under the greeting — and then leave the facts to the card (ADR-0088).
  */
 export function greetingService<T extends GreetingService>(services: T[], myName: string, now: Date = new Date()): T | null {
   return (

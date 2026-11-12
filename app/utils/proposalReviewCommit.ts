@@ -160,7 +160,7 @@ export interface ApprovePlan extends PlanBase {
    */
   liveTeamNotes: string | null;
   /**
-   * The service's «Mensaje del pastor» as stored now (ADR-0088), so the check can say what the
+   * The service's «Mensaje del pastor» as stored now (ADR-0087), so the check can say what the
    * post-commit copy would do. Read only in PEEK (`peekLivePastorMessage`); `null` in write mode — the
    * copy reads the thread itself — and in peek when the read failed (never a refusal). `""` = none.
    */
@@ -206,7 +206,7 @@ async function peekLiveTeamNotes(mode: ProposalReviewMode, write: SetlistWrite):
 }
 
 /**
- * The service's «Mensaje del pastor», for the check only (ADR-0088). The write path never reads it
+ * The service's «Mensaje del pastor», for the check only (ADR-0087). The write path never reads it
  * here: `adoptProposalPastorMessage` reads the thread itself, after the commit. A failed read is
  * `null` («no se pudo leer»), never a refusal — the pastor's message is not part of the decision.
  */
@@ -653,7 +653,7 @@ export interface ProposalReviewEffects {
   /** `queueSetlistNotice`'s descriptor; null when it skipped (or for a transition / replay). */
   notice: SetlistNoticeDescriptor | null;
   /**
-   * Approve only (ADR-0088): what the post-commit copy of the proposal's
+   * Approve only (ADR-0087): what the post-commit copy of the proposal's
    * «Mensaje del pastor» into the service did; null for a transition or a replay.
    */
   pastorMessage: AdoptPastorMessageOutcome | null;
@@ -769,7 +769,7 @@ async function commitApproval(
   // The approved proposal just wrote the real setlist — refresh the cached
   // home/schedule/song pages so it shows without waiting for ISR expiry.
   revalidateProposalApproval();
-  // ADR-0088: the lead's «Mensaje del pastor» goes to the service's ONE field,
+  // ADR-0087: the lead's «Mensaje del pastor» goes to the service's ONE field,
   // only when that field is empty. AFTER the commit, never inside it: a chat
   // append moving the thread `_rev` must not 409 an approval. The text is the
   // reviewed revision's (`plan.doc`, asserted above). Never throws.

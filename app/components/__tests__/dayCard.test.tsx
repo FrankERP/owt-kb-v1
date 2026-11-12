@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-// The service card (R1 Task 6, spec §12.1/§18/§19.2; its head and frame: ADR-0087). What is asserted here is
+// The service card (R1 Task 6, spec §12.1/§18/§19.2; its head and frame: ADR-0088). What is asserted here is
 // the contract Task 7 composes against: the header reads `DÍA · fecha` with no
 // eyebrow, the countdown replaces the `Próximo` pill, `hero` carries the one
 // Ensayar, rows show BPM, and `wide` puts the two sections side by side.
@@ -184,7 +184,7 @@ describe("DayCard", () => {
     expect(screen.queryByRole("button", { name: /Practicar/ })).toBeNull();
   });
 
-  describe("ADR-0087 — the next service is a card with a head of its own", () => {
+  describe("ADR-0088 — the next service is a card with a head of its own", () => {
     it("heads the card with the date as a leaf, the day as its title, the clock and the countdown", () => {
       vi.useFakeTimers({ toFake: ["Date"] });
       vi.setSystemTime(new Date(2026, 8, 11, 9, 0, 0));

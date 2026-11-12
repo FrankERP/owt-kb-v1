@@ -1,6 +1,6 @@
 "use client";
 
-// What a folded service says about itself WITHOUT a sentence (ADR-0087): who leads, as faces
+// What a folded service says about itself WITHOUT a sentence (ADR-0088): who leads, as faces
 // beside their names, and the set, as its songs' pictures beside the count — or «Setlist
 // pendiente» when the team was published before the songs (the state most weekends are in from
 // Monday to Thursday). One component for Inicio's «Después» cards, `/me` and the Calendario's

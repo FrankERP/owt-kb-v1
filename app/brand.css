@@ -1281,7 +1281,7 @@ html[data-motion="off"] .brand-stage-hero::before {
 /* ── Lit card (spec §23, decision Q) — the FIFTH beam site. After the route
    reveal, the NEXT card gets ONE light pass around its border, 900 ms, then
    rests on its own border (the next Jóvenes meeting since ADR-0086, and the
-   next worship service on Inicio again since ADR-0087 gave it its frame back;
+   next worship service on Inicio again since ADR-0088 gave it its frame back;
    ADR-0070 had taken it). Transform only, no @property
    (Safari 16.4). Never loops; the global reduced-motion rule above
    (`*, *::before, *::after`) already zeroes its animation-duration/-delay,
@@ -1310,7 +1310,7 @@ html[data-motion="off"] .brand-stage-hero::before {
        diagonal  ≤  shorter side + 1600 px
 
    — NOT «any card up to 1600 px wide at any height», which this comment said
-   until ADR-0087: a narrow, very tall card fails it. The two shapes that are lit
+   until ADR-0088: a narrow, very tall card fails it. The two shapes that are lit
    both pass with room: the wide hero this was sized on (capped at 1232 px,
    `max-w-7xl` minus `px-6` in `app/(client)/page.tsx`; measured 1232 × 257, a
    4.8 : 1 box with a 1259 px diagonal against 257 + 1600), and the worship card

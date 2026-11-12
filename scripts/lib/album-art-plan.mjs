@@ -1,4 +1,4 @@
-// Pure half of scripts/set-album-art.mjs (ADR-0087): which listed songs get a cover, which
+// Pure half of scripts/set-album-art.mjs (ADR-0088): which listed songs get a cover, which
 // get their cover SWAPPED, and which are left alone. It decides a production write, so it
 // lives here where scripts/lib/__tests__/album-art-plan.test.mjs can pin it.
 

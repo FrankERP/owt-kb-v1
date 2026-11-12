@@ -44,7 +44,7 @@ async function getSharedProposal(roleId: string) {
   return operationalClient.fetch(
     `*[_type == "setlistProposal" && service_ref._ref == $roleId] | order(_createdAt asc)[0] {
       _id, _rev, status, lead_notes, team_notes, admin_notes,
-      // ADR-0088: the editor re-sends this on every save, so the read MUST carry it.
+      // ADR-0087: the editor re-sends this on every save, so the read MUST carry it.
       pastor_message,
       ${THREAD_MESSAGES},
       "createdById": lead->_id,

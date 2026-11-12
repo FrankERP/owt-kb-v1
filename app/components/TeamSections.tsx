@@ -19,7 +19,7 @@
 // rail), and a fourth meaning would make them all harder to read. Inside a
 // group the seat is the label, so a face carries only its name.
 //
-// On the service card's sheet (ADR-0087) a section is found by its GLYPH — a microphone,
+// On the service card's sheet (ADR-0088) a section is found by its GLYPH — a microphone,
 // a guitar, the booth's sliders on a tile beside its name — a closed one shows its people as
 // overlapped faces beside the names, and a seat in Banda or Cabina wears its instrument on
 // the face's corner. The words are all still there; they are no longer the only way in.
@@ -139,7 +139,7 @@ function OpenSection({ section, myName, photos, sheet = false }: { section: Team
 /** The sheet's section label (ADR-0070): the page's 17 px semibold, no small caps. */
 const SHEET_LABEL = "font-body text-[17px] font-semibold text-ink";
 
-/** The section's glyph on a tinted tile — what the eye finds before the word (ADR-0087). */
+/** The section's glyph on a tinted tile — what the eye finds before the word (ADR-0088). */
 function SectionTile({ id }: { id: TeamSectionId }) {
   return (
     <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-ink/[0.07] text-ink-muted">

@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-// A team member as a face, and several of them overlapped on a folded service card (ADR-0087).
+// A team member as a face, and several of them overlapped on a folded service card (ADR-0088).
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 

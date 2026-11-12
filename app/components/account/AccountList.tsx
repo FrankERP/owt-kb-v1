@@ -4,7 +4,7 @@
 // download — a 17 px title with a one-line status under it, and a chevron.
 // Hairline rows in the page's own type since the «millones» pass (no raised card
 // around the list); each row carries its glyph on a neutral tile again since
-// ADR-0087, the service card's own. Before design pass C the page ended on a lone bordered
+// ADR-0088, the service card's own. Before design pass C the page ended on a lone bordered
 // «Disponibilidad» link, the settings were only in the avatar menu, and «Añadir
 // a calendario» floated top-right above the hero card.
 //
@@ -28,7 +28,7 @@ export const ACCOUNT_ROW_CLASS =
 export function AccountRowBody({ title, status, trailing, icon }: { title: string; status?: string; trailing?: ReactNode; icon?: ReactNode }) {
   return (
     <>
-      {/* The row's glyph on the service card's own tile (ADR-0087): the four rows
+      {/* The row's glyph on the service card's own tile (ADR-0088): the four rows
           are told apart by shape before their words are read. */}
       {icon && (
         <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-ink/[0.07] text-ink-muted">

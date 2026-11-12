@@ -137,7 +137,7 @@ token) for private/fresh data.
 [API_REFERENCE.md](API_REFERENCE.md)) on every route except `/` and `/me`, which pass `cue={false}`
 because their own headers already show the countdown.
 
-- **`/`** — `Navbar`, `DayCard` (the next service as a framed card, ADR-0087: `layout="wide"` + `hero` + `lit`; its countdown chip carries the start time and «Mensaje para el equipo» folds to three lines since design pass D, 2026-10-22), `DayCardDisclosure` (every other service, a folded card: date leaf, title, who leads as faces and the set as album covers).
+- **`/`** — `Navbar`, `DayCard` (the next service as a framed card, ADR-0088: `layout="wide"` + `hero` + `lit`; its countdown chip carries the start time and «Mensaje para el equipo» folds to three lines since design pass D, 2026-10-22), `DayCardDisclosure` (every other service, a folded card: date leaf, title, who leads as faces and the set as album covers).
 - **`/schedule`** — `Navbar`, `CalendarView` (composition only: `ScheduleHeader`, `DayStrip`, the
   Agenda|Mes `SegmentedControl`, `AgendaView` or the month grid, the day sheet `CueDialog`).
 - **`/biblioteca`** — `Navbar`, `LibraryIndex`.

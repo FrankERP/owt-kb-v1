@@ -1,6 +1,6 @@
 # ADR-0059: A service card takes its day colour only on its rail
 
-**Date:** 2026-10-20 · **Status:** Accepted, amended by ADR-0067 and ADR-0087 (the date leaf's weekday band joins the rail; nothing else)
+**Date:** 2026-10-20 · **Status:** Accepted, amended by ADR-0067 and ADR-0088 (the date leaf's weekday band joins the rail; nothing else)
 
 ## Context
 

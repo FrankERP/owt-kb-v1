@@ -1,4 +1,4 @@
-# ADR-0087: A worship service is a card, with faces and album covers
+# ADR-0088: A worship service is a card, with faces and album covers
 
 **Date:** 2026-11-12 · **Status:** Accepted · **Amends:** ADR-0070 (the frameless sheet), ADR-0059 (where the day's colour may sit), ADR-0086 (the lit card's one site)
 

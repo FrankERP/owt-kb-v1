@@ -360,7 +360,7 @@ export interface PastorMessageEffects {
  *
  * It lives on `serviceThread.<roleId>`, never on the role (every role writer
  * asserts the role `_rev`) and never on a proposal (ADR-0065). A proposal may
- * carry the lead's DRAFT of it (`setlistProposal.pastor_message`, ADR-0088);
+ * carry the lead's DRAFT of it (`setlistProposal.pastor_message`, ADR-0087);
  * only `adoptProposalPastorMessage` below moves that here, on approval.
  *
  * Notifies the leads (push AND email, `pastor: true`) only when a message
@@ -495,7 +495,7 @@ export async function setPastorMessage(
 }
 
 /**
- * What the approval's copy did (ADR-0088): `copied` (it is now the service's
+ * What the approval's copy did (ADR-0087): `copied` (it is now the service's
  * message), `same` (the service already showed that text), `kept_existing` (the
  * service had a DIFFERENT message, left alone), `none` (the proposal carried
  * none), `failed` (not copied; the approval stands, the dialog offers «Usar»).
@@ -509,7 +509,7 @@ function comparable(text: string): string {
 
 /**
  * Copy a just-approved proposal's «Mensaje del pastor» into the service's ONE
- * field (ADR-0088) — the post-commit step of `commitApproval`
+ * field (ADR-0087) — the post-commit step of `commitApproval`
  * (`proposalReviewCommit.ts`), never a route of its own.
  *
  * Only into an EMPTY field: Frank's option was «pasa al mensaje del pastor del

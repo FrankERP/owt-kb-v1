@@ -13,7 +13,7 @@
 // in one line per service instead of a stack of full cards, and the sheet still
 // carries the full `DayCard` for whichever day is tapped.
 //
-// The day sheet draws the SAME service Inicio opens on (ADR-0087): the long date is
+// The day sheet draws the SAME service Inicio opens on (ADR-0088): the long date is
 // the sheet's title, «11:00 · En 2 días» its one line, then `DayCard hero` — cover rows
 // for the setlist, the folding team as faces, «Ensayar el setlist». A day with ONE
 // service draws that body ALONE (`identity` off: the sheet already names the date, so

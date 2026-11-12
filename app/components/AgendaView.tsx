@@ -5,7 +5,7 @@
 // the second one — because the question the page is asked is "when do I serve next",
 // and a grid answers it by making the reader scan 30 cells for the lit ones.
 //
-// A row is a CARD (ADR-0087; it was a hairline row since the «millones» pass): the date as a
+// A row is a CARD (ADR-0088; it was a hairline row since the «millones» pass): the date as a
 // calendar leaf in the day's colour, the day as the card's title, the clock with its icon, and
 // who leads and whether the songs are in as faces and pictures (`ServiceFacts`) — not the
 // sentence that spelled every seat on every row. «Tú · EG» is the app's one green chip with the

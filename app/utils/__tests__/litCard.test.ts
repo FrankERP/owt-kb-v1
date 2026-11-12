@@ -104,11 +104,11 @@ describe("brand.css — .brand-lit-card", () => {
 // ADR-0070 (2026-10-23) made the hero a run SHEET on the page, with no frame — and a border
 // pass needs a border, so for three weeks NOTHING set `data-lit`. ADR-0086 (2026-11-12) gave the
 // pass a site back: the NEXT meeting on `/jovenes`, a framed card, lit once so the eye lands on
-// it among a list of cards. ADR-0087 (2026-11-12) framed the worship service again and lit the
+// it among a list of cards. ADR-0088 (2026-11-12) framed the worship service again and lit the
 // NEXT service on Inicio for the same reason. Two sites, on two different screens — never two
 // lit cards on one screen, which would be two things claiming to be «next». Adding a site is an
 // ADR, then this list.
-describe("app/** — data-lit has exactly two sites (ADR-0086, ADR-0087)", () => {
+describe("app/** — data-lit has exactly two sites (ADR-0086, ADR-0088)", () => {
   it("only the Jóvenes meeting card and the worship service card set data-lit", () => {
     const sites = tsxFiles("app").filter((rel) => {
       const jsx = read(rel)
