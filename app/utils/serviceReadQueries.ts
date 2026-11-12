@@ -625,7 +625,7 @@ export function serviceConversationQuery(roleId: string, threadId: string): Boun
       ]{ _id, _rev, _type, team_notes },
       "proposal": *[_type == "setlistProposal" && service_ref._ref == $roleId] | order(_createdAt asc)[0]{
         _id, status,
-        // ADR-0087: the lead's copy, for the dialog's «Usar como mensaje del pastor».
+        // ADR-0088: the lead's copy, for the dialog's «Usar como mensaje del pastor».
         pastor_message,
         ${THREAD_MESSAGES}
       }

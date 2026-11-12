@@ -401,7 +401,7 @@ describe("review_setlist_proposal", () => {
   });
 });
 
-describe("the leads' pastor's message in the check and the answer (ADR-0087)", () => {
+describe("the leads' pastor's message in the check and the answer (ADR-0088)", () => {
   const plan = (pastor: unknown, live: string | null) => ({ doc: { pastor_message: pastor }, livePastorMessage: live });
 
   it("says nothing when the proposal carries none", () => {

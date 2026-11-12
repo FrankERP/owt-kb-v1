@@ -1,7 +1,7 @@
 # Leads can hand in the pastor's message with their proposal — design
 
 **Date:** 2026-11-12 · **Status:** approved (critical-tier review, see the log) and implemented · **Thread:** «Corregir el mensaje del pastor del 15 de noviembre»
-**Governs:** ADR-0065 (service messages) — amended by a new ADR-0087 (below).
+**Governs:** ADR-0065 (service messages) — amended by a new ADR-0088 (below).
 
 ## Requirement (Frank, verbatim)
 
@@ -174,7 +174,7 @@ and §4 covers a failure. Copying on replay could resurrect a message an admin c
 
 ## Docs
 
-ADR-0087 «A lead hands in the pastor's message with the proposal» (links ADR-0065; ADR-0065 gets a pointer);
+ADR-0088 «A lead hands in the pastor's message with the proposal» (links ADR-0065; ADR-0065 gets a pointer);
 `docs/NOTIFICATIONS.md` (the copy sends nothing; «Usar» follows the PUT's rule); `docs/DATA_MODEL.md` (new field);
 `docs/MCP.md` where it lists these tools' answers. CLAUDE.md's write-paths line unchanged (no new route; the copy
 is a post-commit step of the existing proposals PATCH; «Usar» uses the existing PUT).
@@ -202,8 +202,8 @@ Adopted from the approving reviewers' non-blocking notes; none changes the appro
    lists the pastor's message among what to show before a yes. The `line` is unchanged.
 6. Approved editor: the read-only proposal field is hidden when it equals the service's message (no double).
 7. Docs: CLAUDE.md and `docs/agents/project-rules.md` list `proposalReviewCommit.ts` among
-   `serviceThreadCommit.ts`'s callers; `setPastorMessage`'s docstring and ADR-0065 get a pointer to ADR-0087.
-   ADR-0087 names the accepted edges: a crash between commit and copy is surfaced only by the dialog's «Usar»;
+   `serviceThreadCommit.ts`'s callers; `setPastorMessage`'s docstring and ADR-0065 get a pointer to ADR-0088.
+   ADR-0088 names the accepted edges: a crash between commit and copy is surfaced only by the dialog's «Usar»;
    re-approval after reopen refills a field an admin cleared; «Usar» keeps offering a differing lead text after
    an admin's deliberate edit; the editor hides the field when the service already has a message and the
    proposal has none (a narrowing of Frank's option, told to him).

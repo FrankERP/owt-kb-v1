@@ -187,7 +187,7 @@ beforeEach(() => {
   });
 });
 
-// ── The approval's copy of the leads' pastor's message (ADR-0087) ───────────
+// ── The approval's copy of the leads' pastor's message (ADR-0088) ───────────
 
 describe("adoptProposalPastorMessage — the approval's post-commit copy", () => {
   it("copies into a missing thread with `create`, trimmed, authored by the approver, and notifies NOBODY", async () => {
@@ -635,7 +635,7 @@ describe("the new read parts, evaluated", () => {
     });
   });
 
-  it("serviceConversationQuery carries the proposal's own pastor's message (ADR-0087)", async () => {
+  it("serviceConversationQuery carries the proposal's own pastor's message (ADR-0088)", async () => {
     const withProposal = [
       ...dataset,
       {

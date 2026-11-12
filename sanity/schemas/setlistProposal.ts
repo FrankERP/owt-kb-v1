@@ -155,7 +155,7 @@ export const setlistProposal = defineType({
       rows: 3,
     },
     {
-      // ADR-0087: the lead's copy of what the pastor shared. Copied on approval
+      // ADR-0088: the lead's copy of what the pastor shared. Copied on approval
       // into the service's ONE «Mensaje del pastor» (`serviceThread.<roleId>`)
       // only when that field is empty; never shown to the team from here.
       name: "pastor_message",

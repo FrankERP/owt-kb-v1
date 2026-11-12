@@ -47,19 +47,19 @@ interface Conversation {
   proposal?: {
     _id: string;
     status?: string;
-    /** The leads' copy of the pastor's message (ADR-0087). */
+    /** The leads' copy of the pastor's message (ADR-0088). */
     pastor_message?: string | null;
     messages?: ThreadMessage[] | null;
   } | null;
 }
 
-/** Trimmed, line endings folded: how the approval's copy compares two bodies (ADR-0087). */
+/** Trimmed, line endings folded: how the approval's copy compares two bodies (ADR-0088). */
 function comparablePastor(text: string | null | undefined): string {
   return (text ?? "").trim().replace(/\r\n?/g, "\n");
 }
 
 /**
- * The leads' pastor's message to OFFER in the dialog (ADR-0087): a submitted
+ * The leads' pastor's message to OFFER in the dialog (ADR-0088): a submitted
  * proposal's (never a draft's — the leads have not handed it in), and only when
  * it differs from what the service shows. Null = nothing to offer.
  */
@@ -340,7 +340,7 @@ function PastorMessageSection({
 }: {
   url: string;
   stored: PastorMessageRow | null;
-  /** The leads' text to offer («Usar como mensaje del pastor», ADR-0087); null = none. */
+  /** The leads' text to offer («Usar como mensaje del pastor», ADR-0088); null = none. */
   fromProposal: string | null;
   published: boolean;
   onSaved: (row: PastorMessageRow | null) => void;
@@ -472,7 +472,7 @@ function PastorMessageSection({
         </div>
       )}
 
-      {/* The leads handed one in with their proposal (ADR-0087): adopt it through
+      {/* The leads handed one in with their proposal (ADR-0088): adopt it through
           this same writer — the observed stamp is the message on screen, so a
           save another admin made meanwhile is refused, never overwritten. */}
       {fromProposal && !stale && draft === null && (

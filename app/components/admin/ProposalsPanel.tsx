@@ -50,7 +50,7 @@ interface Proposal {
   lead_id: string;
   lead_notes?: string;
   team_notes?: string;
-  /** The lead's copy of the pastor's message (ADR-0087); goes to the service on approval if it has none. */
+  /** The lead's copy of the pastor's message (ADR-0088); goes to the service on approval if it has none. */
   pastor_message?: string;
   admin_notes?: string;
   messages?: ThreadMessage[] | null;
@@ -264,7 +264,7 @@ function ProposalCard({
         )}
       </div>
 
-      {/* The pastor's message the leads handed in (ADR-0087), above their own note. */}
+      {/* The pastor's message the leads handed in (ADR-0088), above their own note. */}
       {proposal.pastor_message?.trim() && (
         <div>
           <p className={`mb-1 ${SHEET_TITLE}`}>Mensaje del pastor</p>
@@ -546,7 +546,7 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
     el.focus({ preventScroll: true });
   }, [highlightIds, filter, proposals, windowSteps]);
 
-  // What the approval did with the leads' «Mensaje del pastor» (ADR-0087); any
+  // What the approval did with the leads' «Mensaje del pastor» (ADR-0088); any
   // other answer keeps the action's own toast.
   const PASTOR_MESSAGE_TOAST: Record<string, string> = {
     copied: "Aprobada. El mensaje del pastor quedó en el servicio.",

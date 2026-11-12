@@ -78,14 +78,14 @@ const EXPECTED_CALLERS: Record<string, string[]> = {
   roleUnpublishCommit: ["app/api/admin/roles/unpublish/route.ts", "app/mcp/tools/unpublishService.ts"],
   setlistSaveCommit: ["app/api/admin/setlists/route.ts", "app/mcp/tools/editSetlist.ts"],
   // Admin parity phase 3: the four service-conversation routes (ADR-0065), the MCP message tools,
-  // and the proposal approval (ADR-0087).
+  // and the proposal approval (ADR-0088).
   serviceThreadCommit: [
     "app/api/admin/service-threads/[roleId]/messages/[key]/route.ts",
     "app/api/admin/service-threads/[roleId]/messages/route.ts",
     "app/api/admin/service-threads/[roleId]/pastor-message/route.ts",
     "app/api/admin/service-threads/[roleId]/team-notes/route.ts",
     "app/mcp/tools/serviceMessages.ts",
-    // ADR-0087: an approval's post-commit copy of the leads' pastor's message
+    // ADR-0088: an approval's post-commit copy of the leads' pastor's message
     // (`adoptProposalPastorMessage`), never a route of its own.
     "app/utils/proposalReviewCommit.ts",
   ],

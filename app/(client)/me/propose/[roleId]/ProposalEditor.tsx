@@ -50,7 +50,7 @@ interface SharedProposal {
   status: ProposalStatus;
   lead_notes?: string;
   team_notes?: string;
-  /** The lead's copy of the pastor's message (ADR-0087). */
+  /** The lead's copy of the pastor's message (ADR-0088). */
   pastor_message?: string;
   admin_notes?: string;
   messages?: ThreadMessage[] | null;
@@ -432,7 +432,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
           // payload in place and makes the server rule unsound.
           leadNotes: proposalId ? "" : leadNotes,
           teamNotes,
-          // ADR-0087. Always sent: this editor read it (`getSharedProposal`), so
+          // ADR-0088. Always sent: this editor read it (`getSharedProposal`), so
           // what it sends is what the lead sees, cleared included.
           pastorMessage: pastorDraft,
           status: submitStatus,
@@ -523,7 +523,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
 
   const isApproved  = status === "approved";
 
-  // ADR-0087: offered while the service has no pastor's message, and kept
+  // ADR-0088: offered while the service has no pastor's message, and kept
   // whenever this proposal holds one (stored, or being typed).
   const showPastorField =
     !isApproved && (!pastorMessage || !!proposal?.pastor_message?.trim() || !!pastorDraft.trim());
@@ -849,7 +849,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
         )}
       </div>
 
-      {/* The pastor's message (ADR-0087): the leads are who receive it, so they
+      {/* The pastor's message (ADR-0088): the leads are who receive it, so they
           hand it in here, and approval moves it to the service's ONE field — only
           when that field is empty. With the service's already set (pinned above),
           a field that would never be copied is not offered, unless this proposal

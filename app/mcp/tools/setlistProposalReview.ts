@@ -4,7 +4,7 @@
 //   check_setlist_proposal_review  read-only: what a decision would do — the songs it publishes, the
 //                                  live setlist it REPLACES, the team note it copies (an empty one
 //                                  blanks the live note), the pastor's message it would pass to the
-//                                  service (ADR-0087), who is told (the setlist email forecast and
+//                                  service (ADR-0088), who is told (the setlist email forecast and
 //                                  the review push) — plus the proposal's `rev` and a one-line `line`.
 //   review_setlist_proposal        destructive: approve / request changes / reopen through `/admin`'s
 //                                  own writer (`app/utils/proposalReviewCommit.ts`, ADR-0043).
@@ -157,7 +157,7 @@ function pastorComparable(text: unknown): string {
 }
 
 /**
- * What approving would do with the proposal's «Mensaje del pastor» (ADR-0087): it goes to the
+ * What approving would do with the proposal's «Mensaje del pastor» (ADR-0088): it goes to the
  * service only when the service has none. Null when the proposal carries none.
  */
 export function pastorMessageCheckLine(plan: { doc: Record<string, unknown>; livePastorMessage: string | null }): string | null {
@@ -173,7 +173,7 @@ export function pastorMessageCheckLine(plan: { doc: Record<string, unknown>; liv
   return `Mensaje del pastor de la propuesta: «${text}». El servicio ya tiene otro («${current}»): no se cambia.`;
 }
 
-/** What the approval's copy did, for the write's answer (ADR-0087). Null when there was nothing. */
+/** What the approval's copy did, for the write's answer (ADR-0088). Null when there was nothing. */
 export function pastorMessageResultLine(outcome: string | null): string | null {
   switch (outcome) {
     case "copied":

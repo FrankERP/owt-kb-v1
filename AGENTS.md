@@ -260,7 +260,7 @@ looks wrong** — several exist to stop a plausible-looking change.
   ADR-0072; the proposal tools: proposals PATCH, its planner in peek for the check, ADR-0076;
   `serviceCommitCallers.test.ts`). The service conversation's writers live in
   `serviceThreadCommit.ts` too, called by its four routes, the MCP conversation tools (ADR-0073) and the
-  proposal approval's post-commit pastor's-message copy (ADR-0087);
+  proposal approval's post-commit pastor's-message copy (ADR-0088);
   Oasis Kids' in `kidsCommit.ts`, called by the four `/api/kids/*` writes and the MCP Kids tools;
   the song library's in `songSaveCommit.ts`, called by the song and author routes and the MCP song
   tools (edits by parts, a lossless lyrics gate, `ifRevisionId`, a token-keyed create; ADR-0077);

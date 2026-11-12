@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 // The leads' «Mensaje del pastor» on a proposal card, and what the approval did
-// with it (ADR-0087): the route answers the copy's outcome in its body, and the
+// with it (ADR-0088): the route answers the copy's outcome in its body, and the
 // toast says it when the service kept another message or the copy failed.
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";

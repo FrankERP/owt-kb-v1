@@ -43,7 +43,7 @@ vi.mock("@/app/utils/proposalNotify", () => ({
 vi.mock("@/app/utils/revalidate", () => ({
   revalidateServiceViews: (...a: unknown[]) => revalidateServiceViewsMock(...a),
 }));
-// ADR-0087: the approval's post-commit copy into `serviceThread` has its own
+// ADR-0088: the approval's post-commit copy into `serviceThread` has its own
 // suite (`serviceMessageEditRoutes.test.ts`); here only WHEN it is called, with
 // WHAT, and what the approval answers.
 const adoptMock = vi.fn();
@@ -705,7 +705,7 @@ describe("POST /api/me/proposals — first create", () => {
   });
 });
 
-describe("POST /api/me/proposals — the lead's pastor's message (ADR-0087)", () => {
+describe("POST /api/me/proposals — the lead's pastor's message (ADR-0088)", () => {
   it("a create carries it when sent, and omits it when empty or absent", async () => {
     store.roles.push(sundayRole());
     store.locks.push(lock());
@@ -998,7 +998,7 @@ describe("PATCH /api/admin/proposals/[id] — approval", () => {
     expect(sendPushMock).toHaveBeenCalledWith(["mem-1"], "proposals", expect.anything());
   });
 
-  it("copies the REVIEWED proposal's pastor's message after the commit and answers the outcome (ADR-0087)", async () => {
+  it("copies the REVIEWED proposal's pastor's message after the commit and answers the outcome (ADR-0088)", async () => {
     seed({ pastor_message: "  Efesios 2  " });
     adoptMock.mockImplementation(async () => {
       // After the commit, never inside it.
@@ -1105,7 +1105,7 @@ describe("PATCH /api/admin/proposals/[id] — approval", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, status: "approved", idempotent: true });
     expect(transactions).toHaveLength(0);
-    // A replay never copies the pastor's message (ADR-0087).
+    // A replay never copies the pastor's message (ADR-0088).
     expect(adoptMock).not.toHaveBeenCalled();
     expect(revalidateServiceViewsMock).not.toHaveBeenCalled();
     expect(sendPushMock).not.toHaveBeenCalled();
@@ -1286,7 +1286,7 @@ describe("PATCH /api/admin/proposals/[id] — request_changes and reopen", () =>
     store.proposals.push(proposal(over));
   }
 
-  it("a transition never copies the pastor's message (ADR-0087)", async () => {
+  it("a transition never copies the pastor's message (ADR-0088)", async () => {
     seed({ pastor_message: "Efesios 2" });
     expect(
       (await patchAdmin(PROPOSAL_ID, { action: "request_changes", rev: "prop-rev-1", adminNotes: "Cambia" })).status,

@@ -302,7 +302,7 @@ async function postHandler(req: NextRequest) {
         songs,
         status: request.status,
         team_notes: request.teamNotes,
-        // ADR-0087: absent from the request = left as stored; "" clears it.
+        // ADR-0088: absent from the request = left as stored; "" clears it.
         ...(request.pastorMessage !== null ? { pastor_message: request.pastorMessage } : {}),
         contributors,
         // Target metadata refreshed from the authorized canonical role.
@@ -338,7 +338,7 @@ async function postHandler(req: NextRequest) {
       songs,
       status: request.status,
       team_notes: request.teamNotes,
-      // ADR-0087: a create writes the lead's pastor message only when there is one.
+      // ADR-0088: a create writes the lead's pastor message only when there is one.
       ...(request.pastorMessage ? { pastor_message: request.pastorMessage } : {}),
       // A first submission goes through `create`, not a patch, so the array is
       // minted directly and needs no `setIfMissing`. `lead_notes` does NOT ride
