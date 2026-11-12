@@ -44,6 +44,26 @@ describe("the registry", () => {
     expect(rolloutAllows("jovenesEvents", person({ active: false }))).toBe(false);
   });
 
+  // The registry entry is moved here and put back, so the nav copy's arms stay exercised whatever
+  // stage the feature is at.
+  it("at every stage the nav copy shows no more than the server allows; at `admins`, the super-admin only", () => {
+    const entry = ROLLOUT.jovenesEvents;
+    const was = entry.stage;
+    try {
+      for (const stage of ROLLOUT_STAGES) {
+        entry.stage = stage;
+        expect(navRolloutAllows("jovenesEvents", true), stage).toBe(rolloutAllows("jovenesEvents", superAdmin));
+        if (navRolloutAllows("jovenesEvents", false)) expect(rolloutAllows("jovenesEvents", pastor), stage).toBe(true);
+      }
+      entry.stage = "admins";
+      expect(navRolloutAllows("jovenesEvents", false)).toBe(false);
+      entry.stage = "hidden";
+      expect(navRolloutAllows("jovenesEvents", true)).toBe(false);
+    } finally {
+      entry.stage = was;
+    }
+  });
+
   it("the nav copy never shows more than the server allows", () => {
     expect(navRolloutAllows("jovenesEvents", true)).toBe(rolloutAllows("jovenesEvents", superAdmin));
     expect(navRolloutAllows("jovenesEvents", false)).toBe(rolloutAllows("jovenesEvents", pastor));

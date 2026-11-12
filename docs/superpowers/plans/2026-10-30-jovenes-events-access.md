@@ -425,7 +425,9 @@ range).
 - **Sanity project accounts read everything.** `/studio` lets worship `admin` through `proxy.ts`,
   and any Sanity project account reads every event in Studio and its Vision tool, `readOnly` or not.
   Who holds one is checked in sanity.io/manage before the rollout reaches `all` (believed: Frank
-  only); a token in a non-Frank hand would cross the boundary by design.
+  only); a token in a non-Frank hand would cross the boundary by design. **Checked 2026-11-12:** the
+  belief was wrong — two worship team members who are also Jóvenes pastors hold Administrator
+  accounts. Frank was told before the stage moved; ADR-0081's Consequences record it.
 - **The encargado's program right is narrower than «any event»:** only on whole-ministry meetings
   (the Saturday roster and the like), as Frank said «de cada sábado»; group events have no such
   right until he asks. A Saturday kept as a draft is invisible to its encargado (member mode never

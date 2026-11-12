@@ -1,7 +1,23 @@
 // One ministry at a time in the nav (Frank, 2026-10-29): which section a page
 // belongs to and where a switch lands — the derivation both nav surfaces share.
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// The real registry by default (Jóvenes open to every pastor since 2026-11-12); one test closes
+// the nav's copy of it, so the section stays tied to the rollout whatever the registry says.
+const nav = vi.hoisted(() => ({ closedToPastors: false }));
+vi.mock("@/app/utils/rollout", async (orig) => {
+  const real = await orig<typeof import("@/app/utils/rollout")>();
+  return {
+    ...real,
+    navRolloutAllows: (f: never, isSuper: boolean) => (nav.closedToPastors ? isSuper : real.navRolloutAllows(f, isSuper)),
+  };
+});
+
 import { availableSections, currentSection, navAccess, sectionHome } from "../navSections";
+
+beforeEach(() => {
+  nav.closedToPastors = false;
+});
 
 const user = (p: Record<string, unknown>) => navAccess({ role: "member", ...p });
 
@@ -19,6 +35,13 @@ describe("navSections", () => {
     // Membership still decides: the rollout opens the section to nobody outside Jóvenes.
     expect(availableSections(user({ ministries: ["worship"] }))).toEqual(["worship"]);
     expect(availableSections(user({ role: "admin", ministries: ["worship", "kids"] }))).toEqual(["worship", "kids"]);
+  });
+  it("while the rollout does not reach pastors, only the super-admin has the Jóvenes section", () => {
+    nav.closedToPastors = true;
+    expect(availableSections(user({ role: "super-admin" }))).toEqual(["worship", "kids", "jovenes"]);
+    expect(availableSections(user({ ministries: ["jovenes"] }))).toEqual([]);
+    expect(currentSection("/", user({ ministries: ["jovenes"] }))).toBeNull();
+    expect(currentSection("/jovenes", user({ ministries: ["worship", "jovenes"] }))).toBe("worship");
   });
   it("/jovenes… is Jóvenes for whoever has the section, and switching there lands on /jovenes", () => {
     const sup = user({ role: "super-admin" });

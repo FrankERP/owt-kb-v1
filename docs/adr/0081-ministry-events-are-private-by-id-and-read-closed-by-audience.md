@@ -62,7 +62,11 @@ calendario de los de Otro Nivel y viceversa». Two facts decide how:
   token; the calendar itself does not.
 - Reads trail a group change by up to 30 s (the cached access snapshot); writes do not.
 - Anyone with a Sanity project account reads every event in Studio and Vision; who holds one is
-  checked before the rollout reaches everyone.
+  checked before the rollout reaches everyone. Checked on 2026-11-12, before the stage moved to
+  `all`: besides Frank and two robot tokens, two worship team members who are also Jóvenes pastors
+  hold Administrator accounts, so the plan's belief («Frank only») was wrong. Frank was told before
+  the release; whether those two accounts stay is his call, and until he removes them they can read
+  and edit every group's meetings from the Studio, outside the app's group boundary.
 - A joint event whose creator stops leading its groups, or is deleted, belongs to the admins.
 - Do not «simplify» the reader into a wider read plus a TypeScript filter, drop the id prefix arm, or
   copy the Kids writer (it stores no `_weak` references and authorizes no audience).
