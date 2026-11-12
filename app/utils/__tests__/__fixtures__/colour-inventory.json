@@ -8,28 +8,28 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 320,
-    "filesScanned": 620,
-    "filesWithColour": 66,
+    "literalRows": 322,
+    "filesScanned": 625,
+    "filesWithColour": 67,
     "byCategory": {
       "2": 2,
       "4": 63,
       "5": 2,
       "8": 86,
       "9": 10,
-      "11": 11,
+      "11": 13,
       "12": 146
     },
     "byDisposition": {
       "exempt": 60,
-      "B": 114,
-      "keep": 232,
+      "B": 116,
+      "keep": 233,
       "C": 5,
       "D": 13
     },
     "compositingClasses": 22,
     "compositingSelectorOccurrences": 60,
-    "compositingClassNameOccurrences": 33,
+    "compositingClassNameOccurrences": 34,
     "compositingRuleBodies": 52,
     "lightCounterpartClasses": 13,
     "pairs": 3,
@@ -3253,6 +3253,30 @@
       "reason": null
     },
     {
+      "file": "app/components/jovenes/GroupClasses.tsx",
+      "category": 11,
+      "categoryName": "arbitrary-value-var-brand",
+      "value": "[var(--brand-radius-panel)]",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 278,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/jovenes/GroupClasses.tsx",
+      "category": 11,
+      "categoryName": "arbitrary-value-var-brand",
+      "value": "[var(--brand-radius-panel)]",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 384,
+      "disposition": "B",
+      "reason": null
+    },
+    {
       "file": "app/components/jovenes/MeetingCard.tsx",
       "category": 11,
       "categoryName": "arbitrary-value-var-brand",
@@ -4200,6 +4224,14 @@
     },
     {
       "file": "app/components/jovenes/GroupCalendar.tsx",
+      "kind": "className",
+      "class": "surface",
+      "count": 1,
+      "disposition": "keep",
+      "reason": "Usage site of a compositing class"
+    },
+    {
+      "file": "app/components/jovenes/GroupClasses.tsx",
       "kind": "className",
       "class": "surface",
       "count": 1,

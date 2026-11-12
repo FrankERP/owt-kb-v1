@@ -34,8 +34,8 @@ installMotionTestEnv();
 
 const TOKEN = "0f8e6a52-1c1b-4d7e-9a43-6a2b1c0d9e11";
 const people = [
-  { id: "m1", name: "Ana" },
-  { id: "m2", name: "Beto" },
+  { id: "m1", name: "Ana", groups: [] },
+  { id: "m2", name: "Beto", groups: [] },
 ];
 
 function ev(over: Partial<MinistryEventView> = {}): MinistryEventView {

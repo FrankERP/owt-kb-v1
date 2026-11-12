@@ -17,7 +17,7 @@ describe("ministryLesson", () => {
     [{ ...ok, series: " El Caos" }],
     [{ ...ok, series: "" }],
     [{ ...ok, series: "x".repeat(81) }],
-    [{ ...ok, series: "a b" }],
+    [{ ...ok, series: "a\u2028b" }],
     [{ ...ok, track: "Libro" }],
     [{ ...ok, done: 1 }],
     [{ ...ok, extra: true }],

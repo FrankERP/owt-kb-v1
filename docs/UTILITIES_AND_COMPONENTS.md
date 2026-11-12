@@ -673,7 +673,15 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   ([jovenesPlannerModel.ts](../app/utils/jovenesPlannerModel.ts)) — Planear Jóvenes' pure half: the
   month's rows, the bodies the editors send, which buttons to SHOW (cosmetic), the WhatsApp text.
   **`readJovenesPeople`** ([jovenesPeople.ts](../app/utils/jovenesPeople.ts)) — the seat picker's
-  list (ids and names). **`sendEventWrite`**/**`writeMessage`**
+  list (ids, names and each person's Jóvenes `groups`, so a class's responsable is picked from its
+  group). **A group's classes** (2026-11-12): **`parseLesson`**/**`lessonOf`**/**`singleGroup`**/
+  **`shiftedDate`**/**`plusDays`**, `TRACK_LABEL`, `CORAZON_HELP`
+  ([ministryLesson.ts](../app/utils/ministryLesson.ts) — the ONE validity rule of a `lesson`, shared
+  by the writer and the reader, and «Recorrer»'s date rule); **`shiftMinistryLesson`**/
+  **`swapMinistryLessons`** in the writer; **`groupRosters`**/**`splitRoster`**/**`shiftPreview`**/
+  **`swapCandidates`**/**`classForm`**/**`classBody`**/**`bookForm`**/**`bookRows`**
+  ([jovenesClassesModel.ts](../app/utils/jovenesClassesModel.ts)) and the component
+  **`GroupClasses`** [C] («Clases del grupo» in Planear Jóvenes). `BookIcon` in `icons.tsx`. **`sendEventWrite`**/**`writeMessage`**
   ([eventWrite.ts](../app/components/jovenes/eventWrite.ts)) — the one client caller of the four
   routes. Components (`app/components/jovenes/`): `SaturdayPlanner`, `GroupCalendar`, `ProgramEditor`
   (`compact` = the quiet «Programa» beside a row's «Editar»), `PersonSelect` (its «Escribir un
