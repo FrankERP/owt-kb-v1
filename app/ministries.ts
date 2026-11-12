@@ -71,29 +71,6 @@ export type MinistryLevel = (typeof MINISTRY_LEVELS)[number];
 export type MinistryRole = { ministry: MinistryId; level: MinistryLevel; groups: string[]; leaderOf: string[] };
 
 /**
- * What a write REQUEST carries for one item in PR 1: no `leaderOf`. The people writer decides the
- * stored `leaderOf` itself (K1 in `memberCommit.ts`); a request that sends it is refused (400) until
- * PR 2 changes the request contract.
- */
-export type MinistryRoleWrite = Omit<MinistryRole, "leaderOf">;
-
-/**
- * How the read takes a stored LEADER item with no `leaderOf` (absent = the key is missing, or its
- * value is `null`/`undefined`; plan §4.4):
- *   · `"all"`  (L1) — leads every kept group: today's meaning of every stored leader;
- *   · `"none"` (L2) — leads nothing (still a member of their groups).
- */
-export type AbsentLeaderOf = "all" | "none";
-
-/**
- * THE L1/L2 switch. TRANSITIONAL — PR 1 of the per-group leadership plan reads with L1, so PR 1
- * changes nobody's access. PR 2 flips the read to L2 and deletes this switch, only after the backfill
- * (`scripts/backfill-jovenes-leader-of.mjs`, which imports it to compare both readings) reports zero
- * documents whose leadership differs between the two. Do not flip it by hand (ADR-0085).
- */
-export const ABSENT_LEADER_OF: AbsentLeaderOf = "all";
-
-/**
  * Membership test, NOT `x in MINISTRIES`. The `in` operator walks the prototype
  * chain, so `"constructor"`, `"toString"` and `"__proto__"` all pass it —
  * verified: `node -e '...' ` prints true for all three. This function validates
@@ -215,14 +192,11 @@ export function validateMinistryWrite(
  *    malformed: there is no guessing which one was meant.
  * 5. `leaderOf` (the groups they LEAD): `[]` for any level but `leader`, whatever is stored. For a
  *    leader: an array → its entries that are in the item's kept `groups`, de-duplicated; present but
- *    not an array → `[]`; ABSENT (no key, `null` or `undefined`) → `absentLeaderOf`: every kept group
- *    under L1 (PR 1, today's meaning), none under L2. Anything unusable leads nothing (I4).
+ *    not an array → `[]`; ABSENT (no key, `null` or `undefined`) → `[]` (L2, ADR-0085: PR 1 read it as
+ *    every kept group while the old writers could still store a leader without one; every stored
+ *    leader had an explicit `leaderOf` before this flip). Anything unusable leads nothing (I4).
  */
-export function normalizeMinistryRoles(
-  raw: unknown,
-  ministries: readonly MinistryId[],
-  absentLeaderOf: AbsentLeaderOf = ABSENT_LEADER_OF,
-): MinistryRole[] {
+export function normalizeMinistryRoles(raw: unknown, ministries: readonly MinistryId[]): MinistryRole[] {
   if (!Array.isArray(raw)) return [];
   const items = raw.filter((i): i is Record<string, unknown> => typeof i === "object" && i !== null);
   const named = (m: unknown) => items.filter((i) => i.ministry === m).length;
@@ -234,16 +208,14 @@ export function normalizeMinistryRoles(
     if (!ministries.includes(ministry)) continue;
     if (!isLevel(level)) continue;
     const kept = [...new Set(Array.isArray(groups) ? groups.filter((g) => isGroupId(ministry, g)) : [])];
-    parsed.push({ ministry, level, groups: kept, leaderOf: readLeaderOf(level, item.leaderOf, kept, absentLeaderOf) });
+    parsed.push({ ministry, level, groups: kept, leaderOf: readLeaderOf(level, item.leaderOf, kept) });
   }
   return parsed;
 }
 
 /** Step 5 of `normalizeMinistryRoles`: the groups a stored item leads, given its KEPT groups. */
-function readLeaderOf(level: MinistryLevel, stored: unknown, kept: readonly string[], absent: AbsentLeaderOf): string[] {
-  if (level !== "leader") return [];
-  if (stored === undefined || stored === null) return absent === "all" ? [...kept] : [];
-  if (!Array.isArray(stored)) return [];
+function readLeaderOf(level: MinistryLevel, stored: unknown, kept: readonly string[]): string[] {
+  if (level !== "leader" || !Array.isArray(stored)) return [];
   return [...new Set(stored.filter((g): g is string => typeof g === "string" && kept.includes(g)))];
 }
 
@@ -260,9 +232,11 @@ function readLeaderOf(level: MinistryLevel, stored: unknown, kept: readonly stri
  *
  * Strict where `normalizeMinistryRoles` is forgiving: the read drops what it
  * cannot use, the write refuses it, so nothing malformed is ever stored. An item
- * carries exactly `ministry`, `level` and `groups` (the form strips the stored
- * `_key`/`_type`; the route adds them back). No `leaderOf` in PR 1: the writer
- * decides it from the stored person (K1, `memberCommit.ts`).
+ * carries EXACTLY `groups`, `leaderOf`, `level` and `ministry` (the form strips the
+ * stored `_key`/`_type`; the route adds them back), `leaderOf` always — `[]` for a
+ * member or an admin — so a body from an older form (no `leaderOf`) is refused,
+ * never reinterpreted (ADR-0085). `leaderOf` ⊆ `groups`, no repeats (I1); a leader
+ * leads at least one group, a member or an admin none (I2).
  */
 export function validateMinistryRolesWrite(value: unknown, ministries: unknown): string | null {
   if (!Array.isArray(value)) return "Niveles de ministerio inválidos.";
@@ -271,8 +245,8 @@ export function validateMinistryRolesWrite(value: unknown, ministries: unknown):
   for (const item of value) {
     if (typeof item !== "object" || item === null || Array.isArray(item)) return "Niveles de ministerio inválidos.";
     const keys = Object.keys(item).sort().join(",");
-    if (keys !== "groups,level,ministry") return "Niveles de ministerio inválidos.";
-    const { ministry, level, groups } = item as Record<string, unknown>;
+    if (keys !== "groups,leaderOf,level,ministry") return "Niveles de ministerio inválidos.";
+    const { ministry, level, groups, leaderOf } = item as Record<string, unknown>;
     if (!isMinistryId(ministry) || !LEVELED_MINISTRY_IDS.includes(ministry)) return "Ministerio sin niveles.";
     if (seen.has(ministry)) return "Un solo nivel por ministerio.";
     seen.add(ministry);
@@ -280,7 +254,11 @@ export function validateMinistryRolesWrite(value: unknown, ministries: unknown):
     if (!isLevel(level)) return "Nivel inválido.";
     if (!Array.isArray(groups) || !groups.every((g) => isGroupId(ministry, g))) return "Grupo inválido.";
     if (new Set(groups).size !== groups.length) return "Grupo repetido.";
-    if (level === "leader" && groups.length === 0) return "Un líder necesita al menos un grupo.";
+    if (!Array.isArray(leaderOf) || !leaderOf.every((g) => isGroupId(ministry, g))) return "Grupo inválido.";
+    if (new Set(leaderOf).size !== leaderOf.length) return "Grupo repetido.";
+    if (!leaderOf.every((g) => groups.includes(g))) return "Solo puede liderar un grupo al que pertenece.";
+    if (level !== "leader" && leaderOf.length > 0) return "Solo un líder lidera grupos; un admin ya administra todos.";
+    if (level === "leader" && leaderOf.length === 0) return "Un líder necesita liderar al menos un grupo.";
   }
   return null;
 }
@@ -289,8 +267,8 @@ export function validateMinistryRolesWrite(value: unknown, ministries: unknown):
  * A VALIDATED `ministryRoles` (see above) as stored: `_key` = the ministry, so a
  * person holds at most one item per ministry and a patch can address it as
  * `ministryRoles[_key=="jovenes"]`; `_type` = the Studio's object name, so the
- * Studio never flags the items as unknown. `leaderOf` is stored for a `leader`
- * only, from the item given (I2: a member or admin item stores no `leaderOf` key).
+ * Studio never flags the items as unknown. `leaderOf` is stored as sent for a
+ * `leader` only (I2: a member or admin item stores no `leaderOf` key).
  */
 export function ministryRolesForStorage(items: readonly MinistryRole[]) {
   return items.map(({ ministry, level, groups, leaderOf }) => ({

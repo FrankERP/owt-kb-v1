@@ -9,15 +9,20 @@ import {
   worshipRoleWithoutWorship,
 } from "@/app/ministries";
 
-const item = (p: Record<string, unknown> = {}) => ({ ministry: "jovenes", level: "member", groups: [], ...p });
+const item = (p: Record<string, unknown> = {}) => ({ ministry: "jovenes", level: "member", groups: [], leaderOf: [], ...p });
 const J = ["worship", "jovenes"];
 
 describe("validateMinistryRolesWrite", () => {
-  it("accepts every level, with or without groups (a leader needs one)", () => {
+  it("accepts every level, with or without groups (a leader leads at least one)", () => {
     expect(validateMinistryRolesWrite([], J)).toBeNull();
     expect(validateMinistryRolesWrite([item()], J)).toBeNull();
     expect(validateMinistryRolesWrite([item({ level: "admin" })], ["jovenes"])).toBeNull();
-    expect(validateMinistryRolesWrite([item({ level: "leader", groups: ["emprendedores"] })], J)).toBeNull();
+    expect(validateMinistryRolesWrite([item({ level: "admin", groups: ["emprendedores", "guerreras"] })], ["jovenes"])).toBeNull();
+    expect(validateMinistryRolesWrite([item({ level: "leader", groups: ["emprendedores"], leaderOf: ["emprendedores"] })], J)).toBeNull();
+    // Jacob (plan §1): leads two of his three groups.
+    expect(
+      validateMinistryRolesWrite([item({ level: "leader", groups: ["otro-nivel", "invencibles", "adrenalin"], leaderOf: ["otro-nivel", "adrenalin"] })], J),
+    ).toBeNull();
     expect(validateMinistryRolesWrite([item({ groups: ["otro-nivel", "invencibles", "emprendedores"] })], J)).toBeNull();
   });
   it("requires `ministries` in the same request, naming the item's ministry", () => {
@@ -25,11 +30,14 @@ describe("validateMinistryRolesWrite", () => {
     expect(validateMinistryRolesWrite([item()], ["worship"])).not.toBeNull();
     expect(validateMinistryRolesWrite([], undefined)).not.toBeNull();
   });
-  it("refuses a non-array, a non-object item, and any key beyond ministry/level/groups", () => {
+  it("refuses a non-array, a non-object item, and any key set but exactly groups/leaderOf/level/ministry", () => {
     for (const bad of [null, "x", { ministry: "jovenes" }]) expect(validateMinistryRolesWrite(bad, J)).not.toBeNull();
     for (const bad of [null, "jovenes", ["jovenes"]]) expect(validateMinistryRolesWrite([bad], J)).not.toBeNull();
     expect(validateMinistryRolesWrite([{ ...item(), _key: "jovenes" }], J)).not.toBeNull();
     expect(validateMinistryRolesWrite([{ ministry: "jovenes", level: "member" }], J)).not.toBeNull();
+    // A PR 1 body (no `leaderOf`) — a stale tab of the old form — is refused, never reinterpreted (plan §7).
+    expect(validateMinistryRolesWrite([{ ministry: "jovenes", level: "leader", groups: ["otro-nivel"] }], J)).toBe("Niveles de ministerio inválidos.");
+    expect(validateMinistryRolesWrite([{ ministry: "jovenes", level: "member", groups: [] }], J)).toBe("Niveles de ministerio inválidos.");
   });
   it("refuses a ministry that is not leveled", () => {
     expect(validateMinistryRolesWrite([item({ ministry: "worship" })], J)).not.toBeNull();
@@ -38,12 +46,30 @@ describe("validateMinistryRolesWrite", () => {
   it("refuses two items for one ministry", () => {
     expect(validateMinistryRolesWrite([item(), item({ level: "admin" })], J)).toBe("Un solo nivel por ministerio.");
   });
-  it("refuses an unknown level, an unknown or repeated group, and a leader with no group", () => {
+  it("refuses an unknown level, an unknown or repeated group, and a leader who leads nothing", () => {
     expect(validateMinistryRolesWrite([item({ level: "owner" })], J)).toBe("Nivel inválido.");
     expect(validateMinistryRolesWrite([item({ groups: ["worship"] })], J)).toBe("Grupo inválido.");
     expect(validateMinistryRolesWrite([item({ groups: "otro-nivel" })], J)).toBe("Grupo inválido.");
     expect(validateMinistryRolesWrite([item({ groups: ["otro-nivel", "otro-nivel"] })], J)).toBe("Grupo repetido.");
-    expect(validateMinistryRolesWrite([item({ level: "leader" })], J)).toBe("Un líder necesita al menos un grupo.");
+    expect(validateMinistryRolesWrite([item({ level: "leader" })], J)).toBe("Un líder necesita liderar al menos un grupo.");
+    expect(validateMinistryRolesWrite([item({ level: "leader", groups: ["otro-nivel"] })], J)).toBe("Un líder necesita liderar al menos un grupo.");
+  });
+  it("refuses a `leaderOf` that is not a list of this ministry's groups, repeats one, or leaves `groups`", () => {
+    const leader = (leaderOf: unknown, groups: unknown = ["otro-nivel", "invencibles"]) => item({ level: "leader", groups, leaderOf });
+    for (const bad of [null, "otro-nivel", { 0: "otro-nivel" }, ["worship"], [1], ["toString"]]) {
+      expect(validateMinistryRolesWrite([leader(bad)], J)).toBe("Grupo inválido.");
+    }
+    expect(validateMinistryRolesWrite([leader(["otro-nivel", "otro-nivel"])], J)).toBe("Grupo repetido.");
+    expect(validateMinistryRolesWrite([leader(["emprendedores"])], J)).toBe("Solo puede liderar un grupo al que pertenece.");
+    expect(validateMinistryRolesWrite([leader(["otro-nivel", "emprendedores"])], J)).toBe("Solo puede liderar un grupo al que pertenece.");
+  });
+  it("refuses a non-empty `leaderOf` on a member or an admin (an admin already administers every group)", () => {
+    for (const level of ["member", "admin"]) {
+      expect(validateMinistryRolesWrite([item({ level, groups: ["otro-nivel"], leaderOf: ["otro-nivel"] })], J)).toBe(
+        "Solo un líder lidera grupos; un admin ya administra todos.",
+      );
+      expect(validateMinistryRolesWrite([item({ level, groups: ["otro-nivel"], leaderOf: [] })], J)).toBeNull();
+    }
   });
   it("prototype strings validate nowhere", () => {
     for (const k of ["constructor", "toString", "__proto__"]) {
@@ -72,8 +98,17 @@ describe("ministryRolesForStorage", () => {
       expect(Object.keys(stored).sort()).toEqual(["_key", "_type", "groups", "level", "ministry"]);
     }
   });
-  it("PR 1: a request item still carries exactly ministry/level/groups — `leaderOf` is refused (400)", () => {
-    expect(validateMinistryRolesWrite([item({ level: "leader", groups: ["otro-nivel"], leaderOf: ["otro-nivel"] })], J)).toBe("Niveles de ministerio inválidos.");
+  it("stores what was validated, per level (I2): a leader's `leaderOf` as sent, none on a member or admin", () => {
+    const sent = [{ ministry: "jovenes" as const, level: "leader" as const, groups: ["otro-nivel", "invencibles"], leaderOf: ["invencibles"] }];
+    expect(validateMinistryRolesWrite(sent, J)).toBeNull();
+    expect(ministryRolesForStorage(sent)).toEqual([
+      { _key: "jovenes", _type: "ministryRole", ministry: "jovenes", level: "leader", groups: ["otro-nivel", "invencibles"], leaderOf: ["invencibles"] },
+    ]);
+    for (const level of ["member", "admin"] as const) {
+      const body = [{ ministry: "jovenes" as const, level, groups: ["otro-nivel"], leaderOf: [] }];
+      expect(validateMinistryRolesWrite(body, J)).toBeNull();
+      expect(ministryRolesForStorage(body)).toEqual([{ _key: "jovenes", _type: "ministryRole", ministry: "jovenes", level, groups: ["otro-nivel"] }]);
+    }
   });
 });
 

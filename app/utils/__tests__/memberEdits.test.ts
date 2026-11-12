@@ -39,7 +39,15 @@ describe("memberView — the guards' own reading", () => {
     const stale = { ministries: ["worship"], ministryRoles: [{ _key: "jovenes", ministry: "jovenes", level: "admin", groups: [] }] };
     expect(memberView(stale).jovenes).toBeNull();
     expect(holdsManagement(memberView(stale))).toBe(false);
-    expect(memberView({ ...stale, ministries: ["worship", "jovenes"] }).jovenes).toEqual({ level: "admin", groups: [] });
+    expect(memberView({ ...stale, ministries: ["worship", "jovenes"] }).jovenes).toEqual({ level: "admin", groups: [], leaderOf: [] });
+  });
+
+  it("jovenes.leaderOf is ledGroupsIn's answer: the led subset; [] for a legacy leader, a member or an admin", () => {
+    const leader = (p: Record<string, unknown>) =>
+      memberView({ ministries: ["jovenes"], ministryRoles: [{ _key: "jovenes", ministry: "jovenes", level: "leader", groups: ["otro-nivel", "invencibles"], ...p }] }).jovenes;
+    expect(leader({ leaderOf: ["otro-nivel"] })).toEqual({ level: "leader", groups: ["otro-nivel", "invencibles"], leaderOf: ["otro-nivel"] });
+    expect(leader({})?.leaderOf).toEqual([]);
+    expect(leader({ level: "admin", leaderOf: ["otro-nivel"] })?.leaderOf).toEqual([]);
   });
 });
 
@@ -78,7 +86,7 @@ describe("applyMemberEdits — by parts, on the fresh person (D2, D13)", () => {
     expect(applyMemberEdits(worshipMember, [{ op: "add", field: "ministries", value: "Youth" }]).ok).toBe(false);
     expect(applyMemberEdits(worshipMember, [{ op: "remove", field: "ministries", value: "Alabanza" }]).ok).toBe(false);
     expect(
-      applyMemberEdits({ ...worshipMember, ministries: ["worship", "jovenes"] }, [{ op: "jovenes", level: "leader", groups: ["Nope"] }]).ok,
+      applyMemberEdits({ ...worshipMember, ministries: ["worship", "jovenes"] }, [{ op: "jovenes", level: "leader", groups: ["Nope"], leaderOf: ["Nope"] }]).ok,
     ).toBe(false);
   });
 
@@ -92,13 +100,84 @@ describe("applyMemberEdits — by parts, on the fresh person (D2, D13)", () => {
   });
 
   it("a Jóvenes level always travels with ministries (§7.7) and needs Jóvenes in them", () => {
-    expect(applyMemberEdits(worshipMember, [{ op: "jovenes", level: "leader", groups: ["Otro Nivel"] }]).ok).toBe(false);
+    expect(applyMemberEdits(worshipMember, [{ op: "jovenes", level: "leader", groups: ["Otro Nivel"], leaderOf: ["Otro Nivel"] }]).ok).toBe(false);
     const { body, before, after } = apply(worshipMember, [
       { op: "add", field: "ministries", value: "Jóvenes" },
-      { op: "jovenes", level: "leader", groups: ["Otro Nivel"] },
+      { op: "jovenes", level: "leader", groups: ["Otro Nivel"], leaderOf: ["otro nivel"] },
     ]);
-    expect(body).toEqual({ ministries: ["worship", "jovenes"], ministryRoles: [{ ministry: "jovenes", level: "leader", groups: ["otro-nivel"] }] });
-    expect(memberChangeLines(before, after)).toEqual(["Ministerios: + Jóvenes", "Jóvenes: no es de Jóvenes → líder (Otro Nivel)"]);
+    expect(body).toEqual({
+      ministries: ["worship", "jovenes"],
+      ministryRoles: [{ ministry: "jovenes", level: "leader", groups: ["otro-nivel"], leaderOf: ["otro-nivel"] }],
+    });
+    expect(memberChangeLines(before, after)).toEqual(["Ministerios: + Jóvenes", "Jóvenes: no es de Jóvenes → líder de Otro Nivel"]);
+  });
+
+  it("a member or admin item always carries leaderOf [] (the request's exact key set, §11 N2)", () => {
+    for (const level of ["member", "admin"] as const) {
+      const { body } = apply(worshipMember, [
+        { op: "add", field: "ministries", value: "Jóvenes" },
+        { op: "jovenes", level, groups: ["Emprendedores"] },
+      ]);
+      expect(body.ministryRoles).toEqual([{ ministry: "jovenes", level, groups: ["emprendedores"], leaderOf: [] }]);
+    }
+  });
+
+
+  it("leaderOf: names or ids; a leader must name it; it must be in groups; never on a member or admin (T7)", () => {
+    const inJovenes: Doc = { ...worshipMember, ministries: ["worship", "jovenes"] };
+    const refused = (e: MemberEdit) => {
+      const r = applyMemberEdits(inJovenes, [e]);
+      return r.ok ? null : r.message;
+    };
+    const ASK = "Di qué grupos lidera (leaderOf); los demás quedan como miembro.";
+    expect(refused({ op: "jovenes", level: "leader", groups: ["Otro Nivel"] })).toBe(ASK);
+    expect(refused({ op: "jovenes", level: "leader", groups: ["Otro Nivel"], leaderOf: [] })).toBe(ASK);
+    expect(refused({ op: "jovenes", level: "leader", groups: ["Otro Nivel"], leaderOf: ["Adrenalin"] })).toBe(
+      "Para liderar «Adrenalin» tiene que pertenecer a «Adrenalin»: agrégalo a groups.",
+    );
+    expect(refused({ op: "jovenes", level: "leader", groups: ["Otro Nivel"], leaderOf: ["Nope"] })).toMatch(/^«Nope» no es un grupo de Jóvenes/);
+    for (const level of ["member", "admin"] as const) {
+      expect(refused({ op: "jovenes", level, groups: ["Otro Nivel"], leaderOf: ["Otro Nivel"] })).toBe("Solo un líder lidera grupos; un admin ya administra todos.");
+      expect(refused({ op: "jovenes", level, groups: ["Otro Nivel"], leaderOf: [] })).toBeNull();
+    }
+  });
+
+  it("Jacob's roster line: «líder de Otro Nivel y Adrenalin; miembro de Invencibles»; admin and member keep their list", () => {
+    const jacob: Doc = { ...worshipMember, ministries: ["worship", "jovenes"], ministryRoles: [{ _key: "jovenes", ministry: "jovenes", level: "leader", groups: ["otro-nivel", "invencibles"], leaderOf: ["otro-nivel", "invencibles"] }] };
+    const { body, before, after } = apply(jacob, [
+      { op: "jovenes", level: "leader", groups: ["Otro Nivel", "Invencibles", "Adrenalin"], leaderOf: ["Otro Nivel", "adrenalin"] },
+    ]);
+    expect(body).toEqual({
+      ministries: ["worship", "jovenes"],
+      ministryRoles: [{ ministry: "jovenes", level: "leader", groups: ["otro-nivel", "invencibles", "adrenalin"], leaderOf: ["otro-nivel", "adrenalin"] }],
+    });
+    expect(memberChangeLines(before, after)).toEqual([
+      "Jóvenes: líder de Otro Nivel e Invencibles → líder de Otro Nivel y Adrenalin; miembro de Invencibles",
+    ]);
+    const noemi = apply(jacob, [{ op: "jovenes", level: "admin", groups: ["Emprendedores", "Guerreras"] }]);
+    expect(memberChangeLines(noemi.before, noemi.after)).toEqual([
+      "Jóvenes: líder de Otro Nivel e Invencibles → admin (Emprendedores, Guerreras)",
+    ]);
+    const milo = apply(jacob, [{ op: "jovenes", level: "member", groups: ["Emprendedores"] }]);
+    expect(memberChangeLines(milo.before, milo.after)).toEqual(["Jóvenes: líder de Otro Nivel e Invencibles → miembro (Emprendedores)"]);
+  });
+
+  it("a change of leaderOf alone is a body and a line; the same leaderOf is no change", () => {
+    const jacob: Doc = { ...worshipMember, ministries: ["worship", "jovenes"], ministryRoles: [{ _key: "jovenes", ministry: "jovenes", level: "leader", groups: ["otro-nivel", "invencibles"], leaderOf: ["otro-nivel"] }] };
+    const changed = apply(jacob, [{ op: "jovenes", level: "leader", groups: ["Otro Nivel", "Invencibles"], leaderOf: ["Invencibles", "Otro Nivel"] }]);
+    expect(changed.body.ministryRoles).toEqual([{ ministry: "jovenes", level: "leader", groups: ["otro-nivel", "invencibles"], leaderOf: ["invencibles", "otro-nivel"] }]);
+    expect(memberChangeLines(changed.before, changed.after)).toEqual([
+      "Jóvenes: líder de Otro Nivel; miembro de Invencibles → líder de Invencibles y Otro Nivel",
+    ]);
+    const same = apply(jacob, [{ op: "jovenes", level: "leader", groups: ["Invencibles", "Otro Nivel"], leaderOf: ["Otro Nivel"] }]);
+    expect(same.body).toEqual({});
+    expect(memberChangeLines(same.before, same.after)).toEqual([]);
+  });
+
+  it("a legacy leader (no leaderOf) reads as leading no group, and says so", () => {
+    const legacy: Doc = { ...worshipMember, ministries: ["worship", "jovenes"], ministryRoles: [{ _key: "jovenes", ministry: "jovenes", level: "leader", groups: ["otro-nivel"] }] };
+    const { before, after } = apply(legacy, [{ op: "jovenes", level: "leader", groups: ["Otro Nivel"], leaderOf: ["Otro Nivel"] }]);
+    expect(memberChangeLines(before, after)).toEqual(["Jóvenes: líder de ningún grupo; miembro de Otro Nivel → líder de Otro Nivel"]);
   });
 
   it("a stale stored level that ministries brings back is shown", () => {
@@ -157,10 +236,13 @@ describe("chatAccessRefusal — the chat grants, never revokes (§3.1)", () => {
   });
 
   it("Jóvenes: raise to admin allowed; drop from admin, or leave Jóvenes as its admin, refused", () => {
-    const leader: Doc = { ...people.member, ministries: ["jovenes"], ministryRoles: [{ _key: "jovenes", ministry: "jovenes", level: "leader", groups: ["invencibles"] }] };
+    const leader: Doc = { ...people.member, ministries: ["jovenes"], ministryRoles: [{ _key: "jovenes", ministry: "jovenes", level: "leader", groups: ["invencibles"], leaderOf: ["invencibles"] }] };
     expect(judge(leader, [{ op: "jovenes", level: "admin", groups: [] }])).toBeNull();
-    expect(judge(leader, [{ op: "jovenes", level: "leader", groups: ["otro-nivel"] }])).toBeNull();
-    expect(judge(people.jovenesAdmin, [{ op: "jovenes", level: "leader", groups: ["invencibles"] }])).toBe(CHAT_ACCESS.dropJovenesAdmin);
+    expect(judge(leader, [{ op: "jovenes", level: "leader", groups: ["otro-nivel"], leaderOf: ["otro-nivel"] }])).toBeNull();
+    // Leadership of a group is not management (ADR-0082 untouched): the chat adds or removes it.
+    expect(judge(leader, [{ op: "jovenes", level: "leader", groups: ["invencibles", "otro-nivel"], leaderOf: ["otro-nivel"] }])).toBeNull();
+    expect(judge(leader, [{ op: "jovenes", level: "member", groups: ["invencibles"] }])).toBeNull();
+    expect(judge(people.jovenesAdmin, [{ op: "jovenes", level: "leader", groups: ["invencibles"], leaderOf: ["invencibles"] }])).toBe(CHAT_ACCESS.dropJovenesAdmin);
     expect(judge(people.jovenesAdmin, [{ op: "jovenes", level: null }])).toBe(CHAT_ACCESS.dropJovenesAdmin);
     expect(judge({ ...people.jovenesAdmin, ministries: ["worship", "jovenes"] }, [{ op: "remove", field: "ministries", value: "jovenes" }])).toBe(
       CHAT_ACCESS.dropJovenesAdmin,
