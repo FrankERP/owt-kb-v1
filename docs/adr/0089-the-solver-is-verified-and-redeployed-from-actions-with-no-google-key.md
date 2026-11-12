@@ -1,4 +1,4 @@
-# ADR-0086: The solver is verified and re-deployed from GitHub Actions with no Google key
+# ADR-0089: The solver is verified and re-deployed from GitHub Actions with no Google key
 
 **Date:** 2026-10-22 · **Status:** Accepted
 
@@ -16,6 +16,9 @@
 > `main` first. Its own branch renumbers to the next free number on `main` before it merges.
 > Renumbered 0085 → 0086 on `preview` 2026-11-11: Jóvenes per-group leadership's ADR-0085
 > reaches `main` first.
+> Renumbered 0086 → 0089 on `preview` 2026-11-12: Jóvenes cards (ADR-0086), the worship card
+> (ADR-0087) and the pastor's message from the lead (ADR-0088) reached `preview` first; two records
+> were 0086 there.
 
 ## Context
 
