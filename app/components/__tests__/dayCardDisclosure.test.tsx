@@ -64,6 +64,8 @@ describe("DayCardDisclosure", () => {
   });
 
   it("says «Setlist pendiente» for a team published before its songs, and shows who leads as faces", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 8, 9, 0, 0)); // before the service: only a coming one is pending
     mount({ leads: ["Ana", "Gaby"], setlist: { week: "2026-09-19", songs: [] }, photos: { ana: "https://lh3.googleusercontent.com/a/ana" } });
     const row = screen.getByRole("button", { expanded: false });
     expect(row.textContent).toContain("Setlist pendiente");
@@ -71,6 +73,35 @@ describe("DayCardDisclosure", () => {
     // One face per lead: Ana's photo, Gaby's initials.
     expect(row.querySelectorAll("img")).toHaveLength(1);
     expect(within(row).getByText("GA")).toBeTruthy();
+    // A screen reader hears it too: the label is the head's whole summary.
+    expect(row.getAttribute("aria-label")).toMatch(/Lead Ana y Gaby, setlist pendiente$/);
+  });
+
+  it("folds its summary away as the card opens — a span, because it lives inside the head's button", () => {
+    mount({ leads: ["Ana", "Gaby"] });
+    const trigger = screen.getByRole("button", { expanded: false });
+    const facts = within(trigger).getByText(/Lead Ana y Gaby/).closest("[style]") as HTMLElement;
+    // Phrasing content only inside a <button>: no <div> anywhere in the head.
+    expect(trigger.querySelector("div")).toBeNull();
+    expect(facts.tagName).toBe("SPAN");
+    expect(facts.getAttribute("aria-hidden")).toBeNull();
+    // No `space-y` on the column the summary sits in: a closed Collapse would keep its gap.
+    expect(facts.parentElement!.className).not.toMatch(/space-y/);
+    fireEvent.click(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    // The opened sheet says «Diriges»/«Setlist» itself; the summary is on its way out.
+    const region = document.getElementById(trigger.getAttribute("aria-controls")!)!;
+    expect(region.getAttribute("aria-hidden")).toBeNull();
+  });
+
+  it("gives a booth seat the booth's glyph beside «Tú», whatever the seat is called", () => {
+    mount({ leads: ["Gaby"], fohTeam: [{ label: "Stream", person: "Ani" }] });
+    const chip = screen.getByText("Tú · Stream");
+    // Sliders (three lines with knobs), not the unknown-seat note.
+    const withSection = chip.querySelector("svg")!.innerHTML;
+    cleanup();
+    mount({ leads: ["Gaby"], fohTeam: [{ label: "Console", person: "Ani" }] });
+    expect(screen.getByText("Tú · Console").querySelector("svg")!.innerHTML).toBe(withSection);
   });
 
   it("chips the seats you hold, matched by the session's display name", () => {

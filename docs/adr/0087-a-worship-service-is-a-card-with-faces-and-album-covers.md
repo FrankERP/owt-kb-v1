@@ -36,19 +36,26 @@ schema gains one optional image (`post.albumArt`) and the three service reads pr
 - **The next service is a framed card** (`DayCard` with `hero`, on `.brand-surface`): the date as a
   calendar leaf (`DateTile`, large), the day as an uppercase display title, the clock, the
   countdown and «Tú · EG» as chips, the one «Ensayar el setlist», then the sheet's body. `framed`
-  is `hero && identity`: a host that already names the service (the Calendario's day sheet, an
-  open «Después» card) still gets the body alone, with no second frame.
+  is `hero && identity`: a host that already names the service (the Calendario's day sheet on a
+  day with one service, an open «Después» card) gets the body alone, with no second frame. The
+  one exception is a day with two or more services: the day sheet draws each as a whole framed
+  card, head included, because the clock in the head is what tells two same-day sets apart.
+  Whatever the host, an open body still says «Diriges: …» to the member who leads a song and
+  gives an admin «Mensajes»; only «Ensayar el setlist» is the hero's alone.
 - **Every other service is a folded card** (`DayCardDisclosure`; `AgendaView`'s rows): leaf, title,
   clock, chips, and `ServiceFacts` — who leads as faces beside their names, the set as its songs'
-  pictures beside the count, or «Setlist pendiente». The whole team is one tap away; the agenda's
-  full sentence stays in the row's `aria-label`.
+  pictures beside the count, or «Setlist pendiente» — said only of a service still to come (a
+  past one with no songs stored has nothing pending), and in the row's `aria-label` too. The
+  whole team is one tap away; the agenda's full sentence stays in the row's `aria-label`.
 - **People are photos** (`app/components/service/Face.tsx`, `FaceStack`): the circle
   `TeamSections` already drew, lifted out. A closed section shows its people overlapped; on the
   card a band or booth face wears its seat's glyph (`SeatIcon`: microphone, keys, drum, guitar,
   sliders), and each section header has its glyph on a tile.
 - **Songs have a picture: their album's cover** (`SongCover`, `app/utils/songCover.ts`). It is
   stored on the song (`albumArt`, a Sanity image; `SONG_COVER_GROQ` projects its URL and
-  `songCoverUrl` sizes it to a 160 px square, in the uploaded format, never WebP), with the song's
+  `songCoverUrl` sizes it to a 160 px square and always asks for a JPEG, `fm=jpg` — the Studio
+  field takes whatever an editor drags in, and a WebP or AVIF does not decode in the iOS app's
+  web view, the rule `avatarSrc` follows), with the song's
   place in the set on its corner. A song without one gets a neutral tile, never a stand-in. An
   editor replaces a cover in the Studio. A medley is a tinted panel labelled «Medley · N canciones
   seguidas» instead of a spine and a «+».
@@ -110,11 +117,16 @@ schema gains one optional image (`post.albumArt`) and the three service reads pr
   still renders the plain `DayCard`, which keeps its old header).
 - The plain (non-`sheet`) `DayCard` no longer has a two-column `wide` rendering: its only `wide`
   caller was the hero, which is a sheet. `layout="wide"` now means the framed card's body.
-- A song's cover is DATA someone has to supply. The first load was a one-time match of the
-  catalog against Deezer's public search (title and artist), reviewed by Frank on a contact sheet
-  and written with his consent; 138 of 148 songs matched, 8 of them to a sister act's album. A
-  new song has no cover until an editor uploads one in the Studio; the app's own song form does
-  not offer the field yet. An image that fails to load falls back to the neutral tile
+- A song's cover is DATA someone has to supply. The first load is a one-time match of the
+  catalog against Deezer's public search (title and artist), reviewed by Frank on a contact
+  sheet: 138 of 148 songs matched, 8 of them to a sister act's album. Its 102 images are stored
+  as Sanity image assets (each compared pixel by pixel with its source), and the song → asset
+  links are written by `scripts/set-album-art.mjs` from `scripts/data/album-art-2026-11-12.json`
+  (dry-run by default, `--apply` with Frank's consent, never replaces a cover a song already
+  has). It is a script and not a connector patch because the connector validates against the
+  deployed schema, which does not know `albumArt` until this change's schema is deployed. Until
+  that script has run, every song draws the neutral tile. A new song has no cover until an
+  editor uploads one in the Studio; the app's own song form does not offer the field yet. An image that fails to load falls back to the neutral tile
   (`onError`); the picture is `alt=""` decoration and nothing else on the row depends on it.
 - `songSaveCommit` writes a song by `set`/`unset` of the fields it edits, so a save from the app
   or the chat keeps `albumArt`. A future writer that replaces the whole document would drop it.

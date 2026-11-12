@@ -108,6 +108,8 @@ describe("AgendaView", () => {
   });
 
   it("is a card (ADR-0087): the date as a leaf, the day as the title, the clock, and the facts as faces and pictures", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 10, 9, 0, 0)); // 2026-09-10 local
     mountAgenda();
     const row = rows()[0];
     expect(row.className).toContain("brand-surface");
@@ -127,6 +129,28 @@ describe("AgendaView", () => {
     // A Saturday card at the standing 18:00, its songs still to come.
     expect(within(rows()[1]).getByText("18:00")).toBeTruthy();
     expect(rows()[1].textContent).toContain("Setlist pendiente");
+  });
+
+  it("says «Setlist pendiente» only of a worship service still to come — in the label too", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 10, 9, 0, 0)); // 2026-09-10 local
+    const noSongs = (date: string) => sunday(date, { leads: ["Ana"], setlist: null });
+    render(
+      <MotionProvider>
+        <AgendaView
+          activeDays={{ "2026-09-06": [noSongs("2026-09-06")], "2026-09-13": [noSongs("2026-09-13")] }}
+          todayStr="2026-09-10"
+          onSelect={vi.fn()}
+          emptyMessage="vacío"
+        />
+      </MotionProvider>,
+    );
+    // The past row (a browsed month) simply has no songs; the coming one is waiting for them.
+    expect(rows()[0].textContent).not.toContain("Setlist pendiente");
+    expect(rows()[0].getAttribute("aria-label")).not.toContain("setlist pendiente");
+    expect(rows()[0].textContent).toContain("Lead Ana");
+    expect(rows()[1].textContent).toContain("Setlist pendiente");
+    expect(rows()[1].getAttribute("aria-label")).toContain(", setlist pendiente");
   });
 
   it("names the day, the long date, the countdown and the summary in the row's label", () => {
@@ -468,6 +492,14 @@ describe("CalendarView — ministry filter", () => {
     expect(screen.getByText(/5 servicios por venir/)).toBeTruthy();
     fireEvent.click(screen.getByRole("radio", { name: "Oasis Kids" }));
     expect(screen.getByText(/2 servicios por venir/)).toBeTruthy();
+  });
+
+  it("never says «Setlist pendiente» of a Kids Sunday: it has no setlist to wait for", () => {
+    mountFiltered("kids");
+    for (const row of rows()) {
+      expect(row.textContent).not.toContain("Setlist pendiente");
+      expect(row.getAttribute("aria-label")).not.toContain("setlist pendiente");
+    }
   });
 
   it("marks the reader's Kids seat «Tú» in the row, decided by the server's flag", () => {

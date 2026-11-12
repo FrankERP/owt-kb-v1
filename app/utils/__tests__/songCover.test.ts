@@ -5,14 +5,16 @@ const ASSET = "https://cdn.sanity.io/images/ebb8vcnk/production/abc123-1000x1000
 
 describe("songCoverUrl", () => {
   it("is the stored album cover, square and sized for the largest tile at 3×", () => {
-    expect(songCoverUrl(ASSET)).toBe(`${ASSET}?w=160&h=160&fit=crop`);
+    expect(songCoverUrl(ASSET)).toBe(`${ASSET}?w=160&h=160&fit=crop&fm=jpg`);
   });
 
   it("replaces any query the URL already carries instead of appending a second one", () => {
-    expect(songCoverUrl(`${ASSET}?w=2000`)).toBe(`${ASSET}?w=160&h=160&fit=crop`);
+    expect(songCoverUrl(`${ASSET}?w=2000`)).toBe(`${ASSET}?w=160&h=160&fit=crop&fm=jpg`);
   });
 
-  it("never asks Sanity to pick the format — WebP does not decode in the iOS app's web view", () => {
+  it("always asks for a JPEG — a WebP or AVIF an editor uploaded does not decode in the iOS app's web view", () => {
+    const webp = "https://cdn.sanity.io/images/ebb8vcnk/production/abc123-1000x1000.webp";
+    expect(songCoverUrl(webp)).toContain("fm=jpg");
     expect(songCoverUrl(ASSET)).not.toContain("auto=format");
   });
 

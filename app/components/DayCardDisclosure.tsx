@@ -30,7 +30,7 @@ import type { ICSEvent } from "@/app/utils/ics";
 import { downloadICS } from "@/app/utils/icsDownload";
 import { serviceStartTime } from "@/app/utils/calendarFeed";
 import { normalizeText } from "@/app/utils/normalizeText";
-import { myNameFromSession, mySeats, serviceTone, TONE_RAIL } from "@/app/utils/agenda";
+import { myNameFromSession, mySeats, seatSectionOf, serviceTone, TONE_RAIL } from "@/app/utils/agenda";
 import { joinNames } from "@/app/utils/homeGreeting";
 import { plural } from "@/app/utils/plural";
 import { COUNTDOWN_CHIP, MINE_CHIP, SERVICE_TONE } from "@/app/utils/serviceToneStyle";
@@ -57,6 +57,10 @@ export default function DayCardDisclosure(props: DayCardProps) {
   const seats = mySeats(props, myName);
   const songs = props.setlist?.songs ?? [];
   const leads = props.leads ?? [];
+  // Said of a service still to come (this card is only ever handed one, but the rule is
+  // the sheet's own: a past service with no songs stored has nothing pending).
+  const setlistPending = songs.length === 0 && !(days !== null && days < 0);
+  const hasChips = days !== null || seats.length > 0;
   const tone = serviceTone(props);
   const toneStyle = SERVICE_TONE[tone];
   // The clock by the feed's one rule, the same the `.ics` below mints.
@@ -66,7 +70,7 @@ export default function DayCardDisclosure(props: DayCardProps) {
     `${props.day}${shortDate ? `, ${shortDate}` : ""}${clock ? `, ${clock}` : ""}`,
     ...(days !== null ? [formatCountdown(days).toLowerCase()] : []),
     ...(leads.length ? [`Lead ${joinNames(leads)}`] : []),
-    ...(songs.length ? [plural(songs.length, "canción", "canciones")] : []),
+    ...(songs.length ? [plural(songs.length, "canción", "canciones")] : setlistPending ? ["setlist pendiente"] : []),
     ...(seats.length ? [`te toca: ${seats.join(", ")}`] : []),
   ].join(", ");
 
@@ -120,7 +124,9 @@ export default function DayCardDisclosure(props: DayCardProps) {
       >
         {/* `decorative`: the head's own label already says the date. */}
         {props.date && <DateTile decorative date={props.date.slice(0, 10)} tone={toneStyle} />}
-        <span className="block min-w-0 flex-1 space-y-2">
+        {/* Explicit margins, not `space-y`: the summary below is a `Collapse`, and a
+            closed one is a zero-height child whose gap a `space-y` parent would keep. */}
+        <span className="block min-w-0 flex-1">
           <span className="flex items-start justify-between gap-3">
             <span className="block min-w-0 break-words pt-0.5 font-display text-[22px] font-semibold uppercase leading-none tracking-[0.02em] text-ink md:text-2xl">
               {props.day}
@@ -131,38 +137,39 @@ export default function DayCardDisclosure(props: DayCardProps) {
           </span>
           {/* Same-day sets differ only by the clock, so the folded card carries it. */}
           {clock && (
-            <span className="flex items-center gap-1.5 font-body text-[15px] leading-snug text-ink-muted">
+            <span className="mt-2 flex items-center gap-1.5 font-body text-[15px] leading-snug text-ink-muted">
               <ClockIcon size={14} className="shrink-0 text-ink-dim" />
               <span className="font-semibold tabular-nums text-ink">{clock}</span>
             </span>
           )}
           {/* Wraps rather than truncates: at «Máximo» a chip drops under the other
               instead of pushing anything off the card. */}
-          {(days !== null || seats.length > 0) && (
-            <span className="flex flex-wrap items-center gap-1.5">
+          {hasChips && (
+            <span className="mt-2 flex flex-wrap items-center gap-1.5">
               {days !== null && <span className={COUNTDOWN_CHIP}>{formatCountdown(days)}</span>}
               {seats.length > 0 && (
                 <span className={MINE_CHIP}>
-                  <SeatIcon seat={seats[0]} size={11} />
+                  <SeatIcon seat={seats[0]} section={seatSectionOf(props, seats[0])} size={11} />
                   Tú · {seats.join(", ")}
                 </span>
               )}
             </span>
           )}
           {/* Folded, the card still says who leads and whether the songs are in — as
-              faces and pictures. It closes as the body opens (the crossed `Collapse` of
-              a Jóvenes card), its top padding inside so an open card keeps no gap. */}
-          <Collapse open={!open}>
-            <ServiceFacts leads={leads} songs={songs} photos={props.photos} myName={myName} className="pt-1" />
+              faces and covers. It closes as the body opens (the crossed `Collapse` of
+              a Jóvenes card), its top padding inside so an open card keeps no gap; a
+              span, because this is inside the head's `<button>`. */}
+          <Collapse as="span" open={!open}>
+            <ServiceFacts leads={leads} songs={songs} pending={setlistPending} photos={props.photos} myName={myName} className="pt-3" />
           </Collapse>
         </span>
       </button>
       {/* The padding rides on Collapse's inner div: a padded animated element
           floors its own height under border-box and never closes to zero. */}
       <Collapse open={open} id={id} className="border-t border-ink/[0.08] py-5 pl-5 pr-4">
-        {/* `nested sheet`: this card already names the service, so the inner one draws
-            the sheet's body alone — songs with their pictures, the team as faces. */}
-        <DayCard {...props} nested sheet />
+        {/* `sheet`: this card already names the service, so the inner one draws the
+            sheet's body alone — songs with their covers, the team as faces. */}
+        <DayCard {...props} sheet />
       </Collapse>
       <QuickActions
         open={actionsOpen}

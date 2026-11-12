@@ -128,7 +128,7 @@ describe("app/** — data-lit has exactly two sites (ADR-0086, ADR-0087)", () =>
     expect(src).toMatch(/function Lit\(\{ on, children \}[\s\S]*?return on \? \(\s*<div className="brand-lit-card" data-lit="">/);
     expect(src).toMatch(/<Lit on=\{lit\}>/);
     expect(src).toMatch(/lit = false/);
-    const hosts = tsxFiles("app").filter((rel) => /<DayCard\b[^>]*\blit\b/.test(read(rel)));
+    const hosts = tsxFiles("app").filter((rel) => /<DayCard\b(?:[^>]|=>)*?\blit\b/.test(read(rel)));
     expect(hosts).toEqual(["app/(client)/page.tsx"]);
   });
 

@@ -29,6 +29,27 @@ describe("Collapse", () => {
     expect((box as HTMLElement & { inert: boolean }).inert).toBe(false);
     expect(screen.getByRole("button", { name: "dentro" })).toBeTruthy();
   });
+  it("`as=\"span\"` draws both of its elements as block spans, for a Collapse inside a <button>", () => {
+    render(
+      <MotionProvider>
+        <button>
+          <Collapse as="span" open={false} id="s" className="pt-3"><span>resumen</span></Collapse>
+        </button>
+      </MotionProvider>,
+    );
+    const box = document.getElementById("s")!;
+    expect(box.tagName).toBe("SPAN");
+    expect(box.style.display).toBe("block");
+    expect(box.style.overflow).toBe("hidden");
+    // The padding still rides on the INNER element, never on the animated one.
+    const inner = box.firstElementChild!;
+    expect(inner.tagName).toBe("SPAN");
+    expect(inner.className).toBe("block pt-3");
+    expect(box.closest("button")!.querySelector("div")).toBeNull();
+    // The same closed contract as a div.
+    expect(box.getAttribute("aria-hidden")).toBe("true");
+    expect((box as HTMLElement & { inert: boolean }).inert).toBe(true);
+  });
   it("flips both attributes when toggled", async () => {
     const { rerender } = wrap(false);
     rerender(<MotionProvider><Collapse open id="c"><button>dentro</button></Collapse></MotionProvider>);

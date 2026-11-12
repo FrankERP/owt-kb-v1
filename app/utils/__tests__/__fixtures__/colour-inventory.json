@@ -8,7 +8,7 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 322,
+    "literalRows": 321,
     "filesScanned": 626,
     "filesWithColour": 67,
     "byCategory": {
@@ -17,12 +17,12 @@
       "5": 2,
       "8": 85,
       "9": 10,
-      "11": 13,
+      "11": 12,
       "12": 146
     },
     "byDisposition": {
       "exempt": 60,
-      "B": 115,
+      "B": 114,
       "keep": 235,
       "C": 5,
       "D": 13
@@ -2216,7 +2216,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 1325,
+      "line": 1334,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2228,7 +2228,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 1325,
+      "line": 1334,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2816,7 +2816,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 130,
+      "line": 132,
       "disposition": "B",
       "reason": null
     },
@@ -3104,7 +3104,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 407,
+      "line": 413,
       "disposition": "B",
       "reason": null
     },
@@ -3116,19 +3116,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 460,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/DayCard.tsx",
-      "category": 11,
-      "categoryName": "arbitrary-value-var-brand",
-      "value": "[var(--brand-radius-panel)]",
-      "alpha": null,
-      "utility": null,
-      "carrier": null,
-      "line": 460,
+      "line": 466,
       "disposition": "B",
       "reason": null
     },
@@ -3140,7 +3128,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 762,
+      "line": 772,
       "disposition": "B",
       "reason": null
     },
@@ -3152,7 +3140,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 771,
+      "line": 781,
       "disposition": "B",
       "reason": null
     },
@@ -3164,7 +3152,7 @@
       "alpha": null,
       "utility": "to",
       "carrier": null,
-      "line": 417,
+      "line": 423,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3176,7 +3164,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 104,
+      "line": 108,
       "disposition": "B",
       "reason": null
     },
@@ -3548,7 +3536,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 231,
+      "line": 234,
       "disposition": "B",
       "reason": null
     },

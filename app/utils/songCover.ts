@@ -16,12 +16,14 @@ const COVER_PX = 160;
  * The square, sized URL of a stored cover, or null. Only a Sanity image URL is accepted: the
  * value comes from `SONG_COVER_GROQ`, and anything else is not a picture this app stored.
  *
- * No `auto=format`: the image is served in the format it was uploaded in (JPEG or PNG), never
- * WebP — the iOS WKWebView rule the avatars follow.
+ * `fm=jpg`, never `auto=format` and never the original's own format: the field accepts
+ * whatever an editor drags into the Studio, and a WebP or AVIF cover would decode on the
+ * web and fail silently in the iOS WKWebView — the rule `avatarSrc` and `heroPhotoSrc`
+ * follow. A cover has no transparency to lose.
  */
 export function songCoverUrl(assetUrl?: string | null): string | null {
   if (typeof assetUrl !== "string" || !assetUrl.startsWith("https://cdn.sanity.io/images/")) return null;
-  return `${assetUrl.split("?")[0]}?w=${COVER_PX}&h=${COVER_PX}&fit=crop`;
+  return `${assetUrl.split("?")[0]}?w=${COVER_PX}&h=${COVER_PX}&fit=crop&fm=jpg`;
 }
 
 /** The GROQ projection a setlist row reads its cover from, relative to a `songs[]` item. */

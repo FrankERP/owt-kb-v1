@@ -522,10 +522,9 @@ export default async function MePage() {
             "Ensayar" action. */}
         {inWorship && heroAssignment && (
           <div className="space-y-14" {...revealProps(1)}>
-            {/* «Próximo» (the «millones» pass, 2026-10-24): the page's sections carry
-                the sheet's small-caps titles, the one uppercase left on it, so the
-                hero reads as the first section of a run sheet, not a card dropped
-                under the header. */}
+            {/* «Próximo»: the page's sections carry the small-caps titles of the
+                «millones» pass (2026-10-24); under this one the next service is the
+                framed service card (ADR-0087), the same one Inicio opens on. */}
             <section key={heroAssignment.doc._id} aria-labelledby="me-proximo">
               <h2 id="me-proximo" className={`${SHEET_TITLE} mb-5`}>Próximo</h2>
               <DayCard {...cardProps(heroAssignment)} hero />

@@ -18,36 +18,47 @@ import { CoverRow } from "./SongCover";
 import { MusicNoteIcon } from "../ui/icons";
 
 export default function ServiceFacts({
-  leads = [],
-  songs = [],
+  leads,
+  songs,
+  pending = true,
   photos,
   myName = "",
   className = "",
 }: {
-  leads?: string[];
-  songs?: Array<{ cover?: string | null }>;
+  /** Null-safe on purpose: a setlist document made in the Studio with no `songs` field
+   *  projects `null`, which a default parameter does not catch. */
+  leads?: string[] | null;
+  songs?: Array<{ cover?: string | null }> | null;
+  /** Whether a set with no songs is still «pendiente». False for a service that already
+   *  happened: nothing is pending there, the songs were simply never stored. */
+  pending?: boolean;
   photos?: Record<string, string>;
   myName?: string;
   className?: string;
 }) {
+  const who = leads ?? [];
+  const set = songs ?? [];
+  if (who.length === 0 && set.length === 0 && !pending) return null;
   return (
     <span className={`flex flex-wrap items-center gap-x-4 gap-y-2 font-body text-[14px] leading-snug text-ink-muted ${className}`}>
-      {leads.length > 0 && (
+      {who.length > 0 && (
         <span className="inline-flex min-w-0 items-center gap-2">
-          <FaceStack names={leads} photos={photos} myName={myName} max={3} size="xs" />
-          <span className="min-w-0 break-words">Lead {joinNames(leads)}</span>
+          <FaceStack names={who} photos={photos} myName={myName} max={3} size="xs" />
+          <span className="min-w-0 break-words">Lead {joinNames(who)}</span>
         </span>
       )}
-      {songs.length > 0 ? (
+      {set.length > 0 ? (
         <span className="inline-flex items-center gap-2 whitespace-nowrap">
-          <CoverRow covers={songs.map((song) => songCoverUrl(song.cover))} />
-          {plural(songs.length, "canción", "canciones")}
+          <CoverRow covers={set.map((song) => songCoverUrl(song.cover))} />
+          {plural(set.length, "canción", "canciones")}
         </span>
       ) : (
-        <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-ink-dim">
-          <MusicNoteIcon size={12} />
-          Setlist pendiente
-        </span>
+        pending && (
+          <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-ink-dim">
+            <MusicNoteIcon size={12} />
+            Setlist pendiente
+          </span>
+        )
       )}
     </span>
   );

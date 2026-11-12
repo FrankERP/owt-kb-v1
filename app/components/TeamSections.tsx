@@ -221,8 +221,11 @@ function Section({ section, open, onToggle, myName, photos, sheet = false }: {
             </span>
           )}
         </span>
-        {/* Closed, the section still shows WHO: its people as overlapped faces. Hidden
-            below 22rem of row (a phone at «Máximo»), where the names line needs the width. */}
+        {/* Closed, the section still shows WHO: its people as overlapped faces. Hidden on
+            a VIEWPORT under 360 px (an iPhone SE), where the names line needs the width.
+            `min-[360px]` is a viewport breakpoint, not a measure of the row and not of the
+            text size: «Máximo» is `-webkit-text-size-adjust`, which widens no box, so at
+            «Máximo» on a wider phone the faces stay and the names wrap to their two lines. */}
         {sheet && !open && (
           <FaceStack names={people.map((p) => p.name)} photos={photos} myName={myName} max={4} className="hidden min-[360px]:inline-flex" />
         )}

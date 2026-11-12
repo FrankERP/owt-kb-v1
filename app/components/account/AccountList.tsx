@@ -2,9 +2,9 @@
 // «millones» pass, 2026-10-24): one row per place a member goes to about
 // themselves — Disponibilidad, Calendario, Ajustes, and the one-shot `.ics`
 // download — a 17 px title with a one-line status under it, and a chevron.
-// Hairline rows in the page's own type since the «millones» pass: the raised
-// card and the tinted icon squares it had were the last card on a page that is
-// now a run sheet. Before design pass C the page ended on a lone bordered
+// Hairline rows in the page's own type since the «millones» pass (no raised card
+// around the list); each row carries its glyph on a neutral tile again since
+// ADR-0087, the service card's own. Before design pass C the page ended on a lone bordered
 // «Disponibilidad» link, the settings were only in the avatar menu, and «Añadir
 // a calendario» floated top-right above the hero card.
 //
@@ -54,7 +54,7 @@ export function AccountLinkRow({ href, title, status, icon }: { href: string; ti
   );
 }
 
-/** The list itself: hairline rows, a hairline above and below. */
+/** The list itself: hairline rows (each with its glyph tile), a hairline above and below. */
 export default function AccountList({ children, labelledBy }: { children: ReactNode; labelledBy: string }) {
   return (
     <ul aria-labelledby={labelledBy} className="divide-y divide-ink/[0.10] border-y border-ink/[0.10]">

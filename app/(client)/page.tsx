@@ -284,7 +284,7 @@ export default async function Home() {
           text, not an eyebrow: the sheet keeps its small caps for section
           titles only. */}
       <section
-        aria-label="Tu próximo servicio"
+        aria-label="Saludo"
         className={`relative flex flex-col justify-end ${photo ? "min-h-[24rem] md:min-h-[32rem]" : "pt-12"}`}
         {...revealProps(0)}
       >
@@ -355,7 +355,8 @@ export default async function Home() {
                 <h3 id="home-despues" className={`${SHEET_TITLE} flex items-center gap-3 pb-3`}>
                   Después
                   <span aria-hidden="true" className="h-px flex-1 bg-ink/[0.10]" />
-                  <span className="tabular-nums">{rest.length}</span>
+                  {/* Decorative: read after the title it would be heard as «Después 2». */}
+                  <span aria-hidden="true" className="tabular-nums">{rest.length}</span>
                 </h3>
                 <div className="space-y-3">
                   {rest.map((s, i) => (

@@ -17,7 +17,7 @@ import { themeColour } from "@/app/utils/themeColour";
 import { paintsDayCard } from "@/app/utils/paintsDayCard";
 import { daysUntil, formatCountdown } from "@/app/utils/daysUntil";
 import { serviceStartTime } from "@/app/utils/calendarFeed";
-import { myNameFromSession, mySeats, serviceTone, TONE_RAIL } from "@/app/utils/agenda";
+import { myNameFromSession, mySeats, seatSectionOf, serviceTone, TONE_RAIL } from "@/app/utils/agenda";
 import { normalizeSeatName } from "./admin/seatModel";
 import { SEAT_TO_FAMILY } from "@/app/utils/rehearsalMixes";
 import { formatLeadNames } from "@/app/utils/songLeads";
@@ -78,16 +78,16 @@ export interface DayCardProps {
    */
   hero?: boolean;
   /**
-   * The run-sheet rendering WITHOUT the hero's own head (ADR-0070): hairline
-   * rows, the sheet's titles and body-type labels, no card header — what a
-   * «Después» row on home opens onto, since the row already names the service.
-   * `hero` implies it.
+   * The service card's BODY without a head of its own (ADR-0087): the songs with their
+   * covers, the team as faces, the sheet's titles — what an open «Después» card draws,
+   * since `DayCardDisclosure` already frames and names the service. `hero` implies it.
    */
   sheet?: boolean;
   /**
-   * The hero's one identity line («Domingo · 25 oct · 11:00»). `false` when the
-   * host already names the service — the calendar's day sheet titles itself with
-   * the date (2026-10-24) — so the line is not said twice. Ignored without `hero`.
+   * Whether a `hero` draws its own frame and head (the date leaf, the day as title, the
+   * clock, «Tú · EG»). `false` when the host already names the service — the calendar's
+   * day sheet titles itself with the date (2026-10-24) — so it is not said twice and the
+   * body is drawn alone. Ignored without `hero`.
    */
   identity?: boolean;
   /**
@@ -96,9 +96,6 @@ export interface DayCardProps {
    * (`hero` with `identity`).
    */
   lit?: boolean;
-  /** Rendered inside `DayCardDisclosure`, which already draws the card's ground,
-   *  hairline and rail: drop this card's own so there is one card, not two. */
-  nested?: boolean;
   /** Display-name key → photo URL for the team's faces (`seatPhotos`). Absent:
    *  initials for everyone and no «+ foto» (see `TeamSections`). */
   photos?: Record<string, string>;
@@ -127,7 +124,7 @@ export interface DayCardProps {
 /** The neutral the card's quiet chrome (the medley spine) is drawn in. */
 const NEUTRAL = "--ink-dim-rgb";
 
-export function DayCard({ day, date, time, setlist, pastorMessage, leads, myLeadSongs, instruments, fohTeam, bgvs, chorus, roleId, serviceId, isNext, layout = "card", hero = false, sheet: sheetProp = false, identity = true, lit = false, nested = false, photos, viewerTypes, viewerName, viewerIsAdmin }: DayCardProps) {
+export function DayCard({ day, date, time, setlist, pastorMessage, leads, myLeadSongs, instruments, fohTeam, bgvs, chorus, roleId, serviceId, isNext, layout = "card", hero = false, sheet: sheetProp = false, identity = true, lit = false, photos, viewerTypes, viewerName, viewerIsAdmin }: DayCardProps) {
   const { openSheet } = usePlayer();
   const { data: session } = useSession();
   const { toast } = useToast();
@@ -203,6 +200,9 @@ export function DayCard({ day, date, time, setlist, pastorMessage, leads, myLead
 
   // Group songs into medley runs
   const runs = hasSetlist ? buildRuns(setlist!.songs) : [];
+  // «Pendiente» is a promise about a service still to come: a past one with no songs
+  // stored simply has none (the calendar's day sheet opens old services too).
+  const setlistPending = sheet && !hasSetlist && !(days !== null && days < 0);
 
   // «Abrir» is the row's own tap, named; «Practicar» is deliberately absent because
   // the player exposes ONE song entry point and «Abrir» already calls it. The link
@@ -322,9 +322,11 @@ export function DayCard({ day, date, time, setlist, pastorMessage, leads, myLead
       )}
 
       {/* The usual mid-week state: the team is published, the songs are not. The
-          framed card says so in the setlist's own place — without it the card
-          opened straight on «Equipo» and read as if the service had no music. */}
-      {framed && !hasSetlist && (
+          card says so in the setlist's own place — without it the body opened
+          straight on «Equipo» and read as if the service had no music. Every sheet,
+          framed or not: an open «Después» card has just folded away the
+          `ServiceFacts` that said it. */}
+      {setlistPending && (
         <section>
           <h4 className={SHEET_TITLE}>Setlist</h4>
           <p className="mt-2 flex items-center gap-3 rounded-2xl border border-dashed border-ink/[0.14] px-3.5 py-3 font-body text-[15px] text-ink-muted">
@@ -339,16 +341,20 @@ export function DayCard({ day, date, time, setlist, pastorMessage, leads, myLead
   );
 
   // The card's actions, under its head: the ONE primary action («Ensayar el setlist»), what
-  // the member leads on a worship night, and an admin's «Mensajes».
-  const hasActions = hero && (hasSetlist || canMessage || !!myLeadSongs?.length);
+  // the member leads on a worship night, and an admin's «Mensajes». Only «Ensayar» is the
+  // hero's alone (every other sheet has it inline on the Setlist title): «Diriges» and
+  // «Mensajes» belong to ANY sheet, or an open «Después» card loses both — and keeps a
+  // mounted messages dialog with nothing to open it.
+  const heroPractice = hero && hasSetlist;
+  const hasActions = heroPractice || canMessage || !!myLeadSongs?.length;
   const heroActions = hasActions ? (
     <div className="space-y-3">
       {myLeadSongs && myLeadSongs.length > 0 && <p className="font-body text-sm text-accent">Diriges: {myLeadSongs.join(", ")}</p>}
-      {(hasSetlist || canMessage) && (
+      {(heroPractice || canMessage) && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           {/* Capped from `md`: full width on a phone is the thumb's target, but the
               same button across a 56rem desktop page read as a banner (D). */}
-          {hasSetlist && (
+          {heroPractice && (
             <div className="w-full md:w-auto md:min-w-[22rem] md:max-w-md">
               <PracticePlaylistButton variant="hero" songs={setlist!.songs} mySeat={mySeat} accentVar="--accent-rgb" />
             </div>
@@ -397,8 +403,8 @@ export function DayCard({ day, date, time, setlist, pastorMessage, leads, myLead
       {sheet ? (
         // THE SERVICE AS A CARD (ADR-0087, which supersedes ADR-0070's frameless sheet):
         // one object with an edge — the date as a calendar leaf, the day as its title, the
-        // clock and «Tú · EG» as icon chips, the day's colour on the rail and behind the
-        // head — then the songs with their pictures and the team as faces. `framed` is that
+        // clock and «Tú · EG» as icon chips, the day's colour on the rail and the leaf's
+        // band — then the songs with their covers and the team as faces. `framed` is that
         // card; without it (a host that already names the service) only the body is drawn.
         framed ? (
           <Lit on={lit}>
@@ -437,7 +443,7 @@ export function DayCard({ day, date, time, setlist, pastorMessage, leads, myLead
                         )}
                         {myServiceSeats.length > 0 && (
                           <span className={MINE_CHIP}>
-                            <SeatIcon seat={myServiceSeats[0]} size={11} />
+                            <SeatIcon seat={myServiceSeats[0]} section={seatSectionOf({ instruments, fohTeam }, myServiceSeats[0])} size={11} />
                             Tú · {myServiceSeats.join(", ")}
                           </span>
                         )}
@@ -453,12 +459,12 @@ export function DayCard({ day, date, time, setlist, pastorMessage, leads, myLead
         ) : (
           <div className="relative">
             {heroActions}
-            <div className={hero ? (heroActions ? "mt-6" : "") : "mt-1 pb-1"}>{sheetBody}</div>
+            <div className={hero ? (heroActions ? "mt-6" : "") : heroActions ? "mt-5 pb-1" : "mt-1 pb-1"}>{sheetBody}</div>
           </div>
         )
       ) : (
-      <div className={nested ? "relative overflow-hidden rounded-[var(--brand-radius-panel)]" : "brand-facet-panel brand-surface overflow-hidden rounded-[var(--brand-radius-panel)]"}>
-        {!nested && <span aria-hidden className={`absolute inset-y-0 left-0 z-[1] w-[3px] ${TONE_RAIL[tone]}`} />}
+      <div className="brand-facet-panel brand-surface overflow-hidden rounded-[var(--brand-radius-panel)]">
+        <span aria-hidden className={`absolute inset-y-0 left-0 z-[1] w-[3px] ${TONE_RAIL[tone]}`} />
         {/* Header — day · date with the countdown on the right (next service
             only). §18 keeps one eyebrow per surface, so the `Servicio` label and
             the long date are gone; the date the header already shows is the date. */}
@@ -595,7 +601,7 @@ function TeamNote({
 }: {
   text: string;
   title?: string;
-  /** The pastor's message: the same fold, an accent edge so it reads as the pastor's. */
+  /** The pastor's message: the same fold, in the accent so it reads as the pastor's. */
   pastor?: boolean;
 }) {
   const id = useId();
@@ -622,15 +628,15 @@ function TeamNote({
     };
   }, [expanded, text]);
   return (
-    // An icon tile and an edge in the note's own colour (ADR-0087): the pastor's word is
-    // found by its megaphone and the accent, the team's note by its bubble — before the
-    // small caps over either are read.
+    // An icon tile in the note's own colour (ADR-0087): the pastor's word is found by its
+    // megaphone and the accent, the team's note by its bubble — before the small caps over
+    // either are read. No rail down its edge: inside a card the left rail is the DAY's
+    // device, and a cyan one here was a second Sunday rail.
     <section
-      className={`relative flex gap-3 overflow-hidden rounded-2xl border py-3 pl-4 pr-4 ${
+      className={`flex gap-3 rounded-2xl border px-3.5 py-3 ${
         pastor ? "border-surface-accent-30 bg-accent/5" : "border-ink/[0.08] bg-ink/[0.03]"
       }`}
     >
-      <span aria-hidden className={`absolute inset-y-0 left-0 w-[3px] ${pastor ? "bg-accent" : "bg-ink-dim"}`} />
       <span aria-hidden className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${pastor ? "bg-accent/[0.14] text-accent" : "bg-ink/[0.07] text-ink-muted"}`}>
         {pastor ? <MegaphoneIcon size={15} /> : <MessageIcon size={15} />}
       </span>
@@ -709,6 +715,10 @@ function SongRow({ song, n, onOpen, onQuickActions, dense = false, sheet = false
       >
         <SongCover src={songCoverUrl(song.cover)} n={n} />
         <div className="min-w-0 flex-1">
+          {/* The song's place in the set, for a screen reader: the number on the cover's
+              corner is inside a decorative tile. Its own element, so the title stays the
+              title. */}
+          <span className="sr-only">Canción {n}: </span>
           <span className="block truncate font-body text-[17px] font-semibold leading-snug transition-colors group-hover:text-accent">{song.title}</span>
           {(song.author || song.bpm) && (
             <span className="flex min-w-0 items-center gap-2 font-body text-sm text-ink-muted">
