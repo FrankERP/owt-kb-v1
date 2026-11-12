@@ -42,14 +42,14 @@ still one-shot:
 4. **Drop landing** (spec §2.1, not yet built — lands with the drag-and-drop
    phase) — when a dragged chip lands, the target cell flashes the beam edge
    once, 120ms.
-5. **The lit card on `/`** (once, 900 ms) — **no site since ADR-0070 (2026-10-23)**: the
-   hero is a run sheet with no frame, and a border pass needs a border; the rules stay
-   for a framed surface to adopt, `litCard.test.ts` asserts nothing sets `data-lit`. As
-   designed: after the route reveal, the next
-   service's hero card gets one light pass around its border, then rests on its
-   own accent border. `.brand-lit-card[data-lit]::before`, `@keyframes
-   brand-lit-pass`, `--lit-beam`. `data-lit` is set by `app/(client)/page.tsx`
-   on the hero card only. The wrapper CLIPS and an unmasked conic layer spins
+5. **The lit card** (once, 900 ms) — **its one site is the NEXT meeting on `/jovenes`**
+   (`app/components/jovenes/MeetingCard.tsx`, the `featured` card; ADR-0087, 2026-11-12).
+   It was the worship hero's until ADR-0070 (2026-10-23) made that a run sheet with no
+   frame — a border pass needs a border — and for three weeks nothing set `data-lit`.
+   `litCard.test.ts` asserts that file is the ONLY site and that the wrapper sits in the
+   `featured` branch; a second site is an ADR first. After the route reveal the card gets
+   one light pass around its border, then rests. `.brand-lit-card[data-lit]::before`,
+   `@keyframes brand-lit-pass`, `--lit-beam`. The wrapper CLIPS and an unmasked conic layer spins
    under the card, so the light only shows in the 1 px gap the wrapper's
    `padding` opens — a mask would rotate with the layer and slash across the
    card. Guard: `app/utils/__tests__/litCard.test.ts`, which cannot see
@@ -201,13 +201,13 @@ Assert final state, never timing. Wrap in `<MotionProvider>`.
 | `dialogSemantics.test.ts` | Every file that draws a dismissable full-bleed scrim (`bg-scrim` + `inset-0` + `onClick`) carries `role="dialog"`/`aria-modal`/an accessible name/focus management, or is named in an exemption list with a reason. Floor is 1 (`CueDialog` itself) as of M1 Task 1 — `BottomNav`'s hand-rolled scrim was replaced by a `CueDialog` sheet, so its `NOT_A_DIALOG` entry was deleted along with the overlay it exempted; the exemption list is now empty. A stale exemption (naming a file the scan no longer finds) fails its own check. |
 | `labelBudget.test.ts` | Spec §18 (decision N): one eyebrow per surface. Pins seven named labels at their audited counts, by equality — a phase that removes one lowers its number in the same commit. `>Cue<` (0, M0b-1), `>Servicio<` (0, R1 — `DayCard`'s day · date header carries it now), "Índice musical" (0, R1 — `SongSearchList` removed), "títulos" (0, R1 — the home library count removed), "Repertorio" (0, R1 — `PostComponent`'s song-card eyebrow removed), "Backstage operations" (0, R5 Task 1 — `/admin`'s eyebrow removed) and "Acceso autorizado" (0, R5 Task 1 — the status pill removed). All seven are at 0; the file stays as the ratchet a new eyebrow has to argue with. |
 | `redirects.test.ts` | R1 (spec §12.2, decision H): `next.config.mjs`'s `redirects()` folds `/tag`, `/tag/:slug`, `/author`, `/author/:slug` into `/biblioteca` (`?tag=:slug`/`?author=:slug`), all `permanent: true` (308). |
-| `litCard.test.ts` | The home hero card's one-shot light pass (R1, decision Q — see "The beam" above). Cannot see geometry (jsdom), so it pins the CSS contract instead. |
+| `litCard.test.ts` | The one-shot light pass around a card's border (R1, decision Q — see "The beam" above). Cannot see geometry (jsdom), so it pins the CSS contract instead, and that `data-lit` has exactly ONE site: the featured card of `app/components/jovenes/MeetingCard.tsx` (ADR-0087). |
 | `bottomNavOffsetSync.test.ts` | Names `BottomNav`'s `NAV_H_VAR`/`NAV_CLASS` exports, the `setProperty`/`removeProperty`/`classList` publish-and-clear shapes, `brand.css`'s `--bottom-nav-h` declaration and `html.has-bottom-nav [data-route-main]` padding rule, that every fixed-bottom consumer (`Toast.tsx`, `AudioPlayer.tsx`, `EditSongButton.tsx`) offsets by the variable, and that the client layout mounts `<BottomNav />` inside `<Provider>`. A new fixed-bottom element joins the `it.each` list. |
 | `adminShell.test.tsx` | R5 (spec §12.5, [ADR-0035](adr/0035-the-admin-shell-is-gone.md)): `/admin` has no shell and no panel boxes — no `.brand-admin-shell`/`.brand-admin-tabs`, no `brand-surface` wrapper around a panel body and no second tab bar. A structural ratchet: a new box fails the suite rather than shipping. Its queries are scoped to the rendered container after a flake that saw the previous test's tree. |
 | `adminDynamic.test.ts` | R5 Task 6: a source scan proving each of `ActivityPanel`, `ContentPanel`, `AvailabilityPanel`, `ProposalsPanel`, `MembersPanel` (in `AdminPanel.tsx`) and `MonthGenerator` (in `ServicesPanel.tsx`) is imported through `next/dynamic` in exactly the file allowed to gate it, and statically NOWHERE else under `app/**` — one static import elsewhere pulls the chunk back into the eager graph and silently undoes the −207.8 kB split. |
 | `panelBoundary.test.tsx` | A failed panel chunk stays inside its own column: a throwing child renders «No se pudo cargar esta sección» + «Reintentar» instead of reaching `app/(client)/error.tsx`, and an `onRetry` recovers in place. The rule it encodes: App Router `next/dynamic` renders `loading` only as a Suspense fallback and never passes `error`/`retry`, so the recovery belongs to an error boundary, never to the skeleton. |
 | `navbarHeightSync.test.ts` | R4 Task 6 (spec §5.3): `Navbar` and `NavbarSkeleton` must publish the top bar's height from the ONE spelling, `NAVBAR_H_CLASS` (`app/utils/navbarHeight.ts`, `"h-20 lg:h-24"`), so a `loading.tsx` never hard-codes a height that can drift from the real navbar. Reads both sources and asserts each imports the constant from `@/app/utils/navbarHeight` and neither contains the literal string. Scope is exactly those two files — `SectionNav`'s sticky offset, `LibraryIndex` and the song page's `scroll-mt-*` still hard-code their own values and the guard does not see them. |
-| `tailwindMotion.test.ts` | R6 Task 2: the `pop` keyframe exists in `tailwind.config.ts` with its three frames (`scale(0.92)` → `scale(1.04)` at 60% → `transform: none`) and `animation.pop` spells `pop var(--motion-slow) var(--ease-out) both`. `animate-pop` is the only overshoot outside `ui/**`, where `motion` may not be imported, so the keyframe IS the primitive and a silent edit to it changes two product surfaces at once. |
+| `tailwindMotion.test.ts` | `rail-draw` (ADR-0087: `scaleY(0)` → `transform: none` on `--motion-reveal`, the Jóvenes card's colour rail) and R6 Task 2: the `pop` keyframe exists in `tailwind.config.ts` with its three frames (`scale(0.92)` → `scale(1.04)` at 60% → `transform: none`) and `animation.pop` spells `pop var(--motion-slow) var(--ease-out) both`. `animate-pop` is the only overshoot outside `ui/**`, where `motion` may not be imported, so the keyframe IS the primitive and a silent edit to it changes two product surfaces at once. |
 | `lyricMarkers.test.tsx` | R6 Task 6 (spec §19.5, decision P): `dimRepeatMarkers`'s behaviour, plus three SOURCE facts a DOM test cannot see, because each is a cascade tie an emission order decides — the eyebrow element is a bare `div` and never a `p` (which would lose the `!important` tie to the prose wrapper's `prose-p:!mt-0`), `LYRIC_EYEBROW_BLOCK` carries no `first:` variant (which matched every group wrapper and zeroed the whole rhythm), and the song page's prose wrapper and the gallery fixture's are byte-identical, so the fixture renders the real cascade. |
 | `vrConfig.test.ts` | R6 Task 8: `playwright.vr.config.ts`'s snapshot contract — the `{projectName}/{platform}` path template (a linux run must have NO baselines rather than compare against macOS rasterisation), `maxDiffPixelRatio: 0.01`, `animations: "disabled"`, and the `desktop`/`phone` project pair. Raising the diff ratio to make a failing baseline pass is the forbidden move; recapture instead. |
 | `themeGallery.test.ts` | The gallery's seven-fixture tuple and, for every fixture, HERMETICITY — no `useSession`, no `next-auth`, no `fetch`, no Sanity client, no env read — because the route is public and prerendered (ADR-0017). Since R6 it also pins `GalleryMotion`'s `#motion` branch and that the `nav` fixture hosts `BottomNavBar`, the presentational half, rather than `BottomNav`, which reads the session. A gallery fixture hosts a presentational half; the song fixture's tutorial poster is the single documented exception, and the VR spec stubs its image route. |
@@ -614,7 +614,7 @@ cards — see spec Part X for the full ledger; the motion-relevant pieces:
   own; the ONE count on that surface lives in the search placeholder), and "Repertorio"
   (`PostComponent`'s song-card eyebrow — the card itself is gone).
 - **The lit card** (`.brand-lit-card`, `--lit-beam` — see "The beam" above) was the home
-  hero's one-shot border pass until ADR-0070 (the hero lost its frame; the CSS stays, unused); it is the fifth enumerated beam use and the first CSS-only
+  hero's one-shot border pass until ADR-0070 (the hero lost its frame) and is the next Jóvenes meeting's since ADR-0087; it is the fifth enumerated beam use and the first CSS-only
   one (no `motion` import, so it costs nothing against the bundle budget below). Guarded by
   `litCard.test.ts`, which reads `brand.css`/`page.tsx` as text and cannot see geometry —
   see the file's own header for what closed that gap.
@@ -1647,3 +1647,30 @@ member page is fast; `loadingSkeletons`'s list is untouched), planner-cell motio
 the day sheet" — there is still no day sheet.
 
 **Release:** merged to `main` as `0d21f8ce` (PR #83, 2026-09-18 16:26 CST); production alias `owt-backstage.vercel.app` verified on that SHA (`alias` + `meta.githubCommitSha`). Preview last verified at `cd6d7176` (dev alias on `8b024c5e` carried the final code; `cd6d7176` added only the shots record).
+
+### Jóvenes as cards (2026-11-12, ADR-0087)
+
+`/jovenes` and Planear Jóvenes went from hairline rows to cards, and the motion is all borrowed:
+
+- **Each card rises with the route reveal**, staggered (`revealProps(1 + i)` on the card's wrapper,
+  capped by `REVEAL_STAGGER_CAP` as everywhere).
+- **The colour rail draws itself** top to bottom after its card rises: `animate-rail-draw`
+  (`AudienceRail.tsx`), the one new utility. Its delay is `calc(var(--reveal-i, 0) * 40ms + 120ms)`
+  — the card's own stagger, which it inherits, plus a beat — so the rails follow the cards down the
+  page. `transform` only; ends on `none`.
+- **The fold is `Collapse`** twice per card, crossed: the summary closes as the body opens. The
+  summary's top padding lives INSIDE its `Collapse` (the zero-height-child rule above), so an open
+  card keeps no phantom gap. The chevron turns on `duration-base`.
+- **The filter reflows with `AnimatedList`**: leavers fade, the rest slide into place, and a month
+  label that loses its last meeting leaves with it. The card that becomes first under a filter
+  opens by itself — the card keeps `null` until the reader touches the fold, so «open» follows
+  `featured` with no second state to reconcile.
+- **The next meeting takes the lit pass** (see "The beam", item 5). Geometry was checked in
+  Chromium with the pass paused mid-way (`document.getAnimations()`, `currentTime = 930`): the
+  light rides the 1 px gap and nowhere else. `litCard.test.ts` cannot see that; repeat the check if
+  the wrapper or the card's radius changes.
+- **Nothing here imports `motion`**: the Jóvenes components sit outside `ui/**` and compose
+  primitives. Reduced motion collapses all of it through the one global rule.
+
+Not animated on purpose: the month map (a picture of the month; a dot that pulsed would claim
+something changed) and the planner's cards beyond the reveal (an admin opens them to work).

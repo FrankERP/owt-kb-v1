@@ -781,7 +781,7 @@ importable only under `app/components/ui/**` — see `docs/MOTION.md` and
 ADR-0031.
 
 ## Colour tokens
-Colour lives in **68 base roles + 32 composed tokens** (`app/brand.css` `:root`,
+Colour lives in **73 base roles + 32 composed tokens** (`app/brand.css` `:root`,
 `tailwind.config.ts`). The seven retired `--brand-*` COLOUR variables and their `brand.*`
 Tailwind keys are **gone**; the four non-colour ones (`--brand-radius-*`,
 `--brand-duration-*`) survive.
@@ -793,6 +793,19 @@ Tailwind keys are **gone**; the four non-colour ones (`--brand-radius-*`,
   alert, a button, a link or «tú», and the key stays ink inside a day card, where the 3 px rail
   already owns the colour. Frank chose it over gold (which blurred into Saturday's amber) and
   over more cyan (which turns the accent into wallpaper).
+- **Each Jóvenes group has a colour, and it means only «this group»** (`--group-otro-nivel-rgb`,
+  `--group-invencibles-rgb`, `--group-emprendedores-rgb`, `--group-adrenalin-rgb`,
+  `--group-guerreras-rgb`; ADR-0087, 2026-11-12). They exist because `/jovenes` lists the meetings
+  of five groups and no existing hue was free to say whose a meeting is. Categorical like the
+  `chart-*` six, and as narrow: the audience chip, a card's rail, the date leaf's band, the month
+  map's dots. Never a state («Publicada» green, «Borrador» amber), never «tú», never a button, and
+  never access (which meetings a person sees is the reader's, ADR-0081). `jovenesGroupStyle.ts` is
+  the only file that spells the classes (whole, since Tailwind reads it as text); a chip always
+  carries the group's two-letter monogram, so the colour is never the only signal; a meeting for
+  all of Jóvenes uses the accent and an unknown id is neutral. `lightContrast.test.ts` measures
+  each hue on the page AND on its own wash in both themes — the wash is where it is read, and it
+  is the row that failed first (teal, 4.49:1). The values were picked by the implementer; real
+  group colours replace them in `brand.css` and the guard judges them.
 - **Never build a colour by string concatenation.** `` `${hex}55` `` worked on a bare hex;
   a token cannot be appended to, and `rgb(var(--accent-rgb) / 0.2)55` is not a valid
   `<color>` — the browser drops the whole declaration with nothing in the console. Use
