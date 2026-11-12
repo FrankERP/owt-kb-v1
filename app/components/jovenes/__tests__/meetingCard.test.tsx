@@ -108,6 +108,26 @@ describe("JovenesMeetingCard", () => {
     expect(faces[0].textContent).toBe("AN");
   });
 
+  it("the folded summary draws each person's own photo, and a tap on a face still reaches the card", () => {
+    card(
+      ev({
+        seats: [
+          { _key: "s1", role: "encargado", memberId: "m1", name: "Ana", photo: "https://lh3.googleusercontent.com/a/ana", mine: false },
+          { _key: "s2", role: "predica", memberId: "m2", name: "Beto", photo: null, mine: false },
+        ],
+        program: [],
+      }),
+    );
+    const faces = [...screen.getByText("Ana, Beto").parentElement!.querySelectorAll<HTMLElement>(".-space-x-1\\.5 > *")];
+    expect(faces.map((f) => f.querySelector<HTMLElement>("[data-photo]")?.style.backgroundImage ?? null)).toEqual([
+      'url("https://lh3.googleusercontent.com/a/ana")',
+      null,
+    ]);
+    // The head's hit area is the fold button's stretched `::after`; a face must not sit on top of
+    // it and swallow the tap (jsdom has no hit-testing, so the class is what can be pinned).
+    for (const face of faces) expect(face.className).toContain("pointer-events-none");
+  });
+
   it("the heading says the date to a screen reader, and the drawn leaf is hidden from it", () => {
     const { container } = card(ev());
     expect(screen.getByRole("heading", { level: 3 }).textContent).toBe("Sábado de Jóvenes, Sábado 14 de noviembre");

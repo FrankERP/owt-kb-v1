@@ -28,10 +28,28 @@ describe("PersonAvatar", () => {
       "url(&quot;https://lh3.googleusercontent.com/a/xyz=s96-c&quot;)",
     );
   });
-  it("a URL cannot end its own CSS string", () => {
+  it("a URL cannot end its own CSS string: not with a quote, not with a control character", () => {
     const out = html({ name: "Jacob", photo: 'https://example.test/a").x{color:red}/*' });
     expect(out).toContain("https://example.test/a%22).x{color:red}/*&quot;)");
     expect(out).not.toContain('a&quot;).x');
+    // CSS ends a string at a newline, and a form feed counts as one.
+    for (const control of ["\f", "\n", "\r", "\u0000", "\u000b", "\u007f"]) {
+      const broken = html({ name: "Jacob", photo: `https://example.test/a${control}); position:fixed; x:` });
+      expect(broken).not.toContain(control);
+      expect(broken).toContain(`https://example.test/a${encodeURIComponent(control)}); position:fixed`);
+    }
+  });
+  it("paints only an https URL; anything else leaves the initials", () => {
+    for (const photo of ["javascript:alert(1)", "http://example.test/a.jpg", "data:image/png;base64,AAAA", "/icons/a.png", ""]) {
+      const out = html({ name: "Jacob", photo });
+      expect(out).not.toContain("data-photo");
+      expect(out).toContain("JA");
+    }
+  });
+  it("lets a tap through to whatever is under the face", () => {
+    // A positioned face would otherwise sit above a card head's stretched hit area.
+    expect(html({ name: "Jacob" })).toContain("pointer-events-none");
+    expect(html({ name: "Jacob", photo: "https://lh3.googleusercontent.com/a/j" })).toContain("pointer-events-none");
   });
   it("keeps the green ring on «Tú» with a photo", () => {
     const out = html({ name: "Frank", photo: "https://lh3.googleusercontent.com/a/f", mine: true });

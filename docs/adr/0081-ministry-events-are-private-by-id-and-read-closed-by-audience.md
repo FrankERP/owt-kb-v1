@@ -94,12 +94,13 @@ approved by two fresh reviews; log beside it).
 
 ## Addendum — a seat carries its member's profile photo (2026-11-12)
 
-- The projection's people (`seats[]`, `program[]`) gain `photo`:
-  `member->{ coalesce(profilePhoto.asset->url, googlePhotoUrl) }`, beside the name it already read
-  the same way (Frank: the profile is global, photo and alias; [ADR-0086](0086-jovenes-meetings-are-cards-and-each-group-has-a-colour.md)'s addendum).
+- The projection's people (`seats[]`, `program[]`) gain
+  `"photo": member->{ "p": coalesce(profilePhoto.asset->url, googlePhotoUrl) }.p`, beside the name
+  it already read the same way (Frank: the profile is global, photo and alias; [ADR-0086](0086-jovenes-meetings-are-cards-and-each-group-has-a-colour.md)'s addendum).
 - It widens nothing this ADR guards: the filter, the id prefix arm and the audience parameters are
   untouched, so no reader gets a meeting or a person they did not already get by name. The URL is
   a field of `teamMembers`, which is undotted and public until DEF-A-16, and the same two fields
   every worship read already projects.
-- A typed name has no member, so no photo. A program line whose member is gone keeps neither name
-  nor photo (`jovenesDayEntry`).
+- A typed name has no member, so no photo. A seat or line whose member is gone reads a null name and
+  a null photo (the reference no longer resolves), and `jovenesDayEntry` drops both for a program
+  line with no member.

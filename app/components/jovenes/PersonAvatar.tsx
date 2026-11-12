@@ -13,9 +13,14 @@
 import { avatarSrc, initialsOf } from "../../utils/teamSections";
 
 const SIZE = { sm: "h-6 w-6 text-[9px]", md: "h-9 w-9 text-[11px]" } as const;
-/** A URL as a CSS `url()` value: quoted, with the characters that could end the string escaped,
- *  so nothing a stored URL holds can add a second declaration. */
-const cssUrl = (url: string) => `url("${url.replace(/["\\\n\r]/g, (c) => encodeURIComponent(c))}")`;
+/** A URL as a CSS `url()` value, or null for one this does not paint. Only `https:` (what both
+ *  sources store: Sanity's CDN and Google). Quoted, with the quote, the backslash and EVERY control
+ *  character escaped: CSS ends a string at a newline, and a form feed is one, so a stored URL
+ *  could otherwise close the string and add declarations of its own to a server-rendered `style`. */
+function cssUrl(url: string): string | null {
+  if (!url.startsWith("https://")) return null;
+  return `url("${url.replace(/["\\\u0000-\u001f\u007f]/g, (c) => encodeURIComponent(c))}")`;
+}
 
 export default function PersonAvatar({
   name,
@@ -36,16 +41,21 @@ export default function PersonAvatar({
     : name
       ? "border border-ink/10 bg-surface-raised text-ink"
       : "border border-dashed border-ink/25 text-ink-dim";
+  const image = name && photo ? cssUrl(avatarSrc(photo)) : null;
   return (
     <span
       aria-hidden="true"
-      className={`relative flex shrink-0 items-center justify-center overflow-hidden rounded-full font-label ${SIZE[size]} ${look} ${className}`}
+      // `pointer-events-none`: `relative` (for the photo) makes this a positioned box, and a
+      // positioned box paints ABOVE a stretched hit area that comes before it, such as the fold
+      // button's `::after` over a card's head. A face is decoration; a tap on it must reach
+      // whatever is under it.
+      className={`pointer-events-none relative flex shrink-0 items-center justify-center overflow-hidden rounded-full font-label ${SIZE[size]} ${look} ${className}`}
     >
       {name ? initialsOf(name) : ""}
-      {name && photo && (
+      {image && (
         // `avatarSrc` asks Sanity for a small JPEG: the iOS WKWebView fails to decode WebP (the
         // reason `MeHeader`'s and `TeamSections`' avatars are served unoptimized).
-        <span data-photo="" className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: cssUrl(avatarSrc(photo)) }} />
+        <span data-photo="" className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: image }} />
       )}
     </span>
   );

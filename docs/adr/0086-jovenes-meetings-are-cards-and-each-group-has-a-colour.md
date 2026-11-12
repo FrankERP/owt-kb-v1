@@ -99,8 +99,9 @@ worship page stay ADR-0070's sheets.
 - The lit pass has exactly one site again (`litCard.test.ts`). A second one needs an ADR.
 - `JovenesMeetingBody` changed for the Calendario's day sheet too (faces, numbered program). That
   is on purpose: one body, so the two screens cannot word or colour a seat differently.
-- No read or write changed: `ministryEventReads.ts`, `ministryEventCommit.ts`, the four event
-  routes and `jovenesPlannerModel.ts` are untouched.
+- No read or write changed in the first pass: `ministryEventReads.ts`, `ministryEventCommit.ts`, the
+  four event routes and `jovenesPlannerModel.ts` were untouched. The 2026-11-12 addendum then added
+  one field (`photo`) to the reader's people; the writers are still untouched.
 - Undoing this means going back to rows that Frank rejected; `jovenesPage.test.tsx`,
   `meetingCard.test.tsx` and `monthMap.test.tsx` describe the cards.
 
@@ -122,8 +123,13 @@ a photo there; a circle with «JA» beside it read as a different, emptier accou
   (measured in Chromium, with an empty `alt` too). A background that fails paints nothing and the
   initials underneath remain, before hydration as well. The URL goes through `avatarSrc` (a small
   JPEG from Sanity; WebP does not decode in the iOS WKWebView).
-- **Rejected: a second avatar component beside the worship one, or sharing `TeamSections`' own.**
-  That one is a client component keyed by display name through a `photos` map; Jóvenes knows its
-  people by member id from the query, and a name-keyed map would give two pastors called «Ana» one
-  face.
+- **Rejected: drawing these faces with the worship avatar (`TeamSections`' own).** That one is a
+  client component keyed by display name through a `photos` map; Jóvenes knows its people by member
+  id from the query, and a name-keyed map would give two pastors called «Ana» one face. So
+  `PersonAvatar` stays a second, hook-free avatar, sharing `initialsOf` and `avatarSrc` with it.
+- **The face lets a tap through (`pointer-events-none`) and paints only an `https:` URL.** The photo
+  needs a positioned box, and a positioned box paints above the fold button's stretched hit area
+  over a card's head: without it a tap on a face in a folded card did nothing (review, measured in
+  Chromium). The URL is written into a server-rendered `style`, so every character that could end
+  the CSS string is escaped, control characters included (a form feed is a CSS newline).
 - A typed seat name («Ana», no account) has no profile, so it keeps initials.
