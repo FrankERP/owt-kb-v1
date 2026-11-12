@@ -8,6 +8,7 @@ import { parseMonthParam, windowBounds, WINDOW_MONTHS } from "@/app/utils/schedu
 import { indexUniqueByKey, serviceDayKey } from "@/app/utils/serviceReadSelect";
 import { requireWorshipPage } from "@/app/utils/worshipPageGate";
 import { seatPhotos } from "@/app/utils/teamSections";
+import { SONG_COVER_GROQ } from "@/app/utils/songCover";
 import { myNameFromSession } from "@/app/utils/agenda";
 import { pastorMessageBodyOf } from "@/app/utils/serviceThread";
 import { getMemberAccess } from "@/app/utils/memberAccess";
@@ -47,7 +48,8 @@ const SETLIST_FRAGMENT = `songs[]{
   play_key,
   medley_tag,
   "title": song->title, "slug": song->slug, "_id": song->_id,
-  "author": song->author, "timeSig": song->timeSig, "bpm": song->bpm, "key": song->key
+  "author": song->author, "timeSig": song->timeSig, "bpm": song->bpm, "key": song->key,
+  "cover": ${SONG_COVER_GROQ}
 }, week, team_notes`;
 
 // `photo` per seat: the faces in the day sheet's team sections, the same
@@ -79,7 +81,7 @@ const SCHEDULE_QUERY = `{
   "satSetlists": *[_type == "saturdarSongs" && week >= $today && week <= $limit] | order(week asc)  { ${SETLIST_FRAGMENT} },
   "specials":    *[_type == "special_role"  && date >= $weekStart && date <= $limit && published != false] | order(date asc, time asc) {
     _id, date, time, service_name, team_notes,
-    songs[]{ play_key, medley_tag, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "bpm": song->bpm, "key": song->key, "leads": leads[]->{ member_name, alias } },
+    songs[]{ play_key, medley_tag, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "bpm": song->bpm, "key": song->key, "cover": ${SONG_COVER_GROQ}, "leads": leads[]->{ member_name, alias } },
     ${ROLE_FIELDS}
   },
   "viewer": *[_type == "teamMembers" && _id == $me][0]{ memberType },

@@ -1,6 +1,6 @@
 # ADR-0070: Inicio is set on one type scale, with small caps on section titles only, over a team photo
 
-**Date:** 2026-10-23 · **Status:** Accepted
+**Date:** 2026-10-23 · **Status:** Accepted, amended by ADR-0087 (the member's services are cards again; the type scale stands)
 
 ## Context
 

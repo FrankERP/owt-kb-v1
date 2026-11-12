@@ -305,7 +305,9 @@ each one owns, and its rules) and `docs/UTILITIES_AND_COMPONENTS.md`. Most are "
   `serviceLabel`/`serviceIdentity`, `findDuplicates`/`serviceConflicts`,
   `daysUntil`/`formatCountdown`, `MEMBER_TYPE_LABEL`, `isWorshipNight`, `songLeads.ts`
   (`sortedLeadIds` must agree byte for byte on the queue and flush sides), `transpose.ts`,
-  `practice.ts`, `rehearsalMixes.ts`, `rehearsalQueue.ts` (the setlist run), `themeColour`.
+  `practice.ts`, `rehearsalMixes.ts`, `rehearsalQueue.ts` (the setlist run), `themeColour`,
+  `songCoverUrl`/`SONG_COVER_GROQ` (a song's album cover, `post.albumArt` — never the YouTube still),
+  `greetingService`, `SERVICE_TONE` (a service's day colour: rail + date leaf only, ADR-0087).
 - **Planner/solver:** `fillSpecialGroup`/`orderGroup`, `collectPins`/`pinRefusal`/
   `pinHandshakeHolds`, `planClear`, `upcomingMonthPills`/`addMonths`, `trailingSaturday`
   (ADR-0048), `rolesOfPattern`/`rolesOfPatternV3` (`patternRolesSync`/`patternRolesV3Sync`
@@ -333,6 +335,8 @@ each one owns, and its rules) and `docs/UTILITIES_AND_COMPONENTS.md`. Most are "
   picker), `TempoPill` + `createMetronome` (one metronome app-wide), `LyricsAutoscroll`,
   `lyricMarkers.tsx`, `TutorialPoster`, `RehearsalPlayer`/`Waveform` (URLs always
   `/api/audio/[song]/[key]`), `PracticeCluster`.
+- **Service cards (ADR-0087):** `service/Face`/`FaceStack` (a worship member as a photo), `SongCover`/
+  `CoverRow`, `ServiceFacts` (the ONE folded summary), `SeatIcon`/`seatIconKind`, `DateTile`.
 - **Availability:** `useAvailability` is the ONLY client-side writer — one hook call per page.
 - **Solver v3 planner (C6, behind the engine prop):** `buildV3SolveRequest` (the ONE v3 request
   builder), `runV3Auto`, `freezeConfirmEntries`/`runV3ConfirmAttempt` (the ONE v3 confirm —
