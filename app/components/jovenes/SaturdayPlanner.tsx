@@ -10,9 +10,9 @@ import Switch from "@/app/components/ui/Switch";
 import { useToast } from "@/app/components/ui/Toast";
 import { HAIRLINE_INPUT_CLASS, HAIRLINE_LABEL_CLASS } from "@/app/components/ui/hairlineField";
 import type { MinistryEventView } from "@/app/utils/ministryEventReads";
-import { SHEET_TITLE } from "@/app/utils/homeHero";
-import { DOW_SHORT, dayTitle } from "@/app/utils/agenda";
-import { audienceLabel, dayWords, eventDayLabel, eventName } from "@/app/utils/jovenesEventView";
+import { dayTitle } from "@/app/utils/agenda";
+import { audienceLabel, dayWords, eventDayLabel, eventHeading, seatRoleLabel } from "@/app/utils/jovenesEventView";
+import { MINISTRY_TONE } from "@/app/utils/jovenesGroupStyle";
 import {
   SATURDAY_SEATS,
   isIsoDay,
@@ -26,7 +26,13 @@ import {
   type SaturdaySeat,
   type SeatPick,
 } from "@/app/utils/jovenesPlannerModel";
+import { CalendarIcon, CopyIcon, NoteIcon, PlusIcon } from "@/app/components/ui/icons";
+import AudienceRail from "./AudienceRail";
+import DateTile from "./DateTile";
+import MeetingMeta from "./MeetingMeta";
 import MeetingState from "./MeetingState";
+import PersonAvatar from "./PersonAvatar";
+import SectionHead from "./SectionHead";
 import PersonSelect, { type JovenesPerson } from "./PersonSelect";
 import ProgramEditor from "./ProgramEditor";
 import { eventUrl, eventsUrl, halfTypedClock, sendEventWrite } from "./eventWrite";
@@ -36,39 +42,17 @@ const SEAT_LABEL = { encargado: "Encargado", apoyo: "Apoyo", comparte: "Quién c
 
 type Editing = { event: MinistryEventView | null; form: SaturdayForm; token: string };
 
-// One column template for the heads and every row, so they line up: the last column has a FIXED
-// width (it used to be `auto`, and each row is its own grid, so «Crear» and «Editar · Programa»
-// pushed the names to different places). The others are `minmax(0, …)` for the same reason: a
-// bare `1fr` cannot shrink under its content, so one long name or a link in Notas would give that
-// row a template of its own. A leader has no actions and no column for them.
-const COLS_EDIT =
-  "md:grid md:grid-cols-[6.5rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)_10.5rem] md:gap-x-4";
-const COLS_READ =
-  "md:grid md:grid-cols-[6.5rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)] md:gap-x-4";
-
-/** «sáb»: the weekday beside the day number, from the calendar's own abbreviations. */
-function dow(date: string): string {
-  return DOW_SHORT[new Date(`${date}T12:00:00Z`).getUTCDay()].toLowerCase();
-}
-
-/** The day number in the display face, as a Calendario row leads with it. */
-function DayNumber({ date }: { date: string }) {
-  return (
-    <span className="font-display text-[30px] font-semibold leading-none tabular-nums text-ink">{Number(date.slice(8))}</span>
-  );
-}
-
 /**
- * Planear Jóvenes — the roster of whole-ministry meetings as hairline rows by month (Fecha,
- * Encargado, Apoyo, Quién comparte, Lugar, Notas) and «Copiar para WhatsApp», which replaces the
- * image the team sent. Every Saturday has a row; «Nueva reunión» creates one on any date (a Friday
- * study), which then has its own row. A seat holds a pastor or a typed name (someone without an
- * account, or the hosting group). `canEdit` (a Jóvenes admin) only shows the buttons; every write
- * is decided again by the server.
+ * Planear Jóvenes — the roster of whole-ministry meetings by month, a card per meeting (the date
+ * as a leaf, Encargado, Apoyo and Quién comparte as faces, Lugar, Notas), and «Copiar para
+ * WhatsApp», which replaces the image the team sent. Every Saturday has a card; «Nueva reunión»
+ * creates one on any date (a Friday study), which then has its own. A seat holds a pastor or a
+ * typed name (someone without an account, or the hosting group). `canEdit` (a Jóvenes admin) only
+ * shows the buttons; every write is decided again by the server.
  *
  * The month and its arrows live in the page's title (`/jovenes/admin`); this is the section under
- * it. No card per Saturday: a rule between rows, the day number leading, the state as a dot and a
- * word, and the actions as house buttons (2026-11-10, the «millones» pass of ADR-0070).
+ * it. Cards since 2026-11-12 (ADR-0086): as hairline rows under column heads the month read as a
+ * table of text, and the two sections of the page ran into each other.
  */
 export default function SaturdayPlanner({
   month,
@@ -204,108 +188,105 @@ export default function SaturdayPlanner({
   }
 
   const names = new Map(editing?.event?.seats.map((s) => [s._key, s.name]) ?? []);
-  const cols = canEdit ? COLS_EDIT : COLS_READ;
 
   return (
     <section aria-labelledby="jovenes-saturday-roster">
-      <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pb-3">
-        <h2 id="jovenes-saturday-roster" className={SHEET_TITLE}>
-          Rol del sábado
-        </h2>
-        <div className="flex flex-wrap items-center gap-2">
-          {canEdit && (
-            <Button variant="secondary" size="sm" onClick={() => open(defaultDate, null)}>
-              Nueva reunión
-            </Button>
-          )}
-          <Button variant="secondary" size="sm" onClick={copyRoster}>
-            Copiar para WhatsApp
+      <SectionHead
+        id="jovenes-saturday-roster"
+        icon={<CalendarIcon size={20} />}
+        title="Rol del sábado"
+        note="Las reuniones de todo Jóvenes."
+      >
+        {canEdit && (
+          <Button variant="secondary" size="sm" onClick={() => open(defaultDate, null)}>
+            <PlusIcon size={13} />
+            Nueva reunión
           </Button>
-        </div>
-      </header>
+        )}
+        <Button variant="secondary" size="sm" onClick={copyRoster}>
+          <CopyIcon size={13} />
+          Copiar para WhatsApp
+        </Button>
+      </SectionHead>
 
-      {/* Column heads for wide screens; on a phone each row stacks (no sideways scroll). */}
-      <div aria-hidden="true" className={`hidden pb-2 ${cols} ${HAIRLINE_LABEL_CLASS}`}>
-        <span>Fecha</span>
-        {SATURDAY_SEATS.map((r) => (
-          <span key={r}>{SEAT_LABEL[r]}</span>
-        ))}
-        <span>Lugar</span>
-        <span>Notas</span>
-      </div>
-      <ul className="divide-y divide-ink/[0.10] border-y border-ink/[0.10]">
+      {/* A card per meeting (ADR-0086): the date as a leaf, the three seats as faces under their
+          role, the state as a pill. A Saturday with nothing yet is an outline that asks for it. */}
+      <ul className="space-y-3">
         {rows.map((row) =>
           row.events.length === 0 ? (
-            <li key={row.date} className={`flex items-center justify-between gap-4 py-4 md:items-center ${cols}`}>
-              <p className="flex items-baseline gap-2.5 md:block">
-                <DayNumber date={row.date} />
-                <span className="font-body text-[13px] text-ink-dim md:mt-1.5 md:block">{dow(row.date)}</span>
-              </p>
-              <p className="flex-1 font-body text-[15px] italic text-ink-muted md:col-span-5">Sin reunión</p>
+            <li
+              key={row.date}
+              className="flex items-center gap-3.5 rounded-[var(--brand-radius-panel)] border border-dashed border-ink/[0.16] py-3 pl-5 pr-4"
+            >
+              <DateTile date={row.date} tone={MINISTRY_TONE} empty />
+              <p className="min-w-0 flex-1 font-body text-[15px] italic text-ink-muted">Sin reunión</p>
               {canEdit && (
-                <div className="md:text-right">
-                  <Button variant="secondary" size="sm" onClick={() => open(row.date, null)}>
-                    Crear
-                  </Button>
-                </div>
+                <Button variant="secondary" size="sm" onClick={() => open(row.date, null)}>
+                  <PlusIcon size={13} />
+                  Crear
+                </Button>
               )}
             </li>
           ) : (
             row.events.map((e) => (
-              <li key={e._id} className={`space-y-2.5 py-4 md:items-start md:space-y-0 ${cols}`}>
-                <div>
-                  <p className="flex items-baseline gap-2.5 md:block">
-                    <DayNumber date={e.date} />
-                    <span className="font-body text-[13px] leading-snug text-ink-dim md:mt-1.5 md:block">
-                      <span className="whitespace-nowrap">{[dow(e.date), e.time].filter(Boolean).join(" · ")}</span>
-                      {e.arrival && (
-                        <>
-                          <span className="md:hidden"> · </span>
-                          <span className="whitespace-nowrap md:block">llegada {e.arrival}</span>
-                        </>
-                      )}
-                    </span>
-                  </p>
-                  {/* A board or a titled meeting names itself; the plain Saturday needs no name. */}
-                  {eventName(e) && <p className="mt-1.5 font-body text-[15px] font-semibold leading-snug text-ink">{eventName(e)}</p>}
-                  <p className="mt-1.5">
-                    <MeetingState published={e.published} />
-                  </p>
-                </div>
-                {/* One paragraph of running text on a phone («Encargado Ana · Apoyo …»); from `md`
-                    the paragraph dissolves and each seat is its own cell under the column heads. */}
-                <p className="break-words font-body text-[17px] leading-snug md:contents">
-                  {SATURDAY_SEATS.map((role, i) => {
-                    const list = seatNames(e, role);
-                    // A stored seat whose person is gone reads «Sin asignar» too, and looks it.
-                    const filled = e.seats.some((s) => s.role === role && s.name);
-                    return (
-                      <span key={role} className="md:relative md:block md:break-words md:text-[15px]">
-                        {i > 0 && <span className="text-ink-muted md:hidden"> · </span>}
-                        {/* Read, not shown, from `md`: the column head above is the visible label. */}
-                        <span className="text-ink-dim md:sr-only">{SEAT_LABEL[role]} </span>
-                        <span className={filled ? "text-ink" : "italic text-ink-muted"}>
-                          {list.length ? list.join(", ") : "Sin asignar"}
-                        </span>
-                      </span>
-                    );
-                  })}
-                </p>
-                <p className={`break-words font-body text-[15px] leading-snug text-ink ${e.place ? "" : "hidden md:block"}`}>
-                  {e.place && <span className="text-ink-dim md:sr-only">Lugar </span>}
-                  {e.place ?? ""}
-                </p>
-                <p className={`whitespace-pre-line break-words font-body text-[15px] leading-snug text-ink-muted ${e.notes ? "" : "hidden md:block"}`}>
-                  {e.notes ?? ""}
-                </p>
-                {canEdit && (
-                  <div className="flex flex-wrap items-center gap-2 pt-1 md:justify-end md:pt-0">
-                    <Button variant="secondary" size="sm" onClick={() => open(e.date, e)}>
-                      Editar
-                    </Button>
-                    <ProgramEditor event={e} people={people} compact />
+              <li key={e._id} className="brand-surface relative overflow-hidden rounded-[var(--brand-radius-panel)]">
+                <AudienceRail audience={e.audience} muted={!e.published} />
+                {/* On a phone the leaf and the title share the first line and everything else runs
+                    the card's full width under them; from `md` the leaf is a column of its own and
+                    the actions another, so the seats line up from card to card. */}
+                <div className="py-4 pl-5 pr-4 md:grid md:grid-cols-[auto_minmax(0,1fr)_auto] md:gap-x-4">
+                  <div className="flex gap-3.5 md:contents">
+                    <DateTile date={e.date} tone={MINISTRY_TONE} className="md:row-span-2" decorative />
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                        <h3 className="min-w-0 break-words pt-0.5 font-display text-[22px] font-semibold uppercase leading-none tracking-[0.02em] text-ink md:text-2xl">
+                          {eventHeading(e)}
+                          <span className="sr-only">, {dayTitle(e.date)}</span>
+                        </h3>
+                        <MeetingState published={e.published} />
+                      </div>
+                      <MeetingMeta time={e.time} arrival={e.arrival} place={e.place} />
+                    </div>
                   </div>
-                )}
+                  <div className="min-w-0 space-y-3 pt-3.5 md:col-start-2">
+                    <ul className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+                      {SATURDAY_SEATS.map((role) => {
+                        const list = seatNames(e, role);
+                        // A stored seat whose person is gone reads «Sin asignar» too, and looks it.
+                        // The face is the first seat WITH a name: `seatNames` spells a nameless
+                        // one as «Sin asignar», which must never become the initials «SI».
+                        const face = e.seats.find((s) => s.role === role && s.name)?.name ?? null;
+                        const filled = face !== null;
+                        return (
+                          <li key={role} className="flex min-w-0 items-center gap-2.5">
+                            <PersonAvatar name={face} />
+                            <div className="min-w-0">
+                              {/* The short word («Comparte»), as `/jovenes` says it; the sheet's field asks «Quién comparte». */}
+                              <p className="font-label text-[10px] uppercase tracking-[0.16em] text-ink-dim">{seatRoleLabel(role)}</p>
+                              <p className={`break-words font-body text-[16px] leading-tight ${filled ? "font-semibold text-ink" : "italic text-ink-muted"}`}>
+                                {list.length ? list.join(", ") : "Sin asignar"}
+                              </p>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    {e.notes && (
+                      <p className="flex gap-2.5 rounded-xl bg-ink/[0.05] px-3.5 py-2.5 font-body text-[15px] leading-snug text-ink-muted">
+                        <NoteIcon size={15} className="mt-[3px] shrink-0 text-ink-dim" />
+                        <span className="min-w-0 whitespace-pre-line break-words">{e.notes}</span>
+                      </p>
+                    )}
+                  </div>
+                  {canEdit && (
+                    <div className="flex flex-wrap items-center gap-2 pt-3.5 md:col-start-3 md:row-span-2 md:row-start-1 md:flex-col md:items-stretch md:pt-0">
+                      <Button variant="secondary" size="sm" onClick={() => open(e.date, e)}>
+                        Editar
+                      </Button>
+                      <ProgramEditor event={e} people={people} compact />
+                    </div>
+                  )}
+                </div>
               </li>
             ))
           ),

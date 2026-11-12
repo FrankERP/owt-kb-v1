@@ -11,9 +11,9 @@ import Switch from "@/app/components/ui/Switch";
 import { useToast } from "@/app/components/ui/Toast";
 import { HAIRLINE_INPUT_CLASS, HAIRLINE_LABEL_CLASS } from "@/app/components/ui/hairlineField";
 import type { MinistryEventView } from "@/app/utils/ministryEventReads";
-import { SHEET_TITLE } from "@/app/utils/homeHero";
-import { DOW_SHORT } from "@/app/utils/agenda";
-import { audienceLabel, dayWords, eventHeading } from "@/app/utils/jovenesEventView";
+import { dayTitle } from "@/app/utils/agenda";
+import { eventHeading } from "@/app/utils/jovenesEventView";
+import { audienceTone } from "@/app/utils/jovenesGroupStyle";
 import {
   JOVENES_GROUPS,
   canCreateGroupEvent,
@@ -25,16 +25,16 @@ import {
   type GroupEventForm,
   type PlannerViewer,
 } from "@/app/utils/jovenesPlannerModel";
+import { CalendarOffIcon, NoteIcon, PlusIcon, UsersIcon } from "@/app/components/ui/icons";
+import AudienceChips from "./AudienceChips";
+import AudienceRail from "./AudienceRail";
+import DateTile from "./DateTile";
+import MeetingMeta from "./MeetingMeta";
 import MeetingState from "./MeetingState";
+import SectionHead from "./SectionHead";
 import { eventUrl, eventsUrl, halfTypedClock, sendEventWrite } from "./eventWrite";
 
 const MINISTRY = "jovenes";
-
-/** «mié 18 de noviembre»: the short weekday and the date, in a row that already leads with the number. */
-function shortDay(date: string): string {
-  const words = dayWords(date);
-  return `${DOW_SHORT[new Date(`${date}T12:00:00Z`).getUTCDay()].toLowerCase()} ${words.slice(words.indexOf(" ") + 1)}`;
-}
 
 type Editing = { event: MinistryEventView | null; form: GroupEventForm; token: string };
 
@@ -46,8 +46,8 @@ type Editing = { event: MinistryEventView | null; form: GroupEventForm; token: s
  * again by the server on the stored meeting. The rows come from the editor-mode read, so a leader
  * never receives another group's meetings to begin with.
  *
- * Hairline rows led by the day number, like the roster above and the Calendario's agenda; the
- * state as a dot and a word; house buttons for the actions (2026-11-10, ADR-0070).
+ * A card per meeting in its group's colour, the date as a leaf like the roster above, the state
+ * as a pill, house buttons for the actions (2026-11-12, ADR-0086; hairline rows before).
  */
 export default function GroupCalendar({
   events,
@@ -157,52 +157,65 @@ export default function GroupCalendar({
 
   return (
     <section aria-labelledby="jovenes-group-calendar">
-      <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pb-3">
-        <h2 id="jovenes-group-calendar" className={SHEET_TITLE}>
-          Calendario de grupos
-        </h2>
+      <SectionHead
+        id="jovenes-group-calendar"
+        icon={<UsersIcon size={20} />}
+        title="Calendario de grupos"
+        note="Las de cada grupo y las compartidas."
+      >
         {canCreateGroupEvent(viewer) && (
           // The section title already says «de grupos»; the name the button answers to keeps it.
           <Button variant="secondary" size="sm" aria-label="Nueva reunión de grupo" onClick={() => open(null)}>
+            <PlusIcon size={13} />
             Nueva reunión
           </Button>
         )}
-      </header>
+      </SectionHead>
 
       {events.length === 0 ? (
-        <p className="border-y border-ink/[0.10] py-8 font-body text-[15px] text-ink-muted">No hay reuniones de grupo este mes.</p>
+        <p className="flex flex-col items-center gap-3 rounded-[var(--brand-radius-panel)] border border-dashed border-ink/[0.16] px-6 py-10 text-center font-body text-[15px] text-ink-muted">
+          <CalendarOffIcon size={24} className="text-ink-dim" />
+          No hay reuniones de grupo este mes.
+        </p>
       ) : (
-        <ul className="divide-y divide-ink/[0.10] border-y border-ink/[0.10]">
+        // A card per meeting, in its group's colour (ADR-0086): the rail and the date leaf's band
+        // take it, and a shared meeting shows one rail segment and one chip per group.
+        <ul className="space-y-3">
           {events.map((e) => {
             const joint = e.audience?.kind === "groups" && e.audience.groups.length > 1;
             return (
-              <li key={e._id} className="grid grid-cols-[2.75rem_minmax(0,1fr)_auto] items-start gap-x-3.5 py-4">
-                <span className="pt-0.5 text-center font-display text-[30px] font-semibold leading-none tabular-nums text-ink">
-                  {Number(e.date.slice(8))}
-                </span>
-                <div className="min-w-0 space-y-1">
-                  <p className="break-words font-body text-[17px] font-semibold leading-tight text-ink">
-                    {eventHeading(e)}
-                    {e.time && <span className="font-normal tabular-nums text-ink-dim"> · {e.time}</span>}
-                  </p>
-                  <p className="font-body text-[15px] leading-snug text-ink-dim">
-                    {[shortDay(e.date), e.place, audienceLabel(e.audience)].filter(Boolean).join(" · ")}
-                  </p>
-                  {joint && (
-                    <p className="font-body text-[13px] text-ink-muted">Creada por {e.createdByName ?? "alguien que ya no está"}</p>
-                  )}
-                  {e.notes && <p className="whitespace-pre-line break-words font-body text-[15px] leading-snug text-ink-muted">{e.notes}</p>}
-                  <p>
-                    <MeetingState published={e.published} />
-                  </p>
+              <li key={e._id} className="brand-surface relative overflow-hidden rounded-[var(--brand-radius-panel)]">
+                <AudienceRail audience={e.audience} muted={!e.published} />
+                <div className="flex gap-3.5 py-4 pl-5 pr-4">
+                  <DateTile date={e.date} tone={audienceTone(e.audience)} decorative />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+                        <h3 className="min-w-0 break-words pt-0.5 font-display text-[22px] font-semibold uppercase leading-none tracking-[0.02em] text-ink md:text-2xl">
+                          {eventHeading(e)}
+                          <span className="sr-only">, {dayTitle(e.date)}</span>
+                        </h3>
+                        <MeetingState published={e.published} />
+                      </div>
+                      {canEditGroupEvent(e, viewer) && (
+                        <Button variant="secondary" size="sm" className="shrink-0" onClick={() => open(e)}>
+                          Editar
+                        </Button>
+                      )}
+                    </div>
+                    <MeetingMeta time={e.time} arrival={e.arrival} place={e.place} />
+                    <AudienceChips audience={e.audience} />
+                    {joint && (
+                      <p className="font-body text-[13px] text-ink-dim">Creada por {e.createdByName ?? "alguien que ya no está"}</p>
+                    )}
+                    {e.notes && (
+                      <p className="flex gap-2.5 rounded-xl bg-ink/[0.05] px-3.5 py-2.5 font-body text-[15px] leading-snug text-ink-muted">
+                        <NoteIcon size={15} className="mt-[3px] shrink-0 text-ink-dim" />
+                        <span className="min-w-0 whitespace-pre-line break-words">{e.notes}</span>
+                      </p>
+                    )}
+                  </div>
                 </div>
-                {canEditGroupEvent(e, viewer) ? (
-                  <Button variant="secondary" size="sm" onClick={() => open(e)}>
-                    Editar
-                  </Button>
-                ) : (
-                  <span />
-                )}
               </li>
             );
           })}

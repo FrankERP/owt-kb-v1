@@ -8,17 +8,18 @@ import {
   type MinistryEventView,
 } from "@/app/utils/ministryEventReads";
 import { rolloutAllows } from "@/app/utils/rollout";
-import { addDaysIso, eventLine, meetingsLede } from "@/app/utils/jovenesEventView";
+import { addDaysIso, meetingsLede } from "@/app/utils/jovenesEventView";
 import { jovenesDayEntry } from "@/app/utils/calendarMinistry";
-import { dayTitle, mySeats } from "@/app/utils/agenda";
+import { mySeats } from "@/app/utils/agenda";
+import { daysUntil, formatCountdown } from "@/app/utils/daysUntil";
 import { isMinistryManager, ledGroupsIn } from "@/app/utils/ministryAccess";
 import { showsProgramEditor } from "@/app/utils/jovenesPlannerModel";
-import { readJovenesPeople, type JovenesPerson } from "@/app/utils/jovenesPeople";
+import { readJovenesPeople } from "@/app/utils/jovenesPeople";
 import { PAGE_LEDE, PAGE_TITLE } from "@/app/utils/homeHero";
-import type { JovenesDayEntry } from "@/app/components/CalendarView";
 import Navbar from "@/app/components/Navbar";
 import Button from "@/app/components/ui/Button";
-import JovenesMeetingBody from "@/app/components/jovenes/MeetingBody";
+import JovenesMeetingList from "@/app/components/jovenes/MeetingList";
+import { CalendarIcon, CalendarOffIcon } from "@/app/components/ui/icons";
 import ProgramEditor from "@/app/components/jovenes/ProgramEditor";
 import { revealProps } from "@/app/utils/reveal";
 
@@ -88,24 +89,28 @@ export default async function JovenesPage() {
   return (
     <div>
       <Navbar title="Jóvenes" />
-      <div className="mx-auto max-w-3xl px-6 pb-16 pt-10">
+      <div className="mx-auto max-w-3xl px-5 pb-16 pt-10 sm:px-6">
         {/* The page's name in the display face and a lede that says what is coming and what is
-            yours (the «millones» scale, ADR-0070). «Planear» is a house button, not a bare link. */}
-        <header {...revealProps(0)}>
-          <h1 className={PAGE_TITLE}>Jóvenes</h1>
-          {meetings.length > 0 && (
-            <p className={`${PAGE_LEDE} mt-3`}>
-              {lede.count}
-              {lede.mine && (
-                <>
-                  {" · "}
-                  <span className="text-ink">{lede.mine}</span>
-                </>
-              )}
-            </p>
-          )}
+            yours (the «millones» scale, ADR-0070). «Planear» is a house button, beside the title
+            from `sm` and under the lede on a phone. */}
+        <header className="sm:flex sm:items-end sm:justify-between sm:gap-6" {...revealProps(0)}>
+          <div className="min-w-0">
+            <h1 className={PAGE_TITLE}>Jóvenes</h1>
+            {meetings.length > 0 && (
+              <p className={`${PAGE_LEDE} mt-3`}>
+                {lede.count}
+                {lede.mine && (
+                  <>
+                    {" · "}
+                    <span className="text-ink">{lede.mine}</span>
+                  </>
+                )}
+              </p>
+            )}
+          </div>
           {plans && (
-            <Button href="/jovenes/admin" variant="secondary" size="sm" className="mt-5">
+            <Button href="/jovenes/admin" variant="secondary" size="md" className="mt-5 shrink-0 sm:mb-1 sm:mt-0">
+              <CalendarIcon size={14} />
               Planear
             </Button>
           )}
@@ -120,63 +125,31 @@ export default async function JovenesPage() {
             No pudimos leer las reuniones en este momento. Intenta de nuevo más tarde.
           </p>
         ) : meetings.length === 0 ? (
-          <p className="py-20 text-center font-body text-base text-ink-muted" {...revealProps(1)}>
-            Aún no hay reuniones publicadas.
-          </p>
+          <div
+            className="mt-10 flex flex-col items-center gap-3 rounded-[var(--brand-radius-panel)] border border-dashed border-ink/[0.16] px-6 py-14 text-center"
+            {...revealProps(1)}
+          >
+            <CalendarOffIcon size={28} className="text-ink-dim" />
+            <p className="font-body text-base text-ink-muted">Aún no hay reuniones publicadas.</p>
+          </div>
         ) : (
-          <div className="mt-12 space-y-14">
-            {meetings.map((m, i) => (
-              <Meeting
-                key={m.event._id}
-                event={m.event}
-                entry={m.entry}
-                mine={m.mine}
-                index={i}
-                people={editable.has(m.event._id) ? people : null}
-              />
-            ))}
+          <div className="mt-9">
+            {/* Cards, not rows (ADR-0086): the next meeting open and lit, the rest folded under
+                their month, each with its date leaf and its audience's colour. */}
+            <JovenesMeetingList
+              items={meetings.map(({ event: e, ...m }) => ({
+                // Only what a card draws crosses to the browser; the whole view (member ids, the
+                // revision) goes to `ProgramEditor` alone, for a meeting this reader may edit.
+                event: { _id: e._id, date: e.date, time: e.time, arrival: e.arrival, place: e.place, title: e.title, kind: e.kind, audience: e.audience },
+                entry: m.entry,
+                mine: m.mine,
+                countdown: formatCountdown(daysUntil(e.date)),
+                editor: editable.has(e._id) ? <ProgramEditor event={e} people={people} /> : null,
+              }))}
+            />
           </div>
         )}
       </div>
     </div>
-  );
-}
-
-/**
- * One meeting: the DATE as its heading (what tells four Saturdays apart), a line with its name,
- * clock and who it is for, «Tú · …» in the app's one green when something on it is the reader's,
- * then the same hairline rows as the Calendario's day sheet. No frame around it and none inside:
- * the space between meetings separates them. `people` is set only when this reader may edit the
- * program (then the button shows).
- */
-function Meeting({
-  event: e,
-  entry,
-  mine,
-  index,
-  people,
-}: {
-  event: MinistryEventView;
-  entry: JovenesDayEntry;
-  mine: string[];
-  index: number;
-  people: JovenesPerson[] | null;
-}) {
-  return (
-    <article {...revealProps(1 + index)}>
-      <h2 className="font-display text-[28px] font-semibold leading-none text-ink md:text-[34px]">{dayTitle(e.date)}</h2>
-      <p className="mt-2 font-body text-[15px] leading-snug text-ink-dim">{eventLine(e)}</p>
-      {mine.length > 0 && (
-        <p className="mt-1.5 font-body text-[15px] font-semibold text-positive-fg">Tú · {mine.join(" · ")}</p>
-      )}
-      <div className="mt-6">
-        <JovenesMeetingBody entry={entry} teamTitle="Equipo" level={3} />
-      </div>
-      {people && (
-        <div className="mt-5">
-          <ProgramEditor event={e} people={people} />
-        </div>
-      )}
-    </article>
   );
 }

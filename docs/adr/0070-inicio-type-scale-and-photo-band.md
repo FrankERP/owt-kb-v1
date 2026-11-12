@@ -230,4 +230,9 @@ pill; «Equipo» is the small-caps title, «Banda» is 17 px sentence case; a sh
   No read or write changed (`ministryEventReads.ts`, `ministryEventCommit.ts` untouched). Tests:
   `jovenesEventView`, `jovenesPlannerModel`, `calendarMinistry`, `jovenesPage`, `saturdayPlanner`,
   `groupCalendar`, `jovenesDayCard`.
+- **Jóvenes left the row pattern on 2026-11-12 (ADR-0086).** With every meeting of five groups on
+  one screen the hairline rows read, in Frank's words, as «una tabla con texto». `/jovenes` and
+  Planear Jóvenes now draw each meeting as a card with a calendar leaf, group colours and faces;
+  the page title, the lede, the sheets' fields and the copy rules of the bullet above stand, and
+  nothing outside those two screens changed surface. Read ADR-0086 before «restoring» either one.
 - Undoing it means re-adding the eyebrows and frames the mock removed; the tests above will say so.
