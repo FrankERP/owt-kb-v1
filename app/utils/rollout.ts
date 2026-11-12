@@ -27,8 +27,10 @@ type Feature = { ministry: MinistryId; stage: RolloutStage };
 // Typed as the wide stage on purpose: a literal type would make each later stage's code
 // unreachable to the compiler, and moving a stage would then turn into a type error.
 export const ROLLOUT: Record<"jovenesEvents", Feature> = {
-  // Jóvenes' meetings: `/jovenes` and, from PR C, Planear Jóvenes and its write routes.
-  jovenesEvents: { ministry: "jovenes", stage: "superAdmin" },
+  // Jóvenes' meetings: `/jovenes`, Planear Jóvenes and its write routes. Open to every pastor since
+  // 2026-11-12 (Frank's call, once the accounts, per-group leadership and the card design were in
+  // production). Each page's and route's own guard still decides who gets in.
+  jovenesEvents: { ministry: "jovenes", stage: "all" },
 };
 
 export type RolloutFeature = keyof typeof ROLLOUT;

@@ -25,6 +25,7 @@ const h = vi.hoisted(() => ({
   readMinistryEvents: vi.fn(),
   readJovenesPeople: vi.fn(),
   rolloutOpen: false,
+  rolloutClosed: false,
 }));
 vi.mock("@/app/utils/authGuards", () => ({
   requireActiveSession: () => h.requireActiveSession(),
@@ -43,10 +44,11 @@ vi.mock("@/app/utils/jovenesPeople", () => ({ readJovenesPeople: () => h.readJov
 vi.mock("@/app/components/jovenes/ProgramEditor", () => ({
   default: ({ event, people }: { event: { _id: string }; people: unknown[] }) => `[programa ${event._id} · ${people.length}]`,
 }));
-// The real rollout, unless a row opens it to reach a pastor (the encargado's program button).
+// The real rollout (open to every pastor since 2026-11-12), unless a row forces it open or CLOSED:
+// the server gate is still proven with a stage that has not reached the visitor.
 vi.mock("@/app/utils/rollout", async (orig) => {
   const real = await orig<typeof import("@/app/utils/rollout")>();
-  return { ...real, rolloutAllows: (f: never, a: never) => h.rolloutOpen || real.rolloutAllows(f, a) };
+  return { ...real, rolloutAllows: (f: never, a: never) => !h.rolloutClosed && (h.rolloutOpen || real.rolloutAllows(f, a)) };
 });
 
 import JovenesPage from "../page";
@@ -89,6 +91,7 @@ const EVENT = {
 beforeEach(() => {
   for (const f of Object.values(h)) if (typeof f === "function") f.mockReset();
   h.rolloutOpen = false;
+  h.rolloutClosed = false;
   h.readJovenesPeople.mockResolvedValue([{ id: "p9", name: "Ana", groups: [] }]);
   h.requireActiveSession.mockResolvedValue(session);
   h.requireMinistryMember.mockResolvedValue(session);
@@ -109,7 +112,8 @@ describe("/jovenes gates", () => {
     expect(h.requireMinistryMember).toHaveBeenCalledWith("jovenes");
   });
 
-  it("the rollout holds on the server: a pastor and a Jóvenes admin get 404 while the stage is superAdmin", async () => {
+  it("the rollout holds on the server: a pastor and a Jóvenes admin get 404 while the stage does not reach them", async () => {
+    h.rolloutClosed = true;
     for (const access of [PASTOR, ADMIN]) {
       h.getMemberAccess.mockResolvedValue(access);
       expect(await visit()).toBe("→ 404");
@@ -118,6 +122,7 @@ describe("/jovenes gates", () => {
   });
 
   it("before the rollout reaches someone, a non-member gets the same 404 as a member — no redirect hint", async () => {
+    h.rolloutClosed = true;
     h.getMemberAccess.mockResolvedValue({ ...PASTOR, ministries: ["worship"], ministryRoles: [] });
     h.requireMinistryMember.mockResolvedValue(null);
     expect(await visit()).toBe("→ 404");
