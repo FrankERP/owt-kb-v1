@@ -108,3 +108,26 @@ approved by two fresh reviews; log beside it).
 - A typed name has no member, so no photo. A seat or line whose member is gone reads a null name and
   a null photo (the reference no longer resolves), and `jovenesDayEntry` drops both for a program
   line with no member.
+
+## Addendum — a group's classes (2026-11-12)
+
+Frank: each group plans its own class roster in the app instead of a Google Sheet («Rol Clases»),
+before Jóvenes opens to the pastors. Plan `docs/superpowers/plans/2026-11-12-jovenes-group-classes.md`
+(critical; review log beside it).
+
+- A class is a ONE-group meeting carrying `lesson { series, track: libro | corazon | sin_clase, done }`.
+  It is read and written by exactly the rules above; `lesson` never decides access.
+  `app/utils/ministryLesson.ts` is the one validity rule, shared by the writer and the reader.
+- The writer never leaves a `lesson` on a shared or whole-ministry meeting: a PATCH that makes one
+  shared unsets it.
+- «Recorrer» (`POST …/events/[token]/shift`) and «Cambiar con…» (`POST …/swap`) are two new
+  writes of the same module, each one transaction under every touched row's revision. «Recorrer»
+  reads the anchor's roster with a second query shape — R1's identity filters, ONE group the actor
+  was already found to write, never returned to the client — and refuses (409) unless its classes
+  are exactly the ids the screen showed. A «No hubo clase» row is date-bound: it never moves and
+  classes hop over it. The row «Recorrer» leaves on the cancelled date is a DRAFT, so no member view
+  shows a cancelled Sunday as a meeting.
+- Rejected: a separate «plan» document per group with a table of rows (a second boundary to build
+  and review, and classes absent from the calendars); three flat fields (`series`, `track`, `done`
+  are generic names the protected-read audit would have to list); creating a whole roster in one
+  server write (the client's token-keyed creates already retry without duplicates).

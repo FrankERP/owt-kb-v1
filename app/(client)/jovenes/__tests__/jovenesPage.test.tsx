@@ -92,7 +92,7 @@ beforeEach(() => {
   for (const f of Object.values(h)) if (typeof f === "function") f.mockReset();
   h.rolloutOpen = false;
   h.rolloutClosed = false;
-  h.readJovenesPeople.mockResolvedValue([{ id: "p9", name: "Ana" }]);
+  h.readJovenesPeople.mockResolvedValue([{ id: "p9", name: "Ana", groups: [] }]);
   h.requireActiveSession.mockResolvedValue(session);
   h.requireMinistryMember.mockResolvedValue(session);
   h.getMemberAccess.mockResolvedValue(SUPER);

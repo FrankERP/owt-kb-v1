@@ -26,6 +26,7 @@ import Button from "@/app/components/ui/Button";
 import { ArrowLeftIcon, ChevronLeftIcon, ChevronRightIcon } from "@/app/components/ui/icons";
 import SaturdayPlanner from "@/app/components/jovenes/SaturdayPlanner";
 import GroupCalendar from "@/app/components/jovenes/GroupCalendar";
+import GroupClasses from "@/app/components/jovenes/GroupClasses";
 import MonthMap from "@/app/components/jovenes/MonthMap";
 import { revealProps } from "@/app/utils/reveal";
 
@@ -65,15 +66,24 @@ export default async function JovenesPlannerPage({ searchParams }: { searchParam
   const { from, to } = monthRange(month);
 
   let events: MinistryEventView[] = [];
+  // «Clases del grupo» reads its rosters over their whole future (NO upper bound, so the list
+  // «Recorrer» sends is the server's own set, plan 2026-11-12 L3) and a year back for «Anteriores»:
+  // the same one reader in the same mode, just a wider window.
+  let classEvents: MinistryEventView[] = [];
   let unavailable = false;
   try {
-    events = await readMinistryEvents(access, { me: sanityId, ministry: "jovenes", from, to, mode: "editor" });
+    [events, classEvents] = await Promise.all([
+      readMinistryEvents(access, { me: sanityId, ministry: "jovenes", from, to, mode: "editor" }),
+      readMinistryEvents(access, { me: sanityId, ministry: "jovenes", from: `${shiftMonth(month, -12)}-01`, to: "9999-12-31", mode: "editor" }),
+    ]);
   } catch (e) {
     // No read token: say so, never «no meetings» (R4).
     if (!(e instanceof MinistryEventReadUnavailable)) throw e;
     unavailable = true;
   }
-  const people = isManager ? await readJovenesPeople() : [];
+  // Admins pick seats for the Saturday roster; admins and leaders pick a class's responsable from
+  // the group's members (plan 2026-11-12 §4). Group membership is already public (base plan §8).
+  const people = await readJovenesPeople();
   // The buttons' view of who is looking (cosmetic). The groups a leader leads are the groups the
   // writer counts for them (W3) — `ledGroupsIn`, the same answer.
   const viewer: PlannerViewer = { me: sanityId, isManager, led };
@@ -150,6 +160,9 @@ export default async function JovenesPlannerPage({ searchParams }: { searchParam
                 <SaturdayPlanner month={month} rows={rows} people={people} canEdit={isManager} defaultDate={defaultDate} />
               </div>
               <div {...revealProps(3)}>
+                <GroupClasses events={classEvents} viewer={viewer} people={people} today={today} />
+              </div>
+              <div {...revealProps(4)}>
                 <GroupCalendar events={groups} viewer={viewer} defaultDate={defaultDate} />
               </div>
             </div>

@@ -65,6 +65,8 @@ const PROTECTED_FIELDS = [
   "audience",
   "program",
   "place",
+  // A group's class (plan 2026-11-12 L0): one distinctive name for its roster, track and «hecho».
+  "lesson",
 ] as const;
 
 const MUTATION_METHODS = [

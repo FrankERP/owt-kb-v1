@@ -79,6 +79,18 @@ export const ministryEvent = defineType({
         },
       ],
     },
+    {
+      // A group's class (plan 2026-11-12 L0): only on a ONE-group meeting. `series` is the roster
+      // (the book), `track` libro | corazon | sin_clase, `done` the sheet's «Hecho».
+      name: "lesson",
+      title: "Clase del grupo",
+      type: "object",
+      fields: [
+        { name: "series", title: "Rol (libro)", type: "string" },
+        { name: "track", title: "Tipo", type: "string" },
+        { name: "done", title: "Hecho", type: "boolean" },
+      ],
+    },
     { name: "notes", title: "Notas", type: "text" },
     { name: "published", title: "Publicado", type: "boolean" },
     { name: "createdBy", title: "Creada por", ...weakMember },
