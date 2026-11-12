@@ -694,8 +694,9 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   folded to a summary or open, the `featured` one open and the lit pass's only site; `children` is
   the program editor) and the neutral pieces **`DateTile`** (a date as a calendar leaf; `empty` for a
   free Saturday), **`AudienceChips`** (who it is for, one chip per group with its monogram),
-  **`AudienceRail`** (the card's colour edge, `animate-rail-draw`), **`PersonAvatar`** (initials via
-  `initialsOf`; green ring = the reader, dashed = nobody), **`MeetingMeta`** (clock · llegada · place
+  **`AudienceRail`** (the card's colour edge, `animate-rail-draw`), **`PersonAvatar`** (the member's profile
+  `photo` painted as a background over the initials of `initialsOf`, so a photo that fails leaves
+  the initials; green ring = the reader, dashed = nobody; hook-free on purpose, ADR-0086 addendum), **`MeetingMeta`** (clock · llegada · place
   with icons), **`SectionHead`** (the planner's section title with an icon tile and its actions),
   **`MonthMap`** (the planner's month at a glance: a dot per meeting in its audience's colour, hollow
   for a draft; one `role="img"`), **`JovenesMeetingBody`** (`MeetingBody.tsx` — seats as faces, the

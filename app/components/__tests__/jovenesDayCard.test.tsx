@@ -11,8 +11,8 @@ const entry: JovenesDayEntry = {
   audience: "Todo Jóvenes",
   arrival: "17:30",
   place: "Oasis Tlalpan",
-  seats: [{ key: "s1", label: "Encargado", name: "Ana", mine: true }],
-  program: [{ key: "l1", label: "Dinámica", name: null, mine: false, note: "10 min" }],
+  seats: [{ key: "s1", label: "Encargado", name: "Ana", photo: null, mine: true }],
+  program: [{ key: "l1", label: "Dinámica", name: null, photo: null, mine: false, note: "10 min" }],
   notes: "Traer Biblia",
 };
 
@@ -33,5 +33,21 @@ describe("JovenesDayCard", () => {
     expect(html).toContain("10 min");
     expect(html).toContain("Traer Biblia");
     expect(html).toContain('href="/jovenes"');
+  });
+  it("draws a person's profile photo, and asks only the reader with none for one", () => {
+    const withMine = renderToStaticMarkup(<JovenesDayCard title="Sábado de Jóvenes" entry={entry} />);
+    expect(withMine).toContain('href="/me/ajustes"');
+    expect(withMine).not.toContain("data-photo");
+    const seats = [
+      { key: "s1", label: "Encargado", name: "Ana", photo: "https://lh3.googleusercontent.com/a/ana", mine: true },
+      { key: "s2", label: "Apoyo", name: "Beto", photo: null, mine: false },
+    ];
+    const program = [{ key: "l1", label: "Oración", name: "Beto", photo: "https://lh3.googleusercontent.com/a/beto", mine: false, note: null }];
+    const html = renderToStaticMarkup(<JovenesDayCard title="Sábado de Jóvenes" entry={{ ...entry, seats, program }} />);
+    expect(html).toContain("url(&quot;https://lh3.googleusercontent.com/a/ana&quot;)");
+    // The program line's person gets a face too.
+    expect(html).toContain("url(&quot;https://lh3.googleusercontent.com/a/beto&quot;)");
+    // Ana has a photo and Beto is not the reader: nobody is asked.
+    expect(html).not.toContain('href="/me/ajustes"');
   });
 });

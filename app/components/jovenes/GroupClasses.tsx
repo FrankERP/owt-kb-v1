@@ -302,7 +302,7 @@ export default function GroupClasses({
             </div>
             {!gap && (
               <p className="flex items-center gap-2 font-body text-[15px] text-ink">
-                <PersonAvatar name={seat?.name ?? null} mine={seat?.mine ?? false} size="sm" />
+                <PersonAvatar name={seat?.name ?? null} photo={seat?.photo ?? null} mine={seat?.mine ?? false} size="sm" />
                 <span className={seat?.name ? "" : "text-ink-dim"}>{seat?.name ?? "Sin responsable"}</span>
               </p>
             )}

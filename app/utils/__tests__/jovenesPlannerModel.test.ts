@@ -50,7 +50,7 @@ function ev(over: Partial<MinistryEventView> = {}): MinistryEventView {
 }
 
 const seat = (role: string, memberId: string | null, name: string | null, mine = false, _key = `k-${role}`) =>
-  ({ _key, role, memberId, name, mine });
+  ({ _key, role, memberId, name, photo: null, mine });
 
 describe("months", () => {
   it("parses ?mes and falls back on anything else", () => {
@@ -251,7 +251,7 @@ describe("the clocks the editors accept", () => {
 describe("the program body", () => {
   it("round-trips stored lines and leaves blank ones out", () => {
     const form = programForm([
-      { _key: "l1", label: "Oración", memberId: "m1", name: "Ana", mine: false, note: null },
+      { _key: "l1", label: "Oración", memberId: "m1", name: "Ana", photo: null, mine: false, note: null },
     ]);
     form.push({ key: null, label: " Dinámica ", member: null, note: " 10 min " });
     form.push({ key: null, label: "   ", member: "m2", note: "" });

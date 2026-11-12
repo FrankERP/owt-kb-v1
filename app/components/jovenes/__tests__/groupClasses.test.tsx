@@ -50,7 +50,7 @@ function cls(date: string, title: string, over: { track?: LessonTrack; done?: bo
     place: "Oasis Tepepan",
     lesson: { series: "El Caos Dentro de Mi", track: over.track ?? "libro", done: over.done ?? false },
     published: true,
-    seats: over.who ? [{ _key: "k1", role: "encargado", memberId: over.who, name: over.who, mine: false }] : [],
+    seats: over.who ? [{ _key: "k1", role: "encargado", memberId: over.who, name: over.who, photo: null, mine: false }] : [],
     program: [],
     createdById: null,
     createdByName: null,
