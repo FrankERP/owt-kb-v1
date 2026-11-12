@@ -95,11 +95,17 @@ export interface ParsedProposalSaveRequest {
   songs: NormalizedSongRow[];
   leadNotes: string;
   teamNotes: string;
+  /**
+   * The lead's copy of the pastor's message (ADR-0087). `null` when the request
+   * did not carry the key — the writer then leaves the stored field alone, so a
+   * client that predates the field never blanks it. `""` clears it.
+   */
+  pastorMessage: string | null;
 }
 
 /**
  * Parse the §6 member contract:
- * `{ roleId, observed, songs, leadNotes?, teamNotes?, status: "draft" | "pending" }`
+ * `{ roleId, observed, songs, leadNotes?, teamNotes?, pastorMessage?, status: "draft" | "pending" }`
  *
  * `observed` is REQUIRED. Service type and date are deliberately NOT accepted
  * from the client: the writer refreshes them from the authorized canonical role.
@@ -117,9 +123,16 @@ export function parseProposalSaveRequest(body: unknown): ParseResult<ParsedPropo
   if (withLeads !== -1) return fail([`songs[${withLeads}].leadIds`]);
   if (body.leadNotes != null && typeof body.leadNotes !== "string") return fail(["leadNotes"]);
   if (body.teamNotes != null && typeof body.teamNotes !== "string") return fail(["teamNotes"]);
+  if (body.pastorMessage != null && typeof body.pastorMessage !== "string") return fail(["pastorMessage"]);
   const leadNotes = typeof body.leadNotes === "string" ? body.leadNotes : "";
   const teamNotes = typeof body.teamNotes === "string" ? body.teamNotes : "";
-  if (leadNotes.length > PROPOSAL_NOTES_MAX || teamNotes.length > PROPOSAL_NOTES_MAX) {
+  // Absent (or null) = unchanged; only a string is a write.
+  const pastorMessage = typeof body.pastorMessage === "string" ? body.pastorMessage : null;
+  if (
+    leadNotes.length > PROPOSAL_NOTES_MAX ||
+    teamNotes.length > PROPOSAL_NOTES_MAX ||
+    (pastorMessage?.length ?? 0) > PROPOSAL_NOTES_MAX
+  ) {
     return fail(["notes_length"]);
   }
   return {
@@ -131,6 +144,7 @@ export function parseProposalSaveRequest(body: unknown): ParseResult<ParsedPropo
       songs: songs.value,
       leadNotes,
       teamNotes,
+      pastorMessage,
     },
   };
 }
