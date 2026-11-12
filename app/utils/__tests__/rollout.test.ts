@@ -34,15 +34,38 @@ describe("stageAllows: each stage widens the last", () => {
 });
 
 describe("the registry", () => {
-  it("Jóvenes' meetings are at superAdmin until Frank widens them", () => {
-    expect(ROLLOUT.jovenesEvents).toEqual({ ministry: "jovenes", stage: "superAdmin" });
-    expect(rolloutAllows("jovenesEvents", superAdmin)).toBe(true);
-    expect(rolloutAllows("jovenesEvents", jovenesAdmin)).toBe(false);
-    expect(rolloutAllows("jovenesEvents", pastor)).toBe(false);
+  // Frank opened Jóvenes to every pastor on 2026-11-12. The stage is pinned here on purpose: moving
+  // it changes who gets in, so it should never move as a side effect of another change.
+  it("Jóvenes' meetings reach everyone their own guards let in", () => {
+    expect(ROLLOUT.jovenesEvents).toEqual({ ministry: "jovenes", stage: "all" });
+    for (const access of [superAdmin, jovenesAdmin, leader, pastor]) expect(rolloutAllows("jovenesEvents", access)).toBe(true);
+    // The registry never lets an inactive person in, at any stage.
+    expect(rolloutAllows("jovenesEvents", inactiveSuper)).toBe(false);
+    expect(rolloutAllows("jovenesEvents", person({ active: false }))).toBe(false);
+  });
+
+  // The registry entry is moved here and put back, so the nav copy's arms stay exercised whatever
+  // stage the feature is at.
+  it("at every stage the nav copy shows no more than the server allows; at `admins`, the super-admin only", () => {
+    const entry = ROLLOUT.jovenesEvents;
+    const was = entry.stage;
+    try {
+      for (const stage of ROLLOUT_STAGES) {
+        entry.stage = stage;
+        expect(navRolloutAllows("jovenesEvents", true), stage).toBe(rolloutAllows("jovenesEvents", superAdmin));
+        if (navRolloutAllows("jovenesEvents", false)) expect(rolloutAllows("jovenesEvents", pastor), stage).toBe(true);
+      }
+      entry.stage = "admins";
+      expect(navRolloutAllows("jovenesEvents", false)).toBe(false);
+      entry.stage = "hidden";
+      expect(navRolloutAllows("jovenesEvents", true)).toBe(false);
+    } finally {
+      entry.stage = was;
+    }
   });
 
   it("the nav copy never shows more than the server allows", () => {
     expect(navRolloutAllows("jovenesEvents", true)).toBe(rolloutAllows("jovenesEvents", superAdmin));
-    expect(navRolloutAllows("jovenesEvents", false)).toBe(false);
+    expect(navRolloutAllows("jovenesEvents", false)).toBe(rolloutAllows("jovenesEvents", pastor));
   });
 });
