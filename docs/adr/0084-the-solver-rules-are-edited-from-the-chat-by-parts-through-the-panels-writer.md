@@ -67,7 +67,7 @@ that document for every month it plans. What made this slice a critical contract
   balance or «Mes por medio» flag changes, a superset of the plan's «touches a person in a bound
   month's record»: the check does not read the ledger, and a superfluous note costs nothing.
 - Rotating `MCP_OAUTH_SECRET` voids pending rules checks (`docs/SECRETS.md`).
-- Released 2026-11-11 (PR #238); live proof passed 2026-11-12. That proof found that Claude Code shows the
+- Released 2026-11-10 (PR #238); live proof passed 2026-11-11 (CDMX dates). That proof found that Claude Code shows the
   model only `structuredContent`, so the answers now carry their lines there too (members and songs too).
 
 ## Rejected

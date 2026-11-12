@@ -1161,8 +1161,8 @@ from the chat, through the same writer: `POST /api/admin/solver-config` now auth
 [ADR-0084](adr/0084-the-solver-rules-are-edited-from-the-chat-by-parts-through-the-panels-writer.md);
 plan: `docs/superpowers/plans/2026-11-06-owt-mcp-admin-parity-f4r-rules.md`. A rules save notifies
 nobody and changes no saved month; it applies to the next month Auto generates. Not on the worship-admin
-read tier (ADR-0083). In production since 2026-11-11 (PR #238, `31f3e18c`). Live proof passed
-2026-11-12 with Frank's consent (a «como máximo» Sunday count added, changed and removed for one person,
+read tier (ADR-0083). In production since 2026-11-10 CDMX (PR #238, `31f3e18c`). Live proof passed
+2026-11-11 CDMX with Frank's consent (a «como máximo» Sunday count added, changed and removed for one person,
 a stale token refused, a pool no-op and an off-Tipo pool refusal; the rules read back unchanged). Every
 answer carries its lines in the text AND in `structuredContent.lines`: the Claude app gives the model only
 the text, Claude Code only the structured half (found in that proof; the member and song tools do the same).
