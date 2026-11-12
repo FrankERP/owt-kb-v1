@@ -154,6 +154,7 @@ describe("save_song_edits", () => {
     const out = await saveSongEditsResult({ songId: "post-1", rev, token, edits: KEY_EDIT }, PRINCIPAL, d);
     expect(out.isError).toBeUndefined();
     expect(textOf(out)).toContain("Guardado en «Way Maker»");
+    expect(sc(out).lines).toEqual(textOf(out).split("\n"));
     expect(d.patch).toHaveBeenCalledWith("post-1", { key: "A" }, { ifRevisionId: "rev-1", newAuthors: [] });
   });
 
