@@ -481,7 +481,7 @@ several exist precisely to stop a plausible-looking change.
   equipo») has its writers in `serviceThreadCommit.ts` (admin parity phase 3, ADR-0073): the four
   `/api/admin/service-threads/[roleId]/*` routes and the MCP conversation tools
   (`app/mcp/tools/serviceMessages.ts`) both call them (and `proposalReviewCommit.ts` calls
-  `adoptProposalPastorMessage` after an approval commits, ADR-0088), so a chat message reaches the leads exactly as
+  `adoptProposalPastorMessage` after an approval commits, ADR-0087), so a chat message reaches the leads exactly as
   `/admin`'s does. The acting member is the session's on `/admin` and the bearer's (`principalOf`) in
   the chat, never an argument; no principal refuses before any read.
   Oasis Kids' writers (one Sunday, the pair roster, a volunteer's absences) live in `kidsCommit.ts`

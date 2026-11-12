@@ -52,7 +52,7 @@ function ev(over: Partial<MinistryEventView> = {}): MinistryEventView {
     notes: null,
     place: null,
     published: false,
-    seats: [{ _key: "k1", role: "encargado", memberId: "m1", name: "Ana", mine: false }],
+    seats: [{ _key: "k1", role: "encargado", memberId: "m1", name: "Ana", photo: null, mine: false }],
     program: [],
     createdById: null,
     createdByName: null,
@@ -152,8 +152,23 @@ describe("SaturdayPlanner", () => {
     expect(screen.getByText(/Ya hay una reunión ese día/)).toBeTruthy();
   });
 
+  it("a role's face is the first seat WITH a name, and the photo is that same person's", () => {
+    const { container } = renderPlanner([
+      ev({
+        seats: [
+          // A seat whose member is gone: no name. Its stray photo must never be drawn for Beto.
+          { _key: "k0", role: "encargado", memberId: "gone", name: null, photo: "https://lh3.googleusercontent.com/a/stray", mine: false },
+          { _key: "k1", role: "encargado", memberId: "m2", name: "Beto", photo: "https://lh3.googleusercontent.com/a/beto", mine: false },
+        ],
+      }),
+    ]);
+    const photos = [...container.querySelectorAll<HTMLElement>("[data-photo]")].map((el) => el.style.backgroundImage);
+    expect(photos).toEqual(['url("https://lh3.googleusercontent.com/a/beto")']);
+    expect(container.querySelector("[data-photo]")!.parentElement!.textContent).toBe("BE");
+  });
+
   it("a typed seat opens as text and keeps its key; picking a pastor sends the member instead", async () => {
-    renderPlanner([ev({ seats: [{ _key: "k1", role: "comparte", memberId: null, name: "Ana", mine: false }], place: "Casa Fam Varela" })]);
+    renderPlanner([ev({ seats: [{ _key: "k1", role: "comparte", memberId: null, name: "Ana", photo: null, mine: false }], place: "Casa Fam Varela" })]);
     expect(screen.getByText("Casa Fam Varela")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Editar" }));
     expect((screen.getByLabelText("Quién comparte: nombre") as HTMLInputElement).value).toBe("Ana");
@@ -336,7 +351,7 @@ describe("ProgramEditor after a stale save", () => {
 
     // The refresh brings the other person's line under a new revision.
     answer = { status: 200, body: { ok: true, id: "x", rev: "rev-3" } };
-    rerender(view(ev({ rev: "rev-2", program: [{ _key: "l9", label: "Dinámica", memberId: null, name: null, mine: false, note: null }] })));
+    rerender(view(ev({ rev: "rev-2", program: [{ _key: "l9", label: "Dinámica", memberId: null, name: null, photo: null, mine: false, note: null }] })));
     fireEvent.click(await screen.findByRole("button", { name: "Editar programa" }));
     fireEvent.click(await screen.findByRole("button", { name: "Guardar programa" }));
     await waitFor(() => expect(calls).toHaveLength(2));

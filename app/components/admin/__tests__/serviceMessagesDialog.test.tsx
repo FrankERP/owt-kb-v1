@@ -253,7 +253,7 @@ describe("ServiceMessagesDialog", () => {
     });
   });
 
-  describe("the leads' pastor's message from their proposal (ADR-0088)", () => {
+  describe("the leads' pastor's message from their proposal (ADR-0087)", () => {
     const LEADS_TEXT = "Vida en lugar de muerte";
     const withProposal = (status: string, extra: Record<string, unknown> = {}) =>
       conversation({ proposal: { _id: "setlistProposal.x", status, pastor_message: `  ${LEADS_TEXT}  `, messages: [] }, ...extra });

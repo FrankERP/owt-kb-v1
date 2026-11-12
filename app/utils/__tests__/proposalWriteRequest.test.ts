@@ -56,7 +56,7 @@ describe("parseProposalSaveRequest", () => {
     });
   });
 
-  it("carries the lead's pastor's message only when sent: absent = unchanged (null), \"\" = clear (ADR-0088)", () => {
+  it("carries the lead's pastor's message only when sent: absent = unchanged (null), \"\" = clear (ADR-0087)", () => {
     const sent = parseProposalSaveRequest({ ...base, pastorMessage: "Efesios 2" });
     expect(sent.ok && sent.value.pastorMessage).toBe("Efesios 2");
     const cleared = parseProposalSaveRequest({ ...base, pastorMessage: "" });

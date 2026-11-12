@@ -255,11 +255,11 @@ export default function SaturdayPlanner({
                         // A stored seat whose person is gone reads «Sin asignar» too, and looks it.
                         // The face is the first seat WITH a name: `seatNames` spells a nameless
                         // one as «Sin asignar», which must never become the initials «SI».
-                        const face = e.seats.find((s) => s.role === role && s.name)?.name ?? null;
+                        const face = e.seats.find((s) => s.role === role && s.name) ?? null;
                         const filled = face !== null;
                         return (
                           <li key={role} className="flex min-w-0 items-center gap-2.5">
-                            <PersonAvatar name={face} />
+                            <PersonAvatar name={face?.name ?? null} photo={face?.photo} />
                             <div className="min-w-0">
                               {/* The short word («Comparte»), as `/jovenes` says it; the sheet's field asks «Quién comparte». */}
                               <p className="font-label text-[10px] uppercase tracking-[0.16em] text-ink-dim">{seatRoleLabel(role)}</p>

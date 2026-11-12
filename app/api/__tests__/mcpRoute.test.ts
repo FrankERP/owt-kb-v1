@@ -1696,7 +1696,7 @@ describe("/api/mcp — three tool lists: who you are (live) and which agent hold
     // `groups` bound follows the registry (five groups, was 3). PR 2 (T7) moves it again.
     // Changed on purpose 2026-11-12 (per-group leadership PR 2, T7): the people tools take `leaderOf`
     // in the `jovenes` edit op and in a new person, and both descriptions state its rule.
-    // Changed on purpose 2026-11-12 (ADR-0088): the proposal-review confirm rule and
+    // Changed on purpose 2026-11-12 (ADR-0087): the proposal-review confirm rule and
     // get_service_messages name the leads' pastor's message.
     expect(TOOL_LIST_VERSIONS.full).toBe("0f660b6b");
     expect(TOOL_LIST_VERSION).toBe(TOOL_LIST_VERSIONS.full);

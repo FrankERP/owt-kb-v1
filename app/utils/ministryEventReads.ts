@@ -70,11 +70,16 @@ const MEMBER_ARM =
 const LEADER_DRAFT_ARM =
   `published != true && audience.kind == "groups" && count(audience.groups[@ in $led]) > 0`;
 
-const PERSON = `"memberId": member._ref, "name": member->{ "n": coalesce(alias, member_name) }.n, "mine": member._ref == $me`;
+// A person is drawn from the ONE profile every ministry shares (`teamMembers`): the alias when
+// there is one, and the photo `/me` shows (the upload over the Google one). Both are read through
+// the seat's own reference, so the read gains a field of somebody it already names, never a person
+// or a meeting (ADR-0081). A typed name has no member, so it has no photo.
+const MEMBER_PHOTO = `"photo": member->{ "p": coalesce(profilePhoto.asset->url, googlePhotoUrl) }.p`;
+const PERSON = `"memberId": member._ref, "name": member->{ "n": coalesce(alias, member_name) }.n, ${MEMBER_PHOTO}, "mine": member._ref == $me`;
 // A seat holds a member OR a typed name (plan 2026-11-10 P2): the member's live name wins, else
 // the seat's own text. Program lines keep members only, so they keep PERSON.
 const SEAT_PERSON =
-  `"memberId": member._ref, "name": coalesce(member->{ "n": coalesce(alias, member_name) }.n, name), "mine": member._ref == $me`;
+  `"memberId": member._ref, "name": coalesce(member->{ "n": coalesce(alias, member_name) }.n, name), ${MEMBER_PHOTO}, "mine": member._ref == $me`;
 const PROJECTION = `{
   _id,
   _rev,
@@ -163,7 +168,14 @@ export function mayRead(access: Access, event: StoredMinistryEvent, mode: Minist
 
 // ── The read ────────────────────────────────────────────────────────────────
 
-export type MinistryEventPerson = { _key: string; memberId: string | null; name: string | null; mine: boolean };
+export type MinistryEventPerson = {
+  _key: string;
+  memberId: string | null;
+  name: string | null;
+  /** The member's profile photo URL, or null (no photo, a typed name, a member who is gone). */
+  photo: string | null;
+  mine: boolean;
+};
 export type MinistryEventSeat = MinistryEventPerson & { role: string | null };
 export type MinistryEventLine = MinistryEventPerson & { label: string | null; note: string | null };
 
@@ -189,7 +201,7 @@ export type MinistryEventView = {
   createdByName: string | null;
 };
 
-type RawPerson = { _key?: unknown; memberId?: unknown; name?: unknown; mine?: unknown };
+type RawPerson = { _key?: unknown; memberId?: unknown; name?: unknown; photo?: unknown; mine?: unknown };
 
 const str = (x: unknown): string | null => (typeof x === "string" && x.trim() ? x : null);
 
@@ -198,6 +210,7 @@ function person(p: RawPerson, i: number): MinistryEventPerson {
     _key: str(p._key) ?? `i${i}`,
     memberId: str(p.memberId),
     name: str(p.name),
+    photo: str(p.photo),
     mine: p.mine === true,
   };
 }

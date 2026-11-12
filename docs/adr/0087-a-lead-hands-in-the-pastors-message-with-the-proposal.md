@@ -1,4 +1,4 @@
-# ADR-0088: A lead hands in the pastor's message with the proposal; approval copies it into an empty field
+# ADR-0087: A lead hands in the pastor's message with the proposal; approval copies it into an empty field
 
 **Date:** 2026-11-12 · **Status:** Accepted · Amends [ADR-0065](0065-admin-messages-to-a-service-live-on-their-own-document.md)
 

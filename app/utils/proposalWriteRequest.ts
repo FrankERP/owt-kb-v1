@@ -96,7 +96,7 @@ export interface ParsedProposalSaveRequest {
   leadNotes: string;
   teamNotes: string;
   /**
-   * The lead's copy of the pastor's message (ADR-0088). `null` when the request
+   * The lead's copy of the pastor's message (ADR-0087). `null` when the request
    * did not carry the key — the writer then leaves the stored field alone, so a
    * client that predates the field never blanks it. `""` clears it.
    */

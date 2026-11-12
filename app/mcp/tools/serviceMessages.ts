@@ -212,7 +212,7 @@ export async function getServiceMessagesResult(
       proposal: proposal
         ? {
             status: proposal.status ?? null,
-            // ADR-0088: the leads' copy; null when none, and for a draft they have not handed in
+            // ADR-0087: the leads' copy; null when none, and for a draft they have not handed in
             // (the dialog offers none either).
             pastorMessage: proposal.status !== "draft" && typeof proposal.pastor_message === "string" && proposal.pastor_message.trim()
               ? proposal.pastor_message.trim()
