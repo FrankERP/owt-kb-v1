@@ -167,9 +167,18 @@ const EXPECTED: Record<string, Partial<Record<MinistryEventMode, string[]>>> = {
 
 // ── Engine ──────────────────────────────────────────────────────────────────
 
+// p1 has only the Google photo; l1 uploaded one, which wins over their Google photo (as `/me`).
 const MEMBER_DOCS = [
-  { _id: "p1", _type: "teamMembers", member_name: "Pastor Uno" },
-  { _id: "l1", _type: "teamMembers", member_name: "Líder Uno", alias: "Lu" },
+  { _id: "p1", _type: "teamMembers", member_name: "Pastor Uno", googlePhotoUrl: "https://lh3.googleusercontent.com/p1" },
+  {
+    _id: "l1",
+    _type: "teamMembers",
+    member_name: "Líder Uno",
+    alias: "Lu",
+    googlePhotoUrl: "https://lh3.googleusercontent.com/l1",
+    profilePhoto: { _type: "image", asset: { _type: "reference", _ref: "image-l1" } },
+  },
+  { _id: "image-l1", _type: "sanity.imageAsset", url: "https://cdn.sanity.io/images/x/y/l1.jpg" },
 ];
 const DATASET = [...Object.values(EVENTS), ...MEMBER_DOCS];
 
@@ -255,7 +264,7 @@ describe("G3: isolation matrix on the real engine", () => {
     expect(got.map((r) => r._id)).toEqual(["ministryEvent.c", "ministryEvent.a", "ministryEvent.b"]);
   });
 
-  it("R7: «mine» is decided by member id in the projection, and names come from the reference", async () => {
+  it("R7: «mine» is decided by member id in the projection; names and profile photos come from the reference", async () => {
     const meeting = ev("seated", {
       ...PUB,
       audience: { kind: "ministry" },
@@ -270,14 +279,16 @@ describe("G3: isolation matrix on the real engine", () => {
     h.fetch.mockImplementation((q: string, p?: Record<string, unknown>) => groq(q, p, [meeting, ...MEMBER_DOCS]));
     const [row] = await readMinistryEvents(PEOPLE.pastorON, { me: "p1", ministry: "jovenes", mode: "member", ...WINDOW });
     expect(row.seats).toEqual([
-      { _key: "s1", role: "encargado", memberId: "p1", name: "Pastor Uno", mine: true },
-      { _key: "s2", role: "apoyo", memberId: "l1", name: "Lu", mine: false },
-      { _key: "s3", role: "apoyo", memberId: "gone", name: null, mine: false },
+      { _key: "s1", role: "encargado", memberId: "p1", name: "Pastor Uno", photo: "https://lh3.googleusercontent.com/p1", mine: true },
+      { _key: "s2", role: "apoyo", memberId: "l1", name: "Lu", photo: "https://cdn.sanity.io/images/x/y/l1.jpg", mine: false },
+      { _key: "s3", role: "apoyo", memberId: "gone", name: null, photo: null, mine: false },
     ]);
-    expect(row.program).toEqual([{ _key: "g1", label: "Oración", note: "5 min", memberId: "l1", name: "Lu", mine: false }]);
+    expect(row.program).toEqual([
+      { _key: "g1", label: "Oración", note: "5 min", memberId: "l1", name: "Lu", photo: "https://cdn.sanity.io/images/x/y/l1.jpg", mine: false },
+    ]);
     expect([row.createdById, row.createdByName, row.published]).toEqual(["l1", "Lu", true]);
   });
-  it("a typed seat name reads as its text, never «mine»; a member's live name wins; the place reads back", async () => {
+  it("a typed seat name reads as its text, never «mine» and never a photo; a member's live name wins; the place reads back", async () => {
     const meeting = ev("typed", {
       ...PUB,
       audience: { kind: "ministry" },
@@ -293,10 +304,10 @@ describe("G3: isolation matrix on the real engine", () => {
     const [row] = await readMinistryEvents(PEOPLE.pastorON, { me: "p1", ministry: "jovenes", mode: "member", ...WINDOW });
     expect(row.place).toBe("Oasis Tlalpan");
     expect(row.seats).toEqual([
-      { _key: "s1", role: "encargado", memberId: null, name: "Emprendedores", mine: false },
-      { _key: "s2", role: "comparte", memberId: null, name: "Ana", mine: false },
-      { _key: "s3", role: "apoyo", memberId: "p1", name: "Pastor Uno", mine: true },
-      { _key: "s4", role: "apoyo", memberId: null, name: null, mine: false },
+      { _key: "s1", role: "encargado", memberId: null, name: "Emprendedores", photo: null, mine: false },
+      { _key: "s2", role: "comparte", memberId: null, name: "Ana", photo: null, mine: false },
+      { _key: "s3", role: "apoyo", memberId: "p1", name: "Pastor Uno", photo: "https://lh3.googleusercontent.com/p1", mine: true },
+      { _key: "s4", role: "apoyo", memberId: null, name: null, photo: null, mine: false },
     ]);
   });
 });
