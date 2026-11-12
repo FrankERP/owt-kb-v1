@@ -480,7 +480,8 @@ several exist precisely to stop a plausible-looking change.
   A service's conversation (ADR-0065: the leads' thread, «Mensaje del pastor», «Mensaje para el
   equipo») has its writers in `serviceThreadCommit.ts` (admin parity phase 3, ADR-0073): the four
   `/api/admin/service-threads/[roleId]/*` routes and the MCP conversation tools
-  (`app/mcp/tools/serviceMessages.ts`) both call them, so a chat message reaches the leads exactly as
+  (`app/mcp/tools/serviceMessages.ts`) both call them (and `proposalReviewCommit.ts` calls
+  `adoptProposalPastorMessage` after an approval commits, ADR-0087), so a chat message reaches the leads exactly as
   `/admin`'s does. The acting member is the session's on `/admin` and the bearer's (`principalOf`) in
   the chat, never an argument; no principal refuses before any read.
   Oasis Kids' writers (one Sunday, the pair roster, a volunteer's absences) live in `kidsCommit.ts`
@@ -775,6 +776,23 @@ before any read, the fresh 20 s ledger read, the 58 s solve), `freezeConfirmEntr
 (`v3Confirm.ts`/`v3ConfirmRun.ts` — the ONE v3 confirm: every month's record in one PUT, then drafts month by
 month; critical, reviewed as such), `v3Copy.ts` (the ONLY v3 copy, keyed on codes), `prefillCountedSpecials`
 (`v3Prefill.ts` — counted specials before the solve; uncounted ones keep `fillColumn`).
+**Service cards (ADR-0088, 2026-11-12)** — the member's worship screens (Inicio, the Calendario's
+agenda, `/me`) draw a service as a card, with these and nothing hand-rolled beside them:
+`service/Face` and `FaceStack` (`app/components/service/Face.tsx` — a worship member as a photo with
+an initials fallback, «tú» in the one green ring; NOT the Jóvenes `PersonAvatar`, which is initials
+only because its reader carries no photos), `SongCover`/`CoverRow` (a song's album cover or a
+neutral tile), `ServiceFacts` (the ONE folded summary: lead faces, covers, «Setlist pendiente»),
+`SeatIcon`/`seatIconKind` (a seat's glyph, always beside its word), `DateTile` (the calendar leaf,
+shared with Jóvenes), `SERVICE_TONE`/`MINE_CHIP`/`COUNTDOWN_CHIP` (`app/utils/serviceToneStyle.ts` —
+a service's day colour lives on the rail and the leaf's band ONLY, ADR-0059's rule widened by that
+band; never a wash behind the head), `songCoverUrl`/`SONG_COVER_GROQ` (`app/utils/songCover.ts` — the
+cover is `post.albumArt`, a Sanity image served unconverted; a song without one has no picture and
+the YouTube still is never a stand-in, Frank 2026-11-12), `greetingService`
+(`app/utils/homeGreeting.ts` — the service Inicio's greeting is about, so the page does not repeat
+in the lede what the card under it says in chips). The lit border pass has two sites (the next
+Jóvenes meeting, Inicio's next service) and ONE worship host; a third is an ADR, then
+`litCard.test.ts`.
+
 Motion tokens are `--motion-*` /
 `--ease-*`; `motion` is
 importable only under `app/components/ui/**` — see `docs/MOTION.md` and
