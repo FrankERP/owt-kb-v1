@@ -108,6 +108,7 @@ describe("check_member_changes / save_member_changes", () => {
     const token = await checkedToken(d);
     const out = await saveMemberChangesResult({ memberId: "vale", edits: EDITS, token }, PRINCIPAL, d);
     expect(sc(out)).toMatchObject({ ok: true, saved: true });
+    expect(sc(out).lines).toEqual(textOf(out).split("\n"));
     expect(d.save.mock.calls[0][2].actorId).toBe(PRINCIPAL.sub);
   });
 

@@ -3,7 +3,7 @@
 **Date:** 2026-11-11 · **Status:** Accepted
 
 > **Numbering.** 0084 because records are numbered in the order they reach `main`; `preview`'s
-> solver-ops record moves to 0085 when this one merges there.
+> solver-ops record is 0086 (0085 went to the Jóvenes per-group leaders record).
 
 ## Context
 
@@ -67,6 +67,8 @@ that document for every month it plans. What made this slice a critical contract
   balance or «Mes por medio» flag changes, a superset of the plan's «touches a person in a bound
   month's record»: the check does not read the ledger, and a superfluous note costs nothing.
 - Rotating `MCP_OAUTH_SECRET` voids pending rules checks (`docs/SECRETS.md`).
+- Released 2026-11-10 (PR #238); live proof passed 2026-11-11 (CDMX dates). That proof found that Claude Code shows the
+  model only `structuredContent`, so the answers now carry their lines there too (members and songs too).
 
 ## Rejected
 
