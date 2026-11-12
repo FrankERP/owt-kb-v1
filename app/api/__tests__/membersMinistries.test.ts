@@ -245,28 +245,31 @@ describe("POST /api/admin/members — ministries", () => {
 // ADR-0075, access plan §3.4 and §5: the write side of a LEVELED ministry
 // (Jóvenes) and the rule that keeps a Jóvenes admin from becoming a worship admin.
 describe("members routes — ministryRoles (Jóvenes level and groups)", () => {
-  const admin = { ministry: "jovenes", level: "admin", groups: [] };
-  const leader = { ministry: "jovenes", level: "leader", groups: ["otro-nivel", "invencibles"] };
+  // Every request item carries `leaderOf` (ADR-0085): `[]` unless a leader.
+  const admin = { ministry: "jovenes", level: "admin", groups: [], leaderOf: [] };
+  const leader = { ministry: "jovenes", level: "leader", groups: ["otro-nivel", "invencibles"], leaderOf: ["otro-nivel"] };
   const stored = (p: Record<string, unknown>) => h.storedFetch.mockResolvedValue({ _rev: "rev-1", ...p });
 
   it("PATCH stores the items keyed by ministry, with the Studio's _type", async () => {
     const res = await PATCH(req({ ministries: ["worship", "jovenes"], ministryRoles: [leader] }), { params });
     expect(res.status).toBe(200);
-    // A leader leads every group the request names (K1's PR 1 meaning of «Líder»).
-    expect(patchSet().ministryRoles).toEqual([{ _key: "jovenes", _type: "ministryRole", ...leader, leaderOf: leader.groups }]);
+    // What is sent is what is stored: the leader leads the groups the request names in leaderOf.
+    expect(patchSet().ministryRoles).toEqual([{ _key: "jovenes", _type: "ministryRole", ...leader }]);
     expect(h.unsets).toEqual([]); // set and unset never touch one path in one patch
   });
 
-  it("PATCH with ministryRoles always reads the person and pins the write to that read (K1 judges the stored item)", async () => {
-    stored({ _rev: "rev-9", ministries: ["jovenes"], ministryRoles: [{ _key: "jovenes", ministry: "jovenes", level: "leader", groups: ["otro-nivel", "invencibles"], leaderOf: ["otro-nivel"] }] });
+  it("PATCH with ministryRoles always reads the person and pins the write to that read", async () => {
+    stored({ _rev: "rev-9", ministries: ["jovenes"], ministryRoles: [{ _key: "jovenes", ministry: "jovenes", level: "leader", groups: ["otro-nivel", "invencibles"], leaderOf: ["invencibles"] }] });
     const res = await PATCH(req({ ministries: ["jovenes"], ministryRoles: [leader] }), { params });
     expect(res.status).toBe(200);
     expect(h.revisions).toEqual(["rev-9"]);
-    expect(patchSet().ministryRoles).toEqual([{ _key: "jovenes", _type: "ministryRole", ...leader, leaderOf: ["otro-nivel"] }]);
+    expect(patchSet().ministryRoles).toEqual([{ _key: "jovenes", _type: "ministryRole", ...leader }]);
   });
 
-  it("PATCH refuses a request item that carries leaderOf in PR 1 (the key set is unchanged)", async () => {
-    const res = await PATCH(req({ ministries: ["jovenes"], ministryRoles: [{ ...leader, leaderOf: ["otro-nivel"] }] }), { params });
+  it("PATCH refuses a request item without leaderOf — an older form's body is refused, never reinterpreted", async () => {
+    const { leaderOf: _omitted, ...legacy } = leader;
+    void _omitted;
+    const res = await PATCH(req({ ministries: ["jovenes"], ministryRoles: [legacy] }), { params });
     expect(res.status).toBe(400);
     expect(h.commit).not.toHaveBeenCalled();
   });
@@ -397,14 +400,14 @@ describe("members routes — ministryRoles (Jóvenes level and groups)", () => {
       expect(h.create.mock.calls[0][0]).toMatchObject({
         role: "member",
         ministries: ["jovenes"],
-        ministryRoles: [{ _key: "jovenes", _type: "ministryRole", ...admin }],
+        ministryRoles: [{ _key: "jovenes", _type: "ministryRole", ministry: "jovenes", level: "admin", groups: [] }],
       });
     });
 
-    it("creates a leader leading every group they are given (leaderOf = groups)", async () => {
+    it("creates a leader leading the groups the request names in leaderOf", async () => {
       const res = await POST(req({ ...base, ministries: ["jovenes"], ministryRoles: [leader] }));
       expect(res.status).toBe(201);
-      expect(h.create.mock.calls[0][0].ministryRoles).toEqual([{ _key: "jovenes", _type: "ministryRole", ...leader, leaderOf: leader.groups }]);
+      expect(h.create.mock.calls[0][0].ministryRoles).toEqual([{ _key: "jovenes", _type: "ministryRole", ...leader }]);
     });
 
     it("refuses ministryRoles without ministries", async () => {

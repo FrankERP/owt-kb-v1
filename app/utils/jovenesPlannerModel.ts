@@ -355,7 +355,7 @@ export function groupEventProblem(form: GroupEventForm, v: PlannerViewer): strin
   // The writer's own bound on a groups audience (`parseAudience`: 1–3); `eventWrite.ts` answers its
   // `invalid_audience` with the same sentence.
   if (form.groups.length > 3) return "Elige hasta tres grupos; para todos, usa una reunión de todo Jóvenes.";
-  if (!v.isManager && !form.groups.some((g) => v.led.includes(g))) return "Incluye uno de tus grupos.";
+  if (!v.isManager && !form.groups.some((g) => v.led.includes(g))) return "Incluye uno de los grupos que lideras.";
   return timeProblem(form.time, "La hora", "19:30");
 }
 

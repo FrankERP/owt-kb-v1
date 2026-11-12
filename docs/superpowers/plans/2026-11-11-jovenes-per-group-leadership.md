@@ -6,11 +6,20 @@ were added AFTER approval and are un-reviewed. Extends ADR-0075 (levels and grou
 boundary; plan `2026-10-30-jovenes-events-access.md`, R1–R3 and W1–W3a). Branch
 `claude/project-thread-uqw2lr`, on top of `e11dafc49` (the Adrenalin and Guerreras groups).
 
-**Release state (2026-11-11):** PR 1 (T1–T5, T-mig, T-docs 1, the §11 notes that apply) is
-implemented on the branch, gates green, NOT yet reviewed or merged; the backfill has NOT run. The ADR
-is `docs/adr/0085-a-jovenes-leader-leads-named-groups.md` (Proposed). `preview` already holds a
-different unmerged ADR-0085 (the solver redeploy): the merge into `preview` renumbers whichever
-reaches it second to 0086, with its links.
+**Release state (2026-11-11):** PR 1 (T1–T5, T-mig, T-docs 1, the §11 notes that apply) is IN
+PRODUCTION: PR #239, merged as `3ad29ae9`, production alias verified 21:34Z; on dev from `82f696b5`
+(that merge renumbered the preview-only solver-ops ADR to 0086). §7 steps 1–2 done.
+
+**Release state (2026-11-12):** §7 step 3 is SATISFIED BY THE PR 1 WRITERS, not by the backfill: a
+read of production (2026-11-12 ~01:35Z, raw perspective, drafts included) found every stored Jóvenes
+leader (7 people) already carrying an explicit `leaderOf` (the pastors' load went through K1), so L1
+and L2 read identically and the check is 0. The backfill was never run; PR 2 deletes it with the
+switch, its lib and its test (§11 N4). PR 2 (T6–T10, §11 N2, N4–N6, N10) is implemented on this
+branch, not yet on `preview`. Before it reaches `preview` (step 4) the check is re-verified by a
+fresh read (every Jóvenes leader item, published and `drafts.*`/`versions.*`, has `leaderOf` present
+— no leader whose L1 and L2 readings differ), since the script that printed it is gone. ADR-0085 is
+Accepted with PR 2. Deviation, said aloud: the «Personas» form judges «a leader needs a led group»
+only when it sends `ministryRoles`, so an untouched legacy leader can still save an unrelated field.
 
 **Critical contract** (CLAUDE.md §Review policy): this changes an auth/ACL boundary (who leads which
 group decides who reads a group's drafts and who writes its meetings), the payload of a production
