@@ -384,8 +384,10 @@ built on `ministryAccess.ts` over ONE snapshot, `accessFromDoc`); worship pages 
 - **A Jóvenes group is a security boundary** (ADR-0081): `ministryEvent` has dotted ids and is
   read ONLY through `readMinistryEvents` (id prefix + the reader's groups as a parameter, audience
   read closed); never a wider read filtered in TypeScript (`ministryEventCoverage.test.ts`). Written
-  ONLY by `ministryEventCommit.ts` (fresh access, stored `_rev`, 404 for an unreadable event); a
-  route that writes a client-supplied id pins its type first (`storedRevisionOfType`, W9).
+  ONLY by `ministryEventCommit.ts` (fresh access, stored `_rev`, 404 for an unreadable event); its
+  one other query shape is «Recorrer»'s roster read (one group the actor writes, never returned).
+  A group's CLASS is a one-group meeting with a `lesson` (`ministryLesson.ts` is its one validity
+  rule). A route that writes a client-supplied id pins its type first (`storedRevisionOfType`, W9).
   Unreleased features gate on `rolloutAllows` (`app/utils/rollout.ts`) on the server, not the nav.
 
 ## Continuous improvement

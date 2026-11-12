@@ -295,11 +295,15 @@ export const JOVENES_GROUPS: ReadonlyArray<{ id: string; name: string }> = MINIS
 /** Who is looking at the planner, as the buttons need it. Cosmetic: the writer decides again. */
 export type PlannerViewer = { me: string; isManager: boolean; led: readonly string[] };
 
-/** The month's meetings of one or more groups (never the whole-ministry ones), by date then time. */
+/**
+ * The month's meetings of one or more groups (never the whole-ministry ones), by date then time.
+ * A group's CLASSES are not here: they live in «Clases del grupo», whose editor knows their lesson
+ * (plan 2026-11-12 §4) — this section's editor would otherwise drop it on a shared save.
+ */
 export function groupEvents(month: string, events: readonly MinistryEventView[]): MinistryEventView[] {
   const { from, to } = monthRange(month);
   return events
-    .filter((e) => e.audience?.kind === "groups" && e.date >= from && e.date <= to)
+    .filter((e) => e.audience?.kind === "groups" && !e.lesson && e.date >= from && e.date <= to)
     .sort((a, b) => (a.date === b.date ? (a.time ?? "").localeCompare(b.time ?? "") : a.date < b.date ? -1 : 1));
 }
 
