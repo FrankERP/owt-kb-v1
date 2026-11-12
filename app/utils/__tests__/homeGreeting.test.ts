@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { firstName, homeGreeting, joinNames, type GreetingService } from "../homeGreeting";
+import { firstName, greetingService, homeGreeting, joinNames, type GreetingService } from "../homeGreeting";
 
 // Wednesday 2026-10-21, 10:00 in CDMX (UTC−6).
 const NOW = new Date("2026-10-21T16:00:00Z");
@@ -63,5 +63,34 @@ describe("homeGreeting", () => {
 
   it("seats nobody without a name, and has no hello to give", () => {
     expect(homeGreeting([sat({ leads: [""] })], {}, "", NOW)).toMatchObject({ hello: null, lead: "Esta semana" });
+  });
+});
+
+describe("greetingService", () => {
+  it("is the earliest upcoming service the member is seated in — the same object, so the page can compare it with its hero", () => {
+    const saturday = sat();
+    const sunday = sun({ instruments: [{ label: "Bajo", person: "Frank" }] });
+    expect(greetingService([saturday, sunday], "frank", NOW)).toBe(sunday);
+    const both = sat({ leads: ["Frank"] });
+    expect(greetingService([sunday, both], "frank", NOW)).toBe(both);
+  });
+
+  it("is null when the member serves in none, and never a service already past", () => {
+    expect(greetingService([sat(), sun()], "frank", NOW)).toBeNull();
+    expect(greetingService([sat({ leads: ["Frank"], date: "2026-10-17" })], "frank", NOW)).toBeNull();
+    expect(greetingService([], "frank", NOW)).toBeNull();
+  });
+
+  it("orders same-day sets by the clock, an untimed one last", () => {
+    const early = { day: "Campamento", date: "2026-10-24", time: "09:00", leads: ["Frank"] };
+    const late = { day: "Campamento", date: "2026-10-24", time: "19:00", leads: ["Frank"] };
+    const untimed = { day: "Campamento", date: "2026-10-24", leads: ["Frank"] };
+    expect(greetingService([untimed, late, early], "frank", NOW)).toBe(early);
+  });
+
+  it("agrees with the greeting: the service it returns is the one `homeGreeting` names", () => {
+    const services = [sat(), sun({ leads: ["Frank"] })];
+    expect(greetingService(services, "frank", NOW)?.day).toBe("Domingo");
+    expect(homeGreeting(services, { alias: "Frank" }, "frank", NOW).day).toBe("domingo");
   });
 });

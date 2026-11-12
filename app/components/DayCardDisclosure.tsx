@@ -1,11 +1,11 @@
 "use client";
 
-// A service that is NOT the next one, collapsed to a row (spec §12.1):
-// "SÁBADO · 19 sep        en 11 días ▾" over a summary — «Lead Gaby y Pau · 5
-// canciones» and, when you serve, a «Tú · BGVs» chip (the Inicio redesign,
-// 2026-10-21). Opening reveals the ordinary `DayCard`.
-// Home renders the next service in full and every other one through this, so the
-// page is the run sheet plus a couple of lines instead of a wall of cards.
+// A service that is NOT the next one, as a folded CARD (ADR-0087): the date as a calendar leaf
+// in the day's colour, the day as the card's title, the clock, and — instead of a sentence —
+// who leads as faces, the set as a stack of its songs' pictures, «Tú · EG» with the seat's glyph.
+// A tap opens the ordinary `DayCard` sheet inside the same card. It is the object the Jóvenes
+// list draws for a meeting (ADR-0086): Inicio and `/me` render the next service in full and
+// every other one through this, so three services read as three things, not as three lines.
 //
 // The caller only hands this a service whose card actually paints (home filters
 // on `paintsDayCard` before splitting hero from rest) — a header over an empty
@@ -14,9 +14,8 @@
 // `Collapse` keeps its children mounted, so the `DayCard` inside a closed one
 // still runs `usePlayer`/`useSession`; both providers are global, and a closed
 // Collapse is inert + aria-hidden, so nothing inside it is reachable.
-
 //
-// A long press on the row (R7 Task 4, spec §12.8) opens its quick actions —
+// A long press on the head (R7 Task 4, spec §12.8) opens its quick actions —
 // the agenda, or this one service as an .ics — instead of toggling it open.
 
 import { useId, useState } from "react";
@@ -34,14 +33,13 @@ import { normalizeText } from "@/app/utils/normalizeText";
 import { myNameFromSession, mySeats, serviceTone, TONE_RAIL } from "@/app/utils/agenda";
 import { joinNames } from "@/app/utils/homeGreeting";
 import { plural } from "@/app/utils/plural";
+import { COUNTDOWN_CHIP, MINE_CHIP, SERVICE_TONE } from "@/app/utils/serviceToneStyle";
+import DateTile from "./jovenes/DateTile";
+import ServiceFacts from "./service/ServiceFacts";
+import SeatIcon from "./service/SeatIcon";
+import { ChevronDownIcon, ClockIcon } from "./ui/icons";
 
-/**
- * `sheet` (ADR-0070): home's «Después» list — a hairline row in the page's own
- * type (17 px sentence-case title, a plain countdown) with no card chrome and no
- * tone rail; the parent draws the dividers. Without it, the opaque card with the
- * day rail, as the calendar still shows it.
- */
-export default function DayCardDisclosure({ sheet = false, ...props }: DayCardProps & { sheet?: boolean }) {
+export default function DayCardDisclosure(props: DayCardProps) {
   const [open, setOpen] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const longPress = useLongPress(() => setActionsOpen(true));
@@ -57,11 +55,20 @@ export default function DayCardDisclosure({ sheet = false, ...props }: DayCardPr
   const { data: session } = useSession();
   const myName = myNameFromSession(session?.user) || props.viewerName || "";
   const seats = mySeats(props, myName);
-  const songs = props.setlist?.songs?.length ?? 0;
-  const summary = [
-    ...(props.leads?.length ? [`Lead ${joinNames(props.leads)}`] : []),
-    ...(songs ? [plural(songs, "canción", "canciones")] : []),
-  ].join(" · ");
+  const songs = props.setlist?.songs ?? [];
+  const leads = props.leads ?? [];
+  const tone = serviceTone(props);
+  const toneStyle = SERVICE_TONE[tone];
+  // The clock by the feed's one rule, the same the `.ics` below mints.
+  const clock = serviceStartTime(props.roleId ? "special" : "weekend", props.day, props.time);
+  // What a screen reader hears for the head, in the order the eye takes it in.
+  const label = [
+    `${props.day}${shortDate ? `, ${shortDate}` : ""}${clock ? `, ${clock}` : ""}`,
+    ...(days !== null ? [formatCountdown(days).toLowerCase()] : []),
+    ...(leads.length ? [`Lead ${joinNames(leads)}`] : []),
+    ...(songs.length ? [plural(songs.length, "canción", "canciones")] : []),
+    ...(seats.length ? [`te toca: ${seats.join(", ")}`] : []),
+  ].join(", ");
 
   // The same `downloadICS` as `DownloadCalendarRow` on `/me`, for the ONE service
   // this row stands for rather than the member's whole upcoming list. The UID
@@ -94,68 +101,68 @@ export default function DayCardDisclosure({ sheet = false, ...props }: DayCardPr
   ];
 
   return (
-    // Opaque, with the card's tone rail (2026-10-20). The row's focus ring is
-    // `ring-inset`: this wrapper clips, and an outset ring would vanish.
-    <div className={sheet ? "relative" : "brand-surface overflow-hidden rounded-[var(--brand-radius-panel)]"}>
-      {!sheet && <span aria-hidden className={`absolute inset-y-0 left-0 z-[1] w-[3px] ${TONE_RAIL[serviceTone(props)]}`} />}
-      {/* A raw <button>, not the house Button: this is a disclosure row (the row is
-        the affordance), the same exemption SongRow and LibraryRow carry. */}
-    <button
+    <article className="brand-surface relative overflow-hidden rounded-[var(--brand-radius-panel)] transition-[border-color] duration-fast ease-out-brand hover:border-ink/20">
+      <span
+        aria-hidden
+        className={`absolute inset-y-0 left-0 z-[1] w-[3px] origin-top animate-rail-draw [animation-delay:calc(var(--reveal-i,0)*40ms+120ms)] ${TONE_RAIL[tone]}`}
+      />
+      {/* A raw <button>, not the house Button: the card's head is a disclosure row (the
+          row is the affordance), the same exemption SongRow and LibraryRow carry. Its
+          focus ring is `ring-inset`: the card clips, and an outset ring would vanish. */}
+      <button
         type="button"
         {...longPress}
         aria-expanded={open}
         aria-controls={id}
+        aria-label={label}
         onClick={() => setOpen((o) => !o)}
-        className={`flex w-full items-center justify-between gap-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60 ${sheet ? "min-h-[4.5rem] py-4" : "px-5 py-4"}`}
+        className="relative flex w-full gap-3.5 py-4 pl-5 pr-4 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60"
       >
-        <span className="min-w-0">
-          <span className={sheet ? "block font-body text-[17px] font-semibold text-ink" : "block font-display text-lg uppercase text-ink"}>
-            {props.day}
-            {shortDate && <span className="text-ink-dim font-normal"> · {shortDate}</span>}
-            {/* Same-day sets differ only by the clock, so the collapsed row carries
-                it too — matching `DayCard`'s own `day · date · time` header. */}
-            {props.time && <span className="text-ink-dim font-normal tabular-nums"> · {props.time}</span>}
+        {/* `decorative`: the head's own label already says the date. */}
+        {props.date && <DateTile decorative date={props.date.slice(0, 10)} tone={toneStyle} />}
+        <span className="block min-w-0 flex-1 space-y-2">
+          <span className="flex items-start justify-between gap-3">
+            <span className="block min-w-0 break-words pt-0.5 font-display text-[22px] font-semibold uppercase leading-none tracking-[0.02em] text-ink md:text-2xl">
+              {props.day}
+            </span>
+            <span aria-hidden className="-mr-1 -mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-ink/[0.12] text-ink-muted">
+              <ChevronDownIcon size={16} className={`transition-transform duration-base ease-out-brand ${open ? "rotate-180" : ""}`} />
+            </span>
           </span>
-          {(summary || seats.length > 0) && (
-            // Wraps rather than truncates: at «Máximo» the chip drops under the
-            // summary instead of pushing the countdown off the row.
-            <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-body text-sm text-ink-muted">
-              {summary && <span className="break-words">{summary}</span>}
-              {/* The agenda's «tú» chip, class for class: one signal on both surfaces. */}
+          {/* Same-day sets differ only by the clock, so the folded card carries it. */}
+          {clock && (
+            <span className="flex items-center gap-1.5 font-body text-[15px] leading-snug text-ink-muted">
+              <ClockIcon size={14} className="shrink-0 text-ink-dim" />
+              <span className="font-semibold tabular-nums text-ink">{clock}</span>
+            </span>
+          )}
+          {/* Wraps rather than truncates: at «Máximo» a chip drops under the other
+              instead of pushing anything off the card. */}
+          {(days !== null || seats.length > 0) && (
+            <span className="flex flex-wrap items-center gap-1.5">
+              {days !== null && <span className={COUNTDOWN_CHIP}>{formatCountdown(days)}</span>}
               {seats.length > 0 && (
-                <span className="rounded-full border border-positive-fg/35 bg-positive-fg/10 px-2.5 py-0.5 font-label text-[10px] uppercase tracking-widest text-positive-fg">
+                <span className={MINE_CHIP}>
+                  <SeatIcon seat={seats[0]} size={11} />
                   Tú · {seats.join(", ")}
                 </span>
               )}
             </span>
           )}
-        </span>
-        <span className={`flex shrink-0 items-center gap-3 ${sheet ? "font-body text-sm text-ink-muted" : "font-label text-[11px] uppercase tracking-widest text-ink-dim"}`}>
-          {days !== null && formatCountdown(days).toLowerCase()}
-          {/* `currentColor` on purpose: `var()` is not substituted inside an SVG
-              presentation attribute, so the stroke inherits the span's colour. */}
-          <svg
-            aria-hidden
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            className={`transition-transform duration-base ease-out-brand ${open ? "rotate-180" : ""}`}
-          >
-            <path d="m6 9 6 6 6-6" />
-          </svg>
+          {/* Folded, the card still says who leads and whether the songs are in — as
+              faces and pictures. It closes as the body opens (the crossed `Collapse` of
+              a Jóvenes card), its top padding inside so an open card keeps no gap. */}
+          <Collapse open={!open}>
+            <ServiceFacts leads={leads} songs={songs} photos={props.photos} myName={myName} className="pt-1" />
+          </Collapse>
         </span>
       </button>
       {/* The padding rides on Collapse's inner div: a padded animated element
           floors its own height under border-box and never closes to zero. */}
-      <Collapse open={open} id={id} className={sheet ? "pb-4" : "px-2 pb-2"}>
-        {/* `nested`: this wrapper already is the card (ground, hairline, rail), so the
-            inner one drops its own chrome — two rails 5 px apart otherwise. */}
-        {/* `sheet` with `sheet`: the open row keeps the hairline typography and draws
-            no card header — this row already names the service. */}
-        <DayCard {...props} nested sheet={sheet} />
+      <Collapse open={open} id={id} className="border-t border-ink/[0.08] py-5 pl-5 pr-4">
+        {/* `nested sheet`: this card already names the service, so the inner one draws
+            the sheet's body alone — songs with their pictures, the team as faces. */}
+        <DayCard {...props} nested sheet />
       </Collapse>
       <QuickActions
         open={actionsOpen}
@@ -163,6 +170,6 @@ export default function DayCardDisclosure({ sheet = false, ...props }: DayCardPr
         title={`${props.day}${shortDate ? ` · ${shortDate}` : ""}`}
         actions={actions}
       />
-    </div>
+    </article>
   );
 }

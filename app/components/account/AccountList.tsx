@@ -25,9 +25,16 @@ export const ACCOUNT_ROW_CLASS =
   "flex w-full items-center gap-4 py-4 text-left transition-colors hover:bg-accent/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60";
 
 /** `trailing` is the row's right-hand glyph: the chevron of a link, or what a button row does. */
-export function AccountRowBody({ title, status, trailing }: { title: string; status?: string; trailing?: ReactNode }) {
+export function AccountRowBody({ title, status, trailing, icon }: { title: string; status?: string; trailing?: ReactNode; icon?: ReactNode }) {
   return (
     <>
+      {/* The row's glyph on the service card's own tile (ADR-0087): the four rows
+          are told apart by shape before their words are read. */}
+      {icon && (
+        <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-ink/[0.07] text-ink-muted">
+          {icon}
+        </span>
+      )}
       <span className="min-w-0 flex-1">
         <span className="block font-body text-[17px] font-semibold text-ink">{title}</span>
         {status && <span className="block font-body text-sm text-ink-muted">{status}</span>}
@@ -37,11 +44,11 @@ export function AccountRowBody({ title, status, trailing }: { title: string; sta
   );
 }
 
-export function AccountLinkRow({ href, title, status }: { href: string; title: string; status?: string }) {
+export function AccountLinkRow({ href, title, status, icon }: { href: string; title: string; status?: string; icon?: ReactNode }) {
   return (
     <li>
       <Link href={href} className={ACCOUNT_ROW_CLASS}>
-        <AccountRowBody title={title} status={status} />
+        <AccountRowBody title={title} status={status} icon={icon} />
       </Link>
     </li>
   );

@@ -267,6 +267,7 @@ export default function CalendarView({ activeDays: allDays, viewMonth, todayStr,
               onSelect={setSelected}
               emptyMessage={emptyMessage}
               myName={myName}
+              photos={photos}
             />
           ) : isEmpty ? (
             <p className="py-20 text-center font-body text-base text-ink-muted">{emptyMessage}</p>

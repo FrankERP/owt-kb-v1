@@ -49,6 +49,21 @@ export function firstName(user?: { alias?: string | null; name?: string | null }
 }
 
 /**
+ * The service the greeting is ABOUT: the earliest upcoming one the member is seated in, or
+ * null. The same object it was handed, so the page can tell whether that is the card it
+ * draws right under the greeting — and then leave the facts to the card (ADR-0087).
+ */
+export function greetingService<T extends GreetingService>(services: T[], myName: string, now: Date = new Date()): T | null {
+  return (
+    services
+      .filter((s) => !!s.date && daysUntil(s.date, now) >= 0 && mySeats(s, myName).length > 0)
+      // `compareServiceTime`, the one comparator: an untimed set sorts LAST, as the
+      // page's own `order(date asc, time asc)` puts it.
+      .sort((a, b) => a.date!.localeCompare(b.date!) || compareServiceTime(a.time, b.time))[0] ?? null
+  );
+}
+
+/**
  * The greeting for the services home shows. `myName` is `myNameFromSession`'s
  * lowercased display name; `now` is injectable for tests. The service picked is
  * the EARLIEST upcoming one the member is seated in — by date, then by a special's
@@ -63,11 +78,7 @@ export function homeGreeting(
   const name = firstName(user);
   const hello = name ? `Hola, ${name}` : null;
 
-  const mine = services
-    .filter((s) => !!s.date && daysUntil(s.date, now) >= 0 && mySeats(s, myName).length > 0)
-    // `compareServiceTime`, the one comparator: an untimed set sorts LAST, as the
-    // page's own `order(date asc, time asc)` puts it.
-    .sort((a, b) => a.date!.localeCompare(b.date!) || compareServiceTime(a.time, b.time))[0];
+  const mine = greetingService(services, myName, now);
 
   if (!mine) return { hello, lead: "Esta semana", day: "", sub: "Esta vez no te toca servir." };
 

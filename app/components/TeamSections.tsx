@@ -19,19 +19,23 @@
 // rail), and a fourth meaning would make them all harder to read. Inside a
 // group the seat is the label, so a face carries only its name.
 //
+// On the service card's sheet (ADR-0087) a section is found by its GLYPH — a microphone,
+// a guitar, the booth's sliders on a tile beside its name — a closed one shows its people as
+// overlapped faces beside the names, and a seat in Banda or Cabina wears its instrument on
+// the face's corner. The words are all still there; they are no longer the only way in.
+//
 // The section header is a raw <button>, not the house Button: it is a disclosure
 // row (the row is the affordance), the exemption `DayCardDisclosure` carries.
 
-import Image from "next/image";
 import Link from "next/link";
 import { Fragment, useId, useState } from "react";
 import Collapse from "./ui/Collapse";
 import { WarningIcon } from "./ui/icons";
+import Face, { FaceStack } from "./service/Face";
+import SeatIcon, { SectionIcon } from "./service/SeatIcon";
 import { findDuplicates } from "@/app/utils/agenda";
 import {
-  avatarSrc,
   defaultOpenSections,
-  initialsOf,
   personKey,
   teamSections,
   type TeamInput,
@@ -121,8 +125,11 @@ function OpenSection({ section, myName, photos, sheet = false }: { section: Team
   const people = section.people.filter((p) => p.name);
   return (
     <div className={sheet ? "py-4" : "py-3"}>
-      <p className={sheet ? `mb-3 ${SHEET_LABEL}` : "mb-2 font-label text-xs uppercase tracking-widest text-mono-400"}>
-        <SectionLabel section={section} count={people.length} dups={dups} />
+      <p className={sheet ? `mb-3 flex items-center gap-3 ${SHEET_LABEL}` : "mb-2 font-label text-xs uppercase tracking-widest text-mono-400"}>
+        {sheet && <SectionTile id={section.id} />}
+        <span>
+          <SectionLabel section={section} count={people.length} dups={dups} />
+        </span>
       </p>
       <SectionBody section={section} people={people} myName={myName} photos={photos} dups={dups} sheet={sheet} />
     </div>
@@ -131,6 +138,15 @@ function OpenSection({ section, myName, photos, sheet = false }: { section: Team
 
 /** The sheet's section label (ADR-0070): the page's 17 px semibold, no small caps. */
 const SHEET_LABEL = "font-body text-[17px] font-semibold text-ink";
+
+/** The section's glyph on a tinted tile — what the eye finds before the word (ADR-0087). */
+function SectionTile({ id }: { id: TeamSectionId }) {
+  return (
+    <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-ink/[0.07] text-ink-muted">
+      <SectionIcon id={id} size={17} />
+    </span>
+  );
+}
 
 /** «Voces · 8», plus the ⚠ count when someone is seated twice in the section. */
 function SectionLabel({ section, count, dups }: { section: TeamSection; count: number; dups: Set<string> }) {
@@ -160,12 +176,12 @@ function SectionBody({ section, people, myName, photos, dups, sheet = false }: {
           <p className={sheet ? "mb-2 font-body text-sm text-ink-muted" : "mb-2 font-label text-[10px] uppercase tracking-widest text-ink-dim"}>
             {g.role} · {g.people.length}
           </p>
-          <Faces people={g.people} myName={myName} photos={photos} dups={dups} grouped />
+          <Faces people={g.people} myName={myName} photos={photos} dups={dups} grouped section={section.id} />
         </div>
       ))}
     </div>
   ) : (
-    <Faces people={people} myName={myName} photos={photos} dups={dups} />
+    <Faces people={people} myName={myName} photos={photos} dups={dups} section={section.id} badges={sheet} />
   );
 }
 
@@ -192,6 +208,7 @@ function Section({ section, open, onToggle, myName, photos, sheet = false }: {
         onClick={() => onToggle(!open)}
         className={`flex w-full items-center gap-3 rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60 ${sheet ? "py-4" : "py-3"}`}
       >
+        {sheet && <SectionTile id={section.id} />}
         <span className="min-w-0 flex-1">
           <span className={sheet ? `block ${SHEET_LABEL}` : "block font-label text-xs uppercase tracking-widest text-mono-400"}>
             <SectionLabel section={section} count={people.length} dups={dups} />
@@ -204,6 +221,11 @@ function Section({ section, open, onToggle, myName, photos, sheet = false }: {
             </span>
           )}
         </span>
+        {/* Closed, the section still shows WHO: its people as overlapped faces. Hidden
+            below 22rem of row (a phone at «Máximo»), where the names line needs the width. */}
+        {sheet && !open && (
+          <FaceStack names={people.map((p) => p.name)} photos={photos} myName={myName} max={4} className="hidden min-[360px]:inline-flex" />
+        )}
         {/* `currentColor`: `var()` is not substituted in an SVG presentation attribute. */}
         <span aria-hidden className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-ink/10 text-ink-dim">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`transition-transform duration-base ease-out-brand ${open ? "rotate-180" : ""}`}>
@@ -232,7 +254,16 @@ function roleGroups(people: TeamPerson[]): Array<{ role: string; people: TeamPer
   return groups;
 }
 
-function Faces({ people, myName, photos, dups, grouped = false }: { people: TeamPerson[]; myName: string; photos?: Record<string, string>; dups: Set<string>; grouped?: boolean }) {
+function Faces({ people, myName, photos, dups, grouped = false, section, badges = false }: {
+  people: TeamPerson[];
+  myName: string;
+  photos?: Record<string, string>;
+  dups: Set<string>;
+  grouped?: boolean;
+  section: TeamSectionId;
+  /** Draw each seat's glyph on its face (the sheet's Banda and Cabina). */
+  badges?: boolean;
+}) {
   return (
     // auto-fit + an em floor, not `grid-cols-2`: the track minimum grows with the
     // TEXT, so at «Máximo» the faces drop to one column instead of two columns
@@ -240,7 +271,7 @@ function Faces({ people, myName, photos, dups, grouped = false }: { people: Team
     // 375 px phone (measured: 8.5em left one column there).
     <ul className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,7.5em),1fr))] gap-x-3 gap-y-3">
       {people.map((p, i) => (
-        <Person key={`${p.name}-${p.role}-${i}`} person={p} myName={myName} photos={photos} duplicate={dups.has(personKey(p.name))} grouped={grouped} />
+        <Person key={`${p.name}-${p.role}-${i}`} person={p} myName={myName} photos={photos} duplicate={dups.has(personKey(p.name))} grouped={grouped} section={section} badge={badges} />
       ))}
     </ul>
   );
@@ -269,7 +300,15 @@ function NamesLine({ section, people, myName, dups }: { section: TeamSection; pe
   );
 }
 
-function Person({ person, myName, photos, duplicate, grouped }: { person: TeamPerson; myName: string; photos?: Record<string, string>; duplicate: boolean; grouped: boolean }) {
+function Person({ person, myName, photos, duplicate, grouped, section, badge }: {
+  person: TeamPerson;
+  myName: string;
+  photos?: Record<string, string>;
+  duplicate: boolean;
+  grouped: boolean;
+  section: TeamSectionId;
+  badge: boolean;
+}) {
   const key = personKey(person.name);
   const me = !duplicate && !!myName && key === myName;
   const photo = photos?.[key];
@@ -281,7 +320,13 @@ function Person({ person, myName, photos, duplicate, grouped }: { person: TeamPe
   const showSeat = !grouped || me;
   return (
     <li className="flex min-w-0 items-center gap-2.5">
-      <Avatar name={person.name} photo={photo} me={me} dashed={askForPhoto} />
+      <Face
+        name={person.name}
+        photo={photo}
+        me={me}
+        dashed={askForPhoto}
+        badge={badge ? <SeatIcon seat={person.role} section={section} size={10} /> : undefined}
+      />
       <div className="min-w-0">
         {/* `break-words`, not `truncate`: at «Máximo» a long name breaks inside its
             own column instead of being cut, and `min-w-0` lets the grid item
@@ -307,25 +352,5 @@ function Person({ person, myName, photos, duplicate, grouped }: { person: TeamPe
         )}
       </div>
     </li>
-  );
-}
-
-function Avatar({ name, photo, me, dashed }: { name: string; photo?: string; me: boolean; dashed: boolean }) {
-  // A photo that fails to load (a revoked Google URL, a deleted asset) falls back
-  // to initials rather than a broken-image glyph.
-  const [failed, setFailed] = useState(false);
-  const ring = me
-    ? dashed ? "border-2 border-dashed border-positive-fg" : "border-2 border-positive-fg"
-    : "border border-ink/10";
-  return (
-    <span aria-hidden className={`flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-raised ${ring}`}>
-      {photo && !failed ? (
-        // unoptimized: the original JPEG/PNG, never Next's WebP — the iOS
-        // WKWebView fails to decode it (same reason as `MeHeader`'s avatar).
-        <Image src={avatarSrc(photo)} alt="" width={36} height={36} unoptimized loading="lazy" onError={() => setFailed(true)} className="h-full w-full object-cover" />
-      ) : (
-        <span className="font-label text-[11px] text-ink">{initialsOf(name)}</span>
-      )}
-    </span>
   );
 }

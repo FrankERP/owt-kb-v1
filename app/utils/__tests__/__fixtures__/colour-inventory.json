@@ -8,28 +8,28 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 320,
-    "filesScanned": 620,
-    "filesWithColour": 66,
+    "literalRows": 322,
+    "filesScanned": 626,
+    "filesWithColour": 67,
     "byCategory": {
       "2": 2,
-      "4": 63,
+      "4": 64,
       "5": 2,
-      "8": 86,
+      "8": 85,
       "9": 10,
-      "11": 11,
+      "11": 13,
       "12": 146
     },
     "byDisposition": {
       "exempt": 60,
-      "B": 114,
-      "keep": 232,
+      "B": 115,
+      "keep": 235,
       "C": 5,
       "D": 13
     },
     "compositingClasses": 22,
     "compositingSelectorOccurrences": 60,
-    "compositingClassNameOccurrences": 33,
+    "compositingClassNameOccurrences": 36,
     "compositingRuleBodies": 52,
     "lightCounterpartClasses": 13,
     "pairs": 3,
@@ -176,7 +176,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 425,
+      "line": 429,
       "disposition": "B",
       "reason": null
     },
@@ -248,7 +248,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 316,
+      "line": 323,
       "disposition": "B",
       "reason": null
     },
@@ -260,7 +260,7 @@
       "alpha": null,
       "utility": "to",
       "carrier": null,
-      "line": 299,
+      "line": 306,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2809,6 +2809,18 @@
       "reason": "Already theme-agnostic"
     },
     {
+      "file": "app/components/AgendaView.tsx",
+      "category": 11,
+      "categoryName": "arbitrary-value-var-brand",
+      "value": "[var(--brand-radius-panel)]",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 130,
+      "disposition": "B",
+      "reason": null
+    },
+    {
       "file": "app/components/assistant/AssistantBubble.tsx",
       "category": 4,
       "categoryName": "colour-keyword",
@@ -3092,7 +3104,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 302,
+      "line": 407,
       "disposition": "B",
       "reason": null
     },
@@ -3104,7 +3116,19 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 302,
+      "line": 460,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/DayCard.tsx",
+      "category": 11,
+      "categoryName": "arbitrary-value-var-brand",
+      "value": "[var(--brand-radius-panel)]",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 460,
       "disposition": "B",
       "reason": null
     },
@@ -3116,7 +3140,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 605,
+      "line": 762,
       "disposition": "B",
       "reason": null
     },
@@ -3128,9 +3152,21 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 614,
+      "line": 771,
       "disposition": "B",
       "reason": null
+    },
+    {
+      "file": "app/components/DayCard.tsx",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "to-transparent",
+      "alpha": null,
+      "utility": "to",
+      "carrier": null,
+      "line": 417,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
     },
     {
       "file": "app/components/DayCardDisclosure.tsx",
@@ -3140,19 +3176,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 99,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/DayCardDisclosure.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 143,
+      "line": 104,
       "disposition": "B",
       "reason": null
     },
@@ -3524,7 +3548,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 209,
+      "line": 231,
       "disposition": "B",
       "reason": null
     },
@@ -4103,6 +4127,14 @@
       "reason": "Usage site of a compositing class"
     },
     {
+      "file": "app/components/AgendaView.tsx",
+      "kind": "className",
+      "class": "surface",
+      "count": 1,
+      "disposition": "keep",
+      "reason": "Usage site of a compositing class"
+    },
+    {
       "file": "app/components/ChordChart.tsx",
       "kind": "className",
       "class": "key-dial",
@@ -4129,8 +4161,16 @@
     {
       "file": "app/components/DayCard.tsx",
       "kind": "className",
-      "class": "surface",
+      "class": "lit-card",
       "count": 1,
+      "disposition": "keep",
+      "reason": "Usage site of a compositing class"
+    },
+    {
+      "file": "app/components/DayCard.tsx",
+      "kind": "className",
+      "class": "surface",
+      "count": 2,
       "disposition": "keep",
       "reason": "Usage site of a compositing class"
     },

@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
-// The collapsed service (R1 Task 7, spec §12.1). Home shows the next service in
-// full and every other one through this: one line — day · date and the countdown
-// — that opens onto the ordinary card.
+// The folded service (R1 Task 7, spec §12.1; a CARD since ADR-0087). Home shows the next
+// service in full and every other one through this: a card head — the date leaf, the day,
+// the clock, the countdown, who leads as faces — that opens onto the service's sheet.
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { CueDialogProvider } from "@/app/components/ui/CueDialogProvider";
@@ -55,11 +55,22 @@ function longPress(el: Element) {
 }
 
 describe("DayCardDisclosure", () => {
-  it("summarizes the closed row — who leads, how many songs — with no «tú» chip for a service you do not serve", () => {
+  it("summarizes the folded card — who leads, how many songs — with no «tú» chip for a service you do not serve", () => {
     mount({ leads: ["Ana", "Gaby"] });
     const row = screen.getByRole("button", { expanded: false });
-    expect(row.textContent).toContain("Lead Ana y Gaby · 1 canción");
+    expect(row.textContent).toContain("Lead Ana y Gaby");
+    expect(row.textContent).toContain("1 canción");
     expect(within(row).queryByText(/^Tú ·/)).toBeNull();
+  });
+
+  it("says «Setlist pendiente» for a team published before its songs, and shows who leads as faces", () => {
+    mount({ leads: ["Ana", "Gaby"], setlist: { week: "2026-09-19", songs: [] }, photos: { ana: "https://lh3.googleusercontent.com/a/ana" } });
+    const row = screen.getByRole("button", { expanded: false });
+    expect(row.textContent).toContain("Setlist pendiente");
+    expect(row.textContent).not.toMatch(/canci[oó]n/);
+    // One face per lead: Ana's photo, Gaby's initials.
+    expect(row.querySelectorAll("img")).toHaveLength(1);
+    expect(within(row).getByText("GA")).toBeTruthy();
   });
 
   it("chips the seats you hold, matched by the session's display name", () => {
@@ -68,59 +79,47 @@ describe("DayCardDisclosure", () => {
     expect(within(row).getByText("Tú · Lead, Keys").className).toContain("text-positive-fg");
   });
 
-  it("collapses the service to one line: day · date and the countdown", () => {
+  it("folds the service into one card head: the date as a leaf, the day as the title, the countdown", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(2026, 8, 8, 9, 0, 0)); // 2026-09-08 local
-    mount();
+    const { container } = mount();
     const trigger = screen.getByRole("button", { name: /Sábado/ });
-    // jsdom's ICU renders es-MX `month: short` as "19 sep"; only the day number
-    // is stable across ICU builds, so the month is matched case-insensitively.
-    expect(trigger.textContent).toMatch(/Sábado\s*·\s*19\s*sep/i);
-    expect(trigger.textContent).toContain("en 11 días");
+    // The leaf is decorative — the head's own label says the date — and reads «Sáb 19 sep».
+    const leaf = trigger.querySelector("time")!;
+    expect(leaf.getAttribute("datetime")).toBe("2026-09-19");
+    expect(leaf.getAttribute("aria-hidden")).toBe("true");
+    expect(leaf.textContent).toMatch(/Sáb\s*19\s*sep/i);
+    expect(trigger.getAttribute("aria-label")).toMatch(/^Sábado, 19 sep/i);
+    expect(trigger.getAttribute("aria-label")).toContain("en 11 días");
+    expect(trigger.textContent).toMatch(/en 11 días/i);
+    // ADR-0087: a card with an edge and the day's rail, the title in the display face, uppercase.
+    expect(container.querySelector("article.brand-surface")).toBeTruthy();
+    expect(container.querySelector(".w-\\[3px\\]")!.className).toContain("animate-rail-draw");
+    const title = within(trigger).getByText("Sábado", { selector: "span" });
+    expect(title.className).toContain("font-display");
+    expect(title.className).toContain("uppercase");
   });
 
-  it("carries a special's time when it has one, and nothing clock-shaped when it does not", () => {
+  it("carries the clock: the standing time of a weekend service, a special's own, none for a special without one", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(2026, 8, 8, 9, 0, 0));
     mount();
-    expect(screen.getByRole("button", { name: /Sábado/ }).textContent).not.toMatch(/\d\d:\d\d/);
+    expect(screen.getByRole("button", { name: /Sábado/ }).textContent).toMatch(/18:00/);
     cleanup();
-    render(
-      <MotionProvider>
-        <ToastProvider>
-          <CueDialogProvider>
-            <DayCardDisclosure day="Campamento" date="2026-09-19" time="18:45" setlist={{ week: "2026-09-19", songs: [song] }} leads={["Ana"]} />
-          </CueDialogProvider>
-        </ToastProvider>
-      </MotionProvider>,
-    );
+    mount({ day: "Campamento", roleId: "special-1", time: "18:45" });
     expect(screen.getByRole("button", { name: /Campamento/ }).textContent).toMatch(/18:45/);
+    cleanup();
+    mount({ day: "Campamento", roleId: "special-1" });
+    expect(screen.getByRole("button", { name: /Campamento/ }).textContent).not.toMatch(/\d\d:\d\d/);
   });
 
-  it("ADR-0070 — as a `sheet` row it drops the card chrome and the rail, and sets its title in body type", () => {
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date(2026, 8, 8, 9, 0, 0));
-    const { container } = mount({ sheet: true });
-    expect(container.querySelector(".brand-surface")).toBeNull();
-    expect(container.querySelector(".w-\\[3px\\]")).toBeNull();
+  it("opened, the card draws the sheet's body alone — no second heading repeats the day", () => {
+    mount();
     const trigger = screen.getByRole("button", { name: /Sábado/ });
-    const title = within(trigger).getByText(/Sábado/, { selector: "span" });
-    expect(title.className).toContain("font-body");
-    expect(title.className).not.toContain("uppercase");
-    expect(trigger.textContent).toContain("en 11 días");
-    // Opened, the row is still a sheet: no card header repeats the day inside it.
     const region = document.getElementById(trigger.getAttribute("aria-controls")!)!;
     // `hidden`: the closed region is inert and aria-hidden, which role queries skip.
     expect(within(region).queryByRole("heading", { level: 3, hidden: true })).toBeNull();
-    expect(within(region).getByRole("heading", { level: 4, name: "Setlist", hidden: true })).toBeTruthy();
-    // The card version keeps both, and its open card keeps the header.
-    cleanup();
-    const card = mount();
-    expect(card.container.querySelector(".brand-surface")).toBeTruthy();
-    expect(card.container.querySelector(".w-\\[3px\\]")).toBeTruthy();
-    const cardTrigger = screen.getByRole("button", { name: /Sábado/ });
-    const cardRegion = document.getElementById(cardTrigger.getAttribute("aria-controls")!)!;
-    expect(within(cardRegion).getByRole("heading", { level: 3, hidden: true })).toBeTruthy();
+    expect(within(region).getByRole("heading", { level: 4, name: /^Setlist/, hidden: true })).toBeTruthy();
   });
 
   it("opens onto the card, and the setlist lives inside the collapsed region", () => {

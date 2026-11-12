@@ -234,3 +234,63 @@ export function UsersIcon(props: IconProps) {
     </Icon>
   );
 }
+
+/** A keyboard — the «Keys» seat. */
+export function KeysIcon(props: IconProps) {
+  return (
+    <Icon name="keys" {...props}>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="M8 5v8h2V5M14 5v8h2V5" /><path d="M9 13v6M15 13v6" />
+    </Icon>
+  );
+}
+
+/** A drum and its sticks — the «Drums» seat. */
+export function DrumIcon(props: IconProps) {
+  return (
+    <Icon name="drum" {...props}>
+      <ellipse cx="12" cy="10.5" rx="8" ry="3.2" />
+      <path d="M4 10.5v6c0 1.8 3.6 3.2 8 3.2s8-1.4 8-3.2v-6" />
+      <path d="m7 3 4 4.5M17 3l-4 4.5" />
+    </Icon>
+  );
+}
+
+/** A guitar — the string seats (EG, AG, Bass); the seat's own word says which. */
+export function GuitarIcon(props: IconProps) {
+  return (
+    <Icon name="guitar" {...props}>
+      <path d="m14.5 9.5 5-5" /><path d="m18 3 3 3" />
+      <path d="M13.2 8.3a4.4 4.4 0 0 0-3.4 1.5c-.8.9-2 1-3.1 1.2A4.5 4.5 0 1 0 13 17.3c.2-1.1.3-2.3 1.2-3.1a4.4 4.4 0 0 0 1.5-3.4" />
+      <circle cx="9.5" cy="14.5" r="1.3" />
+    </Icon>
+  );
+}
+
+/** A metronome — a song's tempo beside its BPM. */
+export function MetronomeIcon(props: IconProps) {
+  return (
+    <Icon name="metronome" {...props}>
+      <path d="M9 3h6l4 18H5L9 3Z" /><path d="m12 17 5-11" /><path d="M7 15h10" />
+    </Icon>
+  );
+}
+
+/** A gear — Ajustes. */
+export function GearIcon(props: IconProps) {
+  return (
+    <Icon name="gear" {...props}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" />
+    </Icon>
+  );
+}
+
+/** The pastor's word to the team — a megaphone on «Mensaje del pastor». */
+export function MegaphoneIcon(props: IconProps) {
+  return (
+    <Icon name="megaphone" {...props}>
+      <path d="M4 10v4l12 4V6L4 10Z" /><path d="M19 9.5a3.5 3.5 0 0 1 0 5" /><path d="M7 15v2.5a2 2 0 0 0 4 0v-1.2" />
+    </Icon>
+  );
+}
