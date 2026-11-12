@@ -1,8 +1,9 @@
 # Jóvenes: each group plans its own classes («Clases del grupo»)
 
-Status: built on the branch below, not released (2026-11-12). The critical review of §3 stopped at
-the churn cap after two rounds whose blockers were fixed; a third round awaits Frank
-(`2026-11-12-jovenes-group-classes-review-log.md`). Extends `2026-10-30-jovenes-events-access.md` (ADR-0081, W1–W9) and
+Status: released to production on Frank's word (2026-11-12 06:05Z, «quiero verlo todo bien en
+producción»), still behind the Jóvenes rollout (super-admin only). The critical review of §3 stopped
+at the churn cap after two rounds whose blockers were fixed; Frank chose to release without a third
+round (`2026-11-12-jovenes-group-classes-review-log.md`). Extends `2026-10-30-jovenes-events-access.md` (ADR-0081, W1–W9) and
 `2026-11-10-jovenes-place-and-names.md`. Branch `claude/project-thread-u70fsq`, from `main`
 `2ee15003`. Only §3 (the writer slice) owns a critical contract; §4 (the screen) consumes it.
 

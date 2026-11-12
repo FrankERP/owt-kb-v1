@@ -25,7 +25,9 @@ pointers and the owner's requirement.
 **Churn cap reached after round 2** (two rounds with verified blockers). Per CLAUDE.md §Review
 policy a third round needs Frank's go-ahead in advance; it was asked on 2026-11-12 and, at the time
 of this entry, is still unanswered. The loop has therefore **not converged**: no two consecutive
-fresh APPROVED verdicts exist on one digest. This entry is updated if a third round runs.
+fresh APPROVED verdicts exist on one digest. On 2026-11-12 06:05Z Frank asked
+for the release («quiero verlo todo bien en producción») with the third round still unrun; that is
+his call on the cap, and the release went out without it.
 
 ## Blockers
 
