@@ -26,6 +26,7 @@ const h = vi.hoisted(() => ({
   readJovenesPeople: vi.fn(),
   planner: vi.fn(),
   groups: vi.fn(),
+  classes: vi.fn(),
   rolloutOpen: false,
 }));
 vi.mock("@/app/utils/authGuards", () => ({ requireActiveSession: () => h.requireActiveSession() }));
@@ -46,6 +47,12 @@ vi.mock("@/app/components/jovenes/GroupCalendar", () => ({
   default: (props: { events: Array<{ _id: string }>; viewer: unknown; defaultDate: string }) => {
     h.groups(props);
     return `[groups ${props.events.map((e) => e._id).join(",")}]`;
+  },
+}));
+vi.mock("@/app/components/jovenes/GroupClasses", () => ({
+  default: (props: { events: Array<{ _id: string }>; viewer: unknown; people: unknown[]; today: string }) => {
+    h.classes(props);
+    return `[classes ${props.events.map((e) => e._id).join(",")}]`;
   },
 }));
 vi.mock("@/app/utils/rollout", async (orig) => {
@@ -83,7 +90,7 @@ beforeEach(() => {
   h.requireActiveSession.mockResolvedValue(session);
   h.getMemberAccess.mockResolvedValue(SUPER);
   h.readMinistryEvents.mockResolvedValue([]);
-  h.readJovenesPeople.mockResolvedValue([{ id: "p1", name: "Ana" }]);
+  h.readJovenesPeople.mockResolvedValue([{ id: "p1", name: "Ana", groups: [] }]);
 });
 
 describe("/jovenes/admin gates", () => {
@@ -132,17 +139,23 @@ describe("/jovenes/admin read", () => {
     expect(h.readMinistryEvents.mock.calls[0][1].from).toBe(`${month}-01`);
   });
 
-  it("an admin edits and gets the people list; a leader sees the table with neither", async () => {
+  it("an admin edits the roster; a leader sees it read-only — both get the people, for the classes' responsables", async () => {
     expect(await visit("2026-11")).toContain("[planner 2026-11 edit=true]");
-    expect(h.planner.mock.calls[0][0].people).toEqual([{ id: "p1", name: "Ana" }]);
+    expect(h.planner.mock.calls[0][0].people).toEqual([{ id: "p1", name: "Ana", groups: [] }]);
     expect(h.planner.mock.calls[0][0].rows).toHaveLength(4);
 
     h.rolloutOpen = true;
     h.getMemberAccess.mockResolvedValue(role("leader"));
-    h.readJovenesPeople.mockClear();
     expect(await visit("2026-11")).toContain("[planner 2026-11 edit=false]");
-    expect(h.planner.mock.calls[1][0].people).toEqual([]);
-    expect(h.readJovenesPeople).not.toHaveBeenCalled();
+    expect(h.classes.mock.calls[1][0].people).toEqual([{ id: "p1", name: "Ana", groups: [] }]);
+  });
+
+  it("«Clases del grupo» reads the same way over a year back and the whole future (plan 2026-11-12 L3)", async () => {
+    await visit("2026-12");
+    expect(h.readMinistryEvents).toHaveBeenCalledTimes(2);
+    const [access, opts] = h.readMinistryEvents.mock.calls[1];
+    expect(access).toBe(SUPER);
+    expect(opts).toEqual({ me: "s1", ministry: "jovenes", from: "2025-12-01", to: "9999-12-31", mode: "editor" });
   });
 
   it("without the read token it says it could not read; any other failure is not swallowed", async () => {
@@ -157,7 +170,7 @@ describe("/jovenes/admin groups' calendars (PR D)", () => {
   // A month well past the current one, so the new meeting's default date is its first day.
   const meeting = (id: string, audience: unknown, date = "2031-11-12") => ({
     _id: id, rev: "r", ministry: "jovenes", audience, kind: "group", date, time: null, arrival: null, title: null,
-    notes: null, published: true, seats: [], program: [], createdById: null, createdByName: null,
+    notes: null, lesson: null, published: true, seats: [], program: [], createdById: null, createdByName: null,
   });
 
   it("hands the month's group meetings (never the Saturday ones) and who is looking", async () => {

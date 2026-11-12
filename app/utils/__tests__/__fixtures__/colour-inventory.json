@@ -8,28 +8,28 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 321,
-    "filesScanned": 626,
-    "filesWithColour": 67,
+    "literalRows": 323,
+    "filesScanned": 631,
+    "filesWithColour": 68,
     "byCategory": {
       "2": 2,
       "4": 64,
       "5": 2,
       "8": 85,
       "9": 10,
-      "11": 12,
+      "11": 14,
       "12": 146
     },
     "byDisposition": {
       "exempt": 60,
-      "B": 114,
-      "keep": 235,
+      "B": 116,
+      "keep": 236,
       "C": 5,
       "D": 13
     },
     "compositingClasses": 22,
     "compositingSelectorOccurrences": 60,
-    "compositingClassNameOccurrences": 36,
+    "compositingClassNameOccurrences": 37,
     "compositingRuleBodies": 52,
     "lightCounterpartClasses": 13,
     "pairs": 3,
@@ -188,7 +188,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 545,
+      "line": 561,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -200,7 +200,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 946,
+      "line": 1002,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -212,7 +212,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1037,
+      "line": 1093,
       "disposition": "B",
       "reason": null
     },
@@ -224,7 +224,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1046,
+      "line": 1102,
       "disposition": "B",
       "reason": null
     },
@@ -2552,7 +2552,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 194,
+      "line": 196,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2564,7 +2564,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 232,
+      "line": 234,
       "disposition": "B",
       "reason": null
     },
@@ -2588,7 +2588,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 61,
+      "line": 85,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3261,6 +3261,30 @@
       "utility": null,
       "carrier": null,
       "line": 187,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/jovenes/GroupClasses.tsx",
+      "category": 11,
+      "categoryName": "arbitrary-value-var-brand",
+      "value": "[var(--brand-radius-panel)]",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 286,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/jovenes/GroupClasses.tsx",
+      "category": 11,
+      "categoryName": "arbitrary-value-var-brand",
+      "value": "[var(--brand-radius-panel)]",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 392,
       "disposition": "B",
       "reason": null
     },
@@ -4228,6 +4252,14 @@
     },
     {
       "file": "app/components/jovenes/GroupCalendar.tsx",
+      "kind": "className",
+      "class": "surface",
+      "count": 1,
+      "disposition": "keep",
+      "reason": "Usage site of a compositing class"
+    },
+    {
+      "file": "app/components/jovenes/GroupClasses.tsx",
       "kind": "className",
       "class": "surface",
       "count": 1,

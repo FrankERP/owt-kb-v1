@@ -28,6 +28,7 @@ import { accessFromDoc, fetchMemberAccessFresh, type MemberAccess, type MemberAc
 import { groupsIn, isMinistryManager, ledGroupsIn } from "./ministryAccess";
 import { MINISTRY_EVENT_TYPE, MinistryEventReadUnavailable, mayRead, type StoredMinistryEvent } from "./ministryEventReads";
 import { isServiceTime } from "./serviceTime";
+import { NO_CLASS_TITLE, SHIFT_DONE_WORDS, lessonDoc, lessonOf, parseLesson, shiftedDate, singleGroup, type Lesson } from "./ministryLesson";
 import { revalidateMinistryViews } from "./revalidate";
 import { sanityConflictKind } from "./roleWriteRequest";
 import type { CommitOutcome } from "./commitOutcome";
@@ -50,6 +51,11 @@ export const EVENT_ERROR = {
   invalidPublished: "invalid_published",
   invalidSeats: "invalid_seats",
   invalidProgram: "invalid_program",
+  invalidLesson: "invalid_lesson",
+  invalidShift: "invalid_shift",
+  invalidSwap: "invalid_swap",
+  shiftChanged: "El rol cambió mientras lo veías; recarga.",
+  shiftDone: SHIFT_DONE_WORDS,
   invalidMember: "invalid_member",
   alreadyCreated: "already_created",
   inactive: "Tu acceso no está activo.",
@@ -220,6 +226,8 @@ type Edit = {
   published?: boolean;
   seats?: SeatIn[];
   program?: LineIn[];
+  /** `null`: unset. Absent: untouched (plan 2026-11-12 L1). */
+  lesson?: Lesson | null;
 };
 
 function parseEdit(body: Record<string, unknown>, ministry: MinistryId): Edit | Refusal {
@@ -275,6 +283,18 @@ function parseEdit(body: Record<string, unknown>, ministry: MinistryId): Edit | 
     const p = parseProgram(body.program);
     if (isRefusal(p)) return p;
     edit.program = p;
+  }
+  if (has(body, "lesson")) {
+    if (body.lesson === null) edit.lesson = null;
+    else {
+      // A request's roster name is trimmed first; everything else is the one stored-shape check.
+      const raw = plainObject(body.lesson) && typeof body.lesson.series === "string"
+        ? { ...body.lesson, series: body.lesson.series.trim() }
+        : body.lesson;
+      const l = parseLesson(raw);
+      if (!l) return refuse(400, EVENT_ERROR.invalidLesson);
+      edit.lesson = l;
+    }
   }
   return edit;
 }
@@ -348,11 +368,15 @@ type StoredRow = StoredMinistryEvent & {
   seats?: unknown;
   program?: unknown;
   createdBy?: string | null;
+  date?: unknown;
+  time?: unknown;
+  place?: unknown;
+  lesson?: unknown;
 };
 
 const STORED_QUERY =
   `*[_type == "${MINISTRY_EVENT_TYPE}" && _id in path("${MINISTRY_EVENT_TYPE}.*") && ministry == $ministry && _id == $id][0]` +
-  `{ _id, _rev, _type, ministry, audience, kind, published, seats, program, "createdBy": createdBy._ref }`;
+  `{ _id, _rev, _type, ministry, audience, kind, published, seats, program, date, time, place, lesson, "createdBy": createdBy._ref }`;
 
 async function readStored(id: string, ministry: MinistryId): Promise<StoredRow | null> {
   const row = await operationalClient.fetch<StoredRow | null>(STORED_QUERY, { id, ministry });
@@ -476,6 +500,8 @@ export async function createMinistryEvent(
   const actor = await actorFor(actorId);
   if (isRefusal(actor)) return actor;
   if (!canSetAudience(actor, edit.audience, ministry)) return refuse(403, EVENT_ERROR.createForbidden);
+  // L0: a class belongs to ONE group (Frank, 2026-11-12: «Cada uno tiene clases aparte»).
+  if (edit.lesson && singleGroup(edit.audience) === null) return refuse(400, EVENT_ERROR.invalidLesson);
 
   const seats = reconcile(edit.seats ?? [], []);
   const program = reconcile(edit.program ?? [], []);
@@ -496,6 +522,7 @@ export async function createMinistryEvent(
     ...(edit.title ? { title: edit.title } : {}),
     ...(edit.notes ? { notes: edit.notes } : {}),
     ...(edit.place ? { place: edit.place } : {}),
+    ...(edit.lesson ? { lesson: lessonDoc(edit.lesson) } : {}),
     seats: seats.items.map(seatDoc),
     program: program.items.map(lineDoc),
     published: edit.published ?? false,
@@ -517,7 +544,7 @@ export async function createMinistryEvent(
 
 // ── Edit, publish ───────────────────────────────────────────────────────────
 
-const EDITABLE = ["audience", "kind", "date", "time", "arrival", "title", "notes", "place", "published", "seats", "program"];
+const EDITABLE = ["audience", "kind", "date", "time", "arrival", "title", "notes", "place", "published", "seats", "program", "lesson"];
 
 export async function updateMinistryEvent(
   actorId: string,
@@ -549,6 +576,8 @@ export async function updateMinistryEvent(
   if (!canWriteStored(actor, stored, ministry)) return refuse(403, EVENT_ERROR.forbidden);
   if (!resulting) return refuse(400, EVENT_ERROR.invalidAudience);
   if (!canSetAudience(actor, resulting, ministry)) return refuse(403, EVENT_ERROR.forbidden);
+  // L2: a lesson is written only onto a one-group meeting (after the 404 and 403, before the 409).
+  if (edit.lesson && singleGroup(resulting) === null) return refuse(400, EVENT_ERROR.invalidLesson);
   if (stored._rev !== rev) return refuse(409, EVENT_ERROR.stale);
 
   const kind = resolveKind(resulting, edit.kind, stored.kind);
@@ -562,6 +591,12 @@ export async function updateMinistryEvent(
     const v = edit[k];
     if (v === null) unset.push(k);
     else set[k] = v;
+  }
+  if (edit.lesson) set.lesson = lessonDoc(edit.lesson);
+  // `lesson: null` unsets it; and a meeting that ends up shared (or for all of Jóvenes) never keeps
+  // one, so a lesson can never revive in another group's roster later (L2).
+  else if (has(stored, "lesson") && stored.lesson != null && (edit.lesson === null || singleGroup(resulting) === null)) {
+    unset.push("lesson");
   }
   if (edit.seats) {
     const r = reconcile(edit.seats, storedItems(stored.seats));
@@ -673,4 +708,231 @@ export async function deleteMinistryEvent(
     if (!revisionConflict(err)) throw err;
     return refuse(409, EVENT_ERROR.stale);
   }
+}
+
+// ── «Recorrer» (plan 2026-11-12 L3) ─────────────────────────────────────────
+
+/**
+ * A roster holds at most this many rows (classes and «No hubo clase» gaps) from the anchor on. Twice
+ * «Nuevo libro»'s 60 classes, so the largest book still shifts after it has gathered gaps.
+ */
+export const SHIFT_MAX_ROWS = 120;
+const EVENT_ID = /^ministryEvent\.[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+type RosterRow = StoredMinistryEvent & {
+  _id: string;
+  _rev: string;
+  date?: unknown;
+  lesson?: unknown;
+  createdBy?: string | null;
+};
+
+// The writer's one other query shape (sanctioned by ADR-0081's 2026-11-12 addendum): R1's identity
+// filters, ONE group the actor was already found to write, and its rows are never returned.
+const ROSTER_QUERY =
+  `*[_type == "${MINISTRY_EVENT_TYPE}" && _id in path("${MINISTRY_EVENT_TYPE}.*") && ministry == $ministry` +
+  ` && audience.kind == "groups" && count(audience.groups) == 1 && audience.groups[0] == $group` +
+  ` && lesson.series == $series && date >= $date]` +
+  `{ _id, _rev, _type, ministry, audience, published, date, lesson, "createdBy": createdBy._ref }`;
+
+function mapCommitConflict(err: unknown): Refusal {
+  const kind = sanityConflictKind(err);
+  // A revision that moved, or a marker id that already exists (a retry after a lost answer).
+  if (kind === "revision_mismatch" || kind === "conflict" || kind === "already_exists") return refuse(409, EVENT_ERROR.stale);
+  throw err;
+}
+
+/**
+ * «Recorrer»: the class in `[token]` did not happen. Its date becomes a «No hubo clase» row (a
+ * DRAFT, so no member view shows a cancelled Sunday as a meeting), and that class and every later
+ * class of its roster move a week, hopping the roster's «No hubo clase» dates, which never move.
+ * All or nothing, under every row's revision, and only when the rows are the ones the screen showed.
+ */
+export async function shiftMinistryLesson(
+  actorId: string,
+  ministryRaw: unknown,
+  tokenRaw: unknown,
+  raw: unknown,
+): Promise<CommitOutcome<EventEffects & { moved: number }>> {
+  const ministry = ministryOf(ministryRaw);
+  const id = eventIdOf(tokenRaw);
+  if (!ministry || !id) return refuse(404, EVENT_ERROR.notFound);
+  const body = fields(raw);
+  if (!body) return refuse(400, EVENT_ERROR.invalidBody);
+  if (typeof body._rev !== "string" || !body._rev) return refuse(400, EVENT_ERROR.revRequired);
+  const rev = body._rev;
+  const markerToken = typeof body.token === "string" ? body.token.toLowerCase() : "";
+  if (!UUID.test(markerToken)) return refuse(400, EVENT_ERROR.invalidToken);
+  const ids = body.ids;
+  if (
+    !Array.isArray(ids) ||
+    ids.length < 1 ||
+    ids.length > SHIFT_MAX_ROWS ||
+    !ids.every((x) => typeof x === "string" && EVENT_ID.test(x)) ||
+    new Set(ids).size !== ids.length
+  ) {
+    return refuse(400, EVENT_ERROR.invalidShift);
+  }
+
+  assertToken();
+  const actor = await actorFor(actorId);
+  if (isRefusal(actor)) return actor;
+  const anchor = await readStored(id, ministry);
+  if (!anchor || !readable(actor, anchor, ministry)) return refuse(404, EVENT_ERROR.notFound);
+  if (!canWriteStored(actor, anchor, ministry)) return refuse(403, EVENT_ERROR.forbidden);
+  const group = singleGroup(anchor.audience);
+  const lesson = lessonOf(anchor.audience, anchor.lesson);
+  if (!group || !isGroupId(ministry, group) || !lesson || lesson.track === "sin_clase" || lesson.done) {
+    return refuse(400, EVENT_ERROR.invalidShift);
+  }
+  if (typeof anchor.date !== "string" || !isIsoDate(anchor.date)) return refuse(400, EVENT_ERROR.invalidShift);
+  if (anchor._rev !== rev) return refuse(409, EVENT_ERROR.stale);
+  const anchorDate = anchor.date;
+
+  const fetched = await operationalClient.fetch<RosterRow[] | null>(ROSTER_QUERY, {
+    ministry,
+    group,
+    series: lesson.series,
+    date: anchorDate,
+  });
+  // The TypeScript re-check: a row the query returned but L0 does not call this roster's is dropped.
+  const rows = (Array.isArray(fetched) ? fetched : []).filter(
+    (r) =>
+      typeof r?._id === "string" &&
+      typeof r._rev === "string" &&
+      singleGroup(r.audience) === group &&
+      typeof r.date === "string" &&
+      isIsoDate(r.date) &&
+      r.date >= anchorDate &&
+      lessonOf(r.audience, r.lesson)?.series === lesson.series,
+  );
+  if (rows.length > SHIFT_MAX_ROWS) return refuse(400, EVENT_ERROR.invalidShift);
+  const classes = rows.filter((r) => lessonOf(r.audience, r.lesson)?.track !== "sin_clase");
+  const gaps = rows.filter((r) => lessonOf(r.audience, r.lesson)?.track === "sin_clase");
+  const self = classes.find((r) => r._id === id);
+  // The anchor moved between the first read and this one.
+  if (!self || self._rev !== rev) return refuse(409, EVENT_ERROR.stale);
+  const want = new Set(ids as string[]);
+  if (classes.length !== want.size || !classes.every((r) => want.has(r._id))) return refuse(409, EVENT_ERROR.shiftChanged);
+  if (classes.some((r) => lessonOf(r.audience, r.lesson)?.done)) return refuse(409, EVENT_ERROR.shiftDone);
+  if (!rows.every((r) => canWriteStored(actor, r as StoredRow, ministry))) return refuse(403, EVENT_ERROR.forbidden);
+
+  const gapDates = new Set<string>([anchorDate, ...gaps.map((g) => g.date as string)]);
+  const markerId = `${MINISTRY_EVENT_TYPE}.${markerToken}`;
+  let tx = writeClient.transaction();
+  for (const r of classes) {
+    const to = shiftedDate(r.date as string, gapDates);
+    tx = tx.patch(r._id, (p) => p.ifRevisionId(r._rev).set({ date: to }));
+  }
+  // A gap removed or re-dated after the read fails the whole write instead of being hopped blind.
+  for (const g of gaps) tx = tx.patch(g._id, (p) => p.ifRevisionId(g._rev).set({ ministry }));
+  tx = tx.create({
+    _id: markerId,
+    _type: MINISTRY_EVENT_TYPE,
+    ministry,
+    audience: { kind: "groups", groups: [group] },
+    kind: "group",
+    date: anchorDate,
+    title: NO_CLASS_TITLE,
+    lesson: lessonDoc({ series: lesson.series, track: "sin_clase", done: false }),
+    seats: [],
+    program: [],
+    published: false,
+    createdBy: weakRef(actor.id),
+  });
+  try {
+    await tx.commit();
+  } catch (err) {
+    return mapCommitConflict(err);
+  }
+  revalidateMinistryViews(ministry);
+  return { ok: true, status: 200, body: { ok: true, id, rev: null, moved: classes.length }, effects: { id, rev: null, moved: classes.length } };
+}
+
+// ── «Cambiar con…» (plan 2026-11-12 L4) ─────────────────────────────────────
+
+type SeatOut = { _key: string; _type: "ministryEventSeat"; role: string; member?: ReturnType<typeof weakRef>; name?: string };
+
+/** A stored seat array re-built as the writer writes seats, or `null` when any seat is malformed. */
+function rebuildSeats(raw: unknown): { seats: SeatOut[]; members: string[] } | null {
+  const seats: SeatOut[] = [];
+  const members: string[] = [];
+  for (const s of Array.isArray(raw) ? raw : []) {
+    if (!plainObject(s) || typeof s._key !== "string" || !KEY.test(s._key)) return null;
+    if (typeof s.role !== "string" || !(SEAT_ROLES as readonly string[]).includes(s.role)) return null;
+    const member = s.member === undefined || s.member === null ? null : refOf(s.member);
+    if (s.member !== undefined && s.member !== null && (!member || !MEMBER_ID.test(member))) return null;
+    const name = s.name === undefined || s.name === null ? null : optionalLine(s.name, LIMITS.name);
+    if (name === undefined) return null;
+    if (member && name) return null;
+    seats.push({
+      _key: s._key,
+      _type: "ministryEventSeat",
+      role: s.role,
+      ...(member ? { member: weakRef(member) } : {}),
+      ...(name ? { name } : {}),
+    });
+    if (member) members.push(member);
+  }
+  return { seats, members };
+}
+
+/**
+ * «Cambiar con…»: two classes of one group trade their people (Frank, 2026-11-12: «cuando alguien
+ * cambia de clase con alguien, cambian de día y de capítulo»). Only `seats` move — every seat of
+ * each — in one transaction under both revisions.
+ */
+export async function swapMinistryLessons(
+  actorId: string,
+  ministryRaw: unknown,
+  tokenRaw: unknown,
+  raw: unknown,
+): Promise<CommitOutcome<EventEffects>> {
+  const ministry = ministryOf(ministryRaw);
+  const idA = eventIdOf(tokenRaw);
+  if (!ministry || !idA) return refuse(404, EVENT_ERROR.notFound);
+  const body = fields(raw);
+  if (!body) return refuse(400, EVENT_ERROR.invalidBody);
+  const other = fields(body.with);
+  if (typeof body._rev !== "string" || !body._rev || !other || typeof other._rev !== "string" || !other._rev) {
+    return refuse(400, EVENT_ERROR.revRequired);
+  }
+  const idB = eventIdOf(typeof other.token === "string" ? other.token.toLowerCase() : other.token);
+  if (!idB || idB === idA) return refuse(400, EVENT_ERROR.invalidSwap);
+  const revA = body._rev;
+  const revB = other._rev;
+
+  assertToken();
+  const actor = await actorFor(actorId);
+  if (isRefusal(actor)) return actor;
+  const [a, b] = await Promise.all([readStored(idA, ministry), readStored(idB, ministry)]);
+  if (!a || !b || !readable(actor, a, ministry) || !readable(actor, b, ministry)) return refuse(404, EVENT_ERROR.notFound);
+  if (!canWriteStored(actor, a, ministry) || !canWriteStored(actor, b, ministry)) return refuse(403, EVENT_ERROR.forbidden);
+  const group = singleGroup(a.audience);
+  const la = lessonOf(a.audience, a.lesson);
+  const lb = lessonOf(b.audience, b.lesson);
+  const held = (l: Lesson | null) => !l || l.done || l.track === "sin_clase";
+  // One roster only: a trade moves a responsable between two chapters of the same book (L4).
+  if (!group || singleGroup(b.audience) !== group || held(la) || held(lb) || la!.series !== lb!.series) {
+    return refuse(400, EVENT_ERROR.invalidSwap);
+  }
+  if (a._rev !== revA || b._rev !== revB) return refuse(409, EVENT_ERROR.stale);
+
+  const sa = rebuildSeats(a.seats);
+  const sb = rebuildSeats(b.seats);
+  if (!sa || !sb) return refuse(400, EVENT_ERROR.invalidSwap);
+  const moved = [...new Set([...sa.members, ...sb.members])];
+  if (!(await peopleFit(moved, ministry, { kind: "groups", groups: [group] }))) return refuse(400, EVENT_ERROR.invalidMember);
+
+  try {
+    await writeClient
+      .transaction()
+      .patch(idA, (p) => p.ifRevisionId(revA).set({ seats: sb.seats }))
+      .patch(idB, (p) => p.ifRevisionId(revB).set({ seats: sa.seats }))
+      .commit();
+  } catch (err) {
+    return mapCommitConflict(err);
+  }
+  revalidateMinistryViews(ministry);
+  return ok(idA, null);
 }

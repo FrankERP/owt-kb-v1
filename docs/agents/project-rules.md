@@ -884,6 +884,17 @@ pass.
   encargado or apoyo of a whole-ministry meeting writes its program only. The routes that write a
   client-supplied id of another type pin it first (`storedRevisionOfType`, `typePin.ts`; W9) —
   a new route that patches or deletes an id it was handed does the same.
+- **A group's classes** (plan `2026-11-12-jovenes-group-classes.md`, ADR-0081 addendum 2026-11-12).
+  A class is a ONE-group meeting carrying `lesson { series, track, done }`; `ministryLesson.ts`
+  (`parseLesson`/`lessonOf`) is the ONE validity rule, used by the writer and the reader, so the two
+  never disagree about which meetings are a roster (a disagreement is a permanent 409 on
+  «Recorrer»). The writer never leaves a lesson on a shared meeting (it unsets it). «Recorrer»
+  (`shift` route) and «Cambiar con…» (`swap` route) are one transaction each under every row's
+  revision; «Recorrer» moves only CLASSES (a «No hubo clase» row is date-bound and is hopped) and
+  refuses unless the ids the screen sends equal the stored roster — so the planner reads the roster
+  with NO upper date bound. Its roster read is the writer's one other query shape: never widen it,
+  never return its rows. The «No hubo clase» marker is a DRAFT so no member view shows a cancelled
+  Sunday as a meeting.
 - **Rollout registry (`app/utils/rollout.ts`).** A feature built but not for everyone yet has
   one entry (`hidden → superAdmin → admins → all`), keyed by a feature name. `rolloutAllows`
   is the SERVER gate each page and route of the feature calls (a page answers 404); the nav's

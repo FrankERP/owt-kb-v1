@@ -45,6 +45,7 @@ function ev(over: Partial<MinistryEventView> = {}): MinistryEventView {
     title: "Célula",
     notes: null,
     place: null,
+    lesson: null,
     published: false,
     seats: [],
     program: [],
