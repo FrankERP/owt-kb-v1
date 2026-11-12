@@ -1,6 +1,6 @@
 # Jóvenes: leadership per group
 
-Status: plan, 2026-11-11. **Review: APPROVED** (critical tier; two fresh approvals on digest
+Status: DONE, in production 2026-11-12 (PR #239, PR #241). Plan of 2026-11-11. **Review: APPROVED** (critical tier; two fresh approvals on digest
 `d8c739c8…5f42`; log `2026-11-11-jovenes-per-group-leadership-review-log.md`). §11 and this line
 were added AFTER approval and are un-reviewed. Extends ADR-0075 (levels and groups) and ADR-0081 (a group is a security
 boundary; plan `2026-10-30-jovenes-events-access.md`, R1–R3 and W1–W3a). Branch
@@ -20,6 +20,15 @@ fresh read (every Jóvenes leader item, published and `drafts.*`/`versions.*`, h
 — no leader whose L1 and L2 readings differ), since the script that printed it is gone. ADR-0085 is
 Accepted with PR 2. Deviation, said aloud: the «Personas» form judges «a leader needs a led group»
 only when it sends `ministryRoles`, so an untouched legacy leader can still save an unrelated field.
+
+**Release state (2026-11-12, final):** PR 2 is IN PRODUCTION: PR #241, merged as `2a71801b`,
+production alias verified 02:33Z; on dev from `521d9f7c` (the fresh read before that merge found 7
+leaders, 0 without `leaderOf`, 0 items without `_key`, 0 duplicates). §7 steps 4–5 done. §7's last
+step, Frank's roster, was applied the same night through the chat's check → save, each line checked
+against his sheet first: Jacob leads Otro Nivel and Adrenalin (member of Invencibles) and Andy leads
+Invencibles (member of Otro Nivel and Guerreras); a re-read of the 23 people in Jóvenes matched the
+sheet. The plan is complete. `jovenesEvents` stays at `superAdmin`: opening Jóvenes to the pastors is
+Frank's decision and a separate one-line PR.
 
 **Critical contract** (CLAUDE.md §Review policy): this changes an auth/ACL boundary (who leads which
 group decides who reads a group's drafts and who writes its meetings), the payload of a production

@@ -1,7 +1,8 @@
 # ADR-0085: A Jóvenes leader leads the groups named in `leaderOf`, not every group they are in
 
 **Date:** 2026-11-11 · **Status:** Accepted (2026-11-12) — PR 1 (the read side and K1, #239, in
-production since 2026-11-11) and PR 2 (the request contract, L2, the form and the chat).
+production since 2026-11-11) and PR 2 (the request contract, L2, the form and the chat, #241, in
+production since 2026-11-12).
 
 > **Numbering.** `preview` held a different, unmerged ADR-0085 (the solver redeploy from Actions).
 > Records are numbered in the order they reach `main`, so that one became 0086 on `preview` when
