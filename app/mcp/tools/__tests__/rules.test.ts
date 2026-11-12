@@ -107,6 +107,8 @@ describe("check_rule_edits", () => {
     expect(textOf(out)).toContain(LINES[0]!);
     expect(textOf(out)).toContain("Los meses ya guardados no cambian");
     expect(String(sc(out).token)).toMatch(/^\d+\.[A-Za-z0-9_-]{43}$/);
+    // The same lines in the structured half: Claude Code shows the model only that one (live proof).
+    expect(sc(out).lines).toEqual(textOf(out).split("\n"));
     expect(d.save).not.toHaveBeenCalled();
     expectClean(out);
   });
@@ -160,6 +162,7 @@ describe("save_rule_edits", () => {
     expect(out.isError).toBeFalsy();
     expect(sc(out)).toMatchObject({ saved: true });
     expect(textOf(out)).toContain("Guardado en las reglas:");
+    expect(sc(out).lines).toEqual(textOf(out).split("\n"));
     expect(textOf(out)).toContain("Nadie recibe aviso.");
     expect(d.written).toHaveBeenCalledWith(PRINCIPAL.sub);
     expectClean(out);

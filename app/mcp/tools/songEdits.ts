@@ -209,8 +209,11 @@ function refuse(lines: readonly string[], content: Record<string, unknown>): Cal
   return refusalResult(lines.filter(Boolean).join(" "), { refused: true, ...content });
 }
 
+// The lines go in BOTH halves: the Claude app gives the model only the text (ADR-0066), Claude Code only
+// `structuredContent` (the rules live proof, 2026-11-11 CDMX), and the person must see them either way.
 function answer(lines: readonly string[], content: Record<string, unknown>): CallToolResult {
-  return { content: [{ type: "text", text: lines.filter(Boolean).join("\n") }], structuredContent: { ok: true, ...content } };
+  const shown = lines.filter(Boolean);
+  return { content: [{ type: "text", text: shown.join("\n") }], structuredContent: { ok: true, ...content, lines: shown } };
 }
 
 /** The writer's own author rows for the ids an edit names: catalog authors plus the ones it creates. */

@@ -123,8 +123,11 @@ export function defaultRuleToolDeps(): RuleToolDeps {
   };
 }
 
+// The lines go in BOTH halves: the Claude app gives the model only the text (ADR-0066), Claude Code only
+// `structuredContent` (the rules live proof, 2026-11-11 CDMX), and the person must see them either way.
 function answer(lines: readonly string[], content: Record<string, unknown>): CallToolResult {
-  return { content: [{ type: "text", text: lines.filter(Boolean).join("\n") }], structuredContent: { ok: true, ...content } };
+  const shown = lines.filter(Boolean);
+  return { content: [{ type: "text", text: shown.join("\n") }], structuredContent: { ok: true, ...content, lines: shown } };
 }
 
 function refuse(text: string, content: Record<string, unknown>): CallToolResult {
