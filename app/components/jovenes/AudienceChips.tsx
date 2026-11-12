@@ -1,5 +1,5 @@
 // Who a meeting is for, as chips: «Todo Jóvenes» in the app's accent with the people icon, or one
-// chip per group in the group's own colour with its monogram (ADR-0087). The monogram is why the
+// chip per group in the group's own colour with its monogram (ADR-0086). The monogram is why the
 // colour is never the only thing telling two groups apart.
 //
 // NEUTRAL — no hooks.

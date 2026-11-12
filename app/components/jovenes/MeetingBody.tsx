@@ -7,7 +7,7 @@
 // Until 2026-11-12 these were hairline rows, label left and name right. With eight meetings on
 // one page that read as one long table of text (Frank), so each part now has its own SHAPE: a
 // person is a circle with a name, a program line is a numbered step on a line, a note is a
-// tinted block (ADR-0087).
+// tinted block (ADR-0086).
 //
 // NEUTRAL — no hooks — so either side of the boundary can render it.
 import { SHEET_TITLE } from "../../utils/homeHero";

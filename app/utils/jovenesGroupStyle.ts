@@ -1,4 +1,4 @@
-// Who a Jóvenes meeting is for, as COLOUR and a badge (ADR-0087). Pure and neutral — no React,
+// Who a Jóvenes meeting is for, as COLOUR and a badge (ADR-0086). Pure and neutral — no React,
 // no hooks — so the page (a Server Component) and the planner (client) both call it.
 //
 // A group's colour is its identity on a meeting: the chip with its monogram, the card's rail, the

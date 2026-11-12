@@ -51,7 +51,7 @@ type Editing = { event: MinistryEventView | null; form: SaturdayForm; token: str
  * shows the buttons; every write is decided again by the server.
  *
  * The month and its arrows live in the page's title (`/jovenes/admin`); this is the section under
- * it. Cards since 2026-11-12 (ADR-0087): as hairline rows under column heads the month read as a
+ * it. Cards since 2026-11-12 (ADR-0086): as hairline rows under column heads the month read as a
  * table of text, and the two sections of the page ran into each other.
  */
 export default function SaturdayPlanner({
@@ -209,7 +209,7 @@ export default function SaturdayPlanner({
         </Button>
       </SectionHead>
 
-      {/* A card per meeting (ADR-0087): the date as a leaf, the three seats as faces under their
+      {/* A card per meeting (ADR-0086): the date as a leaf, the three seats as faces under their
           role, the state as a pill. A Saturday with nothing yet is an outline that asks for it. */}
       <ul className="space-y-3">
         {rows.map((row) =>

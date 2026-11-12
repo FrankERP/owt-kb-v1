@@ -1,6 +1,6 @@
 "use client";
 
-// One meeting on `/jovenes`, as a card (ADR-0087): the date as a calendar leaf, the meeting's
+// One meeting on `/jovenes`, as a card (ADR-0086): the date as a calendar leaf, the meeting's
 // name as the card's title, clock and place with their icons, who it is for as coloured chips,
 // «Tú · …» in the app's one green, and a rail in the audience's colour. The NEXT meeting
 // (`featured`) opens with its team, program and notes showing and takes the one light pass

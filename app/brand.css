@@ -238,7 +238,7 @@
   --chart-instr-rgb: 186 117 23;     /* #BA7517 */
   --chart-foh-rgb: 136 135 128;      /* #888780 */
 
-  /* Five more CATEGORICAL hues: the Jóvenes groups (ADR-0087). A group's colour is
+  /* Five more CATEGORICAL hues: the Jóvenes groups (ADR-0086). A group's colour is
      its identity on a meeting — the chip with its monogram, the card's rail, the
      date tile's band — never a state: «publicada», «borrador» and «tú» keep the
      semantic roles. Named after the group id (`app/ministries.ts`), like the chart
@@ -1280,7 +1280,7 @@ html[data-motion="off"] .brand-stage-hero::before {
 
 /* ── Lit card (spec §23, decision Q) — the FIFTH beam site. After the route
    reveal, the NEXT card gets ONE light pass around its border, 900 ms, then
-   rests on its own border (the next Jóvenes meeting since ADR-0087; it was
+   rests on its own border (the next Jóvenes meeting since ADR-0086; it was
    the worship hero's until ADR-0070 took its frame). Transform only, no @property
    (Safari 16.4). Never loops; the global reduced-motion rule above
    (`*, *::before, *::after`) already zeroes its animation-duration/-delay,

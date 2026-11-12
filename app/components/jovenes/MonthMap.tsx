@@ -1,7 +1,7 @@
 // Planear Jóvenes' month at a glance: a small calendar with a dot per meeting in its audience's
 // colour — the accent for all of Jóvenes, a group's own for a group meeting, hollow while it is a
 // draft —
-// and a legend under it (ADR-0087). It is a PICTURE of the month, not a control: the cards below
+// and a legend under it (ADR-0086). It is a PICTURE of the month, not a control: the cards below
 // are where a meeting is opened, so the grid is one image to a screen reader, named by its count.
 //
 // NEUTRAL — no hooks.

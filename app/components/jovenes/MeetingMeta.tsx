@@ -1,5 +1,5 @@
 // A meeting's clock, arrival and place as icon + words, in one wrapping line. The icons are what
-// let the eye find «when» and «where» without reading the line (ADR-0087); every part is optional.
+// let the eye find «when» and «where» without reading the line (ADR-0086); every part is optional.
 //
 // NEUTRAL — no hooks.
 import { ClockIcon, MapPinIcon } from "../ui/icons";

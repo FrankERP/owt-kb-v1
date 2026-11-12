@@ -58,7 +58,7 @@ const BASE_ROLES = [
   // B4 additions — the vocabulary's "no role here" table, decided.
   "elevation", "surface-lift", "scrim", "on-fill",
   "chart-lead", "chart-bgv", "chart-coro", "chart-especial", "chart-instr", "chart-foh",
-  // The five Jóvenes groups (ADR-0087): a categorical hue each, never a state.
+  // The five Jóvenes groups (ADR-0086): a categorical hue each, never a state.
   "group-otro-nivel", "group-invencibles", "group-emprendedores", "group-adrenalin", "group-guerreras",
   // Child C — the palette families. The stray-key assertion below fails without these.
   "mono-200", "mono-300", "mono-400", "mono-500",

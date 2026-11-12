@@ -2,7 +2,7 @@
 
 // The list on `/jovenes`: a filter when there is something to choose between («Todas», «Me toca»,
 // one chip per audience in its colour) and the meetings as cards under section labels — the next
-// one first, the rest by month (ADR-0087). Filtering reflows the cards (`AnimatedList`: leavers
+// one first, the rest by month (ADR-0086). Filtering reflows the cards (`AnimatedList`: leavers
 // fade, the others slide into place) instead of swapping the page.
 //
 // The rules — which filters exist, what one keeps, the rows — are `jovenesMeetingList.ts`'s; this

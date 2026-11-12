@@ -82,7 +82,7 @@ const FOREGROUND_ON_PAGE = [
   "availability-faint", "availability-soft", "availability-strong",
   "badge-violet-fg", "badge-azure-fg",
   "chart-lead", "chart-bgv", "chart-coro", "chart-especial", "chart-instr", "chart-foh",
-  // The Jóvenes group hues (ADR-0087). On the page here; on their own wash, where the chip and
+  // The Jóvenes group hues (ADR-0086). On the page here; on their own wash, where the chip and
   // the date leaf actually put them, in the «group hues» block below.
   "group-otro-nivel", "group-invencibles", "group-emprendedores", "group-adrenalin", "group-guerreras",
 ] as const;
@@ -157,7 +157,7 @@ describe("light theme — WCAG AA contrast", () => {
     }
   });
 
-  it("each Jóvenes group hue clears 4.5:1 on its OWN wash over the card, in both themes (ADR-0087)", () => {
+  it("each Jóvenes group hue clears 4.5:1 on its OWN wash over the card, in both themes (ADR-0086)", () => {
     // Where the hue is actually read: the audience chip and the date leaf's weekday band are the
     // hue as TEXT on a tint of the same hue over `--surface-card`. A tint of itself always costs
     // contrast, so the page row above would pass a colour that fails here (teal did, at 4.49:1).

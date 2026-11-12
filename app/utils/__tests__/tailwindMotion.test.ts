@@ -16,7 +16,7 @@ describe("tailwind motion utilities", () => {
     );
   });
 
-  it("declares rail-draw: a scaleY from 0 that ends on none, on the reveal token (ADR-0087)", () => {
+  it("declares rail-draw: a scaleY from 0 that ends on none, on the reveal token (ADR-0086)", () => {
     // A Jóvenes meeting card's colour rail. It ends on `none`, not `scaleY(1)`: the rail is
     // `position: absolute` inside the card, and a transform left on it would make it a
     // containing block for nothing today and for a surprise tomorrow (MOTION.md rule 5).

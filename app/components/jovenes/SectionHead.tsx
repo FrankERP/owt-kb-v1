@@ -1,6 +1,6 @@
 // The head of a section in Planear Jóvenes: an icon on a tinted tile, the section's name in the
 // display face, a line under it saying what the section holds, and its actions on the right
-// (ADR-0087). Two sections that each opened with one small-caps label read as one table; a head
+// (ADR-0086). Two sections that each opened with one small-caps label read as one table; a head
 // with its own shape is what tells «Rol del sábado» from «Calendario de grupos» while scrolling.
 //
 // NEUTRAL — no hooks.

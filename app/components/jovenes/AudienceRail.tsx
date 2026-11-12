@@ -1,5 +1,5 @@
 // The colour rail on a meeting card's left edge: the accent for all of Jóvenes, the group's own
-// colour for a group meeting, and one segment per group for a shared one (ADR-0087). It draws
+// colour for a group meeting, and one segment per group for a shared one (ADR-0086). It draws
 // itself top to bottom after the card rises (`animate-rail-draw`), delayed by the card's own
 // stagger index, which it inherits as `--reveal-i`.
 //

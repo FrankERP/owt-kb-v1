@@ -1,4 +1,4 @@
-// The month map and the date leaf of the Jóvenes screens (ADR-0087), as static markup: both are
+// The month map and the date leaf of the Jóvenes screens (ADR-0086), as static markup: both are
 // neutral components with no state, so what they print is the whole of what they do.
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";

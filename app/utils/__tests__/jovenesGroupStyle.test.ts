@@ -1,4 +1,4 @@
-// The colours of the Jóvenes groups (ADR-0087). The classes are literals Tailwind reads as text,
+// The colours of the Jóvenes groups (ADR-0086). The classes are literals Tailwind reads as text,
 // so nothing but this file notices a group added to the registry without a row in
 // `jovenesGroupStyle.ts` — it would render in the neutral «unknown» tone, silently.
 import { describe, expect, it } from "vitest";

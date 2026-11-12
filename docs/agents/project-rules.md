@@ -795,7 +795,7 @@ Tailwind keys are **gone**; the four non-colour ones (`--brand-radius-*`,
   over more cyan (which turns the accent into wallpaper).
 - **Each Jóvenes group has a colour, and it means only «this group»** (`--group-otro-nivel-rgb`,
   `--group-invencibles-rgb`, `--group-emprendedores-rgb`, `--group-adrenalin-rgb`,
-  `--group-guerreras-rgb`; ADR-0087, 2026-11-12). They exist because `/jovenes` lists the meetings
+  `--group-guerreras-rgb`; ADR-0086, 2026-11-12). They exist because `/jovenes` lists the meetings
   of five groups and no existing hue was free to say whose a meeting is. Categorical like the
   `chart-*` six, and as narrow: the audience chip, a card's rail, the date leaf's band, the month
   map's dots. Never a state («Publicada» green, «Borrador» amber), never «tú», never a button, and

@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-// The `/jovenes` list in the browser (ADR-0087): the filter pills are toggles, a filter makes
+// The `/jovenes` list in the browser (ADR-0086): the filter pills are toggles, a filter makes
 // another meeting the open one, and a chosen audience that disappears falls back to everything.
 // The rules themselves are `jovenesMeetingList.test.ts`'s; this pins the wiring.
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";

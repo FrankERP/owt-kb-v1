@@ -1,5 +1,5 @@
 // A meeting's date as a calendar leaf: the weekday on a band in the audience's colour, the day
-// number in the display face, the month under it (ADR-0087). It is what lets eight meetings read
+// number in the display face, the month under it (ADR-0086). It is what lets eight meetings read
 // as eight DAYS at a glance instead of eight lines of text, and it is the same object on `/jovenes`
 // and in Planear Jóvenes. The full date is there for a screen reader; the three parts are drawn.
 // On a meeting card the HEADING carries the date instead (`decorative`), so a list of «Sábado de

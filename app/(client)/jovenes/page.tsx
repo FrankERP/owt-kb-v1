@@ -134,7 +134,7 @@ export default async function JovenesPage() {
           </div>
         ) : (
           <div className="mt-9">
-            {/* Cards, not rows (ADR-0087): the next meeting open and lit, the rest folded under
+            {/* Cards, not rows (ADR-0086): the next meeting open and lit, the rest folded under
                 their month, each with its date leaf and its audience's colour. */}
             <JovenesMeetingList
               items={meetings.map(({ event: e, ...m }) => ({

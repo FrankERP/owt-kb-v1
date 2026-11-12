@@ -95,12 +95,12 @@ describe("brand.css — .brand-lit-card", () => {
 });
 
 // ADR-0070 (2026-10-23) made the hero a run SHEET on the page, with no frame — and a border
-// pass needs a border, so for three weeks NOTHING set `data-lit`. ADR-0087 (2026-11-12) gave the
+// pass needs a border, so for three weeks NOTHING set `data-lit`. ADR-0086 (2026-11-12) gave the
 // pass its one site back: the NEXT meeting on `/jovenes`, a framed card, lit once so the eye lands
 // on it among a list of cards. One site, on purpose — a second lit card on a screen is two things
 // claiming to be «next», and a pass on the worship hero would mean someone re-framed it without
 // rereading ADR-0070. Adding a site is an ADR, then this list.
-describe("app/** — data-lit has exactly one site (ADR-0087)", () => {
+describe("app/** — data-lit has exactly one site (ADR-0086)", () => {
   it("only the Jóvenes meeting card sets data-lit", () => {
     const walk = (dir: string): string[] =>
       readdirSync(path.join(REPO_ROOT, dir), { withFileTypes: true }).flatMap((e) => {

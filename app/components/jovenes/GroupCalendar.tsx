@@ -47,7 +47,7 @@ type Editing = { event: MinistryEventView | null; form: GroupEventForm; token: s
  * never receives another group's meetings to begin with.
  *
  * A card per meeting in its group's colour, the date as a leaf like the roster above, the state
- * as a pill, house buttons for the actions (2026-11-12, ADR-0087; hairline rows before).
+ * as a pill, house buttons for the actions (2026-11-12, ADR-0086; hairline rows before).
  */
 export default function GroupCalendar({
   events,
@@ -178,7 +178,7 @@ export default function GroupCalendar({
           No hay reuniones de grupo este mes.
         </p>
       ) : (
-        // A card per meeting, in its group's colour (ADR-0087): the rail and the date leaf's band
+        // A card per meeting, in its group's colour (ADR-0086): the rail and the date leaf's band
         // take it, and a shared meeting shows one rail segment and one chip per group.
         <ul className="space-y-3">
           {events.map((e) => {

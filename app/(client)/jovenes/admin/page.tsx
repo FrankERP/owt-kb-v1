@@ -136,7 +136,7 @@ export default async function JovenesPlannerPage({ searchParams }: { searchParam
           </p>
         ) : (
           // The month as a picture beside the two sections from `lg` (it stays in view while
-          // they scroll) and above them on a phone (ADR-0087).
+          // they scroll) and above them on a phone (ADR-0086).
           <div className="mt-10 lg:grid lg:grid-cols-[minmax(0,1fr)_17.5rem] lg:items-start lg:gap-x-10">
             <aside
               aria-label="El mes de un vistazo"

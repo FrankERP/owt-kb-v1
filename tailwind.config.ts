@@ -63,7 +63,7 @@ const config: Config = {
 				"chart-especial": "rgb(var(--chart-especial-rgb) / <alpha-value>)",
 				"chart-instr": "rgb(var(--chart-instr-rgb) / <alpha-value>)",
 				"chart-foh": "rgb(var(--chart-foh-rgb) / <alpha-value>)",
-				// The five Jóvenes groups: categorical identity hues, never a state (ADR-0087).
+				// The five Jóvenes groups: categorical identity hues, never a state (ADR-0086).
 				"group-otro-nivel": "rgb(var(--group-otro-nivel-rgb) / <alpha-value>)",
 				"group-invencibles": "rgb(var(--group-invencibles-rgb) / <alpha-value>)",
 				"group-emprendedores": "rgb(var(--group-emprendedores-rgb) / <alpha-value>)",
@@ -228,7 +228,7 @@ const config: Config = {
 				// appeared" — and ends on `transform: "none"` for the same
 				// containing-block reason as `rise`/`scale-in` above.
 				// A meeting card's colour rail drawing itself top to bottom after the card
-				// rises (Jóvenes, ADR-0087) — `brand-rail-draw`'s move as a utility, ending
+				// rises (Jóvenes, ADR-0086) — `brand-rail-draw`'s move as a utility, ending
 				// on `transform: "none"` like the others.
 				"rail-draw": {
 					from: { transform: "scaleY(0)" },

@@ -1,4 +1,4 @@
-// The `/jovenes` list as data (ADR-0087): which filters it offers, what one keeps, the rows.
+// The `/jovenes` list as data (ADR-0086): which filters it offers, what one keeps, the rows.
 import { describe, expect, it } from "vitest";
 import { MINISTRIES } from "@/app/ministries";
 import { FILTER_MIN_MEETINGS, applyFilter, filterOptions, listRows, type ListedMeeting } from "../jovenesMeetingList";

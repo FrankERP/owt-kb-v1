@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-// The meeting card on `/jovenes` (ADR-0087): what is folded and what is open, that the fold is a
+// The meeting card on `/jovenes` (ADR-0086): what is folded and what is open, that the fold is a
 // real disclosure (a button with `aria-expanded`, the closed half inert), and that only the next
 // meeting wears the light pass.
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
