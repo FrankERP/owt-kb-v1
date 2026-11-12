@@ -95,6 +95,7 @@ vi.mock("@/app/utils/revalidate", () => ({ revalidateMinistryViews: revalidate }
 
 import {
   EVENT_ERROR,
+  SHIFT_MAX_ROWS,
   createMinistryEvent,
   shiftMinistryLesson,
   swapMinistryLessons,
@@ -386,13 +387,14 @@ describe("L3: «Recorrer»", () => {
     expect(stored(c8)!.date).toBe("2026-12-13");
   });
 
-  it("refuses a roster of more than 60 rows (400)", async () => {
+  it("refuses a roster of more than SHIFT_MAX_ROWS rows (400), twice the largest «Nuevo libro»", async () => {
+    expect(SHIFT_MAX_ROWS).toBe(120);
     const all: string[] = [];
-    for (let i = 0; i < 61; i++) {
+    for (let i = 0; i < SHIFT_MAX_ROWS + 1; i++) {
       const d = new Date(Date.UTC(2026, 10, 15 + 7 * i)).toISOString().slice(0, 10);
       all.push(await cls(d));
     }
-    const out = await shift("admin", all[0], { ids: ids(...all.slice(0, 60)) });
+    const out = await shift("admin", all[0], { ids: ids(...all.slice(0, SHIFT_MAX_ROWS)) });
     expect([out.status, out.body]).toEqual([400, { error: EVENT_ERROR.invalidShift }]);
   });
 });
@@ -411,12 +413,13 @@ describe("L4: «Cambiar con…»", () => {
     expect([stored(a)!.date, stored(b)!.date]).toEqual(["2026-11-15", "2026-11-22"]);
   });
 
-  it("refuses classes of two groups, a done class, a «No hubo clase» row, or the same class twice (400)", async () => {
+  it("refuses classes of two groups or two rosters, a done class, a «No hubo clase» row, or the same class twice (400)", async () => {
     const a = await cls("2026-11-15");
     const inv = await eventBy("admin", { audience: groups("invencibles"), date: "2026-11-22", lesson: lesson() });
     const done = await cls("2026-11-29", { lesson: lesson({ done: true }) });
     const gap = await cls("2026-12-06", { lesson: lesson({ track: "sin_clase" }) });
-    for (const b of [inv, done, gap]) expect((await swap("admin", a, b)).status).toBe(400);
+    const otherBook = await cls("2026-12-13", { lesson: lesson({ series: "Amar es para valientes" }) });
+    for (const b of [inv, done, gap, otherBook]) expect((await swap("admin", a, b)).status).toBe(400);
     expect((await swap("admin", a, a)).status).toBe(400);
   });
 

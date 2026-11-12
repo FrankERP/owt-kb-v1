@@ -21,6 +21,11 @@ const CODE_WORDS: Record<string, string> = {
   // the form never sends; the sentence is accepted for those too (plan 2026-11-11 §11 N8).
   invalid_audience: "Elige hasta tres grupos; para todos, usa una reunión de todo Jóvenes.",
   already_created: "Esta reunión ya estaba creada.",
+  // A group's classes (plan 2026-11-12). The screen never sends these shapes; the words are for a
+  // roster that changed under it or a hand-made request.
+  invalid_lesson: "Una clase es de un solo grupo; revisa el grupo y el nombre del rol.",
+  invalid_shift: "No se pudo recorrer este rol; recarga la página e intenta de nuevo.",
+  invalid_swap: "Solo se cambian dos clases del mismo rol que no estén hechas.",
 };
 
 /** The answer's words: the server's Spanish message, else a known code's words, else a plain line. */

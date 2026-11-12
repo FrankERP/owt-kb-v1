@@ -20,7 +20,7 @@ import { dayTitle } from "@/app/utils/agenda";
 import { dayWords } from "@/app/utils/jovenesEventView";
 import { groupTone } from "@/app/utils/jovenesGroupStyle";
 import { monthLabel, JOVENES_GROUPS, type PlannerViewer } from "@/app/utils/jovenesPlannerModel";
-import { CORAZON_HELP, LESSON_TRACKS, TRACK_LABEL, type LessonTrack } from "@/app/utils/ministryLesson";
+import { CORAZON_HELP, LESSON_TRACKS, SHIFT_DONE_WORDS, TRACK_LABEL, type LessonTrack } from "@/app/utils/ministryLesson";
 import {
   MAX_NEW_CLASSES,
   bookForm,
@@ -97,7 +97,14 @@ export default function GroupClasses({
   const split = roster ? splitRoster(roster, today) : null;
 
   function close() {
-    if (!busy) setDialog(null);
+    if (busy) return;
+    // A «Nuevo libro» that stopped part way already created some classes: show them, so nobody
+    // starts the book again with fresh tokens and duplicates it.
+    if (dialog?.kind === "book" && dialog.created > 0) {
+      setPicked(dialog.form.series.trim());
+      router.refresh();
+    }
+    setDialog(null);
   }
   function stale(message: string) {
     setDialog(null);
@@ -232,7 +239,8 @@ export default function GroupClasses({
       const { ids } = shiftPreview(roster, anchor, groupMeetings);
       const r = await sendEventWrite("POST", `${eventUrl(MINISTRY, anchor._id)}/shift`, { _rev: anchor.rev, token, ids });
       if (!r.ok) {
-        if (r.stale) return stale(r.message);
+        // A held later class is a 409 a reload does not fix: say it here, keep the dialog.
+        if (r.stale && r.message !== SHIFT_DONE_WORDS) return stale(r.message);
         return setError(r.message);
       }
       setDialog(null);

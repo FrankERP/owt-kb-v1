@@ -85,7 +85,11 @@ export function shiftPreview(r: Roster, anchor: ClassView, groupEvents: readonly
   const moves = classes.map((c) => ({ id: c._id, title: c.title, from: c.date, to: shiftedDate(c.date, gaps) }));
   const moving = new Set(classes.map((c) => c._id));
   const taken = new Set(groupEvents.filter((e) => !moving.has(e._id)).map((e) => e.date));
-  const collisions = [...new Set(moves.map((m) => m.to).filter((d) => taken.has(d)))];
+  // A date already holding another meeting, or two moved classes landing together (possible only
+  // when a class and a «No hubo clase» row already shared a date).
+  const landed = moves.map((m) => m.to);
+  const twice = landed.filter((d, i) => landed.indexOf(d) !== i);
+  const collisions = [...new Set(landed.filter((d) => taken.has(d) || twice.includes(d)))];
   return { ids: classes.map((c) => c._id), moves, collisions };
 }
 
@@ -158,7 +162,8 @@ export function classProblem(f: ClassForm): string | null {
  */
 export function classBody(f: ClassForm, keepKey: string | null = null): Record<string, unknown> {
   const title = orNull(f.title) ?? (f.track === "sin_clase" ? NO_CLASS_TITLE : null);
-  const r = f.responsable;
+  // A «No hubo clase» row has nobody in charge (its editor hides the field), so it saves no seat.
+  const r = f.track === "sin_clase" ? { member: null, name: null } : f.responsable;
   const seat = r.member || (r.name && r.name.trim())
     ? [{ ...(keepKey ? { _key: keepKey } : {}), role: "encargado", ...(r.member ? { member: r.member } : { name: r.name!.trim() }) }]
     : [];
@@ -177,7 +182,7 @@ export function classBody(f: ClassForm, keepKey: string | null = null): Record<s
 
 // ── «Nuevo libro» ───────────────────────────────────────────────────────────
 
-/** The writer's «Recorrer» cap (`SHIFT_MAX_ROWS`): a roster never outgrows what can be shifted. */
+/** At most this many classes at once; the writer's «Recorrer» cap (`SHIFT_MAX_ROWS`) is twice it. */
 export const MAX_NEW_CLASSES = 60;
 
 export type BookForm = {

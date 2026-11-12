@@ -82,6 +82,14 @@ describe("jovenesClassesModel", () => {
     expect(p.collisions).toEqual(["2026-12-20"]);
   });
 
+  it("warns when two moved classes land on one date (a class already sharing a date with a gap)", () => {
+    const c6 = cls("2026-11-22", { title: "Cap 6" });
+    const c7 = cls("2026-11-29", { title: "Cap 7" });
+    const gap = cls("2026-11-29", { track: "sin_clase" });
+    const [r] = groupRosters([c6, c7, gap], "otro-nivel", "2026-11-01");
+    expect(shiftPreview(r, c6, []).collisions).toEqual(["2026-12-06"]);
+  });
+
   it("offers to trade only open classes of the same roster", () => {
     const a = cls("2026-11-15");
     const b = cls("2026-11-22");
@@ -100,6 +108,8 @@ describe("jovenesClassesModel", () => {
       title: null,
     });
     expect(classBody({ ...f, track: "sin_clase" }).title).toBe("No hubo clase");
+    // Its editor hides the responsable, so a «No hubo clase» row saves none.
+    expect(classBody({ ...f, track: "sin_clase", responsable: { member: "m1", name: null } }).seats).toEqual([]);
     expect(classBody({ ...f, responsable: { member: "m1", name: null } }, "k1").seats).toEqual([{ _key: "k1", role: "encargado", member: "m1" }]);
     expect(classBody({ ...f, responsable: { member: null, name: null } }).seats).toEqual([]);
   });

@@ -28,7 +28,7 @@ import { accessFromDoc, fetchMemberAccessFresh, type MemberAccess, type MemberAc
 import { groupsIn, isMinistryManager, ledGroupsIn } from "./ministryAccess";
 import { MINISTRY_EVENT_TYPE, MinistryEventReadUnavailable, mayRead, type StoredMinistryEvent } from "./ministryEventReads";
 import { isServiceTime } from "./serviceTime";
-import { NO_CLASS_TITLE, lessonDoc, lessonOf, parseLesson, shiftedDate, singleGroup, type Lesson } from "./ministryLesson";
+import { NO_CLASS_TITLE, SHIFT_DONE_WORDS, lessonDoc, lessonOf, parseLesson, shiftedDate, singleGroup, type Lesson } from "./ministryLesson";
 import { revalidateMinistryViews } from "./revalidate";
 import { sanityConflictKind } from "./roleWriteRequest";
 import type { CommitOutcome } from "./commitOutcome";
@@ -55,7 +55,7 @@ export const EVENT_ERROR = {
   invalidShift: "invalid_shift",
   invalidSwap: "invalid_swap",
   shiftChanged: "El rol cambió mientras lo veías; recarga.",
-  shiftDone: "Hay clases marcadas como hechas después de esta fecha; quítales la palomita o muévelas a mano.",
+  shiftDone: SHIFT_DONE_WORDS,
   invalidMember: "invalid_member",
   alreadyCreated: "already_created",
   inactive: "Tu acceso no está activo.",
@@ -712,8 +712,11 @@ export async function deleteMinistryEvent(
 
 // ── «Recorrer» (plan 2026-11-12 L3) ─────────────────────────────────────────
 
-/** A roster holds at most this many rows (classes and «No hubo clase» gaps) from the anchor on. */
-export const SHIFT_MAX_ROWS = 60;
+/**
+ * A roster holds at most this many rows (classes and «No hubo clase» gaps) from the anchor on. Twice
+ * «Nuevo libro»'s 60 classes, so the largest book still shifts after it has gathered gaps.
+ */
+export const SHIFT_MAX_ROWS = 120;
 const EVENT_ID = /^ministryEvent\.[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 type RosterRow = StoredMinistryEvent & {
@@ -909,7 +912,10 @@ export async function swapMinistryLessons(
   const la = lessonOf(a.audience, a.lesson);
   const lb = lessonOf(b.audience, b.lesson);
   const held = (l: Lesson | null) => !l || l.done || l.track === "sin_clase";
-  if (!group || singleGroup(b.audience) !== group || held(la) || held(lb)) return refuse(400, EVENT_ERROR.invalidSwap);
+  // One roster only: a trade moves a responsable between two chapters of the same book (L4).
+  if (!group || singleGroup(b.audience) !== group || held(la) || held(lb) || la!.series !== lb!.series) {
+    return refuse(400, EVENT_ERROR.invalidSwap);
+  }
   if (a._rev !== revA || b._rev !== revB) return refuse(409, EVENT_ERROR.stale);
 
   const sa = rebuildSeats(a.seats);

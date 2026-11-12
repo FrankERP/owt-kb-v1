@@ -11,7 +11,7 @@ import { CueDialogProvider } from "@/app/components/ui/CueDialogProvider";
 import { ToastProvider } from "@/app/components/ui/Toast";
 import type { MinistryEventView } from "@/app/utils/ministryEventReads";
 import type { PlannerViewer } from "@/app/utils/jovenesPlannerModel";
-import type { LessonTrack } from "@/app/utils/ministryLesson";
+import { SHIFT_DONE_WORDS, type LessonTrack } from "@/app/utils/ministryLesson";
 import GroupClasses from "../GroupClasses";
 
 function Providers({ children }: { children: ReactNode }) {
@@ -162,6 +162,30 @@ describe("GroupClasses", () => {
         body: { _rev: c6.rev, token: "11111111-1111-4111-8111-000000000001", ids: [c6._id, c7._id] },
       },
     ]);
+  });
+
+  it("a «Nuevo libro» that stopped part way and is closed shows what it created (no second, duplicating run)", async () => {
+    show([]);
+    fireEvent.click(screen.getByRole("button", { name: /Nuevo libro/ }));
+    fireEvent.change(screen.getByPlaceholderText("Por ejemplo, El Caos Dentro de Mi"), { target: { value: "El Caos Dentro de Mi" } });
+    fireEvent.change(screen.getByLabelText("Cuántas clases"), { target: { value: "3" } });
+    answers = [{ status: 200, body: { ok: true } }, { status: 403, body: { error: "No puedes editar este evento." } }];
+    fireEvent.click(screen.getByRole("button", { name: "Crear clases" }));
+    await waitFor(() => expect(screen.getByText(/Se crearon 1 de 3/)).toBeTruthy());
+    expect(refresh).not.toHaveBeenCalled();
+    fireEvent.click(screen.getAllByRole("button", { name: "Cerrar" }).at(-1)!);
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it("a «Recorrer» refused for a held later class stays open with its words (a reload would not fix it)", async () => {
+    const c6 = cls("2026-11-22", "Cap 6");
+    show([c6]);
+    fireEvent.click(screen.getByRole("button", { name: /Opciones de Cap 6/ }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "No hubo clase: recorrer" }));
+    answers = [{ status: 409, body: { error: SHIFT_DONE_WORDS } }];
+    fireEvent.click(screen.getByRole("button", { name: "Recorrer" }));
+    await waitFor(() => expect(screen.getByText(SHIFT_DONE_WORDS)).toBeTruthy());
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it("a refused «Recorrer» stays open with the server's words", async () => {

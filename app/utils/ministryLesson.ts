@@ -28,6 +28,12 @@ export const CORAZON_HELP =
 /** The title a «No hubo clase» row carries, so no view shows it as an untitled meeting. */
 export const NO_CLASS_TITLE = "No hubo clase";
 
+/**
+ * «Recorrer»'s refusal when a later class is already held. The writer answers it as a 409 and the
+ * screen shows it in place (a reload would not change it), so both read this one sentence.
+ */
+export const SHIFT_DONE_WORDS = "Hay clases marcadas como hechas después de esta fecha; quítales la palomita o muévelas a mano.";
+
 const plain = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x);
 
 /** A roster name as stored: one line, trimmed, 1–80 characters; anything else is `null`. */

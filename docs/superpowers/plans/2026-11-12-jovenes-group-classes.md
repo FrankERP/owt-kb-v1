@@ -1,6 +1,8 @@
 # Jóvenes: each group plans its own classes («Clases del grupo»)
 
-Status: plan, 2026-11-12. Extends `2026-10-30-jovenes-events-access.md` (ADR-0081, W1–W9) and
+Status: built on the branch below, not released (2026-11-12). The critical review of §3 stopped at
+the churn cap after two rounds whose blockers were fixed; a third round awaits Frank
+(`2026-11-12-jovenes-group-classes-review-log.md`). Extends `2026-10-30-jovenes-events-access.md` (ADR-0081, W1–W9) and
 `2026-11-10-jovenes-place-and-names.md`. Branch `claude/project-thread-u70fsq`, from `main`
 `2ee15003`. Only §3 (the writer slice) owns a critical contract; §4 (the screen) consumes it.
 
@@ -115,7 +117,7 @@ showed as moving (anchor included).
 Order (W2's precedence, extended):
 
 1. **Shape (400, no I/O):** `[token]` a UUID (else 404 as today); body an object; `_rev` a
-   non-empty string (`rev_required`); `token` a v4 UUID (`invalid_token`); `ids` an array of 1–60
+   non-empty string (`rev_required`); `token` a v4 UUID (`invalid_token`); `ids` an array of 1–120
    distinct strings each matching `^ministryEvent\.[0-9a-f-]{36}$` (`invalid_shift`).
 2. `assertToken()`; **actor** fresh (W1) — inactive ⇒ 403.
 3. **Anchor** = `readStored(id)`; missing or unreadable in both modes ⇒ 404.
@@ -136,7 +138,8 @@ Order (W2's precedence, extended):
 
    re-checked in TypeScript per row (L0 shape valid, same `series` byte for byte, same single
    group, ISO `date ≥ anchor.date`) — a row failing the TS check is dropped, never moved. More than
-   60 rows ⇒ 400 `invalid_shift` (a roster is ≤ ~52 Sundays). The anchor must be in the set, with
+   120 rows (`SHIFT_MAX_ROWS`) ⇒ 400 `invalid_shift` (a roster is ≤ ~52 Sundays; twice «Nuevo
+   libro»'s 60, so the largest book still shifts after it has gathered gaps — code review 2026-11-12). The anchor must be in the set, with
    the `_rev` the client sent (else 409 `stale`: it moved between step 3 and this read). The set
    has NO upper date bound, and neither has the screen's read of the roster (§4), so the two always
    describe the same rows. The set is the roster's CLASSES only: rows with `track == "sin_clase"`
@@ -158,7 +161,7 @@ Order (W2's precedence, extended):
       free Sunday. Each gap row's `_rev` is also asserted in the transaction (a no-op
       `patch(gap).ifRevisionId(rev).set({ ministry })`, the guarded-delete idiom), so a gap
       removed or re-dated after the read fails the whole write (409) instead of being hopped over
-      blind. The set read's 60-row cap counts classes and gaps together.
+      blind. The set read's 120-row cap counts classes and gaps together.
     - `create` the marker `ministryEvent.<token>`: `ministry`, `audience {groups:[g]}`,
       `kind: "group"`, `date: anchor.date`, `title: "No hubo clase"`, NO time and NO place,
       `lesson {series, track: "sin_clase", done: false}`, `seats: []`, `program: []`,
@@ -189,7 +192,8 @@ Body: `{ _rev: string, with: { token: uuid, _rev: string } }`.
 3. Both stored; either missing or unreadable ⇒ 404 (the same body for both, so the refusal does
    not say which).
 4. `canWriteStored` on both ⇒ else 403.
-5. Both are classes (valid `lesson` by L0) of the SAME single group, neither `done` and neither
+5. Both are classes (valid `lesson` by L0) of the SAME single group and the SAME roster (`series`
+   byte for byte; code review 2026-11-12), neither `done` and neither
    `track == "sin_clase"` ⇒ else 400 `invalid_swap` (a held class is history; a «no class» row has
    no responsable to trade).
 6. Either `_rev` differs ⇒ 409 `stale`.
@@ -286,7 +290,8 @@ titles, no font change):
 - «Nuevo libro» (a `CueDialog`): roster name, first chapter number, how many chapters, first date,
   every N days (7 by default), time and place (11:40 / «Oasis Tepepan» proposed for Otro Nivel and
   Invencibles), responsables in rotation (members of the group, or typed names like «Todos»),
-  published or draft; at most 60 classes (the shift's cap). It previews the rows, then POSTs them
+  published or draft; at most 60 classes (half the shift's cap). Closing a book that stopped part way refreshes the
+  page, so the classes it already created show and nobody starts it again with fresh tokens. It previews the rows, then POSTs them
   ONE AT A TIME with tokens minted when the preview was built. After the first POST the inputs and
   tokens are FROZEN (the form is read-only; only «Reintentar» and «Cerrar» remain), so a retry
   completes what is missing and never duplicates (W6). Here a 409 `already_created` means «that row
@@ -324,7 +329,11 @@ Frank's explicit word after he has looked on dev (`/jovenes` is 404 for the dev-
   sparse roster edits dates by hand. It has no undo: the confirmation says so, and putting it back
   is editing dates by hand. A class CREATED in the roster between the set read and the commit is
   not moved (no revision to assert on a document that did not exist; the ADR-0072 gap, accepted).
-- A roster with more than 60 rows (classes and gaps) from the anchor on cannot be shifted (400).
+- A roster with more than 120 rows (classes and gaps) from the anchor on cannot be shifted (400).
+- A class and a «No hubo clase» row that already share a date both hop to the same later date when
+  shifted (only reachable by editing dates by hand); the preview warns about two moves landing on
+  one date, and the writer does not refuse it.
+- A «No hubo clase» row carries no responsable: `classBody` saves no seat for it.
 - «Recorrer» on a past class is allowed on purpose: the sheet records cancellations after the
   Sunday («Semana Santa y se quedaron adentro. SE RECORRE TODO EL ROL»).
 - A roster is identified by its exact `series` text within a group; renaming a roster is an edit
