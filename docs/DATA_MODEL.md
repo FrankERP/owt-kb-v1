@@ -46,7 +46,7 @@ this is a **song**.
 | `key` | string | Native/original key. |
 | `musicalReferenceUrl` | url | YouTube reference mix musicians rehearse with. |
 | `lyricsVideoUrl` | url | YouTube video with the Spanish lyrics the team sings. |
-| `albumArt` | image | Optional. The cover of the album the song comes from, square — the song's picture on a setlist row ([ADR-0087](adr/0087-a-worship-service-is-a-card-with-faces-and-album-covers.md); read through `SONG_COVER_GROQ`, sized by `songCoverUrl`, never the YouTube still). Absent = a neutral tile. First load: `scripts/set-album-art.mjs`; afterwards an editor replaces it in the Studio. |
+| `albumArt` | image | Optional. The cover of the album the song comes from, square — the song's picture on a setlist row ([ADR-0088](adr/0088-a-worship-service-is-a-card-with-faces-and-album-covers.md); read through `SONG_COVER_GROQ`, sized by `songCoverUrl`, never the YouTube still). Absent = a neutral tile. First load: `scripts/set-album-art.mjs`; afterwards an editor replaces it in the Studio. |
 | `body` | array (Portable Text) | `block` + `image` (image has an `alt` text field). Lyrics live here. |
 | `tutorials2` | array of `tutorial` | `{ title, url }`. |
 | `audioTracks` | array of `audioTrack` | `{ title, tone, audioFile (.mp3 file) }`. |

@@ -1,6 +1,6 @@
 "use client";
 
-// A song's picture on a setlist row (ADR-0087): the cover of its album, cropped square, or a
+// A song's picture on a setlist row (ADR-0088): the cover of its album, cropped square, or a
 // neutral tile with a note when the song has none (or the image fails to load). It is what turns
 // a setlist from five lines of text into five things: the eye finds «Nadie» by its cover the
 // second time it looks.

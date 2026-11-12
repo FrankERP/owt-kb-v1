@@ -131,7 +131,7 @@ describe("TeamSections", () => {
     expect(header(/Voces/).getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("ADR-0087 — on the service card (`sheet`) a section is found by its glyph and, closed, shows who is in it as faces", () => {
+  it("ADR-0088 — on the service card (`sheet`) a section is found by its glyph and, closed, shows who is in it as faces", () => {
     mount({ myName: "", viewerTypes: null, sheet: true, photos: { gaby: "https://lh3.googleusercontent.com/a/gaby" } });
     // Microphone, guitar, sliders — one tile per section header.
     expect(header(/Voces/).querySelector('[data-icon="mic"]')).not.toBeNull();
@@ -148,7 +148,7 @@ describe("TeamSections", () => {
     expect(header(/Voces/).querySelector(".animate-scale-in")).toBeNull();
   });
 
-  it("ADR-0087 — on the service card a band or booth face wears its seat's glyph; an ordinary card's does not", () => {
+  it("ADR-0088 — on the service card a band or booth face wears its seat's glyph; an ordinary card's does not", () => {
     const { container } = mount({ myName: "frank", viewerTypes: ["instrumento"], sheet: true, team: { ...team, instruments: [{ label: "Bass", person: "Frank" }, { label: "Drums", person: "Raúl" }] } });
     const banda = document.getElementById(header(/Banda/).getAttribute("aria-controls")!)!;
     expect(banda.querySelector('[data-icon="guitar"]')).not.toBeNull();

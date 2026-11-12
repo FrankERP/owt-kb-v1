@@ -775,7 +775,7 @@ before any read, the fresh 20 s ledger read, the 58 s solve), `freezeConfirmEntr
 (`v3Confirm.ts`/`v3ConfirmRun.ts` — the ONE v3 confirm: every month's record in one PUT, then drafts month by
 month; critical, reviewed as such), `v3Copy.ts` (the ONLY v3 copy, keyed on codes), `prefillCountedSpecials`
 (`v3Prefill.ts` — counted specials before the solve; uncounted ones keep `fillColumn`).
-**Service cards (ADR-0087, 2026-11-12)** — the member's worship screens (Inicio, the Calendario's
+**Service cards (ADR-0088, 2026-11-12)** — the member's worship screens (Inicio, the Calendario's
 agenda, `/me`) draw a service as a card, with these and nothing hand-rolled beside them:
 `service/Face` and `FaceStack` (`app/components/service/Face.tsx` — a worship member as a photo with
 an initials fallback, «tú» in the one green ring; NOT the Jóvenes `PersonAvatar`, which is initials

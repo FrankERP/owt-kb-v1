@@ -1,4 +1,4 @@
-// A seat's glyph (ADR-0087): the microphone of a voice, the keys, the drum, the guitar of the
+// A seat's glyph (ADR-0088): the microphone of a voice, the keys, the drum, the guitar of the
 // three string seats, the sliders of the booth. Drawn on a face's corner and beside «Tú · EG»,
 // so the eye finds «what do I play» without reading the seat's word — which still stands next to
 // it, because EG, AG and Bass share one guitar.

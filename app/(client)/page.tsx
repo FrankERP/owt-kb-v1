@@ -256,7 +256,7 @@ export default async function Home() {
   const greeting = homeGreeting(services.map((s) => s.props), session.user, myName);
   // When the member's own next service IS the card drawn right under the greeting, the
   // card says the seat, the hour and the countdown as chips — the line would repeat them
-  // (ADR-0087). It stays when the two differ (a Sunday Lead on a week that opens on
+  // (ADR-0088). It stays when the two differ (a Sunday Lead on a week that opens on
   // Saturday) and when the member does not serve («Esta vez no te toca servir.»).
   const greetingOnHero = !!hero && greetingService(services.map((s) => s.props), myName) === hero.props;
   // The team photo behind the greeting (ADR-0070): the ONE Studio document
@@ -335,7 +335,7 @@ export default async function Home() {
         ) : (
           <>
             {/* The next service is a CARD, open, and takes the one light pass around its
-                border (ADR-0087, which gives back the frame ADR-0070 took): the date as a
+                border (ADR-0088, which gives back the frame ADR-0070 took): the date as a
                 calendar leaf, the songs with their pictures, the team as faces. The label
                 over it is the Jóvenes list's own («Próxima reunión»): small caps and a
                 hairline that runs to the edge. */}

@@ -1,4 +1,4 @@
-// A song's picture on a setlist row (ADR-0087): the cover of the ALBUM it comes from, stored on
+// A song's picture on a setlist row (ADR-0088): the cover of the ALBUM it comes from, stored on
 // the song itself (`post.albumArt`, a Sanity image an editor can replace in the Studio).
 //
 // Frank chose the album's cover over the still of the song's YouTube video (2026-11-12, on the

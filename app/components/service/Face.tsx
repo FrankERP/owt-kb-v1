@@ -3,7 +3,7 @@
 // A worship team member as a FACE: the photo (an uploaded one, else the Google account's), or two
 // initials when there is none or it fails to load. It is the circle `TeamSections` has drawn since
 // 2026-10-21, lifted out so a folded service card and an agenda row can show WHO is on a service
-// as faces instead of a sentence of names (ADR-0087).
+// as faces instead of a sentence of names (ADR-0088).
 //
 // Not the Jóvenes `PersonAvatar`: that one is initials only on purpose (its one reader carries no
 // photos, ADR-0081) and has no state, so it stays neutral; this one needs `onError`.

@@ -1,4 +1,4 @@
-// A worship service's day as COLOUR on its card (ADR-0087): the band of the date tile and the
+// A worship service's day as COLOUR on its card (ADR-0088): the band of the date tile and the
 // card's rail — the two parts of ONE device, the day's mark. Nothing else on the card takes the
 // hue (ADR-0059's rule stands: an amber wash behind a Saturday read as a warning). The same three hues the agenda has always given the
 // week — Saturday amber, Sunday the app's cyan, a special service the info blue (`TONE_RAIL`,

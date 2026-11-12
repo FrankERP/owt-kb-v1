@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-// The folded service (R1 Task 7, spec §12.1; a CARD since ADR-0087). Home shows the next
+// The folded service (R1 Task 7, spec §12.1; a CARD since ADR-0088). Home shows the next
 // service in full and every other one through this: a card head — the date leaf, the day,
 // the clock, the countdown, who leads as faces — that opens onto the service's sheet.
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
@@ -123,7 +123,7 @@ describe("DayCardDisclosure", () => {
     expect(trigger.getAttribute("aria-label")).toMatch(/^Sábado, 19 sep/i);
     expect(trigger.getAttribute("aria-label")).toContain("en 11 días");
     expect(trigger.textContent).toMatch(/en 11 días/i);
-    // ADR-0087: a card with an edge and the day's rail, the title in the display face, uppercase.
+    // ADR-0088: a card with an edge and the day's rail, the title in the display face, uppercase.
     expect(container.querySelector("article.brand-surface")).toBeTruthy();
     expect(container.querySelector(".w-\\[3px\\]")!.className).toContain("animate-rail-draw");
     const title = within(trigger).getByText("Sábado", { selector: "span" });

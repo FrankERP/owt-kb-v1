@@ -524,7 +524,7 @@ export default async function MePage() {
           <div className="space-y-14" {...revealProps(1)}>
             {/* «Próximo»: the page's sections carry the small-caps titles of the
                 «millones» pass (2026-10-24); under this one the next service is the
-                framed service card (ADR-0087), the same one Inicio opens on. */}
+                framed service card (ADR-0088), the same one Inicio opens on. */}
             <section key={heroAssignment.doc._id} aria-labelledby="me-proximo">
               <h2 id="me-proximo" className={`${SHEET_TITLE} mb-5`}>Próximo</h2>
               <DayCard {...cardProps(heroAssignment)} hero />
@@ -532,7 +532,7 @@ export default async function MePage() {
             </section>
             {restAssignments.length > 0 && (
               // «Después»: the other services as folded cards (`DayCardDisclosure`,
-              // home's own stack, ADR-0087), each still followed by its proposal CTA.
+              // home's own stack, ADR-0088), each still followed by its proposal CTA.
               <section aria-labelledby="me-despues">
                 <h2 id="me-despues" className={SHEET_TITLE}>Después</h2>
                 <div className="mt-4 space-y-4">

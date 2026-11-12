@@ -107,7 +107,7 @@ describe("AgendaView", () => {
     expect(titles.every((h) => h.lastElementChild?.getAttribute("aria-hidden") === "true")).toBe(true);
   });
 
-  it("is a card (ADR-0087): the date as a leaf, the day as the title, the clock, and the facts as faces and pictures", () => {
+  it("is a card (ADR-0088): the date as a leaf, the day as the title, the clock, and the facts as faces and pictures", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(2026, 8, 10, 9, 0, 0)); // 2026-09-10 local
     mountAgenda();
