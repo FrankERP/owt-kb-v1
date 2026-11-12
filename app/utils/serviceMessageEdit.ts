@@ -18,8 +18,12 @@ function record(raw: unknown): Record<string, unknown> | null {
   return raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null;
 }
 
-/** Trimmed text, `""` allowed; null when not a string or over the shared cap. */
-function fieldText(value: unknown): string | null {
+/**
+ * Trimmed text, `""` allowed; null when not a string or over the shared cap.
+ * The ONE normalisation of a «Mensaje del pastor» body: `setPastorMessage` and
+ * the approval's copy (`adoptProposalPastorMessage`, ADR-0087) both store this.
+ */
+export function fieldText(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const text = value.trim();
   return text.length > PROPOSAL_NOTES_MAX ? null : text;

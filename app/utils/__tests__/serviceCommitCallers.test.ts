@@ -77,13 +77,17 @@ const EXPECTED_CALLERS: Record<string, string[]> = {
   roleDeleteCommit: ["app/api/admin/roles/[id]/route.ts", "app/mcp/tools/serviceDeletes.ts"],
   roleUnpublishCommit: ["app/api/admin/roles/unpublish/route.ts", "app/mcp/tools/unpublishService.ts"],
   setlistSaveCommit: ["app/api/admin/setlists/route.ts", "app/mcp/tools/editSetlist.ts"],
-  // Admin parity phase 3: the four service-conversation routes (ADR-0065) and the MCP message tools.
+  // Admin parity phase 3: the four service-conversation routes (ADR-0065), the MCP message tools,
+  // and the proposal approval (ADR-0087).
   serviceThreadCommit: [
     "app/api/admin/service-threads/[roleId]/messages/[key]/route.ts",
     "app/api/admin/service-threads/[roleId]/messages/route.ts",
     "app/api/admin/service-threads/[roleId]/pastor-message/route.ts",
     "app/api/admin/service-threads/[roleId]/team-notes/route.ts",
     "app/mcp/tools/serviceMessages.ts",
+    // ADR-0087: an approval's post-commit copy of the leads' pastor's message
+    // (`adoptProposalPastorMessage`), never a route of its own.
+    "app/utils/proposalReviewCommit.ts",
   ],
   // Admin parity phase 3 (S4): the four Kids write routes and the MCP Kids tools.
   kidsCommit: [

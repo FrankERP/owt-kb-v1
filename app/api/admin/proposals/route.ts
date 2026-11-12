@@ -30,6 +30,7 @@ export async function GET() {
       status,
       lead_notes,
       team_notes,
+      pastor_message,
       admin_notes,
       submitted_at,
       reviewed_at,
