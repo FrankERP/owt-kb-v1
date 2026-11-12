@@ -6,19 +6,22 @@
 //   DayStrip       (the week, swipeable — pages weeks client-side)
 //   Agenda | Mes   (SegmentedControl, agenda by default)
 //   AgendaView  ·or·  the month grid + legend
-//   CueDialog      (the day sheet: the service as a run sheet, `DayCard hero`)
+//   CueDialog      (the day sheet: the service's body, `DayCard hero`)
 //
 // The «Lista» mode and its `getWeekends` weekend-grouping are GONE: the agenda
 // answers the same question (which days carry a service, who leads, how many songs)
 // in one line per service instead of a stack of full cards, and the sheet still
 // carries the full `DayCard` for whichever day is tapped.
 //
-// The day sheet (the «millones» pass, 2026-10-24) is the SAME run sheet Inicio opens
-// on: the long date is the sheet's title, «11:00 · En 2 días» its one line, then
-// `DayCard hero` — hairline setlist rows, the folding team, «Ensayar el setlist» —
-// instead of the default card with its own uppercase header inside a sheet already
-// titled «Detalle del día». Keys stay ink here, not rose: inside a day the date is
-// the protagonist, not the song (ADR-0071).
+// The day sheet draws the SAME service Inicio opens on (ADR-0088): the long date is
+// the sheet's title, «11:00 · En 2 días» its one line, then `DayCard hero` — cover rows
+// for the setlist, the folding team as faces, «Ensayar el setlist». A day with ONE
+// service draws that body ALONE (`identity` off: the sheet already names the date, so
+// no second frame and no second head). A day with two or more draws each as a whole
+// FRAMED card with its head, one under the other, because the clock in the head is
+// what tells two same-day sets apart: cards inside a sheet, deliberately, on the rare
+// day that has them. Keys stay ink here, not rose: inside a day the date is the
+// protagonist, not the song (ADR-0071).
 //
 // The mode crossfade is the RECORDED FALLBACK, not the plan's stacked panels: a
 // plain, enter-only fade. `Presence` is KEYED ON THE MODE, so switching unmounts
@@ -204,8 +207,8 @@ export default function CalendarView({ activeDays: allDays, viewMonth, todayStr,
   const selectedEntries = selected ? (activeDays[selected] ?? []) : [];
   // The sheet's one line under its title, for a day with ONE service: the clock and
   // the countdown (upcoming days only — `todayStr` is the fetch's boundary, and
-  // `formatCountdown` only floors a past date). Two same-day sets keep their own
-  // identity line inside each card instead (`identity`), since they differ by the clock.
+  // `formatCountdown` only floors a past date). Two same-day sets keep their own head
+  // (leaf, title, clock) on each card instead (`identity`), since they differ by the clock.
   const selectedDays = selected ? daysUntil(selected) : -1;
   const selectedLine =
     selected && selectedEntries.length === 1
@@ -267,6 +270,7 @@ export default function CalendarView({ activeDays: allDays, viewMonth, todayStr,
               onSelect={setSelected}
               emptyMessage={emptyMessage}
               myName={myName}
+              photos={photos}
             />
           ) : isEmpty ? (
             <p className="py-20 text-center font-body text-base text-ink-muted">{emptyMessage}</p>

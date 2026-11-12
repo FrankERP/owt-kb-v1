@@ -3,6 +3,7 @@
 // ⚠ marks can never disagree.
 import type { ActiveDay } from "../components/CalendarView";
 import { plural } from "./plural";
+import type { TeamSectionId } from "./teamSections";
 import { serviceStartTime, WEEKEND_SERVICE_TIME } from "./calendarFeed";
 import { SEAT_ROLE_LABEL } from "./jovenesEventView";
 
@@ -74,6 +75,16 @@ export function mySeats(e: Pick<ActiveDay, "leads" | "bgvs" | "chorus" | "instru
   for (const s of e.instruments ?? []) if (seated(s.person)) seats.push(s.label);
   for (const s of e.fohTeam ?? []) if (seated(s.person)) seats.push(s.label);
   return [...new Set(seats)];
+}
+
+/** The team section one of `mySeats`' worship labels belongs to, so «Tú · Stream» takes
+ *  the booth's glyph beside it (`SeatIcon`) — the same one that seat's face wears on the
+ *  card — instead of the unknown-seat note. Undefined for a Kids or Jóvenes label. */
+export function seatSectionOf(e: Pick<ActiveDay, "instruments" | "fohTeam">, seat: string): TeamSectionId | undefined {
+  if (seat === "Lead" || seat === "BGVs" || seat === "Coro") return "voces";
+  if ((e.instruments ?? []).some((s) => s.label === seat)) return "banda";
+  if ((e.fohTeam ?? []).some((s) => s.label === seat)) return "cabina";
+  return undefined;
 }
 
 /** Conflicts = people seated twice within ONE section (voces / instrumentos / foh). */
