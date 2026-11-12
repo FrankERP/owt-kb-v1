@@ -616,7 +616,7 @@ cards — see spec Part X for the full ledger; the motion-relevant pieces:
 - **The lit card** (`.brand-lit-card`, `--lit-beam` — see "The beam" above) was the home
   hero's one-shot border pass until ADR-0070 (the hero lost its frame) and is the next Jóvenes meeting's since ADR-0087; it is the fifth enumerated beam use and the first CSS-only
   one (no `motion` import, so it costs nothing against the bundle budget below). Guarded by
-  `litCard.test.ts`, which reads `brand.css`/`page.tsx` as text and cannot see geometry —
+  `litCard.test.ts`, which reads `brand.css`/`MeetingCard.tsx` as text and cannot see geometry —
   see the file's own header for what closed that gap.
 - **The letter rail is an INDEX BAR** (`LibraryLetterRail`, F3), not a list of links. It
   shows progress — the letter whose heading is in view carries `aria-current` and the accent,

@@ -236,11 +236,12 @@ export default function SaturdayPlanner({
                     the actions another, so the seats line up from card to card. */}
                 <div className="py-4 pl-5 pr-4 md:grid md:grid-cols-[auto_minmax(0,1fr)_auto] md:gap-x-4">
                   <div className="flex gap-3.5 md:contents">
-                    <DateTile date={e.date} tone={MINISTRY_TONE} className="md:row-span-2" />
+                    <DateTile date={e.date} tone={MINISTRY_TONE} className="md:row-span-2" decorative />
                     <div className="min-w-0 flex-1 space-y-1.5">
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                         <h3 className="min-w-0 break-words pt-0.5 font-display text-[22px] font-semibold uppercase leading-none tracking-[0.02em] text-ink md:text-2xl">
                           {eventHeading(e)}
+                          <span className="sr-only">, {dayTitle(e.date)}</span>
                         </h3>
                         <MeetingState published={e.published} />
                       </div>
@@ -252,11 +253,15 @@ export default function SaturdayPlanner({
                       {SATURDAY_SEATS.map((role) => {
                         const list = seatNames(e, role);
                         // A stored seat whose person is gone reads «Sin asignar» too, and looks it.
-                        const filled = e.seats.some((s) => s.role === role && s.name);
+                        // The face is the first seat WITH a name: `seatNames` spells a nameless
+                        // one as «Sin asignar», which must never become the initials «SI».
+                        const face = e.seats.find((s) => s.role === role && s.name)?.name ?? null;
+                        const filled = face !== null;
                         return (
                           <li key={role} className="flex min-w-0 items-center gap-2.5">
-                            <PersonAvatar name={filled ? list[0] : null} />
+                            <PersonAvatar name={face} />
                             <div className="min-w-0">
+                              {/* The short word («Comparte»), as `/jovenes` says it; the sheet's field asks «Quién comparte». */}
                               <p className="font-label text-[10px] uppercase tracking-[0.16em] text-ink-dim">{seatRoleLabel(role)}</p>
                               <p className={`break-words font-body text-[16px] leading-tight ${filled ? "font-semibold text-ink" : "italic text-ink-muted"}`}>
                                 {list.length ? list.join(", ") : "Sin asignar"}

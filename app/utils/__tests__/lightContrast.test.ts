@@ -181,6 +181,26 @@ describe("light theme — WCAG AA contrast", () => {
     }
   });
 
+  it("the Jóvenes state pills clear 4.5:1 on their own wash over the card, in both themes", () => {
+    // `MeetingState`: «Publicada» and «Borrador» are a word on a 10 % tint of the state's colour.
+    // The draft shipped to review as `warning-strong` and measured 4.25:1 in light — a pair no
+    // table above could see, because its ground is neither the page nor a solid fill. The pairs
+    // are read from the component, so a new ink or a deeper wash is measured, not assumed.
+    const src = readFileSync(path.join(REPO_ROOT, "app/components/jovenes/MeetingState.tsx"), "utf8");
+    const pairs = [...src.matchAll(/bg-([a-z-]+)\/(\d+) text-([a-z-]+)/g)].map((m) => ({ wash: m[1], alpha: Number(m[2]) / 100, ink: m[3] }));
+    expect(pairs.map((p) => p.ink), "MeetingState's two pills were not found").toHaveLength(2);
+    for (const [theme, selector, roles] of [["light", ".light {", LIGHT], ["dark", ":root {", darkRoles()]] as const) {
+      const start = CSS.indexOf(selector);
+      const block = CSS.slice(start, CSS.indexOf("\n}", start));
+      const ground = roles.get(block.match(/--surface-card:\s*rgb\(var\(--([a-z0-9-]+)-rgb\)\)/)![1])!;
+      for (const { wash, alpha, ink } of pairs) {
+        const tint = roles.get(wash)!.map((v, i) => v * alpha + ground[i] * (1 - alpha));
+        const ratio = contrast(roles.get(ink)!, tint);
+        expect(ratio, `${ink} on ${wash}/${alpha * 100} is ${ratio.toFixed(2)}:1 in ${theme}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
   it("keeps the surface hierarchy the right way round", () => {
     // In dark the page is the DARKEST surface; in light it must be the LIGHTEST, or
     // panels disappear into it. This is the invariant the one deviation from the

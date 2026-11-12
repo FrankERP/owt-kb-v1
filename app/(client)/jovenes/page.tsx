@@ -137,12 +137,14 @@ export default async function JovenesPage() {
             {/* Cards, not rows (ADR-0087): the next meeting open and lit, the rest folded under
                 their month, each with its date leaf and its audience's colour. */}
             <JovenesMeetingList
-              items={meetings.map((m) => ({
-                event: m.event,
+              items={meetings.map(({ event: e, ...m }) => ({
+                // Only what a card draws crosses to the browser; the whole view (member ids, the
+                // revision) goes to `ProgramEditor` alone, for a meeting this reader may edit.
+                event: { _id: e._id, date: e.date, time: e.time, arrival: e.arrival, place: e.place, title: e.title, kind: e.kind, audience: e.audience },
                 entry: m.entry,
                 mine: m.mine,
-                countdown: formatCountdown(daysUntil(m.event.date)),
-                editor: editable.has(m.event._id) ? <ProgramEditor event={m.event} people={people} /> : null,
+                countdown: formatCountdown(daysUntil(e.date)),
+                editor: editable.has(e._id) ? <ProgramEditor event={e} people={people} /> : null,
               }))}
             />
           </div>

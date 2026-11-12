@@ -139,9 +139,10 @@ describe("/jovenes read", () => {
     const html = await visit();
     // The card's title is the meeting's name, one level under the list's section label.
     expect(html).toMatch(/<h2[^>]*>Próxima reunión/);
-    expect(html).toMatch(/<h3[^>]*>Junta de grupos<\/h3>/);
-    // The date is drawn in three parts and READ whole, capital first and «de» lowercase.
-    expect(html).toMatch(/<time dateTime="2026-11-14"[^>]*><span class="sr-only">Sábado 14 de noviembre<\/span>/);
+    // The date is drawn as a leaf and READ in the heading (capital first, «de» lowercase), so
+    // two «Sábado de Jóvenes» are two different headings; the drawn leaf is hidden from AT.
+    expect(html).toMatch(/<h3[^>]*>Junta de grupos<span class="sr-only">, Sábado 14 de noviembre<\/span><\/h3>/);
+    expect(html).toMatch(/<time dateTime="2026-11-14" aria-hidden="true"/);
     // One chip per group, each with its monogram (the colour is never the only signal).
     expect(html).toMatch(/>ON<\/span>Otro Nivel</);
     expect(html).toMatch(/>EM<\/span>Emprendedores</);
@@ -174,7 +175,7 @@ describe("/jovenes read", () => {
     h.readMinistryEvents.mockResolvedValue([EVENT, later]);
     const html = await visit();
     expect(html).toMatch(/<h2[^>]*>Diciembre/);
-    expect(html).toMatch(/<h3[^>]*>Sábado de Jóvenes<\/h3>/);
+    expect(html).toMatch(/<h3[^>]*>Sábado de Jóvenes<span class="sr-only">, Sábado 5 de diciembre<\/span><\/h3>/);
     expect(html).toContain("Todo Jóvenes");
     expect(html.match(/aria-expanded="true"/g)).toHaveLength(1);
     expect(html.match(/aria-expanded="false"/g)).toHaveLength(1);

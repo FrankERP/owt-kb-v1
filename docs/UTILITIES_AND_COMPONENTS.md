@@ -693,7 +693,7 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   THE body of both `/jovenes` and the Calendario's `JovenesDayCard`, so a seat is never worded or
   coloured differently between them) and **`MeetingState`** («Publicada» / «Borrador» as a pill).
   **A group's colour comes only from [jovenesGroupStyle.ts](../app/utils/jovenesGroupStyle.ts)**:
-  `groupTone(id)`, `audienceBadges`/`audienceTone`/`audienceRail`/`audienceKeys`, `groupMonogram`,
+  `groupTone(id)`, `audienceBadges`/`audienceTone`/`audienceRail`, `groupMonogram`,
   `MINISTRY_TONE` (all of Jóvenes = the accent), `UNKNOWN_TONE` — never a `group-*` class written
   anywhere else, and never `bg-group-${id}` (Tailwind reads classes as text). The editors' clocks are `DateField kind="time"
   size="lg"`, never a text input; before sending they ask **`halfTypedClock(ids)`** (`eventWrite.ts`),

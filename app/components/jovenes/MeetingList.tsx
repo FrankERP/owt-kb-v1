@@ -11,15 +11,14 @@
 import { useState } from "react";
 import AnimatedList from "@/app/components/ui/AnimatedList";
 import Button from "@/app/components/ui/Button";
-import type { MinistryEventView } from "@/app/utils/ministryEventReads";
 import type { JovenesDayEntry } from "@/app/components/CalendarView";
 import { SHEET_TITLE } from "@/app/utils/homeHero";
 import { applyFilter, filterOptions, listRows } from "@/app/utils/jovenesMeetingList";
 import { revealProps } from "@/app/utils/reveal";
-import JovenesMeetingCard from "./MeetingCard";
+import JovenesMeetingCard, { type MeetingCardEvent } from "./MeetingCard";
 
 export type JovenesListItem = {
-  event: MinistryEventView;
+  event: MeetingCardEvent;
   entry: JovenesDayEntry;
   mine: string[];
   countdown: string;
@@ -28,7 +27,12 @@ export type JovenesListItem = {
 };
 
 export default function JovenesMeetingList({ items }: { items: JovenesListItem[] }) {
-  const [filter, setFilter] = useState("all");
+  // `null` until the reader picks a filter. Until then the rows carry the route reveal's stagger;
+  // after, they do not — a row that re-enters under a filter would otherwise mount with
+  // `[data-reveal]` again and wait out its stagger delay on top of `AnimatedList`'s own fade.
+  const [picked, setPicked] = useState<string | null>(null);
+  const filter = picked ?? "all";
+  const reveal = (i: number) => (picked === null ? revealProps(i) : {});
   const listed = items.map((it) => ({ id: it.event._id, date: it.event.date, audience: it.event.audience, mine: it.mine.length > 0, item: it }));
   const options = filterOptions(listed);
   // A refresh can take the chosen audience away (its last meeting passed): back to everything.
@@ -47,7 +51,7 @@ export default function JovenesMeetingList({ items }: { items: JovenesListItem[]
           {...revealProps(1)}
         >
           {options.map((o) => (
-            <Button key={o.value} variant="pill" size="sm" active={active === o.value} onClick={() => setFilter(o.value)} className="shrink-0 whitespace-nowrap py-1.5">
+            <Button key={o.value} variant="pill" size="sm" active={active === o.value} onClick={() => setPicked(o.value)} className="shrink-0 whitespace-nowrap py-1.5">
               {o.tone && o.value !== "ministry" && <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${o.tone.solid}`} />}
               {o.label}
               <span className="tabular-nums opacity-70">{o.count}</span>
@@ -62,7 +66,7 @@ export default function JovenesMeetingList({ items }: { items: JovenesListItem[]
             ? {
                 key: row.key,
                 node: (
-                  <h2 className={`${SHEET_TITLE} flex items-center gap-3 ${i === 0 ? "" : "pt-7"}`} {...revealProps(1 + i)}>
+                  <h2 className={`${SHEET_TITLE} flex items-center gap-3 ${i === 0 ? "" : "pt-7"}`} {...reveal(1 + i)}>
                     {row.title}
                     <span aria-hidden="true" className="h-px flex-1 bg-ink/[0.10]" />
                     {row.count !== null && <span className="tabular-nums tracking-normal">{row.count}</span>}
@@ -72,7 +76,7 @@ export default function JovenesMeetingList({ items }: { items: JovenesListItem[]
             : {
                 key: row.key,
                 node: (
-                  <div {...revealProps(1 + i)}>
+                  <div {...reveal(1 + i)}>
                     <JovenesMeetingCard
                       event={row.meeting.item.event}
                       entry={row.meeting.item.entry}

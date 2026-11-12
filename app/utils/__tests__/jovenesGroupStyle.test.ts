@@ -10,7 +10,6 @@ import {
   MINISTRY_TONE,
   UNKNOWN_TONE,
   audienceBadges,
-  audienceKeys,
   audienceRail,
   audienceTone,
   groupMonogram,
@@ -76,7 +75,6 @@ describe("audienceBadges", () => {
     expect(badges[0]).toEqual({ key: b.id, label: b.name, monogram: groupMonogram(b.name), tone: groupTone(b.id) });
     expect(audienceTone({ kind: "groups", groups: [b.id, a.id] })).toBe(groupTone(b.id));
     expect(audienceRail({ kind: "groups", groups: [b.id, a.id] })).toEqual([groupTone(b.id).solid, groupTone(a.id).solid]);
-    expect(audienceKeys({ kind: "groups", groups: [b.id, a.id] })).toEqual([b.id, a.id]);
   });
 
   it("shows an unknown id as itself, neutral, and never throws on a missing audience", () => {

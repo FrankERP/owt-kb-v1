@@ -1279,22 +1279,24 @@ html[data-motion="off"] .brand-stage-hero::before {
 }
 
 /* ── Lit card (spec §23, decision Q) — the FIFTH beam site. After the route
-   reveal, the next service's card gets ONE light pass around its border,
-   900 ms, then rests on its own accent border. Transform only, no @property
+   reveal, the NEXT card gets ONE light pass around its border, 900 ms, then
+   rests on its own border (the next Jóvenes meeting since ADR-0087; it was
+   the worship hero's until ADR-0070 took its frame). Transform only, no @property
    (Safari 16.4). Never loops; the global reduced-motion rule above
    (`*, *::before, *::after`) already zeroes its animation-duration/-delay,
    because this is a plain `animation:` shorthand — no per-effect override
    needed here, unlike `.brand-stage-hero::before`, which needs one because its
-   rest frame is opacity 1, not 0. `data-lit` is set by the page
-   (`app/(client)/page.tsx`).
+   rest frame is opacity 1, not 0. `data-lit` is set by its one
+   site, `app/components/jovenes/MeetingCard.tsx` (`litCard.test.ts`).
 
    NOT a mask on the rotating layer: a mask lives in the element's own box, so
    it rotates WITH it and the "ring" becomes a line slashing across the card.
    House precedent instead (`.brand-btn-sheen`, `.brand-skeleton`): the wrapper
    CLIPS, an UNMASKED conic layer spins underneath, and the card sits on top —
    the only light that escapes is what the 1 px `padding` gap leaves showing.
-   The wrapper's clip also eats the card's own `.brand-surface` shadow, so the
-   hero wrapper carries the shadow in `app/(client)/page.tsx`.
+   The wrapper's clip also eats the card's own `.brand-surface` shadow; the
+   lit Jóvenes card goes without one (the pass and its size already set it
+   apart).
 
    The card is fully opaque since 2026-10-20 (`--surface-card`), so the wedge
    reaches the 1 px gap and nothing else. (Before, `.brand-surface` was a

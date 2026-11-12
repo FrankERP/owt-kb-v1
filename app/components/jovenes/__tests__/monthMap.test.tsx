@@ -71,6 +71,12 @@ describe("DateTile", () => {
     expect(renderToStaticMarkup(<DateTile date="2026-12-31" tone={MINISTRY_TONE} />)).toMatch(/>31<\/span>.*>dic<\/span>/);
   });
 
+  it("decorative: hidden whole from a screen reader, for a card whose heading says the date", () => {
+    const html = renderToStaticMarkup(<DateTile date="2026-11-14" tone={MINISTRY_TONE} decorative />);
+    expect(html).toMatch(/<time dateTime="2026-11-14" aria-hidden="true"/);
+    expect(html).not.toContain("sr-only");
+  });
+
   it("an empty day is an outline with no colour", () => {
     const html = renderToStaticMarkup(<DateTile date="2026-11-21" tone={groupTone(G1.id)} empty />);
     expect(html).toContain("border-dashed");

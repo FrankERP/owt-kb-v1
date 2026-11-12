@@ -99,9 +99,30 @@ describe("JovenesMeetingCard", () => {
     expect(screen.getByText("Traer Biblia")).toBeTruthy();
   });
 
-  it("a single seat reads «Role · Name» in the summary, and an empty seat shows no face", () => {
+  it("a single seat reads «Role · Name» in the summary, and an empty seat shows no face there", () => {
     card(ev({ seats: [{ _key: "s1", role: "encargado", memberId: "m1", name: "Ana", mine: false }, { _key: "s2", role: "predica", memberId: null, name: null, mine: false }], program: [] }));
-    expect(screen.getByText("Encargado · Ana")).toBeTruthy();
+    const summary = screen.getByText("Encargado · Ana");
+    // One face in the folded summary: Ana's initials, nothing for the seat with nobody.
+    const faces = summary.parentElement!.querySelectorAll(".-space-x-1\\.5 > *");
+    expect(faces.length).toBe(1);
+    expect(faces[0].textContent).toBe("AN");
+  });
+
+  it("the heading says the date to a screen reader, and the drawn leaf is hidden from it", () => {
+    const { container } = card(ev());
+    expect(screen.getByRole("heading", { level: 3 }).textContent).toBe("Sábado de Jóvenes, Sábado 14 de noviembre");
+    expect(container.querySelector("time")!.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("the toggle stretches over the head and gives up the press transform that would shrink it", () => {
+    // A transformed button is the containing block of its own `::after`: with the house press
+    // (`active:scale`) the stretched hit area collapsed to the circle mid-tap and a tap on the
+    // title never clicked. jsdom has no layout, so the class is the contract.
+    card(ev());
+    const cls = screen.getByRole("button").className;
+    expect(cls).toContain("after:absolute");
+    expect(cls).toContain("after:inset-0");
+    expect(cls).toContain("active:!transform-none");
   });
 
   it("names every group of a shared meeting, monogram and name, and draws a rail segment each", () => {

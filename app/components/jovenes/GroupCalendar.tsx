@@ -11,6 +11,7 @@ import Switch from "@/app/components/ui/Switch";
 import { useToast } from "@/app/components/ui/Toast";
 import { HAIRLINE_INPUT_CLASS, HAIRLINE_LABEL_CLASS } from "@/app/components/ui/hairlineField";
 import type { MinistryEventView } from "@/app/utils/ministryEventReads";
+import { dayTitle } from "@/app/utils/agenda";
 import { eventHeading } from "@/app/utils/jovenesEventView";
 import { audienceTone } from "@/app/utils/jovenesGroupStyle";
 import {
@@ -186,12 +187,13 @@ export default function GroupCalendar({
               <li key={e._id} className="brand-surface relative overflow-hidden rounded-[var(--brand-radius-panel)]">
                 <AudienceRail audience={e.audience} muted={!e.published} />
                 <div className="flex gap-3.5 py-4 pl-5 pr-4">
-                  <DateTile date={e.date} tone={audienceTone(e.audience)} />
+                  <DateTile date={e.date} tone={audienceTone(e.audience)} decorative />
                   <div className="min-w-0 flex-1 space-y-2">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
                         <h3 className="min-w-0 break-words pt-0.5 font-display text-[22px] font-semibold uppercase leading-none tracking-[0.02em] text-ink md:text-2xl">
                           {eventHeading(e)}
+                          <span className="sr-only">, {dayTitle(e.date)}</span>
                         </h3>
                         <MeetingState published={e.published} />
                       </div>

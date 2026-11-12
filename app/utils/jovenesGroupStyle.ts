@@ -133,8 +133,3 @@ export function audienceTone(audience: Audience): AudienceTone {
 export function audienceRail(audience: Audience): string[] {
   return audienceBadges(audience).map((b) => b.tone.solid);
 }
-
-/** A stable id for «which audience» a list filter can key on: `ministry`, or a group id. */
-export function audienceKeys(audience: Audience): string[] {
-  return audienceBadges(audience).map((b) => b.key);
-}

@@ -2,6 +2,8 @@
 // number in the display face, the month under it (ADR-0087). It is what lets eight meetings read
 // as eight DAYS at a glance instead of eight lines of text, and it is the same object on `/jovenes`
 // and in Planear Jóvenes. The full date is there for a screen reader; the three parts are drawn.
+// On a meeting card the HEADING carries the date instead (`decorative`), so a list of «Sábado de
+// Jóvenes» headings can be told apart by heading navigation.
 //
 // NEUTRAL — no hooks — so either side of the boundary can render it.
 import { DOW_SHORT, dayTitle } from "../../utils/agenda";
@@ -25,6 +27,7 @@ export default function DateTile({
   tone,
   size = "md",
   empty = false,
+  decorative = false,
   className = "",
 }: {
   /** `YYYY-MM-DD`; read at UTC noon, so the day never slips. */
@@ -33,6 +36,8 @@ export default function DateTile({
   size?: keyof typeof SIZE;
   /** A day with no meeting yet (the planner's free Saturday): an outline, no colour. */
   empty?: boolean;
+  /** The heading beside it already says the date (a meeting card): hidden from a screen reader. */
+  decorative?: boolean;
   className?: string;
 }) {
   const d = new Date(`${date}T12:00:00Z`);
@@ -40,11 +45,12 @@ export default function DateTile({
   return (
     <time
       dateTime={date}
+      aria-hidden={decorative ? "true" : undefined}
       className={`flex shrink-0 flex-col self-start overflow-hidden rounded-xl border text-center ${s.box} ${
         empty ? "border-dashed border-ink/20" : "border-ink/[0.12] bg-surface-base/60"
       } ${className}`}
     >
-      <span className="sr-only">{dayTitle(date)}</span>
+      {!decorative && <span className="sr-only">{dayTitle(date)}</span>}
       <span aria-hidden="true" className={`font-label uppercase tracking-[0.16em] ${s.band} ${empty ? "text-ink-dim" : `${tone.wash} ${tone.ink}`}`}>
         {DOW_SHORT[d.getUTCDay()]}
       </span>
