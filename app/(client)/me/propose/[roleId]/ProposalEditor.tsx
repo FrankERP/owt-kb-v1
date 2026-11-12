@@ -11,6 +11,7 @@ import CueDialog from "@/app/components/ui/CueDialog";
 import Button from "@/app/components/ui/Button";
 import { ArrowLeftIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, CloseIcon, MusicNoteIcon, PlusIcon } from "@/app/components/ui/icons";
 import { formatKey, formatKeys } from "@/app/utils/formatKey";
+import { PROPOSAL_NOTES_MAX } from "@/app/utils/proposalNotesLimit";
 
 // Design pass (2026-10-22, item 12 of «Diseño para miembros»): the oldest screen
 // in the app, and every one of its controls was drawn by hand — «Volver»,
@@ -49,6 +50,8 @@ interface SharedProposal {
   status: ProposalStatus;
   lead_notes?: string;
   team_notes?: string;
+  /** The lead's copy of the pastor's message (ADR-0088). */
+  pastor_message?: string;
   admin_notes?: string;
   messages?: ThreadMessage[] | null;
   createdById?: string;
@@ -164,11 +167,13 @@ export function proposalSnapshot(
   teamNotes: string,
   leadNotes: string,
   proposalId: string | null,
+  pastorMessage = "",
 ): string {
   return JSON.stringify({
     songs: songs.map(s => [s.songId, s.play_key ?? "", s.medley_tag ?? ""]),
     teamNotes: teamNotes.trim(),
     leadNotes: proposalId ? "" : leadNotes.trim(),
+    pastorMessage: pastorMessage.trim(),
   });
 }
 
@@ -182,6 +187,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
   const [messages, setMessages] = useState<ThreadMessage[]>(proposal?.messages ?? []);
   const [leadNotes, setLeadNotes] = useState(proposal?.lead_notes ?? "");
   const [teamNotes, setTeamNotes] = useState(proposal?.team_notes ?? "");
+  const [pastorDraft, setPastorDraft] = useState(proposal?.pastor_message ?? "");
   const [status, setStatus]       = useState<ProposalStatus>(proposal?.status ?? "draft");
   // Which save is in flight — the bar's two buttons each swap their own label.
   const [savingAs, setSavingAs]   = useState<"draft" | "pending" | null>(null);
@@ -200,6 +206,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
       proposal?.team_notes ?? "",
       proposal?.lead_notes ?? "",
       proposal?._id ?? null,
+      proposal?.pastor_message ?? "",
     ),
   );
 
@@ -209,6 +216,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
   // needed a trap in the first place.
   const teamNotesId = useId();
   const leadNotesId = useId();
+  const pastorMessageId = useId();
 
   // The doc revision for optimistic concurrency. MUST track the live prop (not a
   // one-time initializer): after a 409 the reload banner calls router.refresh(),
@@ -424,6 +432,9 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
           // payload in place and makes the server rule unsound.
           leadNotes: proposalId ? "" : leadNotes,
           teamNotes,
+          // ADR-0088. Always sent: this editor read it (`getSharedProposal`), so
+          // what it sends is what the lead sees, cleared included.
+          pastorMessage: pastorDraft,
           status: submitStatus,
         }),
       });
@@ -448,7 +459,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
       // the id the server just minted, not the one this closure captured: on a
       // FIRST save those differ, and the old `null` would keep `leadNotes` in
       // the fingerprint that the next render no longer puts there.
-      setInitialSnap(proposalSnapshot(songs, teamNotes, leadNotes, data._id ?? proposalId));
+      setInitialSnap(proposalSnapshot(songs, teamNotes, leadNotes, data._id ?? proposalId, pastorDraft));
       // No fresh revision means the next save cannot be guarded: force a reload
       // rather than let it fall back to an unguarded observation.
       if (data._rev) setRev(data._rev);
@@ -478,7 +489,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
    * lead's OWN post moves `_rev`, so a blanket pin guarantees a 409 on their
    * next save and a reload that discards the in-progress setlist — on the
    * feature's primary action. And a content comparison is not a substitute:
-   * `POST /api/me/proposals` writes `songs`, `status` AND `team_notes` in one
+   * `POST /api/me/proposals` writes `songs`, `status`, `team_notes` AND `pastor_message` in one
    * patch — `lead_notes` was in this list until Child B froze it, and the
    * argument rests on the others — so "identical songs" proves only that songs did
    * not move; adopting on that would let this editor's stale `teamNotes`
@@ -512,12 +523,17 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
 
   const isApproved  = status === "approved";
 
+  // ADR-0088: offered while the service has no pastor's message, and kept
+  // whenever this proposal holds one (stored, or being typed).
+  const showPastorField =
+    !isApproved && (!pastorMessage || !!proposal?.pastor_message?.trim() || !!pastorDraft.trim());
+
   // Unsaved work. Not tracked once approved: the editor is read-only there, so a
   // warning the member cannot act on is noise, and the action bar that would
   // show it is not rendered.
   const dirty =
     !isApproved &&
-    proposalSnapshot(songs, teamNotes, leadNotes, proposalId) !== initialSnap;
+    proposalSnapshot(songs, teamNotes, leadNotes, proposalId, pastorDraft) !== initialSnap;
 
   // Tab close / refresh / navigation out of the app. Client-side navigation
   // inside the app does not fire this — "Volver" is guarded below, and the
@@ -833,6 +849,34 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
         )}
       </div>
 
+      {/* The pastor's message (ADR-0088): the leads are who receive it, so they
+          hand it in here, and approval moves it to the service's ONE field — only
+          when that field is empty. With the service's already set (pinned above),
+          a field that would never be copied is not offered, unless this proposal
+          already holds text, which is never hidden from its author: the help
+          then says plainly that it does not replace the service's. */}
+      {showPastorField && (
+        <div className="space-y-2">
+          <label htmlFor={pastorMessageId} className="font-label text-xs uppercase tracking-widest text-mono-500">
+            Mensaje del pastor <span className="normal-case tracking-normal text-mono-600">(opcional)</span>
+          </label>
+          <textarea
+            id={pastorMessageId}
+            className={`${inputCls} resize-none`}
+            rows={4}
+            maxLength={PROPOSAL_NOTES_MAX}
+            placeholder="Si el pastor compartió un mensaje para este servicio, pégalo aquí."
+            value={pastorDraft}
+            onChange={e => setPastorDraft(e.target.value)}
+          />
+          <p className="font-body text-xs text-mono-600">
+            {pastorMessage
+              ? "El servicio ya tiene mensaje del pastor (arriba); este no lo reemplaza. Si cambió, avísale a un admin."
+              : "Lo verá todo el equipo en la tarjeta del servicio cuando se apruebe la propuesta."}
+          </p>
+        </div>
+      )}
+
       {/* Team message */}
       {!isApproved && (
         <div className="space-y-2">
@@ -847,7 +891,10 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
             value={teamNotes}
             onChange={e => setTeamNotes(e.target.value)}
           />
-          <p className="font-body text-xs text-mono-600">Se mostrará al equipo cuando se apruebe la propuesta.</p>
+          <p className="font-body text-xs text-mono-600">
+            Se mostrará al equipo cuando se apruebe la propuesta.
+            {showPastorField && " Para el mensaje del pastor usa el campo de arriba."}
+          </p>
         </div>
       )}
 
@@ -870,6 +917,15 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId, earli
             onChange={e => setLeadNotes(e.target.value)}
           />
           <p className="font-body text-xs text-mono-600">Solo las verán los admins que revisan la propuesta.</p>
+        </div>
+      )}
+
+      {/* Approved: the lead's pastor's message, read-only — unless it is exactly
+          the service's, already pinned at the top (no double). */}
+      {isApproved && pastorDraft.trim() && pastorDraft.trim() !== (pastorMessage ?? "").trim() && (
+        <div className="space-y-1">
+          <p className="font-label text-xs uppercase tracking-widest text-accent">Mensaje del pastor que mandaron</p>
+          <p className="font-body text-sm text-mono-300 whitespace-pre-wrap">{pastorDraft.trim()}</p>
         </div>
       )}
 

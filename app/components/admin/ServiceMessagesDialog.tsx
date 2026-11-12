@@ -44,7 +44,31 @@ interface Conversation {
   pastor_message?: PastorMessageRow | null;
   /** Where the «Mensaje para el equipo» lives; null = no setlist yet. */
   teamNotes?: TeamNotesTarget | { unavailable: "ambiguous" } | null;
-  proposal?: { _id: string; status?: string; messages?: ThreadMessage[] | null } | null;
+  proposal?: {
+    _id: string;
+    status?: string;
+    /** The leads' copy of the pastor's message (ADR-0088). */
+    pastor_message?: string | null;
+    messages?: ThreadMessage[] | null;
+  } | null;
+}
+
+/** Trimmed, line endings folded: how the approval's copy compares two bodies (ADR-0088). */
+function comparablePastor(text: string | null | undefined): string {
+  return (text ?? "").trim().replace(/\r\n?/g, "\n");
+}
+
+/**
+ * The leads' pastor's message to OFFER in the dialog (ADR-0088): a submitted
+ * proposal's (never a draft's — the leads have not handed it in), and only when
+ * it differs from what the service shows. Null = nothing to offer.
+ */
+export function offeredProposalPastorMessage(data: Pick<Conversation, "proposal" | "pastor_message">): string | null {
+  const proposal = data.proposal;
+  if (!proposal || !proposal.status || proposal.status === "draft") return null;
+  const text = comparablePastor(proposal.pastor_message);
+  if (!text) return null;
+  return text === comparablePastor(data.pastor_message?.body) ? null : text;
 }
 
 /** The message as stored — `author` a reference, no resolved name — which the
@@ -250,6 +274,7 @@ export default function ServiceMessagesDialog({
               key={`pastor-${key}`}
               url={`${base}/pastor-message`}
               stored={data.pastor_message ?? null}
+              fromProposal={offeredProposalPastorMessage(data)}
               published={published}
               onSaved={(row) => {
                 changed.current = true;
@@ -308,12 +333,15 @@ export default function ServiceMessagesDialog({
 function PastorMessageSection({
   url,
   stored,
+  fromProposal,
   published,
   onSaved,
   onReload,
 }: {
   url: string;
   stored: PastorMessageRow | null;
+  /** The leads' text to offer («Usar como mensaje del pastor», ADR-0088); null = none. */
+  fromProposal: string | null;
   published: boolean;
   onSaved: (row: PastorMessageRow | null) => void;
   onReload: () => void;
@@ -323,6 +351,7 @@ function PastorMessageSection({
   // `observed`: never the stamp of whatever is on screen at save time.
   const [draft, setDraft] = useState<{ body: string; observed: string | null } | null>(null);
   const [confirmingClear, setConfirmingClear] = useState(false);
+  const [confirmingAdopt, setConfirmingAdopt] = useState(false);
   const [saving, setSaving] = useState(false);
   const [stale, setStale] = useState(false);
   const [error, showError] = useTransientValue<string | null>(null, 6000);
@@ -335,6 +364,7 @@ function PastorMessageSection({
       onSaved(out.pastor_message ?? null);
       setDraft(null);
       setConfirmingClear(false);
+      setConfirmingAdopt(false);
     } catch (err) {
       if (err instanceof StaleError) setStale(true);
       else showError(err instanceof BlockedError ? BLOCKED_COPY : "No se pudo guardar el mensaje del pastor");
@@ -439,6 +469,48 @@ function PastorMessageSection({
           <Button variant="secondary" size="sm" onClick={() => setDraft({ body: "", observed: null })}>
             Agregar
           </Button>
+        </div>
+      )}
+
+      {/* The leads handed one in with their proposal (ADR-0088): adopt it through
+          this same writer — the observed stamp is the message on screen, so a
+          save another admin made meanwhile is refused, never overwritten. */}
+      {fromProposal && !stale && draft === null && (
+        <div className="space-y-2 rounded-lg border border-ink/[0.08] px-4 py-3">
+          <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">
+            Los líderes mandaron este mensaje del pastor con su propuesta
+          </p>
+          <p className="whitespace-pre-wrap font-body text-sm text-ink-muted/90">{fromProposal}</p>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {error && !current && <span className="font-body text-xs text-negative-muted">{error}</span>}
+            {confirmingAdopt ? (
+              <>
+                <span className="font-body text-xs text-mono-400">¿Reemplazar el mensaje del pastor actual?</span>
+                <Button variant="ghost" size="sm" onClick={() => setConfirmingAdopt(false)} disabled={saving}>
+                  No
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => save(fromProposal, pastorMessageStamp(current))}
+                  busy={saving}
+                  busyLabel="Guardando…"
+                >
+                  Sí, reemplazar
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => (current ? setConfirmingAdopt(true) : save(fromProposal, null))}
+                busy={saving && !current}
+                busyLabel="Guardando…"
+              >
+                Usar como mensaje del pastor
+              </Button>
+            )}
+          </div>
         </div>
       )}
     </section>

@@ -74,7 +74,7 @@ export async function GET() {
 /**
  * Create / save / resubmit the ONE shared proposal for a service (A2 §6).
  *
- * Body: `{ roleId, observed, songs, leadNotes?, teamNotes?, status: "draft" | "pending" }`
+ * Body: `{ roleId, observed, songs, leadNotes?, teamNotes?, pastorMessage?, status: "draft" | "pending" }`
  *
  * - The service target (type + date) is refreshed from the AUTHORIZED canonical
  *   role; it is never accepted from the client.
@@ -302,6 +302,8 @@ async function postHandler(req: NextRequest) {
         songs,
         status: request.status,
         team_notes: request.teamNotes,
+        // ADR-0088: absent from the request = left as stored; "" clears it.
+        ...(request.pastorMessage !== null ? { pastor_message: request.pastorMessage } : {}),
         contributors,
         // Target metadata refreshed from the authorized canonical role.
         service_type: target.serviceType,
@@ -336,6 +338,8 @@ async function postHandler(req: NextRequest) {
       songs,
       status: request.status,
       team_notes: request.teamNotes,
+      // ADR-0088: a create writes the lead's pastor message only when there is one.
+      ...(request.pastorMessage ? { pastor_message: request.pastorMessage } : {}),
       // A first submission goes through `create`, not a patch, so the array is
       // minted directly and needs no `setIfMissing`. `lead_notes` does NOT ride
       // along any more: seeding a field nothing maintains is worse than not

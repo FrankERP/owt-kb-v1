@@ -49,6 +49,8 @@ import { serviceError } from "@/app/utils/serviceMutation";
 import { sanityConflictKind } from "@/app/utils/roleWriteRequest";
 import { nextKey, nowIso, type StoredLock } from "@/app/utils/roleWriteOps";
 import { buildProposalMessage } from "@/app/utils/proposalMessageWrite";
+import { adoptProposalPastorMessage, type AdoptPastorMessageOutcome } from "@/app/utils/serviceThreadCommit";
+import { SERVICE_THREAD_TYPE, serviceThreadId } from "@/app/utils/serviceThread";
 import {
   loadCanonicalProposal,
   loadProposalGroup,
@@ -157,6 +159,12 @@ export interface ApprovePlan extends PlanBase {
    * write mode, and in peek when that revision moved before the read.
    */
   liveTeamNotes: string | null;
+  /**
+   * The service's «Mensaje del pastor» as stored now (ADR-0088), so the check can say what the
+   * post-commit copy would do. Read only in PEEK (`peekLivePastorMessage`); `null` in write mode — the
+   * copy reads the thread itself — and in peek when the read failed (never a refusal). `""` = none.
+   */
+  livePastorMessage: string | null;
   /** The stored `setlist_song` items the approval writes, leaders carried over on a worship night. */
   songs: Record<string, unknown>[];
   hasSongs: boolean;
@@ -195,6 +203,26 @@ async function peekLiveTeamNotes(mode: ProposalReviewMode, write: SetlistWrite):
     { id: write.id, rev: write.rev },
   );
   return row ? (typeof row.notes === "string" ? row.notes : "") : null;
+}
+
+/**
+ * The service's «Mensaje del pastor», for the check only (ADR-0088). The write path never reads it
+ * here: `adoptProposalPastorMessage` reads the thread itself, after the commit. A failed read is
+ * `null` («no se pudo leer»), never a refusal — the pastor's message is not part of the decision.
+ */
+async function peekLivePastorMessage(mode: ProposalReviewMode, roleId: string): Promise<string | null> {
+  if (mode !== "peek") return null;
+  const threadId = serviceThreadId(roleId);
+  if (!threadId) return null;
+  try {
+    const body = await operationalClient.fetch<string | null>(
+      `*[_type == "${SERVICE_THREAD_TYPE}" && _id == $threadId][0].pastor_message.body`,
+      { threadId },
+    );
+    return typeof body === "string" ? body : "";
+  } catch {
+    return null;
+  }
 }
 
 function roleTypeOf(target: CanonicalTarget): RoleTypeName {
@@ -383,6 +411,7 @@ async function planApproval(
         approval,
         teamNotes,
         liveTeamNotes: await peekLiveTeamNotes(mode, { kind: "patch", id: specialRole._id, rev: specialRole._rev }),
+        livePastorMessage: await peekLivePastorMessage(mode, args.target.serviceRef),
         songs,
         hasSongs: songRows.length > 0,
         // The special role IS the live setlist target: its revision assertion both
@@ -453,6 +482,7 @@ async function planApproval(
       approval,
       teamNotes,
       liveTeamNotes: await peekLiveTeamNotes(mode, setlistWrite),
+      livePastorMessage: await peekLivePastorMessage(mode, args.target.serviceRef),
       songs,
       hasSongs: songRows.length > 0,
       setlistId,
@@ -622,6 +652,11 @@ export interface ProposalReviewEffects {
   pushRecipients: string[];
   /** `queueSetlistNotice`'s descriptor; null when it skipped (or for a transition / replay). */
   notice: SetlistNoticeDescriptor | null;
+  /**
+   * Approve only (ADR-0088): what the post-commit copy of the proposal's
+   * «Mensaje del pastor» into the service did; null for a transition or a replay.
+   */
+  pastorMessage: AdoptPastorMessageOutcome | null;
 }
 
 export async function reviewProposal(
@@ -660,6 +695,7 @@ export async function reviewProposal(
         published: null,
         pushRecipients: [],
         notice: null,
+        pastorMessage: null,
       },
     };
   }
@@ -733,10 +769,16 @@ async function commitApproval(
   // The approved proposal just wrote the real setlist — refresh the cached
   // home/schedule/song pages so it shows without waiting for ISR expiry.
   revalidateProposalApproval();
+  // ADR-0088: the lead's «Mensaje del pastor» goes to the service's ONE field,
+  // only when that field is empty. AFTER the commit, never inside it: a chat
+  // append moving the thread `_rev` must not 409 an approval. The text is the
+  // reviewed revision's (`plan.doc`, asserted above). Never throws.
+  const pastorMessage = await adoptProposalPastorMessage(target.serviceRef, doc.pastor_message ?? "", reviewerId);
   return {
     ok: true,
     status: 200,
-    body: { ok: true, status: "approved", setlistId },
+    // `pastorMessage` rides the body too: the /admin route sends only `body`.
+    body: { ok: true, status: "approved", setlistId, pastorMessage },
     effects: {
       action: "approve",
       status: "approved",
@@ -750,6 +792,7 @@ async function commitApproval(
       published: subject.published,
       pushRecipients: proposalReviewRecipients(doc),
       notice,
+      pastorMessage,
     },
   };
 }
@@ -879,6 +922,7 @@ async function commitTransition(
       published: plan.subject?.published ?? null,
       pushRecipients: push ? proposalReviewRecipients(doc) : [],
       notice: null,
+      pastorMessage: null,
     },
   };
 }

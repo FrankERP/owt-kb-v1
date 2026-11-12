@@ -43,6 +43,13 @@ vi.mock("@/app/utils/proposalNotify", () => ({
 vi.mock("@/app/utils/revalidate", () => ({
   revalidateServiceViews: (...a: unknown[]) => revalidateServiceViewsMock(...a),
 }));
+// ADR-0088: the approval's post-commit copy into `serviceThread` has its own
+// suite (`serviceMessageEditRoutes.test.ts`); here only WHEN it is called, with
+// WHAT, and what the approval answers.
+const adoptMock = vi.fn();
+vi.mock("@/app/utils/serviceThreadCommit", () => ({
+  adoptProposalPastorMessage: (...a: unknown[]) => adoptMock(...a),
+}));
 
 import { POST } from "@/app/api/me/proposals/route";
 import { PATCH } from "@/app/api/admin/proposals/[id]/route";
@@ -444,6 +451,7 @@ function fingerprintOf(doc: Record<string, unknown>, setlistTargetKey = `feature
 
 beforeEach(() => {
   vi.clearAllMocks();
+  adoptMock.mockResolvedValue("none");
   transactions.length = 0;
   commitOutcomes.length = 0;
   store = emptyStore();
@@ -694,6 +702,38 @@ describe("POST /api/me/proposals — first create", () => {
         unset: [],
       },
     ]);
+  });
+});
+
+describe("POST /api/me/proposals — the lead's pastor's message (ADR-0088)", () => {
+  it("a create carries it when sent, and omits it when empty or absent", async () => {
+    store.roles.push(sundayRole());
+    store.locks.push(lock());
+    await POST(req(saveBody({ pastorMessage: "Efesios 2" })));
+    expect(creates(committedTransactions()[0])[0]).toMatchObject({ pastor_message: "Efesios 2" });
+
+    store = emptyStore();
+    transactions.length = 0;
+    store.roles.push(sundayRole());
+    store.locks.push(lock());
+    await POST(req(saveBody()));
+    expect(creates(committedTransactions()[0])[0]).not.toHaveProperty("pastor_message");
+  });
+
+  it("a save sets it when sent (\"\" clears) and leaves it alone when the key is absent", async () => {
+    const observed = { state: "single", id: PROPOSAL_ID, rev: "prop-rev-1" };
+    const run = async (over: Record<string, unknown>) => {
+      store = emptyStore();
+      transactions.length = 0;
+      store.roles.push(sundayRole());
+      store.locks.push(lock());
+      store.proposals.push(proposal({ status: "draft", pastor_message: "Guardado" }));
+      expect((await POST(req(saveBody({ observed, ...over })))).status).toBe(200);
+      return patches(committedTransactions()[0])[0].set;
+    };
+    expect(await run({ pastorMessage: "Nuevo" })).toMatchObject({ pastor_message: "Nuevo" });
+    expect(await run({ pastorMessage: "" })).toMatchObject({ pastor_message: "" });
+    expect(await run({})).not.toHaveProperty("pastor_message");
   });
 });
 
@@ -958,6 +998,31 @@ describe("PATCH /api/admin/proposals/[id] — approval", () => {
     expect(sendPushMock).toHaveBeenCalledWith(["mem-1"], "proposals", expect.anything());
   });
 
+  it("copies the REVIEWED proposal's pastor's message after the commit and answers the outcome (ADR-0088)", async () => {
+    seed({ pastor_message: "  Efesios 2  " });
+    adoptMock.mockImplementation(async () => {
+      // After the commit, never inside it.
+      expect(committedTransactions()).toHaveLength(1);
+      return "kept_existing";
+    });
+    const res = await patchAdmin(PROPOSAL_ID, { action: "approve", rev: "prop-rev-1" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ok: true, status: "approved", pastorMessage: "kept_existing" });
+    expect(adoptMock).toHaveBeenCalledTimes(1);
+    expect(adoptMock).toHaveBeenCalledWith("role-1", "  Efesios 2  ", "admin-1");
+    // The approval transaction itself never touches a service thread.
+    expect(JSON.stringify(committedTransactions()[0])).not.toContain("serviceThread");
+  });
+
+  it("a failed copy still answers 200: the approval stands", async () => {
+    seed({ pastor_message: "Efesios 2" });
+    adoptMock.mockResolvedValue("failed");
+    const res = await patchAdmin(PROPOSAL_ID, { action: "approve", rev: "prop-rev-1" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ status: "approved", pastorMessage: "failed" });
+    expect(committedTransactions()).toHaveLength(1);
+  });
+
   it("swallows a thrown review push without failing the committed approval (§7)", async () => {
     seed();
     sendPushMock.mockImplementation(() => {
@@ -1040,6 +1105,8 @@ describe("PATCH /api/admin/proposals/[id] — approval", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, status: "approved", idempotent: true });
     expect(transactions).toHaveLength(0);
+    // A replay never copies the pastor's message (ADR-0088).
+    expect(adoptMock).not.toHaveBeenCalled();
     expect(revalidateServiceViewsMock).not.toHaveBeenCalled();
     expect(sendPushMock).not.toHaveBeenCalled();
   });
@@ -1218,6 +1285,14 @@ describe("PATCH /api/admin/proposals/[id] — request_changes and reopen", () =>
     store.locks.push(lock());
     store.proposals.push(proposal(over));
   }
+
+  it("a transition never copies the pastor's message (ADR-0088)", async () => {
+    seed({ pastor_message: "Efesios 2" });
+    expect(
+      (await patchAdmin(PROPOSAL_ID, { action: "request_changes", rev: "prop-rev-1", adminNotes: "Cambia" })).status,
+    ).toBe(200);
+    expect(adoptMock).not.toHaveBeenCalled();
+  });
 
   it("records the transition fingerprint and heartbeats the token", async () => {
     seed();

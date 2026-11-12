@@ -50,6 +50,8 @@ interface Proposal {
   lead_id: string;
   lead_notes?: string;
   team_notes?: string;
+  /** The lead's copy of the pastor's message (ADR-0088); goes to the service on approval if it has none. */
+  pastor_message?: string;
   admin_notes?: string;
   messages?: ThreadMessage[] | null;
   /** What admins wrote to the service's leads from its card (ADR-0065). */
@@ -261,6 +263,17 @@ function ProposalCard({
           </ol>
         )}
       </div>
+
+      {/* The pastor's message the leads handed in (ADR-0088), above their own note. */}
+      {proposal.pastor_message?.trim() && (
+        <div>
+          <p className={`mb-1 ${SHEET_TITLE}`}>Mensaje del pastor</p>
+          <p className="font-body text-[15px] leading-relaxed text-ink-muted whitespace-pre-wrap [overflow-wrap:anywhere]">{proposal.pastor_message.trim()}</p>
+          {proposal.status !== "approved" && (
+            <p className="mt-1 font-body text-xs text-mono-500">Al aprobar pasa al mensaje del pastor del servicio, si el servicio aún no tiene uno.</p>
+          )}
+        </div>
+      )}
 
       {/* Team message */}
       {proposal.team_notes && (
@@ -533,6 +546,13 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
     el.focus({ preventScroll: true });
   }, [highlightIds, filter, proposals, windowSteps]);
 
+  // What the approval did with the leads' «Mensaje del pastor» (ADR-0088); any
+  // other answer keeps the action's own toast.
+  const PASTOR_MESSAGE_TOAST: Record<string, string> = {
+    copied: "Aprobada. El mensaje del pastor quedó en el servicio.",
+    kept_existing: "Aprobada. El servicio ya tenía otro mensaje del pastor; no se cambió (revísalo en Mensajes).",
+    failed: "Aprobada, pero no se pudo pasar el mensaje del pastor. Pásalo desde Mensajes.",
+  };
   const ACTION_TOAST: Record<ProposalAction, string> = {
     approve: "Setlist publicado",
     request_changes: "Cambios solicitados",
@@ -628,8 +648,11 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
         // also appends a thread message: a repeat with the same note is a
         // no-write retry, and a success toast would tell the admin a message
         // was delivered that was not.
-        const data: { idempotent?: boolean } = await res.json().catch(() => ({}));
-        showToast(data.idempotent ? "Sin cambios" : ACTION_TOAST[action]);
+        const data: { idempotent?: boolean; pastorMessage?: string } = await res.json().catch(() => ({}));
+        showToast(
+          data.idempotent ? "Sin cambios" : (PASTOR_MESSAGE_TOAST[data.pastorMessage ?? ""] ?? ACTION_TOAST[action]),
+          data.pastorMessage !== "failed",
+        );
         // Approving a PAST-dated proposal moves it into a windowed status whose
         // month may already be behind the window start — the card would vanish
         // from under the admin right after the toast. Widen to keep it on

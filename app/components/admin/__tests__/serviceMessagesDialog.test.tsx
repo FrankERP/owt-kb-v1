@@ -253,6 +253,51 @@ describe("ServiceMessagesDialog", () => {
     });
   });
 
+  describe("the leads' pastor's message from their proposal (ADR-0088)", () => {
+    const LEADS_TEXT = "Vida en lugar de muerte";
+    const withProposal = (status: string, extra: Record<string, unknown> = {}) =>
+      conversation({ proposal: { _id: "setlistProposal.x", status, pastor_message: `  ${LEADS_TEXT}  `, messages: [] }, ...extra });
+
+    it("offers a submitted proposal's text and adopts it into an empty field with `observed: null`", async () => {
+      getBody = withProposal("pending");
+      writeReplies["/pastor-message"] = { status: 200, body: { ok: true, pastor_message: { ...PASTOR, body: LEADS_TEXT } } };
+      renderDialog();
+      await waitFor(() => expect(screen.getByText(/Los líderes mandaron este mensaje del pastor/)).toBeTruthy());
+      fireEvent.click(screen.getByText("Usar como mensaje del pastor"));
+      await waitFor(() => expect(writesTo("/pastor-message")).toHaveLength(1));
+      expect(JSON.parse(String(writesTo("/pastor-message")[0][1].body))).toEqual({ body: LEADS_TEXT, observed: null });
+      // Now it IS the service's message: no longer offered.
+      await waitFor(() => expect(screen.queryByText("Usar como mensaje del pastor")).toBeNull());
+    });
+
+    it("asks before replacing a different message, then sends the loaded stamp", async () => {
+      getBody = withProposal("approved", { pastor_message: PASTOR });
+      writeReplies["/pastor-message"] = { status: 200, body: { ok: true, pastor_message: { ...PASTOR, body: LEADS_TEXT } } };
+      renderDialog();
+      await waitFor(() => expect(screen.getByText("Usar como mensaje del pastor")).toBeTruthy());
+      fireEvent.click(screen.getByText("Usar como mensaje del pastor"));
+      expect(writesTo("/pastor-message")).toHaveLength(0);
+      fireEvent.click(screen.getByText("Sí, reemplazar"));
+      await waitFor(() => expect(writesTo("/pastor-message")).toHaveLength(1));
+      expect(JSON.parse(String(writesTo("/pastor-message")[0][1].body))).toEqual({ body: LEADS_TEXT, observed: PASTOR.at });
+    });
+
+    it("offers nothing for a draft, an empty text, or the text the service already shows", async () => {
+      for (const body of [
+        withProposal("draft"),
+        conversation({ proposal: { _id: "p", status: "pending", pastor_message: "  ", messages: [] } }),
+        withProposal("approved", { pastor_message: { ...PASTOR, body: LEADS_TEXT } }),
+      ]) {
+        getBody = body;
+        renderDialog();
+        // Loaded (the leads line renders only with the conversation), and still nothing offered.
+        await waitFor(() => expect(screen.getByText("Líderes: Ana, Beto")).toBeTruthy());
+        expect(screen.queryByText("Usar como mensaje del pastor")).toBeNull();
+        cleanup();
+      }
+    });
+  });
+
   describe("Mensaje para el equipo", () => {
     it("says it needs a setlist when there is none", async () => {
       renderDialog();

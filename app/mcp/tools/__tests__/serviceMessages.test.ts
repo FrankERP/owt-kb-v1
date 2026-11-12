@@ -81,6 +81,22 @@ beforeEach(() => {
 });
 
 describe("get_service_messages", () => {
+  it("reports the leads' pastor's message from their proposal, trimmed; null when none (ADR-0088)", async () => {
+    h.loadServiceConversation.mockResolvedValue({
+      ...conversation(),
+      proposal: { _id: "setlistProposal.x", status: "pending", pastor_message: "  Efesios 2  ", messages: [] },
+    });
+    expect(sc(await getServiceMessagesResult({ serviceId: ROLE }, PRINCIPAL)).proposal).toMatchObject({
+      status: "pending",
+      pastorMessage: "Efesios 2",
+    });
+    h.loadServiceConversation.mockResolvedValue({
+      ...conversation(),
+      proposal: { _id: "setlistProposal.x", status: "pending", messages: [] },
+    });
+    expect(sc(await getServiceMessagesResult({ serviceId: ROLE }, PRINCIPAL)).proposal).toMatchObject({ pastorMessage: null });
+  });
+
   it("reads the conversation: mine marks only the bearer's messages, the team message carries its observation", async () => {
     const out = await getServiceMessagesResult({ serviceId: ROLE }, PRINCIPAL);
     expect(out.isError).toBeFalsy();

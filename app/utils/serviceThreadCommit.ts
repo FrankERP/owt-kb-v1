@@ -37,6 +37,7 @@ import {
   type PastorMessageRow,
 } from "@/app/utils/serviceThread";
 import {
+  fieldText,
   isMessageKey,
   parseMessageEdit,
   parsePastorMessageEdit,
@@ -358,7 +359,9 @@ export interface PastorMessageEffects {
  * not make the admin redo an edit that conflicts with nothing.
  *
  * It lives on `serviceThread.<roleId>`, never on the role (every role writer
- * asserts the role `_rev`) and never on a proposal (ADR-0065).
+ * asserts the role `_rev`) and never on a proposal (ADR-0065). A proposal may
+ * carry the lead's DRAFT of it (`setlistProposal.pastor_message`, ADR-0088);
+ * only `adoptProposalPastorMessage` below moves that here, on approval.
  *
  * Notifies the leads (push AND email, `pastor: true`) only when a message
  * APPEARS on a published service. An edit or a clear sends nothing: a typo fix
@@ -489,6 +492,90 @@ export async function setPastorMessage(
     },
     effects: { change: !next ? "clear" : before ? "edit" : "set", notified, leadIds: [...leadIds] },
   };
+}
+
+/**
+ * What the approval's copy did (ADR-0088): `copied` (it is now the service's
+ * message), `same` (the service already showed that text), `kept_existing` (the
+ * service had a DIFFERENT message, left alone), `none` (the proposal carried
+ * none), `failed` (not copied; the approval stands, the dialog offers «Usar»).
+ */
+export type AdoptPastorMessageOutcome = "copied" | "same" | "kept_existing" | "none" | "failed";
+
+/** Line endings folded so a WhatsApp paste and its stored copy compare equal. */
+function comparable(text: string): string {
+  return text.replace(/\r\n?/g, "\n");
+}
+
+/**
+ * Copy a just-approved proposal's «Mensaje del pastor» into the service's ONE
+ * field (ADR-0088) — the post-commit step of `commitApproval`
+ * (`proposalReviewCommit.ts`), never a route of its own.
+ *
+ * Only into an EMPTY field: Frank's option was «pasa al mensaje del pastor del
+ * servicio, solo si está vacío». It cannot tell an admin's message from this
+ * proposal's own earlier copy, so it never overwrites either; the caller
+ * reports `kept_existing` and the dialog offers the replace.
+ *
+ * The same write discipline as `setPastorMessage`: a patch under the thread
+ * `_rev` it read, or a `create` (never `createIfNotExists`) — so a concurrent
+ * admin save is never overwritten. One conflict is re-read and re-decided (a
+ * chat append moves the `_rev` without touching the field); a second one, or any
+ * other error, is `failed`. It NEVER throws: the approval already committed, and
+ * its answer must not become a 500.
+ *
+ * NO notification, unlike `setPastorMessage`: the leads wrote it themselves and
+ * the approval already tells the team. `author` is the approving admin — who
+ * put it on the service, the field's meaning in `setPastorMessage` too.
+ */
+export async function adoptProposalPastorMessage(
+  roleId: string,
+  raw: unknown,
+  actorId: string | null,
+): Promise<AdoptPastorMessageOutcome> {
+  const body = fieldText(raw);
+  if (body === null) return typeof raw === "string" ? "failed" : "none";
+  if (!body) return "none";
+  const threadId = serviceThreadId(roleId);
+  if (!threadId) return "failed";
+
+  for (let attemptNo = 0; attemptNo < 2; attemptNo++) {
+    try {
+      const stored = await operationalClient.fetch<StoredThread | null>(
+        `*[_type == "${SERVICE_THREAD_TYPE}" && _id == $threadId][0]{ _id, _rev, pastor_message }`,
+        { threadId },
+      );
+      const current = stored?.pastor_message?.body ?? "";
+      if (current) return comparable(current) === comparable(body) ? "same" : "kept_existing";
+
+      const next = {
+        _type: "pastor_message",
+        body,
+        ...(actorId ? { author: { _ref: actorId, _type: "reference" as const } } : {}),
+        at: nowIso(),
+      };
+      if (stored) {
+        await writeClient.patch(threadId).ifRevisionId(stored._rev).set({ pastor_message: next }).commit();
+      } else {
+        await writeClient.create({
+          _id: threadId,
+          _type: SERVICE_THREAD_TYPE,
+          // A plain string, never a reference (ADR-0065).
+          role_id: roleId,
+          messages: [],
+          pastor_message: next,
+        });
+      }
+      revalidateServiceViews();
+      return "copied";
+    } catch (err) {
+      if (sanityConflictKind(err) && attemptNo === 0) continue;
+      // A fixed tag, never the body (it is member-written text).
+      console.error("[adoptProposalPastorMessage] not copied:", err instanceof Error ? err.message : "unknown");
+      return "failed";
+    }
+  }
+  return "failed";
 }
 
 /** What a team-notes save did. */

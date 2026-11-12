@@ -166,10 +166,10 @@ import { PERSON_CONFIRMS_RULE } from "@/app/mcp/writes/confirmRule";
  * The tool-list digests (ADR-0069), pinned. `SLICE_A_READ_DIGEST` is what a worship admin's slice A
  * connection holds: `adminRead` must keep it, so that connection sees no change and no refresh note.
  */
-const FULL_DIGEST_PIN = "25c759eb";
-const FULL_NO_APPS_DIGEST_PIN = "5537beba";
-const ADMIN_DIGEST_PIN = "2210b227";
-const ADMIN_NO_APPS_DIGEST_PIN = "abce26ab";
+const FULL_DIGEST_PIN = "196f90ac";
+const FULL_NO_APPS_DIGEST_PIN = "e6787c94";
+const ADMIN_DIGEST_PIN = "44cfe71a";
+const ADMIN_NO_APPS_DIGEST_PIN = "d20a3a8b";
 const SLICE_A_READ_DIGEST = "f75b2615";
 import { buildGrantDocument, newGrantId } from "@/app/mcp/oauth/grantDocument";
 import { __clearGrantCache, createGrant, revokeGrant } from "@/app/mcp/oauth/grantStore";
