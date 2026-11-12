@@ -131,6 +131,35 @@ describe("TeamSections", () => {
     expect(header(/Voces/).getAttribute("aria-expanded")).toBe("false");
   });
 
+  it("ADR-0088 — on the service card (`sheet`) a section is found by its glyph and, closed, shows who is in it as faces", () => {
+    mount({ myName: "", viewerTypes: null, sheet: true, photos: { gaby: "https://lh3.googleusercontent.com/a/gaby" } });
+    // Microphone, guitar, sliders — one tile per section header.
+    expect(header(/Voces/).querySelector('[data-icon="mic"]')).not.toBeNull();
+    expect(header(/Banda/).querySelector('[data-icon="guitar"]')).not.toBeNull();
+    expect(header(/Cabina/).querySelector('[data-icon="sliders"]')).not.toBeNull();
+    // Closed: the names line stays (it is what a screen reader hears) and the faces join it.
+    const voces = header(/Voces/);
+    expect(voces.getAttribute("aria-expanded")).toBe("false");
+    expect(voces.textContent).toContain("Gaby");
+    expect(voces.querySelectorAll(".animate-scale-in")).toHaveLength(2);
+    expect(voces.querySelector("img")?.getAttribute("src")).toContain("gaby");
+    // Open, the stack leaves the header: the faces are in the body now.
+    fireEvent.click(voces);
+    expect(header(/Voces/).querySelector(".animate-scale-in")).toBeNull();
+  });
+
+  it("ADR-0088 — on the service card a band or booth face wears its seat's glyph; an ordinary card's does not", () => {
+    const { container } = mount({ myName: "frank", viewerTypes: ["instrumento"], sheet: true, team: { ...team, instruments: [{ label: "Bass", person: "Frank" }, { label: "Drums", person: "Raúl" }] } });
+    const banda = document.getElementById(header(/Banda/).getAttribute("aria-controls")!)!;
+    expect(banda.querySelector('[data-icon="guitar"]')).not.toBeNull();
+    expect(banda.querySelector('[data-icon="drum"]')).not.toBeNull();
+    expect(container.querySelector('[data-icon="keys"]')).toBeNull();
+    cleanup();
+    mount({ myName: "frank", viewerTypes: ["instrumento"], team: { ...team, instruments: [{ label: "Bass", person: "Frank" }] } });
+    expect(document.querySelector('[data-icon="guitar"]')).toBeNull();
+    expect(document.querySelector('[data-icon="mic"]')).toBeNull();
+  });
+
   it("renders ONE folding rendering, shown at every width, without `openAllFrom`", () => {
     const { container } = mount({ myName: "" });
     expect(container.querySelector("[data-team-open]")).toBeNull();

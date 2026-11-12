@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findDuplicates, serviceTone, serviceConflicts, summarizeService, conflictLabel, agendaRows, monthStripDays, weekStripDays, mondayOf, addDays, mySeats, myNameFromSession, dayCellLabel, dayTitle, serviceClock, calendarCounts, calendarCountLine } from "../agenda";
+import { findDuplicates, serviceTone, serviceConflicts, summarizeService, conflictLabel, agendaRows, monthStripDays, weekStripDays, mondayOf, addDays, mySeats, seatSectionOf, myNameFromSession, dayCellLabel, dayTitle, serviceClock, calendarCounts, calendarCountLine } from "../agenda";
 import type { ActiveDay } from "../../components/CalendarView";
 
 const sun = (date: string, extra: Partial<ActiveDay> = {}): ActiveDay => ({ day: "Domingo", date, leads: ["Jakey", "Marianne"], instruments: [{ label: "Keys", person: "Sofi" }, { label: "Bass", person: "Mkz" }], setlist: { songs: Array(5).fill({ _id: "s", title: "t" }) as never, week: date }, ...extra });
@@ -123,6 +123,20 @@ describe("myNameFromSession", () => {
   });
 });
 
+describe("seatSectionOf", () => {
+  const e = sun("2026-09-13", { fohTeam: [{ label: "Stream", person: "Sofi" }] });
+  it("puts the three voice seats in «voces», whatever the service lists", () => {
+    expect(["Lead", "BGVs", "Coro"].map((s) => seatSectionOf({}, s))).toEqual(["voces", "voces", "voces"]);
+  });
+  it("puts an instrument's label in «banda» and a booth seat's in «cabina»", () => {
+    expect(seatSectionOf(e, "Keys")).toBe("banda");
+    expect(seatSectionOf(e, "Stream")).toBe("cabina");
+  });
+  it("is undefined for a label the service does not carry (a Kids or Jóvenes seat)", () => {
+    expect(seatSectionOf(e, "Maestra")).toBeUndefined();
+    expect(seatSectionOf({ instruments: null as never, fohTeam: undefined }, "Keys")).toBeUndefined();
+  });
+});
 describe("mySeats", () => {
   it("lists Lead and the instrument for a member seated in both, in DayCard's order", () => {
     const e = sun("2026-09-13", { leads: ["Sofi"], instruments: [{ label: "Keys", person: "Sofi" }, { label: "Bass", person: "Mkz" }] });

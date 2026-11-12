@@ -15,6 +15,10 @@
 // A closed Collapse is a zero-height child; a `space-y-*`/`gap` PARENT still
 // reserves its gap, so carry the gap on the Collapse's own className instead
 // (see MyAvailabilityPanel, ServicesPanel).
+//
+// `as="span"` is for a Collapse INSIDE a `<button>` (a folded card's summary, which
+// closes as the card opens): a button may only hold phrasing content, so both
+// elements are spans drawn as blocks. Everything else is the same.
 
 import { useEffect, useRef, useState } from "react";
 import * as m from "motion/react-m";
@@ -23,18 +27,20 @@ import { EASE_IN, EASE_OUT, EXIT_MS, MS } from "@/app/utils/motionPresets";
 export default function Collapse({
   open,
   id,
+  as = "div",
   className = "",
   children,
 }: {
   open: boolean;
   id?: string;
+  as?: "div" | "span";
   className?: string;
   children: React.ReactNode;
 }) {
   // Attributes flip AFTER the close animation (so content fades while still
   // readable) and BEFORE the open animation (so it is reachable at once).
   const [hidden, setHidden] = useState(!open);
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLElement>(null);
   // Derived during RENDER, not in an effect: React runs the whole passive-effect
   // pass before flushing work an effect schedules, so a `setHidden(false)` latch
   // would still leave `inert` on the node while the PARENT's effect runs — that
@@ -54,11 +60,14 @@ export default function Collapse({
   // Collapse.test.tsx observes, and it is a harmless no-op duplicate of the
   // attribute in a real browser.
   useEffect(() => {
-    if (ref.current) (ref.current as HTMLDivElement & { inert: boolean }).inert = closedNow;
+    if (ref.current) (ref.current as HTMLElement & { inert: boolean }).inert = closedNow;
   }, [closedNow]);
+  const span = as === "span";
+  const Outer = span ? m.span : m.div;
+  const Inner = span ? "span" : "div";
   return (
-    <m.div
-      ref={ref}
+    <Outer
+      ref={ref as React.Ref<HTMLDivElement & HTMLSpanElement>}
       id={id}
       aria-hidden={closedNow ? "true" : undefined}
       inert={closedNow ? true : undefined}
@@ -72,9 +81,9 @@ export default function Collapse({
       onAnimationComplete={() => {
         if (!open) setHidden(true);
       }}
-      style={{ overflow: "hidden" }}
+      style={span ? { display: "block", overflow: "hidden" } : { overflow: "hidden" }}
     >
-      <div className={className}>{children}</div>
-    </m.div>
+      <Inner className={span ? `block ${className}` : className}>{children}</Inner>
+    </Outer>
   );
 }

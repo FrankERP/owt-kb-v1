@@ -172,7 +172,8 @@ export const GET_SERVICE_MESSAGES_DESCRIPTION =
   "el «Mensaje del pastor» (uno solo por servicio, editable, con su observed para set_pastor_message), los mensajes " +
   "que los admins escribieron a los líderes (cada uno con key, autor y mine: true cuando lo escribiste tú, que es lo " +
   "único que puedes editar o borrar), la conversación de la propuesta de setlist de los líderes si existe (solo " +
-  "lectura), y el «Mensaje para el equipo» del setlist publicado con su observed para set_team_message (null si aún " +
+  "lectura; su pastorMessage es el mensaje del pastor que los líderes mandaron con la propuesta (null en un borrador), que al aprobarla " +
+  "pasa al servicio solo si el servicio no tiene uno), y el «Mensaje para el equipo» del setlist publicado con su observed para set_team_message (null si aún " +
   "no hay setlist). threadOpen dice si todavía se puede escribir. " + OPEN_RULE + " Solo lee: no cambia nada.";
 
 export async function getServiceMessagesResult(
@@ -192,7 +193,11 @@ export async function getServiceMessagesResult(
       team_notes: service.team_notes,
       hasSongs: service.hasSongs,
     });
-    const proposal = (data.proposal ?? null) as { status?: string; messages?: ThreadMessageRow[] | null } | null;
+    const proposal = (data.proposal ?? null) as {
+      status?: string;
+      pastor_message?: string | null;
+      messages?: ThreadMessageRow[] | null;
+    } | null;
     return successResult({
       serviceId: service._id,
       label: labelOf(service),
@@ -205,7 +210,15 @@ export async function getServiceMessagesResult(
       pastorObserved: pastorMessageStamp(pastorSet),
       messages: ((data.messages ?? []) as ThreadMessageRow[]).map((m) => messageRow(m, me)),
       proposal: proposal
-        ? { status: proposal.status ?? null, messages: (proposal.messages ?? []).map((m) => messageRow(m, null)) }
+        ? {
+            status: proposal.status ?? null,
+            // ADR-0087: the leads' copy; null when none, and for a draft they have not handed in
+            // (the dialog offers none either).
+            pastorMessage: proposal.status !== "draft" && typeof proposal.pastor_message === "string" && proposal.pastor_message.trim()
+              ? proposal.pastor_message.trim()
+              : null,
+            messages: (proposal.messages ?? []).map((m) => messageRow(m, null)),
+          }
         : null,
       teamMessage:
         team === null

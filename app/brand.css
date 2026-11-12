@@ -1280,23 +1280,24 @@ html[data-motion="off"] .brand-stage-hero::before {
 
 /* ── Lit card (spec §23, decision Q) — the FIFTH beam site. After the route
    reveal, the NEXT card gets ONE light pass around its border, 900 ms, then
-   rests on its own border (the next Jóvenes meeting since ADR-0086; it was
-   the worship hero's until ADR-0070 took its frame). Transform only, no @property
+   rests on its own border (the next Jóvenes meeting since ADR-0086, and the
+   next worship service on Inicio again since ADR-0088 gave it its frame back;
+   ADR-0070 had taken it). Transform only, no @property
    (Safari 16.4). Never loops; the global reduced-motion rule above
    (`*, *::before, *::after`) already zeroes its animation-duration/-delay,
    because this is a plain `animation:` shorthand — no per-effect override
    needed here, unlike `.brand-stage-hero::before`, which needs one because its
-   rest frame is opacity 1, not 0. `data-lit` is set by its one
-   site, `app/components/jovenes/MeetingCard.tsx` (`litCard.test.ts`).
+   rest frame is opacity 1, not 0. `data-lit` is set by its two
+   sites, `app/components/jovenes/MeetingCard.tsx` and `DayCard`'s `Lit`
+   (only where a host passes `lit`: Inicio's next service) — `litCard.test.ts`.
 
    NOT a mask on the rotating layer: a mask lives in the element's own box, so
    it rotates WITH it and the "ring" becomes a line slashing across the card.
    House precedent instead (`.brand-btn-sheen`, `.brand-skeleton`): the wrapper
    CLIPS, an UNMASKED conic layer spins underneath, and the card sits on top —
    the only light that escapes is what the 1 px `padding` gap leaves showing.
-   The wrapper's clip also eats the card's own `.brand-surface` shadow; the
-   lit Jóvenes card goes without one (the pass and its size already set it
-   apart).
+   The wrapper's clip also eats the card's own `.brand-surface` shadow; a
+   lit card goes without one (the pass and its size already set it apart).
 
    The card is fully opaque since 2026-10-20 (`--surface-card`), so the wedge
    reaches the 1 px gap and nothing else. (Before, `.brand-surface` was a
@@ -1304,10 +1305,18 @@ html[data-motion="off"] .brand-stage-hero::before {
 .brand-lit-card { position: relative; isolation: isolate; border-radius: 16px; } /* --brand-radius-panel's value — DayCard.tsx's own rounded-[var(--brand-radius-panel)], not referenced here: tokenLayer.test.ts pins brand.css's own rule bodies as --brand-radius-free, consumed only from components */
 /* The spinner: the wrapper's box grown by 800 px on every side. A rotating box
    covers the wrapper at EVERY angle once its shorter side reaches the wrapper's
-   diagonal, and a fixed inset reaches that for any card up to 1600 px wide at
-   any height — the hero is capped at 1232 px (`max-w-7xl` minus `px-6` in
-   `app/(client)/page.tsx`) and measured 1232 × 257, a 4.8 : 1 box with a
-   1259 px diagonal.
+   diagonal, so the rule a card must meet is
+
+       diagonal  ≤  shorter side + 1600 px
+
+   — NOT «any card up to 1600 px wide at any height», which this comment said
+   until ADR-0088: a narrow, very tall card fails it. The two shapes that are lit
+   both pass with room: the wide hero this was sized on (capped at 1232 px,
+   `max-w-7xl` minus `px-6` in `app/(client)/page.tsx`; measured 1232 × 257, a
+   4.8 : 1 box with a 1259 px diagonal against 257 + 1600), and the worship card
+   on a phone, 342 px wide, which is covered up to about 1 900 px tall
+   (√(1942² − 342²) ≈ 1911) — a full setlist and team run well under that. A card
+   that could outgrow the rule needs a larger inset, not a percentage:
    PERCENTAGES CANNOT DO THIS: they scale BOTH axes, so a wide, flat card keeps
    its aspect ratio however large the layer grows. Measured over the pass at that
    hero, `inset: -100%` (3× → 771 px short side) leaves 81 of 2834 ring pixels

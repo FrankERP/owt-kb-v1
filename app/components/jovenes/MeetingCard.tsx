@@ -120,7 +120,7 @@ export default function JovenesMeetingCard({
                     <span className="inline-flex min-w-0 items-center gap-2">
                       <span className="flex -space-x-1.5">
                         {faces.slice(0, 4).map((s) => (
-                          <PersonAvatar key={s.key} name={s.name} mine={s.mine} size="sm" className="ring-2 ring-surface-card" />
+                          <PersonAvatar key={s.key} name={s.name} photo={s.photo} mine={s.mine} size="sm" className="ring-2 ring-surface-card" />
                         ))}
                       </span>
                       <span className="min-w-0 truncate">

@@ -97,8 +97,8 @@ export function jovenesDayEntry(e: MinistryEventView): JovenesDayEntry {
     audience: audienceLabel(e.audience),
     arrival: e.arrival,
     place: e.place,
-    seats: e.seats.map((s) => ({ key: s._key, label: seatRoleLabel(s.role), name: s.name, mine: s.mine })),
-    program: e.program.map((l) => ({ key: l._key, label: l.label ?? "—", name: l.memberId ? l.name : null, mine: l.mine, note: l.note })),
+    seats: e.seats.map((s) => ({ key: s._key, label: seatRoleLabel(s.role), name: s.name, photo: s.photo, mine: s.mine })),
+    program: e.program.map((l) => ({ key: l._key, label: l.label ?? "—", name: l.memberId ? l.name : null, photo: l.memberId ? l.photo : null, mine: l.mine, note: l.note })),
     notes: e.notes,
   };
 }

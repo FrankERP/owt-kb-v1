@@ -11,8 +11,9 @@ import MeHeader from "@/app/components/MeHeader";
 import Button from "@/app/components/ui/Button";
 import AccountList, { AccountLinkRow } from "@/app/components/account/AccountList";
 import DownloadCalendarRow from "@/app/components/account/DownloadCalendarRow";
-import { ArrowRightIcon, CheckIcon, ClockIcon, MessageIcon, PlusIcon } from "@/app/components/ui/icons";
+import { ArrowRightIcon, CalendarIcon, CalendarOffIcon, CheckIcon, ClockIcon, GearIcon, MessageIcon, PlusIcon } from "@/app/components/ui/icons";
 import { SHEET_TITLE } from "@/app/utils/homeHero";
+import { SONG_COVER_GROQ } from "@/app/utils/songCover";
 import { serviceStartTime } from "@/app/utils/calendarFeed";
 import { UNDER_NAVBAR_SCROLL_MT } from "@/app/utils/navbarHeight";
 import { Setlist, SetlistSong, ProposalStatus } from "@/app/utils/interface";
@@ -170,6 +171,7 @@ export default async function MePage() {
               medley_tag,
               "title": song->title, "slug": song->slug, "_id": song->_id,
               "author": song->author, "bpm": song->bpm, "key": song->key,
+              "cover": ${SONG_COVER_GROQ},
             },
             week,
             team_notes,
@@ -194,6 +196,7 @@ export default async function MePage() {
               medley_tag,
               "title": song->title, "slug": song->slug, "_id": song->_id,
               "author": song->author, "bpm": song->bpm, "key": song->key,
+              "cover": ${SONG_COVER_GROQ},
             },
             week,
             team_notes,
@@ -217,6 +220,7 @@ export default async function MePage() {
             medley_tag,
             "title": song->title, "slug": song->slug, "_id": song->_id,
             "author": song->author, "bpm": song->bpm, "key": song->key,
+            "cover": ${SONG_COVER_GROQ},
             "leads": leads[]->{ member_name, alias },
           },
           "myLeadSongs": songs[$id in leads[]._ref]{ "title": song->title }
@@ -507,7 +511,7 @@ export default async function MePage() {
         {/* Upcoming WORSHIP services — hidden outright for a member who is not in
             that ministry, and absent entirely when there are none: the header says
             so, so an empty column here would say it twice. The next service is the
-            full hero; every other one is a collapsed `DayCardDisclosure` row (R1),
+            full hero; every other one is a folded `DayCardDisclosure` card (R1),
             each still followed by its own proposal CTA.
 
             The hero renders as `<DayCard {...} hero />` directly, WITHOUT `isNext`
@@ -518,24 +522,23 @@ export default async function MePage() {
             "Ensayar" action. */}
         {inWorship && heroAssignment && (
           <div className="space-y-14" {...revealProps(1)}>
-            {/* «Próximo» (the «millones» pass, 2026-10-24): the page's sections carry
-                the sheet's small-caps titles, the one uppercase left on it, so the
-                hero reads as the first section of a run sheet, not a card dropped
-                under the header. */}
+            {/* «Próximo»: the page's sections carry the small-caps titles of the
+                «millones» pass (2026-10-24); under this one the next service is the
+                framed service card (ADR-0088), the same one Inicio opens on. */}
             <section key={heroAssignment.doc._id} aria-labelledby="me-proximo">
               <h2 id="me-proximo" className={`${SHEET_TITLE} mb-5`}>Próximo</h2>
               <DayCard {...cardProps(heroAssignment)} hero />
               {renderProposalCta(heroAssignment.doc)}
             </section>
             {restAssignments.length > 0 && (
-              // «Después»: the other services as hairline rows (`DayCardDisclosure
-              // sheet`, home's own list), each still followed by its proposal CTA.
+              // «Después»: the other services as folded cards (`DayCardDisclosure`,
+              // home's own stack, ADR-0088), each still followed by its proposal CTA.
               <section aria-labelledby="me-despues">
                 <h2 id="me-despues" className={SHEET_TITLE}>Después</h2>
-                <div className="mt-2 divide-y divide-ink/[0.10] border-y border-ink/[0.10]">
+                <div className="mt-4 space-y-4">
                   {restAssignments.map((assignment) => (
-                    <div key={assignment.doc._id} className="pb-1">
-                      <DayCardDisclosure {...cardProps(assignment)} sheet />
+                    <div key={assignment.doc._id}>
+                      <DayCardDisclosure {...cardProps(assignment)} />
                       {renderProposalCta(assignment.doc)}
                     </div>
                   ))}
@@ -612,6 +615,7 @@ export default async function MePage() {
             {member && (
               <AccountLinkRow
                 href="/me/disponibilidad"
+                icon={<CalendarOffIcon size={17} />}
                 title="Disponibilidad"
                 status={
                   upcomingUnavailable === 0
@@ -628,12 +632,14 @@ export default async function MePage() {
             {inWorship && (
               <AccountLinkRow
                 href="/me/ajustes#calendario"
+                icon={<CalendarIcon size={17} />}
                 title="Calendario"
                 status="Suscribirte a tus servicios"
               />
             )}
             <AccountLinkRow
               href="/me/ajustes"
+              icon={<GearIcon size={17} />}
               title="Ajustes"
               status="Tema, tamaño de texto, perfil"
             />

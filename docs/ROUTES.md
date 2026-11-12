@@ -137,13 +137,13 @@ token) for private/fresh data.
 [API_REFERENCE.md](API_REFERENCE.md)) on every route except `/` and `/me`, which pass `cue={false}`
 because their own headers already show the countdown.
 
-- **`/`** — `Navbar`, `DayCard` (the next service, `layout="wide"` + `hero`; its countdown pill carries the start time and «Mensaje para el equipo» folds to three lines since design pass D, 2026-10-22), `DayCardDisclosure` (every other service, collapsed to one line).
+- **`/`** — `Navbar`, `DayCard` (the next service as a framed card, ADR-0088: `layout="wide"` + `hero` + `lit`; its countdown chip carries the start time and «Mensaje para el equipo» folds to three lines since design pass D, 2026-10-22), `DayCardDisclosure` (every other service, a folded card: date leaf, title, who leads as faces and the set as album covers).
 - **`/schedule`** — `Navbar`, `CalendarView` (composition only: `ScheduleHeader`, `DayStrip`, the
   Agenda|Mes `SegmentedControl`, `AgendaView` or the month grid, the day sheet `CueDialog`).
 - **`/biblioteca`** — `Navbar`, `LibraryIndex`.
 - **`/me`** — `Navbar`, `MeHeader` (the identity header: name, Tipo chips, and the one
-  countdown line), `DayCard` (the next service, `hero`, no `isNext` — the header already
-  carries the countdown), `DayCardDisclosure` (every other service, collapsed), each lead
+  countdown line), `DayCard` (the next service as a framed card, `hero`, no `isNext` — the header
+  already carries the countdown), `DayCardDisclosure` (every other service, a folded card), each lead
   service's proposal CTA (a house `Button`), and «Tu cuenta» (`account/AccountList`, 2026-10-22):
   Disponibilidad with its count, the one-shot `.ics` download (`account/DownloadCalendarRow`,
   worship only), Calendario (`/me/ajustes#calendario`) and Ajustes. `MeHeader` carries no
