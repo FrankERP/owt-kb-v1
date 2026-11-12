@@ -870,7 +870,9 @@ pass.
   one entry (`hidden → superAdmin → admins → all`), keyed by a feature name. `rolloutAllows`
   is the SERVER gate each page and route of the feature calls (a page answers 404); the nav's
   `navRolloutAllows` is cosmetic and, since the session carries no ministry level, shows the
-  `admins` stage to the super-admin only. `jovenesEvents` is at `superAdmin`.
+  `admins` stage to the super-admin only. `jovenesEvents` is at `all` since 2026-11-12 (Frank opened
+  Jóvenes to every pastor); each page's and route's own guard still decides who gets in, and
+  `rollout.test.ts` pins the stage so it never moves as a side effect.
 - **Readable ≠ writable (`ASSIGNABLE_MINISTRY_IDS`).** Registering a ministry in `MINISTRIES`
   makes a stored id mean something; only `ASSIGNABLE_MINISTRY_IDS` makes it storable — it feeds
   `validateMinistryWrite("ministries")`, the «Personas» pills and scope bar, and the Studio

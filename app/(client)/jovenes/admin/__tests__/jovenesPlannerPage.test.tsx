@@ -27,6 +27,7 @@ const h = vi.hoisted(() => ({
   planner: vi.fn(),
   groups: vi.fn(),
   rolloutOpen: false,
+  rolloutClosed: false,
 }));
 vi.mock("@/app/utils/authGuards", () => ({ requireActiveSession: () => h.requireActiveSession() }));
 vi.mock("@/app/utils/memberAccess", () => ({ getMemberAccess: (id: string) => h.getMemberAccess(id) }));
@@ -50,7 +51,7 @@ vi.mock("@/app/components/jovenes/GroupCalendar", () => ({
 }));
 vi.mock("@/app/utils/rollout", async (orig) => {
   const real = await orig<typeof import("@/app/utils/rollout")>();
-  return { ...real, rolloutAllows: (f: never, a: never) => h.rolloutOpen || real.rolloutAllows(f, a) };
+  return { ...real, rolloutAllows: (f: never, a: never) => !h.rolloutClosed && (h.rolloutOpen || real.rolloutAllows(f, a)) };
 });
 
 import JovenesPlannerPage from "../page";
@@ -80,6 +81,7 @@ const role = (level: string, groups: string[] = ["otro-nivel"], leaderOf: string
 beforeEach(() => {
   for (const f of Object.values(h)) if (typeof f === "function") f.mockReset();
   h.rolloutOpen = false;
+  h.rolloutClosed = false;
   h.requireActiveSession.mockResolvedValue(session);
   h.getMemberAccess.mockResolvedValue(SUPER);
   h.readMinistryEvents.mockResolvedValue([]);
@@ -93,7 +95,8 @@ describe("/jovenes/admin gates", () => {
     expect(h.readMinistryEvents).not.toHaveBeenCalled();
   });
 
-  it("while the stage is superAdmin, a Jóvenes admin gets 404 and nothing is read", async () => {
+  it("while the stage does not reach them, a Jóvenes admin gets 404 and nothing is read", async () => {
+    h.rolloutClosed = true;
     h.getMemberAccess.mockResolvedValue(role("admin", []));
     expect(await visit()).toBe("→ 404");
     expect(h.readMinistryEvents).not.toHaveBeenCalled();

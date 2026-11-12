@@ -5,7 +5,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactElement } from "react";
 
-const { fetchMock, accessMock, cookieValue, eventsMock, Unavailable } = vi.hoisted(() => ({
+const { fetchMock, accessMock, cookieValue, eventsMock, Unavailable, rolloutStage } = vi.hoisted(() => ({
+  // null = the real registry (open to every pastor since 2026-11-12); false closes the stage.
+  rolloutStage: { override: null as null | boolean },
   fetchMock: vi.fn(),
   accessMock: vi.fn(),
   cookieValue: { current: undefined as string | undefined },
@@ -22,6 +24,10 @@ vi.mock("next/headers", () => ({
   cookies: async () => ({ get: (name: string) => (name === "owt_calendar_view" && cookieValue.current ? { value: cookieValue.current } : undefined) }),
 }));
 vi.mock("@/app/utils/ministryEventReads", () => ({ readMinistryEvents: eventsMock, MinistryEventReadUnavailable: Unavailable }));
+vi.mock("@/app/utils/rollout", async (orig) => {
+  const real = await orig<typeof import("@/app/utils/rollout")>();
+  return { ...real, rolloutAllows: (f: never, a: never) => rolloutStage.override ?? real.rolloutAllows(f, a) };
+});
 vi.mock("@/app/components/Navbar", () => ({ default: () => null }));
 vi.mock("@/app/components/CalendarView", () => ({ default: () => null }));
 
@@ -65,6 +71,7 @@ beforeEach(() => {
   eventsMock.mockReset();
   eventsMock.mockResolvedValue([]);
   cookieValue.current = undefined;
+  rolloutStage.override = null;
   fetchMock.mockImplementation(async (_q: string, params: { withKids: boolean }) => ({
     sundays: [{ _id: "sun1", week: "2026-11-01", Lead: [{ member_name: "Ana" }] }],
     saturdays: [],
@@ -143,13 +150,32 @@ describe("/schedule — Jóvenes in the Calendario", () => {
   const frank = { active: true, role: "super-admin", ministries: ["worship"], managesMinistries: [], ministryRoles: [] };
 
   it("before the rollout reaches a pastor: no read, no Jóvenes option", async () => {
+    rolloutStage.override = false;
     accessMock.mockResolvedValue(pastor);
     const props = await render();
     expect(eventsMock).not.toHaveBeenCalled();
     expect(props.ministryView).toBeUndefined();
   });
 
-  it("once it reaches them (the super-admin today): member mode, the page's window, and the meeting joins its day", async () => {
+  it("a pastor of Alabanza and Jóvenes gets the meetings: the rollout reaches every pastor", async () => {
+    accessMock.mockResolvedValue(pastor);
+    eventsMock.mockResolvedValue([MEETING]);
+    const props = await render();
+    expect(eventsMock).toHaveBeenCalledTimes(1);
+    expect(eventsMock.mock.calls[0][0]).toBe(pastor);
+    expect(eventsMock.mock.calls[0][1]).toMatchObject({ me: "m1", ministry: "jovenes", mode: "member" });
+    expect(props.ministryExtras).toEqual(["jovenes"]);
+    expect(props.activeDays["2026-11-07"].map((e) => e.jovenes?.id)).toEqual(["ministryEvent.a"]);
+  });
+
+  it("open or not, membership decides: a member of Alabanza only gets no read and no Jóvenes option", async () => {
+    accessMock.mockResolvedValue({ active: true, role: "member", ministries: ["worship"], managesMinistries: [], ministryRoles: [] });
+    const props = await render();
+    expect(eventsMock).not.toHaveBeenCalled();
+    expect(props.ministryView).toBeUndefined();
+  });
+
+  it("the super-admin: member mode, the page's window, and the meeting joins its day", async () => {
     accessMock.mockResolvedValue(frank);
     eventsMock.mockResolvedValue([MEETING]);
     const props = await render();
