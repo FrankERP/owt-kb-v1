@@ -94,7 +94,7 @@ export type ActiveDay = {
 };
 
 /** A person on a Jóvenes meeting, «mine» decided by member id on the server. */
-export type JovenesDayPerson = { key: string; label: string; name: string | null; mine: boolean };
+export type JovenesDayPerson = { key: string; label: string; name: string | null; photo: string | null; mine: boolean };
 /** A published Jóvenes meeting the reader may see (ADR-0081), as the Calendario shows it. */
 export type JovenesDayEntry = {
   id: string;
