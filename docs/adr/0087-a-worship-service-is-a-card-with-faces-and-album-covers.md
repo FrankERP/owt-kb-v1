@@ -117,15 +117,22 @@ schema gains one optional image (`post.albumArt`) and the three service reads pr
   still renders the plain `DayCard`, which keeps its old header).
 - The plain (non-`sheet`) `DayCard` no longer has a two-column `wide` rendering: its only `wide`
   caller was the hero, which is a sheet. `layout="wide"` now means the framed card's body.
-- A song's cover is DATA someone has to supply. The first load is a one-time match of the
-  catalog against Deezer's public search (title and artist), reviewed by Frank on a contact
-  sheet: 138 of 148 songs matched, 8 of them to a sister act's album. Its 102 images are stored
-  as Sanity image assets (each compared pixel by pixel with its source), and the song → asset
-  links are written by `scripts/set-album-art.mjs` from `scripts/data/album-art-2026-11-12.json`
-  (dry-run by default, `--apply` with Frank's consent, never replaces a cover a song already
-  has). It is a script and not a connector patch because the connector validates against the
-  deployed schema, which does not know `albumArt` until this change's schema is deployed. Until
-  that script has run, every song draws the neutral tile. A new song has no cover until an
+- A song's cover is DATA someone has to supply, and its source is **MultiTracks first**. The
+  first load (2026-11-12, 03:29Z) matched the catalog against Deezer's public search: 138 of 148
+  songs. Frank, the same day, on seeing them: «si puedes hacer que la fuente principal de las
+  imágenes sea multitracks.com, estaría mejor». In practice MultiTracks lists the Spanish release of a
+  translated song, where Deezer's search had answered with the English album for many. The list is now all 148 songs: 127 take the
+  cover MultiTracks shows for their album (82 images, 568 px, the largest it serves; the app draws
+  them at 160 px), the Spanish release when there is one; the 21 MultiTracks does not carry
+  (Conquistando Fronteras, Caminodevida, most of En Espíritu y En Verdad, a few carols) keep the
+  Deezer cover. Every image is a Sanity image asset, and the song → asset links are written by
+  `scripts/set-album-art.mjs` from `scripts/data/album-art-2026-11-12.json` (dry-run by default,
+  `--apply` with Frank's consent). The loader gives a cover to a song that has none and CHANGES
+  one only when the row names the exact asset the song has now (`replaces`, the cover the first
+  load wrote): a cover an editor chose in the Studio is never replaced
+  (`scripts/lib/album-art-plan.mjs`, pinned by its test). It is a script and not a connector patch
+  because the connector validates against the deployed schema, which does not know `albumArt`
+  until this change's schema is deployed. A song with no cover draws the neutral tile. A new song has no cover until an
   editor uploads one in the Studio; the app's own song form does not offer the field yet. An image that fails to load falls back to the neutral tile
   (`onError`); the picture is `alt=""` decoration and nothing else on the row depends on it.
 - `songSaveCommit` writes a song by `set`/`unset` of the fields it edits, so a save from the app
