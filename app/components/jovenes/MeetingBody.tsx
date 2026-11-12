@@ -10,6 +10,7 @@
 // tinted block (ADR-0086).
 //
 // NEUTRAL — no hooks — so either side of the boundary can render it.
+import Link from "next/link";
 import { SHEET_TITLE } from "../../utils/homeHero";
 import { NoteIcon } from "../ui/icons";
 import type { JovenesDayEntry, JovenesDayPerson } from "../CalendarView";
@@ -28,9 +29,22 @@ function Seat({ person }: { person: JovenesDayPerson }) {
   const name = personName(person);
   return (
     <li className="flex min-w-0 items-center gap-2.5">
-      <PersonAvatar name={person.name} mine={person.mine} />
+      <PersonAvatar name={person.name} photo={person.photo} mine={person.mine} />
       <div className="min-w-0">
-        <p className={ROLE}>{person.label}</p>
+        <p className={ROLE}>
+          {person.label}
+          {/* «+ foto» only on your own face, as the worship team block: it links to the upload in
+              Ajustes, which only you can use. The profile is the person's, not a ministry's. */}
+          {person.mine && !person.photo && (
+            <>
+              {" · "}
+              <Link href="/me/ajustes" className="font-semibold text-accent underline-offset-2 hover:underline">
+                {/* A no-break space: «+» alone at a line's end read as a stray mark. */}
+                +{"\u00a0"}foto
+              </Link>
+            </>
+          )}
+        </p>
         <p className={`break-words font-body text-[16px] leading-tight ${name.className}`}>{name.text}</p>
       </div>
     </li>
@@ -58,7 +72,12 @@ function Step({ line, index, last }: { line: JovenesDayEntry["program"][number];
           <p className="break-words font-body text-[16px] font-semibold leading-snug text-ink">{line.label}</p>
           {line.note && <p className="break-words font-body text-[14px] leading-snug text-ink-muted">{line.note}</p>}
         </div>
-        {who && <p className={`max-w-[55%] shrink-0 truncate font-body text-[15px] leading-snug ${who.className}`}>{who.text}</p>}
+        {who && (
+          <div className="flex max-w-[55%] shrink-0 items-center gap-1.5">
+            {line.name && <PersonAvatar name={line.name} photo={line.photo} mine={line.mine} size="sm" />}
+            <p className={`min-w-0 truncate font-body text-[15px] leading-snug ${who.className}`}>{who.text}</p>
+          </div>
+        )}
       </div>
     </li>
   );

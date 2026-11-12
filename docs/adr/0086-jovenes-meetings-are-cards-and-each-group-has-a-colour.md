@@ -44,7 +44,8 @@ worship page stay ADR-0070's sheets.
   the reader was already given.
 - **Colour is never the only signal**: every group chip carries a two-letter monogram (ON, IN, EM,
   AD, GU — `groupMonogram`) beside the name.
-- **People are faces**: initials in a circle (`PersonAvatar`, the house `initialsOf`), a green ring
+- **People are faces**: the profile photo, or initials in a circle when there is none
+  (`PersonAvatar`, the house `initialsOf`; photos since 2026-11-12, see the addendum), a green ring
   on the reader's own, a dashed empty circle for a seat with nobody. The program is a numbered
   timeline. Both live in `JovenesMeetingBody`, which is still the one body of `/jovenes` and of the
   Calendario's `JovenesDayCard`.
@@ -74,9 +75,10 @@ worship page stay ADR-0070's sheets.
   wash, in both themes.
 - **Storing the colour on the group in `ministries.ts` or Sanity.** A stored colour is a value the
   token layer cannot theme (it needs a dark and a light value) and Tailwind cannot see.
-- **Photos on the avatars.** Member photos exist, but a meeting's people reach the page only
-  through `readMinistryEvents`' projection, the security boundary of ADR-0081. Widening the one
-  reader for decoration is not a visual change; initials need nothing new. It can be its own slice.
+- **Photos on the avatars** (rejected in the first pass, REVERSED 2026-11-12, see the addendum).
+  Member photos exist, but a meeting's people reach the page only through `readMinistryEvents`'
+  projection, the security boundary of ADR-0081, and the first pass did not touch that reader for
+  what it took to be decoration.
 - **Cards everywhere** (undoing ADR-0070). The sheets are right where a screen holds one thing.
   This ADR is scoped to the two Jóvenes screens, and the Calendario's day sheet keeps its sheet.
 - **A real calendar grid as the main view of `/jovenes`.** On a phone a month grid shows dots, not
@@ -101,3 +103,27 @@ worship page stay ADR-0070's sheets.
   routes and `jovenesPlannerModel.ts` are untouched.
 - Undoing this means going back to rows that Frank rejected; `jovenesPage.test.tsx`,
   `meetingCard.test.tsx` and `monthMap.test.tsx` describe the cards.
+
+## Addendum — the faces are the profile's photos (2026-11-12)
+
+Frank, on seeing the cards: «te faltan las fotos de perfil que ya hay en la sección de alabanza. El
+perfil debe ser global, incluyendo la foto y el alias». A pastor who serves in Alabanza already has
+a photo there; a circle with «JA» beside it read as a different, emptier account.
+
+- **One profile per person.** The alias was already the name Jóvenes shows (`coalesce(alias,
+  member_name)`). The photo now comes from the same two fields every worship surface reads
+  (`coalesce(profilePhoto.asset->url, googlePhotoUrl)`), through the seat's own member reference in
+  `readMinistryEvents` (ADR-0081's addendum says why that widens nothing). `/me` and `/me/ajustes`
+  were already ministry-neutral (`requireActiveSession`), so a Jóvenes-only pastor changes both
+  there; the reader's own seat with no photo links to it («+ foto»), as the worship team block does.
+- **The photo is a background over the initials, not an `<img>`.** `PersonAvatar` stays neutral (no
+  hooks) because the server-rendered day sheet draws it, so it cannot hear `onError` the way
+  `TeamSections`' avatar does, and a failed `<img>` paints the browser's broken-image glyph
+  (measured in Chromium, with an empty `alt` too). A background that fails paints nothing and the
+  initials underneath remain, before hydration as well. The URL goes through `avatarSrc` (a small
+  JPEG from Sanity; WebP does not decode in the iOS WKWebView).
+- **Rejected: a second avatar component beside the worship one, or sharing `TeamSections`' own.**
+  That one is a client component keyed by display name through a `photos` map; Jóvenes knows its
+  people by member id from the query, and a name-keyed map would give two pastors called «Ana» one
+  face.
+- A typed seat name («Ana», no account) has no profile, so it keeps initials.

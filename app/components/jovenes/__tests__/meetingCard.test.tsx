@@ -30,10 +30,10 @@ function ev(over: Partial<MinistryEventView> = {}): MinistryEventView {
     place: "Oasis Tlalpan",
     published: true,
     seats: [
-      { _key: "s1", role: "encargado", memberId: "m1", name: "Ana", mine: false },
-      { _key: "s2", role: "predica", memberId: "m2", name: "Beto", mine: true },
+      { _key: "s1", role: "encargado", memberId: "m1", name: "Ana", photo: null, mine: false },
+      { _key: "s2", role: "predica", memberId: "m2", name: "Beto", photo: null, mine: true },
     ],
-    program: [{ _key: "l1", label: "Dinámica", note: "10 min", memberId: "m1", name: "Ana", mine: false }],
+    program: [{ _key: "l1", label: "Dinámica", note: "10 min", memberId: "m1", name: "Ana", photo: null, mine: false }],
     createdById: null,
     createdByName: null,
     ...over,
@@ -100,7 +100,7 @@ describe("JovenesMeetingCard", () => {
   });
 
   it("a single seat reads «Role · Name» in the summary, and an empty seat shows no face there", () => {
-    card(ev({ seats: [{ _key: "s1", role: "encargado", memberId: "m1", name: "Ana", mine: false }, { _key: "s2", role: "predica", memberId: null, name: null, mine: false }], program: [] }));
+    card(ev({ seats: [{ _key: "s1", role: "encargado", memberId: "m1", name: "Ana", photo: null, mine: false }, { _key: "s2", role: "predica", memberId: null, name: null, photo: null, mine: false }], program: [] }));
     const summary = screen.getByText("Encargado · Ana");
     // One face in the folded summary: Ana's initials, nothing for the seat with nobody.
     const faces = summary.parentElement!.querySelectorAll(".-space-x-1\\.5 > *");
