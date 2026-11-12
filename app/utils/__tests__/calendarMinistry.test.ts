@@ -108,6 +108,7 @@ function meeting(over: Partial<MinistryEventView> = {}): MinistryEventView {
     title: null,
     notes: "Traer Biblia",
     place: null,
+    lesson: null,
     published: true,
     seats: [{ _key: "s1", role: "encargado", memberId: "m1", name: "Ana", mine: true }],
     program: [

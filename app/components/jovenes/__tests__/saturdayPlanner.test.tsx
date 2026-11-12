@@ -51,6 +51,7 @@ function ev(over: Partial<MinistryEventView> = {}): MinistryEventView {
     title: null,
     notes: null,
     place: null,
+    lesson: null,
     published: false,
     seats: [{ _key: "k1", role: "encargado", memberId: "m1", name: "Ana", mine: false }],
     program: [],

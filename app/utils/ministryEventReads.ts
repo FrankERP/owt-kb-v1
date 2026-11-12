@@ -18,6 +18,7 @@ import { operationalClient } from "@/sanity/lib/operationalClient";
 import { LEVELED_MINISTRY_IDS, isGroupId, type MinistryId } from "@/app/ministries";
 import type { MemberAccess } from "./memberAccess";
 import { groupsIn, isMinistryManager, isMinistryMember, ledGroupsIn } from "./ministryAccess";
+import { lessonOf, type Lesson } from "./ministryLesson";
 
 export const MINISTRY_EVENT_TYPE = "ministryEvent";
 
@@ -87,6 +88,7 @@ const PROJECTION = `{
   title,
   notes,
   place,
+  lesson,
   "published": coalesce(published, false),
   "seats": seats[]{ _key, role, ${SEAT_PERSON} },
   "program": program[]{ _key, label, note, ${PERSON} },
@@ -181,6 +183,8 @@ export type MinistryEventView = {
   notes: string | null;
   /** Where it happens («Oasis Tlalpan»), display only. */
   place: string | null;
+  /** A group's class (plan 2026-11-12 L0): only on a one-group meeting with a valid lesson. */
+  lesson: Lesson | null;
   published: boolean;
   /** A seat's `name` is its member's live name, or — with `memberId` null — a typed name. */
   seats: MinistryEventSeat[];
@@ -228,6 +232,7 @@ function viewOf(row: Record<string, unknown>): MinistryEventView | null {
     title: str(row.title),
     notes: str(row.notes),
     place: str(row.place),
+    lesson: lessonOf(row.audience, row.lesson),
     published: row.published === true,
     seats: seats.filter(plainObject).map((s, i) => ({ ...person(s as RawPerson, i), role: str(s.role) })),
     program: program
