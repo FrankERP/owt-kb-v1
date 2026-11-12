@@ -63,6 +63,12 @@ const config: Config = {
 				"chart-especial": "rgb(var(--chart-especial-rgb) / <alpha-value>)",
 				"chart-instr": "rgb(var(--chart-instr-rgb) / <alpha-value>)",
 				"chart-foh": "rgb(var(--chart-foh-rgb) / <alpha-value>)",
+				// The five Jóvenes groups: categorical identity hues, never a state (ADR-0087).
+				"group-otro-nivel": "rgb(var(--group-otro-nivel-rgb) / <alpha-value>)",
+				"group-invencibles": "rgb(var(--group-invencibles-rgb) / <alpha-value>)",
+				"group-emprendedores": "rgb(var(--group-emprendedores-rgb) / <alpha-value>)",
+				"group-adrenalin": "rgb(var(--group-adrenalin-rgb) / <alpha-value>)",
+				"group-guerreras": "rgb(var(--group-guerreras-rgb) / <alpha-value>)",
 
 				// Child C — the palette families. 34 roles carrying Tailwind's exact
 				// values, so the migration renders byte-identically. See brand.css for
@@ -221,6 +227,13 @@ const config: Config = {
 				// not a plain fade-in — it says "this one changed", not "this one
 				// appeared" — and ends on `transform: "none"` for the same
 				// containing-block reason as `rise`/`scale-in` above.
+				// A meeting card's colour rail drawing itself top to bottom after the card
+				// rises (Jóvenes, ADR-0087) — `brand-rail-draw`'s move as a utility, ending
+				// on `transform: "none"` like the others.
+				"rail-draw": {
+					from: { transform: "scaleY(0)" },
+					to: { transform: "none" },
+				},
 				pop: {
 					"0%": { opacity: "0", transform: "scale(0.92)" },
 					"60%": { opacity: "1", transform: "scale(1.04)" },
@@ -233,6 +246,7 @@ const config: Config = {
 				"scale-in": "scale-in var(--motion-slow) var(--ease-out) both",
 				shimmer: "shimmer var(--motion-shimmer) linear infinite",
 				pop: "pop var(--motion-slow) var(--ease-out) both",
+				"rail-draw": "rail-draw var(--motion-reveal) var(--ease-out) both",
 			},
 			scrollSnapType: {
 				x: "x mandatory",

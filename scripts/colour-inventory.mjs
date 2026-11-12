@@ -559,6 +559,8 @@ const TOKEN_LAYER_ROLES = new RegExp(
       // Added in B4: the shadow black and the six categorical hues.
       "elevation", "surface-lift", "scrim", "on-fill",
       "chart-lead", "chart-bgv", "chart-coro", "chart-especial", "chart-instr", "chart-foh",
+      // The five Jóvenes group hues (ADR-0087).
+      "group-otro-nivel", "group-invencibles", "group-emprendedores", "group-adrenalin", "group-guerreras",
       // Child C's 34 palette-family roles. Without these the category-12 scan
       // dispositions them to B, and C1 — a slice that migrates nothing — would move
       // byDisposition.B from 124 to 158.

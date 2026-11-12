@@ -255,11 +255,13 @@ describe("brand.css — (b) theme parity, dormant until .light carries custom pr
     // resolves to a different role or alpha per theme. That edit is the point, not
     // an inconvenience. 100 when `--key-fg-rgb` (2026-10-24, ADR-0071) made the
     // musical key the second brand colour — rose in dark, a deeper rose in light.
+    // 105 when the five `--group-*-rgb` hues (2026-11-12, ADR-0087) gave each Jóvenes
+    // group a colour — bright on navy in dark, deepened for white cards in light.
     const root = customProperties(css.slice(css.indexOf(":root {"), css.indexOf("\n}", css.indexOf(":root {"))));
     const light = customProperties(lightBlock(css) ?? "");
     const rootColour = [...root].filter((p) => isColourProperty(p, css));
     expect(light.size).toBe(rootColour.length);
-    expect(light.size).toBe(100);
+    expect(light.size).toBe(105);
   });
 
   it("FIRES on a synthetic .light block with a missing counterpart (the fire-proof)", () => {

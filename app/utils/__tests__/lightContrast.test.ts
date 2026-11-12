@@ -82,6 +82,9 @@ const FOREGROUND_ON_PAGE = [
   "availability-faint", "availability-soft", "availability-strong",
   "badge-violet-fg", "badge-azure-fg",
   "chart-lead", "chart-bgv", "chart-coro", "chart-especial", "chart-instr", "chart-foh",
+  // The Jóvenes group hues (ADR-0087). On the page here; on their own wash, where the chip and
+  // the date leaf actually put them, in the «group hues» block below.
+  "group-otro-nivel", "group-invencibles", "group-emprendedores", "group-adrenalin", "group-guerreras",
 ] as const;
 
 /**
@@ -102,6 +105,11 @@ const FOREGROUND_ON_FILL: ReadonlyArray<readonly [string, string, string]> = [
   ["surface-sunken", "accent", "ChordChart.tsx:183 — selected key"],
   ["surface-base", "warning-fg", "ImpersonationBanner.tsx:160"],
   ["scrim", "recency-fg", "ProposalsPanel.tsx:573 — pending count"],
+  ["surface-base", "group-otro-nivel", "jovenes/AudienceChips.tsx — the monogram on the group's solid"],
+  ["surface-base", "group-invencibles", "jovenes/AudienceChips.tsx — the monogram on the group's solid"],
+  ["surface-base", "group-emprendedores", "jovenes/AudienceChips.tsx — the monogram on the group's solid"],
+  ["surface-base", "group-adrenalin", "jovenes/AudienceChips.tsx — the monogram on the group's solid"],
+  ["surface-base", "group-guerreras", "jovenes/AudienceChips.tsx — the monogram on the group's solid"],
 ];
 
 describe("light theme — WCAG AA contrast", () => {
@@ -145,6 +153,30 @@ describe("light theme — WCAG AA contrast", () => {
       for (const role of ["positive-fg", "ink"]) {
         const ratio = contrast(roles.get(role)!, roles.get(ground!)!);
         expect(ratio, `${role} on surface-card (${ground}) is ${ratio.toFixed(2)}:1 in ${theme}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  it("each Jóvenes group hue clears 4.5:1 on its OWN wash over the card, in both themes (ADR-0087)", () => {
+    // Where the hue is actually read: the audience chip and the date leaf's weekday band are the
+    // hue as TEXT on a tint of the same hue over `--surface-card`. A tint of itself always costs
+    // contrast, so the page row above would pass a colour that fails here (teal did, at 4.49:1).
+    // The alpha is read from the one file that spells those classes, so a deeper wash is measured.
+    const style = readFileSync(path.join(REPO_ROOT, "app/utils/jovenesGroupStyle.ts"), "utf8");
+    const washes = [...style.matchAll(/bg-group-[a-z-]+\/\[(0\.\d+)\]/g)].map((m) => Number(m[1]));
+    expect(washes.length, "no group wash found in jovenesGroupStyle.ts").toBeGreaterThan(0);
+    const alpha = Math.max(...washes);
+    for (const [theme, selector, roles] of [["light", ".light {", LIGHT], ["dark", ":root {", darkRoles()]] as const) {
+      const start = CSS.indexOf(selector);
+      const block = CSS.slice(start, CSS.indexOf("\n}", start));
+      const ground = roles.get(block.match(/--surface-card:\s*rgb\(var\(--([a-z0-9-]+)-rgb\)\)/)![1])!;
+      const groups = [...roles.keys()].filter((r) => r.startsWith("group-"));
+      expect(groups.length, `no group hue in ${selector}`).toBe(5);
+      for (const role of groups) {
+        const hue = roles.get(role)!;
+        const wash = hue.map((v, i) => v * alpha + ground[i] * (1 - alpha));
+        const ratio = contrast(hue, wash);
+        expect(ratio, `${role} on its ${alpha} wash is ${ratio.toFixed(2)}:1 in ${theme}`).toBeGreaterThanOrEqual(4.5);
       }
     }
   });

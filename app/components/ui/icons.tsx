@@ -212,3 +212,25 @@ export function CopyIcon(props: IconProps) {
     </Icon>
   );
 }
+
+/** Where a meeting happens — the pin beside «Oasis Tlalpan». */
+export function MapPinIcon(props: IconProps) {
+  return (
+    <Icon name="map-pin" {...props}>
+      <path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0Z" />
+      <circle cx="12" cy="10" r="3" />
+    </Icon>
+  );
+}
+
+/** Several people — «Todo Jóvenes», a team, a group's section. */
+export function UsersIcon(props: IconProps) {
+  return (
+    <Icon name="users" {...props}>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </Icon>
+  );
+}

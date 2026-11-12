@@ -134,28 +134,51 @@ describe("/jovenes read", () => {
     expect(opts.to > opts.from).toBe(true);
   });
 
-  it("renders a meeting: the date as heading, its line, «Tú» in the house wording, an empty seat, the program and notes", async () => {
+  it("renders a meeting as a card: its name as the title, the date as a leaf, chips per group, «Tú», an empty seat, the program and notes", async () => {
     h.readMinistryEvents.mockResolvedValue([EVENT]);
     const html = await visit();
-    expect(html).toContain("Junta de grupos");
-    expect(html).toContain("Otro Nivel · Emprendedores");
-    // The date heads the meeting, capital first and «de» lowercase (CSS `capitalize` raised it).
-    expect(html).toContain("Sábado 14 de noviembre");
-    expect(html).toContain("Junta de grupos · 18:00 · llegada 17:30 · Otro Nivel · Emprendedores");
-    // «Tú», as the Calendario says it, never the old accent chip «Te toca — …»: in the line under
-    // the heading, in the seat's own row, and in the lede.
+    // The card's title is the meeting's name, one level under the list's section label.
+    expect(html).toMatch(/<h2[^>]*>Próxima reunión/);
+    expect(html).toMatch(/<h3[^>]*>Junta de grupos<\/h3>/);
+    // The date is drawn in three parts and READ whole, capital first and «de» lowercase.
+    expect(html).toMatch(/<time dateTime="2026-11-14"[^>]*><span class="sr-only">Sábado 14 de noviembre<\/span>/);
+    // One chip per group, each with its monogram (the colour is never the only signal).
+    expect(html).toMatch(/>ON<\/span>Otro Nivel</);
+    expect(html).toMatch(/>EM<\/span>Emprendedores</);
+    expect(html).toContain("text-group-otro-nivel");
+    expect(html).toContain("text-group-emprendedores");
+    // The clock and the arrival, with their icon.
+    expect(html).toContain('data-icon="clock"');
+    expect(html).toContain(">18:00</span>");
+    expect(html).toContain("llegada 17:30");
+    // «Tú», as the Calendario says it, never the old accent chip «Te toca — …»: on the card's
+    // chip, in the seat's own name, and in the lede.
     expect(html).toContain("Tú · Encargado");
     expect(html).toContain("Tú · Frank");
     expect(html).not.toContain("Te toca");
-    // The seats sit under their own section title, one level under the date's `h2`.
-    expect(html).toMatch(/<h3[^>]*>Equipo<\/h3>/);
-    expect(html).toMatch(/<h3[^>]*>Programa<\/h3>/);
+    // The next meeting opens: its sections sit one level under the card's title.
+    expect(html).toMatch(/<h4[^>]*>Equipo<\/h4>/);
+    expect(html).toMatch(/<h4[^>]*>Programa<\/h4>/);
     expect(html).toContain("1 reunión por venir");
     expect(html).toContain("te toca el sábado 14 de noviembre");
     expect(html).toContain("Sin asignar");
     expect(html).toContain("Oración");
-    expect(html).toContain("llegada 17:30");
+    expect(html).toContain("5 min");
     expect(html).toContain("Traer Biblia");
+    // It is the one lit card.
+    expect(html.match(/data-lit=""/g)).toHaveLength(1);
+  });
+
+  it("the next meeting is featured and open; the ones after it fold under their month", async () => {
+    const later = { ...EVENT, _id: "ministryEvent.b", date: "2026-12-05", audience: { kind: "ministry" }, kind: "saturday" };
+    h.readMinistryEvents.mockResolvedValue([EVENT, later]);
+    const html = await visit();
+    expect(html).toMatch(/<h2[^>]*>Diciembre/);
+    expect(html).toMatch(/<h3[^>]*>Sábado de Jóvenes<\/h3>/);
+    expect(html).toContain("Todo Jóvenes");
+    expect(html.match(/aria-expanded="true"/g)).toHaveLength(1);
+    expect(html.match(/aria-expanded="false"/g)).toHaveLength(1);
+    expect(html.match(/data-lit=""/g)).toHaveLength(1);
   });
 
   it("says when there is nothing published", async () => {

@@ -15,4 +15,16 @@ describe("tailwind motion utilities", () => {
       "pop var(--motion-slow) var(--ease-out) both",
     );
   });
+
+  it("declares rail-draw: a scaleY from 0 that ends on none, on the reveal token (ADR-0087)", () => {
+    // A Jóvenes meeting card's colour rail. It ends on `none`, not `scaleY(1)`: the rail is
+    // `position: absolute` inside the card, and a transform left on it would make it a
+    // containing block for nothing today and for a surprise tomorrow (MOTION.md rule 5).
+    const kf = (config.theme?.extend?.keyframes as Record<string, Record<string, Record<string, string>>>)["rail-draw"];
+    expect(kf.from.transform).toBe("scaleY(0)");
+    expect(kf.to.transform).toBe("none");
+    expect((config.theme?.extend?.animation as Record<string, string>)["rail-draw"]).toBe(
+      "rail-draw var(--motion-reveal) var(--ease-out) both",
+    );
+  });
 });
