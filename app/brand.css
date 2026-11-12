@@ -238,6 +238,19 @@
   --chart-instr-rgb: 186 117 23;     /* #BA7517 */
   --chart-foh-rgb: 136 135 128;      /* #888780 */
 
+  /* Five more CATEGORICAL hues: the Jóvenes groups (ADR-0086). A group's colour is
+     its identity on a meeting — the chip with its monogram, the card's rail, the
+     date tile's band — never a state: «publicada», «borrador» and «tú» keep the
+     semantic roles. Named after the group id (`app/ministries.ts`), like the chart
+     hues after their seat, so adding a group cannot repaint another; the map that
+     reads them is `app/utils/jovenesGroupStyle.ts`. Fuchsia is not the key's rose
+     (ADR-0071): a different role, and no Jóvenes screen shows a musical key. */
+  --group-otro-nivel-rgb: 106 168 255;     /* #6aa8ff */
+  --group-invencibles-rgb: 177 140 255;    /* #b18cff */
+  --group-emprendedores-rgb: 45 212 191;   /* #2dd4bf */
+  --group-adrenalin-rgb: 255 138 76;       /* #ff8a4c */
+  --group-guerreras-rgb: 244 114 182;      /* #f472b6 */
+
   /* ---- Child C, Layer 1 continued: the palette families ------------------
      34 roles carrying Tailwind's EXACT palette values. Child C ships zero
      licensed diffs: every one of the 36 (family, shade) pairs it migrates maps
@@ -557,6 +570,11 @@
   --chart-especial-rgb: 168 56 51;        /* #a83833  <- dark 217 83 79 */
   --chart-instr-rgb: 138 86 15;           /* #8a560f  <- dark 186 117 23 */
   --chart-foh-rgb: 94 93 88;              /* #5e5d58  <- dark 136 135 128 */
+  --group-otro-nivel-rgb: 29 95 191;      /* #1d5fbf  <- dark 106 168 255 */
+  --group-invencibles-rgb: 109 63 209;    /* #6d3fd1  <- dark 177 140 255 */
+  --group-emprendedores-rgb: 8 105 96;    /* #086960  <- dark 45 212 191 */
+  --group-adrenalin-rgb: 168 62 10;       /* #a83e0a  <- dark 255 138 76 */
+  --group-guerreras-rgb: 185 28 105;      /* #b91c69  <- dark 244 114 182 */
   --mono-200-rgb: 36 46 60;               /* #242e3c  <- dark 229 231 235 */
   --mono-300-rgb: 48 59 74;               /* #303b4a  <- dark 209 213 219 */
   --mono-400-rgb: 60 72 87;              /* #3c4857  <- dark 156 163 175 */
@@ -1261,22 +1279,24 @@ html[data-motion="off"] .brand-stage-hero::before {
 }
 
 /* ── Lit card (spec §23, decision Q) — the FIFTH beam site. After the route
-   reveal, the next service's card gets ONE light pass around its border,
-   900 ms, then rests on its own accent border. Transform only, no @property
+   reveal, the NEXT card gets ONE light pass around its border, 900 ms, then
+   rests on its own border (the next Jóvenes meeting since ADR-0086; it was
+   the worship hero's until ADR-0070 took its frame). Transform only, no @property
    (Safari 16.4). Never loops; the global reduced-motion rule above
    (`*, *::before, *::after`) already zeroes its animation-duration/-delay,
    because this is a plain `animation:` shorthand — no per-effect override
    needed here, unlike `.brand-stage-hero::before`, which needs one because its
-   rest frame is opacity 1, not 0. `data-lit` is set by the page
-   (`app/(client)/page.tsx`).
+   rest frame is opacity 1, not 0. `data-lit` is set by its one
+   site, `app/components/jovenes/MeetingCard.tsx` (`litCard.test.ts`).
 
    NOT a mask on the rotating layer: a mask lives in the element's own box, so
    it rotates WITH it and the "ring" becomes a line slashing across the card.
    House precedent instead (`.brand-btn-sheen`, `.brand-skeleton`): the wrapper
    CLIPS, an UNMASKED conic layer spins underneath, and the card sits on top —
    the only light that escapes is what the 1 px `padding` gap leaves showing.
-   The wrapper's clip also eats the card's own `.brand-surface` shadow, so the
-   hero wrapper carries the shadow in `app/(client)/page.tsx`.
+   The wrapper's clip also eats the card's own `.brand-surface` shadow; the
+   lit Jóvenes card goes without one (the pass and its size already set it
+   apart).
 
    The card is fully opaque since 2026-10-20 (`--surface-card`), so the wedge
    reaches the 1 px gap and nothing else. (Before, `.brand-surface` was a

@@ -94,14 +94,14 @@ describe("brand.css — .brand-lit-card", () => {
   });
 });
 
-// ADR-0070 (2026-10-23): the hero is a run SHEET on the page, with no frame — and
-// a border pass needs a border. The rules above stay in `brand.css` (removing
-// `--lit-beam` would move the pinned composed-token count for nothing) and the
-// CSS half of this guard keeps them honest for the day a framed surface adopts
-// the pass again. Until then NOTHING sets `data-lit`: a count of 1 here would
-// mean someone re-framed the hero without rereading the ADR.
-describe("app/** — data-lit has no site since ADR-0070", () => {
-  it("no component sets data-lit", () => {
+// ADR-0070 (2026-10-23) made the hero a run SHEET on the page, with no frame — and a border
+// pass needs a border, so for three weeks NOTHING set `data-lit`. ADR-0086 (2026-11-12) gave the
+// pass its one site back: the NEXT meeting on `/jovenes`, a framed card, lit once so the eye lands
+// on it among a list of cards. One site, on purpose — a second lit card on a screen is two things
+// claiming to be «next», and a pass on the worship hero would mean someone re-framed it without
+// rereading ADR-0070. Adding a site is an ADR, then this list.
+describe("app/** — data-lit has exactly one site (ADR-0086)", () => {
+  it("only the Jóvenes meeting card sets data-lit", () => {
     const walk = (dir: string): string[] =>
       readdirSync(path.join(REPO_ROOT, dir), { withFileTypes: true }).flatMap((e) => {
         const rel = path.join(dir, e.name);
@@ -115,6 +115,14 @@ describe("app/** — data-lit has no site since ADR-0070", () => {
         .replace(/^\s*\/\/.*$/gm, "");
       return /\bdata-lit\b/.test(jsx);
     });
-    expect(sites).toEqual([]);
+    expect(sites).toEqual(["app/components/jovenes/MeetingCard.tsx"]);
+  });
+
+  it("the card lights only when it is the featured one", () => {
+    // Every card is a `JovenesMeetingCard`; an unconditional `data-lit` would light the whole
+    // list at once. The wrapper exists only inside the `featured` branch.
+    const src = read("app/components/jovenes/MeetingCard.tsx");
+    expect(src.match(/data-lit/g)?.length).toBe(1);
+    expect(src).toMatch(/featured\s*\?[\s\S]{0,80}brand-lit-card[^>]*data-lit/);
   });
 });

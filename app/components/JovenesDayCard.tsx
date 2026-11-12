@@ -17,7 +17,7 @@ export default function JovenesDayCard({ title, entry, time }: { title: string; 
   return (
     <section aria-label={title}>
       <h3 className={`${SHEET_TITLE} pb-1`}>{title}</h3>
-      <p className="pb-2.5 font-body text-[15px] text-ink-muted">
+      <p className="pb-4 font-body text-[15px] text-ink-muted">
         {[time, entry.audience, entry.arrival ? `llegada ${entry.arrival}` : null, entry.place].filter(Boolean).join(" · ")}
       </p>
       <JovenesMeetingBody entry={entry} />

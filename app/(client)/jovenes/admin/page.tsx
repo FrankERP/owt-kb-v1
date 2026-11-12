@@ -26,6 +26,7 @@ import Button from "@/app/components/ui/Button";
 import { ArrowLeftIcon, ChevronLeftIcon, ChevronRightIcon } from "@/app/components/ui/icons";
 import SaturdayPlanner from "@/app/components/jovenes/SaturdayPlanner";
 import GroupCalendar from "@/app/components/jovenes/GroupCalendar";
+import MonthMap from "@/app/components/jovenes/MonthMap";
 import { revealProps } from "@/app/utils/reveal";
 
 export const metadata: Metadata = {
@@ -34,6 +35,8 @@ export const metadata: Metadata = {
 };
 
 const TZ = "America/Mexico_City";
+/** The month map stays under the navbar while the sections scroll; the banner's height joins in. */
+const PLANNER_STICKY = "lg:sticky lg:top-[calc(6.5rem+env(safe-area-inset-top)+var(--impersonation-offset))]";
 
 // Planear Jóvenes (ADR-0081, plan §7.3 PR C). Its ONE read is `readMinistryEvents` in EDITOR
 // mode, so an admin sees drafts and a leader sees the published meetings plus their groups'
@@ -82,7 +85,7 @@ export default async function JovenesPlannerPage({ searchParams }: { searchParam
   return (
     <div>
       <Navbar title="Planear Jóvenes" />
-      <div className="mx-auto max-w-5xl px-5 pb-16 pt-10 sm:px-6">
+      <div className="mx-auto max-w-6xl px-5 pb-16 pt-10 sm:px-6">
         {/* The MONTH is the page title, as in the Calendario: it is the one thing that changes
             here, and its arrows are the round controls that header uses. «Rol del sábado» and
             «Calendario de grupos» are the two sections under it (2026-11-10). */}
@@ -132,12 +135,23 @@ export default async function JovenesPlannerPage({ searchParams }: { searchParam
             No pudimos leer las reuniones en este momento. Intenta de nuevo más tarde.
           </p>
         ) : (
-          <div className="mt-12 space-y-14">
-            <div {...revealProps(1)}>
-              <SaturdayPlanner month={month} rows={rows} people={people} canEdit={isManager} defaultDate={defaultDate} />
-            </div>
-            <div {...revealProps(2)}>
-              <GroupCalendar events={groups} viewer={viewer} defaultDate={defaultDate} />
+          // The month as a picture beside the two sections from `lg` (it stays in view while
+          // they scroll) and above them on a phone (ADR-0086).
+          <div className="mt-10 lg:grid lg:grid-cols-[minmax(0,1fr)_17.5rem] lg:items-start lg:gap-x-10">
+            <aside
+              aria-label="El mes de un vistazo"
+              className={`mb-10 lg:order-2 lg:mb-0 ${PLANNER_STICKY}`}
+              {...revealProps(1)}
+            >
+              <MonthMap month={month} events={events} today={today} />
+            </aside>
+            <div className="min-w-0 space-y-16 lg:order-1">
+              <div {...revealProps(2)}>
+                <SaturdayPlanner month={month} rows={rows} people={people} canEdit={isManager} defaultDate={defaultDate} />
+              </div>
+              <div {...revealProps(3)}>
+                <GroupCalendar events={groups} viewer={viewer} defaultDate={defaultDate} />
+              </div>
             </div>
           </div>
         )}

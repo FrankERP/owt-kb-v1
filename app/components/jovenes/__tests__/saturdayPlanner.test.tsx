@@ -4,7 +4,7 @@
 // never closes as success (CLAUDE.md: client mutation handlers). The server decides every write;
 // these rows pin only that the client asks for the right one.
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installMotionTestEnv } from "@/app/components/ui/__tests__/motionTestSetup";
 import type { ReactNode } from "react";
@@ -232,7 +232,8 @@ describe("SaturdayPlanner", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Editar" })[0]);
     // The sheet's title is the house one (an `h2`), with the date in words under it.
     expect(screen.getByRole("heading", { name: "Editar reunión" })).toBeTruthy();
-    expect(screen.getByText(/Sábado 7 de noviembre/)).toBeTruthy();
+    // The sheet says its date under the title (the card's own leaf reads it too, to a screen reader).
+    expect(within(screen.getByRole("dialog")).getByText(/Sábado 7 de noviembre/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
     // `CueDialogStatus` announces it: the refusal sits in an alert, not in a loose red line.
     expect((await screen.findByText("No puedes editar este evento.")).closest('[role="alert"]')).toBeTruthy();
