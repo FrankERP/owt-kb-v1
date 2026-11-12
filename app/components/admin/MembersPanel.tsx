@@ -40,7 +40,7 @@ import {
   normalizeMinistryRoles,
   type MinistryId,
   type MinistryLevel,
-  type MinistryRoleWrite,
+  type MinistryRole,
 } from "@/app/ministries";
 import { interpretMemberDeleteResponse } from "@/app/utils/memberDelete";
 import { MEMBER_TYPES as MEMBER_TYPE_IDS, type MemberType } from "@/app/utils/memberTypes";
@@ -110,10 +110,11 @@ interface MemberFormData {
    * Sent whenever `ministries` is (the route judges a level against the
    * ministries of the same request): one item per ticked leveled ministry,
    * without the stored `_key`/`_type`. Unticking Jóvenes therefore drops its
-   * item, and the route stores what is left. No `leaderOf` (PR 1): the
-   * writer decides it from the stored person (K1, `memberCommit.ts`).
+   * item, and the route stores what is left. Each item carries `leaderOf`
+   * (the groups a leader leads; `[]` for a member or admin), exactly as the
+   * route stores it (ADR-0085).
    */
-  ministryRoles?: MinistryRoleWrite[];
+  ministryRoles?: MinistryRole[];
 }
 
 // The table's own abbreviations — deliberately not `MEMBER_TYPE_LABEL`'s full
@@ -428,18 +429,19 @@ export function MemberForm({
   // read's own normalizer — so what the form shows is what the guards see, and a
   // stored `_key`/`_type` never travels back. Kept while the ministry is
   // unticked, so re-ticking restores it; the submit sends ticked ones only.
-  const [levels, setLevels] = useState<Partial<Record<MinistryId, { level: MinistryLevel; groups: string[] }>>>(() =>
+  // `leaderOf` (the groups a leader LEADS, ADR-0085) is always a subset of
+  // `groups`: unticking a group drops it, and changing the level clears it —
+  // choosing «Líder» pre-ticks nothing (an explicit choice, fail closed).
+  type LevelState = { level: MinistryLevel; groups: string[]; leaderOf: string[] };
+  const [levels, setLevels] = useState<Partial<Record<MinistryId, LevelState>>>(() =>
     Object.fromEntries(
       normalizeMinistryRoles(initial?.ministryRoles, normalizeMinistries(initial?.ministries))
-        .map((r) => [r.ministry, { level: r.level, groups: r.groups }]),
+        .map((r) => [r.ministry, { level: r.level, groups: r.groups, leaderOf: r.leaderOf }]),
     ),
   );
-  const NO_LEVEL = { level: "member" as const, groups: [] };
+  const NO_LEVEL: LevelState = { level: "member", groups: [], leaderOf: [] };
   const levelOf = (id: MinistryId) => levels[id] ?? NO_LEVEL;
-  const editLevel = (
-    id: MinistryId,
-    next: (cur: { level: MinistryLevel; groups: string[] }) => Partial<{ level: MinistryLevel; groups: string[] }>,
-  ) => {
+  const editLevel = (id: MinistryId, next: (cur: LevelState) => Partial<LevelState>) => {
     setLevels((prev) => {
       const cur = prev[id] ?? NO_LEVEL;
       return { ...prev, [id]: { ...cur, ...next(cur) } };
@@ -448,9 +450,17 @@ export function MemberForm({
     setMinistryError(null);
   };
   const toggleGroup = (id: MinistryId, group: string) =>
-    editLevel(id, ({ groups }) => ({
-      groups: groups.includes(group) ? groups.filter((g) => g !== group) : [...groups, group],
+    editLevel(id, ({ groups, leaderOf }) =>
+      groups.includes(group)
+        ? { groups: groups.filter((g) => g !== group), leaderOf: leaderOf.filter((g) => g !== group) }
+        : { groups: [...groups, group] },
+    );
+  const toggleLed = (id: MinistryId, group: string) =>
+    editLevel(id, ({ leaderOf }) => ({
+      leaderOf: leaderOf.includes(group) ? leaderOf.filter((g) => g !== group) : [...leaderOf, group],
     }));
+  const setLevel = (id: MinistryId, next: MinistryLevel) =>
+    editLevel(id, (cur) => (cur.level === next ? {} : { level: next, leaderOf: [] }));
 
   const toggleType = (value: string) => {
     setMemberType(prev =>
@@ -490,8 +500,12 @@ export function MemberForm({
         // rejects both too — this is the friendly half, not the enforcement.
         if (ministries.length === 0) { setMinistryError("Elige al menos un ministerio."); return; }
         const tickedLeveled = LEVELED_MINISTRY_IDS.filter((id) => ministries.includes(id));
-        if (tickedLeveled.some((id) => levelOf(id).level === "leader" && levelOf(id).groups.length === 0)) {
-          setMinistryError("Un líder necesita al menos un grupo.");
+        // `ministryRoles` travels WITH `ministries`, always: the route judges a
+        // level against the ministries of the same request. Only what is sent is
+        // judged here, so an untouched legacy leader can still fix a typo.
+        const sendsMinistries = !initial || touchedMinistryFields.has("ministries") || touchedMinistryFields.has("ministryRoles");
+        if (sendsMinistries && tickedLeveled.some((id) => levelOf(id).level === "leader" && levelOf(id).leaderOf.length === 0)) {
+          setMinistryError("Un líder necesita liderar al menos un grupo.");
           return;
         }
         setMinistryError(null);
@@ -505,10 +519,8 @@ export function MemberForm({
         // On CREATE both arrays go unconditionally — there is no stored value to
         // clobber, and a Kids volunteer must be created kids-only rather than
         // existing as a worship member until someone remembers a second edit.
-        // `ministryRoles` travels WITH `ministries`, always: the route judges a
-        // level against the ministries of the same request.
         const touchedMinistries: Partial<Pick<MemberFormData, "ministries" | "managesMinistries" | "ministryRoles">> = {};
-        if (!initial || touchedMinistryFields.has("ministries") || touchedMinistryFields.has("ministryRoles")) {
+        if (sendsMinistries) {
           touchedMinistries.ministries = ministries;
           touchedMinistries.ministryRoles = tickedLeveled.map((id) => ({ ministry: id, ...levelOf(id) }));
         }
@@ -604,25 +616,45 @@ export function MemberForm({
         )}
       </div>
       {LEVELED_MINISTRY_IDS.filter((id) => ministries.includes(id)).map((id) => {
-        const { level, groups } = levelOf(id);
+        const { level, groups, leaderOf } = levelOf(id);
+        const name = MINISTRIES[id].name;
+        // Offered in the registry's order, ticked groups only (`leaderOf` ⊆ `groups`).
+        const ledOptions = MINISTRIES[id].groups.filter((g) => groups.includes(g.id));
         return (
           <div key={id} className="space-y-2">
-            <label className="font-label text-xs uppercase tracking-widest text-mono-500">{MINISTRIES[id].name}</label>
+            <label className="font-label text-xs uppercase tracking-widest text-mono-500">{name}</label>
             <SegmentedControl
-              label={`Nivel en ${MINISTRIES[id].name}`}
+              label={`Nivel en ${name}`}
               value={level}
-              onChange={(next) => editLevel(id, () => ({ level: next }))}
+              onChange={(next) => setLevel(id, next)}
               options={MINISTRY_LEVELS.map((l) => ({ value: l, label: MINISTRY_LEVEL_LABEL[l] }))}
             />
-            <div className="flex flex-wrap gap-2">
+            <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">Grupos</p>
+            <div className="flex flex-wrap gap-2" role="group" aria-label={`Grupos en ${name}`}>
               {MINISTRIES[id].groups.map((g) => (
                 <Button key={g.id} variant="pill" active={groups.includes(g.id)} onClick={() => toggleGroup(id, g.id)}>
                   {g.name}
                 </Button>
               ))}
             </div>
+            {level === "leader" && (
+              <>
+                <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">Lidera</p>
+                {ledOptions.length > 0 ? (
+                  <div className="flex flex-wrap gap-2" role="group" aria-label={`Lidera en ${name}`}>
+                    {ledOptions.map((g) => (
+                      <Button key={g.id} variant="pill" active={leaderOf.includes(g.id)} onClick={() => toggleLed(id, g.id)}>
+                        {g.name}
+                      </Button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="font-body text-xs text-mono-500">Marca primero sus grupos.</p>
+                )}
+              </>
+            )}
             <p className="font-body text-xs text-mono-500">
-              Admin administra {MINISTRIES[id].name}; un líder necesita al menos un grupo. No da acceso a Alabanza.
+              Admin administra todo {name}. Un líder planea solo los grupos que lidera; en los demás es miembro. No da acceso a Alabanza.
             </p>
           </div>
         );

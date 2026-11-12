@@ -95,7 +95,12 @@ import { MinistryEventReadUnavailable } from "../ministryEventReads";
 
 // ── People ──────────────────────────────────────────────────────────────────
 
-const J = (level: string, groups: string[]) => ({ ministries: ["jovenes"], ministryRoles: [{ _key: "jovenes", ministry: "jovenes", level, groups }] });
+// A leader leads every group they are in unless `JL` says otherwise (§11 N10: the fixtures store the
+// `leaderOf` every stored leader has, so each test keeps its intent under L2).
+const J = (level: string, groups: string[]) => ({
+  ministries: ["jovenes"],
+  ministryRoles: [{ _key: "jovenes", ministry: "jovenes", level, groups, ...(level === "leader" ? { leaderOf: groups } : {}) }],
+});
 /** A leader who LEADS `leaderOf` and is only IN the rest of `groups` (plan 2026-11-11 §4.1). */
 const JL = (groups: string[], leaderOf: unknown) => ({
   ministries: ["jovenes"],
@@ -610,8 +615,13 @@ describe("G4: a `leader` who leads no group is a member", () => {
     }
   });
 
-  it("a legacy leader (no leaderOf) still leads every group they are in — L1, today's meaning", async () => {
-    expect((await create("leaderON", { audience: groups("otro-nivel") })).out.status).toBe(200);
+  it("a legacy leader (no leaderOf, or null) leads nothing — L2, ADR-0085", async () => {
+    const draft = await eventBy("leaderON", { audience: groups("otro-nivel") });
+    for (const leaderOf of [undefined, null]) {
+      setPerson("leadsNone", JL(["otro-nivel"], leaderOf));
+      expect((await create("leadsNone", { audience: groups("otro-nivel") })).out.status).toBe(403);
+      expect((await update("leadsNone", draft, { title: "x" })).status).toBe(404);
+    }
   });
 });
 

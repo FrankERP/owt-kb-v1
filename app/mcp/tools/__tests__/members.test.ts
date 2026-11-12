@@ -16,7 +16,9 @@ import { memberView } from "@/app/utils/memberEdits";
 import { MEMBER_ERROR } from "@/app/utils/memberCommit";
 import { PRINCIPAL, textOf } from "./monthToolFixtures";
 import {
+  CHECK_MEMBER_CHANGES_DESCRIPTION,
   CHECK_MEMBER_CHANGES_INPUT,
+  CHECK_NEW_MEMBERS_DESCRIPTION,
   CHECK_NEW_MEMBERS_INPUT,
   checkMemberChangesResult,
   checkNewMembersResult,
@@ -244,5 +246,69 @@ describe("the people tools' Jóvenes groups bound follows the registry (T5b)", (
   it("a new person accepts all five groups and refuses a sixth entry", () => {
     expect(CHECK_NEW_MEMBERS_INPUT.safeParse(person(five)).success).toBe(true);
     expect(CHECK_NEW_MEMBERS_INPUT.safeParse(person(six)).success).toBe(false);
+  });
+});
+
+describe("leaderOf in the people tools (per-group leadership T7, §11 N2)", () => {
+  type Jovenes = { level: "member" | "leader" | "admin"; groups?: string[]; leaderOf?: string[] };
+  const person = (jovenes: Jovenes) => ({ name: "Jacob", email: "jacob@example.com", ministries: ["Jóvenes"], jovenes });
+
+  it("the edit op and a new person take leaderOf, bounded by the registry", () => {
+    const five = ["otro-nivel", "invencibles", "emprendedores", "adrenalin", "guerreras"];
+    const edit = (leaderOf: string[]) => ({ memberId: "vale", edits: [{ op: "jovenes", level: "leader", groups: five, leaderOf }] });
+    expect(CHECK_MEMBER_CHANGES_INPUT.safeParse(edit(five)).success).toBe(true);
+    expect(CHECK_MEMBER_CHANGES_INPUT.safeParse(edit([...five, "otro-nivel"])).success).toBe(false);
+    expect(CHECK_NEW_MEMBERS_INPUT.safeParse({ members: [person({ level: "leader", groups: five, leaderOf: five })] }).success).toBe(true);
+    expect(CHECK_NEW_MEMBERS_INPUT.safeParse({ members: [person({ level: "leader", groups: five, leaderOf: [...five, "x"] })] }).success).toBe(false);
+  });
+
+  it("both descriptions name leaderOf and its rule", () => {
+    for (const text of [CHECK_MEMBER_CHANGES_DESCRIPTION, CHECK_NEW_MEMBERS_DESCRIPTION]) {
+      expect(text).toContain("leaderOf son los grupos que lidera, parte de groups; solo con level leader");
+    }
+  });
+
+  it("a new leader's names become ids and the body carries leaderOf; a member's carries []", async () => {
+    const members = [
+      person({ level: "leader", groups: ["Otro Nivel", "Invencibles", "Adrenalin"], leaderOf: ["Otro Nivel", "adrenalin"] }),
+      { name: "Milo", email: "milo@example.com", ministries: ["Jóvenes"], jovenes: { level: "member" as const, groups: ["Emprendedores"] } },
+    ];
+    expect(sc(await checkNewMembersResult({ members }, d)).token).toEqual(expect.any(String));
+    const bodies = d.planNew.mock.calls[0][0] as Array<Record<string, unknown>>;
+    expect(bodies[0].ministryRoles).toEqual([
+      { ministry: "jovenes", level: "leader", groups: ["otro-nivel", "invencibles", "adrenalin"], leaderOf: ["otro-nivel", "adrenalin"] },
+    ]);
+    expect(bodies[1].ministryRoles).toEqual([{ ministry: "jovenes", level: "member", groups: ["emprendedores"], leaderOf: [] }]);
+  });
+
+  it("a new person: a leader with no leaderOf, a led group outside groups, and leaderOf on an admin are refused before any plan", async () => {
+    const refusedWith = async (jovenes: Jovenes) => {
+      d.planNew.mockClear();
+      const out = await checkNewMembersResult({ members: [person(jovenes)] }, d);
+      expect(d.planNew).not.toHaveBeenCalled();
+      return textOf(out);
+    };
+    expect(await refusedWith({ level: "leader", groups: ["Otro Nivel"] })).toContain("Di qué grupos lidera (leaderOf); los demás quedan como miembro.");
+    expect(await refusedWith({ level: "leader", groups: ["Otro Nivel"], leaderOf: ["Invencibles"] })).toContain(
+      "Para liderar «Invencibles» tiene que pertenecer a «Invencibles»: agrégalo a groups.",
+    );
+    expect(await refusedWith({ level: "admin", groups: ["Otro Nivel"], leaderOf: ["Otro Nivel"] })).toContain("Solo un líder lidera grupos; un admin ya administra todos.");
+  });
+
+  it("list_members and get_member say who leads what, in the chat's own words", async () => {
+    const jacob = {
+      id: "jacob",
+      view: memberView({
+        member_name: "Jacob", email: "jacob@example.com", ministries: ["jovenes"],
+        ministryRoles: [{ _key: "jovenes", ministry: "jovenes", level: "leader", groups: ["otro-nivel", "invencibles", "adrenalin"], leaderOf: ["otro-nivel", "adrenalin"] }],
+      }),
+    };
+    d.people.mockResolvedValue([jacob]);
+    d.person.mockResolvedValue(jacob);
+    const listed = (sc(await listMembersResult({}, d)).personas as Array<Record<string, unknown>>)[0];
+    expect(listed.jovenes).toBe("líder de Otro Nivel y Adrenalin; miembro de Invencibles");
+    expect((sc(await getMemberResult({ memberId: "jacob" }, d)).persona as Record<string, unknown>).jovenes).toBe(
+      "líder de Otro Nivel y Adrenalin; miembro de Invencibles",
+    );
   });
 });

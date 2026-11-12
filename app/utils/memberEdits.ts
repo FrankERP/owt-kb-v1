@@ -5,7 +5,8 @@
 //
 //   · `memberView` reads a stored person the way every guard reads it: absent `ministries` ⇒ worship
 //     (`normalizeMinistries`), a Jóvenes level only through `levelIn` (it counts only while `jovenes`
-//     is in `ministries`), an absent or unknown `role` ⇒ `member`, a missing name ⇒ `""` (§7.8).
+//     is in `ministries`) and the groups they lead only through `ledGroupsIn` (ADR-0085), an absent
+//     or unknown `role` ⇒ `member`, a missing name ⇒ `""` (§7.8).
 //   · `applyMemberEdits` turns the chat's small edits into the members PATCH's own touched-field body,
 //     applied to the FRESH person, so a forgotten Tipo or ministry is never a removed one (D2). A field
 //     whose result equals the stored one is left out (D13), so a no-op edit writes nothing.
@@ -24,10 +25,10 @@ import {
   normalizeMinistryRoles,
   type MinistryId,
   type MinistryLevel,
-  type MinistryRoleWrite,
+  type MinistryRole,
 } from "@/app/ministries";
 import { parseMemberInstruments } from "@/app/components/admin/seatModel";
-import { groupsIn, levelIn } from "./ministryAccess";
+import { groupsIn, ledGroupsIn, levelIn } from "./ministryAccess";
 import { MEMBER_TYPES, MEMBER_TYPE_LABEL } from "./memberTypes";
 import { ROLE_LABEL, type OWTRole } from "./roleLabel";
 
@@ -67,9 +68,18 @@ export interface MemberView {
   singsAndPlays: boolean;
   ministries: MinistryId[];
   managesMinistries: MinistryId[];
-  /** `null` when the person is not in Jóvenes; otherwise their level there (`levelIn`) and groups. */
-  jovenes: { level: MinistryLevel; groups: string[] } | null;
+  /**
+   * `null` when the person is not in Jóvenes; otherwise their level there (`levelIn`), the groups they
+   * belong to (`groupsIn`) and the groups they LEAD (`ledGroupsIn`: `[]` unless a leader; ADR-0085).
+   */
+  jovenes: JovenesView | null;
   disabled: boolean;
+}
+
+export interface JovenesView {
+  level: MinistryLevel;
+  groups: string[];
+  leaderOf: string[];
 }
 
 /** The members PATCH/POST body fields a person edit may carry (the route's own names). */
@@ -83,8 +93,8 @@ export interface MemberWriteBody {
   singsAndPlays?: boolean;
   ministries?: string[];
   managesMinistries?: string[];
-  /** PR 1: `{ ministry, level, groups }` only — the writer decides `leaderOf` (K1, `memberCommit.ts`). */
-  ministryRoles?: MinistryRoleWrite[];
+  /** Each item `{ ministry, level, groups, leaderOf }`, `leaderOf` always (`[]` unless a leader). */
+  ministryRoles?: MinistryRole[];
 }
 
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
@@ -118,7 +128,7 @@ export function memberView(doc: Omit<StoredMember, "_id" | "_rev">): MemberView 
     singsAndPlays: doc.singsAndPlays === true,
     ministries,
     managesMinistries: access.managesMinistries,
-    jovenes: level === null ? null : { level, groups: groupsIn(access, "jovenes") },
+    jovenes: level === null ? null : { level, groups: groupsIn(access, "jovenes"), leaderOf: ledGroupsIn(access, "jovenes") },
     disabled: doc.disabled === true,
   };
 }
@@ -153,7 +163,7 @@ export type MemberEdit =
   | { op: "set"; field: (typeof MEMBER_SET_FIELDS)[number]; value: string }
   | { op: "singsAndPlays"; value: boolean }
   | { op: "add" | "remove"; field: (typeof MEMBER_LIST_FIELDS)[number]; value: string }
-  | { op: "jovenes"; level: MinistryLevel | null; groups?: string[] };
+  | { op: "jovenes"; level: MinistryLevel | null; groups?: string[]; leaderOf?: string[] };
 
 export type ApplyResult = { ok: true; body: MemberWriteBody } | { ok: false; message: string };
 
@@ -181,6 +191,50 @@ export function resolveJovenesGroup(value: string): string | null {
   return MINISTRIES.jovenes.groups.find((g) => fold(g.id) === v || fold(g.name) === v)?.id ?? null;
 }
 
+const groupName = (id: string) => MINISTRIES.jovenes.groups.find((g) => g.id === id)?.name ?? id;
+
+/** The words a chat refusal of a Jóvenes level uses (T7), in words the model can relay. */
+export const JOVENES_LEVEL_WORDS = {
+  askLeaderOf: "Di qué grupos lidera (leaderOf); los demás quedan como miembro.",
+  onlyLeaderLeads: "Solo un líder lidera grupos; un admin ya administra todos.",
+  leadsOutside: (name: string) => `Para liderar «${name}» tiene que pertenecer a «${name}»: agrégalo a groups.`,
+  unknownGroup: (g: string) => `«${g}» no es un grupo de Jóvenes. Los grupos: ${MINISTRIES.jovenes.groups.map((x) => x.name).join(", ")}.`,
+} as const;
+
+/**
+ * A chat's Jóvenes level (the edit's `jovenes` op and a new person's `jovenes`) as a request item, or
+ * why it is not one. Groups by name or id; a leader must NAME the groups they lead — never defaulted,
+ * the chat does not guess a grant (ADR-0085) — each one a group they are in; a member or an admin leads
+ * none, and the item carries `leaderOf: []` (the request's exact key set, §11 N2).
+ */
+export function resolveJovenesLevel(
+  level: MinistryLevel,
+  groupNames: readonly string[] | undefined,
+  leaderOfNames: readonly string[] | undefined,
+): { ok: true; value: JovenesView } | { ok: false; message: string } {
+  if (!(MINISTRY_LEVELS as readonly string[]).includes(level)) return { ok: false, message: "Nivel de Jóvenes inválido." };
+  const resolve = (names: readonly string[]): string[] | string => {
+    const ids: string[] = [];
+    for (const g of names) {
+      const id = resolveJovenesGroup(g);
+      if (!id) return JOVENES_LEVEL_WORDS.unknownGroup(g);
+      if (!ids.includes(id)) ids.push(id);
+    }
+    return ids;
+  };
+  const groups = resolve(groupNames ?? []);
+  if (typeof groups === "string") return { ok: false, message: groups };
+  const leaderOf = resolve(leaderOfNames ?? []);
+  if (typeof leaderOf === "string") return { ok: false, message: leaderOf };
+  if (level !== "leader") {
+    return leaderOf.length ? { ok: false, message: JOVENES_LEVEL_WORDS.onlyLeaderLeads } : { ok: true, value: { level, groups, leaderOf: [] } };
+  }
+  if (leaderOf.length === 0) return { ok: false, message: JOVENES_LEVEL_WORDS.askLeaderOf };
+  const outside = leaderOf.find((g) => !groups.includes(g));
+  if (outside) return { ok: false, message: JOVENES_LEVEL_WORDS.leadsOutside(groupName(outside)) };
+  return { ok: true, value: { level, groups, leaderOf } };
+}
+
 const sameList = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
 const sameSet = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x) => b.includes(x));
 
@@ -200,7 +254,7 @@ export function applyMemberEdits(stored: Omit<StoredMember, "_id" | "_rev">, edi
   let singsAndPlays = before.singsAndPlays;
   let ministries: string[] = [...before.ministries];
   let manages: string[] = [...before.managesMinistries];
-  let jovenes: { level: MinistryLevel; groups: string[] } | null | undefined; // undefined = not edited
+  let jovenes: JovenesView | null | undefined; // undefined = not edited
 
   for (const e of edits) {
     switch (e.op) {
@@ -258,14 +312,9 @@ export function applyMemberEdits(stored: Omit<StoredMember, "_id" | "_rev">, edi
           jovenes = null;
           break;
         }
-        if (!(MINISTRY_LEVELS as readonly string[]).includes(e.level)) return { ok: false, message: "Nivel de Jóvenes inválido." };
-        const groups: string[] = [];
-        for (const g of e.groups ?? []) {
-          const id = resolveJovenesGroup(g);
-          if (!id) return { ok: false, message: `«${g}» no es un grupo de Jóvenes. Los grupos: ${MINISTRIES.jovenes.groups.map((x) => x.name).join(", ")}.` };
-          if (!groups.includes(id)) groups.push(id);
-        }
-        jovenes = { level: e.level, groups };
+        const resolved = resolveJovenesLevel(e.level, e.groups, e.leaderOf);
+        if (!resolved.ok) return resolved;
+        jovenes = resolved.value;
         break;
       }
     }
@@ -290,10 +339,14 @@ export function applyMemberEdits(stored: Omit<StoredMember, "_id" | "_rev">, edi
     jovenes !== undefined &&
     !(jovenes === null
       ? before.jovenes === null || (before.jovenes.level === "member" && before.jovenes.groups.length === 0)
-      : before.jovenes !== null && before.jovenes.level === jovenes.level && sameSet(jovenes.groups, before.jovenes.groups));
+      : before.jovenes !== null &&
+        before.jovenes.level === jovenes.level &&
+        sameSet(jovenes.groups, before.jovenes.groups) &&
+        sameSet(jovenes.leaderOf, before.jovenes.leaderOf));
   if (ministriesChange || jovenesChange) body.ministries = ministries;
-  // §7.7: a level always travels with `ministries` (`validateMinistryRolesWrite`).
-  if (jovenesChange) body.ministryRoles = jovenes ? [{ ministry: "jovenes", level: jovenes.level, groups: jovenes.groups }] : [];
+  // §7.7: a level always travels with `ministries` (`validateMinistryRolesWrite`), and every item carries
+  // `leaderOf` (`[]` for a member or an admin: the request's exact key set, §11 N2).
+  if (jovenesChange) body.ministryRoles = jovenes ? [{ ministry: "jovenes", level: jovenes.level, groups: jovenes.groups, leaderOf: jovenes.leaderOf }] : [];
   return { ok: true, body };
 }
 
@@ -307,9 +360,26 @@ function setLine(label: string, before: readonly string[], after: readonly strin
   return added.length || removed.length ? `${label}: ${[...added, ...removed].join(", ")}` : null;
 }
 
-function jovenesText(j: MemberView["jovenes"]): string {
+/** «a, b y c»; «e» before a word that sounds «i» («Otro Nivel e Invencibles»). */
+function joinY(items: readonly string[]): string {
+  if (items.length <= 1) return items.join("");
+  const last = items[items.length - 1];
+  return `${items.slice(0, -1).join(", ")} ${/^h?i(?![aeiouáéíóú])/i.test(last) ? "e" : "y"} ${last}`;
+}
+
+/**
+ * A person's standing in Jóvenes, in one line (the chat's before/after and `personSummary`): «líder de
+ * Otro Nivel y Adrenalin; miembro de Invencibles», «admin (Emprendedores, Guerreras)», «miembro
+ * (Emprendedores)». A leader who leads no group (a hand edit, or a legacy item read under ADR-0085)
+ * says so: «líder de ningún grupo; miembro de …».
+ */
+export function jovenesText(j: MemberView["jovenes"]): string {
   if (!j) return "no es de Jóvenes";
-  const groups = j.groups.map((g) => MINISTRIES.jovenes.groups.find((x) => x.id === g)?.name ?? g);
+  if (j.level === "leader") {
+    const rest = j.groups.filter((g) => !j.leaderOf.includes(g)).map(groupName);
+    return `líder de ${j.leaderOf.length ? joinY(j.leaderOf.map(groupName)) : "ningún grupo"}${rest.length ? `; miembro de ${joinY(rest)}` : ""}`;
+  }
+  const groups = j.groups.map(groupName);
   return `${LEVEL_WORD[j.level]}${groups.length ? ` (${groups.join(", ")})` : ""}`;
 }
 

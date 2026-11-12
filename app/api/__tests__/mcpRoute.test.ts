@@ -1694,7 +1694,9 @@ describe("/api/mcp — three tool lists: who you are (live) and which agent hold
     // Changed on purpose by slice R (ADR-0084): the two rule tools join the full list.
     // Changed on purpose 2026-11-11 (per-group leadership PR 1, T5b): the people tools' Jóvenes
     // `groups` bound follows the registry (five groups, was 3). PR 2 (T7) moves it again.
-    expect(TOOL_LIST_VERSIONS.full).toBe("96ed717d");
+    // Changed on purpose 2026-11-12 (per-group leadership PR 2, T7): the people tools take `leaderOf`
+    // in the `jovenes` edit op and in a new person, and both descriptions state its rule.
+    expect(TOOL_LIST_VERSIONS.full).toBe("46f7a78c");
     expect(TOOL_LIST_VERSION).toBe(TOOL_LIST_VERSIONS.full);
     expect(new Set(Object.values(TOOL_LIST_VERSIONS)).size).toBe(3);
     for (const scope of TOOL_LIST_SCOPES) {
