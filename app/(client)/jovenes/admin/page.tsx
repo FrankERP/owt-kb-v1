@@ -82,7 +82,12 @@ export default async function JovenesPlannerPage({ searchParams }: { searchParam
   }
   // Admins pick seats for the Saturday roster; admins and leaders pick a class's responsable from
   // the group's members (plan 2026-11-12 §4). Group membership is already public (base plan §8).
-  const people = await readJovenesPeople();
+  //
+  // The planner is the ONE page that also asks for the days a person marked as «no disponible»
+  // (ADR-0090): `awayFor` is the access this page's gate read, and the read hands back days only
+  // for the people that reader may see (an admin everyone, a leader the members of the groups
+  // they lead), date only, never the note.
+  const people = await readJovenesPeople({ awayFor: access, today });
   // The buttons' view of who is looking (cosmetic). The groups a leader leads are the groups the
   // writer counts for them (W3) — `ledGroupsIn`, the same answer.
   const viewer: PlannerViewer = { me: sanityId, isManager, led };

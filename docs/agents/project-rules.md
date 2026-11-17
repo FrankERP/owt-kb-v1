@@ -915,6 +915,25 @@ pass.
   encargado or apoyo of a whole-ministry meeting writes its program only. The routes that write a
   client-supplied id of another type pin it first (`storedRevisionOfType`, `typePin.ts`; W9) —
   a new route that patches or deletes an id it was handed does the same.
+- **The days a Jóvenes pastor marked reach ONE page** (ADR-0090; plan
+  `2026-11-17-jovenes-away-in-planner.md` and its review log). `unavailableDates` is one calendar
+  per person, shared by every ministry. Planear Jóvenes (`/jovenes/admin`) is the only Jóvenes
+  surface that is sent anybody's days, and only through `readJovenesPeople({ awayFor: access,
+  today })`: bare, that read is one query with no availability field (so `/jovenes`,
+  `/jovenes/calendario` and `/jovenes/reunion/[token]`, whose program editor a plain pastor can
+  hold as a meeting's encargado, cannot receive a day); with the option it computes the visible
+  ids in TypeScript and reads the days of those ids alone. `awayVisibleTo` (`jovenesAway.ts`) is
+  the audience, on the access snapshot the page's gate read: a Jóvenes admin sees every Jóvenes
+  member, a leader the members of a group they LEAD (`ledGroupsIn`), nobody else and nobody
+  inactive. The date crosses, never the note (not projected); a year ahead; `away` is ABSENT, not
+  `[]`, for a person the reader is not told about. It informs and never refuses: no writer reads
+  it. The person is told on `/me/disponibilidad` («Quien planea en Jóvenes ve estos días, sin tu
+  nota.»). Guard: `jovenesAwayCoverage.test.ts` (who names `awayFor`; no Jóvenes file names the
+  fields but the read). Do not «simplify» the two queries into one that projects `away` for
+  everyone, and do not pass `awayFor` from another page: either sends every pastor's days to any
+  pastor who edits a program. Not a confidentiality boundary — `teamMembers` is public until
+  DEF-A-16. **The leader arm waits for Frank's answer on the audience before production**; «solo
+  admins» is `awayVisibleTo` without its last two lines.
 - **A meeting's fixed parts, «Mi parte» and its emails** (ADR-0089; plan
   `2026-11-17-jovenes-meeting-parts.md`). A part (Oración, Dinámica 1, Dinámica 2, Plática) is a
   program line carrying `part`; `ministryParts.ts` is the ONE table (label, people per line,

@@ -47,6 +47,8 @@ import MeetingMeta from "./MeetingMeta";
 import MeetingState from "./MeetingState";
 import PersonAvatar from "./PersonAvatar";
 import PersonSelect from "./PersonSelect";
+import AwayNote from "./AwayNote";
+import { awayNames } from "@/app/utils/jovenesAway";
 import SectionHead from "./SectionHead";
 import { eventUrl, eventsUrl, halfTypedClock, sendEventWrite } from "./eventWrite";
 
@@ -310,6 +312,7 @@ export default function GroupClasses({
                   <span className={seat?.name ? "" : "text-ink-dim"}>{seat?.name ?? "Sin responsable"}</span>
                 </p>
               )}
+              {!gap && <AwayNote names={awayNames(people, [seat?.memberId], c.date)} />}
               {!gap && <MeetingMeta time={c.time} arrival={null} place={c.place} />}
               {c.notes && (
                 <p className="flex gap-2 font-body text-[14px] leading-snug text-ink-muted">
@@ -495,6 +498,7 @@ export default function GroupClasses({
                   value={dialog.form.responsable}
                   onChange={(responsable) => patchClass({ responsable })}
                   people={members}
+                  date={dialog.form.date}
                   storedName={dialog.event ? (responsable(dialog.event)?.name ?? null) : null}
                   ariaLabel="Responsable"
                 />
@@ -642,17 +646,21 @@ function ResponsableSelect({
   people,
   storedName = null,
   ariaLabel,
+  date = null,
 }: {
   value: ResponsablePick;
   onChange: (p: ResponsablePick) => void;
   people: JovenesPerson[];
   storedName?: string | null;
   ariaLabel: string;
+  /** The class's day, for «no disponible» (ADR-0090). «Nuevo libro» passes none: one person, many Sundays. */
+  date?: string | null;
 }) {
   return (
     <PersonSelect
       ariaLabel={ariaLabel}
       people={people}
+      date={date}
       value={value.member}
       storedName={storedName}
       onChange={(member) => onChange({ member, name: null })}

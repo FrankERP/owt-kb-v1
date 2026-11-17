@@ -35,6 +35,8 @@ import MeetingState from "./MeetingState";
 import PersonAvatar from "./PersonAvatar";
 import SectionHead from "./SectionHead";
 import PersonSelect, { type JovenesPerson } from "./PersonSelect";
+import AwayNote from "./AwayNote";
+import { awayNames } from "@/app/utils/jovenesAway";
 import ProgramEditor from "./ProgramEditor";
 import { eventUrl, eventsUrl, halfTypedClock, sendEventWrite } from "./eventWrite";
 
@@ -44,6 +46,11 @@ const SEAT_LABEL = { encargado: "Encargado", apoyo: "Apoyo", comparte: "Quién c
 const PICK_LABEL = { ...SEAT_LABEL, comparte2: "Quién comparte (segundo, opcional)" } as const;
 
 type Editing = { event: MinistryEventView | null; form: SaturdayForm; token: string };
+
+/** Every member on a meeting: its seats and the people of its program lines. */
+function assignedIds(e: MinistryEventView): Array<string | null> {
+  return [...e.seats.map((x) => x.memberId), ...e.program.flatMap((l) => [l.memberId, l.second?.memberId ?? null])];
+}
 
 /**
  * Planear Jóvenes — the roster of whole-ministry meetings by month, a card per meeting (the date
@@ -276,6 +283,9 @@ export default function SaturdayPlanner({
                         );
                       })}
                     </ul>
+                    {/* Only for whoever can act on it (an admin): a leader's read-only card says
+                        nothing about anybody's days (ADR-0090). */}
+                    {canEdit && <AwayNote names={awayNames(people, assignedIds(e), e.date)} />}
                     {e.notes && (
                       <p className="flex gap-2.5 rounded-xl bg-ink/[0.05] px-3.5 py-2.5 font-body text-[15px] leading-snug text-ink-muted">
                         <NoteIcon size={15} className="mt-[3px] shrink-0 text-ink-dim" />
@@ -386,6 +396,7 @@ export default function SaturdayPlanner({
                   ariaLabel={PICK_LABEL[role]}
                   value={editing.form.picks[role].member}
                   people={people}
+                  date={editing.form.date}
                   storedName={editing.form.picks[role].key ? names.get(editing.form.picks[role].key!) : null}
                   onChange={(member) => patchPick(role, { member })}
                   typedName={editing.form.picks[role].name}

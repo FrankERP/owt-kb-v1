@@ -727,7 +727,12 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   month's rows, the bodies the editors send, which buttons to SHOW (cosmetic), the WhatsApp text.
   **`readJovenesPeople`** ([jovenesPeople.ts](../app/utils/jovenesPeople.ts)) — the seat picker's
   list (ids, names and each person's Jóvenes `groups`, so a class's responsable is picked from its
-  group). **A group's classes** (2026-11-12): **`parseLesson`**/**`lessonOf`**/**`singleGroup`**/
+  group). Bare it projects no availability; `readJovenesPeople({ awayFor: access, today })`, the
+  PLANNER page's call alone, adds `away` (the upcoming days a person marked, dates only) on the
+  people **`awayVisibleTo`** lets that reader see ([jovenesAway.ts](../app/utils/jovenesAway.ts),
+  ADR-0090: an admin everyone, a leader the members of a group they lead), with **`isAway`**,
+  **`awayNames`** and **`awayLine`** for the screen: `PersonSelect`'s optional `date` («Ana · no
+  disponible», «No disponible ese día.») and **`AwayNote`** on a planner card. **A group's classes** (2026-11-12): **`parseLesson`**/**`lessonOf`**/**`singleGroup`**/
   **`shiftedDate`**/**`plusDays`**, `TRACK_LABEL`, `CORAZON_HELP`
   ([ministryLesson.ts](../app/utils/ministryLesson.ts) — the ONE validity rule of a `lesson`, shared
   by the writer and the reader, and «Recorrer»'s date rule); **`shiftMinistryLesson`**/

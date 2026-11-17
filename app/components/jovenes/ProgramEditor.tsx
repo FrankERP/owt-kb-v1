@@ -193,6 +193,7 @@ export default function ProgramEditor({
                                 ariaLabel={spec.people === 2 ? `${spec.label}: responsable` : `${spec.label}: quién`}
                                 value={l.member}
                                 people={people}
+                                date={event.date}
                                 storedName={l.member ? names.get(l.member) : null}
                                 onChange={(member) => edit(i, { member })}
                               />
@@ -206,6 +207,7 @@ export default function ProgramEditor({
                                   ariaLabel={`${spec.label}: segundo responsable`}
                                   value={l.member2}
                                   people={people}
+                                  date={event.date}
                                   storedName={l.member2 ? names.get(l.member2) : null}
                                   onChange={(member2) => edit(i, { member2 })}
                                 />
@@ -267,6 +269,7 @@ export default function ProgramEditor({
                           ariaLabel={`Quién — línea ${n + 1}`}
                           value={l.member}
                           people={people}
+                          date={event.date}
                           storedName={l.member ? names.get(l.member) : null}
                           onChange={(member) => edit(i, { member })}
                         />

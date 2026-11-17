@@ -67,11 +67,16 @@ interface Props {
   initialNotes?: { date: string; note: string }[];
   /** «el viernes es ensayo» is Alabanza's week: the page passes false for someone outside it. */
   rehearsal?: boolean;
+  /**
+   * True for a Jóvenes pastor: whoever plans there is shown these days (the date, never the note;
+   * ADR-0090), and the person marking them is told so here.
+   */
+  seenByJovenesPlanners?: boolean;
 }
 
 const WEEKDAYS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
-export default function MyAvailabilityPanel({ initialRev, initialDates, services = {}, initialNotes = [], rehearsal = true }: Props) {
+export default function MyAvailabilityPanel({ initialRev, initialDates, services = {}, initialNotes = [], rehearsal = true, seenByJovenesPlanners = false }: Props) {
   const { toast } = useToast();
 
   const [popover, setPopover] = useState<NoteAnchor | null>(null);
@@ -138,6 +143,11 @@ export default function MyAvailabilityPanel({ initialRev, initialDates, services
         </span>
         {rehearsal && " · el viernes es ensayo"}
       </p>
+      {seenByJovenesPlanners && (
+        <p className="mt-2 font-body text-[15px] leading-snug text-ink-muted">
+          Quien planea en Jóvenes ve estos días, sin tu nota.
+        </p>
+      )}
 
       {/* The actions, the mode hint, and the recurring panel one of them opens.
           They share a wrapper so the panel is not a spaced child: a closed
