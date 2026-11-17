@@ -15,6 +15,7 @@ import { daysUntil, formatCountdown } from "@/app/utils/daysUntil";
 import { isMinistryManager, ledGroupsIn } from "@/app/utils/ministryAccess";
 import { showsProgramEditor } from "@/app/utils/jovenesPlannerModel";
 import { readJovenesPeople } from "@/app/utils/jovenesPeople";
+import { readSaturdaySets } from "@/app/utils/jovenesWorshipSet";
 import { PAGE_LEDE, PAGE_TITLE } from "@/app/utils/homeHero";
 import Navbar from "@/app/components/Navbar";
 import Button from "@/app/components/ui/Button";
@@ -77,11 +78,15 @@ export default async function JovenesPage() {
   // «Planear» for a manager or a leader of at least one group (per group, plan 2026-11-11 §5.1).
   const plans = isManager || ledGroupsIn(access, "jovenes").length > 0;
   const editable = new Set(events.filter((e) => showsProgramEditor(e, isManager)).map((e) => e._id));
-  const people = editable.size > 0 ? await readJovenesPeople() : [];
+  // Alabanza's songs on a Saturday meeting (ADR-0089): that date's published worship setlist.
+  const [people, sets] = await Promise.all([
+    editable.size > 0 ? readJovenesPeople() : Promise.resolve([]),
+    readSaturdaySets(events.filter((e) => e.kind === "saturday").map((e) => e.date)),
+  ]);
   // One shape for the rows here and in the Calendario's day sheet, and ONE answer to «what is
   // mine on this meeting» (the agenda's `mySeats`: seats and program lines, by member id).
   const meetings = events.map((event) => {
-    const entry = jovenesDayEntry(event);
+    const entry = jovenesDayEntry(event, event.kind === "saturday" ? (sets.get(event.date) ?? null) : undefined);
     return { event, entry, mine: mySeats({ jovenes: entry }, "") };
   });
   const lede = meetingsLede(meetings.map((m) => ({ date: m.event.date, mine: m.mine.length > 0 })));

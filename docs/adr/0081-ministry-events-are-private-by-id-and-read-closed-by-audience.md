@@ -131,3 +131,23 @@ before Jóvenes opens to the pastors. Plan `docs/superpowers/plans/2026-11-12-jo
   and review, and classes absent from the calendars); three flat fields (`series`, `track`, `done`
   are generic names the protected-read audit would have to list); creating a whole roster in one
   server write (the client's token-keyed creates already retry without duplicates).
+
+## Addendum — fixed parts, «Mi parte» (W10) and the emails (2026-11-17)
+
+[ADR-0089](0089-a-jovenes-meeting-has-fixed-parts-each-filled-by-its-responsable.md); plan
+`docs/superpowers/plans/2026-11-17-jovenes-meeting-parts.md` (critical; review log beside it).
+
+- **W10, a seventh write of the same module** (`updateMinistryEventPart`, the `parts/[part]`
+  route): a part's responsable writes that line's `note`, `music` and `helpers`. It follows W2's
+  order and adds one arm to «who may»: a person named on the part (for Plática, a member in a
+  `comparte` seat) **while `mayRead(…, "member")` holds** — W3a's «a seat is a reason to write,
+  never to read», so a draft, another group's meeting or a pastor who left answers 404 or 403
+  exactly as before. The arm has no audience or kind condition; it moves no group boundary.
+- **W4 narrowed on purpose:** the program PATCH still writes only `program`, but on a kept part
+  line it writes the stored `note`, `music` and `helpers` back (`keepFilledParts`). Assigning is
+  the encargado's; the content is the responsable's.
+- **«The writer sends nothing» still holds.** It computes the notices from the row read before
+  its commit and returns them in `effects`; the routes send. Nothing in a write's BODY changed
+  (W3b).
+- No reader filter changed: the projection gained the line's new fields and a second person,
+  whose «mine» is decided by member id in the query like the first.

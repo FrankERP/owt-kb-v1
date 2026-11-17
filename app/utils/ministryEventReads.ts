@@ -19,6 +19,7 @@ import { LEVELED_MINISTRY_IDS, isGroupId, type MinistryId } from "@/app/ministri
 import type { MemberAccess } from "./memberAccess";
 import { groupsIn, isMinistryManager, isMinistryMember, ledGroupsIn } from "./ministryAccess";
 import { lessonOf, type Lesson } from "./ministryLesson";
+import { isPartMusic, partSpec, type PartId, type PartMusic } from "./ministryParts";
 
 export const MINISTRY_EVENT_TYPE = "ministryEvent";
 
@@ -77,6 +78,11 @@ const LEADER_DRAFT_ARM =
 // or a meeting (ADR-0081). A typed name has no member, so it has no photo.
 const MEMBER_PHOTO = `"photo": member->{ "p": coalesce(profilePhoto.asset->url, googlePhotoUrl) }.p`;
 const PERSON = `"memberId": member._ref, "name": member->{ "n": coalesce(alias, member_name) }.n, ${MEMBER_PHOTO}, "mine": member._ref == $me`;
+// A part line may hold a SECOND person (ADR-0089: a dinámica has two responsables), read exactly
+// as the first: through the line's own reference, so the read gains nobody it did not already name.
+const SECOND_PERSON =
+  `"member2Id": member2._ref, "name2": member2->{ "n": coalesce(alias, member_name) }.n, ` +
+  `"photo2": member2->{ "p": coalesce(profilePhoto.asset->url, googlePhotoUrl) }.p, "mine2": member2._ref == $me`;
 // A seat holds a member OR a typed name (plan 2026-11-10 P2): the member's live name wins, else
 // the seat's own text. Program lines keep members only, so they keep PERSON.
 const SEAT_PERSON =
@@ -96,7 +102,7 @@ const PROJECTION = `{
   lesson,
   "published": coalesce(published, false),
   "seats": seats[]{ _key, role, ${SEAT_PERSON} },
-  "program": program[]{ _key, label, note, ${PERSON} },
+  "program": program[]{ _key, label, note, part, music, helpers, ${PERSON}, ${SECOND_PERSON} },
   "createdById": createdBy._ref,
   "createdByName": createdBy->{ "n": coalesce(alias, member_name) }.n
 }`;
@@ -179,7 +185,19 @@ export type MinistryEventPerson = {
   mine: boolean;
 };
 export type MinistryEventSeat = MinistryEventPerson & { role: string | null };
-export type MinistryEventLine = MinistryEventPerson & { label: string | null; note: string | null };
+/**
+ * A program line. The person fields are its FIRST person's; `second` is the other one a part line
+ * may hold (each carries their own `mine`). `part`: a fixed part of the meeting (ADR-0089), or
+ * null for a free line; `music` and `helpers` are what its responsable filled.
+ */
+export type MinistryEventLine = MinistryEventPerson & {
+  label: string | null;
+  note: string | null;
+  part: PartId | null;
+  music: PartMusic | null;
+  helpers: string | null;
+  second: MinistryEventPerson | null;
+};
 
 export type MinistryEventView = {
   _id: string;
@@ -250,7 +268,21 @@ function viewOf(row: Record<string, unknown>): MinistryEventView | null {
     seats: seats.filter(plainObject).map((s, i) => ({ ...person(s as RawPerson, i), role: str(s.role) })),
     program: program
       .filter(plainObject)
-      .map((l, i) => ({ ...person(l as RawPerson, i), label: str(l.label), note: str(l.note) })),
+      .map((l, i) => {
+        const first = person(l as RawPerson, i);
+        const second2 = str(l.member2Id);
+        return {
+          ...first,
+          label: str(l.label),
+          note: str(l.note),
+          part: partSpec(l.part)?.id ?? null,
+          music: isPartMusic(l.music) ? l.music : null,
+          helpers: str(l.helpers),
+          second: second2
+            ? { _key: first._key, memberId: second2, name: str(l.name2), photo: str(l.photo2), mine: l.mine2 === true }
+            : null,
+        };
+      }),
     createdById: str(row.createdById),
     createdByName: str(row.createdByName),
   };

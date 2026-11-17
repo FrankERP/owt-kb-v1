@@ -9,8 +9,14 @@
 // person is a circle with a name, a program line is a numbered step on a line, a note is a
 // tinted block (ADR-0086).
 //
+// Since ADR-0089 a step may be one of the meeting's FIXED PARTS (Alabanza, Oración, the two
+// dinámicas, Plática): it then shows its one or two people under its name, what its responsable
+// wrote, who helps, the music it asks for, and — Alabanza — that Saturday's songs. A part that is
+// yours links to the meeting's page, where you fill it.
+//
 // NEUTRAL — no hooks — so either side of the boundary can render it.
 import Link from "next/link";
+import { meetingPath } from "../../utils/jovenesPartView";
 import { SHEET_TITLE } from "../../utils/homeHero";
 import { NoteIcon } from "../ui/icons";
 import type { JovenesDayEntry, JovenesDayPerson } from "../CalendarView";
@@ -19,7 +25,7 @@ import PersonAvatar from "./PersonAvatar";
 const ROLE = "font-label text-[10px] uppercase tracking-[0.16em] text-ink-dim";
 
 /** «Tú · Frank» in green, a name in ink, or «Sin asignar» for a seat nobody holds. */
-function personName(p: JovenesDayPerson): { text: string; className: string } {
+function personName(p: Pick<JovenesDayPerson, "name" | "mine">): { text: string; className: string } {
   if (p.mine) return { text: `Tú · ${p.name ?? ""}`, className: "font-semibold text-positive-fg" };
   if (p.name) return { text: p.name, className: "font-semibold text-ink" };
   return { text: "Sin asignar", className: "italic text-ink-muted" };
@@ -51,8 +57,80 @@ function Seat({ person }: { person: JovenesDayPerson }) {
   );
 }
 
-function Step({ line, index, last }: { line: JovenesDayEntry["program"][number]; index: number; last: boolean }) {
+const CHIP = "rounded-full border border-ink/[0.16] px-2 py-0.5 font-label text-[10px] uppercase tracking-widest text-ink-muted";
+
+/** What a fixed part shows under its name: its people, or the songs, then what its responsable filled. */
+function PartDetail({ line, href }: { line: JovenesDayEntry["program"][number]; href: string | null }) {
+  const people = line.people ?? [];
+  const mine = people.some((p) => p.mine);
+  return (
+    <div className="min-w-0 space-y-1.5 pt-[3px]">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <p className="break-words font-body text-[16px] font-semibold leading-snug text-ink">{line.label}</p>
+        {line.music && <span className={CHIP}>{line.music}</span>}
+      </div>
+      {line.part === "alabanza" ? (
+        line.songs && line.songs.length > 0 ? (
+          <ol className="space-y-0.5">
+            {line.songs.map((s, i) => (
+              <li key={`${i}-${s.title}`} className="flex items-baseline gap-2 font-body text-[15px] leading-snug text-ink-muted">
+                <span className="min-w-0 break-words">{s.title}</span>
+                {/* Rose is the musical key, here as everywhere (ADR-0071). */}
+                {s.key && <span className="shrink-0 font-label text-[11px] font-semibold text-key-fg">{s.key}</span>}
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="font-body text-[15px] italic leading-snug text-ink-muted">Setlist por definir</p>
+        )
+      ) : people.length > 0 ? (
+        <ul className="flex flex-wrap gap-x-3.5 gap-y-1.5">
+          {people.map((p, i) => {
+            const who = personName(p);
+            return (
+              <li key={i} className="flex min-w-0 items-center gap-1.5">
+                <PersonAvatar name={p.name} photo={p.photo} mine={p.mine} size="sm" />
+                <span className={`min-w-0 break-words font-body text-[15px] leading-snug ${who.className}`}>{who.text}</span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="font-body text-[15px] italic leading-snug text-ink-muted">Sin asignar</p>
+      )}
+      {line.note && <p className="whitespace-pre-line break-words font-body text-[14px] leading-snug text-ink-muted">{line.note}</p>}
+      {line.helpers && (
+        <p className="break-words font-body text-[14px] leading-snug text-ink-muted">
+          <span className="text-ink-dim">Apoyan: </span>
+          {line.helpers}
+        </p>
+      )}
+      {mine && href && (
+        <p>
+          <Link href={href} className="font-body text-[14px] font-semibold text-accent underline-offset-2 hover:underline">
+            {line.pending ? "Llenar mi parte" : "Editar mi parte"}
+            {"\u00a0"}→
+          </Link>
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Step({
+  line,
+  index,
+  last,
+  partHref,
+}: {
+  line: JovenesDayEntry["program"][number];
+  index: number;
+  last: boolean;
+  /** Where «Llenar mi parte» goes, or null on the meeting's own page. */
+  partHref: string | null;
+}) {
   const who = line.name || line.mine ? personName(line) : null;
+  const mine = line.mine || (line.people ?? []).some((p) => p.mine);
   return (
     <li className={`relative grid grid-cols-[1.75rem_minmax(0,1fr)] gap-x-3 ${last ? "" : "pb-4"}`}>
       {/* The line that joins this step to the next one. */}
@@ -60,25 +138,29 @@ function Step({ line, index, last }: { line: JovenesDayEntry["program"][number];
       <span
         aria-hidden="true"
         className={`flex h-7 w-7 items-center justify-center rounded-full border font-label text-[11px] tabular-nums ${
-          line.mine ? "border-positive-fg bg-positive-fg/10 text-positive-fg" : "border-ink/[0.18] bg-surface-base/60 text-ink-muted"
+          mine ? "border-positive-fg bg-positive-fg/10 text-positive-fg" : "border-ink/[0.18] bg-surface-base/60 text-ink-muted"
         }`}
       >
         {index + 1}
       </span>
-      {/* The name keeps its place on the right whatever the note's length: the note wraps under
-          the label, never pushing the person to a line of their own. */}
-      <div className="flex min-w-0 items-start justify-between gap-x-4 pt-[3px]">
-        <div className="min-w-0">
-          <p className="break-words font-body text-[16px] font-semibold leading-snug text-ink">{line.label}</p>
-          {line.note && <p className="break-words font-body text-[14px] leading-snug text-ink-muted">{line.note}</p>}
-        </div>
-        {who && (
-          <div className="flex max-w-[55%] shrink-0 items-center gap-1.5">
-            {line.name && <PersonAvatar name={line.name} photo={line.photo} mine={line.mine} size="sm" />}
-            <p className={`min-w-0 truncate font-body text-[15px] leading-snug ${who.className}`}>{who.text}</p>
+      {line.part ? (
+        <PartDetail line={line} href={partHref} />
+      ) : (
+        // The name keeps its place on the right whatever the note's length: the note wraps under
+        // the label, never pushing the person to a line of their own.
+        <div className="flex min-w-0 items-start justify-between gap-x-4 pt-[3px]">
+          <div className="min-w-0">
+            <p className="break-words font-body text-[16px] font-semibold leading-snug text-ink">{line.label}</p>
+            {line.note && <p className="break-words font-body text-[14px] leading-snug text-ink-muted">{line.note}</p>}
           </div>
-        )}
-      </div>
+          {who && (
+            <div className="flex max-w-[55%] shrink-0 items-center gap-1.5">
+              {line.name && <PersonAvatar name={line.name} photo={line.photo} mine={line.mine} size="sm" />}
+              <p className={`min-w-0 truncate font-body text-[15px] leading-snug ${who.className}`}>{who.text}</p>
+            </div>
+          )}
+        </div>
+      )}
     </li>
   );
 }
@@ -88,6 +170,7 @@ export default function JovenesMeetingBody({
   teamTitle,
   level = 4,
   columns = false,
+  partLinks = true,
 }: {
   entry: JovenesDayEntry;
   /** A title over the seats, where no meeting name sits right above them (a card on `/jovenes`). */
@@ -96,6 +179,8 @@ export default function JovenesMeetingBody({
   level?: 3 | 4;
   /** Team and program side by side from `md` (the wide card on `/jovenes`); never in a sheet. */
   columns?: boolean;
+  /** «Llenar mi parte» under a part that is the reader's. Off on the meeting's own page, which holds the form. */
+  partLinks?: boolean;
 }) {
   const Title = level === 3 ? "h3" : "h4";
   const hasSeats = entry.seats.length > 0;
@@ -120,7 +205,7 @@ export default function JovenesMeetingBody({
               <Title className={`${SHEET_TITLE} pb-3`}>Programa</Title>
               <ol>
                 {entry.program.map((l, i) => (
-                  <Step key={l.key} line={l} index={i} last={i === entry.program.length - 1} />
+                  <Step key={l.key} line={l} index={i} last={i === entry.program.length - 1} partHref={partLinks ? meetingPath(entry.id) : null} />
                 ))}
               </ol>
             </div>

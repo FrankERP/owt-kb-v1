@@ -382,6 +382,11 @@ built on `ministryAccess.ts` over ONE snapshot, `accessFromDoc`); worship pages 
   one other query shape is «Recorrer»'s roster read (one group the actor writes, never returned).
   A group's CLASS is a one-group meeting with a `lesson` (`ministryLesson.ts` is its one validity
   rule). A route that writes a client-supplied id pins its type first (`storedRevisionOfType`, W9).
+  A meeting's fixed PARTS are program lines carrying `part` (`ministryParts.ts`, the one table;
+  ADR-0089): the program PATCH decides a part's people and writes its stored `note`/`music`/`helpers`
+  back (`keepFilledParts`); only «Mi parte» (`updateMinistryEventPart`, W10) changes those. Its
+  emails are computed by the writer from the PRE-COMMIT row, sent by the routes in `after()`, and
+  go only to the people a write adds on a whole-ministry, published, not-past meeting.
   Unreleased features gate on `rolloutAllows` (`app/utils/rollout.ts`) on the server, not the nav.
 
 ## Continuous improvement

@@ -112,8 +112,8 @@ function meeting(over: Partial<MinistryEventView> = {}): MinistryEventView {
     published: true,
     seats: [{ _key: "s1", role: "encargado", memberId: "m1", name: "Ana", photo: null, mine: true }],
     program: [
-      { _key: "l1", label: "Oración", memberId: "m2", name: "Beto", photo: null, mine: false, note: null },
-      { _key: "l2", label: "Dinámica", memberId: null, name: null, photo: null, mine: false, note: "10 min" },
+      { _key: "l1", label: "Oración", memberId: "m2", name: "Beto", photo: null, mine: false, note: null, part: null, music: null, helpers: null, second: null },
+      { _key: "l2", label: "Dinámica", memberId: null, name: null, photo: null, mine: false, note: "10 min", part: null, music: null, helpers: null, second: null },
     ],
     createdById: "m1",
     createdByName: "Ana",
@@ -140,9 +140,9 @@ describe("jovenesActiveDay", () => {
       meeting({
         seats: [{ _key: "s1", role: "encargado", memberId: "m1", name: "Ana", photo: "https://cdn.sanity.io/images/x/y/ana.jpg", mine: true }],
         program: [
-          { _key: "l1", label: "Oración", memberId: "m2", name: "Beto", photo: "https://lh3.googleusercontent.com/beto", mine: false, note: null },
+          { _key: "l1", label: "Oración", memberId: "m2", name: "Beto", photo: "https://lh3.googleusercontent.com/beto", mine: false, note: null, part: null, music: null, helpers: null, second: null },
           // A line whose member is gone keeps no name (above), so it keeps no face either.
-          { _key: "l2", label: "Dinámica", memberId: null, name: null, photo: "https://example.test/stray.jpg", mine: false, note: null },
+          { _key: "l2", label: "Dinámica", memberId: null, name: null, photo: "https://example.test/stray.jpg", mine: false, note: null, part: null, music: null, helpers: null, second: null },
         ],
       }),
     )!;
@@ -183,6 +183,68 @@ describe("jovenesActiveDay", () => {
     expect(rows.map((r) => r.tone)).toEqual(["sat", "jovenes", "jovenes"]);
     expect(new Set(rows.map((r) => r.key)).size).toBe(3);
   });
+  describe("the fixed parts (ADR-0089)", () => {
+    const PLAIN = { memberId: null, name: null, photo: null, mine: false, note: null, part: null, music: null, helpers: null, second: null } as const;
+    const sat = (over: Parameters<typeof meeting>[0] = {}) => meeting({ kind: "saturday", audience: { kind: "ministry" }, seats: [], program: [], ...over });
+
+    it("a Saturday always shows the five steps in the meeting's order, then its free lines", () => {
+      const e = jovenesActiveDay(sat({ program: [{ ...PLAIN, _key: "f1", label: "Bienvenida" }] }))!.jovenes!;
+      expect(e.program.map((l) => [l.label, l.part ?? null])).toEqual([
+        ["Alabanza", "alabanza"],
+        ["Oración", "oracion"],
+        ["Dinámica 1", "dinamica1"],
+        ["Dinámica 2", "dinamica2"],
+        ["Plática", "platica"],
+        ["Bienvenida", null],
+      ]);
+    });
+
+    it("Alabanza's songs are three states: not read, read and none, or that Saturday's list", () => {
+      const step = (songs?: Parameters<typeof jovenesActiveDay>[1]) => jovenesActiveDay(sat(), songs)!.jovenes!.program[0];
+      expect("songs" in step()).toBe(false);
+      expect(step(null).songs).toBeNull();
+      expect(step([{ title: "Rey de reyes", key: "D" }]).songs).toEqual([{ title: "Rey de reyes", key: "D" }]);
+    });
+
+    it("a part carries its people, what its responsable filled and whether it still waits for them", () => {
+      const e = jovenesActiveDay(
+        sat({
+          seats: [{ _key: "c1", role: "comparte", memberId: "m9", name: "Caro", photo: null, mine: true }],
+          program: [
+            { ...PLAIN, _key: "o1", label: "Oración", part: "oracion", memberId: "m1", name: "Ana", music: "alabanza" },
+            { ...PLAIN, _key: "d1", label: "Dinámica 1", part: "dinamica1", memberId: "m2", name: "Beto", second: { _key: "d1", memberId: "me", name: "Yo", photo: null, mine: true } },
+          ],
+        }),
+      )!;
+      const [, oracion, d1, d2, platica] = e.jovenes!.program;
+      expect([oracion.music, oracion.pending, oracion.people?.map((p) => p.name)]).toEqual(["Pide alabanza", false, ["Ana"]]);
+      expect([d1.mine, d1.pending, d1.people?.map((p) => [p.name, p.mine])]).toEqual([true, true, [["Beto", false], ["Yo", true]]]);
+      expect([d2.people, d2.pending]).toEqual([[], false]);
+      // Plática's people are the «Comparte» seats; the step itself is not «mine», so the agenda
+      // says «Comparte» once, never «Comparte · Plática».
+      expect([platica.people?.map((p) => p.name), platica.mine]).toEqual([["Caro"], false]);
+      expect(mySeats(e, "")).toEqual(["Comparte", "Dinámica 1"]);
+    });
+
+    it("another meeting shows only the part lines it holds: no empty steps and no Alabanza", () => {
+      const none = jovenesActiveDay(meeting({ kind: "ministry", audience: { kind: "ministry" }, seats: [], program: [] }), null)!.jovenes!;
+      expect(none.program).toEqual([]);
+      const one = jovenesActiveDay(
+        meeting({ kind: "ministry", audience: { kind: "ministry" }, seats: [], program: [{ ...PLAIN, _key: "d2", label: "Dinámica 2", part: "dinamica2", memberId: "m1", name: "Ana" }] }),
+      )!.jovenes!;
+      expect(one.program.map((l) => l.part)).toEqual(["dinamica2"]);
+    });
+
+    it("off a Saturday, whoever shares sees a Plática step to fill even before its line exists; nobody else sees an empty one", () => {
+      const board = (mine: boolean) =>
+        jovenesActiveDay(
+          meeting({ kind: "ministry", audience: { kind: "ministry" }, program: [], seats: [{ _key: "c1", role: "comparte", memberId: "m9", name: "Caro", photo: null, mine }] }),
+        )!.jovenes!;
+      expect(board(true).program.map((l) => [l.part, l.pending, l.people?.map((p) => p.mine)])).toEqual([["platica", true, [true]]]);
+      expect(board(false).program).toEqual([]);
+    });
+  });
+
   it("filters apart from worship and Kids", () => {
     const days = { "2026-11-01": [sunday, kids], "2026-11-04": [j] };
     expect(filterActiveDays(days, "jovenes")).toEqual({ "2026-11-04": [j] });

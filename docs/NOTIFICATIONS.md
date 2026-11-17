@@ -625,6 +625,41 @@ debounce, no claim, one direct send per lead.
 - **No "already sent" marker:** a duplicated cron event sends the reminder twice (ADR-0080).
   Calling the route by hand on a Sunday with `CRON_SECRET` sends it again too.
 
+## Jóvenes meetings — «Te toca» and the music request (ADR-0089)
+
+A write to a Jóvenes meeting may owe two kinds of email. They are NOT outbox notices: no queue, no
+debounce, no claim — a meeting names nine people at most, once.
+
+- **Computed by the writer, pre-commit.** `ministryEventCommit.ts` builds `before` from the row it
+  read at step 3 (the state its `ifRevisionId` write replaces) and `after` from the fields it
+  stores, and `meetingNotices` (`ministryEventNotices.ts`, pure) says what the write owes. Nothing
+  is read after the commit — the rule under «Landmines» below, for the same reason. The result
+  rides in `effects.notices`; the four routes (create, PATCH, program PATCH, part PATCH) send it in
+  `after()` through `sendMinistryEventNotices` (`ministryEventNotify.ts`), `maxDuration = 60`.
+- **Which meetings:** for all of Jóvenes (`audience.kind == "ministry"`), `published == true`,
+  dated today or later (CDMX). A group's meeting or class announces nothing («Nuevo libro» creates
+  up to 60 classes in a row).
+- **«Te toca» — who:** the people the write ADDS to a seat, a part or a program line; everyone on
+  the meeting when the write publishes it or moves its date («Cambió de fecha»); never the actor.
+  At send time one read drops anyone who is not an active member of Jóvenes, has no email, is
+  outside `EMAIL_ALLOWLIST`, or turned off «Nuevas asignaciones» (`wantsNotification(…,
+  "assigned")`). One email per person per write, listing every role; it links
+  `/jovenes/reunion/<token>`, where «Mi parte» is. Never a group, never a typed name.
+- **The music request — who:** when Oración or Plática starts or stops asking for the worship team
+  (`music == "alabanza"` on a live meeting), or a standing request sits on a meeting whose date
+  moved: the super-admins who are people (`service-account-*` and `member-dev-verify` excluded),
+  minus the actor, under «Propuestas». Today that is Frank. A withdrawal names who had asked.
+- **Not sent:** a «ya no te toca»; anything on a delete, «Recorrer» or «Cambiar con…»; a note
+  edited under a standing request.
+- **No debounce, accepted (ADR-0089):** track ↔ alabanza mails each time; removing someone and
+  adding them back mails them again; unpublish then publish announces everyone again.
+- **Best-effort:** it never throws and never retries (a retry would be a second email to the
+  people the first try reached). Logs: `ministry_event_notices` (`planned`, `emailed`),
+  `ministry_event_notice_failed`, `ministry_event_notices_failed`. Preview mail goes to
+  `EMAIL_REDIRECT_TO`; sends go through `sendEmail`, so the delivery firewall stands in front.
+- **Subjects** are constants plus a date and a part's table label; a free line's typed label never
+  reaches one.
+
 ## The liveness alarm
 
 The daily cron reports the oldest `firstQueuedAt` across notices in **either**
@@ -1059,7 +1094,7 @@ Things that are counter-intuitive and were each a real defect at some point.
 
 ## Verifying the templates
 
-Renders all thirteen templates, asserts the email-client constraints, and writes
+Renders all sixteen templates (the three Jóvenes ones included), asserts the email-client constraints, and writes
 previews plus `.eml` files:
 
 ```bash
