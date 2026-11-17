@@ -1653,10 +1653,15 @@ the day sheet" — there is still no day sheet.
 
 ### Jóvenes as cards (2026-11-12, ADR-0086)
 
-`/jovenes` and Planear Jóvenes went from hairline rows to cards, and the motion is all borrowed:
+`/jovenes` and Planear Jóvenes went from hairline rows to cards, and the motion is all borrowed
+(since 2026-11-17 the cards are on two pages, Inicio and `/jovenes/calendario`, with the same motion;
+the Calendario's rows drop the stagger once the reader filters or changes view, so a re-entering
+row is `AnimatedList`'s to animate, not the route reveal's):
 
-- **Each card rises with the route reveal**, staggered (`revealProps(1 + i)` on the card's wrapper,
-  capped by `REVEAL_STAGGER_CAP` as everywhere).
+- **Each card rises with the route reveal**, staggered and capped by `REVEAL_STAGGER_CAP` as
+  everywhere: on Inicio one step per block in reading order (`JovenesHome`'s `step++`, a block that
+  is absent takes none), on the Calendario `revealProps(2 + i)` on each row's wrapper (the toolbar
+  with the view control and the filter is step 1).
 - **The colour rail draws itself** top to bottom after its card rises: `animate-rail-draw`
   (`AudienceRail.tsx`), the one new utility. Its delay is `calc(var(--reveal-i, 0) * 40ms + 120ms)`
   — the card's own stagger, which it inherits, plus a beat — so the rails follow the cards down the
@@ -1665,9 +1670,10 @@ the day sheet" — there is still no day sheet.
   summary's top padding lives INSIDE its `Collapse` (the zero-height-child rule above), so an open
   card keeps no phantom gap. The chevron turns on `duration-base`.
 - **The filter reflows with `AnimatedList`**: leavers fade, the rest slide into place, and a month
-  label that loses its last meeting leaves with it. The card that becomes first under a filter
-  opens by itself — the card keeps `null` until the reader touches the fold, so «open» follows
-  `featured` with no second state to reconcile.
+  label that loses its last meeting leaves with it. No card opens by itself there: since 2026-11-17
+  the filter lives on the Calendario, where every card is folded. A card keeps `null` until the
+  reader touches the fold, so «open» follows its props (`featured` on Inicio, `defaultOpen` for the
+  one meeting of a day picked on the month grid) with no second state to reconcile.
 - **The next meeting takes the lit pass** (see "The beam", item 5). Geometry was checked in
   Chromium with the pass paused mid-way (`document.getAnimations()`, `currentTime = 930`): the
   light rides the 1 px gap and nowhere else. `litCard.test.ts` cannot see that; repeat the check if

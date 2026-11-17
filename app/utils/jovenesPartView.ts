@@ -94,15 +94,26 @@ export function writableParts(parts: readonly PartView[], reader: { editsProgram
   return parts.filter((p) => reader.editsProgram || (p.mine && reader.published));
 }
 
+/** What a part can still lack: its description (`note`) or its music choice. */
+export type PartGap = "note" | "music";
+
 /**
- * Does the reader still owe something on a part of theirs? Its music where it has one; its
- * description too — except Oración's, whose note is optional («Nota (opcional)» on the form), so
- * choosing the music is all it owes.
+ * What a part still lacks, whoever asks: its music where it has one; its description too — except
+ * Oración's, whose note is optional («Nota (opcional)» on the form), so choosing the music is all
+ * it owes. ONE rule for the screens' «pendiente» and for the reminder emails
+ * (`ministryEventReminder.ts`), so a card never says «pendiente» of a part the reminder calls done.
  */
-export function partPending(p: PartView): boolean {
-  if (!p.mine) return false;
+export function partGaps(p: { id: PartId; note: string | null; music: PartMusic | null }): PartGap[] {
   const spec = MEETING_PARTS.find((s) => s.id === p.id);
-  return (p.id !== "oracion" && !p.note) || (!!spec?.music && !p.music);
+  return [
+    ...(p.id !== "oracion" && !p.note ? (["note"] as const) : []),
+    ...(spec?.music && !p.music ? (["music"] as const) : []),
+  ];
+}
+
+/** Does the reader still owe something on a part of theirs? (`partGaps`, for a part that is theirs.) */
+export function partPending(p: PartView): boolean {
+  return p.mine && partGaps(p).length > 0;
 }
 
 /** «Pau» · «Pau y Mkz» · «Pau, Mkz y Lali». */

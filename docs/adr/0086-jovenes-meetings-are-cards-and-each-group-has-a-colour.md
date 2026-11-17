@@ -133,3 +133,33 @@ a photo there; a circle with «JA» beside it read as a different, emptier accou
   Chromium). The URL is written into a server-rendered `style`, so every character that could end
   the CSS string is escaped, control characters included (a form feed is a CSS newline).
 - A typed seat name («Ana», no account) has no profile, so it keeps initials.
+
+## Addendum — Inicio and Calendario are two pages (2026-11-17)
+
+Frank, five days after the pastors got in: «la parte de Pastores de Jóvenes está muy simple y todo
+está en una sola pantalla. Hace falta una parte principal donde muestre los eventos más recientes,
+y una de calendario donde se puedan ver todos los próximos». The one list answered «what is next»
+and «what is coming» with the same scroll; with five groups' classes in it, the next meeting was
+one card among twenty.
+
+- **`/jovenes` is «Inicio», a glance; `/jovenes/calendario` holds the horizon.** Inicio shows the
+  next meeting open (still the lit pass's one Jóvenes site), the reader's turns, the next three
+  folded and the last one held. The Calendario shows everything to come and opens none.
+  «Eventos más recientes» was read as «the ones nearest in time», so Inicio looks ahead and keeps
+  ONE past meeting; a feed of past meetings was not built.
+- **The month grid this ADR rejected «as the main view» is now the Calendario's SECOND view.** The
+  objection stands, so «Lista» is the default: a grid shows dots, not who shares. But once the list
+  is no longer the landing page, «which Saturdays are taken» is a fair question of a page called
+  Calendario, and a pressed day shows that day's cards, so the grid is a way INTO the cards and
+  never a replacement. Its day circles are the worship Calendario's (`DayDots.tsx`); its dots are
+  the groups' colours.
+- **«Planear» is not a tab.** The bars are built from the session, and who leads a group is not in
+  it (`ledGroupsIn` reads fresh access on the page). Carrying it would mean a new session claim, an
+  auth-boundary change for a shortcut; a tab shown to all would bounce most pastors. It stays a
+  button on both pages for those who plan.
+- **The gate is copied into the second page, not shared.** Rollout first (404), then membership:
+  three lines whose order is the contract (`jovenesCalendarPage.test.tsx` pins it per page). A
+  helper would save them and move an auth boundary in a navigation change.
+- **On a phone Planear shows one section at a time** (`PlannerSections`): hidden by CSS, never
+  unmounted, because each section owns open sheets and half-filled forms. Its cards put their
+  actions in a band under the content there, behind a hairline, instead of a third column.

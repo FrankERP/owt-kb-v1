@@ -1,5 +1,5 @@
-// The list on `/jovenes` as data: which filters it offers, what a filter keeps, and the rows it
-// draws (section labels and meetings, the next one first). Pure and neutral, so the page's client
+// Jóvenes' Calendario (`/jovenes/calendario`) as data: which filters it offers, what a filter
+// keeps, and the rows its list draws (the meetings under their month). Pure and neutral, so the page's client
 // list only draws; `jovenesMeetingList.test.ts` holds the rules.
 //
 // Nothing here decides access: every meeting came from `readMinistryEvents` in member mode, so a
@@ -52,8 +52,8 @@ export function applyFilter<T extends ListedMeeting>(meetings: readonly T[], fil
 }
 
 export type ListRow<T> =
-  | { kind: "label"; key: string; title: string; count: number | null }
-  | { kind: "meeting"; key: string; meeting: T; featured: boolean };
+  | { kind: "label"; key: string; title: string; count: number }
+  | { kind: "meeting"; key: string; meeting: T };
 
 /** «Noviembre», or «Enero 2027» once the list crosses into another year than its first meeting. */
 function monthLabel(month: string, firstYear: string): string {
@@ -62,25 +62,23 @@ function monthLabel(month: string, firstYear: string): string {
 }
 
 /**
- * The rows, top to bottom: «Próxima reunión» and the first meeting (featured), then the rest
- * under their month, each month with its count. The meetings arrive ordered by date.
+ * The rows, top to bottom: every meeting under its month, each month with its count. The meetings
+ * arrive ordered by date. No meeting is singled out here: the open, lit «Próxima reunión» is
+ * Inicio's (`jovenesHomeModel.ts`), and a Calendario that opened one card would show fewer days a
+ * screen, which is the one thing it is for (2026-11-17).
  */
 export function listRows<T extends ListedMeeting>(meetings: readonly T[]): ListRow<T>[] {
   if (meetings.length === 0) return [];
-  const [next, ...rest] = meetings;
-  const rows: ListRow<T>[] = [
-    { kind: "label", key: "label-next", title: "Próxima reunión", count: null },
-    { kind: "meeting", key: next.id, meeting: next, featured: true },
-  ];
-  const firstYear = next.date.slice(0, 4);
+  const rows: ListRow<T>[] = [];
+  const firstYear = meetings[0].date.slice(0, 4);
   let month = "";
-  for (const m of rest) {
+  for (const m of meetings) {
     const ym = m.date.slice(0, 7);
     if (ym !== month) {
       month = ym;
-      rows.push({ kind: "label", key: `label-${ym}`, title: monthLabel(ym, firstYear), count: rest.filter((r) => r.date.slice(0, 7) === ym).length });
+      rows.push({ kind: "label", key: `label-${ym}`, title: monthLabel(ym, firstYear), count: meetings.filter((r) => r.date.slice(0, 7) === ym).length });
     }
-    rows.push({ kind: "meeting", key: m.id, meeting: m, featured: false });
+    rows.push({ kind: "meeting", key: m.id, meeting: m });
   }
   return rows;
 }

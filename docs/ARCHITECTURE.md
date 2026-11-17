@@ -150,7 +150,8 @@ bugs — respect it.
 | Page | Strategy | Detail |
 |------|----------|--------|
 | `/` (home) | **Dynamic** (`requireWorshipPage`, ADR-0020; its `revalidate = 60` only bounds the fetch cache) | Per member since 2026-10-21: the greeting («Te toca el sábado …», `homeGreeting`), then this weekend's services as cards (ADR-0088) — the next service in full, every other one a folded card via `DayCardDisclosure`. Never static: the greeting and the card's open sections are per viewer. |
-| `/schedule` | ISR `revalidate = 60` | Upcoming services; `?m=` month browse. |
+| `/schedule` | **Dynamic, per member** (no `revalidate`: it imports the Jóvenes reader, ADR-0081 R6) | Upcoming services; `?m=` month browse. |
+| `/me/disponibilidad`, `/jovenes`, `/jovenes/calendario`, `/jovenes/reunion/[token]`, `/jovenes/admin` | **Dynamic, per member** (no `revalidate`, same reason) | The member's availability calendar and Jóvenes' pages; see `docs/ROUTES.md`. |
 | `/biblioteca` | ISR `revalidate = 60` fetch, dynamic by `searchParams` | R1: the song library — A–Z index of rows with a search console, letter rail and filter drawer (Tipo, tema, artista, tonalidad). One cached fetch (catalogue + tags + authors) serves every `?q=`/`?tag=`/`?author=`/`?key=`; filtering is client-side, so `searchParams` makes the page dynamic without invalidating the fetch cache. |
 | `/me` | ISR `revalidate = 60` | Member's assignments/profile (session-scoped data fetched fresh via `serverClient`). |
 | `/posts/[slug]` | **Dynamic** (`requireWorshipPage`, ADR-0020; its `revalidate = 3600` only bounds the fetch cache) | No `generateStaticParams` since 2026-10-27: the build's prerender of every slug only bailed out, and would now spend two Sanity reads per song (the song and its history start before the gate settles, ADR-0074). |

@@ -85,6 +85,43 @@ const show = (events: MinistryEventView[], viewer: PlannerViewer = LEADER) =>
     </Providers>,
   );
 
+describe("GroupClasses and a marked day (ADR-0090)", () => {
+  const roster = [{ ...PEOPLE[0], away: ["2026-11-15"] }, PEOPLE[1]];
+  const show2 = (events: MinistryEventView[]) =>
+    render(
+      <Providers>
+        <GroupClasses events={events} viewer={LEADER} people={roster} today="2026-11-12" />
+      </Providers>,
+    );
+
+  it("a class whose responsable marked its day says so on the card, and no other class does", () => {
+    show2([cls("2026-11-15", "Cap 5", { who: "rebe" }), cls("2026-11-22", "Cap 6", { who: "rebe" })]);
+    expect(screen.getAllByText("Rebe: no disponible ese día")).toHaveLength(1);
+  });
+
+  const optionsOf = (label: string) => [...(screen.getByLabelText(label) as HTMLSelectElement).options].map((o) => o.textContent);
+
+  it("the class editor's picker carries the class's day", async () => {
+    show2([cls("2026-11-15", "Cap 5", { who: "rebe" })]);
+    fireEvent.click(screen.getByRole("button", { name: /Opciones de Cap 5/ }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Editar" }));
+    expect(optionsOf("Responsable")).toContain("Rebe · no disponible");
+  });
+
+  it("«Nuevo libro» marks nobody: one person there maps to many Sundays", () => {
+    show2([]);
+    fireEvent.click(screen.getByRole("button", { name: /Nuevo libro/ }));
+    fireEvent.change(screen.getByLabelText("Primera clase"), { target: { value: "2026-11-15" } });
+    expect(optionsOf("Responsable 1")).toContain("Rebe");
+    expect(optionsOf("Responsable 1").join()).not.toMatch(/no disponible/);
+  });
+
+  it("people who carry no `away` never produce a line", () => {
+    show([cls("2026-11-15", "Cap 5", { who: "rebe" })]);
+    expect(screen.queryByText(/no disponible/)).toBeNull();
+  });
+});
+
 describe("GroupClasses", () => {
   it("shows the roster with its count, a leader only their group, and an empty group's hint", () => {
     show([cls("2026-11-08", "Cap 4", { done: true }), cls("2026-11-15", "Cap 5", { who: "Rebe" })]);

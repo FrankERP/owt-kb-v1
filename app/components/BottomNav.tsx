@@ -2,7 +2,8 @@
 
 // The phone tab bar (spec §5.0, §19.1, decision B). Worship tabs: Inicio ·
 // Calendario · Biblioteca. Kids: Kids (+ Planear Kids when managesKids).
-// Jóvenes: Reuniones (once its rollout reaches the person, ADR-0081). ONE
+// Jóvenes: Inicio · Calendario (once its rollout reaches the person, ADR-0081;
+// two pages since 2026-11-17, so a pastor only in Jóvenes now has a bar). ONE
 // ministry at a time — the page's (`navSections.ts`, Frank 2026-10-29).
 // Plus a «Más» tab and its sheet ONLY when there is something the tabs cannot
 // hold (the switch to the other ministry, Admin in worship) — Tema, Cerrar sesión AND «Yo» all live in
@@ -20,7 +21,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import BottomNavBar, { type Tab, KidsIcon, PlanIcon, AdminIcon, HomeIcon, CalendarIcon, MusicIcon } from "./BottomNavBar";
-import { SECTION_LABEL, availableSections, currentSection, navAccess, sectionHome } from "./navSections";
+import { JOVENES_CALENDAR_HREF, SECTION_LABEL, availableSections, currentSection, navAccess, sectionHome } from "./navSections";
 
 export const NAV_H_VAR = "--bottom-nav-h";
 export const NAV_CLASS = "has-bottom-nav";
@@ -51,7 +52,13 @@ export default function BottomNav() {
         ...(access.managesKids ? [{ href: "/kids/admin", label: "Planear Kids", icon: <PlanIcon />, match: (p: string) => p.startsWith("/kids/admin") }] : []),
       ]
     : section === "jovenes"
-    ? [{ href: "/jovenes", label: "Reuniones", icon: <CalendarIcon />, match: (p) => p.startsWith("/jovenes") }]
+    ? [
+        // «Planear» is not a tab: who leads a group is not in the session (the pages decide it,
+        // `ledGroupsIn`), and a tab that bounces most pastors back would be worse than its button
+        // on both pages. On the planner no tab is lit, as on worship's /admin.
+        { href: "/jovenes", label: "Inicio", icon: <HomeIcon />, match: (p) => p === "/jovenes" },
+        { href: JOVENES_CALENDAR_HREF, label: "Calendario", icon: <CalendarIcon />, match: (p) => p.startsWith(JOVENES_CALENDAR_HREF) },
+      ]
     : [];
 
   // «Más» holds only what the tabs cannot fit — the avatar menu (NavMenu) now
