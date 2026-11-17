@@ -35,6 +35,8 @@ import MeetingState from "./MeetingState";
 import PersonAvatar from "./PersonAvatar";
 import SectionHead from "./SectionHead";
 import PersonSelect, { type JovenesPerson } from "./PersonSelect";
+import AwayNote from "./AwayNote";
+import { awayNames } from "@/app/utils/jovenesAway";
 import ProgramEditor from "./ProgramEditor";
 import { eventUrl, eventsUrl, halfTypedClock, sendEventWrite } from "./eventWrite";
 
@@ -44,6 +46,11 @@ const SEAT_LABEL = { encargado: "Encargado", apoyo: "Apoyo", comparte: "Quién c
 const PICK_LABEL = { ...SEAT_LABEL, comparte2: "Quién comparte (segundo, opcional)" } as const;
 
 type Editing = { event: MinistryEventView | null; form: SaturdayForm; token: string };
+
+/** Every member on a meeting: its seats and the people of its program lines. */
+function assignedIds(e: MinistryEventView): Array<string | null> {
+  return [...e.seats.map((x) => x.memberId), ...e.program.flatMap((l) => [l.memberId, l.second?.memberId ?? null])];
+}
 
 /**
  * Planear Jóvenes — the roster of whole-ministry meetings by month, a card per meeting (the date
@@ -234,8 +241,10 @@ export default function SaturdayPlanner({
             row.events.map((e) => (
               <li key={e._id} className="brand-surface relative overflow-hidden rounded-[var(--brand-radius-panel)]">
                 <AudienceRail audience={e.audience} muted={!e.published} />
-                {/* On a phone the leaf and the title share the first line and everything else runs
-                    the card's full width under them; from `md` the leaf is a column of its own and
+                {/* On a phone the card is three bands under one another, each behind a hairline:
+                    the leaf with the title, the seats one per line, the actions as two equal
+                    buttons (2026-11-17: two seats a row broke a long name mid-word, and the
+                    actions hung loose under them). From `md` the leaf is a column of its own and
                     the actions another, so the seats line up from card to card. */}
                 <div className="py-4 pl-5 pr-4 md:grid md:grid-cols-[auto_minmax(0,1fr)_auto] md:gap-x-4">
                   <div className="flex gap-3.5 md:contents">
@@ -251,8 +260,8 @@ export default function SaturdayPlanner({
                       <MeetingMeta time={e.time} arrival={e.arrival} place={e.place} />
                     </div>
                   </div>
-                  <div className="min-w-0 space-y-3 pt-3.5 md:col-start-2">
-                    <ul className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+                  <div className="mt-3.5 min-w-0 space-y-3 border-t border-ink/[0.08] pt-3.5 md:col-start-2 md:mt-0 md:border-t-0">
+                    <ul className="grid grid-cols-1 gap-x-4 gap-y-3 min-[480px]:grid-cols-2 sm:grid-cols-3">
                       {SATURDAY_SEATS.map((role) => {
                         const list = seatNames(e, role);
                         // A stored seat whose person is gone reads «Sin asignar» too, and looks it.
@@ -274,6 +283,9 @@ export default function SaturdayPlanner({
                         );
                       })}
                     </ul>
+                    {/* Only for whoever can act on it (an admin): a leader's read-only card says
+                        nothing about anybody's days (ADR-0090). */}
+                    {canEdit && <AwayNote names={awayNames(people, assignedIds(e), e.date)} />}
                     {e.notes && (
                       <p className="flex gap-2.5 rounded-xl bg-ink/[0.05] px-3.5 py-2.5 font-body text-[15px] leading-snug text-ink-muted">
                         <NoteIcon size={15} className="mt-[3px] shrink-0 text-ink-dim" />
@@ -282,7 +294,7 @@ export default function SaturdayPlanner({
                     )}
                   </div>
                   {canEdit && (
-                    <div className="flex flex-wrap items-center gap-2 pt-3.5 md:col-start-3 md:row-span-2 md:row-start-1 md:flex-col md:items-stretch md:pt-0">
+                    <div className="mt-3.5 grid grid-cols-2 gap-2 border-t border-ink/[0.08] pt-3.5 md:col-start-3 md:row-span-2 md:row-start-1 md:mt-0 md:flex md:flex-col md:items-stretch md:border-t-0 md:pt-0">
                       <Button variant="secondary" size="sm" onClick={() => open(e.date, e)}>
                         Editar
                       </Button>
@@ -384,6 +396,7 @@ export default function SaturdayPlanner({
                   ariaLabel={PICK_LABEL[role]}
                   value={editing.form.picks[role].member}
                   people={people}
+                  date={editing.form.date}
                   storedName={editing.form.picks[role].key ? names.get(editing.form.picks[role].key!) : null}
                   onChange={(member) => patchPick(role, { member })}
                   typedName={editing.form.picks[role].name}

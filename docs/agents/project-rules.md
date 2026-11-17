@@ -816,7 +816,7 @@ Tailwind keys are **gone**; the four non-colour ones (`--brand-radius-*`,
   `--group-guerreras-rgb`; ADR-0086, 2026-11-12). They exist because `/jovenes` lists the meetings
   of five groups and no existing hue was free to say whose a meeting is. Categorical like the
   `chart-*` six, and as narrow: the audience chip, a card's rail, the date leaf's band, the month
-  map's dots. Never a state («Publicada» green, «Borrador» amber), never «tú», never a button, and
+  map's dots, and the dots and legend of the Calendario's month grid (`MonthBoard`, 2026-11-17). Never a state («Publicada» green, «Borrador» amber), never «tú», never a button, and
   never access (which meetings a person sees is the reader's, ADR-0081). `jovenesGroupStyle.ts` is
   the only file that spells the classes (whole, since Tailwind reads it as text); a chip always
   carries the group's two-letter monogram, so the colour is never the only signal; a meeting for
@@ -884,6 +884,25 @@ pass.
   encargado or apoyo of a whole-ministry meeting writes its program only. The routes that write a
   client-supplied id of another type pin it first (`storedRevisionOfType`, `typePin.ts`; W9) —
   a new route that patches or deletes an id it was handed does the same.
+- **The days a Jóvenes pastor marked reach ONE page** (ADR-0090; plan
+  `2026-11-17-jovenes-away-in-planner.md` and its review log). `unavailableDates` is one calendar
+  per person, shared by every ministry. Planear Jóvenes (`/jovenes/admin`) is the only Jóvenes
+  surface that is sent anybody's days, and only through `readJovenesPeople({ awayFor: access,
+  today })`: bare, that read is one query with no availability field (so `/jovenes`,
+  `/jovenes/calendario` and `/jovenes/reunion/[token]`, whose program editor a plain pastor can
+  hold as a meeting's encargado, cannot receive a day); with the option it computes the visible
+  ids in TypeScript and reads the days of those ids alone. `awayVisibleTo` (`jovenesAway.ts`) is
+  the audience, on the access snapshot the page's gate read: a Jóvenes admin sees every Jóvenes
+  member, a leader the members of a group they LEAD (`ledGroupsIn`), nobody else and nobody
+  inactive. The date crosses, never the note (not projected); a year ahead; `away` is ABSENT, not
+  `[]`, for a person the reader is not told about. It informs and never refuses: no writer reads
+  it. The person is told on `/me/disponibilidad` («Quien planea en Jóvenes ve estos días, sin tu
+  nota.»). Guard: `jovenesAwayCoverage.test.ts` (who names `awayFor`; no Jóvenes file names the
+  fields but the read). Do not «simplify» the two queries into one that projects `away` for
+  everyone, and do not pass `awayFor` from another page: either sends every pastor's days to any
+  pastor who edits a program. Not a confidentiality boundary — `teamMembers` is public until
+  DEF-A-16. **The audience is Frank's choice** (2026-11-17, «Admins y líderes de su grupo», over
+  «solo admins»); narrowing it to admins is `awayVisibleTo` ending at the manager check.
 - **A meeting's fixed parts, «Mi parte» and its emails** (ADR-0089; plan
   `2026-11-17-jovenes-meeting-parts.md`). A part (Oración, Dinámica 1, Dinámica 2, Plática) is a
   program line carrying `part`; `ministryParts.ts` is the ONE table (label, people per line,
@@ -951,8 +970,8 @@ pass.
   stored on a `leader` only. `ledGroupsIn(access, ministry)` (`app/utils/ministryAccess.ts`) is the
   one answer: `[]` unless their level is `leader`, then the normalized `leaderOf`; no admin arm. The
   event writer's `led()`, the reader's leader arm (drafts only of LED groups, published meetings of
-  every group they are in), the `/jovenes/admin` gate and `viewer.led`, and `/jovenes`' «Planear»
-  all call it; a `leader` who leads nothing is a member everywhere. `ledGroupsCoverage.test.ts`
+  every group they are in), the `/jovenes/admin` gate and `viewer.led`, and «Planear» on `/jovenes` and
+  `/jovenes/calendario` all call it; a `leader` who leads nothing is a member everywhere. `ledGroupsCoverage.test.ts`
   fails on any other line comparing a level with `"leader"` (an exact-line allow-list for the form's
   refusal and «Lidera» row, the chat's request rule and its wording). Membership (`groupsIn`) still
   decides who fits a seat.

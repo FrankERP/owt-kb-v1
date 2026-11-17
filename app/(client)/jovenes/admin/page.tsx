@@ -28,6 +28,7 @@ import SaturdayPlanner from "@/app/components/jovenes/SaturdayPlanner";
 import GroupCalendar from "@/app/components/jovenes/GroupCalendar";
 import GroupClasses from "@/app/components/jovenes/GroupClasses";
 import MonthMap from "@/app/components/jovenes/MonthMap";
+import PlannerSections from "@/app/components/jovenes/PlannerSections";
 import { revealProps } from "@/app/utils/reveal";
 
 export const metadata: Metadata = {
@@ -36,8 +37,6 @@ export const metadata: Metadata = {
 };
 
 const TZ = "America/Mexico_City";
-/** The month map stays under the navbar while the sections scroll; the banner's height joins in. */
-const PLANNER_STICKY = "lg:sticky lg:top-[calc(6.5rem+env(safe-area-inset-top)+var(--impersonation-offset))]";
 
 // Planear Jóvenes (ADR-0081, plan §7.3 PR C). Its ONE read is `readMinistryEvents` in EDITOR
 // mode, so an admin sees drafts and a leader sees the published meetings plus their groups'
@@ -57,7 +56,7 @@ export default async function JovenesPlannerPage({ searchParams }: { searchParam
   if (!access.active || !isMinistryMember(access, "jovenes")) redirect("/");
   const isManager = isMinistryManager(access, "jovenes");
   // The groups this person LEADS (per group, plan 2026-11-11 §5.1); a pastor who leads none — a
-  // `leader` with an empty `leaderOf` included — has nothing to plan: back to the meetings list.
+  // `leader` with an empty `leaderOf` included — has nothing to plan: back to Jóvenes' Inicio.
   const led = ledGroupsIn(access, "jovenes");
   if (!isManager && led.length === 0) redirect("/jovenes");
 
@@ -83,7 +82,12 @@ export default async function JovenesPlannerPage({ searchParams }: { searchParam
   }
   // Admins pick seats for the Saturday roster; admins and leaders pick a class's responsable from
   // the group's members (plan 2026-11-12 §4). Group membership is already public (base plan §8).
-  const people = await readJovenesPeople();
+  //
+  // The planner is the ONE page that also asks for the days a person marked as «no disponible»
+  // (ADR-0090): `awayFor` is the access this page's gate read, and the read hands back days only
+  // for the people that reader may see (an admin everyone, a leader the members of the groups
+  // they lead), date only, never the note.
+  const people = await readJovenesPeople({ awayFor: access, today });
   // The buttons' view of who is looking (cosmetic). The groups a leader leads are the groups the
   // writer counts for them (W3) — `ledGroupsIn`, the same answer.
   const viewer: PlannerViewer = { me: sanityId, isManager, led };
@@ -145,27 +149,16 @@ export default async function JovenesPlannerPage({ searchParams }: { searchParam
             No pudimos leer las reuniones en este momento. Intenta de nuevo más tarde.
           </p>
         ) : (
-          // The month as a picture beside the two sections from `lg` (it stays in view while
-          // they scroll) and above them on a phone (ADR-0086).
-          <div className="mt-10 lg:grid lg:grid-cols-[minmax(0,1fr)_17.5rem] lg:items-start lg:gap-x-10">
-            <aside
-              aria-label="El mes de un vistazo"
-              className={`mb-10 lg:order-2 lg:mb-0 ${PLANNER_STICKY}`}
-              {...revealProps(1)}
-            >
-              <MonthMap month={month} events={events} today={today} />
-            </aside>
-            <div className="min-w-0 space-y-16 lg:order-1">
-              <div {...revealProps(2)}>
-                <SaturdayPlanner month={month} rows={rows} people={people} canEdit={isManager} defaultDate={defaultDate} />
-              </div>
-              <div {...revealProps(3)}>
-                <GroupClasses events={classEvents} viewer={viewer} people={people} today={today} />
-              </div>
-              <div {...revealProps(4)}>
-                <GroupCalendar events={groups} viewer={viewer} defaultDate={defaultDate} />
-              </div>
-            </div>
+          // One section at a time on a phone, all three beside the month map from `lg`
+          // (`PlannerSections`, 2026-11-17).
+          <div className="mt-8 lg:mt-10" {...revealProps(1)}>
+            <PlannerSections
+              initial={isManager ? "saturday" : "classes"}
+              map={<MonthMap month={month} events={events} today={today} />}
+              saturday={<SaturdayPlanner month={month} rows={rows} people={people} canEdit={isManager} defaultDate={defaultDate} />}
+              classes={<GroupClasses events={classEvents} viewer={viewer} people={people} today={today} />}
+              groups={<GroupCalendar events={groups} viewer={viewer} defaultDate={defaultDate} />}
+            />
           </div>
         )}
       </div>

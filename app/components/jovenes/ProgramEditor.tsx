@@ -39,7 +39,8 @@ export default function ProgramEditor({
 }: {
   event: MinistryEventView;
   people: readonly JovenesPerson[];
-  /** Beside «Editar» in a planner row: a quiet «Programa». It still answers to «Editar programa». */
+  /** Beside «Editar» in a planner card: the short «Programa», a button like its neighbour (on a
+   *  phone the two share a row in halves). It still answers to «Editar programa». */
   compact?: boolean;
 }) {
   const router = useRouter();
@@ -130,7 +131,7 @@ export default function ProgramEditor({
   return (
     <>
       {compact ? (
-        <Button variant="ghost" size="sm" aria-label="Editar programa" onClick={openEditor}>
+        <Button variant="secondary" size="sm" aria-label="Editar programa" onClick={openEditor}>
           Programa
         </Button>
       ) : (
@@ -192,6 +193,7 @@ export default function ProgramEditor({
                                 ariaLabel={spec.people === 2 ? `${spec.label}: responsable` : `${spec.label}: quién`}
                                 value={l.member}
                                 people={people}
+                                date={event.date}
                                 storedName={l.member ? names.get(l.member) : null}
                                 onChange={(member) => edit(i, { member })}
                               />
@@ -205,6 +207,7 @@ export default function ProgramEditor({
                                   ariaLabel={`${spec.label}: segundo responsable`}
                                   value={l.member2}
                                   people={people}
+                                  date={event.date}
                                   storedName={l.member2 ? names.get(l.member2) : null}
                                   onChange={(member2) => edit(i, { member2 })}
                                 />
@@ -266,6 +269,7 @@ export default function ProgramEditor({
                           ariaLabel={`Quién — línea ${n + 1}`}
                           value={l.member}
                           people={people}
+                          date={event.date}
                           storedName={l.member ? names.get(l.member) : null}
                           onChange={(member) => edit(i, { member })}
                         />

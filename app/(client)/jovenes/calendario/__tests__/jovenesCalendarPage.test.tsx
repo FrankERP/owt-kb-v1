@@ -1,0 +1,243 @@
+// `/jovenes/calendario` (Jóvenes' Calendario, 2026-11-17): the SAME gates as `/jovenes` — sign-in,
+// membership, the rollout on the SERVER — and the same one read in member mode (ADR-0081; plan R1,
+// R4, G6), from today on. A second page is a second door, so it is proven on its own.
+
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+
+class NavSignal extends Error {
+  constructor(readonly target: string) {
+    super(`NAV ${target}`);
+  }
+}
+vi.mock("next/navigation", () => ({
+  redirect: (t: string) => {
+    throw new NavSignal(t);
+  },
+  notFound: () => {
+    throw new NavSignal("404");
+  },
+}));
+
+const h = vi.hoisted(() => ({
+  requireActiveSession: vi.fn(),
+  requireMinistryMember: vi.fn(),
+  getMemberAccess: vi.fn(),
+  readMinistryEvents: vi.fn(),
+  readJovenesPeople: vi.fn(),
+  readSaturdaySets: vi.fn(),
+  rolloutOpen: false,
+  rolloutClosed: false,
+}));
+vi.mock("@/app/utils/authGuards", () => ({
+  requireActiveSession: () => h.requireActiveSession(),
+  requireMinistryMember: (m: string) => h.requireMinistryMember(m),
+}));
+vi.mock("@/app/utils/memberAccess", () => ({ getMemberAccess: (id: string) => h.getMemberAccess(id) }));
+vi.mock("@/app/utils/ministryEventReads", async () => {
+  class MinistryEventReadUnavailable extends Error {}
+  return {
+    MinistryEventReadUnavailable,
+    readMinistryEvents: (a: unknown, o: unknown) => h.readMinistryEvents(a, o),
+  };
+});
+vi.mock("@/app/components/Navbar", () => ({ default: () => null }));
+vi.mock("@/app/utils/jovenesPeople", () => ({ readJovenesPeople: () => h.readJovenesPeople() }));
+vi.mock("@/app/utils/jovenesWorshipSet", () => ({ readSaturdaySets: (dates: string[]) => h.readSaturdaySets(dates) }));
+vi.mock("@/app/components/jovenes/ProgramEditor", () => ({
+  default: ({ event, people }: { event: { _id: string }; people: unknown[] }) => `[programa ${event._id} · ${people.length}]`,
+}));
+// The real rollout (open to every pastor since 2026-11-12), unless a row forces it open or CLOSED:
+// the server gate is still proven with a stage that has not reached the visitor.
+vi.mock("@/app/utils/rollout", async (orig) => {
+  const real = await orig<typeof import("@/app/utils/rollout")>();
+  return { ...real, rolloutAllows: (f: never, a: never) => !h.rolloutClosed && (h.rolloutOpen || real.rolloutAllows(f, a)) };
+});
+
+import JovenesCalendarPage from "../page";
+import { MinistryEventReadUnavailable } from "@/app/utils/ministryEventReads";
+
+async function visit(): Promise<string> {
+  try {
+    return renderToStaticMarkup(await JovenesCalendarPage());
+  } catch (e) {
+    if (e instanceof NavSignal) return `→ ${e.target}`;
+    throw e;
+  }
+}
+
+const session = { user: { role: "super-admin", sanityId: "s1", email: "x@y.z" } };
+const SUPER = { active: true, role: "super-admin", ministries: ["worship"], managesMinistries: [], ministryRoles: [] };
+const PASTOR = { active: true, role: "member", ministries: ["jovenes"], managesMinistries: [], ministryRoles: [{ ministry: "jovenes", level: "member", groups: ["otro-nivel"] }] };
+const ADMIN = { ...PASTOR, ministryRoles: [{ ministry: "jovenes", level: "admin", groups: [] }] };
+
+const EVENT = {
+  _id: "ministryEvent.a",
+  ministry: "jovenes",
+  audience: { kind: "groups", groups: ["otro-nivel", "emprendedores"] },
+  kind: "joint",
+  date: "2026-11-14",
+  time: "18:00",
+  arrival: "17:30",
+  title: null,
+  notes: "Traer Biblia",
+  published: true,
+  seats: [
+    { _key: "s1", role: "encargado", memberId: "s1", name: "Frank", mine: true },
+    { _key: "s2", role: "apoyo", memberId: "gone", name: null, mine: false },
+  ],
+  program: [{ _key: "g1", label: "Oración", note: "5 min", memberId: "p9", name: "Ana", mine: false }],
+  createdById: null,
+  createdByName: null,
+};
+
+// The page splits what it read at CDMX's today, so the clock is pinned: Tuesday 10 November 2026.
+const TODAY = "2026-11-10";
+afterEach(() => vi.useRealTimers());
+
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(`${TODAY}T18:00:00Z`));
+  for (const f of Object.values(h)) if (typeof f === "function") f.mockReset();
+  h.rolloutOpen = false;
+  h.rolloutClosed = false;
+  h.readJovenesPeople.mockResolvedValue([{ id: "p9", name: "Ana", groups: [] }]);
+  h.readSaturdaySets.mockResolvedValue(new Map());
+  h.requireActiveSession.mockResolvedValue(session);
+  h.requireMinistryMember.mockResolvedValue(session);
+  h.getMemberAccess.mockResolvedValue(SUPER);
+  h.readMinistryEvents.mockResolvedValue([]);
+});
+
+describe("/jovenes/calendario gates", () => {
+  it("no active session goes to sign-in, before any read", async () => {
+    h.requireActiveSession.mockResolvedValue(null);
+    expect(await visit()).toBe("→ /auth/signin?callbackUrl=/jovenes/calendario");
+    expect(h.readMinistryEvents).not.toHaveBeenCalled();
+  });
+
+  it("an active non-member goes to /, and membership asked is Jóvenes'", async () => {
+    h.requireMinistryMember.mockResolvedValue(null);
+    expect(await visit()).toBe("→ /");
+    expect(h.requireMinistryMember).toHaveBeenCalledWith("jovenes");
+  });
+
+  it("the rollout holds on the server: a pastor and a Jóvenes admin get 404 while the stage does not reach them", async () => {
+    h.rolloutClosed = true;
+    for (const access of [PASTOR, ADMIN]) {
+      h.getMemberAccess.mockResolvedValue(access);
+      expect(await visit()).toBe("→ 404");
+    }
+    expect(h.readMinistryEvents).not.toHaveBeenCalled();
+  });
+
+  it("before the rollout reaches someone, a non-member gets the same 404 as a member — no redirect hint", async () => {
+    h.rolloutClosed = true;
+    h.getMemberAccess.mockResolvedValue({ ...PASTOR, ministries: ["worship"], ministryRoles: [] });
+    h.requireMinistryMember.mockResolvedValue(null);
+    expect(await visit()).toBe("→ 404");
+  });
+});
+
+describe("/jovenes/calendario read", () => {
+  it("reads through the one reader in member mode, as the session's member, from CDMX today a year ahead", async () => {
+    await visit();
+    expect(h.readMinistryEvents).toHaveBeenCalledTimes(1);
+    const [access, opts] = h.readMinistryEvents.mock.calls[0];
+    expect(access).toBe(SUPER);
+    expect(opts).toEqual({ me: "s1", ministry: "jovenes", mode: "member", from: "2026-11-10", to: "2027-11-10" });
+  });
+
+  it("lists every meeting under its month, folded, with the view control and the lede", async () => {
+    const later = { ...EVENT, _id: "ministryEvent.b", date: "2026-12-05", audience: { kind: "ministry" }, kind: "saturday" };
+    h.readMinistryEvents.mockResolvedValue([EVENT, later]);
+    const html = await visit();
+    expect(html).toMatch(/<h1[^>]*>Calendario<\/h1>/);
+    expect(html).toContain("2 reuniones por venir");
+    expect(html).toContain("te toca el sábado 14 de noviembre");
+    expect(html).toMatch(/<h2[^>]*>Noviembre/);
+    expect(html).toMatch(/<h2[^>]*>Diciembre/);
+    expect(html).toMatch(/<h3[^>]*>Junta de grupos<span class="sr-only">, Sábado 14 de noviembre<\/span><\/h3>/);
+    expect(html).toMatch(/<h3[^>]*>Sábado de Jóvenes<span class="sr-only">, Sábado 5 de diciembre<\/span><\/h3>/);
+    // «Lista» is the view it opens on; no card is opened or lit here (that is Inicio's).
+    expect(html).toMatch(/role="radio" aria-checked="true"[^>]*>(<[^>]*>)*Lista/);
+    expect(html).not.toContain('aria-expanded="true"');
+    expect(html.match(/aria-expanded="false"/g)).toHaveLength(2);
+    expect(html).not.toContain('data-lit=""');
+    expect(html).toContain("Tú · Encargado");
+  });
+
+  it("a Saturday meeting shows Alabanza's songs, read for the Saturdays' dates only (ADR-0089)", async () => {
+    const saturday = { ...EVENT, _id: "ministryEvent.s", audience: { kind: "ministry" }, kind: "saturday", date: "2026-11-21", seats: [], program: [] };
+    h.readMinistryEvents.mockResolvedValue([EVENT, saturday, { ...saturday, _id: "ministryEvent.s2", date: "2026-11-28" }]);
+    h.readSaturdaySets.mockResolvedValue(new Map([["2026-11-21", [{ title: "Rey de reyes", key: "D" }]]]));
+    const html = await visit();
+    expect(h.readSaturdaySets).toHaveBeenCalledWith(["2026-11-21", "2026-11-28"]);
+    expect(html).toContain("Rey de reyes");
+    // The Saturday with no published setlist says so, once; the joint meeting has no Alabanza step.
+    expect(html.match(/Setlist por definir/g)).toHaveLength(1);
+  });
+
+  it("says when there is nothing published", async () => {
+    expect(await visit()).toContain("Aún no hay reuniones publicadas");
+  });
+
+  it("without the read token it says it could not read — never «no meetings»", async () => {
+    h.readMinistryEvents.mockRejectedValue(new MinistryEventReadUnavailable());
+    const html = await visit();
+    expect(html).toContain("No pudimos leer las reuniones");
+    expect(html).not.toContain("Aún no hay reuniones");
+  });
+
+  it("any other failure is not swallowed", async () => {
+    h.readMinistryEvents.mockRejectedValue(new Error("boom"));
+    await expect(visit()).rejects.toThrow("boom");
+  });
+});
+
+describe("/jovenes/calendario program editor and «Planear» (cosmetic; the server decides)", () => {
+  const SATURDAY = { ...EVENT, _id: "ministryEvent.sat", audience: { kind: "ministry" }, kind: "saturday" };
+
+  it("an admin gets «Planear» and the program button on every meeting, with the people list", async () => {
+    h.readMinistryEvents.mockResolvedValue([EVENT, SATURDAY]);
+    const html = await visit();
+    expect(html).toContain("Planear");
+    expect(html).toContain("[programa ministryEvent.a · 1]");
+    expect(html).toContain("[programa ministryEvent.sat · 1]");
+    expect(h.readJovenesPeople).toHaveBeenCalledTimes(1);
+  });
+
+  it("the encargado of a whole-ministry meeting gets the button there only; a pastor gets no «Planear»", async () => {
+    h.rolloutOpen = true;
+    h.getMemberAccess.mockResolvedValue(PASTOR);
+    h.readMinistryEvents.mockResolvedValue([EVENT, SATURDAY]);
+    const html = await visit();
+    expect(html).toContain("[programa ministryEvent.sat · 1]");
+    expect(html).not.toContain("[programa ministryEvent.a");
+    expect(html).not.toContain(">Planear<");
+    // Every pastor reaches their own availability from here, and that page knows the way back.
+    expect(html).toMatch(/href="\/me\/disponibilidad\?de=jovenes"[^>]*>(<[^>]*>)*Disponibilidad/);
+  });
+
+  it("«Planear» for a leader of at least one group; none for a `leader` who leads no group", async () => {
+    h.rolloutOpen = true;
+    const leader = (leaderOf: string[]) => ({
+      ...PASTOR,
+      ministryRoles: [{ ministry: "jovenes", level: "leader", groups: ["otro-nivel", "invencibles"], leaderOf }],
+    });
+    h.readMinistryEvents.mockResolvedValue([EVENT]);
+    h.getMemberAccess.mockResolvedValue(leader(["invencibles"]));
+    expect(await visit()).toContain(">Planear<");
+    h.getMemberAccess.mockResolvedValue(leader([]));
+    expect(await visit()).not.toContain(">Planear<");
+  });
+
+  it("nobody who may edit nothing costs a people read", async () => {
+    h.rolloutOpen = true;
+    h.getMemberAccess.mockResolvedValue(PASTOR);
+    h.readMinistryEvents.mockResolvedValue([{ ...SATURDAY, seats: [{ ...SATURDAY.seats[0], role: "comparte" }] }]);
+    const html = await visit();
+    expect(html).not.toContain("[programa");
+    expect(h.readJovenesPeople).not.toHaveBeenCalled();
+  });
+});

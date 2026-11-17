@@ -9,37 +9,35 @@ import {
 } from "@/app/utils/ministryEventReads";
 import { rolloutAllows } from "@/app/utils/rollout";
 import { addDaysIso, meetingsLede } from "@/app/utils/jovenesEventView";
-import { jovenesDayEntry } from "@/app/utils/calendarMinistry";
-import { mySeats } from "@/app/utils/agenda";
-import { daysUntil, formatCountdown } from "@/app/utils/daysUntil";
+import { HOME_LOOKBACK_DAYS, JOVENES_HORIZON_DAYS, homeCards, homeSections } from "@/app/utils/jovenesHomeModel";
 import { isMinistryManager, ledGroupsIn } from "@/app/utils/ministryAccess";
-import { showsProgramEditor } from "@/app/utils/jovenesPlannerModel";
 import { readJovenesPeople } from "@/app/utils/jovenesPeople";
 import { readSaturdaySets } from "@/app/utils/jovenesWorshipSet";
 import { PAGE_LEDE, PAGE_TITLE } from "@/app/utils/homeHero";
 import Navbar from "@/app/components/Navbar";
 import Button from "@/app/components/ui/Button";
-import JovenesMeetingList from "@/app/components/jovenes/MeetingList";
+import JovenesHome from "@/app/components/jovenes/JovenesHome";
+import { jovenesMeetingItems, type JovenesListItem } from "@/app/components/jovenes/meetingItems";
 import { CalendarIcon, CalendarOffIcon } from "@/app/components/ui/icons";
-import ProgramEditor from "@/app/components/jovenes/ProgramEditor";
+import { JOVENES_AVAILABILITY_HREF } from "@/app/components/navSections";
 import { revealProps } from "@/app/utils/reveal";
 
 export const metadata: Metadata = {
   title: "Jóvenes — Backstage",
-  description: "Las próximas reuniones de Jóvenes: el sábado y las de tu grupo.",
+  description: "La próxima reunión de Jóvenes, lo que te toca y lo que sigue.",
 };
 
 const TZ = "America/Mexico_City";
-/** How far ahead the list reaches: a page range, not access (plan R8). */
-const HORIZON_DAYS = 120;
-
 // Every read goes through the ONE reader (ADR-0081): it carries the id prefix, the ministry,
 // `published == true` and the reader's groups as a parameter, so Otro Nivel never receives
 // Emprendedores' meetings. This page reads the session, so it is dynamic; it exports no
 // `revalidate` and caches nothing (R6, `ministryEventCoverage.test.ts`).
 //
-// The pastors' list reads in MEMBER mode for everyone, admins included: drafts belong to the
+// The pastors' pages read in MEMBER mode for everyone, admins included: drafts belong to the
 // planner (`/jovenes/admin`), and a page that shows the same thing to every pastor is the one they trust.
+//
+// «Inicio» since 2026-11-17: the next meeting, the reader's turns, the few after it and the last
+// one held (`JovenesHome`). The whole horizon moved to `/jovenes/calendario`.
 
 export default async function JovenesPage() {
   // The two failure cases stay split, as on /kids: no active session goes to sign-in (sending it
@@ -63,8 +61,9 @@ export default async function JovenesPage() {
     events = await readMinistryEvents(access, {
       me: sanityId,
       ministry: "jovenes",
-      from: today,
-      to: addDaysIso(today, HORIZON_DAYS),
+      // A little back, for «Reunión anterior»: the same reader and the same arm, a wider window.
+      from: addDaysIso(today, -HOME_LOOKBACK_DAYS),
+      to: addDaysIso(today, JOVENES_HORIZON_DAYS),
       mode: "member",
     });
   } catch (e) {
@@ -77,19 +76,21 @@ export default async function JovenesPage() {
   const isManager = isMinistryManager(access, "jovenes");
   // «Planear» for a manager or a leader of at least one group (per group, plan 2026-11-11 §5.1).
   const plans = isManager || ledGroupsIn(access, "jovenes").length > 0;
-  const editable = new Set(events.filter((e) => showsProgramEditor(e, isManager)).map((e) => e._id));
-  // Alabanza's songs on a Saturday meeting (ADR-0089): that date's published worship setlist.
-  const [people, sets] = await Promise.all([
-    editable.size > 0 ? readJovenesPeople() : Promise.resolve([]),
-    readSaturdaySets(events.filter((e) => e.kind === "saturday").map((e) => e.date)),
-  ]);
-  // One shape for the rows here and in the Calendario's day sheet, and ONE answer to «what is
-  // mine on this meeting» (the agenda's `mySeats`: seats and program lines, by member id).
-  const meetings = events.map((event) => {
-    const entry = jovenesDayEntry(event, event.kind === "saturday" ? (sets.get(event.date) ?? null) : undefined);
-    return { event, entry, mine: mySeats({ jovenes: entry }, "") };
-  });
-  const lede = meetingsLede(meetings.map((m) => ({ date: m.event.date, mine: m.mine.length > 0 })));
+  const placed = (m: JovenesListItem) => ({ date: m.event.date, mine: m.mine.length > 0 });
+  // The people to pick from are read only when a card this page DRAWS carries the editor. Inicio
+  // reads a year and draws at most five cards, so «some meeting this reader may edit» (the
+  // Calendario's question) would read the roster for an editor that is never on screen. The first
+  // pass builds the items without people to learn which cards those are; where one has the
+  // editor, the items are built again with the roster.
+  // Alabanza's songs on a Saturday meeting (ADR-0089): that date's published worship setlist,
+  // read once here and handed to the one builder, so a card says the same on both pages.
+  const sets = await readSaturdaySets(events.filter((e) => e.kind === "saturday").map((e) => e.date));
+  const draft = jovenesMeetingItems(events, { isManager, people: [], today, sets });
+  const editing = homeCards(homeSections(draft, today, placed)).some((m) => m.editor !== null);
+  const meetings = editing ? jovenesMeetingItems(events, { isManager, people: await readJovenesPeople(), today, sets }) : draft;
+  const sections = homeSections(meetings, today, placed);
+  const coming = meetings.filter((m) => m.event.date >= today);
+  const lede = meetingsLede(coming.map((m) => ({ date: m.event.date, mine: m.mine.length > 0 })));
 
   return (
     <div>
@@ -101,7 +102,7 @@ export default async function JovenesPage() {
         <header className="sm:flex sm:items-end sm:justify-between sm:gap-6" {...revealProps(0)}>
           <div className="min-w-0">
             <h1 className={PAGE_TITLE}>Jóvenes</h1>
-            {meetings.length > 0 && (
+            {coming.length > 0 && (
               <p className={`${PAGE_LEDE} mt-3`}>
                 {lede.count}
                 {lede.mine && (
@@ -113,12 +114,20 @@ export default async function JovenesPage() {
               </p>
             )}
           </div>
-          {plans && (
-            <Button href="/jovenes/admin" variant="secondary" size="md" className="mt-5 shrink-0 sm:mb-1 sm:mt-0">
-              <CalendarIcon size={14} />
-              Planear
+          <div className="mt-5 flex shrink-0 flex-wrap gap-2 sm:mb-1 sm:mt-0">
+            {/* Every pastor marks the days they cannot (Frank, 2026-11-17). The calendar is the
+                member's own page, shared by every ministry; `de` only names the way back. */}
+            <Button href={JOVENES_AVAILABILITY_HREF} variant="secondary" size="md">
+              <CalendarOffIcon size={14} />
+              Disponibilidad
             </Button>
-          )}
+            {plans && (
+              <Button href="/jovenes/admin" variant="secondary" size="md">
+                <CalendarIcon size={14} />
+                Planear
+              </Button>
+            )}
+          </div>
         </header>
 
         {unavailable ? (
@@ -129,29 +138,11 @@ export default async function JovenesPage() {
           >
             No pudimos leer las reuniones en este momento. Intenta de nuevo más tarde.
           </p>
-        ) : meetings.length === 0 ? (
-          <div
-            className="mt-10 flex flex-col items-center gap-3 rounded-[var(--brand-radius-panel)] border border-dashed border-ink/[0.16] px-6 py-14 text-center"
-            {...revealProps(1)}
-          >
-            <CalendarOffIcon size={28} className="text-ink-dim" />
-            <p className="font-body text-base text-ink-muted">Aún no hay reuniones publicadas.</p>
-          </div>
         ) : (
           <div className="mt-9">
-            {/* Cards, not rows (ADR-0086): the next meeting open and lit, the rest folded under
-                their month, each with its date leaf and its audience's colour. */}
-            <JovenesMeetingList
-              items={meetings.map(({ event: e, ...m }) => ({
-                // Only what a card draws crosses to the browser; the whole view (member ids, the
-                // revision) goes to `ProgramEditor` alone, for a meeting this reader may edit.
-                event: { _id: e._id, date: e.date, time: e.time, arrival: e.arrival, place: e.place, title: e.title, kind: e.kind, audience: e.audience },
-                entry: m.entry,
-                mine: m.mine,
-                countdown: formatCountdown(daysUntil(e.date)),
-                editor: editable.has(e._id) ? <ProgramEditor event={e} people={people} /> : null,
-              }))}
-            />
+            {/* Cards, not rows (ADR-0086): the next meeting open and lit, the reader's turns, the
+                few after it folded, the last one held. The rest is the Calendario's. */}
+            <JovenesHome sections={sections} />
           </div>
         )}
       </div>
