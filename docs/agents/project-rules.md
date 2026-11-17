@@ -841,7 +841,7 @@ Tailwind keys are **gone**; the four non-colour ones (`--brand-radius-*`,
   `--group-guerreras-rgb`; ADR-0086, 2026-11-12). They exist because `/jovenes` lists the meetings
   of five groups and no existing hue was free to say whose a meeting is. Categorical like the
   `chart-*` six, and as narrow: the audience chip, a card's rail, the date leaf's band, the month
-  map's dots. Never a state («Publicada» green, «Borrador» amber), never «tú», never a button, and
+  map's dots, and the dots and legend of the Calendario's month grid (`MonthBoard`, 2026-11-17). Never a state («Publicada» green, «Borrador» amber), never «tú», never a button, and
   never access (which meetings a person sees is the reader's, ADR-0081). `jovenesGroupStyle.ts` is
   the only file that spells the classes (whole, since Tailwind reads it as text); a chip always
   carries the group's two-letter monogram, so the colour is never the only signal; a meeting for
@@ -945,8 +945,8 @@ pass.
   stored on a `leader` only. `ledGroupsIn(access, ministry)` (`app/utils/ministryAccess.ts`) is the
   one answer: `[]` unless their level is `leader`, then the normalized `leaderOf`; no admin arm. The
   event writer's `led()`, the reader's leader arm (drafts only of LED groups, published meetings of
-  every group they are in), the `/jovenes/admin` gate and `viewer.led`, and `/jovenes`' «Planear»
-  all call it; a `leader` who leads nothing is a member everywhere. `ledGroupsCoverage.test.ts`
+  every group they are in), the `/jovenes/admin` gate and `viewer.led`, and «Planear» on `/jovenes` and
+  `/jovenes/calendario` all call it; a `leader` who leads nothing is a member everywhere. `ledGroupsCoverage.test.ts`
   fails on any other line comparing a level with `"leader"` (an exact-line allow-list for the form's
   refusal and «Lidera» row, the chat's request rule and its wording). Membership (`groupsIn`) still
   decides who fits a seat.

@@ -28,6 +28,7 @@ import SaturdayPlanner from "@/app/components/jovenes/SaturdayPlanner";
 import GroupCalendar from "@/app/components/jovenes/GroupCalendar";
 import GroupClasses from "@/app/components/jovenes/GroupClasses";
 import MonthMap from "@/app/components/jovenes/MonthMap";
+import PlannerSections from "@/app/components/jovenes/PlannerSections";
 import { revealProps } from "@/app/utils/reveal";
 
 export const metadata: Metadata = {
@@ -36,8 +37,6 @@ export const metadata: Metadata = {
 };
 
 const TZ = "America/Mexico_City";
-/** The month map stays under the navbar while the sections scroll; the banner's height joins in. */
-const PLANNER_STICKY = "lg:sticky lg:top-[calc(6.5rem+env(safe-area-inset-top)+var(--impersonation-offset))]";
 
 // Planear Jóvenes (ADR-0081, plan §7.3 PR C). Its ONE read is `readMinistryEvents` in EDITOR
 // mode, so an admin sees drafts and a leader sees the published meetings plus their groups'
@@ -57,7 +56,7 @@ export default async function JovenesPlannerPage({ searchParams }: { searchParam
   if (!access.active || !isMinistryMember(access, "jovenes")) redirect("/");
   const isManager = isMinistryManager(access, "jovenes");
   // The groups this person LEADS (per group, plan 2026-11-11 §5.1); a pastor who leads none — a
-  // `leader` with an empty `leaderOf` included — has nothing to plan: back to the meetings list.
+  // `leader` with an empty `leaderOf` included — has nothing to plan: back to Jóvenes' Inicio.
   const led = ledGroupsIn(access, "jovenes");
   if (!isManager && led.length === 0) redirect("/jovenes");
 
@@ -145,27 +144,16 @@ export default async function JovenesPlannerPage({ searchParams }: { searchParam
             No pudimos leer las reuniones en este momento. Intenta de nuevo más tarde.
           </p>
         ) : (
-          // The month as a picture beside the two sections from `lg` (it stays in view while
-          // they scroll) and above them on a phone (ADR-0086).
-          <div className="mt-10 lg:grid lg:grid-cols-[minmax(0,1fr)_17.5rem] lg:items-start lg:gap-x-10">
-            <aside
-              aria-label="El mes de un vistazo"
-              className={`mb-10 lg:order-2 lg:mb-0 ${PLANNER_STICKY}`}
-              {...revealProps(1)}
-            >
-              <MonthMap month={month} events={events} today={today} />
-            </aside>
-            <div className="min-w-0 space-y-16 lg:order-1">
-              <div {...revealProps(2)}>
-                <SaturdayPlanner month={month} rows={rows} people={people} canEdit={isManager} defaultDate={defaultDate} />
-              </div>
-              <div {...revealProps(3)}>
-                <GroupClasses events={classEvents} viewer={viewer} people={people} today={today} />
-              </div>
-              <div {...revealProps(4)}>
-                <GroupCalendar events={groups} viewer={viewer} defaultDate={defaultDate} />
-              </div>
-            </div>
+          // One section at a time on a phone, all three beside the month map from `lg`
+          // (`PlannerSections`, 2026-11-17).
+          <div className="mt-8 lg:mt-10" {...revealProps(1)}>
+            <PlannerSections
+              initial={isManager ? "saturday" : "classes"}
+              map={<MonthMap month={month} events={events} today={today} />}
+              saturday={<SaturdayPlanner month={month} rows={rows} people={people} canEdit={isManager} defaultDate={defaultDate} />}
+              classes={<GroupClasses events={classEvents} viewer={viewer} people={people} today={today} />}
+              groups={<GroupCalendar events={groups} viewer={viewer} defaultDate={defaultDate} />}
+            />
           </div>
         )}
       </div>

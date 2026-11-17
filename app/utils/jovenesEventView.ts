@@ -79,7 +79,7 @@ export function dayWords(date: string): string {
 }
 
 /**
- * The lede of `/jovenes`: how many meetings are coming, and the first one that is the reader's.
+ * The lede of Jóvenes' Inicio and Calendario: how many meetings are coming, and the first one that is the reader's.
  * Two parts because the page sets the second in ink (the bit that is about YOU).
  */
 export function meetingsLede(rows: ReadonlyArray<{ date: string; mine: boolean }>): { count: string; mine: string | null } {

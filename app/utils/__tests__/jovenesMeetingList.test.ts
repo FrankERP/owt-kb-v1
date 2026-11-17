@@ -1,4 +1,4 @@
-// The `/jovenes` list as data (ADR-0086): which filters it offers, what one keeps, the rows.
+// Jóvenes' Calendario as data (ADR-0086): which filters it offers, what one keeps, the rows.
 import { describe, expect, it } from "vitest";
 import { MINISTRIES } from "@/app/ministries";
 import { FILTER_MIN_MEETINGS, applyFilter, filterOptions, listRows, type ListedMeeting } from "../jovenesMeetingList";
@@ -63,12 +63,11 @@ describe("listRows", () => {
     expect(listRows([])).toEqual([]);
   });
 
-  it("features the first meeting, then groups the rest by month with a count and the year once it changes", () => {
+  it("groups every meeting under its month, with a count and the year once it changes; none is singled out", () => {
     const rows = listRows(MIXED);
-    expect(rows.map((r) => (r.kind === "label" ? `# ${r.title} ${r.count ?? ""}`.trim() : `${r.meeting.id}${r.featured ? "*" : ""}`))).toEqual([
-      "# Próxima reunión",
-      "a*",
-      "# Noviembre 2",
+    expect(rows.map((r) => (r.kind === "label" ? `# ${r.title} ${r.count}` : r.meeting.id))).toEqual([
+      "# Noviembre 3",
+      "a",
       "b",
       "c",
       "# Diciembre 1",
@@ -79,7 +78,7 @@ describe("listRows", () => {
     expect(new Set(rows.map((r) => r.key)).size).toBe(rows.length);
   });
 
-  it("a single meeting is only the featured one", () => {
+  it("a single meeting is its month's label and itself", () => {
     expect(listRows([MIXED[0]]).map((r) => r.kind)).toEqual(["label", "meeting"]);
   });
 });

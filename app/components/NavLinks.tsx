@@ -12,7 +12,7 @@ import { useSession } from "next-auth/react";
 import SlidingIndicator, { useActiveIntoView } from "./ui/SlidingIndicator";
 import Menu, { MenuItem } from "./ui/Menu";
 import { ChevronDownIcon } from "./ui/icons";
-import { SECTION_LABEL, availableSections, currentSection, navAccess, sectionHome, type NavAccess, type NavSection } from "./navSections";
+import { JOVENES_CALENDAR_HREF, SECTION_LABEL, availableSections, currentSection, navAccess, sectionHome, type NavAccess, type NavSection } from "./navSections";
 
 function NavLink({ href, label, active }: { href: string; label: string; active: boolean }) {
   const ref = useActiveIntoView(active);
@@ -81,7 +81,11 @@ export default function NavLinks() {
         ...(access.managesKids ? [{ href: "/kids/admin", label: "Planear Kids", active: pathname.startsWith("/kids/admin") }] : []),
       ]
     : section === "jovenes"
-    ? [{ href: "/jovenes", label: "Reuniones", active: pathname.startsWith("/jovenes") }]
+    ? [
+        // Jóvenes names its own Inicio: the lockup's link is worship's home, not this ministry's.
+        { href: "/jovenes", label: "Inicio", active: pathname === "/jovenes" },
+        { href: JOVENES_CALENDAR_HREF, label: "Calendario", active: pathname.startsWith(JOVENES_CALENDAR_HREF) },
+      ]
     : [];
   return (
     <div role="group" className="hidden lg:flex items-center gap-1 pointer-events-auto" aria-label="Secciones">

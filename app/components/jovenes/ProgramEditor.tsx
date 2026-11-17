@@ -34,7 +34,8 @@ export default function ProgramEditor({
 }: {
   event: MinistryEventView;
   people: readonly JovenesPerson[];
-  /** Beside «Editar» in a planner row: a quiet «Programa». It still answers to «Editar programa». */
+  /** Beside «Editar» in a planner card: the short «Programa», a button like its neighbour (on a
+   *  phone the two share a row in halves). It still answers to «Editar programa». */
   compact?: boolean;
 }) {
   const router = useRouter();
@@ -107,7 +108,7 @@ export default function ProgramEditor({
   return (
     <>
       {compact ? (
-        <Button variant="ghost" size="sm" aria-label="Editar programa" onClick={openEditor}>
+        <Button variant="secondary" size="sm" aria-label="Editar programa" onClick={openEditor}>
           Programa
         </Button>
       ) : (

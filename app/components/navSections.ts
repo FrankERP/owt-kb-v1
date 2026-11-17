@@ -68,6 +68,9 @@ export function currentSection(pathname: string, a: NavAccess): NavSection | nul
   return sections[0] ?? null;
 }
 
+/** Jóvenes' Calendario, the second of its two pages (`/jovenes` is its Inicio). One spelling for both navs. */
+export const JOVENES_CALENDAR_HREF = "/jovenes/calendario";
+
 export const SECTION_LABEL: Record<NavSection, string> = {
   worship: MINISTRIES.worship.name,
   kids: MINISTRIES.kids.name,

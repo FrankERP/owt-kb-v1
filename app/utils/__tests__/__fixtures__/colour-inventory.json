@@ -8,28 +8,28 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 323,
-    "filesScanned": 632,
-    "filesWithColour": 68,
+    "literalRows": 327,
+    "filesScanned": 639,
+    "filesWithColour": 70,
     "byCategory": {
       "2": 2,
       "4": 64,
       "5": 2,
       "8": 85,
       "9": 10,
-      "11": 14,
+      "11": 18,
       "12": 146
     },
     "byDisposition": {
       "exempt": 60,
-      "B": 116,
-      "keep": 236,
+      "B": 120,
+      "keep": 238,
       "C": 5,
       "D": 13
     },
     "compositingClasses": 22,
     "compositingSelectorOccurrences": 60,
-    "compositingClassNameOccurrences": 37,
+    "compositingClassNameOccurrences": 39,
     "compositingRuleBodies": 52,
     "lightCounterpartClasses": 13,
     "pairs": 3,
@@ -109,14 +109,14 @@
       "reason": "Already theme-agnostic"
     },
     {
-      "file": "app/(client)/jovenes/page.tsx",
+      "file": "app/(client)/jovenes/calendario/page.tsx",
       "category": 11,
       "categoryName": "arbitrary-value-var-brand",
       "value": "[var(--brand-radius-panel)]",
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 129,
+      "line": 116,
       "disposition": "B",
       "reason": null
     },
@@ -3284,7 +3284,31 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 392,
+      "line": 397,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/jovenes/JovenesHome.tsx",
+      "category": 11,
+      "categoryName": "arbitrary-value-var-brand",
+      "value": "[var(--brand-radius-panel)]",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 52,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/jovenes/JovenesHome.tsx",
+      "category": 11,
+      "categoryName": "arbitrary-value-var-brand",
+      "value": "[var(--brand-radius-panel)]",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 100,
       "disposition": "B",
       "reason": null
     },
@@ -3296,7 +3320,31 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 77,
+      "line": 83,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/jovenes/MonthBoard.tsx",
+      "category": 11,
+      "categoryName": "arbitrary-value-var-brand",
+      "value": "[var(--brand-radius-panel)]",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 82,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/jovenes/MonthBoard.tsx",
+      "category": 11,
+      "categoryName": "arbitrary-value-var-brand",
+      "value": "[var(--brand-radius-panel)]",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 172,
       "disposition": "B",
       "reason": null
     },
@@ -4267,6 +4315,14 @@
       "reason": "Usage site of a compositing class"
     },
     {
+      "file": "app/components/jovenes/JovenesHome.tsx",
+      "kind": "className",
+      "class": "surface",
+      "count": 1,
+      "disposition": "keep",
+      "reason": "Usage site of a compositing class"
+    },
+    {
       "file": "app/components/jovenes/MeetingCard.tsx",
       "kind": "className",
       "class": "lit-card",
@@ -4276,6 +4332,14 @@
     },
     {
       "file": "app/components/jovenes/MeetingCard.tsx",
+      "kind": "className",
+      "class": "surface",
+      "count": 1,
+      "disposition": "keep",
+      "reason": "Usage site of a compositing class"
+    },
+    {
+      "file": "app/components/jovenes/MonthBoard.tsx",
       "kind": "className",
       "class": "surface",
       "count": 1,

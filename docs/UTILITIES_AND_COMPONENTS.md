@@ -692,12 +692,29 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   (`compact` = the quiet «Programa» beside a row's «Editar»), `PersonSelect` (its «Escribir un
   nombre…» typed mode is OPT-IN via `onTypedName`, passed only by the meeting's seats — never by the
   program editor, whose lines keep members only). **Since ADR-0086 (2026-11-12) these screens are
-  CARDS**, built from: **`JovenesMeetingList`** [C] (`MeetingList.tsx` — `/jovenes`' list: the filter
-  pills, month labels and cards through `AnimatedList`; the rules are
+  CARDS**, built from: **`jovenesMeetingItems`**/**`anyProgramEditor`** [N]
+  ([meetingItems.tsx](../app/components/jovenes/meetingItems.tsx) — THE one builder of a card's item
+  for both member pages, so a meeting never reads differently on Inicio and the Calendario; the
+  program editor only on a meeting still to come), **`JovenesHome`** [N] (`JovenesHome.tsx` —
+  `/jovenes`, «Inicio» since 2026-11-17: next meeting, «Te toca», «Lo que sigue», the door to the
+  Calendario, «Reunión anterior»; what lands where is **`homeSections`** in
+  [jovenesHomeModel.ts](../app/utils/jovenesHomeModel.ts), with `HOME_UPCOMING`, `HOME_TURNS`,
+  `HOME_LOOKBACK_DAYS`, **`JOVENES_HORIZON_DAYS`** (the ONE window both member pages read, so «N
+  reuniones más» is what the Calendario lists) and **`homeCards`** (the meetings Inicio draws as
+  cards: the page reads the roster only when one of THOSE carries the program editor)), **`JovenesMeetingList`** [C] (`MeetingList.tsx` — `/jovenes/calendario`: the
+  «Lista · Mes» control, the filter pills over both, and the list itself, month labels and folded
+  cards through `AnimatedList`; the rules are
   [jovenesMeetingList.ts](../app/utils/jovenesMeetingList.ts): `filterOptions`, `applyFilter`,
-  `listRows`, `FILTER_MIN_MEETINGS`), **`JovenesMeetingCard`** [C] (`MeetingCard.tsx` — one meeting:
-  folded to a summary or open, the `featured` one open and the lit pass's only site; `children` is
-  the program editor) and the neutral pieces **`DateTile`** (a date as a calendar leaf; `empty` for a
+  `listRows`, `FILTER_MIN_MEETINGS`), **`JovenesMonthBoard`** [C] (`MonthBoard.tsx` — the «Mes» view:
+  a month grid with the day circles of `DayDots.tsx`, group-colour dots, a pressed day's cards; the
+  rules are [jovenesCalendarModel.ts](../app/utils/jovenesCalendarModel.ts): `calendarMonths`,
+  `monthCells`, `dayMarks`, `monthLegend`, `calendarMonthTitle`), **`PlannerSections`** [C]
+  (Planear's «Sábados · Clases · Grupos» on a phone: one section at a time, hidden by CSS and never
+  unmounted; `initial` is where this viewer has something to do — «Sábados» for an admin, «Clases»
+  for a leader), **`JovenesMeetingCard`** [C] (`MeetingCard.tsx` — one meeting:
+  folded to a summary or open, the `featured` one open and the lit pass's only Jóvenes site;
+  `defaultOpen` opens without that look, `held` shows «Hace N días»; `children` is the program
+  editor) and the neutral pieces **`DateTile`** (a date as a calendar leaf; `empty` for a
   free Saturday), **`AudienceChips`** (who it is for, one chip per group with its monogram),
   **`AudienceRail`** (the card's colour edge, `animate-rail-draw`), **`PersonAvatar`** (the member's profile
   `photo` painted as a background over the initials of `initialsOf`, so a photo that fails leaves
@@ -706,7 +723,7 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   **`MonthMap`** (the planner's month at a glance: a dot per meeting in its audience's colour, hollow
   for a draft; one `role="img"`), **`JovenesMeetingBody`** (`MeetingBody.tsx` — seats as faces, the
   program as a numbered timeline, the notes; `columns` sets team and program side by side from `md`;
-  THE body of both `/jovenes` and the Calendario's `JovenesDayCard`, so a seat is never worded or
+  THE body of the Jóvenes cards and of the worship Calendario's `JovenesDayCard`, so a seat is never worded or
   coloured differently between them) and **`MeetingState`** («Publicada» / «Borrador» as a pill).
   **A group's colour comes only from [jovenesGroupStyle.ts](../app/utils/jovenesGroupStyle.ts)**:
   `groupTone(id)`, `audienceBadges`/`audienceTone`/`audienceRail`, `groupMonogram`,
@@ -718,7 +735,7 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   **`eventLine`** (name · clock · arrival · place · audience), **`audienceLabel`**, **`seatRoleLabel`**,
   **`eventDayLabel`**, **`dayWords`** («sábado 14 de noviembre» inside a sentence; a heading uses
   `dayTitle` from `agenda.ts`, and neither is ever CSS `capitalize`, which writes «14 De Noviembre»),
-  **`meetingsLede`** (`/jovenes`' count line and the reader's next date), **`addDaysIso`**
+  **`meetingsLede`** (the count line and the reader's next date, on Inicio and the Calendario), **`addDaysIso`**
   ([jovenesEventView.ts](../app/utils/jovenesEventView.ts)) — a meeting's words, pure; never decides
   access. What is the READER's on a meeting is the agenda's `mySeats` over **`jovenesDayEntry`**
   (`calendarMinistry.ts`, the one shape of a meeting's people for the list and the day sheet); the
@@ -1059,10 +1076,10 @@ Legend: **[C]** client, **[S]** server.
 | `ActivityPing` [C] | "Last seen" ping, ≤ once / 30 min. |
 | `Navbar` [S] | Top navbar shell; deliberately **non-async** (session resolved client-side) so pages stay ISR-renderable. Props: `title`, `author?`, `cue?` — the `tags`/`schedule` flags were removed in R5 (ruling 9). |
 | `NavMenu` [C] | Account menu (Mi semana, Disponibilidad, Ajustes, Super admin for the super-admin only, Cerrar sesión) + notification badge (the badge pops in on `Presence appear variant="scale"`). |
-| `BottomNav` [C] | Mobile bottom tab bar — one ministry at a time (`navSections.ts`): three worship tabs (Inicio · Calendario · Biblioteca) or, under `/kids…`, the kids set; «Más» only when the switch to the other ministry or (in worship) Admin applies; hidden when fewer than two items; «Más» is a `CueDialog` sheet. Publishes its measured height as `--bottom-nav-h` + a `has-bottom-nav` class on `<html>` while on screen; hidden ≥ `lg` and on `/auth*`/`/studio*`. **Since R6 it is the STATEFUL half only** — the session, the pathname, the tab/row derivation and the measurement effect — and it renders `BottomNavBar` for everything that paints, forwarding its `barRef`. |
+| `BottomNav` [C] | Mobile bottom tab bar — one ministry at a time (`navSections.ts`): three worship tabs (Inicio · Calendario · Biblioteca), under `/kids…` the kids set, or under `/jovenes…` Jóvenes' two (Inicio · Calendario since 2026-11-17, so a pastor only in Jóvenes has a bar; «Planear» is a button on those pages, never a tab, and on the planner no tab is lit); «Más» only when the switch to the other ministry or (in worship) Admin applies; hidden when fewer than two items; «Más» is a `CueDialog` sheet. Publishes its measured height as `--bottom-nav-h` + a `has-bottom-nav` class on `<html>` while on screen; hidden ≥ `lg` and on `/auth*`/`/studio*`. **Since R6 it is the STATEFUL half only** — the session, the pathname, the tab/row derivation and the measurement effect — and it renders `BottomNavBar` for everything that paints, forwarding its `barRef`. |
 | `BottomNavBar` [C] | **The tab bar's presentational half (R6 Task 7)** — `app/components/BottomNavBar.tsx`, props only: `tabs`, `activeHref`, `moreRows`, `moreOpen`, `onMore`, `onNavigate?`, `barRef?` (it also exports the tab glyphs). Draws the `<nav>`, the `SlidingIndicator` and the «Más» `CueDialog` sheet; the rendered DOM is exactly what `BottomNav` drew before the split. The split exists so the theme gallery's `nav` fixture can host the bar — a public, prerendered route cannot call `useSession` (ADR-0017) — and it is the general shape: **a gallery fixture hosts the presentational half, never the component that reads a session.** `bottomNavOffsetSync.test.ts` and `textZoomLayout.test.ts` read this file now. |
-| `NavLinks` [C] | Desktop nav link row, rendered in the navbar's centred title block at `lg`+ (the title itself goes `lg:hidden` there); one shared `SlidingIndicator` underline. **Takes no props:** ministry membership and the page's ministry alone gate the links (the old `schedule`/`tags` flags were passed inconsistently and dropped both links on `/kids`). Since 2026-10-29 it shows ONE ministry's links — the page's — behind an «Alabanza ▾ / Oasis Kids ▾» `Menu` switcher when the person has more than one (Admin with worship, Planear Kids with Kids; Super admin is in `NavMenu`). |
-| `navSections.ts` | The ONE derivation of the nav's ministry sections, shared by `NavLinks` and `BottomNav` (no `"use client"`): `navAccess(user)`, `availableSections`, `currentSection(pathname)` (`/kids…` is Kids, any other page the person's first section; Jóvenes is no section until it has screens), `sectionHome` (a Kids manager outside Kids lands on the planner), `SECTION_LABEL`. Cosmetic like every nav filter — pages enforce (ADR-0020). Guard: `navSections.test.ts`. |
+| `NavLinks` [C] | Desktop nav link row, rendered in the navbar's centred title block at `lg`+ (the title itself goes `lg:hidden` there); one shared `SlidingIndicator` underline. **Takes no props:** ministry membership and the page's ministry alone gate the links (the old `schedule`/`tags` flags were passed inconsistently and dropped both links on `/kids`). Since 2026-10-29 it shows ONE ministry's links — the page's — behind an «Alabanza ▾ / Oasis Kids ▾ / Jóvenes ▾» `Menu` switcher when the person has more than one (Admin with worship, Planear Kids with Kids, Inicio · Calendario with Jóvenes; Super admin is in `NavMenu`). |
+| `navSections.ts` | The ONE derivation of the nav's ministry sections, shared by `NavLinks` and `BottomNav` (no `"use client"`): `navAccess(user)`, `availableSections`, `currentSection(pathname)` (`/kids…` is Kids, `/jovenes…` is Jóvenes once its rollout reaches the person, any other page the person's first section), `sectionHome` (a Kids manager outside Kids lands on the planner), `SECTION_LABEL`, `JOVENES_CALENDAR_HREF` (`/jovenes/calendario`, one spelling for both navs and Inicio's button). Cosmetic like every nav filter — pages enforce (ADR-0020). Guard: `navSections.test.ts`. |
 | `useScrollableRight` / `SCROLL_FADE_RIGHT` (`app/components/ui/useScrollableRight.ts`) [C] | The ONE "there is more to the right" hint for a horizontal strip (lifted out of `AdminRail` in design pass E, 2026-10-22): the hook reads whether the scroller can still scroll right (mount, scroll, resize, a change of `count`); the constant is a `mask-image` fade the strip wears only while it can — never a colour painted over it, which shipped broken once over `.brand-atmosphere` (the module records why). Consumers: `AdminRail`'s phone tab strip (adds `md:` unmasking), `SectionNav`. |
 | `SectionNav` [C] | In-page section anchors, plus — since R4 — the song page's practice cluster. One `IntersectionObserver` on `#song-hero` (threshold 0) flips `heroGone`, inset by a `rootMargin` of `-<sticky top + bar height>px 0px 0px 0px` — the bar's STUCK position, read at observer creation from `getComputedStyle(bar).top` (which resolves the navbar height plus the safe-area inset) plus its own rect height. **Never the rect's `bottom`:** at mount the page is at scrollY 0 and the bar is still in flow BELOW the hero, so that bottom is most of the hero's height and the shrunken root would latch `heroGone` true from load — the cluster would show over a hero still on screen and never hide — otherwise the hand-off waits for the viewport's top edge and the hero's controls are already hidden behind the chrome while the bar still shows nothing, and the optional `practice` prop then fades in through a `Presence variant="fade"`. The right-hand slot (`ml-auto … shrink-0 … min-h-[44px]`) is ALWAYS rendered, empty or not, so the bar's height never changes when the cluster arrives; the links keep their own scroll box and scroll behind it on a phone — and since design pass E (2026-10-22) that box is MASKED at its right edge (`SCROLL_FADE_RIGHT`, the strip carries `data-section-nav-fade` while masked) only while it can still scroll right — `useScrollableRight` (`ui/useScrollableRight.ts`, the hook `AdminRail`'s phone strip already used; measured on scroll, resize and a sections change, never assumed), so a desktop strip that fits never dims its last tab. |
 | `PracticeCluster` [C] | `app/components/song/` — what the hero was carrying, once the hero is gone (R4 ruling 1): the title (desktop only, `hidden lg:block`), the SOUNDING key from `useTransposeOptional()` in `brand-key-dial` chrome with a `NumberRoll`, the BPM, and one 44 px play/pause `Button variant="icon" size="lg"` over `usePlayer()` (`playTrack` when the track is not the loaded one, `togglePlay` when it is). It rides the song page's own sticky section bar, NOT the navbar — the navbar centre is already the song title on phones and the nav links at `lg`. Tested (`sectionNavPractice.test.tsx`). |
