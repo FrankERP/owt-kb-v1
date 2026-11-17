@@ -36,7 +36,7 @@ vi.mock("@/app/utils/ministryEventReads", async () => {
   class MinistryEventReadUnavailable extends Error {}
   return { MinistryEventReadUnavailable, readMinistryEvents: (a: unknown, o: unknown) => h.readMinistryEvents(a, o) };
 });
-vi.mock("@/app/utils/jovenesPeople", () => ({ readJovenesPeople: () => h.readJovenesPeople() }));
+vi.mock("@/app/utils/jovenesPeople", () => ({ readJovenesPeople: (o: unknown) => h.readJovenesPeople(o) }));
 vi.mock("@/app/components/Navbar", () => ({ default: () => null }));
 vi.mock("@/app/components/jovenes/SaturdayPlanner", () => ({
   default: (props: { month: string; rows: unknown[]; people: unknown[]; canEdit: boolean }) => {
@@ -151,6 +151,24 @@ describe("/jovenes/admin read", () => {
     h.getMemberAccess.mockResolvedValue(role("leader"));
     expect(await visit("2026-11")).toContain("[planner 2026-11 edit=false]");
     expect(h.classes.mock.calls[1][0].people).toEqual([{ id: "p1", name: "Ana", groups: [] }]);
+  });
+
+  it("asks for the marked days as the reader its own gate read, at CDMX today (ADR-0090)", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      // 03:00Z on the 18th is still the 17th in Mexico City.
+      vi.setSystemTime(new Date("2026-11-18T03:00:00Z"));
+      h.rolloutOpen = true;
+      const leader = role("leader", ["otro-nivel", "invencibles"], ["otro-nivel"]);
+      h.getMemberAccess.mockResolvedValue(leader);
+      await visit("2026-11");
+      expect(h.readJovenesPeople).toHaveBeenCalledTimes(1);
+      // The access object itself, not a `viewer` the page assembled: the rule derives who leads.
+      expect(h.readJovenesPeople.mock.calls[0][0]).toEqual({ awayFor: leader, today: "2026-11-17" });
+      expect(h.readJovenesPeople.mock.calls[0][0].awayFor).toBe(leader);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("«Clases del grupo» reads the same way over a year back and the whole future (plan 2026-11-12 L3)", async () => {

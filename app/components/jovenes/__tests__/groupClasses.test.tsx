@@ -85,6 +85,26 @@ const show = (events: MinistryEventView[], viewer: PlannerViewer = LEADER) =>
     </Providers>,
   );
 
+describe("GroupClasses and a marked day (ADR-0090)", () => {
+  const roster = [{ ...PEOPLE[0], away: ["2026-11-15"] }, PEOPLE[1]];
+  const show2 = (events: MinistryEventView[]) =>
+    render(
+      <Providers>
+        <GroupClasses events={events} viewer={LEADER} people={roster} today="2026-11-12" />
+      </Providers>,
+    );
+
+  it("a class whose responsable marked its day says so on the card, and no other class does", () => {
+    show2([cls("2026-11-15", "Cap 5", { who: "rebe" }), cls("2026-11-22", "Cap 6", { who: "rebe" })]);
+    expect(screen.getAllByText("Rebe: no disponible ese día")).toHaveLength(1);
+  });
+
+  it("people who carry no `away` never produce a line", () => {
+    show([cls("2026-11-15", "Cap 5", { who: "rebe" })]);
+    expect(screen.queryByText(/no disponible/)).toBeNull();
+  });
+});
+
 describe("GroupClasses", () => {
   it("shows the roster with its count, a leader only their group, and an empty group's hint", () => {
     show([cls("2026-11-08", "Cap 4", { done: true }), cls("2026-11-15", "Cap 5", { who: "Rebe" })]);

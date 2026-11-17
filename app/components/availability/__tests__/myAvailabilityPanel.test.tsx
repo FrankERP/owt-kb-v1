@@ -118,6 +118,17 @@ describe("MyAvailabilityPanel — one surface (R3 F3)", () => {
     expect(screen.getByRole("button", { name: /20 de septiembre[^,]*, hay reunión de Jóvenes$/ })).toBeTruthy();
   });
 
+  it("tells a Jóvenes pastor that whoever plans there sees these days, and nobody else (ADR-0090)", () => {
+    const { rerender } = renderPanel();
+    expect(screen.queryByText(/Quien planea en Jóvenes/)).toBeNull();
+    rerender(
+      <MotionProvider>
+        <MyAvailabilityPanel initialRev="rev-1" initialDates={[]} initialNotes={[]} seenByJovenesPlanners />
+      </MotionProvider>,
+    );
+    expect(screen.getByText("Quien planea en Jóvenes ve estos días, sin tu nota.")).toBeTruthy();
+  });
+
   it("«Marcar días» becomes «Listo» and arms the grid; the mode is the host's", () => {
     renderPanel();
     const mark = screen.getByRole("button", { name: "Marcar días" });

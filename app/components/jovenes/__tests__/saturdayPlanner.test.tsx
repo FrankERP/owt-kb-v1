@@ -88,6 +88,47 @@ const renderPlanner = (events: MinistryEventView[], canEdit = true) =>
     </AdminProviders>,
   );
 
+describe("SaturdayPlanner and a marked day (ADR-0090)", () => {
+  const marked = [{ id: "m1", name: "Ana", groups: [], away: ["2026-11-07"] }, people[1]];
+  const line = { _key: "l1", label: "Oración", note: null, part: null, music: null, helpers: null, memberId: "m2", name: "Beto", photo: null, mine: false, second: null };
+  const show = (canEdit: boolean, roster = marked) =>
+    render(
+      <AdminProviders>
+        <SaturdayPlanner month="2026-11" rows={saturdayRows("2026-11", [ev({ program: [line] })])} people={roster} canEdit={canEdit} defaultDate="2026-11-10" />
+      </AdminProviders>,
+    );
+
+  it("an admin's card names who marked the meeting's day; the editor's picker says it too", () => {
+    show(true);
+    expect(screen.getByText("Ana: no disponible ese día")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Editar" }));
+    expect(within(screen.getByLabelText("Encargado")).getByRole("option", { name: "Ana · no disponible" })).toBeTruthy();
+    expect(screen.getByText("No disponible ese día.")).toBeTruthy();
+    // The mark follows the day in the form, not the day the card had.
+    fireEvent.change(screen.getByLabelText("Fecha"), { target: { value: "2026-11-14" } });
+    expect(screen.queryByText("No disponible ese día.")).toBeNull();
+  });
+
+  it("counts the people of the program too, each once", () => {
+    show(true, [marked[0], { id: "m2", name: "Beto", groups: [], away: ["2026-11-07"] }]);
+    expect(screen.getByText("Ana y Beto: no disponibles ese día")).toBeTruthy();
+  });
+
+  it("a read-only card says nothing about anybody's days", () => {
+    show(false);
+    expect(screen.queryByText(/no disponible/)).toBeNull();
+  });
+
+  it("the WhatsApp roster never carries a mark", async () => {
+    const writeText = vi.fn(async (_text: string) => {});
+    vi.stubGlobal("navigator", { ...globalThis.navigator, clipboard: { writeText } });
+    show(true);
+    fireEvent.click(screen.getByRole("button", { name: "Copiar para WhatsApp" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    expect(writeText.mock.calls[0][0]).not.toMatch(/disponible/i);
+  });
+});
+
 describe("SaturdayPlanner", () => {
   it("creates a Saturday through POST with a create token, the usual times and the ministry audience", async () => {
     renderPlanner([]);
@@ -289,7 +330,7 @@ describe("SaturdayPlanner", () => {
   });
 
   it("a leader sees the table and can copy it, but gets no edit buttons", async () => {
-    const writeText = vi.fn(async () => {});
+    const writeText = vi.fn(async (_text: string) => {});
     vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
     renderPlanner([ev()], false);
     expect(screen.queryByRole("button", { name: "Editar" })).toBeNull();

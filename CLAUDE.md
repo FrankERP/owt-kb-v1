@@ -390,6 +390,11 @@ built on `ministryAccess.ts` over ONE snapshot, `accessFromDoc`); worship pages 
   it when the write publishes it or moves its date), plus the music request to the super-admins
   who are people. Both are deliberate.
   Unreleased features gate on `rolloutAllows` (`app/utils/rollout.ts`) on the server, not the nav.
+- **The days a Jóvenes pastor marked reach ONE page** (ADR-0090): only `/jovenes/admin` calls
+  `readJovenesPeople({ awayFor: access, today })`; bare, that read projects no availability, so the
+  member pages cannot receive a day. `awayVisibleTo` (`jovenesAway.ts`) is the audience: an admin
+  everyone, a leader the members of a group they LEAD; the date, never the note; it informs
+  (`PersonSelect` `date`, `AwayNote`) and never refuses. Guard: `jovenesAwayCoverage.test.ts`.
 
 ## Continuous improvement
 Run `/loop /improve` — the `/improve` command (`.claude/commands/improve.md`)

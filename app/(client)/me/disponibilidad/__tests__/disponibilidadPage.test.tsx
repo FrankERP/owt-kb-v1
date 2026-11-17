@@ -61,7 +61,7 @@ vi.mock("@/app/components/Navbar", () => ({ default: () => null }));
 // `myAvailabilityPanel.test.tsx` and `availabilityCalendarConflict.test.tsx`.
 const panel = vi.fn();
 vi.mock("@/app/components/availability/MyAvailabilityPanel", () => ({
-  default: (props: { services: Record<string, string[]>; rehearsal: boolean }) => {
+  default: (props: { services: Record<string, string[]>; rehearsal: boolean; seenByJovenesPlanners: boolean }) => {
     panel(props);
     return <p>Marcar días</p>;
   },
@@ -117,7 +117,27 @@ describe("/me/disponibilidad", () => {
     // and no rehearsal line for someone outside Alabanza.
     expect(readMinistryEvents).not.toHaveBeenCalled();
     expect(panel.mock.calls[0][0].rehearsal).toBe(false);
+    expect(panel.mock.calls[0][0].seenByJovenesPlanners).toBe(false);
     expect(html).toMatch(/href="\/me"[^>]*>(<[^>]*>)*Mi semana/);
+  });
+
+  it("says «quien planea en Jóvenes ve estos días» to the ministry's members only (ADR-0090)", async () => {
+    getMemberAccess.mockResolvedValue(PASTOR);
+    await renderPage();
+    expect(panel.mock.calls[0][0].seenByJovenesPlanners).toBe(true);
+    // A super-admin outside Jóvenes sees its meetings (dots), but the roster read never lists
+    // them, so no planner is shown their days and the line would be false.
+    panel.mockClear();
+    getMemberAccess.mockResolvedValue({ ...WORSHIP, role: "super-admin" });
+    await renderPage();
+    expect(readMinistryEvents).toHaveBeenCalled();
+    expect(panel.mock.calls[0][0].seenByJovenesPlanners).toBe(false);
+    // And not while the rollout has not reached the pastor.
+    panel.mockClear();
+    rollout.closed = true;
+    getMemberAccess.mockResolvedValue(PASTOR);
+    await renderPage();
+    expect(panel.mock.calls[0][0].seenByJovenesPlanners).toBe(false);
   });
 
   it("tells a worship member that Friday is rehearsal", async () => {
