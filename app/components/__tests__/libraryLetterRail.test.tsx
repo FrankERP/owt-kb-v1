@@ -56,6 +56,16 @@ describe("LibraryLetterRail", () => {
     expect(LETTERS.map((l) => screen.getByRole("button", { name: `Ir a la letra ${l}` }).textContent)).toEqual(LETTERS);
   });
 
+  it("centres itself by `top` alone, never a transform — sticky then keeps it inside the list (ADR-0088)", () => {
+    // A `-translate-y-1/2` moves the box AFTER sticky placed it: at the top of the page the
+    // rail rose over «Filtros» and the shelf's covers. Half the rail's height lives in `top`.
+    const { rail } = mountRail();
+    expect(rail.className).toContain("sticky");
+    expect(rail.className).not.toMatch(/translate/);
+    // 4 letters × 19 px ÷ 2, plus the nav's 4 px of padding.
+    expect(rail.style.top).toBe("calc(50vh - 42px)");
+  });
+
   it("the active letter is the one carrying aria-current — the progress the rail exists to show", () => {
     mountRail("C");
     expect(screen.getByRole("button", { name: "Ir a la letra C" }).getAttribute("aria-current")).toBe("true");

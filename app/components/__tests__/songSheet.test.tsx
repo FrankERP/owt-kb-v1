@@ -27,6 +27,7 @@ type Sheet = {
   key?: string;
   bpm?: string;
   timeSig?: string;
+  cover?: string | null;
 };
 
 const BASE: Sheet = {
@@ -132,6 +133,39 @@ describe("SongSheet head", () => {
     expect(headings.length).toBe(1);
     expect(headings[0].textContent).toBe("Cordero y León");
     expect(screen.getByText(/Lion and The Lamb/).textContent).toContain(BASE.author!);
+  });
+});
+
+describe("SongSheet cover", () => {
+  it("stands the album's cover beside the artist line, as a JPEG at the shelf's size (ADR-0088)", () => {
+    sheet = { ...BASE, cover: "https://cdn.sanity.io/images/p/d/abc-600x600.webp" };
+    render(
+      <CueDialogProvider>
+        <SongSheet />
+      </CueDialogProvider>,
+    );
+    const img = screen.getByRole("dialog").querySelector("img");
+    expect(img?.getAttribute("src")).toBe("https://cdn.sanity.io/images/p/d/abc-600x600.webp?w=400&h=400&fit=crop&fm=jpg");
+    expect(img?.getAttribute("alt")).toBe("");
+    // Beside the artist, NOT beside the pills: next to a 76 px cover they wrapped to three rows.
+    const artistRow = screen.getByText(/Autor de Prueba/).parentElement!;
+    expect(artistRow.contains(img!)).toBe(true);
+    expect(artistRow.textContent).not.toContain("BPM");
+  });
+
+  it("a song with no cover gets no tile at all — a sheet is not a list, an empty square would be a hole", () => {
+    for (const cover of [undefined, null, "https://img.youtube.com/vi/x/hqdefault.jpg"]) {
+      sheet = { ...BASE, cover };
+      const { unmount } = render(
+        <CueDialogProvider>
+          <SongSheet />
+        </CueDialogProvider>,
+      );
+      const dialog = screen.getByRole("dialog");
+      expect(dialog.querySelector("img")).toBeNull();
+      expect(dialog.querySelector(".h-\\[76px\\]")).toBeNull();
+      unmount();
+    }
   });
 });
 

@@ -82,6 +82,31 @@ describe("LibraryRow", () => {
     expect(key?.className).not.toContain("text-key-fg");
   });
 
+  it("leads with the album's cover, sized as a tile and always a JPEG (ADR-0088)", () => {
+    const { container } = render(
+      <MotionProvider>
+        <LibraryRow post={{ ...post, cover: "https://cdn.sanity.io/images/p/d/abc-600x600.png" } as unknown as Post} />
+      </MotionProvider>,
+    );
+    const img = container.querySelector("img");
+    expect(img?.getAttribute("src")).toBe("https://cdn.sanity.io/images/p/d/abc-600x600.png?w=160&h=160&fit=crop&fm=jpg");
+    // Decoration: the row's own label names the song.
+    expect(img?.getAttribute("alt")).toBe("");
+  });
+
+  it("a song with no cover, or a picture this app did not store, draws the neutral tile — never an image", () => {
+    for (const cover of [undefined, null, "https://img.youtube.com/vi/x/hqdefault.jpg"]) {
+      const { container, unmount } = render(
+        <MotionProvider>
+          <LibraryRow post={{ ...post, cover } as unknown as Post} />
+        </MotionProvider>,
+      );
+      expect(container.querySelector("img")).toBeNull();
+      expect(container.querySelector("button svg")).not.toBeNull();
+      unmount();
+    }
+  });
+
   it("a tap still opens the song sheet and reports no long press", () => {
     mount();
     fireEvent.click(screen.getByRole("button", { name: /Canción s1/ }));

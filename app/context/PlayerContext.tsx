@@ -19,6 +19,8 @@ export interface SongSheetData {
   key: string;
   bpm?: string;
   timeSig?: string;
+  /** The album cover as a Sanity image URL (`POST_COVER_GROQ`); the sheet sizes it with `songCoverUrl`. */
+  cover?: string | null;
   _createdAt?: string;
   body?: PortableTextBody;
   chords?: { key: string; content: string }[];

@@ -787,7 +787,13 @@ shared with Jóvenes), `SERVICE_TONE`/`MINE_CHIP`/`COUNTDOWN_CHIP` (`app/utils/s
 a service's day colour lives on the rail and the leaf's band ONLY, ADR-0059's rule widened by that
 band; never a wash behind the head), `songCoverUrl`/`SONG_COVER_GROQ` (`app/utils/songCover.ts` — the
 cover is `post.albumArt`, a Sanity image served unconverted; a song without one has no picture and
-the YouTube still is never a stand-in, Frank 2026-11-12), `greetingService`
+the YouTube still is never a stand-in, Frank 2026-11-12; `POST_COVER_GROQ` is the same field read from
+the song document, for the Biblioteca, the song page and the song sheet; `COVER_SIZE` names the only
+three sizes a caller may ask for — tile 160, shelf 400, hero 640 — because every distinct size is a
+distinct image the CDN renders and a phone caches), `recentSongs` (`app/utils/libraryIndex.ts` — the
+songs the Biblioteca's shelf shows), `LibraryShelf` and `song/SongHeroCover` (part 2, 2026-11-17: the
+two drawings larger than a tile; every other cover is `SongCover`, which gained `size="lg"` for the
+song sheet), `greetingService`
 (`app/utils/homeGreeting.ts` — the service Inicio's greeting is about, so the page does not repeat
 in the lede what the card under it says in chips). The lit border pass has two sites (the next
 Jóvenes meeting, Inicio's next service) and ONE worship host; a third is an ADR, then
