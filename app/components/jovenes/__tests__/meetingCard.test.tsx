@@ -34,7 +34,7 @@ function ev(over: Partial<MinistryEventView> = {}): MinistryEventView {
       { _key: "s1", role: "encargado", memberId: "m1", name: "Ana", photo: null, mine: false },
       { _key: "s2", role: "predica", memberId: "m2", name: "Beto", photo: null, mine: true },
     ],
-    program: [{ _key: "l1", label: "Dinámica", note: "10 min", memberId: "m1", name: "Ana", photo: null, mine: false }],
+    program: [{ _key: "l1", label: "Dinámica", note: "10 min", memberId: "m1", name: "Ana", photo: null, mine: false, part: null, music: null, helpers: null, second: null }],
     createdById: null,
     createdByName: null,
     ...over,
@@ -75,7 +75,8 @@ describe("JovenesMeetingCard", () => {
     expect(button.getAttribute("aria-label")).toBe("Ver detalles");
     expect(body.hasAttribute("inert")).toBe(true);
     expect(screen.getByText("Ana, Beto")).toBeTruthy();
-    expect(screen.getByText("Programa · 1 parte")).toBeTruthy();
+    // A Saturday always has its five steps (ADR-0089), plus this meeting's one free line.
+    expect(screen.getByText("Programa · 6 partes")).toBeTruthy();
 
     fireEvent.click(button);
     expect(button.getAttribute("aria-expanded")).toBe("true");
@@ -106,7 +107,8 @@ describe("JovenesMeetingCard", () => {
   });
 
   it("a meeting with only a note has no fold: the note is on the card", () => {
-    card(ev({ seats: [], program: [], notes: "Traer Biblia" }));
+    // Not a Saturday: that one always has a program to unfold (its five steps, ADR-0089).
+    card(ev({ kind: "ministry", seats: [], program: [], notes: "Traer Biblia" }));
     expect(screen.queryByRole("button")).toBeNull();
     expect(screen.getByText("Traer Biblia")).toBeTruthy();
   });
@@ -185,6 +187,23 @@ describe("JovenesMeetingCard", () => {
     expect(halves().button.getAttribute("aria-expanded")).toBe("false");
     cleanup();
     expect(card(ev(), { countdown: "En 9 días" }).container.textContent).not.toContain("En 9 días");
+  });
+
+  it("a part that is the reader's links to the meeting's page — «Llenar» while it owes something, «Editar» after — unless that page no longer opens the date", () => {
+    const line = (over: Partial<MinistryEventView["program"][number]>) => ({ _key: "o", label: "Oración", note: null, memberId: "m2", name: "Beto", photo: null, mine: true, part: "oracion" as const, music: null, helpers: null, second: null, ...over });
+    const owing = ev({ program: [line({})] });
+    const { unmount } = card(owing, { featured: true });
+    expect(screen.getByRole("link", { name: /Llenar mi parte/ }).getAttribute("href")).toBe("/jovenes/reunion/a");
+    unmount();
+    const done = card(ev({ program: [line({ music: "track" })] }), { featured: true });
+    expect(screen.getByRole("link", { name: /Editar mi parte/ })).toBeTruthy();
+    done.unmount();
+    render(<JovenesMeetingCard event={owing} entry={jovenesDayEntry(owing, undefined, false)} mine={[]} countdown="Hace 40 días" featured />);
+    expect(screen.queryByRole("link", { name: /mi parte/ })).toBeNull();
+    // Nobody else's part carries the link.
+    cleanup();
+    card(ev({ program: [line({ mine: false })] }), { featured: true });
+    expect(screen.queryByRole("link", { name: /mi parte/ })).toBeNull();
   });
 
   it("the program editor makes a seatless meeting foldable, and sits in the body", () => {

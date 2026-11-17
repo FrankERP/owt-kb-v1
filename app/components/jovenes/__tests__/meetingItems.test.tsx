@@ -31,7 +31,7 @@ function ev(over: Partial<MinistryEventView> = {}): MinistryEventView {
       { _key: "s1", role: "encargado", memberId: "m1", name: "Ana", photo: null, mine: false },
       { _key: "s2", role: "comparte", memberId: "m2", name: "Beto", photo: null, mine: true },
     ],
-    program: [{ _key: "l1", label: "Dinámica", note: "10 min", memberId: "m2", name: "Beto", photo: null, mine: true }],
+    program: [{ _key: "l1", label: "Dinámica", note: "10 min", memberId: "m2", name: "Beto", photo: null, mine: true, part: null, music: null, helpers: null, second: null }],
     createdById: null,
     createdByName: null,
     ...over,
@@ -52,6 +52,17 @@ describe("jovenesMeetingItems", () => {
     expect(jovenesMeetingItems([ev()], opts(false))[0].mine).toEqual(["Comparte", "Dinámica"]);
     const nobody = ev({ seats: ev().seats.map((s) => ({ ...s, mine: false })), program: [] });
     expect(jovenesMeetingItems([nobody], opts(false))[0].mine).toEqual([]);
+  });
+
+  it("hands a Saturday its songs as the page read them: not read = no line, a date with no setlist = «por definir» (ADR-0089)", () => {
+    const alabanza = (o: Parameters<typeof jovenesMeetingItems>[1], e = ev()) =>
+      jovenesMeetingItems([e], o)[0].entry.program.find((p) => p.part === "alabanza");
+    expect(alabanza(opts(false))).not.toHaveProperty("songs");
+    expect(alabanza({ ...opts(false), sets: new Map() })).toMatchObject({ songs: null });
+    const sets = new Map([["2026-11-21", [{ title: "Rey de reyes", key: "D" }]]]);
+    expect(alabanza({ ...opts(false), sets })).toMatchObject({ songs: [{ title: "Rey de reyes", key: "D" }] });
+    // Only the Saturday meeting has an Alabanza step, whatever the date holds.
+    expect(alabanza({ ...opts(false), sets }, ev({ kind: "ministry" }))).toBeUndefined();
   });
 
   it("keeps the order the meetings came in", () => {

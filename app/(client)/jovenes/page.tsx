@@ -12,6 +12,7 @@ import { addDaysIso, meetingsLede } from "@/app/utils/jovenesEventView";
 import { HOME_LOOKBACK_DAYS, JOVENES_HORIZON_DAYS, homeCards, homeSections } from "@/app/utils/jovenesHomeModel";
 import { isMinistryManager, ledGroupsIn } from "@/app/utils/ministryAccess";
 import { readJovenesPeople } from "@/app/utils/jovenesPeople";
+import { readSaturdaySets } from "@/app/utils/jovenesWorshipSet";
 import { PAGE_LEDE, PAGE_TITLE } from "@/app/utils/homeHero";
 import Navbar from "@/app/components/Navbar";
 import Button from "@/app/components/ui/Button";
@@ -80,9 +81,12 @@ export default async function JovenesPage() {
   // Calendario's question) would read the roster for an editor that is never on screen. The first
   // pass builds the items without people to learn which cards those are; where one has the
   // editor, the items are built again with the roster.
-  const draft = jovenesMeetingItems(events, { isManager, people: [], today });
+  // Alabanza's songs on a Saturday meeting (ADR-0089): that date's published worship setlist,
+  // read once here and handed to the one builder, so a card says the same on both pages.
+  const sets = await readSaturdaySets(events.filter((e) => e.kind === "saturday").map((e) => e.date));
+  const draft = jovenesMeetingItems(events, { isManager, people: [], today, sets });
   const editing = homeCards(homeSections(draft, today, placed)).some((m) => m.editor !== null);
-  const meetings = editing ? jovenesMeetingItems(events, { isManager, people: await readJovenesPeople(), today }) : draft;
+  const meetings = editing ? jovenesMeetingItems(events, { isManager, people: await readJovenesPeople(), today, sets }) : draft;
   const sections = homeSections(meetings, today, placed);
   const coming = meetings.filter((m) => m.event.date >= today);
   const lede = meetingsLede(coming.map((m) => ({ date: m.event.date, mine: m.mine.length > 0 })));

@@ -284,9 +284,30 @@ describe("G3: isolation matrix on the real engine", () => {
       { _key: "s3", role: "apoyo", memberId: "gone", name: null, photo: null, mine: false },
     ]);
     expect(row.program).toEqual([
-      { _key: "g1", label: "Oración", note: "5 min", memberId: "l1", name: "Lu", photo: "https://cdn.sanity.io/images/x/y/l1.jpg", mine: false },
+      { _key: "g1", label: "Oración", note: "5 min", memberId: "l1", name: "Lu", photo: "https://cdn.sanity.io/images/x/y/l1.jpg", mine: false, part: null, music: null, helpers: null, second: null },
     ]);
     expect([row.createdById, row.createdByName, row.published]).toEqual(["l1", "Lu", true]);
+  });
+  it("ADR-0089: a part line reads its part, its music, who helps and its SECOND person, «mine» decided per person by id", async () => {
+    const meeting = ev("parts", {
+      ...PUB,
+      audience: { kind: "ministry" },
+      program: [
+        { _key: "o1", label: "Oración", part: "oracion", member: { _ref: "l1", _weak: true }, music: "alabanza" },
+        { _key: "d1", label: "Dinámica 1", part: "dinamica1", member: { _ref: "l1", _weak: true }, member2: { _ref: "p1", _weak: true }, note: "Sillas", helpers: "Dani y Sofi" },
+        // A second person who is gone keeps the slot's id and no name; an unknown part or music reads as none.
+        { _key: "d2", label: "Dinámica 2", part: "dinamica2", member2: { _ref: "gone", _weak: true }, music: "banda" },
+        { _key: "x1", label: "Rifa", part: "rifa" },
+      ],
+    });
+    h.fetch.mockImplementation((q: string, p?: Record<string, unknown>) => groq(q, p, [meeting, ...MEMBER_DOCS]));
+    const [row] = await readMinistryEvents(PEOPLE.pastorON, { me: "p1", ministry: "jovenes", mode: "member", ...WINDOW });
+    expect(row.program.map((l) => [l.part, l.music, l.helpers, l.mine, l.second && [l.second.memberId, l.second.name, l.second.mine]])).toEqual([
+      ["oracion", "alabanza", null, false, null],
+      ["dinamica1", null, "Dani y Sofi", false, ["p1", "Pastor Uno", true]],
+      ["dinamica2", null, null, false, ["gone", null, false]],
+      [null, null, null, false, null],
+    ]);
   });
   it("a typed seat name reads as its text, never «mine» and never a photo; a member's live name wins; the place reads back", async () => {
     const meeting = ev("typed", {

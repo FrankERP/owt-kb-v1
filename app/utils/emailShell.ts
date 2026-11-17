@@ -52,13 +52,19 @@ export function tr(inner: string): string {
 
 // `link` is the "Ajustar mis avisos →" footer destination — every caller
 // currently passes `${appBaseUrl()}/me`.
-export function shell(bodyRows: string, link: string): string {
+//
+// `words` is for an email that is not the worship team's (ADR-0089, Jóvenes): its own eyebrow and
+// its own «why you receive this». Both are fixed strings a module passes, never a person's text —
+// they are written into the HTML as they are. Absent, the shell says what it always said.
+export function shell(bodyRows: string, link: string, words: { eyebrow?: string; reason?: string } = {}): string {
+  const eyebrowWords = words.eyebrow ?? "OASIS WORSHIP TEAM";
+  const reason = words.reason ?? "Recibes esto porque sirves en el equipo de alabanza de Oasis.";
   const eyebrow = tr(td(
-    `<span style="font:700 11px system-ui,sans-serif;letter-spacing:.24em;color:${C.accent}">OASIS WORSHIP TEAM</span>`,
+    `<span style="font:700 11px system-ui,sans-serif;letter-spacing:.24em;color:${C.accent}">${eyebrowWords}</span>`,
     { style: "padding:24px 24px 4px" },
   ));
   const footer = tr(td(
-    `<p style="margin:0 0 6px;font:12px system-ui,sans-serif;color:${C.muted}">Recibes esto porque sirves en el equipo de alabanza de Oasis.</p>` +
+    `<p style="margin:0 0 6px;font:12px system-ui,sans-serif;color:${C.muted}">${reason}</p>` +
     `<a href="${link}" style="font:12px system-ui,sans-serif;color:${C.accent};text-decoration:none">Ajustar mis avisos →</a>`,
     { style: `padding:16px 24px 24px;border-top:1px solid ${C.surface}` },
   ));

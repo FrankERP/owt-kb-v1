@@ -95,6 +95,26 @@ export type ActiveDay = {
 
 /** A person on a Jóvenes meeting, «mine» decided by member id on the server. */
 export type JovenesDayPerson = { key: string; label: string; name: string | null; photo: string | null; mine: boolean };
+/**
+ * One step of a meeting's program. A free line is a person with a note, as it always was. A FIXED
+ * PART (ADR-0089: Alabanza, Oración, the two dinámicas, Plática) also says which one it is, its
+ * one or two people, and what its responsable filled; its own `name`/`photo` are its first
+ * person's, so anything that reads the old shape still works.
+ */
+export type JovenesDayStep = JovenesDayPerson & {
+  note: string | null;
+  part?: "alabanza" | "oracion" | "dinamica1" | "dinamica2" | "platica";
+  people?: Array<{ name: string | null; photo: string | null; mine: boolean }>;
+  /** The music it asks for, in words («Track», «Pide alabanza»), or null. */
+  music?: string | null;
+  /** «Jóvenes que apoyan», one line of names. */
+  helpers?: string | null;
+  /** Alabanza only: that Saturday's published worship setlist; `null` = read and there is none
+   *  yet («Setlist por definir»); absent = the page did not read it (nothing is said). */
+  songs?: Array<{ title: string; key: string | null }> | null;
+  /** A part of the reader's that still lacks its description or its music choice. */
+  pending?: boolean;
+};
 /** A published Jóvenes meeting the reader may see (ADR-0081), as the Calendario shows it. */
 export type JovenesDayEntry = {
   id: string;
@@ -103,8 +123,10 @@ export type JovenesDayEntry = {
   /** Where it happens («Oasis Tlalpan»), or null. */
   place: string | null;
   seats: JovenesDayPerson[];
-  program: Array<JovenesDayPerson & { note: string | null }>;
+  program: JovenesDayStep[];
   notes: string | null;
+  /** `false`: the meeting's page no longer opens this date, so a part of the reader's gets no link to it. */
+  partLinks?: false;
 };
 
 interface Props {

@@ -67,9 +67,10 @@ const EXPECTED_CALLERS: Record<string, string[]> = {
     "app/api/me/availability/route.ts",
   ],
   copyInstrumentsCommit: ["app/api/admin/roles/copy-instruments/route.ts", "app/mcp/tools/serviceEditor.ts"],
-  // ADR-0081 (G1c): Jóvenes' meetings — the five route files of its six handlers, never MCP
-  // (the shift and swap of a group's classes: plan 2026-11-12 L3, L4).
+  // ADR-0081 (G1c): Jóvenes' meetings — the six route files of its seven handlers, never MCP
+  // (the shift and swap of a group's classes: plan 2026-11-12 L3, L4; «Mi parte»: ADR-0089, W10).
   ministryEventCommit: [
+    "app/api/ministries/[ministry]/events/[token]/parts/[part]/route.ts",
     "app/api/ministries/[ministry]/events/[token]/program/route.ts",
     "app/api/ministries/[ministry]/events/[token]/route.ts",
     "app/api/ministries/[ministry]/events/[token]/shift/route.ts",

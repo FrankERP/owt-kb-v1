@@ -25,6 +25,7 @@ const h = vi.hoisted(() => ({
   getMemberAccess: vi.fn(),
   readMinistryEvents: vi.fn(),
   readJovenesPeople: vi.fn(),
+  readSaturdaySets: vi.fn(),
   rolloutOpen: false,
   rolloutClosed: false,
 }));
@@ -42,6 +43,7 @@ vi.mock("@/app/utils/ministryEventReads", async () => {
 });
 vi.mock("@/app/components/Navbar", () => ({ default: () => null }));
 vi.mock("@/app/utils/jovenesPeople", () => ({ readJovenesPeople: () => h.readJovenesPeople() }));
+vi.mock("@/app/utils/jovenesWorshipSet", () => ({ readSaturdaySets: (dates: string[]) => h.readSaturdaySets(dates) }));
 vi.mock("@/app/components/jovenes/ProgramEditor", () => ({
   default: ({ event, people }: { event: { _id: string }; people: unknown[] }) => `[programa ${event._id} · ${people.length}]`,
 }));
@@ -100,6 +102,7 @@ beforeEach(() => {
   h.rolloutOpen = false;
   h.rolloutClosed = false;
   h.readJovenesPeople.mockResolvedValue([{ id: "p9", name: "Ana", groups: [] }]);
+  h.readSaturdaySets.mockResolvedValue(new Map());
   h.requireActiveSession.mockResolvedValue(session);
   h.requireMinistryMember.mockResolvedValue(session);
   h.getMemberAccess.mockResolvedValue(SUPER);
@@ -162,6 +165,17 @@ describe("/jovenes/calendario read", () => {
     expect(html.match(/aria-expanded="false"/g)).toHaveLength(2);
     expect(html).not.toContain('data-lit=""');
     expect(html).toContain("Tú · Encargado");
+  });
+
+  it("a Saturday meeting shows Alabanza's songs, read for the Saturdays' dates only (ADR-0089)", async () => {
+    const saturday = { ...EVENT, _id: "ministryEvent.s", audience: { kind: "ministry" }, kind: "saturday", date: "2026-11-21", seats: [], program: [] };
+    h.readMinistryEvents.mockResolvedValue([EVENT, saturday, { ...saturday, _id: "ministryEvent.s2", date: "2026-11-28" }]);
+    h.readSaturdaySets.mockResolvedValue(new Map([["2026-11-21", [{ title: "Rey de reyes", key: "D" }]]]));
+    const html = await visit();
+    expect(h.readSaturdaySets).toHaveBeenCalledWith(["2026-11-21", "2026-11-28"]);
+    expect(html).toContain("Rey de reyes");
+    // The Saturday with no published setlist says so, once; the joint meeting has no Alabanza step.
+    expect(html.match(/Setlist por definir/g)).toHaveLength(1);
   });
 
   it("says when there is nothing published", async () => {

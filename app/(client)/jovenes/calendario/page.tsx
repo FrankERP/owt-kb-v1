@@ -12,6 +12,7 @@ import { addDaysIso, meetingsLede } from "@/app/utils/jovenesEventView";
 import { JOVENES_HORIZON_DAYS } from "@/app/utils/jovenesHomeModel";
 import { isMinistryManager, ledGroupsIn } from "@/app/utils/ministryAccess";
 import { readJovenesPeople } from "@/app/utils/jovenesPeople";
+import { readSaturdaySets } from "@/app/utils/jovenesWorshipSet";
 import { PAGE_LEDE, PAGE_TITLE } from "@/app/utils/homeHero";
 import Navbar from "@/app/components/Navbar";
 import Button from "@/app/components/ui/Button";
@@ -71,8 +72,12 @@ export default async function JovenesCalendarPage() {
   const isManager = isMinistryManager(access, "jovenes");
   // «Planear» for a manager or a leader of at least one group (per group, plan 2026-11-11 §5.1).
   const plans = isManager || ledGroupsIn(access, "jovenes").length > 0;
-  const people = anyProgramEditor(events, isManager, today) ? await readJovenesPeople() : [];
-  const meetings = jovenesMeetingItems(events, { isManager, people, today });
+  // Alabanza's songs on a Saturday meeting (ADR-0089): that date's published worship setlist.
+  const [people, sets] = await Promise.all([
+    anyProgramEditor(events, isManager, today) ? readJovenesPeople() : Promise.resolve([]),
+    readSaturdaySets(events.filter((e) => e.kind === "saturday").map((e) => e.date)),
+  ]);
+  const meetings = jovenesMeetingItems(events, { isManager, people, today, sets });
   const lede = meetingsLede(meetings.map((m) => ({ date: m.event.date, mine: m.mine.length > 0 })));
 
   return (
