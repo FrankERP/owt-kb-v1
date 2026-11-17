@@ -28,7 +28,7 @@ function item(id: string, date: string, over: { mine?: string[]; countdown?: str
   };
 }
 
-const EMPTY: HomeSections<JovenesListItem> = { next: null, upcoming: [], later: 0, turns: [], previous: null };
+const EMPTY: HomeSections<JovenesListItem> = { next: null, upcoming: [], later: 0, turns: [], turnsTotal: 0, previous: null };
 const labels = () => screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
 const cards = () => screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent!.split(",")[0]);
 const calendar = () => screen.queryByRole("link", { name: /^Ver el calendario/ });
@@ -60,9 +60,12 @@ describe("JovenesHome", () => {
 
   it("«Te toca» lists the reader's turns with what they hold, between the next meeting and the rest", () => {
     const turn = item("clase", "2026-11-25", { mine: ["Encargado", "Dinámica"], countdown: "En 8 días", audience: { kind: "groups", groups: [G1.id] } });
-    render(<JovenesHome sections={{ ...EMPTY, next: item("uno", "2026-11-21"), upcoming: [turn], turns: [turn] }} />);
-    expect(labels()).toEqual(["Próxima reunión", "Te toca1", "Lo que sigue"]);
+    render(<JovenesHome sections={{ ...EMPTY, next: item("uno", "2026-11-21"), upcoming: [turn], turns: [turn], turnsTotal: 6 }} />);
+    // The count is every turn ahead (six), not the ones listed (one).
+    expect(labels()).toEqual(["Próxima reunión", "Te toca6", "Lo que sigue"]);
     const block = screen.getByRole("heading", { level: 2, name: /^Te toca/ }).nextElementSibling!;
+    // A list holds only its items: the green rail is the list's own pseudo-element.
+    expect(Array.from(block.querySelector("ul")!.children).every((c) => c.tagName === "LI")).toBe(true);
     expect(block.textContent).toContain("clase");
     expect(block.textContent).toContain("En 8 días · 18:10");
     expect(block.textContent).toContain("Encargado");
@@ -81,7 +84,8 @@ describe("JovenesHome", () => {
   it("a past meeting still shows when nothing is coming", () => {
     render(<JovenesHome sections={{ ...EMPTY, previous: item("pasada", "2026-11-14", { countdown: "Hace 3 días" }) }} />);
     expect(labels()).toEqual(["Próxima reunión", "Reunión anterior"]);
-    expect(screen.getByText("Aún no hay reuniones publicadas.")).toBeTruthy();
+    // Not «Aún no hay»: one was held, and it is right under this line.
+    expect(screen.getByText("No hay próximas reuniones publicadas.")).toBeTruthy();
     expect(cards()).toEqual(["pasada"]);
   });
 });

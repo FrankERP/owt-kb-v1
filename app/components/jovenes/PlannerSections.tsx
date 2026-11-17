@@ -13,7 +13,8 @@
 import { useState } from "react";
 import SegmentedControl from "@/app/components/ui/SegmentedControl";
 
-type Section = "saturday" | "classes" | "groups";
+export type PlannerSection = "saturday" | "classes" | "groups";
+type Section = PlannerSection;
 
 /** The month map stays under the navbar while the sections scroll, from `lg`; the banner's height joins in. */
 const PLANNER_STICKY = "lg:sticky lg:top-[calc(6.5rem+env(safe-area-inset-top)+var(--impersonation-offset))]";
@@ -29,14 +30,18 @@ export default function PlannerSections({
   saturday,
   classes,
   groups,
+  initial = "saturday",
 }: {
   /** The month at a glance (`MonthMap`). */
   map: React.ReactNode;
   saturday: React.ReactNode;
   classes: React.ReactNode;
   groups: React.ReactNode;
+  /** The section a phone opens on: where THIS viewer has something to do (a leader who is not an
+   *  admin only reads the Saturdays, so the page opens them on their classes). */
+  initial?: PlannerSection;
 }) {
-  const [section, setSection] = useState<Section>("saturday");
+  const [section, setSection] = useState<Section>(initial);
   const shown = (s: Section) => (section === s ? "" : "hidden lg:block");
 
   return (

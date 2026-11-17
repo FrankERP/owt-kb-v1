@@ -68,8 +68,8 @@ export default function JovenesMeetingCard({
   children?: React.ReactNode;
 }) {
   const bodyId = useId();
-  // `null` until the reader touches the fold, so the card follows `featured` — when a filter
-  // makes another meeting the next one, that one opens without a second state to keep in step.
+  // `null` until the reader touches the fold, so the card follows its props: Inicio's next meeting
+  // (`featured`) and the month grid's picked day (`defaultOpen`) open without a second state.
   const [toggled, setToggled] = useState<boolean | null>(null);
   // A meeting with only a note has nothing to unfold: the note shows on the card itself.
   const hasBody = entry.seats.length > 0 || entry.program.length > 0 || !!children;

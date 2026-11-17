@@ -56,7 +56,7 @@ export default async function JovenesPlannerPage({ searchParams }: { searchParam
   if (!access.active || !isMinistryMember(access, "jovenes")) redirect("/");
   const isManager = isMinistryManager(access, "jovenes");
   // The groups this person LEADS (per group, plan 2026-11-11 §5.1); a pastor who leads none — a
-  // `leader` with an empty `leaderOf` included — has nothing to plan: back to the meetings list.
+  // `leader` with an empty `leaderOf` included — has nothing to plan: back to Jóvenes' Inicio.
   const led = ledGroupsIn(access, "jovenes");
   if (!isManager && led.length === 0) redirect("/jovenes");
 
@@ -148,6 +148,7 @@ export default async function JovenesPlannerPage({ searchParams }: { searchParam
           // (`PlannerSections`, 2026-11-17).
           <div className="mt-8 lg:mt-10" {...revealProps(1)}>
             <PlannerSections
+              initial={isManager ? "saturday" : "classes"}
               map={<MonthMap month={month} events={events} today={today} />}
               saturday={<SaturdayPlanner month={month} rows={rows} people={people} canEdit={isManager} defaultDate={defaultDate} />}
               classes={<GroupClasses events={classEvents} viewer={viewer} people={people} today={today} />}

@@ -48,8 +48,8 @@ function Label({ children, count = null, first = false, reveal }: { children: Re
  */
 function Turns({ turns }: { turns: JovenesListItem[] }) {
   return (
-    <ul className="brand-surface relative divide-y divide-ink/[0.08] overflow-hidden rounded-[var(--brand-radius-panel)]">
-      <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-positive-fg" />
+    // The green rail is the list's own `::before`: a `<span>` is not a child a `<ul>` may have.
+    <ul className="brand-surface relative divide-y divide-ink/[0.08] overflow-hidden rounded-[var(--brand-radius-panel)] before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-positive-fg">
       {turns.map((t) => (
         <li key={t.event._id} className="flex items-center gap-3.5 py-3.5 pl-5 pr-4">
           <DateTile date={t.event.date} tone={audienceTone(t.event.audience)} decorative />
@@ -77,7 +77,7 @@ function Turns({ turns }: { turns: JovenesListItem[] }) {
 }
 
 export default function JovenesHome({ sections }: { sections: HomeSections<JovenesListItem> }) {
-  const { next, upcoming, later, turns, previous } = sections;
+  const { next, upcoming, later, turns, turnsTotal, previous } = sections;
   // The reveal steps in reading order; a block that is absent takes no step.
   let step = 1;
   const card = (it: JovenesListItem, opts: { featured?: boolean; held?: boolean } = {}) => (
@@ -101,13 +101,17 @@ export default function JovenesHome({ sections }: { sections: HomeSections<Joven
           {...revealProps(step++)}
         >
           <CalendarOffIcon size={28} className="text-ink-dim" />
-          <p className="font-body text-base text-ink-muted">Aún no hay reuniones publicadas.</p>
+          {/* «Aún no hay» only when there is truly nothing: over «Reunión anterior» it would deny
+              the meeting shown right under it. */}
+          <p className="font-body text-base text-ink-muted">{previous ? "No hay próximas reuniones publicadas." : "Aún no hay reuniones publicadas."}</p>
         </div>
       )}
 
       {turns.length > 0 && (
         <>
-          <Label count={turns.length} reveal={step++}>
+          {/* The count is every turn ahead, not the three listed: «Te toca 8» is the truth, and the
+              Calendario's «Me toca» filter holds the rest. */}
+          <Label count={turnsTotal} reveal={step++}>
             Te toca
           </Label>
           <div {...revealProps(step++)}>

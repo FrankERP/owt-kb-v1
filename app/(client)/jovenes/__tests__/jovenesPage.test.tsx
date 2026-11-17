@@ -220,7 +220,9 @@ describe("/jovenes read", () => {
     // With nothing to come, the last one held still shows under the empty state.
     h.readMinistryEvents.mockResolvedValue([held]);
     const empty = await visit();
-    expect(empty).toContain("Aún no hay reuniones publicadas");
+    // «Aún no hay» would deny the meeting shown right under it.
+    expect(empty).toContain("No hay próximas reuniones publicadas");
+    expect(empty).not.toContain("Aún no hay");
     expect(empty).toMatch(/<h2[^>]*>Reunión anterior/);
     expect(empty).not.toContain("por venir");
     expect(empty).not.toContain("Ver el calendario");
@@ -285,5 +287,25 @@ describe("/jovenes program editor and «Planear» (cosmetic; the server decides)
     const html = await visit();
     expect(html).not.toContain("[programa");
     expect(h.readJovenesPeople).not.toHaveBeenCalled();
+  });
+
+  it("an editor on a meeting Inicio does not draw as a card costs no people read either", async () => {
+    // Inicio reads a year and draws five cards. The pastor's own Saturday is the sixth meeting
+    // ahead: it is listed in «Te toca», a line without a card's body, so its editor is never on
+    // screen and the roster is not read for it.
+    h.rolloutOpen = true;
+    h.getMemberAccess.mockResolvedValue(PASTOR);
+    const other = (i: number) => ({ ...EVENT, _id: `ministryEvent.o${i}`, date: `2026-11-${11 + i}`, seats: [], program: [] });
+    const far = { ...SATURDAY, _id: "ministryEvent.far", date: "2026-12-19" };
+    const again = { ...SATURDAY, _id: "ministryEvent.far2", date: "2026-12-26" };
+    h.readMinistryEvents.mockResolvedValue([other(0), other(1), other(2), other(3), other(4), far, again]);
+    const html = await visit();
+    expect(html).toMatch(/<h2[^>]*>Te toca/);
+    expect(html).not.toContain("[programa");
+    expect(h.readJovenesPeople).not.toHaveBeenCalled();
+    // The same Saturday as the NEXT meeting is a card: the editor shows, with the people.
+    h.readMinistryEvents.mockResolvedValue([{ ...far, date: "2026-11-14" }]);
+    expect(await visit()).toContain("[programa ministryEvent.far · 1]");
+    expect(h.readJovenesPeople).toHaveBeenCalledTimes(1);
   });
 });

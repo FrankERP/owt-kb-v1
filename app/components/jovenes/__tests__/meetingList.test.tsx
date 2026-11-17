@@ -174,6 +174,28 @@ describe("JovenesMeetingList", () => {
       expect(pill(new RegExp(`^${G1.name}`)).getAttribute("aria-pressed")).toBe("true");
     });
 
+    it("a paged month the filter empties is forgotten, not kept for later", () => {
+      // December holds only a G1 meeting here; «Me toca» keeps November alone, so the months end
+      // there and the grid falls back. Back on «Todas» it must NOT jump to December again.
+      openMonth();
+      fireEvent.click(screen.getByRole("button", { name: "Mes siguiente" }));
+      expect(screen.getByRole("heading", { level: 2, name: "Diciembre 2026" })).toBeTruthy();
+      fireEvent.click(pill(/^Me toca/));
+      expect(screen.getByRole("heading", { level: 2, name: "Noviembre 2026" })).toBeTruthy();
+      fireEvent.click(pill(/^Todas/));
+      expect(screen.getByRole("heading", { level: 2, name: "Noviembre 2026" })).toBeTruthy();
+    });
+
+    it("a crowded day stops at three dots, plus the reader's green one", () => {
+      // Four dots and the green one are 42 px: wider than a day's column on a small phone.
+      const crowded = ["a", "b", "c", "d", "e"].map((id, i) => item(id, "2026-11-21", { kind: "ministry" }, i === 0 ? ["Encargado"] : []));
+      render(<JovenesMeetingList items={crowded} today={TODAY} />);
+      fireEvent.click(view("Mes"));
+      const dots = day(/^Sábado 21 de noviembre: 5 reuniones/).nextElementSibling!;
+      expect(dots.children).toHaveLength(4);
+      expect(dots.querySelectorAll("[data-mine]")).toHaveLength(1);
+    });
+
     it("a month with nothing says so", () => {
       const sparse = [item("uno", "2026-11-14", { kind: "ministry" }), item("dos", "2027-01-09", { kind: "ministry" })];
       render(<JovenesMeetingList items={sparse} today={TODAY} />);

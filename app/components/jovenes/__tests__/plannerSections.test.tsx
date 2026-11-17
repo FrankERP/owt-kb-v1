@@ -11,9 +11,10 @@ import PlannerSections from "../PlannerSections";
 installMotionTestEnv();
 afterEach(cleanup);
 
-function view() {
+function view(initial?: "saturday" | "classes" | "groups") {
   render(
     <PlannerSections
+      initial={initial}
       map={<p>mapa</p>}
       saturday={<input aria-label="sábado" />}
       classes={<p>clases</p>}
@@ -34,6 +35,14 @@ describe("PlannerSections", () => {
     expect(hiddenOnPhone(wrapper("clases"))).toBe(true);
     expect(hiddenOnPhone(wrapper("grupos"))).toBe(true);
     expect(hiddenOnPhone(screen.getByRole("complementary", { name: "El mes de un vistazo" }))).toBe(false);
+  });
+
+  it("opens where the page says this viewer has something to do", () => {
+    // A leader who is not an admin only reads the Saturdays: the page opens them on their classes.
+    view("classes");
+    expect(screen.getByRole("radio", { name: "Clases" }).getAttribute("aria-checked")).toBe("true");
+    expect(hiddenOnPhone(wrapper("clases"))).toBe(false);
+    expect(hiddenOnPhone(screen.getByLabelText("sábado").parentElement!)).toBe(true);
   });
 
   it("the control is a phone's: from `lg` every section shows and it is not drawn", () => {

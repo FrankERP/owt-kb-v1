@@ -319,7 +319,7 @@ export default function GroupClasses({
               )}
             </div>
           </div>
-          <div className="mt-3 flex items-center justify-between gap-2 border-t border-ink/[0.08] pt-2 sm:mt-0 sm:shrink-0 sm:flex-col sm:items-end sm:justify-start sm:border-t-0 sm:pt-0">
+          <div className={`mt-3 flex items-center ${gap ? "justify-end" : "justify-between"} gap-2 border-t border-ink/[0.08] pt-2 sm:mt-0 sm:shrink-0 sm:flex-col sm:items-end sm:justify-start sm:border-t-0 sm:pt-0`}>
             {!gap && (
               <Checkbox
                 checked={c.lesson.done}

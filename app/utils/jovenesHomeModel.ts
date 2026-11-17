@@ -14,6 +14,12 @@ export const HOME_UPCOMING = 3;
 export const HOME_TURNS = 3;
 /** How far back the page looks for «Reunión anterior». A page range, not access. */
 export const HOME_LOOKBACK_DAYS = 21;
+/**
+ * How far ahead Jóvenes' two member pages read. ONE number for both: «N reuniones más» on Inicio
+ * counts what the Calendario lists, so the two windows may never drift. A page range, not access
+ * (plan R8).
+ */
+export const JOVENES_HORIZON_DAYS = 365;
 
 export type HomeSections<T> = {
   /** The next meeting from today on: the open, lit card. */
@@ -24,6 +30,8 @@ export type HomeSections<T> = {
   later: number;
   /** The reader's next turns, when they say more than the next meeting's own «Tú» chip does. */
   turns: T[];
+  /** Every turn the reader has ahead, the ones `turns` leaves out included: the block's count. */
+  turnsTotal: number;
   /** The latest meeting already held, inside the page's look-back. */
   previous: T | null;
 };
@@ -41,5 +49,14 @@ export function homeSections<T>(meetings: readonly T[], today: string, of: (m: T
   const mine = future.filter((m) => of(m).mine);
   // One turn that IS the next meeting would repeat the chip the open card already wears.
   const turns = mine.length === 1 && mine[0] === next ? [] : mine.slice(0, HOME_TURNS);
-  return { next, upcoming, later: rest.length - upcoming.length, turns, previous: past.at(-1) ?? null };
+  return { next, upcoming, later: rest.length - upcoming.length, turns, turnsTotal: mine.length, previous: past.at(-1) ?? null };
+}
+
+/**
+ * The meetings Inicio draws as CARDS — the next one, the few after it, the last one held. «Te toca»
+ * lists the reader's turns as lines, without a card's body, so a turn that is not also one of
+ * these never shows its program editor: the page asks this before reading the people to pick from.
+ */
+export function homeCards<T>(sections: HomeSections<T>): T[] {
+  return [sections.next, ...sections.upcoming, sections.previous].filter((m): m is T => m !== null);
 }

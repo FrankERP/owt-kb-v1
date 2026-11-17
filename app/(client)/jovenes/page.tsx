@@ -9,14 +9,14 @@ import {
 } from "@/app/utils/ministryEventReads";
 import { rolloutAllows } from "@/app/utils/rollout";
 import { addDaysIso, meetingsLede } from "@/app/utils/jovenesEventView";
-import { HOME_LOOKBACK_DAYS, homeSections } from "@/app/utils/jovenesHomeModel";
+import { HOME_LOOKBACK_DAYS, JOVENES_HORIZON_DAYS, homeCards, homeSections } from "@/app/utils/jovenesHomeModel";
 import { isMinistryManager, ledGroupsIn } from "@/app/utils/ministryAccess";
 import { readJovenesPeople } from "@/app/utils/jovenesPeople";
 import { PAGE_LEDE, PAGE_TITLE } from "@/app/utils/homeHero";
 import Navbar from "@/app/components/Navbar";
 import Button from "@/app/components/ui/Button";
 import JovenesHome from "@/app/components/jovenes/JovenesHome";
-import { anyProgramEditor, jovenesMeetingItems } from "@/app/components/jovenes/meetingItems";
+import { jovenesMeetingItems, type JovenesListItem } from "@/app/components/jovenes/meetingItems";
 import { CalendarIcon } from "@/app/components/ui/icons";
 import { revealProps } from "@/app/utils/reveal";
 
@@ -26,10 +26,6 @@ export const metadata: Metadata = {
 };
 
 const TZ = "America/Mexico_City";
-/** How far ahead «Inicio» reads: the same window the Calendario shows, so «N reuniones más» is
- *  the number that page lists. A page range, not access (plan R8). */
-const HORIZON_DAYS = 365;
-
 // Every read goes through the ONE reader (ADR-0081): it carries the id prefix, the ministry,
 // `published == true` and the reader's groups as a parameter, so Otro Nivel never receives
 // Emprendedores' meetings. This page reads the session, so it is dynamic; it exports no
@@ -65,7 +61,7 @@ export default async function JovenesPage() {
       ministry: "jovenes",
       // A little back, for «Reunión anterior»: the same reader and the same arm, a wider window.
       from: addDaysIso(today, -HOME_LOOKBACK_DAYS),
-      to: addDaysIso(today, HORIZON_DAYS),
+      to: addDaysIso(today, JOVENES_HORIZON_DAYS),
       mode: "member",
     });
   } catch (e) {
@@ -78,9 +74,16 @@ export default async function JovenesPage() {
   const isManager = isMinistryManager(access, "jovenes");
   // «Planear» for a manager or a leader of at least one group (per group, plan 2026-11-11 §5.1).
   const plans = isManager || ledGroupsIn(access, "jovenes").length > 0;
-  const people = anyProgramEditor(events, isManager, today) ? await readJovenesPeople() : [];
-  const meetings = jovenesMeetingItems(events, { isManager, people, today });
-  const sections = homeSections(meetings, today, (m) => ({ date: m.event.date, mine: m.mine.length > 0 }));
+  const placed = (m: JovenesListItem) => ({ date: m.event.date, mine: m.mine.length > 0 });
+  // The people to pick from are read only when a card this page DRAWS carries the editor. Inicio
+  // reads a year and draws at most five cards, so «some meeting this reader may edit» (the
+  // Calendario's question) would read the roster for an editor that is never on screen. The first
+  // pass builds the items without people to learn which cards those are; where one has the
+  // editor, the items are built again with the roster.
+  const draft = jovenesMeetingItems(events, { isManager, people: [], today });
+  const editing = homeCards(homeSections(draft, today, placed)).some((m) => m.editor !== null);
+  const meetings = editing ? jovenesMeetingItems(events, { isManager, people: await readJovenesPeople(), today }) : draft;
+  const sections = homeSections(meetings, today, placed);
   const coming = meetings.filter((m) => m.event.date >= today);
   const lede = meetingsLede(coming.map((m) => ({ date: m.event.date, mine: m.mine.length > 0 })));
 

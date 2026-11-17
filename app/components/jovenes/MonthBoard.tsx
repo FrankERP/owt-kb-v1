@@ -30,8 +30,9 @@ import type { JovenesListItem } from "./meetingItems";
 
 /** Monday first, the Calendario's own weekday labels. */
 const DAY_HEADERS = [...DOW_SHORT.slice(1), DOW_SHORT[0]];
-/** Past this many dots a day stops growing: three meetings on one day is the realistic ceiling. */
-const MAX_DOTS = 4;
+/** Past this many dots a day stops growing (`DayDots` caps at three too): with the reader's green
+ *  one, four dots are 33 px, inside a day's column on a 320 px phone. */
+const MAX_DOTS = 3;
 
 /** The grid stays under the navbar while the cards scroll, from `lg`; the banner's height joins in. */
 const BOARD_STICKY = "lg:sticky lg:top-[calc(6.5rem+env(safe-area-inset-top)+var(--impersonation-offset))]";
@@ -54,6 +55,9 @@ export default function JovenesMonthBoard({
   // Until the reader pages, the month of the next meeting: a grid of an empty month would be a
   // first screen that answers nothing.
   const firstWithMeeting = listed[0]?.date.slice(0, 7);
+  // A pick the months no longer hold is FORGOTTEN, not just ignored: kept, it would jump the
+  // grid back to that month when a later filter brought it back, long after the reader left it.
+  if (pickedMonth !== null && !months.includes(pickedMonth)) setPickedMonth(null);
   const month = pickedMonth && months.includes(pickedMonth) ? pickedMonth : firstWithMeeting && months.includes(firstWithMeeting) ? firstWithMeeting : months[0];
   const at = months.indexOf(month);
   const marks = dayMarks(listed);
@@ -101,7 +105,7 @@ export default function JovenesMonthBoard({
               const mark = marks.get(cell.date);
               const isToday = cell.date === today;
               const selected = day === cell.date;
-              const cls = `${DAY_CELL_BASE} h-10 w-10 text-lg ${selected ? DAY_CELL_SELECTED : mark ? DAY_CELL_LIT : DAY_CELL_EMPTY} ${
+              const cls = `${DAY_CELL_BASE} h-9 w-9 text-lg ${selected ? DAY_CELL_SELECTED : mark ? DAY_CELL_LIT : DAY_CELL_EMPTY} ${
                 isToday ? (selected ? DAY_CELL_TODAY_ON_FILL : DAY_CELL_TODAY) : ""
               }`;
               return (

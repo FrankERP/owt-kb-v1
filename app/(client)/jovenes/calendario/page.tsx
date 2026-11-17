@@ -9,6 +9,7 @@ import {
 } from "@/app/utils/ministryEventReads";
 import { rolloutAllows } from "@/app/utils/rollout";
 import { addDaysIso, meetingsLede } from "@/app/utils/jovenesEventView";
+import { JOVENES_HORIZON_DAYS } from "@/app/utils/jovenesHomeModel";
 import { isMinistryManager, ledGroupsIn } from "@/app/utils/ministryAccess";
 import { readJovenesPeople } from "@/app/utils/jovenesPeople";
 import { PAGE_LEDE, PAGE_TITLE } from "@/app/utils/homeHero";
@@ -25,9 +26,6 @@ export const metadata: Metadata = {
 };
 
 const TZ = "America/Mexico_City";
-/** How far ahead the Calendario reaches, and «Inicio» counts: a page range, not access (plan R8). */
-const HORIZON_DAYS = 365;
-
 // Jóvenes' Calendario (2026-11-17): every meeting to come, as the list `/jovenes` used to be plus
 // a month grid. The same gates and the same ONE read as «Inicio» (`/jovenes`): the rollout first
 // and on the server, membership, then `readMinistryEvents` in MEMBER mode — it carries the id
@@ -60,7 +58,7 @@ export default async function JovenesCalendarPage() {
       me: sanityId,
       ministry: "jovenes",
       from: today,
-      to: addDaysIso(today, HORIZON_DAYS),
+      to: addDaysIso(today, JOVENES_HORIZON_DAYS),
       mode: "member",
     });
   } catch (e) {

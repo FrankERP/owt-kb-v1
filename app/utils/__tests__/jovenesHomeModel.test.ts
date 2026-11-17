@@ -1,6 +1,6 @@
 // «Inicio» de Jóvenes as data: the next meeting, the few after it, the reader's turns, the last one held.
 import { describe, expect, it } from "vitest";
-import { HOME_TURNS, HOME_UPCOMING, homeSections } from "../jovenesHomeModel";
+import { HOME_TURNS, HOME_UPCOMING, homeCards, homeSections } from "../jovenesHomeModel";
 
 const m = (date: string, mine = false) => ({ date, mine });
 const TODAY = "2026-11-17";
@@ -8,7 +8,7 @@ const sections = (list: ReturnType<typeof m>[], today: string) => homeSections(l
 
 describe("homeSections", () => {
   it("is empty for no meetings", () => {
-    expect(sections([], TODAY)).toEqual({ next: null, upcoming: [], later: 0, turns: [], previous: null });
+    expect(sections([], TODAY)).toEqual({ next: null, upcoming: [], later: 0, turns: [], turnsTotal: 0, previous: null });
   });
 
   it("splits at today: a meeting dated today is still the next one, the latest past one is «anterior»", () => {
@@ -33,6 +33,8 @@ describe("homeSections", () => {
     const s = sections(list, TODAY);
     expect(s.turns).toEqual([list[1], list[3], list[4]]);
     expect(s.turns).toHaveLength(HOME_TURNS);
+    // The block's count is every turn ahead, the ones it does not list included.
+    expect(s.turnsTotal).toBe(5);
   });
 
   it("never counts a past turn", () => {
@@ -47,5 +49,13 @@ describe("homeSections", () => {
 
   it("has no «anterior» when nothing was held", () => {
     expect(sections([m("2026-11-21")], TODAY).previous).toBeNull();
+  });
+
+  it("the cards the page draws are the next one, the few after it and the last one held — a turn listed in «Te toca» is not one", () => {
+    const list = [m("2026-11-14"), m("2026-11-21"), m("2026-11-28"), m("2026-12-05"), m("2026-12-12"), m("2026-12-19", true), m("2026-12-26", true)];
+    const s = sections(list, TODAY);
+    expect(s.turns).toEqual([list[5], list[6]]);
+    expect(homeCards(s)).toEqual([list[1], list[2], list[3], list[4], list[0]]);
+    expect(homeCards(sections([], TODAY))).toEqual([]);
   });
 });
