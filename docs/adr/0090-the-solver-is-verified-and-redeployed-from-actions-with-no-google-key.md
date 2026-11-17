@@ -1,4 +1,4 @@
-# ADR-0089: The solver is verified and re-deployed from GitHub Actions with no Google key
+# ADR-0090: The solver is verified and re-deployed from GitHub Actions with no Google key
 
 **Date:** 2026-10-22 · **Status:** Accepted
 
@@ -19,6 +19,8 @@
 > Renumbered 0086 → 0089 on `preview` 2026-11-12: Jóvenes cards (ADR-0086), the worship card
 > (ADR-0087) and the pastor's message from the lead (ADR-0088) reached `preview` first; two records
 > were 0086 there.
+> Renumbered 0089 → 0090 on `preview` 2026-11-17: the Jóvenes meeting's fixed parts (ADR-0089)
+> reach `main` first.
 
 ## Context
 

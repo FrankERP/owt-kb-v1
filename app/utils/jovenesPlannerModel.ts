@@ -13,6 +13,8 @@ import { isServiceTime } from "./serviceTime";
 import { plural } from "./plural";
 import { MONTH_NAMES_ES } from "./scheduleMonths";
 import { MINISTRIES } from "@/app/ministries";
+import { MEETING_PARTS, musicChip, type PartId, type PartMusic } from "./ministryParts";
+import { partViews } from "./jovenesPartView";
 
 /** The Saturday meeting's usual times (Frank, 2026-10-30: «Junta a las 18:10, llegada como a las 17:30»). */
 export const SATURDAY_DEFAULTS = { time: "18:10", arrival: "17:30" } as const;
@@ -20,6 +22,15 @@ export const SATURDAY_DEFAULTS = { time: "18:10", arrival: "17:30" } as const;
 /** The three seats the Saturday table shows, in its column order. */
 export const SATURDAY_SEATS = ["encargado", "apoyo", "comparte"] as const;
 export type SaturdaySeat = (typeof SATURDAY_SEATS)[number];
+
+/**
+ * The columns of the meeting FORM: the three seats, and a second «Comparte» (Frank, 2026-11-17:
+ * the Plática «tiene un responsable, a veces 2»; ADR-0089). Both «comparte» columns are saved as
+ * seats of that one role, in this order.
+ */
+export const SATURDAY_PICKS = ["encargado", "apoyo", "comparte", "comparte2"] as const;
+export type SaturdayPick = (typeof SATURDAY_PICKS)[number];
+export const pickRole = (pick: SaturdayPick): SaturdaySeat => (pick === "comparte2" ? "comparte" : pick);
 
 const MONTH = /^(\d{4})-(0[1-9]|1[0-2])$/;
 
@@ -140,8 +151,8 @@ export type SaturdayForm = {
   place: string;
   notes: string;
   published: boolean;
-  /** One pick per column. Extra stored seats (a second apoyo) ride along untouched in `extra`. */
-  picks: Record<SaturdaySeat, SeatPick>;
+  /** One pick per column. Extra stored seats (a second apoyo, a third comparte) ride along untouched in `extra`. */
+  picks: Record<SaturdayPick, SeatPick>;
   extra: Array<{ key: string; role: string; member: string | null; name: string | null }>;
 };
 
@@ -152,12 +163,15 @@ export function typedName(s: Pick<MinistryEventSeat, "memberId" | "name">): stri
 
 /** The form for an existing meeting, or a new one on `date` with the usual times. */
 export function saturdayForm(date: string, e?: MinistryEventView): SaturdayForm {
-  const picks = { encargado: empty(), apoyo: empty(), comparte: empty() } as Record<SaturdaySeat, SeatPick>;
+  const picks = { encargado: empty(), apoyo: empty(), comparte: empty(), comparte2: empty() } as Record<SaturdayPick, SeatPick>;
   const extra: SaturdayForm["extra"] = [];
   for (const s of e?.seats ?? []) {
     const role = s.role as SaturdaySeat;
-    if ((SATURDAY_SEATS as readonly string[]).includes(s.role ?? "") && picks[role].key === null) {
-      picks[role] = { key: s._key, member: s.memberId, name: typedName(s) };
+    const known = (SATURDAY_SEATS as readonly string[]).includes(s.role ?? "");
+    // The first seat of a role takes its column; a second «comparte» takes the second column.
+    const pick: SaturdayPick | null = !known ? null : picks[role].key === null ? role : role === "comparte" && picks.comparte2.key === null ? "comparte2" : null;
+    if (pick) {
+      picks[pick] = { key: s._key, member: s.memberId, name: typedName(s) };
     } else if (s.role) {
       extra.push({ key: s._key, role: s.role, member: s.memberId, name: typedName(s) });
     }
@@ -234,9 +248,9 @@ function seatBody(key: string | null, role: string, member: string | null, name:
  */
 export function saturdayBody(form: SaturdayForm): Record<string, unknown> {
   const seats: Array<Record<string, unknown>> = [];
-  for (const role of SATURDAY_SEATS) {
-    const p = form.picks[role];
-    const seat = seatBody(p.key, role, p.member, p.name);
+  for (const pick of SATURDAY_PICKS) {
+    const p = form.picks[pick];
+    const seat = seatBody(p.key, pickRole(pick), p.member, p.name);
     if (seat) seats.push(seat);
   }
   for (const x of form.extra) {
@@ -259,22 +273,83 @@ export function saturdayBody(form: SaturdayForm): Record<string, unknown> {
 
 // ── The program editor ──────────────────────────────────────────────────────
 
-export type LineForm = { key: string | null; label: string; member: string | null; note: string };
+/**
+ * One line of the program form. A part line (ADR-0089) carries its `part`, a second person, and
+ * what its responsable filled (`note`, `music`, `helpers`) — the editor only picks its PEOPLE, but
+ * the rest rides along so the body it sends is the whole line, whatever the meeting's kind.
+ */
+export type LineForm = {
+  key: string | null;
+  label: string;
+  part: PartId | null;
+  member: string | null;
+  member2: string | null;
+  note: string;
+  music: PartMusic | null;
+  helpers: string;
+};
 
-export function programForm(lines: readonly MinistryEventLine[]): LineForm[] {
-  return lines.map((l) => ({ key: l._key, label: l.label ?? "", member: l.memberId, note: l.note ?? "" }));
+/** The writer's cap on program lines (`LIMITS.lines`); the editor stops offering «Agregar línea» there. */
+export const PROGRAM_MAX_LINES = 20;
+
+/**
+ * The form of a meeting's program: its part lines first, in the order the meeting runs them, then
+ * its free lines in their stored order. `fixed` (the Saturday meeting, `hasFixedProgram`) adds an
+ * empty row for each part that takes people and is not stored yet, so there is always a place to
+ * say who has the prayer and each dinámica. A second stored line of the same part (the writer
+ * stores one) is left out.
+ */
+export function programForm(lines: readonly MinistryEventLine[], fixed = false): LineForm[] {
+  const all: LineForm[] = lines.map((l) => ({
+    key: l._key,
+    label: l.label ?? "",
+    part: l.part ?? null,
+    member: l.memberId,
+    member2: l.second?.memberId ?? null,
+    note: l.note ?? "",
+    music: l.music,
+    helpers: l.helpers ?? "",
+  }));
+  const parts: LineForm[] = [];
+  for (const spec of MEETING_PARTS) {
+    const stored = all.find((l) => l.part === spec.id);
+    if (stored) parts.push({ ...stored, label: spec.label });
+    else if (fixed && spec.people > 0) {
+      parts.push({ key: null, label: spec.label, part: spec.id, member: null, member2: null, note: "", music: null, helpers: "" });
+    }
+  }
+  return [...parts, ...all.filter((l) => !l.part)];
 }
 
-/** The program PATCH's `program`: blank lines (no label) are left out, never sent as invalid. */
+/**
+ * The program PATCH's `program`. A free line with no label is left out, never sent as invalid. A
+ * part row is left out only while it holds nothing at all (nobody assigned, nothing filled); one
+ * that holds anything is sent WHOLE, so what its responsable wrote goes back as it came.
+ */
 export function programBody(lines: readonly LineForm[]): Array<Record<string, unknown>> {
-  return lines
-    .filter((l) => l.label.trim())
-    .map((l) => ({
-      ...(l.key ? { _key: l.key } : {}),
-      label: l.label.trim(),
-      ...(l.member ? { member: l.member } : {}),
-      ...(l.note.trim() ? { note: l.note.trim() } : {}),
-    }));
+  const out: Array<Record<string, unknown>> = [];
+  for (const l of lines) {
+    const key = l.key ? { _key: l.key } : {};
+    const note = l.note.trim() ? { note: l.note.trim() } : {};
+    if (l.part) {
+      const people = [...new Set([l.member, l.member2].filter((m): m is string => !!m))];
+      const helpers = l.helpers.trim();
+      if (people.length === 0 && !l.note.trim() && !l.music && !helpers) continue;
+      out.push({
+        ...key,
+        part: l.part,
+        ...(people[0] ? { member: people[0] } : {}),
+        ...(people[1] ? { member2: people[1] } : {}),
+        ...note,
+        ...(l.music ? { music: l.music } : {}),
+        ...(helpers ? { helpers } : {}),
+      });
+      continue;
+    }
+    if (!l.label.trim()) continue;
+    out.push({ ...key, label: l.label.trim(), ...(l.member ? { member: l.member } : {}), ...note });
+  }
+  return out;
 }
 
 /**
@@ -411,6 +486,14 @@ export function whatsappRoster(month: string, rows: readonly SaturdayRow[]): str
       for (const role of SATURDAY_SEATS) {
         const names = seatNames(e, role);
         lines.push(`${label[role]}: ${names.length ? names.join(", ") : "Sin asignar"}`);
+      }
+      // The parts that already have someone (ADR-0089). Plática is the «Comparte» line above.
+      for (const p of partViews(e)) {
+        if (p.id === "platica") continue;
+        const names = p.people.map((x) => x.name).filter((n): n is string => !!n);
+        if (names.length === 0) continue;
+        const chip = musicChip(p.id, p.music);
+        lines.push(`${p.label}: ${names.join(" y ")}${chip ? ` (${chip.toLowerCase()})` : ""}`);
       }
       if (e.notes) lines.push(`Notas: ${e.notes}`);
       blocks.push(lines.join("\n"));

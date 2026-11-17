@@ -658,12 +658,39 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   TypeScript for a server decision on one stored event; never post-filter a wider read.
   `ministryEventCoverage.test.ts` fails on any other file that names the type.
 - **`createMinistryEvent`**, **`updateMinistryEvent`**, **`updateMinistryEventProgram`**,
-  **`deleteMinistryEvent`** ([ministryEventCommit.ts](../app/utils/ministryEventCommit.ts)) — THE one
-  writer of `ministryEvent` (W1–W9), called only by the three route files under
+  **`updateMinistryEventPart`**, **`deleteMinistryEvent`**
+  ([ministryEventCommit.ts](../app/utils/ministryEventCommit.ts)) — THE one writer of
+  `ministryEvent` (W1–W10), called only by the six route files under
   `app/api/ministries/[ministry]/events` (`serviceCommitCallers.test.ts`). Fresh access read
   (`fetchMemberAccessFresh`, `memberAccess.ts`), stored revision authorized and written under
   `ifRevisionId`, weak references, `EVENT_ERROR` for every refusal. Its matrix is
-  `ministryEventCommit.test.ts` (G4, groq-js).
+  `ministryEventCommit.test.ts` (G4, groq-js); the parts, «Mi parte» and the notices are
+  `ministryEventParts.test.ts`. A write's `effects.notices` is what the route sends in `after()`.
+- **A Jóvenes meeting's fixed parts (ADR-0089).** **`MEETING_PARTS`**/**`partSpec`**/
+  **`PART_LIMITS`**/**`PLATICA_SEAT`**/**`hasFixedProgram`**/**`musicChip`**/**`MUSIC_WORDS`**/
+  **`PART_ASK`** ([ministryParts.ts](../app/utils/ministryParts.ts)) — THE one table of the parts
+  (label, how many people, whether it takes music and helpers), neutral: the writer, the reader, the
+  emails and the screens all read it, and nothing else spells a part id or a limit.
+  **`partViews`**/**`writableParts`**/**`partPending`**/**`freeLines`**/**`meetingPath`**/
+  **`meetingToken`** ([jovenesPartView.ts](../app/utils/jovenesPartView.ts)) — a meeting's parts as
+  its screens read them (who answers, what they wrote, whether it is the reader's), neutral, so the
+  card, the day sheet and the meeting's page agree; `writableParts` mirrors W10 and decides nothing.
+  **`readSaturdaySets(dates)`**/**`saturdaySetsFrom`**
+  ([jovenesWorshipSet.ts](../app/utils/jovenesWorshipSet.ts), `server-only`) — Alabanza's songs for
+  a Jóvenes Saturday: titles and keys of that date's worship setlist, only when its role is
+  published and neither document is duplicated; the one place Jóvenes reads worship data.
+  **`meetingNotices`**/**`snapshotOf`**
+  ([ministryEventNotices.ts](../app/utils/ministryEventNotices.ts), pure) — what a write owes by
+  email, from the row read BEFORE the commit and what the write stores; called only by the writer.
+  **`sendMinistryEventNotices`**/**`planEventEmails`**
+  ([ministryEventNotify.ts](../app/utils/ministryEventNotify.ts), `server-only`) — the audience and
+  the send, awaited by the four meeting routes inside `after()`; it only narrows who the writer
+  named. **`buildAssignedEmail`**/**`buildMusicEmail`**
+  ([ministryEventEmail.ts](../app/utils/ministryEventEmail.ts)) — the two templates, on the light
+  shell with Jóvenes' own eyebrow and footer. Component **`PartForm`** [C]
+  (`app/components/jovenes/PartForm.tsx`) — «Mi parte»: description (300, counted), music where the
+  part takes it, «Jóvenes que apoyan»; it saves through `partUrl` and keeps what the reader typed
+  when the page refreshes under it.
 - **`storedRevisionOfType(id, type)`** ([typePin.ts](../app/utils/typePin.ts)) — the stored `_rev`
   of an id only when it is of that type, else `null`. The writers that take a client-supplied id
   read it first and answer 404 (W9): the song DELETE, the member PATCH/DELETE, photo, set-password.
@@ -687,8 +714,8 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   **`swapCandidates`**/**`classForm`**/**`classBody`**/**`bookForm`**/**`bookRows`**
   ([jovenesClassesModel.ts](../app/utils/jovenesClassesModel.ts)) and the component
   **`GroupClasses`** [C] («Clases del grupo» in Planear Jóvenes). `BookIcon` in `icons.tsx`. **`sendEventWrite`**/**`writeMessage`**
-  ([eventWrite.ts](../app/components/jovenes/eventWrite.ts)) — the one client caller of the four
-  routes. Components (`app/components/jovenes/`): `SaturdayPlanner`, `GroupCalendar`, `ProgramEditor`
+  ([eventWrite.ts](../app/components/jovenes/eventWrite.ts)) — the one client caller of the event
+  routes (`eventsUrl`, `eventUrl`, `programUrl`, `partUrl`). Components (`app/components/jovenes/`): `SaturdayPlanner`, `GroupCalendar`, `ProgramEditor`
   (`compact` = the quiet «Programa» beside a row's «Editar»), `PersonSelect` (its «Escribir un
   nombre…» typed mode is OPT-IN via `onTypedName`, passed only by the meeting's seats — never by the
   program editor, whose lines keep members only). **Since ADR-0086 (2026-11-12) these screens are
@@ -723,6 +750,8 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   **`MonthMap`** (the planner's month at a glance: a dot per meeting in its audience's colour, hollow
   for a draft; one `role="img"`), **`JovenesMeetingBody`** (`MeetingBody.tsx` — seats as faces, the
   program as a numbered timeline, the notes; `columns` sets team and program side by side from `md`;
+  on a Saturday the five fixed steps with Alabanza's songs, and under a part that is the reader's a
+  link to the meeting's page — `partLinks={false}` on that page itself;
   THE body of the Jóvenes cards and of the worship Calendario's `JovenesDayCard`, so a seat is never worded or
   coloured differently between them) and **`MeetingState`** («Publicada» / «Borrador» as a pill).
   **A group's colour comes only from [jovenesGroupStyle.ts](../app/utils/jovenesGroupStyle.ts)**:

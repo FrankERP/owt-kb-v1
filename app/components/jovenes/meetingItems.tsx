@@ -9,6 +9,7 @@ import { mySeats } from "../../utils/agenda";
 import { jovenesDayEntry } from "../../utils/calendarMinistry";
 import { daysUntil, formatCountdown } from "../../utils/daysUntil";
 import type { JovenesPerson } from "../../utils/jovenesPeople";
+import type { WorshipSong } from "../../utils/jovenesWorshipSet";
 import { showsProgramEditor } from "../../utils/jovenesPlannerModel";
 import type { MinistryEventView } from "../../utils/ministryEventReads";
 import type { JovenesDayEntry } from "../CalendarView";
@@ -38,12 +39,22 @@ export function anyProgramEditor(events: readonly MinistryEventView[], isManager
  */
 export function jovenesMeetingItems(
   events: readonly MinistryEventView[],
-  opts: { isManager: boolean; people: readonly JovenesPerson[]; today: string },
+  opts: {
+    isManager: boolean;
+    people: readonly JovenesPerson[];
+    today: string;
+    /**
+     * Alabanza's songs by date (ADR-0089), as the PAGE read them (`readSaturdaySets`). Absent: not
+     * read, so a Saturday card draws no setlist line; a date missing from it: «por definir».
+     */
+    sets?: ReadonlyMap<string, readonly WorshipSong[]>;
+  },
 ): JovenesListItem[] {
   return events.map((e) => {
     // One shape for the cards here and the Calendario's day sheet, and ONE answer to «what is
     // mine on this meeting» (the agenda's `mySeats`: seats and program lines, by member id).
-    const entry = jovenesDayEntry(e);
+    const songs = opts.sets && e.kind === "saturday" ? (opts.sets.get(e.date) ?? null) : undefined;
+    const entry = jovenesDayEntry(e, songs);
     return {
       // Only what a card draws crosses to the browser; the whole view (member ids, the revision)
       // goes to `ProgramEditor` alone, for a meeting this reader may edit.

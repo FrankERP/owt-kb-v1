@@ -1,7 +1,8 @@
 import "server-only";
 
 // THE ONE WRITER of `ministryEvent` (ADR-0081; plan
-// `docs/superpowers/plans/2026-10-30-jovenes-events-access.md` §5, W1–W9). Its four routes
+// `docs/superpowers/plans/2026-10-30-jovenes-events-access.md` §5, W1–W9; the fixed parts and W10
+// «Mi parte», ADR-0089, plan `2026-11-17-jovenes-meeting-parts.md` §4). Its routes
 // (`/api/ministries/[ministry]/events…`) check the session and the rollout, parse JSON and call
 // these; nothing else imports this module (`serviceCommitCallers.test.ts`; MCP and the admin
 // assistant are refused by `ministryEventCoverage.test.ts`).
@@ -19,6 +20,12 @@ import "server-only";
 // no account, or the group that hosts): that is text, never a person, so it is never validated,
 // is never «Tú» and grants no program right (plan `2026-11-10-jovenes-place-and-names.md`). Every member reference is stored WEAK (D4). Every
 // write answers `{ ok, id, rev }` and nothing of the meeting (W3b); the screen re-reads through R1.
+//
+// EMAILS (ADR-0089, M5). The writer sends nothing itself. It COMPUTES what a write owes — who it
+// newly assigns, a request for the worship team that appeared or went away — from the row it read
+// BEFORE its commit and the fields it stores, and hands that back as `effects.notices`; the route
+// sends it in `after()` (`ministryEventNotify.ts`). Nothing is re-read after the commit: the
+// revision the write asserts is what makes «before» exact.
 
 import { randomUUID } from "node:crypto";
 import { writeClient } from "@/sanity/lib/serverClient";
@@ -32,6 +39,8 @@ import { NO_CLASS_TITLE, SHIFT_DONE_WORDS, lessonDoc, lessonOf, parseLesson, shi
 import { revalidateMinistryViews } from "./revalidate";
 import { sanityConflictKind } from "./roleWriteRequest";
 import type { CommitOutcome } from "./commitOutcome";
+import { PART_LIMITS, PLATICA_SEAT, isPartMusic, partSpec, type PartId, type PartMusic, type PartSpec } from "./ministryParts";
+import { hasNotices, meetingNotices, snapshotOf, type EventNoticeEffects } from "./ministryEventNotices";
 
 /** Every refusal, named. The Spanish ones reach a person; the codes reach the client's logic. */
 export const EVENT_ERROR = {
@@ -51,6 +60,7 @@ export const EVENT_ERROR = {
   invalidPublished: "invalid_published",
   invalidSeats: "invalid_seats",
   invalidProgram: "invalid_program",
+  invalidPart: "invalid_part",
   invalidLesson: "invalid_lesson",
   invalidShift: "invalid_shift",
   invalidSwap: "invalid_swap",
@@ -63,6 +73,7 @@ export const EVENT_ERROR = {
   createForbidden: "No puedes crear este evento.",
   forbidden: "No puedes editar este evento.",
   programForbidden: "No puedes editar el programa de este evento.",
+  partForbidden: "No puedes editar esta parte.",
   stale: "Alguien más cambió este evento; recarga.",
 } as const;
 
@@ -71,10 +82,12 @@ export type SeatRole = (typeof SEAT_ROLES)[number];
 /** The seats that may write a whole-ministry meeting's program (W3). */
 const PROGRAM_SEATS: readonly string[] = ["encargado", "apoyo"];
 
-export const LIMITS = { seats: 6, lines: 20, label: 60, note: 300, title: 80, notes: 2000, place: 120, name: 60 } as const;
+/** `note` is ONE number with a part's description (Frank: «unos 300 caracteres máximo»). */
+export const LIMITS = { seats: 6, lines: 20, label: 60, note: PART_LIMITS.note, title: 80, notes: 2000, place: 120, name: 60 } as const;
 
 export type EventAudience = { kind: "ministry" } | { kind: "groups"; groups: string[] };
-export type EventEffects = { id: string; rev: string | null };
+/** `notices`: what the write owes by email (M5), or `null` — the route sends it in `after()`. */
+export type EventEffects = { id: string; rev: string | null; notices: EventNoticeEffects | null };
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -171,7 +184,33 @@ function optionalKey(v: unknown): string | null | undefined {
 /** A seat holds a member, a typed name (someone without an account, or a hosting group), or
  *  nobody — never both (plan 2026-11-10 P2). A name is not a person: it is never validated. */
 export type SeatIn = { key: string | null; role: SeatRole; member: string | null; name: string | null };
-export type LineIn = { key: string | null; label: string; member: string | null; note: string | null };
+/**
+ * A program line. A PART line (ADR-0089) carries `part`; its label is the table's, it may hold a
+ * second person, and its responsable fills `note` (the description), `music` and `helpers`. A free
+ * line has none of the three new fields.
+ */
+export type LineIn = {
+  key: string | null;
+  label: string;
+  part: PartId | null;
+  member: string | null;
+  member2: string | null;
+  note: string | null;
+  music: PartMusic | null;
+  helpers: string | null;
+};
+
+/** A part's `music`: none, or a known choice on a part that takes one. `undefined` ⇒ refused. */
+function partMusic(v: unknown, spec: PartSpec): PartMusic | null | undefined {
+  if (v === undefined || v === null || v === "") return null;
+  return spec.music && isPartMusic(v) ? v : undefined;
+}
+
+/** A part's `helpers`: one line of names, only on a part that takes them. `undefined` ⇒ refused. */
+function partHelpers(v: unknown, spec: PartSpec): string | null | undefined {
+  const t = optionalLine(v, PART_LIMITS.helpers);
+  return typeof t === "string" && !spec.helpers ? undefined : t;
+}
 
 function parseSeats(raw: unknown): SeatIn[] | Refusal {
   if (!Array.isArray(raw) || raw.length > LIMITS.seats) return refuse(400, EVENT_ERROR.invalidSeats);
@@ -193,19 +232,81 @@ function parseSeats(raw: unknown): SeatIn[] | Refusal {
 
 export function parseProgram(raw: unknown): LineIn[] | Refusal {
   if (!Array.isArray(raw) || raw.length > LIMITS.lines) return refuse(400, EVENT_ERROR.invalidProgram);
+  const bad = refuse(400, EVENT_ERROR.invalidProgram);
   const out: LineIn[] = [];
+  const parts = new Set<PartId>();
   for (const item of raw) {
-    if (!plainObject(item)) return refuse(400, EVENT_ERROR.invalidProgram);
+    if (!plainObject(item)) return bad;
     const key = optionalKey(item._key);
-    const member = optionalMember(item.member);
-    const label = optionalText(item.label, LIMITS.label);
     const note = optionalText(item.note, LIMITS.note);
-    if (key === undefined || member === undefined || !label || note === undefined) {
-      return refuse(400, EVENT_ERROR.invalidProgram);
+    const member = optionalMember(item.member);
+    if (key === undefined || note === undefined || member === undefined) return bad;
+
+    if (item.part === undefined || item.part === null) {
+      // A free line: today's rules, and none of a part's fields (M2).
+      const label = optionalText(item.label, LIMITS.label);
+      if (!label) return bad;
+      for (const k of ["member2", "music", "helpers"] as const) {
+        if (item[k] !== undefined && item[k] !== null) return bad;
+      }
+      out.push({ key, label, part: null, member, member2: null, note, music: null, helpers: null });
+      continue;
     }
-    out.push({ key, label, member, note });
+
+    // A part line. The body's label is ignored: the stored one is the table's, so an older
+    // reader, a rollback and the WhatsApp copy all still say «Oración».
+    const spec = partSpec(item.part);
+    const second = optionalMember(item.member2);
+    if (!spec || second === undefined) return bad;
+    if (member && member === second) return bad;
+    const people = [member, second].filter((m): m is string => m !== null);
+    // More people than the part holds: anyone on Plática (its people are the `comparte` seats),
+    // two on Oración.
+    if (people.length > spec.people) return bad;
+    const music = partMusic(item.music, spec);
+    const helpers = partHelpers(item.helpers, spec);
+    if (music === undefined || helpers === undefined) return bad;
+    if (parts.has(spec.id)) return bad;
+    parts.add(spec.id);
+    // A lone second person is stored as the first.
+    out.push({ key, label: spec.label, part: spec.id, member: people[0] ?? null, member2: people[1] ?? null, note, music, helpers });
   }
   return duplicateKeys(out) ? refuse(400, EVENT_ERROR.duplicateKey) : out;
+}
+
+/**
+ * M2a — a KEPT part line keeps what its responsable filled. An incoming line whose `_key` names a
+ * stored line that carries a valid `part` must name that same part (so a body built by code that
+ * does not know parts — a tab loaded before the deploy sends `_key, label, member, note` — can
+ * never turn a part into a free line), and the stored `note`, `music` and `helpers` are written
+ * back, each only while it still passes that part's rules; the body's values for those three are
+ * ignored. W10 («Mi parte») is their only writer once the line exists. The body still decides the
+ * line's people, which lines remain, and their order. Any other line is taken as parsed.
+ *
+ * Called after the 404, the 403 and the 409, beside the people check: a stale tab answers 409 first.
+ */
+function keepFilledParts(lines: LineIn[], storedProgram: unknown): LineIn[] | Refusal {
+  const byKey = new Map<string, Record<string, unknown>>();
+  for (const item of Array.isArray(storedProgram) ? storedProgram : []) {
+    if (plainObject(item) && typeof item._key === "string" && !byKey.has(item._key)) byKey.set(item._key, item);
+  }
+  const out: LineIn[] = [];
+  for (const line of lines) {
+    const prior = line.key ? byKey.get(line.key) : undefined;
+    const spec = prior ? partSpec(prior.part) : null;
+    if (!prior || !spec) {
+      out.push(line);
+      continue;
+    }
+    if (line.part !== spec.id) return refuse(400, EVENT_ERROR.invalidProgram);
+    out.push({
+      ...line,
+      note: optionalText(prior.note, LIMITS.note) ?? null,
+      music: partMusic(prior.music, spec) ?? null,
+      helpers: partHelpers(prior.helpers, spec) ?? null,
+    });
+  }
+  return out;
 }
 
 function duplicateKeys(items: { key: string | null }[]): boolean {
@@ -359,6 +460,22 @@ function seatGrantsProgram(actor: Actor, stored: StoredRow): boolean {
   return seated && mayRead(actor.access, stored, "member", ministryOf(stored.ministry) ?? "jovenes");
 }
 
+/**
+ * W10: is the actor this part's RESPONSABLE on the stored meeting — and may they still read it as
+ * a member? (Never a draft, never after leaving Jóvenes or the group: a seat is a reason to
+ * write, never to read, as W3a.) Plática's responsables are the `comparte` seats; any other
+ * part's are the people on the FIRST stored line of that part. A typed name is never a person.
+ */
+function partResponsable(actor: Actor, stored: StoredRow, ministry: MinistryId, part: PartId): boolean {
+  if (!mayRead(actor.access, stored, "member", ministry)) return false;
+  if (part === "platica") {
+    const seats = Array.isArray(stored.seats) ? stored.seats : [];
+    return seats.some((s) => plainObject(s) && s.role === PLATICA_SEAT && refOf(s.member) === actor.id);
+  }
+  const line = (Array.isArray(stored.program) ? stored.program : []).find((l) => plainObject(l) && partSpec(l.part)?.id === part);
+  return plainObject(line) && (refOf(line.member) === actor.id || refOf(line.member2) === actor.id);
+}
+
 // ── The stored event (step 3) ───────────────────────────────────────────────
 
 type StoredRow = StoredMinistryEvent & {
@@ -370,13 +487,15 @@ type StoredRow = StoredMinistryEvent & {
   createdBy?: string | null;
   date?: unknown;
   time?: unknown;
+  arrival?: unknown;
+  title?: unknown;
   place?: unknown;
   lesson?: unknown;
 };
 
 const STORED_QUERY =
   `*[_type == "${MINISTRY_EVENT_TYPE}" && _id in path("${MINISTRY_EVENT_TYPE}.*") && ministry == $ministry && _id == $id][0]` +
-  `{ _id, _rev, _type, ministry, audience, kind, published, seats, program, date, time, place, lesson, "createdBy": createdBy._ref }`;
+  `{ _id, _rev, _type, ministry, audience, kind, published, seats, program, date, time, arrival, title, place, lesson, "createdBy": createdBy._ref }`;
 
 async function readStored(id: string, ministry: MinistryId): Promise<StoredRow | null> {
   const row = await operationalClient.fetch<StoredRow | null>(STORED_QUERY, { id, ministry });
@@ -392,21 +511,27 @@ function refOf(x: unknown): string | null {
 
 // ── People (W5) ─────────────────────────────────────────────────────────────
 
-type StoredItem = { _key: string; member: string | null; role?: string };
+type StoredItem = { _key: string; member: string | null; member2: string | null; role?: string };
 
 function storedItems(raw: unknown): StoredItem[] {
   return (Array.isArray(raw) ? raw : [])
     .filter(plainObject)
     .filter((i): i is Record<string, unknown> & { _key: string } => typeof i._key === "string")
-    .map((i) => ({ _key: i._key, member: refOf(i.member), role: typeof i.role === "string" ? i.role : undefined }));
+    .map((i) => ({
+      _key: i._key,
+      member: refOf(i.member),
+      member2: refOf(i.member2),
+      role: typeof i.role === "string" ? i.role : undefined,
+    }));
 }
 
 /**
- * W4/W5 keys: an item whose `_key` names a stored item keeps it; any other gets a fresh one. An
- * item is KEPT (its person not re-validated) when its key, person and — for a seat — role are the
- * stored ones. Returns the items with final keys and the people the write adds or changes.
+ * W4/W5 keys: an item whose `_key` names a stored item keeps it; any other gets a fresh one. A
+ * person is KEPT (not re-validated) when the stored item with that key already holds them — on
+ * either slot of a line (M3: swapping a part's two people re-validates nobody) — and, for a seat,
+ * under the same role. Returns the items with final keys and the people the write adds or changes.
  */
-function reconcile<T extends { key: string | null; member: string | null; role?: string }>(
+function reconcile<T extends { key: string | null; member: string | null; member2?: string | null; role?: string }>(
   incoming: T[],
   stored: StoredItem[],
 ): { items: (T & { finalKey: string })[]; added: string[] } {
@@ -414,8 +539,9 @@ function reconcile<T extends { key: string | null; member: string | null; role?:
   const added = new Set<string>();
   const items = incoming.map((item) => {
     const prior = item.key ? byKey.get(item.key) : undefined;
-    const kept = !!prior && prior.member === item.member && (item.role === undefined || prior.role === item.role);
-    if (!kept && item.member) added.add(item.member);
+    const sameRole = !!prior && (item.role === undefined || prior.role === item.role);
+    const had = sameRole && prior ? [prior.member, prior.member2] : [];
+    for (const m of [item.member, item.member2 ?? null]) if (m && !had.includes(m)) added.add(m);
     return { ...item, finalKey: prior ? prior._key : mintKey() };
   });
   return { items, added: [...added] };
@@ -447,12 +573,17 @@ const seatDoc = (s: SeatIn & { finalKey: string }) => ({
   ...(s.member ? { member: weakRef(s.member) } : {}),
   ...(s.name ? { name: s.name } : {}),
 });
+const LINE_TYPE = "ministryEventProgramLine";
 const lineDoc = (l: LineIn & { finalKey: string }) => ({
   _key: l.finalKey,
-  _type: "ministryEventProgramLine",
+  _type: LINE_TYPE,
   label: l.label,
+  ...(l.part ? { part: l.part } : {}),
   ...(l.member ? { member: weakRef(l.member) } : {}),
+  ...(l.member2 ? { member2: weakRef(l.member2) } : {}),
   ...(l.note ? { note: l.note } : {}),
+  ...(l.music ? { music: l.music } : {}),
+  ...(l.helpers ? { helpers: l.helpers } : {}),
 });
 const audienceDoc = (a: EventAudience) => (a.kind === "ministry" ? { kind: "ministry" } : { kind: "groups", groups: a.groups });
 
@@ -468,12 +599,63 @@ function revisionConflict(err: unknown): boolean {
   return kind === "revision_mismatch" || kind === "conflict";
 }
 
-const ok = (id: string, rev: string | null): CommitOutcome<EventEffects> => ({
+const ok = (id: string, rev: string | null, notices: EventNoticeEffects | null = null): CommitOutcome<EventEffects> => ({
   ok: true,
   status: 200,
   body: { ok: true, id, rev },
-  effects: { id, rev },
+  effects: { id, rev, notices },
 });
+
+// ── Notices (M5) ────────────────────────────────────────────────────────────
+
+/** The fields of a meeting a notice reads: the stored row, or the same fields as a write stores them. */
+type NoticeRow = {
+  audience?: unknown;
+  published?: unknown;
+  date?: unknown;
+  seats?: unknown;
+  program?: unknown;
+  time?: unknown;
+  arrival?: unknown;
+  place?: unknown;
+  title?: unknown;
+  kind?: unknown;
+};
+
+const textOrNull = (v: unknown): string | null => (typeof v === "string" && v ? v : null);
+
+/**
+ * What this write owes by email, or `null`. `before` is the row read at step 3 — the state the
+ * write replaces, guaranteed by `ifRevisionId` — or `null` for a create; `after` is what the write
+ * stores. Pure: called BEFORE the commit and returned only when the commit succeeds. Only Jóvenes
+ * announces (ADR-0089); the audience rules are `meetingNotices`'s, narrowed again by the sender.
+ */
+function noticesFor(
+  ministry: MinistryId,
+  actorId: string,
+  id: string,
+  before: NoticeRow | null,
+  after: NoticeRow,
+): EventNoticeEffects | null {
+  if (ministry !== "jovenes") return null;
+  const today = new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
+  const notices = meetingNotices(before ? snapshotOf(before) : null, snapshotOf(after), { actorId, today });
+  if (!hasNotices(notices)) return null;
+  return {
+    ...notices,
+    ministry,
+    actorId,
+    meeting: {
+      id,
+      date: textOrNull(after.date) ?? "",
+      time: textOrNull(after.time),
+      arrival: textOrNull(after.arrival),
+      place: textOrNull(after.place),
+      title: textOrNull(after.title),
+      kind: textOrNull(after.kind),
+    },
+  };
+}
 
 // ── Create ──────────────────────────────────────────────────────────────────
 
@@ -529,10 +711,11 @@ export async function createMinistryEvent(
     // Written once, from the FRESH actor id, never from a body (W1, W3).
     createdBy: weakRef(actor.id),
   };
+  const notices = noticesFor(ministry, actor.id, id, null, doc);
   try {
     const created = await writeClient.create(doc);
     revalidateMinistryViews(ministry);
-    return ok(id, typeof created?._rev === "string" ? created._rev : null);
+    return ok(id, typeof created?._rev === "string" ? created._rev : null, notices);
   } catch (err) {
     if (sanityConflictKind(err) !== "already_exists") throw err;
     // A retry or double tap of the same token: «already created» only to someone who may read it.
@@ -604,18 +787,25 @@ export async function updateMinistryEvent(
     added.push(...r.added);
   }
   if (edit.program) {
-    const r = reconcile(edit.program, storedItems(stored.program));
+    const lines = keepFilledParts(edit.program, stored.program);
+    if (isRefusal(lines)) return lines;
+    const r = reconcile(lines, storedItems(stored.program));
     set.program = r.items.map(lineDoc);
     added.push(...r.added);
   }
   if (!(await peopleFit([...new Set(added)], ministry, resulting))) return refuse(400, EVENT_ERROR.invalidMember);
+
+  // What the meeting will be: the stored fields overlaid with this edit.
+  const after: Record<string, unknown> = { ...stored, ...set };
+  for (const k of unset) delete after[k];
+  const notices = noticesFor(ministry, actor.id, id, stored, after);
 
   try {
     let patch = writeClient.patch(id).ifRevisionId(rev).set(set);
     if (unset.length) patch = patch.unset(unset);
     const written = await patch.commit();
     revalidateMinistryViews(ministry);
-    return ok(id, typeof written?._rev === "string" ? written._rev : null);
+    return ok(id, typeof written?._rev === "string" ? written._rev : null, notices);
   } catch (err) {
     if (!revisionConflict(err)) throw err;
     return refuse(409, EVENT_ERROR.stale);
@@ -652,17 +842,115 @@ export async function updateMinistryEventProgram(
   }
   if (stored._rev !== rev) return refuse(409, EVENT_ERROR.stale);
 
+  const kept = keepFilledParts(lines, stored.program);
+  if (isRefusal(kept)) return kept;
   const audience = parseAudience(stored.audience, ministry);
-  const r = reconcile(lines, storedItems(stored.program));
+  const r = reconcile(kept, storedItems(stored.program));
   // A malformed stored audience admits no new person; kept lines still save.
   if (r.added.length && (!audience || !(await peopleFit(r.added, ministry, audience)))) {
     return refuse(400, EVENT_ERROR.invalidMember);
   }
 
+  const program = r.items.map(lineDoc);
+  const notices = noticesFor(ministry, actor.id, id, stored, { ...stored, program });
   try {
-    const written = await writeClient.patch(id).ifRevisionId(rev).set({ program: r.items.map(lineDoc) }).commit();
+    const written = await writeClient.patch(id).ifRevisionId(rev).set({ program }).commit();
     revalidateMinistryViews(ministry);
-    return ok(id, typeof written?._rev === "string" ? written._rev : null);
+    return ok(id, typeof written?._rev === "string" ? written._rev : null, notices);
+  } catch (err) {
+    if (!revisionConflict(err)) throw err;
+    return refuse(409, EVENT_ERROR.stale);
+  }
+}
+
+// ── «Mi parte» (W10; ADR-0089) ──────────────────────────────────────────────
+
+const PART_FIELDS = ["note", "music", "helpers"] as const;
+
+/**
+ * «Mi parte»: the responsable of ONE fixed part fills its description, its music choice and who
+ * helps — and nothing else. Whoever may edit the meeting or its program may fill any part.
+ *
+ * The write sets ONLY `program`, rebuilt from the STORED raw items passed through untouched except
+ * the target line, under the stored revision: the array written is the array read plus one change,
+ * so it can never drop, reorder or reassign another person's line. It never writes seats, people
+ * on a line, a label or `published`, whatever the body says.
+ */
+export async function updateMinistryEventPart(
+  actorId: string,
+  ministryRaw: unknown,
+  tokenRaw: unknown,
+  partRaw: unknown,
+  raw: unknown,
+): Promise<CommitOutcome<EventEffects>> {
+  const ministry = ministryOf(ministryRaw);
+  const id = eventIdOf(tokenRaw);
+  const spec = partSpec(partRaw);
+  // An unknown ministry, a token the writer could not have minted, or no such part: 404, no I/O.
+  if (!ministry || !id || !spec) return refuse(404, EVENT_ERROR.notFound);
+  const body = fields(raw);
+  if (!body) return refuse(400, EVENT_ERROR.invalidBody);
+  if (typeof body._rev !== "string" || !body._rev) return refuse(400, EVENT_ERROR.revRequired);
+  const rev = body._rev;
+  // Only these three are read. A KEY that is present is a change (`null` clears it); absent is untouched.
+  const change: { note?: string | null; music?: PartMusic | null; helpers?: string | null } = {};
+  if (has(body, "note")) {
+    const note = optionalText(body.note, LIMITS.note);
+    if (note === undefined) return refuse(400, EVENT_ERROR.invalidPart);
+    change.note = note;
+  }
+  if (has(body, "music")) {
+    const music = partMusic(body.music, spec);
+    if (music === undefined) return refuse(400, EVENT_ERROR.invalidPart);
+    change.music = music;
+  }
+  if (has(body, "helpers")) {
+    const helpers = partHelpers(body.helpers, spec);
+    if (helpers === undefined) return refuse(400, EVENT_ERROR.invalidPart);
+    change.helpers = helpers;
+  }
+  if (!PART_FIELDS.some((k) => has(change, k))) return refuse(400, EVENT_ERROR.nothingToUpdate);
+
+  assertToken();
+  const actor = await actorFor(actorId);
+  if (isRefusal(actor)) return actor;
+  const stored = await readStored(id, ministry);
+  if (!stored || !readable(actor, stored, ministry)) return refuse(404, EVENT_ERROR.notFound);
+  if (
+    !canWriteStored(actor, stored, ministry) &&
+    !seatGrantsProgram(actor, stored) &&
+    !partResponsable(actor, stored, ministry, spec.id)
+  ) {
+    return refuse(403, EVENT_ERROR.partForbidden);
+  }
+  if (stored._rev !== rev) return refuse(409, EVENT_ERROR.stale);
+
+  const items: unknown[] = Array.isArray(stored.program) ? stored.program : [];
+  const at = items.findIndex((l) => plainObject(l) && partSpec(l.part)?.id === spec.id);
+  let program: unknown[];
+  if (at >= 0) {
+    const target: Record<string, unknown> = { ...(items[at] as Record<string, unknown>) };
+    for (const k of PART_FIELDS) {
+      if (!has(change, k)) continue;
+      const v = change[k];
+      if (v === null || v === undefined) delete target[k];
+      else target[k] = v;
+    }
+    program = items.map((l, i) => (i === at ? target : l));
+  } else {
+    const filled = PART_FIELDS.flatMap((k) => (change[k] ? [[k, change[k]] as const] : []));
+    // Nothing stored and nothing to store: the answer is the meeting as it is, with no write.
+    if (filled.length === 0) return ok(id, stored._rev);
+    if (items.length >= LIMITS.lines) return refuse(400, EVENT_ERROR.invalidProgram);
+    program = [...items, { _key: mintKey(), _type: LINE_TYPE, label: spec.label, part: spec.id, ...Object.fromEntries(filled) }];
+  }
+
+  // A part write changes no person, so only a music change can owe a notice.
+  const notices = noticesFor(ministry, actor.id, id, stored, { ...stored, program });
+  try {
+    const written = await writeClient.patch(id).ifRevisionId(rev).set({ program }).commit();
+    revalidateMinistryViews(ministry);
+    return ok(id, typeof written?._rev === "string" ? written._rev : null, notices);
   } catch (err) {
     if (!revisionConflict(err)) throw err;
     return refuse(409, EVENT_ERROR.stale);
@@ -846,7 +1134,7 @@ export async function shiftMinistryLesson(
     return mapCommitConflict(err);
   }
   revalidateMinistryViews(ministry);
-  return { ok: true, status: 200, body: { ok: true, id, rev: null, moved: classes.length }, effects: { id, rev: null, moved: classes.length } };
+  return { ok: true, status: 200, body: { ok: true, id, rev: null, moved: classes.length }, effects: { id, rev: null, notices: null, moved: classes.length } };
 }
 
 // ── «Cambiar con…» (plan 2026-11-12 L4) ─────────────────────────────────────

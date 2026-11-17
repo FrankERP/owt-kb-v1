@@ -548,7 +548,7 @@ calendario de los de Otro Nivel», Frank). Read **only** through
 `SANITY_API_READ_TOKEN`, carries the id prefix in every query and passes the reader's groups as a
 PARAMETER; `ministryEventCoverage.test.ts` fails on any other file that names the type, and
 `ministryEventReads.test.ts` runs the real GROQ on `groq-js` over a people × events matrix. Written
-only by [`ministryEventCommit.ts`](../app/utils/ministryEventCommit.ts), called by the four
+only by [`ministryEventCommit.ts`](../app/utils/ministryEventCommit.ts), called by the
 `/api/ministries/[ministry]/events*` routes (API_REFERENCE «Jóvenes meetings»): a fresh access read,
 the stored revision authorized and written under `ifRevisionId`, weak references, a client create
 token for the id. The routes that write a client-supplied id of another type (the song DELETE, the
@@ -565,7 +565,7 @@ writes an event.
 | `title`, `notes` | free text |
 | `place` | one line, ≤120 — where it happens («Oasis Tlalpan»), display only (2026-11-10) |
 | `seats[]` | `ministryEventSeat`: `role` (`encargado` / `apoyo` / `comparte`), and EITHER `member` (**weak** reference) OR `name` (one line, ≤60: someone without an account, or the hosting group — text, never validated, never «Tú», no program right; 2026-11-10), never both |
-| `program[]` | `ministryEventProgramLine`: `label`, `member?` (weak), `note?` |
+| `program[]` | `ministryEventProgramLine`: `label`, `member?` (weak), `note?` (≤300). A **part line** (ADR-0089) also carries `part` (`oracion` / `dinamica1` / `dinamica2` / `platica` — `app/utils/ministryParts.ts` is the one table), and may carry `member2` (weak; a dinámica's second responsable), `music` (`track` / `alabanza`; Oración and Plática) and `helpers` (one line ≤120, «Jóvenes que apoyan»; a dinámica). Its `label` is the table's, its `note` is the description its responsable writes, and there is at most one line per part. Plática's line never holds a person: its people are the `comparte` seats. «Alabanza» is not stored: it is that date's published Saturday setlist (`jovenesWorshipSet.ts`). |
 | `published` | boolean, written on every create; members read `published == true` only |
 | `createdBy` | weak reference to the creator, written once at create (a joint meeting is edited only by its creator and the admins) |
 

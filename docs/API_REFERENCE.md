@@ -361,14 +361,29 @@ JSON reaches it as `null` (400). Refusal order, for every write: the body's shap
 `_rev` is `rev_required`) → inactive (403) → an event the caller may not read in either mode (404
 «Ese evento no existe.», the same as a missing id, so a refusal never confirms one exists) → not
 allowed (403) → stale `_rev` (409 «Alguien más cambió este evento; recarga.»). Success is
-`{ok, id, rev}` and calls `revalidateMinistryViews`. Wrapped in `withVerificationRunContext`; the
-writer sends nothing. MCP and the admin assistant never import it (`ministryEventCoverage.test.ts`).
+`{ok, id, rev}` and calls `revalidateMinistryViews`. Wrapped in `withVerificationRunContext`. The
+writer sends nothing itself: create, PATCH, the program PATCH and the part PATCH answer (inside
+`effects`, never in the body) the emails the write owes, computed from the row read BEFORE the
+commit, and the route sends them in `after()` (`ministryEventNotify.ts`, `maxDuration = 60`;
+ADR-0089, `docs/NOTIFICATIONS.md` «Jóvenes meetings»). MCP and the admin assistant never import it
+(`ministryEventCoverage.test.ts`).
+
+**A program line** is `{_key?, label, member?, note?}` (a free line) or, since ADR-0089, a PART
+line `{_key?, part, member?, member2?, note?, music?, helpers?}`: `part` is `oracion` (one person),
+`dinamica1` / `dinamica2` (up to two) or `platica` (none on the line: its people are the
+`comparte` seats); the stored label is the table's (`ministryParts.ts`), `music` is `track` |
+`alabanza` on Oración and Plática only, `helpers` is one line ≤120 on a dinámica only, `note` ≤300
+is the description. One line per part; anything else is 400 `invalid_program`. On a line whose
+`_key` names a stored part line the body must carry that same `part` (else 400) and the STORED
+`note`, `music` and `helpers` are written back whatever the body says: once a part line exists,
+only the part route below changes them.
 
 | Route | Methods | Purpose & rules |
 |-------|---------|-----------------|
 | `/api/ministries/[ministry]/events` | POST | Create. `{token, audience, kind?, date, time?, arrival?, title?, place?, notes?, published?, seats?, program?}` (`place`: one line ≤120, else `invalid_place`; a seat is `{_key?, role, member}`, `{_key?, role, name}` — a typed name, one line ≤60, never with a member, else `invalid_seats` — or `{_key?, role}`, an empty seat). `token` is a v4 UUID the client mints when the editor opens (lowercased; the id becomes `ministryEvent.<token>`), so a retry names the same meeting: a second create answers 409 `already_created` only to someone who may read it, else 404. A Jóvenes admin creates anything; a leader only a `groups` audience that includes a group they lead (a joint meeting of up to three groups). `createdBy` is the caller, never the body. Every seat and program person must be an active member of the ministry (and, for groups, of one of them) — `invalid_member`; a seat's typed `name` is text and is not checked. |
 | `/api/ministries/[ministry]/events/[token]` | PATCH, DELETE | PATCH `{_rev, …any editable field}` edits or publishes; arrays are written whole, a stored item keeps its `_key`, an unchanged kept item is not re-validated. DELETE `{_rev}`: a guarded delete (one transaction, an `ifRevisionId` no-op patch then the delete). Who: a Jóvenes admin any meeting; a leader a one-group meeting of a group they lead; a joint meeting only its creator (while leading one of its groups) and the admins. |
 | `/api/ministries/[ministry]/events/[token]/program` | PATCH | `{_rev, program}` — writes ONLY `program`, whatever else the body says. Who: anyone who may edit the meeting, plus the encargado or apoyo of a whole-ministry meeting who may still read it. |
+| `/api/ministries/[ministry]/events/[token]/parts/[part]` | PATCH | «Mi parte» (ADR-0089, W10). `{_rev, note?, music?, helpers?}` — a key that is present is a change (`null` clears it), at least one is required (`nothing_to_update`), a bad value is 400 `invalid_part`, an unknown `part` is 404. Who: anyone who may edit the meeting or its program, plus the part's RESPONSABLE while they can read the meeting as a member (a person on that part's line; for `platica`, a member in a `comparte` seat; never a typed name, never on a draft), else 403 «No puedes editar esta parte.». Writes ONLY `program`: the stored array with that one line's three fields changed, or — when the part has no line yet and there is something to store — a new part line appended (400 `invalid_program` on a full program; nothing to store ⇒ `ok` with the current revision and no write). Never a person, a label, a seat or `published`. |
 
 ---
 

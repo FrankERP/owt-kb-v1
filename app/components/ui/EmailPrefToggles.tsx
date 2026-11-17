@@ -42,7 +42,7 @@ export const EMAIL_PREF_ROWS: EmailPrefRow[] = [
     kind: "assigned",
     field: NOTIFY_PREF_FIELD.assigned,
     label: "Nuevas asignaciones",
-    hint: "Cuando te asignan a un servicio.",
+    hint: "Cuando te asignan a un servicio o a una reunión de Jóvenes.",
   },
   {
     kind: "removed",

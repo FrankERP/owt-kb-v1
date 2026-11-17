@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { normalizeMinistryRoles } from "@/app/ministries";
-import type { MinistryEventView } from "../ministryEventReads";
+import type { MinistryEventLine, MinistryEventView } from "../ministryEventReads";
 import { ledGroupsIn } from "../ministryAccess";
 import {
   canCreateGroupEvent,
@@ -249,16 +249,90 @@ describe("the clocks the editors accept", () => {
 });
 
 describe("the program body", () => {
+  const BLANK = { key: null, label: "", part: null, member: null, member2: null, note: "", music: null, helpers: "" } as const;
   it("round-trips stored lines and leaves blank ones out", () => {
     const form = programForm([
-      { _key: "l1", label: "Oración", memberId: "m1", name: "Ana", photo: null, mine: false, note: null },
+      { _key: "l1", label: "Oración", memberId: "m1", name: "Ana", photo: null, mine: false, note: null, part: null, music: null, helpers: null, second: null },
     ]);
-    form.push({ key: null, label: " Dinámica ", member: null, note: " 10 min " });
-    form.push({ key: null, label: "   ", member: "m2", note: "" });
+    form.push({ ...BLANK, label: " Dinámica ", note: " 10 min " });
+    form.push({ ...BLANK, label: "   ", member: "m2" });
     expect(programBody(form)).toEqual([
       { _key: "l1", label: "Oración", member: "m1" },
       { label: "Dinámica", note: "10 min" },
     ]);
+  });
+});
+
+describe("the program's fixed parts (ADR-0089)", () => {
+  const line = (over: Partial<MinistryEventLine>): MinistryEventLine => ({
+    _key: "k", label: "x", memberId: null, name: null, photo: null, mine: false, note: null, part: null, music: null, helpers: null, second: null, ...over,
+  });
+  const person = (memberId: string, name: string) => ({ _key: "k", memberId, name, photo: null, mine: false });
+
+  it("a Saturday's form always has Oración and the two dinámicas, parts first in the meeting's order, then the free lines", () => {
+    const form = programForm(
+      [
+        line({ _key: "f1", label: "Bienvenida" }),
+        line({ _key: "d2", label: "Dinámica 2", part: "dinamica2", memberId: "m1", second: person("m2", "Beto"), note: "Sillas", helpers: "Dani" }),
+      ],
+      true,
+    );
+    expect(form.map((l) => [l.part, l.key, l.member, l.member2])).toEqual([
+      ["oracion", null, null, null],
+      ["dinamica1", null, null, null],
+      ["dinamica2", "d2", "m1", "m2"],
+      [null, "f1", null, null],
+    ]);
+    // Plática takes no person on its line: no empty row is made for it.
+    expect(form.some((l) => l.part === "platica")).toBe(false);
+  });
+
+  it("another meeting's form holds only the part lines it stores, Plática's included", () => {
+    expect(programForm([line({ _key: "f1", label: "Bienvenida" })]).map((l) => l.part)).toEqual([null]);
+    const form = programForm([line({ _key: "p1", label: "Plática", part: "platica", note: "Daniel 3", music: "track" })]);
+    expect(form).toEqual([{ key: "p1", label: "Plática", part: "platica", member: null, member2: null, note: "Daniel 3", music: "track", helpers: "" }]);
+  });
+
+  it("the body sends a part line WHOLE (what its responsable wrote rides back) and never an empty part row", () => {
+    const form = programForm(
+      [
+        line({ _key: "o1", label: "Oración", part: "oracion", memberId: "m1", music: "alabanza", note: "Antes de la plática" }),
+        line({ _key: "p1", label: "Plática", part: "platica", note: "Daniel 3", music: "track" }),
+      ],
+      true,
+    );
+    form[1].member2 = "m3"; // Dinámica 1: only a second person picked — sent as its first.
+    expect(programBody(form)).toEqual([
+      { _key: "o1", part: "oracion", member: "m1", note: "Antes de la plática", music: "alabanza" },
+      { part: "dinamica1", member: "m3" },
+      { _key: "p1", part: "platica", note: "Daniel 3", music: "track" },
+    ]);
+  });
+
+  it("the same person in both slots is sent once; a stored part row emptied of everything is dropped", () => {
+    const form = programForm([line({ _key: "d1", label: "Dinámica 1", part: "dinamica1", memberId: "m1", second: person("m1", "Ana") })], true);
+    expect(programBody(form).find((l) => l.part === "dinamica1")).toEqual({ _key: "d1", part: "dinamica1", member: "m1" });
+    const cleared = form.map((l) => (l.part === "dinamica1" ? { ...l, member: null, member2: null } : l));
+    expect(programBody(cleared)).toEqual([]);
+  });
+});
+
+describe("the second «Comparte» (ADR-0089: the Plática sometimes has two)", () => {
+  it("the first two comparte seats take the two columns; a third rides in extra; both save as `comparte`", () => {
+    const f = saturdayForm("2026-11-07", ev({
+      seats: [seat("comparte", "m1", "Ana", false, "c1"), seat("comparte", "m2", "Beto", false, "c2"), seat("comparte", "m3", "Caro", false, "c3")],
+    }));
+    expect([f.picks.comparte.member, f.picks.comparte2.member, f.extra.map((x) => x.member)]).toEqual(["m1", "m2", ["m3"]]);
+    expect(saturdayBody(f).seats).toEqual([
+      { _key: "c1", role: "comparte", member: "m1" },
+      { _key: "c2", role: "comparte", member: "m2" },
+      { _key: "c3", role: "comparte", member: "m3" },
+    ]);
+  });
+  it("a new second column sends a second seat of the same role, with no key", () => {
+    const f = saturdayForm("2026-11-07", ev({ seats: [seat("comparte", "m1", "Ana", false, "c1")] }));
+    f.picks.comparte2 = { key: null, member: "m9", name: null };
+    expect(saturdayBody(f).seats).toEqual([{ _key: "c1", role: "comparte", member: "m1" }, { role: "comparte", member: "m9" }]);
   });
 });
 
@@ -312,6 +386,27 @@ describe("whatsappRoster", () => {
       "Encargado: Emprendedores",
       "Apoyo: Sin asignar",
       "Comparte: Ana",
+    ]);
+  });
+
+  it("lists the parts that already have someone, with the music they asked for; Plática is the Comparte line", () => {
+    const rows = saturdayRows("2026-11", [
+      ev({
+        date: "2026-11-07",
+        seats: [seat("comparte", "m2", "Beto")],
+        program: [
+          { _key: "o1", label: "Oración", part: "oracion", memberId: "m1", name: "Ana", photo: null, mine: false, note: null, music: "alabanza", helpers: null, second: null },
+          { _key: "d1", label: "Dinámica 1", part: "dinamica1", memberId: "m3", name: "Caro", photo: null, mine: false, note: "Sillas", music: null, helpers: null, second: { _key: "d1", memberId: "m4", name: "Dani", photo: null, mine: false } },
+          { _key: "p1", label: "Plática", part: "platica", memberId: null, name: null, photo: null, mine: false, note: "Daniel 3", music: "track", helpers: null, second: null },
+        ],
+      }),
+    ]);
+    expect(whatsappRoster("2026-11", rows).split("\n").slice(3)).toEqual([
+      "Encargado: Sin asignar",
+      "Apoyo: Sin asignar",
+      "Comparte: Beto",
+      "Oración: Ana (pide alabanza)",
+      "Dinámica 1: Caro y Dani",
     ]);
   });
 

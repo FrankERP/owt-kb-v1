@@ -5,7 +5,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactElement } from "react";
 
-const { fetchMock, accessMock, cookieValue, eventsMock, Unavailable, rolloutStage } = vi.hoisted(() => ({
+const { fetchMock, accessMock, cookieValue, eventsMock, setsMock, Unavailable, rolloutStage } = vi.hoisted(() => ({
+  setsMock: vi.fn(),
   // null = the real registry (open to every pastor since 2026-11-12); false closes the stage.
   rolloutStage: { override: null as null | boolean },
   fetchMock: vi.fn(),
@@ -24,6 +25,7 @@ vi.mock("next/headers", () => ({
   cookies: async () => ({ get: (name: string) => (name === "owt_calendar_view" && cookieValue.current ? { value: cookieValue.current } : undefined) }),
 }));
 vi.mock("@/app/utils/ministryEventReads", () => ({ readMinistryEvents: eventsMock, MinistryEventReadUnavailable: Unavailable }));
+vi.mock("@/app/utils/jovenesWorshipSet", () => ({ readSaturdaySets: setsMock }));
 vi.mock("@/app/utils/rollout", async (orig) => {
   const real = await orig<typeof import("@/app/utils/rollout")>();
   return { ...real, rolloutAllows: (f: never, a: never) => rolloutStage.override ?? real.rolloutAllows(f, a) };
@@ -70,6 +72,8 @@ beforeEach(() => {
   fetchMock.mockReset();
   eventsMock.mockReset();
   eventsMock.mockResolvedValue([]);
+  setsMock.mockReset();
+  setsMock.mockResolvedValue(new Map());
   cookieValue.current = undefined;
   rolloutStage.override = null;
   fetchMock.mockImplementation(async (_q: string, params: { withKids: boolean }) => ({

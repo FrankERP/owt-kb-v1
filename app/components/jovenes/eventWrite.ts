@@ -1,4 +1,4 @@
-// The one client-side caller of the four Jóvenes event routes (ADR-0081). Each editor calls it
+// The one client-side caller of the Jóvenes event routes (ADR-0081; the part route, ADR-0089). Each editor calls it
 // inside its own try/finally (CLAUDE.md: client mutation handlers check `res.ok` and never close
 // as success on a failure); this answers what happened, in words a pastor can read.
 //
@@ -10,7 +10,9 @@ const CODE_WORDS: Record<string, string> = {
   invalid_member: "Alguna persona elegida ya no está en Jóvenes (o en ese grupo).",
   invalid_time: "La hora debe ser HH:mm.",
   invalid_arrival: "La llegada debe ser HH:mm.",
-  invalid_program: "Revisa el programa: cada línea necesita un nombre corto.",
+  invalid_program: "Revisa el programa: cada línea necesita un nombre corto. Si lo abriste hace rato, recarga la página.",
+  // «Mi parte» (ADR-0089). The form's own limits stop these first; the words are for a hand-made request.
+  invalid_part: "Revisa tu parte: la descripción es de máximo 300 caracteres y los nombres van en una sola línea.",
   invalid_notes: "Las notas son demasiado largas.",
   invalid_title: "El título es demasiado largo.",
   invalid_place: "El lugar es demasiado largo o tiene saltos de línea.",
@@ -67,6 +69,8 @@ export function tokenOf(id: string): string {
 export const eventsUrl = (ministry: string) => `/api/ministries/${ministry}/events`;
 export const eventUrl = (ministry: string, id: string) => `${eventsUrl(ministry)}/${tokenOf(id)}`;
 export const programUrl = (ministry: string, id: string) => `${eventUrl(ministry, id)}/program`;
+/** «Mi parte»: the one part of a meeting its responsable fills (W10). */
+export const partUrl = (ministry: string, id: string, part: string) => `${eventUrl(ministry, id)}/parts/${part}`;
 
 /**
  * A native clock left half typed («18:--» on a desktop) reports `""` as its value, so the form

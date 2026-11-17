@@ -1,11 +1,17 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { requireActiveSession } from "@/app/utils/authGuards";
 import { createMinistryEvent } from "@/app/utils/ministryEventCommit";
+import { sendMinistryEventNotices } from "@/app/utils/ministryEventNotify";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
 import { eventRouteGate, readJson } from "../eventRoute";
 
-// Wrapped because it imports a `*Commit` (`srVerificationRunContext.test.ts`); the writer sends nothing.
+// Wrapped because it imports a `*Commit` (`srVerificationRunContext.test.ts`). The writer sends
+// nothing itself: it answers the notices its pre-commit `before` owes (ADR-0089), sent here after
+// the response — best-effort, never part of the write.
 export const POST = withVerificationRunContext(postHandler);
+
+// The emails are awaited inside `after()`; each send may take its 20 s timeout.
+export const maxDuration = 60;
 
 /**
  * Create a meeting (ADR-0081 W3, W6). The session and the rollout are checked here; everything
@@ -19,5 +25,8 @@ async function postHandler(req: NextRequest, { params }: { params: Promise<{ min
   const closed = await eventRouteGate(session.user.sanityId, ministry);
   if (closed) return closed;
   const outcome = await createMinistryEvent(session.user.sanityId, ministry, await readJson(req));
+  // Captured before the response; the callback never reads the meeting again.
+  const notices = outcome.ok ? outcome.effects.notices : null;
+  if (notices) after(() => sendMinistryEventNotices(notices));
   return NextResponse.json(outcome.body, { status: outcome.status });
 }

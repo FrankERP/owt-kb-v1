@@ -34,7 +34,7 @@ function ev(over: Partial<MinistryEventView> = {}): MinistryEventView {
       { _key: "s1", role: "encargado", memberId: "m1", name: "Ana", photo: null, mine: false },
       { _key: "s2", role: "predica", memberId: "m2", name: "Beto", photo: null, mine: true },
     ],
-    program: [{ _key: "l1", label: "Dinámica", note: "10 min", memberId: "m1", name: "Ana", photo: null, mine: false }],
+    program: [{ _key: "l1", label: "Dinámica", note: "10 min", memberId: "m1", name: "Ana", photo: null, mine: false, part: null, music: null, helpers: null, second: null }],
     createdById: null,
     createdByName: null,
     ...over,
@@ -75,7 +75,8 @@ describe("JovenesMeetingCard", () => {
     expect(button.getAttribute("aria-label")).toBe("Ver detalles");
     expect(body.hasAttribute("inert")).toBe(true);
     expect(screen.getByText("Ana, Beto")).toBeTruthy();
-    expect(screen.getByText("Programa · 1 parte")).toBeTruthy();
+    // A Saturday always has its five steps (ADR-0089), plus this meeting's one free line.
+    expect(screen.getByText("Programa · 6 partes")).toBeTruthy();
 
     fireEvent.click(button);
     expect(button.getAttribute("aria-expanded")).toBe("true");
@@ -106,7 +107,8 @@ describe("JovenesMeetingCard", () => {
   });
 
   it("a meeting with only a note has no fold: the note is on the card", () => {
-    card(ev({ seats: [], program: [], notes: "Traer Biblia" }));
+    // Not a Saturday: that one always has a program to unfold (its five steps, ADR-0089).
+    card(ev({ kind: "ministry", seats: [], program: [], notes: "Traer Biblia" }));
     expect(screen.queryByRole("button")).toBeNull();
     expect(screen.getByText("Traer Biblia")).toBeTruthy();
   });

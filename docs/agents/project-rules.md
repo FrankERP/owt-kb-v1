@@ -86,7 +86,7 @@ disagree, `CLAUDE.md` wins and this file is the one to fix.
   set up as network secrets, the canonical copy of the adversarial-plan-review skill and the
   agent definitions under `~/.claude/agents/`. Google-side secret rotations go through Google
   Cloud Shell in the browser, not a laptop. **The production solver is verified and re-deployed
-  from GitHub Actions** (`.github/workflows/solver-v3-ops.yml`, keyless, ADR-0089): `verify` runs
+  from GitHub Actions** (`.github/workflows/solver-v3-ops.yml`, keyless, ADR-0090): `verify` runs
   by itself after every `gcf_v3/**` merge; a session dispatches `verify` (or, after Frank says
   yes in the thread, `deploy`) with the GitHub connector's `actions_run_trigger` and reads the
   result with `get_job_logs`. If the session's token cannot dispatch, Frank runs it from
@@ -909,6 +909,26 @@ pass.
   encargado or apoyo of a whole-ministry meeting writes its program only. The routes that write a
   client-supplied id of another type pin it first (`storedRevisionOfType`, `typePin.ts`; W9) —
   a new route that patches or deletes an id it was handed does the same.
+- **A meeting's fixed parts, «Mi parte» and its emails** (ADR-0089; plan
+  `2026-11-17-jovenes-meeting-parts.md`). A part (Oración, Dinámica 1, Dinámica 2, Plática) is a
+  program line carrying `part`; `ministryParts.ts` is the ONE table (label, people per line,
+  whether it takes `music` and `helpers`), read by the writer, the reader, the emails and the
+  screens. Plática's people are the `comparte` seats, never stored on its line. Only the Saturday
+  meeting (`hasFixedProgram`) always shows the five steps; «Alabanza» is never stored — it is that
+  date's PUBLISHED Saturday setlist, titles and keys only (`jovenesWorshipSet.ts`, the one place a
+  Jóvenes pastor sees worship data). **Who assigns writes people; who is assigned writes the
+  content:** the program PATCH writes a kept part line's stored `note`/`music`/`helpers` back
+  whatever the body says (`keepFilledParts`), and refuses a body that names a part line's `_key`
+  without its `part` — do not «simplify» that into trusting the body, or a stale tab erases what a
+  responsable wrote. W10 (`updateMinistryEventPart`) is the only writer of those three fields once
+  the line exists; it rebuilds `program` from the STORED array with one change. **Emails:** the
+  writer computes them (`ministryEventNotices.ts`, pure) from the row it read BEFORE the commit and
+  returns them in `effects.notices`; the four routes send in `after()`
+  (`ministryEventNotify.ts`). Only a whole-ministry, published, not-past meeting announces; only
+  the people a write ADDS (everyone on a publish or a new date); never the actor; never a group or
+  a typed name. A request for the worship team goes to the super-admins who are people. Widening
+  any of these is a notification-audience change (HIGH in §Review policy): the sender is a free
+  Gmail account.
 - **A group's classes** (plan `2026-11-12-jovenes-group-classes.md`, ADR-0081 addendum 2026-11-12).
   A class is a ONE-group meeting carrying `lesson { series, track, done }`; `ministryLesson.ts`
   (`parseLesson`/`lessonOf`) is the ONE validity rule, used by the writer and the reader, so the two
