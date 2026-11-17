@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { SONG_COVER_GROQ, songCoverUrl } from "../songCover";
+import { COVER_SIZE, POST_COVER_GROQ, SONG_COVER_GROQ, songCoverUrl } from "../songCover";
 
 const ASSET = "https://cdn.sanity.io/images/ebb8vcnk/production/abc123-1000x1000.jpg";
 
 describe("songCoverUrl", () => {
   it("is the stored album cover, square and sized for the largest tile at 3×", () => {
     expect(songCoverUrl(ASSET)).toBe(`${ASSET}?w=160&h=160&fit=crop&fm=jpg`);
+  });
+
+  it("serves the shelf and the song page from two larger named sizes, still square JPEGs", () => {
+    expect(songCoverUrl(ASSET, "shelf")).toBe(`${ASSET}?w=400&h=400&fit=crop&fm=jpg`);
+    expect(songCoverUrl(ASSET, "hero")).toBe(`${ASSET}?w=640&h=640&fit=crop&fm=jpg`);
+    // Three sizes, no more: each is a separate image for the CDN to render and a phone to cache.
+    expect(Object.keys(COVER_SIZE)).toEqual(["tile", "shelf", "hero"]);
   });
 
   it("replaces any query the URL already carries instead of appending a second one", () => {
@@ -35,5 +42,10 @@ describe("songCoverUrl", () => {
 describe("SONG_COVER_GROQ", () => {
   it("reads the song's own `albumArt` image, through the setlist item's reference", () => {
     expect(SONG_COVER_GROQ).toBe("song->albumArt.asset->url");
+  });
+
+  it("and the same field from the song document itself, for the Biblioteca and the song page", () => {
+    expect(POST_COVER_GROQ).toBe("albumArt.asset->url");
+    expect(SONG_COVER_GROQ).toBe(`song->${POST_COVER_GROQ}`);
   });
 });

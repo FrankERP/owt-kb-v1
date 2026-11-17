@@ -9,8 +9,16 @@
 //
 // NEUTRAL — no React.
 
-/** The longest side a cover is ever drawn at (52 CSS px) at 3×, rounded up. */
+/** A row's cover: the longest side a tile is drawn at (52 CSS px) at 3×, rounded up. */
 const COVER_PX = 160;
+/**
+ * The two larger sizes (ADR-0088), each the drawn side at 3× rounded up: the Biblioteca
+ * shelf's card (132 CSS px) and the song page's own cover (208 CSS px from `md`). Named
+ * sizes, never a free number: every distinct `w`/`h` is a distinct image the CDN renders
+ * and a phone caches, so a caller picks one of three.
+ */
+export const COVER_SIZE = { tile: COVER_PX, shelf: 400, hero: 640 } as const;
+export type CoverSize = keyof typeof COVER_SIZE;
 
 /**
  * The square, sized URL of a stored cover, or null. Only a Sanity image URL is accepted: the
@@ -21,10 +29,14 @@ const COVER_PX = 160;
  * web and fail silently in the iOS WKWebView — the rule `avatarSrc` and `heroPhotoSrc`
  * follow. A cover has no transparency to lose.
  */
-export function songCoverUrl(assetUrl?: string | null): string | null {
+export function songCoverUrl(assetUrl?: string | null, size: CoverSize = "tile"): string | null {
   if (typeof assetUrl !== "string" || !assetUrl.startsWith("https://cdn.sanity.io/images/")) return null;
-  return `${assetUrl.split("?")[0]}?w=${COVER_PX}&h=${COVER_PX}&fit=crop&fm=jpg`;
+  const px = COVER_SIZE[size];
+  return `${assetUrl.split("?")[0]}?w=${px}&h=${px}&fit=crop&fm=jpg`;
 }
 
 /** The GROQ projection a setlist row reads its cover from, relative to a `songs[]` item. */
 export const SONG_COVER_GROQ = `song->albumArt.asset->url`;
+
+/** The same cover read from the song document itself (the Biblioteca, the song page). */
+export const POST_COVER_GROQ = `albumArt.asset->url`;

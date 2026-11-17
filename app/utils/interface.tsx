@@ -61,6 +61,9 @@ export interface Post {
   lyricsVideoUrl?: string;
   tags: Array<Tag>;
   authors?: Array<Author>;
+  /** The song's album cover as a Sanity image URL (`POST_COVER_GROQ`), on the reads that show
+   *  it (`songCoverUrl`). Absent or null: a neutral tile. */
+  cover?: string | null;
   _id: string;
 }
 

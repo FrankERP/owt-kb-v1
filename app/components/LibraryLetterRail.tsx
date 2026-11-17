@@ -10,6 +10,9 @@
 import { useCallback, useRef, useState } from "react";
 import { haptic } from "@/app/utils/haptics";
 
+/** One letter's box in the rail, in CSS px — see the note on the rail's `top`. */
+const RAIL_STEP_PX = 19;
+
 export type LibraryLetterRailProps = {
   letters: string[];
   /** The letter whose section is in view. "" while none is. */
@@ -65,19 +68,27 @@ export default function LibraryLetterRail({ letters, active, onJump }: LibraryLe
   return (
     // AFTER the sections in DOM order, `absolute` inside the list's `relative`
     // wrapper — `right-1`, not `right-0`, so the rail clears the page's own
-    // scrollbar gutter instead of sitting under it. `50vh` on a `sticky` box
-    // resolves against the scrollport, same as a percentage would, and states
-    // the viewport-relative intent (vertical centre of the SCROLLPORT) plainly.
+    // scrollbar gutter instead of sitting under it.
+    //
+    // Centred in the SCROLLPORT by its `top`, not by `top: 50vh` plus a
+    // `-translate-y-1/2`: a transform moves the box AFTER sticky has placed it, so
+    // at the top of the page the rail rose half its height above the list it
+    // indexes — over «Filtros», and since ADR-0088 over the shelf's covers. With
+    // the half-height in `top` itself, sticky's own rule («never above where the
+    // box would naturally sit») keeps the rail inside the list. `RAIL_STEP_PX` is
+    // one letter's box (10 px type on the body's 1.5 line, `py-0.5`); a few px of
+    // error only moves the centre by as much.
     <div className="absolute inset-y-0 right-1">
       <nav
         ref={railRef}
         aria-label="Índice alfabético"
         data-scrubbing={scrubbing || undefined}
+        style={{ top: `calc(50vh - ${(letters.length * RAIL_STEP_PX) / 2 + 4}px)` }}
         // `touch-none` so a drag along the rail scrubs instead of scrolling the
         // page underneath it. The pill only paints while a finger is down, so
         // the rail stays invisible chrome at rest.
         className={
-          "sticky top-[50vh] flex -translate-y-1/2 touch-none flex-col items-center py-1 " +
+          "sticky flex touch-none flex-col items-center py-1 " +
           "transition-colors duration-fast ease-out-brand " +
           "data-[scrubbing]:rounded-full data-[scrubbing]:bg-surface-base/80 data-[scrubbing]:backdrop-blur-sm"
         }
