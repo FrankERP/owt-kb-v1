@@ -1,4 +1,4 @@
-# ADR-0090: The solver is verified and re-deployed from GitHub Actions with no Google key
+# ADR-0091: The solver is verified and re-deployed from GitHub Actions with no Google key
 
 **Date:** 2026-10-22 · **Status:** Accepted
 
@@ -21,6 +21,8 @@
 > were 0086 there.
 > Renumbered 0089 → 0090 on `preview` 2026-11-17: the Jóvenes meeting's fixed parts (ADR-0089)
 > reach `main` first.
+> Renumbered 0090 → 0091 on `preview` 2026-11-17: the days a Jóvenes pastor marked, in Planear
+> (ADR-0090, PR #249), is ahead of it for `main`.
 
 ## Context
 
