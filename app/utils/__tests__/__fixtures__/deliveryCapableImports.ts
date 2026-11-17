@@ -43,8 +43,10 @@ export const DELIVERY_CAPABLE_IMPORTS: readonly string[] = [
   "songSaveCommit",
   // ADR-0079: the availability proposals' writer (its admin email, and «Aplicar» through `editRole`).
   "availabilityFixCommit",
-  // ADR-0081: Jóvenes' meetings — the writer sends nothing; the name keeps its routes in the scan.
+  // ADR-0081: Jóvenes' meetings — the writer sends nothing itself; the name keeps its routes in the scan.
   "ministryEventCommit",
+  // ADR-0089: the «Te toca» and music emails a meeting write owes, sent by its routes in `after()`.
+  "ministryEventNotify",
   // Admin parity phase 4 (slice M): the people writer, extracted from the members routes and /me.
   "memberCommit",
   // Admin parity phase 4 (slice R): the solver rules writer, extracted from the rules POST; it sends nothing.

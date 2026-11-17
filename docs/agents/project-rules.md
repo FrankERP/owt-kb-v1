@@ -880,7 +880,7 @@ pass.
   importing it. Do not «simplify» it into a wider read plus a TypeScript filter. groq-js does not
   escape the `.` in `path()`, so the matrix avoids ids like `ministryEvent-x`; `mayRead`'s own
   test pins them.
-- **Jóvenes meetings: one writer** (ADR-0081 W1–W9). `ministryEventCommit.ts` is the only module
+- **Jóvenes meetings: one writer** (ADR-0081 W1–W10). `ministryEventCommit.ts` is the only module
   that writes `ministryEvent`, called only by the routes under `app/api/ministries/[ministry]/events`
   (`serviceCommitCallers.test.ts`; never MCP or the admin assistant). It reads the caller's access
   FRESH (`fetchMemberAccessFresh`, never the 30 s cache, so a demotion counts on the next write),
@@ -890,6 +890,26 @@ pass.
   encargado or apoyo of a whole-ministry meeting writes its program only. The routes that write a
   client-supplied id of another type pin it first (`storedRevisionOfType`, `typePin.ts`; W9) —
   a new route that patches or deletes an id it was handed does the same.
+- **A meeting's fixed parts, «Mi parte» and its emails** (ADR-0089; plan
+  `2026-11-17-jovenes-meeting-parts.md`). A part (Oración, Dinámica 1, Dinámica 2, Plática) is a
+  program line carrying `part`; `ministryParts.ts` is the ONE table (label, people per line,
+  whether it takes `music` and `helpers`), read by the writer, the reader, the emails and the
+  screens. Plática's people are the `comparte` seats, never stored on its line. Only the Saturday
+  meeting (`hasFixedProgram`) always shows the five steps; «Alabanza» is never stored — it is that
+  date's PUBLISHED Saturday setlist, titles and keys only (`jovenesWorshipSet.ts`, the one place a
+  Jóvenes pastor sees worship data). **Who assigns writes people; who is assigned writes the
+  content:** the program PATCH writes a kept part line's stored `note`/`music`/`helpers` back
+  whatever the body says (`keepFilledParts`), and refuses a body that names a part line's `_key`
+  without its `part` — do not «simplify» that into trusting the body, or a stale tab erases what a
+  responsable wrote. W10 (`updateMinistryEventPart`) is the only writer of those three fields once
+  the line exists; it rebuilds `program` from the STORED array with one change. **Emails:** the
+  writer computes them (`ministryEventNotices.ts`, pure) from the row it read BEFORE the commit and
+  returns them in `effects.notices`; the four routes send in `after()`
+  (`ministryEventNotify.ts`). Only a whole-ministry, published, not-past meeting announces; only
+  the people a write ADDS (everyone on a publish or a new date); never the actor; never a group or
+  a typed name. A request for the worship team goes to the super-admins who are people. Widening
+  any of these is a notification-audience change (HIGH in §Review policy): the sender is a free
+  Gmail account.
 - **A group's classes** (plan `2026-11-12-jovenes-group-classes.md`, ADR-0081 addendum 2026-11-12).
   A class is a ONE-group meeting carrying `lesson { series, track, done }`; `ministryLesson.ts`
   (`parseLesson`/`lessonOf`) is the ONE validity rule, used by the writer and the reader, so the two
