@@ -901,8 +901,8 @@ pass.
   fields but the read). Do not «simplify» the two queries into one that projects `away` for
   everyone, and do not pass `awayFor` from another page: either sends every pastor's days to any
   pastor who edits a program. Not a confidentiality boundary — `teamMembers` is public until
-  DEF-A-16. **The leader arm waits for Frank's answer on the audience before production**; «solo
-  admins» is `awayVisibleTo` without its last two lines.
+  DEF-A-16. **The audience is Frank's choice** (2026-11-17, «Admins y líderes de su grupo», over
+  «solo admins»); narrowing it to admins is `awayVisibleTo` ending at the manager check.
 - **A meeting's fixed parts, «Mi parte» and its emails** (ADR-0089; plan
   `2026-11-17-jovenes-meeting-parts.md`). A part (Oración, Dinámica 1, Dinámica 2, Plática) is a
   program line carrying `part`; `ministryParts.ts` is the ONE table (label, people per line,

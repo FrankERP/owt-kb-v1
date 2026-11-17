@@ -1,6 +1,6 @@
 # ADR-0090: Jóvenes planners are told the days a pastor marked, and nothing else
 
-**Date:** 2026-11-17 · **Status:** Accepted (the leader arm awaits Frank's answer before production)
+**Date:** 2026-11-17 · **Status:** Accepted (audience chosen by Frank 2026-11-17: admins, and a leader for their group)
 
 ## Context
 
@@ -66,12 +66,14 @@ approvals on one digest) and its `-review-log.md`, which lists what was decided 
   `teamMembers` is undotted in a public dataset until DEF-A-16 (ADR-0057, ADR-0081).
 - A leader is the first non-manager who sees anyone's availability, and the days shown first were
   marked before this existed (on 2026-11-17, four people, all in Alabanza and Jóvenes). Frank was
-  asked who the audience should be; until he answers, the leader arm does not go to production
-  (PR #249 carries it as an open blocker, and no auto-merge is armed on it). If he chooses admins
-  only, `awayVisibleTo` ends at the manager check (`return isMinistryManager(…)`), the leader
-  cases of `jovenesAway.test.ts` and `jovenesPeople.test.ts` flip to «nobody», and the sentences
-  that name the leader here, in CLAUDE.md/AGENTS.md §Auth and in `docs/ROUTES.md` are reworded.
-  No read, component or stored field changes.
+  asked who the audience should be, with the slice held out of production until he answered. He
+  chose «Admins y líderes de su grupo» (decision card, 2026-11-17 22:25Z), over «Solo admins de
+  Jóvenes» and «Nadie por ahora»: the leader arm is his decision, not a default. Narrowing it
+  later to admins only is `awayVisibleTo` ending at the manager check
+  (`return isMinistryManager(…)`), the leader cases of `jovenesAway.test.ts` and
+  `jovenesPeople.test.ts` flipped to «nobody», and the sentences that name the leader here, in
+  CLAUDE.md/AGENTS.md §Auth and in `docs/ROUTES.md` reworded. No read, component or stored field
+  changes.
 - One calendar: a pastor who blocks a day with Alabanza in mind reads «no disponible» in Jóvenes
   too. There is no «out for one ministry only».
 - In the program editor outside Planear (`/jovenes`, the Calendario, a meeting's page) nobody gets
