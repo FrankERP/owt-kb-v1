@@ -300,11 +300,12 @@ const Page = async ({ params }: Params) => {
         {/* The cover's own colours behind the head (ADR-0088): the small tile, blurred past
             recognition and faded into the page — an atmosphere, never a picture, and never a
             state (ADR-0059's rule is about a day's hue reading as a warning; this is the
-            record's). No cover, no wash: the head is the plain page it was. */}
+            record's). Fainter on the light theme: there a black-and-white sleeve washes the
+            page grey, not dark. No cover, no wash: the head is the plain page it was. */}
         {coverTile && (
           <div
             aria-hidden
-            className="pointer-events-none absolute -inset-x-16 -top-16 h-[calc(100%+4rem)] bg-cover bg-center opacity-[0.30] blur-3xl [mask-image:linear-gradient(to_bottom,black_30%,transparent_94%)]"
+            className="pointer-events-none absolute -inset-x-16 -top-16 h-[calc(100%+4rem)] bg-cover bg-center opacity-[0.10] blur-3xl dark:opacity-[0.30] [mask-image:linear-gradient(to_bottom,black_30%,transparent_94%)]"
             style={{ backgroundImage: `url("${coverTile}")` }}
           />
         )}
