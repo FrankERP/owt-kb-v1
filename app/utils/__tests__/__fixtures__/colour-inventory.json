@@ -9,7 +9,7 @@
   ],
   "summary": {
     "literalRows": 329,
-    "filesScanned": 650,
+    "filesScanned": 652,
     "filesWithColour": 72,
     "byCategory": {
       "2": 2,
@@ -284,7 +284,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 355,
+      "line": 392,
       "disposition": "B",
       "reason": null
     },
@@ -296,7 +296,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 422,
+      "line": 459,
       "disposition": "B",
       "reason": null
     },
@@ -308,7 +308,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 438,
+      "line": 475,
       "disposition": "B",
       "reason": null
     },
@@ -3416,7 +3416,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 240,
+      "line": 244,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3428,7 +3428,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 221,
+      "line": 225,
       "disposition": "B",
       "reason": null
     },
@@ -3572,7 +3572,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 374,
+      "line": 388,
       "disposition": "B",
       "reason": null
     },
@@ -3584,7 +3584,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 382,
+      "line": 396,
       "disposition": "B",
       "reason": null
     },
@@ -3596,7 +3596,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 486,
+      "line": 500,
       "disposition": "B",
       "reason": null
     },
@@ -3608,7 +3608,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 494,
+      "line": 508,
       "disposition": "B",
       "reason": null
     },
@@ -3620,7 +3620,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 503,
+      "line": 517,
       "disposition": "B",
       "reason": null
     },

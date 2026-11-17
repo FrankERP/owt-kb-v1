@@ -88,6 +88,52 @@ describe("LibraryIndex", () => {
     expect(screen.queryByRole("button", { name: "Limpiar" })).toBeNull();
   });
 
+  describe("the shelf of new songs (ADR-0088)", () => {
+    const DATED = [
+      post("a1", "Alabaré", { _createdAt: "2026-01-05T00:00:00Z" }),
+      post("b1", "Bueno es Dios", { _createdAt: "2026-03-09T00:00:00Z" }),
+    ];
+    const mountDated = () =>
+      render(
+        <MotionProvider>
+          <CueDialogProvider>
+            <ToastProvider>
+              <LibraryIndex posts={DATED} tags={[]} authors={[]} initial={{ q: "", tags: [], author: "", key: "" }} />
+            </ToastProvider>
+          </CueDialogProvider>
+        </MotionProvider>,
+      );
+
+    it("shows «Recién agregadas» above the list while nothing filters, newest first", () => {
+      mountDated();
+      const shelf = screen.getByRole("region", { name: "Recién agregadas" });
+      const cards = Array.from(shelf.querySelectorAll("li"));
+      expect(cards.map((c) => c.textContent)).toEqual([expect.stringContaining("Bueno es Dios"), expect.stringContaining("Alabaré")]);
+      // The shelf comes BEFORE the A–Z list in the document, so a reader meets it first.
+      const firstLetter = screen.getByRole("heading", { name: "A" });
+      expect(shelf.compareDocumentPosition(firstLetter) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it("a card opens the same sheet a row does", () => {
+      mountDated();
+      const shelf = screen.getByRole("region", { name: "Recién agregadas" });
+      fireEvent.click(shelf.querySelector("button")!);
+      expect(openSheet).toHaveBeenCalledWith("b1");
+    });
+
+    it("steps aside for a search — the results are what was asked for", () => {
+      mountDated();
+      fireEvent.change(screen.getByLabelText(/Buscar canciones/), { target: { value: "ala" } });
+      expect(screen.queryByRole("region", { name: "Recién agregadas" })).toBeNull();
+      expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    });
+
+    it("is absent when no song carries a date — never an empty heading", () => {
+      mount();
+      expect(screen.queryByRole("region", { name: "Recién agregadas" })).toBeNull();
+    });
+  });
+
   it("a row opens the song sheet with its id — the row's whole contract", () => {
     mount();
     fireEvent.click(screen.getByRole("button", { name: /Alabaré/ }));

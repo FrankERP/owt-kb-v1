@@ -7,8 +7,14 @@
 //
 // Plain <button>s by the recorded row exemption (spec Part X): bare tap targets
 // in an index rail, not the Button primitive's chrome.
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { haptic } from "@/app/utils/haptics";
+
+/** One letter's box in the rail, in CSS px, at the default text size — the rail's height
+ *  before it has been measured (the server render, the first paint). See the rail's `top`. */
+const RAIL_STEP_PX = 19;
+/** The nav's own `py-1`, top and bottom. */
+const RAIL_PAD_PX = 8;
 
 export type LibraryLetterRailProps = {
   letters: string[];
@@ -25,6 +31,24 @@ export default function LibraryLetterRail({ letters, active, onJump }: LibraryLe
   // only so the pill can paint.
   const scrubbingRef = useRef(false);
   const lastLetter = useRef("");
+  // The rail's MEASURED height. The estimate is right at the default text size only: the
+  // app's text zoom (up to 1.6, and «auto» follows iOS Dynamic Type) makes every letter
+  // taller, and a rail centred on the estimate would hang its last letters under the tab
+  // bar. Null until measured, and wherever there is no layout (the server, jsdom).
+  const [railHeight, setRailHeight] = useState<number | null>(null);
+  useEffect(() => {
+    const el = railRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const measure = () => {
+      const h = el.offsetHeight;
+      setRailHeight(h > 0 ? h : null);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [letters.length]);
+  const halfRail = (railHeight ?? letters.length * RAIL_STEP_PX + RAIL_PAD_PX) / 2;
 
   /** Which letter sits under `clientY` — arithmetic on the first letter
    *  BUTTON's own rect, not the nav's border box: the nav carries `py-1`, and
@@ -65,19 +89,27 @@ export default function LibraryLetterRail({ letters, active, onJump }: LibraryLe
   return (
     // AFTER the sections in DOM order, `absolute` inside the list's `relative`
     // wrapper — `right-1`, not `right-0`, so the rail clears the page's own
-    // scrollbar gutter instead of sitting under it. `50vh` on a `sticky` box
-    // resolves against the scrollport, same as a percentage would, and states
-    // the viewport-relative intent (vertical centre of the SCROLLPORT) plainly.
+    // scrollbar gutter instead of sitting under it.
+    //
+    // Centred in the SCROLLPORT by its `top`, not by `top: 50vh` plus a
+    // `-translate-y-1/2`: a transform moves the box AFTER sticky has placed it, so
+    // at the top of the page the rail rose half its height above the list it
+    // indexes — over «Filtros», and since ADR-0088 over the shelf's covers. With
+    // the half-height in `top` itself, sticky's own rule («never above where the
+    // box would naturally sit») keeps the rail inside the list. The half-height is
+    // the rail's MEASURED one once it has a layout; `RAIL_STEP_PX` (10 px type on the
+    // body's 1.5 line, `py-0.5`) stands in for the first paint.
     <div className="absolute inset-y-0 right-1">
       <nav
         ref={railRef}
         aria-label="Índice alfabético"
         data-scrubbing={scrubbing || undefined}
+        style={{ top: `calc(50vh - ${halfRail}px)` }}
         // `touch-none` so a drag along the rail scrubs instead of scrolling the
         // page underneath it. The pill only paints while a finger is down, so
         // the rail stays invisible chrome at rest.
         className={
-          "sticky top-[50vh] flex -translate-y-1/2 touch-none flex-col items-center py-1 " +
+          "sticky flex touch-none flex-col items-center py-1 " +
           "transition-colors duration-fast ease-out-brand " +
           "data-[scrubbing]:rounded-full data-[scrubbing]:bg-surface-base/80 data-[scrubbing]:backdrop-blur-sm"
         }

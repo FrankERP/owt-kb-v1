@@ -301,7 +301,8 @@ each one owns, and its rules) and `docs/UTILITIES_AND_COMPONENTS.md`. Most are "
   `daysUntil`/`formatCountdown`, `MEMBER_TYPE_LABEL`, `isWorshipNight`, `songLeads.ts`
   (`sortedLeadIds` must agree byte for byte on the queue and flush sides), `transpose.ts`,
   `practice.ts`, `rehearsalMixes.ts`, `rehearsalQueue.ts` (the setlist run), `themeColour`,
-  `songCoverUrl`/`SONG_COVER_GROQ` (a song's album cover, `post.albumArt` — never the YouTube still),
+  `songCoverUrl`/`SONG_COVER_GROQ`/`POST_COVER_GROQ` (a song's album cover, `post.albumArt` — never the
+  YouTube still; three sizes only, `COVER_SIZE`), `recentSongs` (the Biblioteca's shelf),
   `greetingService`, `SERVICE_TONE` (a service's day colour: rail + date leaf only, ADR-0088).
 - **Planner/solver:** `fillSpecialGroup`/`orderGroup`, `collectPins`/`pinRefusal`/
   `pinHandshakeHolds`, `planClear`, `upcomingMonthPills`/`addMonths`, `trailingSaturday`
@@ -332,6 +333,8 @@ each one owns, and its rules) and `docs/UTILITIES_AND_COMPONENTS.md`. Most are "
   `/api/audio/[song]/[key]`), `PracticeCluster`.
 - **Service cards (ADR-0088):** `service/Face`/`FaceStack` (a worship member as a photo), `SongCover`/
   `CoverRow`, `ServiceFacts` (the ONE folded summary), `SeatIcon`/`seatIconKind`, `DateTile`.
+  A cover anywhere else is `SongCover` too (Biblioteca rows, the song sheet); `LibraryShelf` and
+  `SongHeroCover` are the two larger drawings.
 - **Availability:** `useAvailability` is the ONLY client-side writer — one hook call per page.
 - **Solver v3 planner (C6, behind the engine prop):** `buildV3SolveRequest` (the ONE v3 request
   builder), `runV3Auto`, `freezeConfirmEntries`/`runV3ConfirmAttempt` (the ONE v3 confirm —
