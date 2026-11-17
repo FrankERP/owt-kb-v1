@@ -37,6 +37,14 @@ vi.mock("@/app/utils/ministryEventReads", () => {
   };
 });
 
+// The real rollout (open to every pastor since 2026-11-12), unless a case closes it: the page
+// must follow the stage, or a dot would show a meeting whose own page answers 404.
+const rollout = vi.hoisted(() => ({ closed: false }));
+vi.mock("@/app/utils/rollout", async (orig) => {
+  const real = await orig<typeof import("@/app/utils/rollout")>();
+  return { ...real, rolloutAllows: (f: never, a: never) => !rollout.closed && real.rolloutAllows(f, a) };
+});
+
 const serverFetch = vi.fn();
 vi.mock("@/sanity/lib/serverClient", () => ({
   serverClient: { fetch: (q: string, p: Record<string, unknown>) => serverFetch(q, p) },
@@ -83,6 +91,7 @@ beforeEach(() => {
   readMinistryEvents.mockReset();
   readMinistryEvents.mockResolvedValue([]);
   panel.mockReset();
+  rollout.closed = false;
   serverFetch.mockReset();
   serverFetch.mockResolvedValue({ _id: "m1", _rev: "rev-1", member_name: "Ana", alias: "Ana" });
   opFetch.mockReset();
@@ -164,6 +173,23 @@ describe("/me/disponibilidad", () => {
       expect([opts.from, opts.to]).toEqual([today, limit]);
       expect(panel.mock.calls[0][0].services).toEqual({ "2026-11-21": ["sat", "jovenes"], "2026-11-22": ["jovenes"] });
       expect(panel.mock.calls[0][0].rehearsal).toBe(false);
+    });
+
+    it("draws the meeting's dot within the three a day shows", async () => {
+      opFetch.mockResolvedValue([
+        { date: "2026-11-21", tone: "sat" },
+        { date: "2026-11-21", tone: "special" },
+        { date: "2026-11-21", tone: "special" },
+      ]);
+      readMinistryEvents.mockResolvedValue([{ date: "2026-11-21" }]);
+      await renderPage();
+      expect(panel.mock.calls[0][0].services["2026-11-21"].slice(0, 3)).toContain("jovenes");
+    });
+
+    it("reads no meeting and offers no way back to Jóvenes while the rollout has not reached them", async () => {
+      rollout.closed = true;
+      expect(await renderPage({ de: "jovenes" })).toMatch(/href="\/me"[^>]*>(<[^>]*>)*Mi semana/);
+      expect(readMinistryEvents).not.toHaveBeenCalled();
     });
 
     it("keeps the calendar, without dots, when the meetings cannot be read", async () => {

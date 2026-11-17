@@ -36,6 +36,13 @@ import { MEMBER_AVAILABILITY_QUERY, SERVICE_DATES_QUERY, horizon } from "../quer
 // reader's own groups and the whole-ministry meetings, never another group's. That
 // import is why this page exports no `revalidate` (R6,
 // `ministryEventCoverage.test.ts`); it reads the session, so it was dynamic anyway.
+//
+// ONE calendar for every ministry, on purpose. A second one under `/jovenes` was the
+// obvious alternative and is rejected: the days a person cannot serve are the
+// person's, and two calendars would be two writers racing into the same two fields
+// (`useAvailability` is the only client writer). The cost, accepted: for someone in
+// Alabanza and Jóvenes the nav shows their first section here, since `currentSection`
+// sees the path and not `?de=`; the back link is what returns them to Jóvenes.
 
 export const metadata: Metadata = {
   title: "Disponibilidad — Backstage",
@@ -91,10 +98,15 @@ export default async function DisponibilidadPage({ searchParams }: Props = {}) {
     (services[day] ??= []).push(row.tone);
   }
   // One dot per day, however many meetings it holds: the dot says «there is something of Jóvenes
-  // that day», and a pastor in two groups would otherwise get a row of identical greys.
+  // that day», and a pastor in two groups would otherwise get a row of identical greys. Last in
+  // the row, as in the agenda, but never past the third place: `DayDots` draws three, and a
+  // Saturday with a service and two specials would otherwise name the meeting in the day's label
+  // and the legend while drawing no dot for it.
   for (const date of new Set(meetingDays)) {
     const day = serviceDayKey(date);
-    if (day) (services[day] ??= []).push("jovenes");
+    if (!day) continue;
+    const tones = (services[day] ??= []);
+    tones.splice(Math.min(tones.length, 2), 0, "jovenes");
   }
 
   const navbarTitle = member?.alias?.trim() || "Disponibilidad";
