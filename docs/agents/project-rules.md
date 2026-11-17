@@ -903,7 +903,16 @@ pass.
   the people a write ADDS (everyone on a publish or a new date); never the actor; never a group or
   a typed name. A request for the worship team goes to the super-admins who are people. Widening
   any of these is a notification-audience change (HIGH in §Review policy): the sender is a free
-  Gmail account.
+  Gmail account. **Reminders** (ADR-0089's addendum, Frank 2026-11-17): every day the daily cron
+  runs `sendMinistryEventReminders` (`ministryEventReminder.ts`) for the meetings dated exactly 14
+  and 7 days ahead. It reads them through `readAnnouncedMeetings` — the reader's ONE query with no
+  person behind it, hard-wired to `published == true && audience.kind == "ministry"`, so it is
+  narrower than any member's read; never give it a group or a draft arm — and writes only to a
+  member who answers for a part that still lacks something (`partGaps`, the cards' own rule for
+  «pendiente») and to the `encargado` of a Saturday where Oración or a dinámica has nobody, each
+  through `assignedAddress` (the «Te toca» narrowing). Exact days and no «sent» marker on purpose
+  (ADR-0080's trade): a missed day is a missed reminder. It never throws, and it starts no wave of
+  sends past `REMINDER_STEP_DEADLINE_MS`, so the cron's alarms and sweep always run.
 - **A group's classes** (plan `2026-11-12-jovenes-group-classes.md`, ADR-0081 addendum 2026-11-12).
   A class is a ONE-group meeting carrying `lesson { series, track, done }`; `ministryLesson.ts`
   (`parseLesson`/`lessonOf`) is the ONE validity rule, used by the writer and the reader, so the two

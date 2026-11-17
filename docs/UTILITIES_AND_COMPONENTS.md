@@ -657,6 +657,9 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   Throws `MinistryEventReadUnavailable` without the read token. `mayRead` is the same rule in
   TypeScript for a server decision on one stored event; never post-filter a wider read.
   `ministryEventCoverage.test.ts` fails on any other file that names the type.
+  **`readAnnouncedMeetings(ministry, dates)`**/**`buildAnnouncedMeetingsQuery`** — the one read
+  with no person behind it, for the reminder cron only: the published whole-ministry meetings of
+  exact days (what every member reads), never a group's meeting or a draft.
 - **`createMinistryEvent`**, **`updateMinistryEvent`**, **`updateMinistryEventProgram`**,
   **`updateMinistryEventPart`**, **`deleteMinistryEvent`**
   ([ministryEventCommit.ts](../app/utils/ministryEventCommit.ts)) — THE one writer of
@@ -671,14 +674,15 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   **`PART_ASK`** ([ministryParts.ts](../app/utils/ministryParts.ts)) — THE one table of the parts
   (label, how many people, whether it takes music and helpers), neutral: the writer, the reader, the
   emails and the screens all read it, and nothing else spells a part id or a limit.
-  **`partViews`**/**`writableParts`**/**`partPending`**/**`freeLines`**/**`meetingPath`**/
+  **`partViews`**/**`writableParts`**/**`partPending`**/**`partGaps`**/**`freeLines`**/**`meetingPath`**/
   **`meetingToken`**/**`meetingPageOpens`**/**`joinNames`**
   ([jovenesPartView.ts](../app/utils/jovenesPartView.ts)) — a meeting's parts as
   its screens read them (who answers, what they wrote, whether it is the reader's), neutral, so the
   card, the day sheet and the meeting's page agree; `writableParts` mirrors W10 and decides nothing;
   `meetingPageOpens` is how far back the meeting's page opens (`MEETING_PAGE_BACK_DAYS`), asked by
   a screen that can show an older meeting before it links there; `joinNames` is «Pau, Mkz y Lali»
-  for screens and emails alike. The planner's pure half
+  for screens and emails alike; `partGaps` is THE rule for what a part still lacks (the cards'
+  «pendiente» and the reminder emails both read it). The planner's pure half
   ([jovenesPlannerModel.ts](../app/utils/jovenesPlannerModel.ts)) gained `SATURDAY_PICKS`/`pickRole`
   (the second «Comparte»), `programForm`/`programBody` for part lines (a stored part goes with its
   people only) and `PROGRAM_MAX_LINES`.
@@ -692,8 +696,15 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   **`sendMinistryEventNotices`**/**`planEventEmails`**
   ([ministryEventNotify.ts](../app/utils/ministryEventNotify.ts), `server-only`) — the audience and
   the send, awaited by the four meeting routes inside `after()`; it only narrows who the writer
-  named. **`buildAssignedEmail`**/**`buildMusicEmail`**
-  ([ministryEventEmail.ts](../app/utils/ministryEventEmail.ts)) — the two templates, on the light
+  named; **`assignedAddress`** is THE narrowing of an email about one's own place on a meeting
+  (active member, email, allowlist, «Nuevas asignaciones»), shared with the reminders.
+  **`sendMinistryEventReminders`**/**`meetingReminders`**/**`planReminderEmails`**/
+  **`reminderDates`**
+  ([ministryEventReminder.ts](../app/utils/ministryEventReminder.ts), `server-only`) — the
+  reminders 14 and 7 days before a meeting, awaited by the daily cron: who still owes something
+  on a part of theirs, and the encargado of a Saturday with a part nobody holds.
+  **`buildAssignedEmail`**/**`buildMusicEmail`**/**`buildPartReminderEmail`**
+  ([ministryEventEmail.ts](../app/utils/ministryEventEmail.ts)) — the three templates, on the light
   shell with Jóvenes' own eyebrow and footer. Component **`PartForm`** [C]
   (`app/components/jovenes/PartForm.tsx`) — «Mi parte»: description (300, counted), music where the
   part takes it, «Jóvenes que apoyan»; it saves through `partUrl` and keeps what the reader typed

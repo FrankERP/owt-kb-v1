@@ -383,6 +383,134 @@ describe("layer 3 — the Sunday «Te toca dirigir» reminder (ADR-0080)", () =>
   });
 });
 
+describe("layer 3 — the Jóvenes meeting reminders, 14 and 7 days ahead (ADR-0089, addendum)", () => {
+  beforeEach(() => {
+    vi.stubEnv("SANITY_API_READ_TOKEN", "test-read-token");
+    vi.stubEnv("EMAIL_ALLOWLIST", "*");
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.useRealTimers();
+  });
+
+  const isMeetingQuery = (q: unknown) => String(q).includes("date in $dates");
+  const isPeopleQuery = (q: unknown) => String(q).includes("_id in $ids");
+  const MEETING = {
+    _id: "ministryEvent.00000000-0000-4000-8000-000000000001",
+    ministry: "jovenes",
+    audience: { kind: "ministry" },
+    kind: "saturday",
+    date: "2026-11-21",
+    time: "18:10",
+    published: true,
+    seats: [{ _key: "s1", role: "comparte", memberId: "gaby", name: "Gaby" }],
+    program: [
+      { _key: "l1", part: "oracion", label: "Oración", memberId: "jacob", music: "track" },
+      { _key: "l2", part: "dinamica1", label: "Dinámica 1", memberId: "andy", note: "Sillas" },
+      { _key: "l3", part: "dinamica2", label: "Dinámica 2", memberId: "leo", note: "Trivia" },
+    ],
+  };
+  const GABY = { _id: "gaby", ministries: ["jovenes"], email: "gaby@mail.com", name: "Gaby" };
+
+  it("every day: asks for the two exact dates and mails who still owes something, before the sweep", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-08T01:30:00Z")); // Saturday 7 nov, 19:30 CDMX
+    operationalFetch.mockImplementation(async (query: string, params: Record<string, unknown>) => {
+      if (isMeetingQuery(query)) {
+        expect(params).toMatchObject({ ministry: "jovenes", dates: ["2026-11-21", "2026-11-14"] });
+        return [MEETING];
+      }
+      if (isPeopleQuery(query)) {
+        expect(params).toEqual({ ids: ["gaby"] });
+        return [GABY];
+      }
+      if (query.includes("notificationOutbox")) return { count: 0, oldest: null };
+      return [];
+    });
+    const GET = await remindersRoute();
+    const res = await GET(req({ authorization: `Bearer ${SECRET}` }));
+
+    expect(await bodyField(res, "meetingReminders")).toMatchObject({ ran: true, meetings: 1, planned: 1, emailed: 1, failed: 0, skipped: 0 });
+    const reminder = sendEmailMock.mock.calls.find((c) => /^Recordatorio: /.test(String(c[0].subject)));
+    expect(reminder?.[0]).toMatchObject({ to: "gaby@mail.com", subject: "Recordatorio: falta llenar Plática — sábado 21 de noviembre" });
+    expect(sendEmailMock.mock.invocationCallOrder[0]).toBeLessThan(sweepOutboxMock.mock.invocationCallOrder[0]);
+  });
+
+  it("a day with no meeting reads no people, mails nobody and leaves the sweep alone", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-05T01:30:00Z"));
+    serveReminderFetches({ count: 0, oldest: null });
+    const GET = await remindersRoute();
+    const res = await GET(req({ authorization: `Bearer ${SECRET}` }));
+
+    expect(await bodyField(res, "meetingReminders")).toMatchObject({ ran: true, meetings: 0, planned: 0, emailed: 0 });
+    expect(operationalFetch.mock.calls.some((c) => isPeopleQuery(c[0]))).toBe(false);
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    expect(sweepOutboxMock).toHaveBeenCalledWith({});
+  });
+
+  it("still sweeps and still measures liveness when the meetings' read fails", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    operationalFetch.mockImplementation(async (query: string) => {
+      if (isMeetingQuery(query)) throw new Error("sanity down");
+      if (query.includes("notificationOutbox")) return { count: 0, oldest: null };
+      return [];
+    });
+    const GET = await remindersRoute();
+    const res = await GET(req({ authorization: `Bearer ${SECRET}` }));
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.meetingReminders).toMatchObject({ ran: true, error: "ministry_reminder_failed" });
+    expect(body.liveness).toBeDefined();
+    expect(sweepOutboxMock).toHaveBeenCalled();
+  });
+
+  it("without the read token it fails closed as a report, never as «no meetings»", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubEnv("SANITY_API_READ_TOKEN", "");
+    serveReminderFetches({ count: 0, oldest: null });
+    const GET = await remindersRoute();
+    const res = await GET(req({ authorization: `Bearer ${SECRET}` }));
+
+    expect(await bodyField(res, "meetingReminders")).toMatchObject({ ran: true, error: "ministry_reminder_failed" });
+    expect(operationalFetch.mock.calls.some((c) => isMeetingQuery(c[0]))).toBe(false);
+  });
+
+  it("the sweep's deadline is derated by BOTH reminder steps, and skipped when together they left too little", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-08T01:30:00Z"));
+    operationalFetch.mockImplementation(async (query: string) => {
+      if (isMeetingQuery(query)) {
+        vi.setSystemTime(new Date("2026-11-08T01:30:05Z")); // a 5 s read
+        return [];
+      }
+      if (query.includes("notificationOutbox")) return { count: 0, oldest: null };
+      return [];
+    });
+    let GET = await remindersRoute();
+    await GET(req({ authorization: `Bearer ${SECRET}` }));
+    expect(sweepOutboxMock).toHaveBeenCalledWith({ sweepDeadlineMs: 40_000 });
+
+    sweepOutboxMock.mockClear();
+    vi.setSystemTime(new Date("2026-11-08T01:30:00Z"));
+    operationalFetch.mockImplementation(async (query: string) => {
+      if (isMeetingQuery(query)) {
+        vi.setSystemTime(new Date("2026-11-08T01:30:30Z")); // a 30 s read
+        return [];
+      }
+      if (query.includes("notificationOutbox")) return { count: 0, oldest: null };
+      return [];
+    });
+    vi.resetModules();
+    GET = await remindersRoute();
+    const res = await GET(req({ authorization: `Bearer ${SECRET}` }));
+    expect(sweepOutboxMock).not.toHaveBeenCalled();
+    expect(await bodyField(res, "sweep")).toEqual({ error: "sweep_skipped_after_lead_reminders" });
+  });
+});
+
 describe("the liveness alarm", () => {
   /** The query the alarm issued against the outbox. */
   function staleQuery(): string {

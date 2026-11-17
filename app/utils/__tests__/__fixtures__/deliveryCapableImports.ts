@@ -47,6 +47,8 @@ export const DELIVERY_CAPABLE_IMPORTS: readonly string[] = [
   "ministryEventCommit",
   // ADR-0089: the «Te toca» and music emails a meeting write owes, sent by its routes in `after()`.
   "ministryEventNotify",
+  // ADR-0089 (addendum): the reminders 14 and 7 days before a meeting, sent by the daily cron.
+  "ministryEventReminder",
   // Admin parity phase 4 (slice M): the people writer, extracted from the members routes and /me.
   "memberCommit",
   // Admin parity phase 4 (slice R): the solver rules writer, extracted from the rules POST; it sends nothing.

@@ -114,3 +114,60 @@ one program line (query of 2026-11-17), so nothing needed migrating. Plan:
   day's Jóvenes meeting's worship. If a Saturday ever has a different set for Jóvenes, the step
   must stop reading `saturdarSongs`.
 - Undoing the member-read clause of W10 lets a seat outlive the right to read, which W3a forbids.
+
+## Addendum, 2026-11-17: reminders two weeks and one week ahead
+
+Frank, the day this shipped: «También debes de mandar correos de recordatorio 2 semanas antes y
+una semana antes de cada reunión de jóvenes para que vayan llenando las cosas que tienen
+asignadas».
+
+**Decision.** `sendMinistryEventReminders` (`app/utils/ministryEventReminder.ts`) runs every day
+inside the daily cron (`/api/cron/service-reminders`, 19:00–19:59 CDMX), before the sweep. It
+reads the meetings dated EXACTLY 14 and 7 days ahead and writes one email per person per meeting:
+
+- to whoever answers for a part that still lacks something — `partGaps`
+  (`jovenesPartView.ts`), the same rule the cards use for «pendiente»: a dinámica's description,
+  Plática's topic and its music, Oración's music (its note is optional). The email names only what
+  is missing and links the meeting's page;
+- to whoever holds the `encargado` seat of a Saturday meeting when Oración or a dinámica still has
+  nobody. Frank did not ask for this one; it is there because a part nobody holds has nobody to
+  remind, and the encargado is who assigns those. Plática is left out: its people are seats, which
+  the encargado does not write.
+
+The meetings are the ones «Te toca» announces (for all of Jóvenes, published), read by
+`readAnnouncedMeetings` — the reader's one query with no person behind it, whose filter is what
+EVERY member reads, so it cannot return a group's meeting or a draft. The people pass the same
+narrowing as «Te toca» (`assignedAddress`: an active member of Jóvenes, an email, the allowlist,
+«Nuevas asignaciones» on).
+
+**Rejected.**
+
+- **Reminding everyone on the meeting.** Frank's reason is «para que vayan llenando»: someone who
+  filled their part has nothing to do, and an email that asks for nothing teaches people to
+  ignore the next one. It is also the cheaper side of a 500-a-day sender.
+- **A window instead of an exact day** («between 14 and 8 days ahead, if not reminded yet»). It
+  would survive a day the cron missed, but it needs a stored «already reminded» mark per person
+  and meeting — a second writer of the meeting, or a new document type — for two emails. The same
+  trade ADR-0080 made; the cost is below.
+- **Another hour.** The plan has one Vercel cron a day (ADR-0080). 19:00 on a Saturday is during
+  or right after that day's meeting, which is when the people who serve in two weeks are together.
+- **Telling the encargado which parts are unfilled.** Their holders are told themselves; the
+  encargado hears only of what is theirs to do.
+- **A switch of its own.** A reminder is about one's assignment, so it rides «Nuevas
+  asignaciones», whose hint now says so.
+
+**Consequences.**
+
+- A meeting published fewer than 14 (or 7) days ahead skips the reminder it is already past, and
+  a day the cron does not run is a reminder nobody gets: there is no catch-up. A duplicated cron
+  event sends a reminder twice (ADR-0080).
+- Someone assigned at 17:00 on a reminder day gets «Te toca» and, two hours later, the reminder.
+- A typed-name «comparte» is never written to; when a guest shares alone, nobody is reminded of
+  the Plática (an admin or the encargado fills it, as before).
+- The step is told what the route already spent and starts no wave of sends once one more send
+  timeout would pass `REMINDER_STEP_DEADLINE_MS` (45 s of the route's 60); what it leaves is
+  logged (`ministry_reminder_skipped`) and lost. The sweep's deadline is derated by both reminder
+  steps together, and skipped under ADR-0080's rule.
+- Vercel runs crons on Production only: on `preview` the step runs only when someone calls the
+  route by hand with the secret, and then mails the one redirect address.
+

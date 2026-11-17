@@ -78,7 +78,7 @@ hand-writing a fixture that mirrors them).
 |---|---|---|
 | 1 — primary | **Google Cloud Scheduler**, `*/5` ([ADR-0032](adr/0032-layer-1-runs-on-cloud-scheduler.md); live since 2026-09-10) — plus GitHub Actions, declared `*/5` but starved by this repo's CI volume, kept as an independent second caller — see §"Layer 1 does not run on the schedule it declares" | Scheduler job `flush-notification-outbox` (GCP `eloquent-figure-421401`, `us-central1`) and `.github/workflows/flush-notifications.yml`, both → `/api/cron/flush-notifications` (drains up to 5 sweeps per tick when work is re-pended) |
 | 2 — backstop | opportunistic sweep after any queueing write (not after the MCP saved-service save's inline upserts, above) | end of `commitUpserts()` in `serviceMutationSideEffects.ts` — keeps its report and raises the destroyed-mail alarm |
-| 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` (mails a person about destroyed mail, as layer 2 also does; layer 1 goes red on the same conditions instead — see §"The destroyed-mail alarm"). On Sundays it first sends «Te toca dirigir» to leads and then runs a derated sweep, or skips it if the reminders overran — see §"«Te toca dirigir»" |
+| 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` (mails a person about destroyed mail, as layer 2 also does; layer 1 goes red on the same conditions instead — see §"The destroyed-mail alarm"). On Sundays it first sends «Te toca dirigir» to leads, and every day the Jóvenes meeting reminders of 14 and 7 days ahead; then it runs a sweep derated by both, or skips it if they overran — see §"«Te toca dirigir»" and §"Jóvenes meetings — the reminders" |
 
 **Layer 1 also carries the availability proposals' tick** (ADR-0079): after the drain has
 answered, `after()` runs `availabilityTick` on every third 5-minute bucket with at least 40 s left;
@@ -619,7 +619,8 @@ debounce, no claim, one direct send per lead.
 - **Order and budget:** sends run in parallel BEFORE the sweep; the sweep's deadline is derated
   by the time spent (`sweepOptionsAfterReminders`), losslessly. With less than
   `MIN_SWEEP_DEADLINE_MS` (25 s) left the daily sweep is skipped (`notify_daily_sweep_skipped`;
-  `sweep: {error: "sweep_skipped_after_lead_reminders"}`) and layer 1 drains it. The route's JSON carries `leadReminders`
+  `sweep: {error: "sweep_skipped_after_lead_reminders"}`) and layer 1 drains it. Since 2026-11-17 the
+  time derated is this step's plus the Jóvenes reminders' (below). The route's JSON carries `leadReminders`
   (`{ ran: false }` on other days); Vercel logs carry `lead_reminder_run`,
   `lead_reminder_send_failed` and `lead_reminder_failed`.
 - **No "already sent" marker:** a duplicated cron event sends the reminder twice (ADR-0080).
@@ -661,6 +662,40 @@ debounce, no claim — a meeting names nine people at most, once.
   `EMAIL_REDIRECT_TO`; sends go through `sendEmail`, so the delivery firewall stands in front.
 - **Subjects** are constants plus a date and a part's table label; a free line's typed label never
   reaches one.
+
+## Jóvenes meetings — the reminders, 14 and 7 days ahead (ADR-0089, addendum)
+
+**Every day at 19:00–19:59 CDMX** the daily cron (`/api/cron/service-reminders`, layer 3) runs
+`sendMinistryEventReminders` (`app/utils/ministryEventReminder.ts`) after the leads' step and
+before the sweep. Like «Te toca dirigir» it is NOT an outbox notice: no queue, no claim, no «sent»
+marker.
+
+- **Which meetings:** dated EXACTLY 14 and exactly 7 days after today (CDMX), for all of Jóvenes
+  (`audience.kind == "ministry"`) and `published == true` — read by `readAnnouncedMeetings`
+  (`ministryEventReads.ts`), the reader's one query with no person behind it. A group's meeting,
+  a class or a draft reminds nobody.
+- **Who, and of what** (`meetingReminders`, pure): each member who answers for a part that still
+  lacks something (`partGaps`: a dinámica's description, Plática's topic and music, Oración's
+  music) — «Recordatorio: falta llenar Dinámica 1 — sábado 5 de diciembre», naming only what is
+  missing; and each `encargado` of a Saturday meeting where Oración or a dinámica has nobody —
+  «Recordatorio: falta asignar Oración y Dinámica 2 — …». One email per person per meeting, both
+  blocks in it when both apply. A filled part, a free program line, the `apoyo` seat and a
+  typed-name guest get nothing.
+- **Narrowed at send time** exactly as «Te toca» (`assignedAddress`, `ministryEventNotify.ts`):
+  an active member of Jóvenes, with an email, inside `EMAIL_ALLOWLIST`, with «Nuevas
+  asignaciones» on. Preview mail goes to `EMAIL_REDIRECT_TO` — and Vercel runs crons on
+  Production only, so on `preview` the step runs only when the route is called by hand.
+- **Order and budget:** sends go in waves of `SEND_CONCURRENCY`; the step is told what the route
+  already spent (`spentMs`) and starts no wave once one more `SEND_TIMEOUT_MS` would pass
+  `REMINDER_STEP_DEADLINE_MS` (45 s). The sweep's deadline is derated by the leads' step and this
+  one together (`sweepOptionsAfterReminders`), and skipped under the same rule
+  (`sweep_skipped_after_lead_reminders` keeps its name; the log carries `leadMs` and `meetingMs`).
+- **No catch-up:** a day the cron does not run, a meeting published inside the 14 or 7 days, or a
+  wave the deadline left out is a reminder nobody gets; a duplicated cron event sends it twice.
+- The route's JSON carries `meetingReminders` (`meetings`, `planned`, `emailed`, `failed`,
+  `skipped`, `elapsedMs`, or `error: "ministry_reminder_failed"` — it never throws, so the alarms
+  and the sweep always run). Logs: `ministry_reminder_run`, `ministry_reminder_send_failed`,
+  `ministry_reminder_skipped`, `ministry_reminder_failed`.
 
 ## The liveness alarm
 
