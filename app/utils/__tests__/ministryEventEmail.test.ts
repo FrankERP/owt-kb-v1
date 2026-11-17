@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 vi.mock("@/sanity/lib/serverClient", () => ({ serverClient: { fetch: vi.fn() }, writeClient: {} }));
 
-import { buildAssignedEmail, buildMusicEmail, joinNames, meetingPath, roleWords, type EmailMeeting } from "../ministryEventEmail";
+import { buildAssignedEmail, buildMusicEmail, buildPartReminderEmail, joinNames, meetingPath, roleWords, type EmailMeeting } from "../ministryEventEmail";
 import { PART_ASK } from "../ministryParts";
 
 const MEETING: EmailMeeting = {
@@ -187,5 +187,91 @@ describe("joinNames", () => {
     expect(joinNames(["Pau"])).toBe("Pau");
     expect(joinNames(["Pau", "Mkz"])).toBe("Pau y Mkz");
     expect(joinNames(["Pau", "Mkz", "Lali"])).toBe("Pau, Mkz y Lali");
+  });
+});
+
+describe("buildPartReminderEmail", () => {
+  const base = { name: "Gaby Ruiz", meeting: MEETING, link: LINK, settingsLink: SETTINGS };
+
+  it("two weeks ahead: says how far, which part and exactly what it lacks, and links the form", () => {
+    const { subject, html } = buildPartReminderEmail({
+      ...base,
+      days: 14,
+      fill: [{ part: "platica", gaps: ["note", "music"], partnerNames: [] }],
+      assign: [],
+    });
+    expect(subject).toBe("Recordatorio: falta llenar Plática — sábado 21 de noviembre");
+    expect(html).toContain("Faltan dos semanas para la reunión");
+    expect(html).toContain("Hola, Gaby.");
+    expect(html).toContain("Escribe tu tema.");
+    expect(html).toContain("una canción con el grupo de alabanza");
+    expect(html).toContain("18:10 · llegada 17:30 · Oasis Tlalpan");
+    expect(html).toContain(`href="${LINK}"`);
+    expect(html).toContain("Llenar mi parte →");
+    expect(html).not.toContain("SIN RESPONSABLE");
+  });
+
+  it("one week ahead, and only the half that is missing", () => {
+    const { html } = buildPartReminderEmail({ ...base, days: 7, fill: [{ part: "platica", gaps: ["music"], partnerNames: ["Leo", "Pastor invitado"] }], assign: [] });
+    expect(html).toContain("Falta una semana para la reunión");
+    expect(html).not.toContain("Escribe tu tema.");
+    expect(html).toContain("(junto con Leo y Pastor invitado)");
+  });
+
+  it("several parts are one email: every label in the subject, a block each", () => {
+    const { subject, html } = buildPartReminderEmail({
+      ...base,
+      days: 7,
+      fill: [
+        { part: "oracion", gaps: ["music"], partnerNames: [] },
+        { part: "dinamica2", gaps: ["note"], partnerNames: [] },
+      ],
+      assign: [],
+    });
+    expect(subject).toBe("Recordatorio: falta llenar Oración y Dinámica 2 — sábado 21 de noviembre");
+    expect(html).toContain("ORACIÓN");
+    expect(html).toContain("DINÁMICA 2");
+    expect(html).toContain("que toque alguien de alabanza");
+    expect(html).toContain("máximo 300 caracteres");
+  });
+
+  it("the coordinator's: the parts with nobody, singular and plural, and a button that fills nothing", () => {
+    const one = buildPartReminderEmail({ ...base, days: 14, fill: [], assign: ["oracion"] });
+    expect(one.subject).toBe("Recordatorio: falta asignar Oración — sábado 21 de noviembre");
+    expect(one.html).toContain("todavía no tiene a nadie");
+    expect(one.html).toContain("Ver la reunión →");
+    expect(one.html).not.toContain("Todavía falta llenar");
+    const two = buildPartReminderEmail({ ...base, days: 14, fill: [], assign: ["oracion", "dinamica1"] });
+    expect(two.html).toContain("Oración y Dinámica 1");
+    expect(two.html).toContain("todavía no tienen a nadie");
+  });
+
+  it("someone who owes a part AND coordinates gets both blocks under the fill subject", () => {
+    const { subject, html } = buildPartReminderEmail({ ...base, days: 7, fill: [{ part: "dinamica1", gaps: ["note"], partnerNames: [] }], assign: ["dinamica2"] });
+    expect(subject).toBe("Recordatorio: falta llenar Dinámica 1 — sábado 21 de noviembre");
+    expect(html).toContain("SIN RESPONSABLE");
+    expect(html).toContain("Llenar mi parte →");
+  });
+
+  it("escapes everything a person typed", () => {
+    const { html } = buildPartReminderEmail({
+      name: "<b>Gaby</b>",
+      meeting: { ...MEETING, place: "<script>x</script>", title: "A & B" },
+      days: 7,
+      fill: [{ part: "platica", gaps: ["music"], partnerNames: ["<i>Leo</i>"] }],
+      assign: [],
+      link: LINK,
+      settingsLink: SETTINGS,
+    });
+    expect(html).not.toContain("<script>");
+    expect(html).not.toContain("<b>Gaby</b>");
+    expect(html).not.toContain("<i>Leo</i>");
+    expect(html).toContain("A &amp; B");
+  });
+
+  it("uses the Jóvenes shell, never worship's", () => {
+    const { html } = buildPartReminderEmail({ ...base, days: 7, fill: [{ part: "oracion", gaps: ["music"], partnerNames: [] }], assign: [] });
+    expect(html).toContain("JÓVENES · OASIS");
+    expect(html).toContain("Recibes esto porque sirves en Jóvenes de Oasis.");
   });
 });

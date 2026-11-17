@@ -28,7 +28,7 @@ import { wantsNotification } from "./notifyPrefs";
 
 export type { EventNoticeEffects };
 
-type PersonRow = MemberAccessDoc & { email?: unknown; notifPrefs?: unknown; name?: unknown };
+export type PersonRow = MemberAccessDoc & { email?: unknown; notifPrefs?: unknown; name?: unknown };
 
 /** The people a notice names, by id: recipients and the partners their email mentions. */
 export const NOTICE_PEOPLE_QUERY =
@@ -44,7 +44,22 @@ export const MUSIC_AUDIENCE_QUERY =
 export type PlannedEmail = { memberId: string; email: string; subject: string; html: string };
 
 const emailOf = (p: PersonRow): string | null => (typeof p.email === "string" && p.email.trim() ? p.email.trim().toLowerCase() : null);
-const nameOf = (p: PersonRow | undefined): string | null => (p && typeof p.name === "string" && p.name.trim() ? p.name.trim() : null);
+export const nameOf = (p: PersonRow | undefined): string | null => (p && typeof p.name === "string" && p.name.trim() ? p.name.trim() : null);
+
+/**
+ * THE narrowing every email about one's own place on a meeting goes through — «Te toca» here and
+ * the reminders of `ministryEventReminder.ts`: the address to write to, or `null` for someone
+ * who, read NOW, is not an active member of the ministry, has no email, is outside the allowlist
+ * or turned off «Asignaciones».
+ */
+export function assignedAddress(person: PersonRow | undefined, ministry: "jovenes", allow: string[]): string | null {
+  if (!person) return null;
+  const access = accessFromDoc(person);
+  if (!access.active || !isMinistryMember(access, ministry)) return null;
+  const email = emailOf(person);
+  if (!email || !isEmailAllowed(email, allow) || !wantsNotification(person.notifPrefs, "assigned")) return null;
+  return email;
+}
 
 /**
  * Pure half: the emails these notices become, given the people read. `people` answers the
@@ -65,11 +80,8 @@ export function planEventEmails(
     // The writer already left the actor out; said again here because this is the audience.
     if (a.memberId === effects.actorId) continue;
     const person = byId.get(a.memberId);
-    if (!person) continue;
-    const access = accessFromDoc(person);
-    if (!access.active || !isMinistryMember(access, effects.ministry)) continue;
-    const email = emailOf(person);
-    if (!email || !isEmailAllowed(email, env.allow) || !wantsNotification(person.notifPrefs, "assigned")) continue;
+    const email = assignedAddress(person, effects.ministry, env.allow);
+    if (!person || !email) continue;
     const roles = a.roles.map((r) => ({
       kind: r.kind,
       id: r.id,

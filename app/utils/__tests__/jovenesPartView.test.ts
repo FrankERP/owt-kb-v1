@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 import type { MinistryEventLine, MinistryEventSeat, MinistryEventView } from "../ministryEventReads";
-import { freeLines, joinNames, meetingPageOpens, partPending, partViews, writableParts } from "../jovenesPartView";
+import { freeLines, joinNames, meetingPageOpens, partGaps, partPending, partViews, writableParts } from "../jovenesPartView";
 
 const seat = (role: string, over: Partial<MinistryEventSeat> = {}): MinistryEventSeat => ({
   _key: `s-${role}-${over.memberId ?? over.name ?? "x"}`,
@@ -177,5 +177,17 @@ describe("joinNames and meetingPageOpens", () => {
     expect(meetingPageOpens("2027-11-17", "2026-11-17")).toBe(true);
     expect(meetingPageOpens("2026-10-18", "2026-11-17")).toBe(true);
     expect(meetingPageOpens("2026-10-17", "2026-11-17")).toBe(false);
+  });
+});
+
+describe("partGaps: what a part still lacks, whoever asks", () => {
+  it("Oración owes only its music; a dinámica only its description; Plática both", () => {
+    expect(partGaps({ id: "oracion", note: null, music: null })).toEqual(["music"]);
+    expect(partGaps({ id: "oracion", note: null, music: "track" })).toEqual([]);
+    expect(partGaps({ id: "dinamica1", note: null, music: null })).toEqual(["note"]);
+    expect(partGaps({ id: "dinamica2", note: "Sillas", music: null })).toEqual([]);
+    expect(partGaps({ id: "platica", note: null, music: null })).toEqual(["note", "music"]);
+    expect(partGaps({ id: "platica", note: "Fe", music: null })).toEqual(["music"]);
+    expect(partGaps({ id: "platica", note: "Fe", music: "alabanza" })).toEqual([]);
   });
 });
