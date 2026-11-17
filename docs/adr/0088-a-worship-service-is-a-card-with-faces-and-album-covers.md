@@ -148,9 +148,10 @@ schema gains one optional image (`post.albumArt`) and the three service reads pr
 ## Part 2 (2026-11-17): the Biblioteca and the song page wear the same covers
 
 Frank, on the before/after of both screens: «Me encanta». The cover a song wears on a service
-card is now the picture it wears everywhere a member meets it. No write path changed; three more
-reads project `cover` (`POST_COVER_GROQ`, the same field read from the song document itself): the
-Biblioteca's catalogue, the song page, and `/api/song/[id]` for the sheet.
+card is now the picture it wears everywhere a member meets it. No write path changed; four more
+reads project `cover`: the Biblioteca's catalogue, the song page and `/api/song/[id]` for the sheet
+(`POST_COVER_GROQ`, the same field read from the song document itself), and the song page's
+history query for the songs each past set held (`SONG_COVER_GROQ`).
 
 - **A Biblioteca row leads with the cover** (`LibraryRow`, `SongCover` at 52 px). The key moved
   to the right edge, still in the display face and the key's own colour (ADR-0071), still one
@@ -165,15 +166,22 @@ Biblioteca's catalogue, the song page, and `/api/song/[id]` for the sheet.
   Section titles carry a glyph on a tile, and «Última vez tocada» is a card per service with the
   day's `DateTile` and the covers of the songs it shared the set with.
 - **The song sheet shows the cover beside its artist line** (`SongCover size="lg"`, 76 px) when
-  the song has one. The key, tempo and compás pills keep the sheet's full width under it: beside
+  the song has one (a stored cover that fails to load falls back to `SongCover`'s neutral tile,
+  so the line does not jump; the song page's cover removes itself instead). The key, tempo and compás pills keep the sheet's full width under it: beside
   the cover they wrapped to three rows on a 320 px phone (built, looked at, moved).
 - **Three named sizes, never a free number** (`COVER_SIZE`: tile 160, shelf 400, hero 640 — each
   the drawn side at 3×). Every distinct `w`/`h` is a distinct image the CDN renders and a phone
-  caches. The sheet reuses `shelf` rather than adding a fourth for its 76 px.
+  caches. The sheet reuses `shelf` rather than adding a fourth for its 76 px. The MultiTracks
+  images are 568 px, so `hero` asks the CDN to enlarge those by an eighth; at 208 CSS px that is
+  not visible, and an editor's larger cover is served at its full 640.
 - **The letter rail centres by `top`, not a transform.** `top: 50vh` plus `-translate-y-1/2`
   moved the box after sticky had placed it, so at the top of the page the rail rose half its
   height over «Filtros» and, with the shelf there, over the covers. Half the rail's height now
-  lives in `top` (`RAIL_STEP_PX` × letters ÷ 2), and sticky keeps it inside the list.
+  lives in `top`, and sticky keeps it inside the list. The height is MEASURED (`ResizeObserver`),
+  with `RAIL_STEP_PX` × letters as the first paint's estimate: the app's text zoom makes the
+  letters taller, and a rail centred on the estimate hung its last letters under the tab bar.
+- **Both loading skeletons carry the new shapes** (the song page's cover, the Biblioteca's shelf
+  and cover rows), so the page that replaces them does not jump.
 
 Rejected in this part:
 

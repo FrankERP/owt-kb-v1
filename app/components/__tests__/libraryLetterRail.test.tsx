@@ -66,6 +66,31 @@ describe("LibraryLetterRail", () => {
     expect(rail.style.top).toBe("calc(50vh - 42px)");
   });
 
+  it("centres on its MEASURED height once it has one — larger text makes a taller rail", () => {
+    // The estimate is right at the default text size only. At the app's «Más grande» the
+    // letters are taller, and a rail centred on the estimate hung its last letters under
+    // the tab bar. jsdom has no layout, so the height and the observer are stubbed.
+    const height = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(120);
+    const disconnect = vi.fn();
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        disconnect = disconnect;
+      },
+    );
+    try {
+      const { unmount } = render(<LibraryLetterRail letters={LETTERS} active="" onJump={vi.fn()} />);
+      const rail = screen.getByRole("navigation", { name: "Índice alfabético" });
+      expect(rail.style.top).toBe("calc(50vh - 60px)");
+      unmount();
+      expect(disconnect).toHaveBeenCalledTimes(1);
+    } finally {
+      height.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("the active letter is the one carrying aria-current — the progress the rail exists to show", () => {
     mountRail("C");
     expect(screen.getByRole("button", { name: "Ir a la letra C" }).getAttribute("aria-current")).toBe("true");

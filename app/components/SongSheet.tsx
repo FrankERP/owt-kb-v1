@@ -153,7 +153,8 @@ export default function SongSheet() {
             {/* The album's cover beside the artist line (ADR-0088): the picture the row that
                 opened this sheet wore, so the sheet is recognisably THAT song before it is
                 read. Only for a song that has one — a sheet is not a list, and an empty tile
-                here would be a hole, not a placeholder. The pills keep the sheet's full width
+                here would be a hole, not a placeholder (a cover that fails to LOAD still
+                falls back to `SongCover`'s neutral tile, so the line does not jump). The pills keep the sheet's full width
                 under it: beside a 76 px cover they wrapped to three rows on a phone. */}
             {(cover || original || sheet.author) && (
               <div className="flex items-center gap-3.5">

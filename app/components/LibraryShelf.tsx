@@ -72,7 +72,9 @@ export default function LibraryShelf({ title, posts }: { title: string; posts: P
         {title}
         <span aria-hidden="true" className="h-px flex-1 bg-ink/[0.10]" />
       </h2>
-      <ul className="scrollbar-hide -mx-6 flex snap-x snap-mandatory scroll-px-6 gap-3.5 overflow-x-auto px-6 pb-2">
+      {/* `-mt-1 pt-1`: a scroll box clips on both axes, and a card's focus ring sits 4 px
+          outside it — without the room its top edge is cut for a keyboard user. */}
+      <ul className="scrollbar-hide -mx-6 -mt-1 flex snap-x snap-mandatory scroll-px-6 gap-3.5 overflow-x-auto px-6 pb-2 pt-1">
         {posts.map((p, i) => (
           <ShelfCard key={p._id} post={p} index={i} />
         ))}
