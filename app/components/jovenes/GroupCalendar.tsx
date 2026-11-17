@@ -186,10 +186,13 @@ export default function GroupCalendar({
             return (
               <li key={e._id} className="brand-surface relative overflow-hidden rounded-[var(--brand-radius-panel)]">
                 <AudienceRail audience={e.audience} muted={!e.published} />
-                <div className="flex gap-3.5 py-4 pl-5 pr-4">
-                  <DateTile date={e.date} tone={audienceTone(e.audience)} decorative />
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <div className="flex items-start justify-between gap-3">
+                {/* «Editar» is a band under the meeting on a phone, behind a hairline, and the
+                    column on the right from `sm`: beside the title it took the room a two-word
+                    name needs («Reunión de grupo» broke in two, 2026-11-17). */}
+                <div className="py-4 pl-5 pr-4 sm:grid sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-x-3.5">
+                  <div className="flex min-w-0 gap-3.5">
+                    <DateTile date={e.date} tone={audienceTone(e.audience)} decorative />
+                    <div className="min-w-0 flex-1 space-y-2">
                       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
                         <h3 className="min-w-0 break-words pt-0.5 font-display text-[22px] font-semibold uppercase leading-none tracking-[0.02em] text-ink md:text-2xl">
                           {eventHeading(e)}
@@ -197,24 +200,26 @@ export default function GroupCalendar({
                         </h3>
                         <MeetingState published={e.published} />
                       </div>
-                      {canEditGroupEvent(e, viewer) && (
-                        <Button variant="secondary" size="sm" className="shrink-0" onClick={() => open(e)}>
-                          Editar
-                        </Button>
+                      <MeetingMeta time={e.time} arrival={e.arrival} place={e.place} />
+                      <AudienceChips audience={e.audience} />
+                      {joint && (
+                        <p className="font-body text-[13px] text-ink-dim">Creada por {e.createdByName ?? "alguien que ya no está"}</p>
+                      )}
+                      {e.notes && (
+                        <p className="flex gap-2.5 rounded-xl bg-ink/[0.05] px-3.5 py-2.5 font-body text-[15px] leading-snug text-ink-muted">
+                          <NoteIcon size={15} className="mt-[3px] shrink-0 text-ink-dim" />
+                          <span className="min-w-0 whitespace-pre-line break-words">{e.notes}</span>
+                        </p>
                       )}
                     </div>
-                    <MeetingMeta time={e.time} arrival={e.arrival} place={e.place} />
-                    <AudienceChips audience={e.audience} />
-                    {joint && (
-                      <p className="font-body text-[13px] text-ink-dim">Creada por {e.createdByName ?? "alguien que ya no está"}</p>
-                    )}
-                    {e.notes && (
-                      <p className="flex gap-2.5 rounded-xl bg-ink/[0.05] px-3.5 py-2.5 font-body text-[15px] leading-snug text-ink-muted">
-                        <NoteIcon size={15} className="mt-[3px] shrink-0 text-ink-dim" />
-                        <span className="min-w-0 whitespace-pre-line break-words">{e.notes}</span>
-                      </p>
-                    )}
                   </div>
+                  {canEditGroupEvent(e, viewer) && (
+                    <div className="mt-3.5 grid border-t border-ink/[0.08] pt-3.5 sm:mt-0 sm:block sm:border-t-0 sm:pt-0">
+                      <Button variant="secondary" size="sm" onClick={() => open(e)}>
+                        Editar
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </li>
             );

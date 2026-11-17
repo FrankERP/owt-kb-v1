@@ -285,36 +285,41 @@ export default function GroupClasses({
     return (
       <li key={c._id} className={`brand-surface relative overflow-hidden rounded-[var(--brand-radius-panel)] ${gap ? "opacity-70" : ""}`}>
         <span aria-hidden="true" className={`absolute inset-y-0 left-0 w-[3px] ${tone.solid} ${c.published ? "" : "opacity-50"}`} />
-        <div className="flex items-start gap-3.5 py-3.5 pl-5 pr-3 sm:pr-4">
-          <DateTile date={c.date} tone={tone} decorative />
-          <div className="min-w-0 flex-1 space-y-2">
-            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
-              <h3 className="min-w-0 break-words font-display text-[20px] font-semibold uppercase leading-none tracking-[0.02em] text-ink md:text-[22px]">
-                {c.title ?? TRACK_LABEL[c.lesson.track]}
-                <span className="sr-only">, {dayTitle(c.date)}</span>
-              </h3>
+        {/* On a phone «Hecho» and «Opciones» are a band under the class, behind a hairline: as a
+            third column they left the class 150 px, and its place wrapped (2026-11-17). From
+            `sm` they are the column on the right again. */}
+        <div className="py-3.5 pl-5 pr-4 sm:grid sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-x-3.5">
+          <div className="flex min-w-0 items-start gap-3.5">
+            <DateTile date={c.date} tone={tone} decorative />
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+                <h3 className="min-w-0 break-words font-display text-[20px] font-semibold uppercase leading-none tracking-[0.02em] text-ink md:text-[22px]">
+                  {c.title ?? TRACK_LABEL[c.lesson.track]}
+                  <span className="sr-only">, {dayTitle(c.date)}</span>
+                </h3>
+                {!gap && (
+                  <span className={`rounded-full border px-2 py-[2px] font-body text-[12px] font-semibold leading-tight ${c.lesson.track === "corazon" ? tone.chip : "border-ink/15 bg-ink/[0.05] text-ink-muted"}`}>
+                    {TRACK_LABEL[c.lesson.track]}
+                  </span>
+                )}
+                {!c.published && <MeetingState published={false} />}
+              </div>
               {!gap && (
-                <span className={`rounded-full border px-2 py-[2px] font-body text-[12px] font-semibold leading-tight ${c.lesson.track === "corazon" ? tone.chip : "border-ink/15 bg-ink/[0.05] text-ink-muted"}`}>
-                  {TRACK_LABEL[c.lesson.track]}
-                </span>
+                <p className="flex items-center gap-2 font-body text-[15px] text-ink">
+                  <PersonAvatar name={seat?.name ?? null} photo={seat?.photo ?? null} mine={seat?.mine ?? false} size="sm" />
+                  <span className={seat?.name ? "" : "text-ink-dim"}>{seat?.name ?? "Sin responsable"}</span>
+                </p>
               )}
-              {!c.published && <MeetingState published={false} />}
+              {!gap && <MeetingMeta time={c.time} arrival={null} place={c.place} />}
+              {c.notes && (
+                <p className="flex gap-2 font-body text-[14px] leading-snug text-ink-muted">
+                  <NoteIcon size={14} className="mt-[3px] shrink-0 text-ink-dim" />
+                  <span className="min-w-0 whitespace-pre-line break-words">{c.notes}</span>
+                </p>
+              )}
             </div>
-            {!gap && (
-              <p className="flex items-center gap-2 font-body text-[15px] text-ink">
-                <PersonAvatar name={seat?.name ?? null} photo={seat?.photo ?? null} mine={seat?.mine ?? false} size="sm" />
-                <span className={seat?.name ? "" : "text-ink-dim"}>{seat?.name ?? "Sin responsable"}</span>
-              </p>
-            )}
-            {!gap && <MeetingMeta time={c.time} arrival={null} place={c.place} />}
-            {c.notes && (
-              <p className="flex gap-2 font-body text-[14px] leading-snug text-ink-muted">
-                <NoteIcon size={14} className="mt-[3px] shrink-0 text-ink-dim" />
-                <span className="min-w-0 whitespace-pre-line break-words">{c.notes}</span>
-              </p>
-            )}
           </div>
-          <div className="flex shrink-0 flex-col items-end gap-2">
+          <div className="mt-3 flex items-center justify-between gap-2 border-t border-ink/[0.08] pt-2 sm:mt-0 sm:shrink-0 sm:flex-col sm:items-end sm:justify-start sm:border-t-0 sm:pt-0">
             {!gap && (
               <Checkbox
                 checked={c.lesson.done}

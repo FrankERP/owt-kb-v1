@@ -231,8 +231,10 @@ export default function SaturdayPlanner({
             row.events.map((e) => (
               <li key={e._id} className="brand-surface relative overflow-hidden rounded-[var(--brand-radius-panel)]">
                 <AudienceRail audience={e.audience} muted={!e.published} />
-                {/* On a phone the leaf and the title share the first line and everything else runs
-                    the card's full width under them; from `md` the leaf is a column of its own and
+                {/* On a phone the card is three bands under one another, each behind a hairline:
+                    the leaf with the title, the seats one per line, the actions as two equal
+                    buttons (2026-11-17: two seats a row broke a long name mid-word, and the
+                    actions hung loose under them). From `md` the leaf is a column of its own and
                     the actions another, so the seats line up from card to card. */}
                 <div className="py-4 pl-5 pr-4 md:grid md:grid-cols-[auto_minmax(0,1fr)_auto] md:gap-x-4">
                   <div className="flex gap-3.5 md:contents">
@@ -248,8 +250,8 @@ export default function SaturdayPlanner({
                       <MeetingMeta time={e.time} arrival={e.arrival} place={e.place} />
                     </div>
                   </div>
-                  <div className="min-w-0 space-y-3 pt-3.5 md:col-start-2">
-                    <ul className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+                  <div className="mt-3.5 min-w-0 space-y-3 border-t border-ink/[0.08] pt-3.5 md:col-start-2 md:mt-0 md:border-t-0">
+                    <ul className="grid grid-cols-1 gap-x-4 gap-y-3 min-[480px]:grid-cols-2 sm:grid-cols-3">
                       {SATURDAY_SEATS.map((role) => {
                         const list = seatNames(e, role);
                         // A stored seat whose person is gone reads «Sin asignar» too, and looks it.
@@ -279,7 +281,7 @@ export default function SaturdayPlanner({
                     )}
                   </div>
                   {canEdit && (
-                    <div className="flex flex-wrap items-center gap-2 pt-3.5 md:col-start-3 md:row-span-2 md:row-start-1 md:flex-col md:items-stretch md:pt-0">
+                    <div className="mt-3.5 grid grid-cols-2 gap-2 border-t border-ink/[0.08] pt-3.5 md:col-start-3 md:row-span-2 md:row-start-1 md:mt-0 md:flex md:flex-col md:items-stretch md:border-t-0 md:pt-0">
                       <Button variant="secondary" size="sm" onClick={() => open(e.date, e)}>
                         Editar
                       </Button>
