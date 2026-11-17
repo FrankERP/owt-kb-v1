@@ -104,6 +104,9 @@ Stated, not built (limits both reviewers asked to have written down):
 - P1 is held by people, not by a test: the PR carries it as an open blocker and no auto-merge is
   armed. The «admins only» fallback is a one-line change to the function plus its two test
   matrices and the sentences that name the leader.
+  **Closed 2026-11-17 22:25Z:** Frank answered the audience question on its decision card with
+  «Admins y líderes de su grupo», the option this branch carries. P1's condition is met; the
+  release still needs his explicit word for production, which that answer is not.
 
 ## What the reviewers measured (round C, one read-only aggregate query, no names or ids)
 
