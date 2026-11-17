@@ -3,7 +3,8 @@ import "server-only";
 // THE ONE READER of `ministryEvent` (ADR-0081; plan
 // `docs/superpowers/plans/2026-10-30-jovenes-events-access.md` §4). Every read of the type under
 // `app/**` goes through `readMinistryEvents`; `ministryEventCoverage.test.ts` fails the build on any
-// other file that names it.
+// other file that names it. The one read with no person behind it — the reminder cron's
+// `readAnnouncedMeetings`, at the end of this file — is narrower than any member's, never wider.
 //
 // Why the query, and not the page, is the boundary: the Sanity dataset answers anyone without a
 // token, so a document is private only by its dotted id (`ministryEvent.<uuid>`), and a group's
@@ -64,9 +65,8 @@ function armFor(access: Access, ministry: MinistryId, mode: MinistryEventMode): 
 
 // ── The GROQ ────────────────────────────────────────────────────────────────
 
-const BASE =
-  `_type == "${MINISTRY_EVENT_TYPE}" && _id in path("${MINISTRY_EVENT_TYPE}.*") && ministry == $ministry` +
-  ` && date >= $from && date <= $to`;
+const OF_MINISTRY = `_type == "${MINISTRY_EVENT_TYPE}" && _id in path("${MINISTRY_EVENT_TYPE}.*") && ministry == $ministry`;
+const BASE = `${OF_MINISTRY} && date >= $from && date <= $to`;
 const MEMBER_ARM =
   `published == true && (audience.kind == "ministry" || (audience.kind == "groups" && count(audience.groups[@ in $groups]) > 0))`;
 const LEADER_DRAFT_ARM =
@@ -298,6 +298,44 @@ export async function readMinistryEvents(
   opts: { me: string; ministry: MinistryId; from: string; to: string; mode: MinistryEventMode },
 ): Promise<MinistryEventView[]> {
   const built = buildMinistryEventQuery(access, opts);
+  if (!built) return [];
+  if (!process.env.SANITY_API_READ_TOKEN) throw new MinistryEventReadUnavailable();
+  const rows = await operationalClient.fetch<unknown>(built.query, built.params);
+  return (Array.isArray(rows) ? rows : [])
+    .filter(plainObject)
+    .map(viewOf)
+    .filter((v): v is MinistryEventView => v !== null);
+}
+
+// ── The reminder cron's read (ADR-0089, addendum of 2026-11-17) ──────────────
+
+/**
+ * The one read with NO PERSON behind it: the daily cron asks which meetings fall on the days it
+ * reminds about (`ministryEventReminder.ts`). With nobody to take groups from, its filter is the
+ * narrowest audience the member arm has — what EVERY member of the ministry reads: published AND
+ * for the whole ministry. A group's meeting or a draft can never come back from it, whatever the
+ * dates; `ministryEventReads.test.ts` holds it inside every member's own read. `$me` is empty, so
+ * no seat or line reads as «mine». The dates are exact days, never a range.
+ */
+export function buildAnnouncedMeetingsQuery(ministry: MinistryId, dates: readonly string[]): MinistryEventQuery | null {
+  if (!LEVELED_MINISTRY_IDS.includes(ministry)) return null;
+  const days = [...new Set(dates.filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)))];
+  if (days.length === 0) return null;
+  return {
+    query: `*[${OF_MINISTRY} && date in $dates && published == true && audience.kind == "ministry"] | order(date asc, time asc) ${PROJECTION}`,
+    params: { ministry, dates: days, me: "" },
+  };
+}
+
+/**
+ * The published whole-ministry meetings of these exact days. For the reminder cron ONLY — its
+ * one importer is pinned by `ministryEventCoverage.test.ts`: this read asks nobody's access, so a
+ * page that called it would show Jóvenes' meetings to someone outside Jóvenes. A page reads
+ * through `readMinistryEvents`, with its reader. Throws `MinistryEventReadUnavailable`
+ * without the read token (the dotted ids would otherwise read as «no meetings», with no error).
+ */
+export async function readAnnouncedMeetings(ministry: MinistryId, dates: readonly string[]): Promise<MinistryEventView[]> {
+  const built = buildAnnouncedMeetingsQuery(ministry, dates);
   if (!built) return [];
   if (!process.env.SANITY_API_READ_TOKEN) throw new MinistryEventReadUnavailable();
   const rows = await operationalClient.fetch<unknown>(built.query, built.params);

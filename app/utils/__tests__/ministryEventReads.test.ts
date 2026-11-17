@@ -24,9 +24,11 @@ vi.mock("@/sanity/lib/operationalClient", () => ({
 vi.mock("@/sanity/lib/serverClient", () => ({ serverClient: { fetch: vi.fn() } }));
 
 import {
+  buildAnnouncedMeetingsQuery,
   buildMinistryEventQuery,
   mayRead,
   MinistryEventReadUnavailable,
+  readAnnouncedMeetings,
   readMinistryEvents,
   type MinistryEventMode,
   type StoredMinistryEvent,
@@ -444,5 +446,71 @@ describe("G2: query shape", () => {
     const rows = await readMinistryEvents(PEOPLE.pastorON, { ...opts, mode: "member" });
     expect(rows.map((r) => r._id)).toEqual(["ministryEvent.ok"]);
     expect(rows[0]).toMatchObject({ published: false, seats: [], program: [], audience: null, title: null });
+  });
+});
+
+// ── The reminder cron's read (ADR-0089, addendum) ───────────────────────────
+
+describe("the cron's read has no person, so it reads only what every member reads", () => {
+  const DAY = "2026-11-14"; // the matrix's date
+  const announced = async (dates: string[] = [DAY]) =>
+    (await readAnnouncedMeetings("jovenes", dates)).map((r) => KEY_OF_ID.get(r._id) ?? `?${r._id}`).sort();
+
+  it("over the whole matrix: exactly the published whole-ministry meetings — no group's, no draft, nothing malformed", async () => {
+    expect(await announced()).toEqual([...SEEN_BY_ALL_MEMBERS].sort());
+  });
+
+  it("stays inside EVERY member's own read: it can never hand an email a meeting its reader could not open", async () => {
+    const got = await announced();
+    for (const person of Object.keys(EXPECTED)) {
+      const mine = await visibleKeys(person, "member");
+      expect([person, got.filter((k) => !mine.includes(k))]).toEqual([person, []]);
+    }
+  });
+
+  it("the dates are exact days: a meeting of another day is not read, and a second day adds only its own", async () => {
+    const other = ev("other", { ...PUB, audience: { kind: "ministry" }, date: "2026-11-21" });
+    const groupOther = ev("groupOther", { ...PUB, audience: groups("otro-nivel"), date: "2026-11-21" });
+    h.fetch.mockImplementation((q: string, p?: Record<string, unknown>) => groq(q, p, [...DATASET, other, groupOther]));
+    expect(await announced(["2026-11-15"])).toEqual([]);
+    expect((await readAnnouncedMeetings("jovenes", ["2026-11-21"])).map((r) => r._id)).toEqual(["ministryEvent.other"]);
+    expect((await readAnnouncedMeetings("jovenes", [DAY, "2026-11-21"])).map((r) => r._id)).toContain("ministryEvent.other");
+  });
+
+  it("nobody is «mine»: the read has no reader", async () => {
+    const row = ev("mine", { ...PUB, audience: { kind: "ministry" }, seats: [{ _key: "s1", role: "comparte", member: { _ref: "p1" } }] });
+    h.fetch.mockImplementation((q: string, p?: Record<string, unknown>) => groq(q, p, [row, ...MEMBER_DOCS]));
+    const [got] = await readAnnouncedMeetings("jovenes", [DAY]);
+    expect(got.seats).toMatchObject([{ memberId: "p1", name: "Pastor Uno", mine: false }]);
+  });
+
+  it("query shape: the id prefix, the ministry, published == true, the whole-ministry audience, and no group parameter", () => {
+    const built = buildAnnouncedMeetingsQuery("jovenes", [DAY, DAY, "not-a-date"]);
+    expect(built).not.toBeNull();
+    const { query, params } = built!;
+    expect(query).toContain('_type == "ministryEvent"');
+    expect(query).toContain('_id in path("ministryEvent.*")');
+    expect(query).toContain("ministry == $ministry");
+    expect(query).toContain("date in $dates");
+    expect(query).toContain("published == true");
+    expect(query).toContain('audience.kind == "ministry"');
+    expect(query).not.toContain("$groups");
+    expect(query).not.toContain("$led");
+    expect(query).not.toContain('"groups"');
+    expect(params).toEqual({ ministry: "jovenes", dates: [DAY], me: "" });
+  });
+
+  it("no usable date, or a ministry that is not leveled: no query at all", async () => {
+    expect(buildAnnouncedMeetingsQuery("jovenes", [])).toBeNull();
+    expect(buildAnnouncedMeetingsQuery("jovenes", ["14/11/2026"])).toBeNull();
+    expect(buildAnnouncedMeetingsQuery("kids", [DAY])).toBeNull();
+    expect(await readAnnouncedMeetings("worship", [DAY])).toEqual([]);
+    expect(h.fetch).not.toHaveBeenCalled();
+  });
+
+  it("without the read token it throws instead of answering «no meetings»", async () => {
+    vi.stubEnv("SANITY_API_READ_TOKEN", "");
+    await expect(readAnnouncedMeetings("jovenes", [DAY])).rejects.toBeInstanceOf(MinistryEventReadUnavailable);
+    expect(h.fetch).not.toHaveBeenCalled();
   });
 });

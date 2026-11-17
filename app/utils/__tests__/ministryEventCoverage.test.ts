@@ -142,6 +142,15 @@ describe("G1: ministryEvent read coverage", () => {
     }
   });
 
+  // The reminder cron's read takes NO reader (ADR-0089, addendum): it skips `armFor`, so whoever
+  // calls it gets every published whole-ministry meeting of the days it names. That is right for
+  // a cron that only writes to people already on those meetings, and wrong for anything that
+  // shows its rows to a person. One caller, by name.
+  it("only the reminder module names the cron's personless read", () => {
+    const naming = files.filter((f) => /\b(readAnnouncedMeetings|buildAnnouncedMeetingsQuery)\b/.test(load(f)));
+    expect(naming.sort()).toEqual([`${READER}.ts`, "app/utils/ministryEventReminder.ts"].sort());
+  });
+
   it("neither MCP nor the admin assistant imports the reader or the writer", () => {
     const offenders = files
       .filter((f) => FORBIDDEN_IMPORTERS.some((re) => re.test(f)))

@@ -645,7 +645,10 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   **not** session-based). Finds members assigned to **tomorrow's** published services
   (America/Mexico_City) and pushes a `reminders` notification ("Sirves mañana"). **On a CDMX
   Sunday** it also emails «Te toca dirigir» to the leads of next week's published services that
-  still need songs (`leadReminders` in the JSON; ADR-0080, `docs/NOTIFICATIONS.md`). Scheduled by
+  still need songs (`leadReminders` in the JSON; ADR-0080, `docs/NOTIFICATIONS.md`). **Every
+  day** it also emails the reminders of the Jóvenes meetings dated exactly 14 and 7 days ahead, to
+  whoever still owes something on a part of theirs (`meetingReminders` in the JSON; ADR-0089's
+  addendum). Scheduled by
   `vercel.json` at `0 1 * * *` (01:00 UTC daily). The only endpoint scheduled by `vercel.json` —
   Vercel Hobby allows one cron per day, so the other two are driven from outside Vercel — the flush by a Google Cloud Scheduler job plus GitHub Actions (ADR-0032), the probe by hand.
 
