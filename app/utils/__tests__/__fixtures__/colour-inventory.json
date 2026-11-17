@@ -8,28 +8,28 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 323,
-    "filesScanned": 631,
-    "filesWithColour": 68,
+    "literalRows": 325,
+    "filesScanned": 640,
+    "filesWithColour": 70,
     "byCategory": {
       "2": 2,
       "4": 64,
       "5": 2,
       "8": 85,
       "9": 10,
-      "11": 14,
+      "11": 16,
       "12": 146
     },
     "byDisposition": {
       "exempt": 60,
-      "B": 116,
-      "keep": 236,
+      "B": 118,
+      "keep": 238,
       "C": 5,
       "D": 13
     },
     "compositingClasses": 22,
     "compositingSelectorOccurrences": 60,
-    "compositingClassNameOccurrences": 37,
+    "compositingClassNameOccurrences": 39,
     "compositingRuleBodies": 52,
     "lightCounterpartClasses": 13,
     "pairs": 3,
@@ -116,7 +116,19 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 129,
+      "line": 134,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/(client)/jovenes/reunion/[token]/page.tsx",
+      "category": 11,
+      "categoryName": "arbitrary-value-var-brand",
+      "value": "[var(--brand-radius-panel)]",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 184,
       "disposition": "B",
       "reason": null
     },
@@ -3313,14 +3325,14 @@
       "reason": null
     },
     {
-      "file": "app/components/jovenes/SaturdayPlanner.tsx",
+      "file": "app/components/jovenes/PartForm.tsx",
       "category": 11,
       "categoryName": "arbitrary-value-var-brand",
       "value": "[var(--brand-radius-panel)]",
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 219,
+      "line": 168,
       "disposition": "B",
       "reason": null
     },
@@ -3332,7 +3344,19 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 232,
+      "line": 222,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/jovenes/SaturdayPlanner.tsx",
+      "category": 11,
+      "categoryName": "arbitrary-value-var-brand",
+      "value": "[var(--brand-radius-panel)]",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 235,
       "disposition": "B",
       "reason": null
     },
@@ -4123,6 +4147,14 @@
       "reason": "Usage site of a compositing class"
     },
     {
+      "file": "app/(client)/jovenes/reunion/[token]/page.tsx",
+      "kind": "className",
+      "class": "surface",
+      "count": 1,
+      "disposition": "keep",
+      "reason": "Usage site of a compositing class"
+    },
+    {
       "file": "app/(client)/layout.tsx",
       "kind": "className",
       "class": "atmosphere",
@@ -4284,6 +4316,14 @@
     },
     {
       "file": "app/components/jovenes/MonthMap.tsx",
+      "kind": "className",
+      "class": "surface",
+      "count": 1,
+      "disposition": "keep",
+      "reason": "Usage site of a compositing class"
+    },
+    {
+      "file": "app/components/jovenes/PartForm.tsx",
       "kind": "className",
       "class": "surface",
       "count": 1,

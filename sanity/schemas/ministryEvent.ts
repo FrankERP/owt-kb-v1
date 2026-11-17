@@ -73,8 +73,16 @@ export const ministryEvent = defineType({
           name: "ministryEventProgramLine",
           fields: [
             { name: "label", title: "Qué", type: "string" },
+            // A fixed part of the meeting (ADR-0089; `app/utils/ministryParts.ts` is the one table):
+            // oracion | dinamica1 | dinamica2 | platica. Absent on a free line.
+            { name: "part", title: "Parte", type: "string" },
             { name: "member", title: "Quién", ...weakMember },
+            { name: "member2", title: "Quién (segundo)", ...weakMember },
+            // A part's description (300), or a free line's note.
             { name: "note", title: "Nota", type: "string" },
+            // track | alabanza — Oración and Plática only.
+            { name: "music", title: "Música", type: "string" },
+            { name: "helpers", title: "Jóvenes que apoyan", type: "string" },
           ],
         },
       ],

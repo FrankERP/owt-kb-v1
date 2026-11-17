@@ -115,6 +115,7 @@ import { getMessaging } from "@/app/utils/firebaseAdmin";
 import { sendPush } from "@/app/utils/push";
 import { sendAssignmentEmails, sendAssignmentEmailsBatch } from "@/app/utils/assignmentEmail";
 import { notifyProposalSubmitted } from "@/app/utils/proposalNotify";
+import { sendMinistryEventNotices, type EventNoticeEffects } from "@/app/utils/ministryEventNotify";
 import {
   notifyProposalPending,
   notifyProposalReview,
@@ -134,6 +135,17 @@ import {
 const RUN_ID = "srvrun-0123456789abcdef";
 const SERVICE = { type: "sunday_role" as const, date: "2026-08-02" };
 const BODY = { leads: ["m1"], bgvs: [], chorus: [], instruments: [], foh: [] };
+
+/** A Jóvenes meeting's «Te toca» (ADR-0089): one member newly holding one seat. */
+const JOVENES_NOTICES: EventNoticeEffects = {
+  ministry: "jovenes",
+  actorId: "actor",
+  meeting: { id: "x.0123", date: "2026-08-08", time: "18:10", arrival: null, place: null, title: null, kind: "saturday" },
+  assigned: [{ memberId: "j1", roles: [{ kind: "seat", id: "encargado", label: "Encargado", partners: [] }] }],
+  moved: false,
+  music: [],
+};
+const JOVENES_MEMBER_ROW = { _id: "j1", role: "member", ministries: ["jovenes"], email: "joven@oasis.mx", name: "Pau" };
 
 /** One member: mailable AND pushable, so nothing is skipped for lack of a target. */
 const MEMBER_EMAIL_ROW = {
@@ -332,6 +344,11 @@ async function invokeEveryTrigger(): Promise<void> {
     nextUrl: { searchParams: { get: () => null } },
   };
   await remindersGET(req as unknown as Parameters<typeof remindersGET>[0]);
+
+  // 10. a Jóvenes meeting's notices (the four meeting routes await this inside `after()`)
+  opFetch.mockReset();
+  opFetch.mockResolvedValue([JOVENES_MEMBER_ROW]);
+  await sendMinistryEventNotices(JOVENES_NOTICES);
 
   await drainAfter();
 }
@@ -694,6 +711,13 @@ describe("an absent delivery mode delivers unchanged", () => {
     serverFetch.mockResolvedValue([{ ...MEMBER_EMAIL_ROW, notifPrefs: { email: false } }]);
     await sendAssignmentEmails(["m1"], { ...SERVICE, body: BODY });
     expect(sendMail).not.toHaveBeenCalled();
+  });
+
+  it("mails a Jóvenes «Te toca» to exactly the person the write named", async () => {
+    opFetch.mockResolvedValue([JOVENES_MEMBER_ROW]);
+    await sendMinistryEventNotices(JOVENES_NOTICES);
+    expect(sendMail).toHaveBeenCalledTimes(1);
+    expect(sendMail.mock.calls[0][0]).toMatchObject({ to: "joven@oasis.mx" });
   });
 
   it("sends one batched email covering both services", async () => {

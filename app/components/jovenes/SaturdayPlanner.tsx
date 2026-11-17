@@ -14,6 +14,7 @@ import { dayTitle } from "@/app/utils/agenda";
 import { audienceLabel, dayWords, eventDayLabel, eventHeading, seatRoleLabel } from "@/app/utils/jovenesEventView";
 import { MINISTRY_TONE } from "@/app/utils/jovenesGroupStyle";
 import {
+  SATURDAY_PICKS,
   SATURDAY_SEATS,
   isIsoDay,
   saturdayBody,
@@ -23,7 +24,7 @@ import {
   whatsappRoster,
   type SaturdayForm,
   type SaturdayRow,
-  type SaturdaySeat,
+  type SaturdayPick,
   type SeatPick,
 } from "@/app/utils/jovenesPlannerModel";
 import { CalendarIcon, CopyIcon, NoteIcon, PlusIcon } from "@/app/components/ui/icons";
@@ -39,6 +40,8 @@ import { eventUrl, eventsUrl, halfTypedClock, sendEventWrite } from "./eventWrit
 
 const MINISTRY = "jovenes";
 const SEAT_LABEL = { encargado: "Encargado", apoyo: "Apoyo", comparte: "Quién comparte" } as const;
+/** The form's columns: the Plática sometimes has two (Frank, 2026-11-17), so «comparte» has a second, optional one. */
+const PICK_LABEL = { ...SEAT_LABEL, comparte2: "Quién comparte (segundo, opcional)" } as const;
 
 type Editing = { event: MinistryEventView | null; form: SaturdayForm; token: string };
 
@@ -88,7 +91,7 @@ export default function SaturdayPlanner({
   }
 
   /** One seat column, from the latest state (a typed-mode switch sets member and name in two calls). */
-  function patchPick(role: SaturdaySeat, patch: Partial<SeatPick>) {
+  function patchPick(role: SaturdayPick, patch: Partial<SeatPick>) {
     setEditing((e) =>
       e ? { ...e, form: { ...e.form, picks: { ...e.form.picks, [role]: { ...e.form.picks[role], ...patch } } } } : e,
     );
@@ -374,11 +377,11 @@ export default function SaturdayPlanner({
                 onChange={(e) => patchForm({ place: e.target.value.replace(/[\r\n\u2028\u2029]/g, " ") })}
               />
             </label>
-            {SATURDAY_SEATS.map((role) => (
+            {SATURDAY_PICKS.map((role) => (
               <div key={role}>
-                <span className={`${HAIRLINE_LABEL_CLASS} mb-1.5 block`}>{SEAT_LABEL[role]}</span>
+                <span className={`${HAIRLINE_LABEL_CLASS} mb-1.5 block`}>{PICK_LABEL[role]}</span>
                 <PersonSelect
-                  ariaLabel={SEAT_LABEL[role]}
+                  ariaLabel={PICK_LABEL[role]}
                   value={editing.form.picks[role].member}
                   people={people}
                   storedName={editing.form.picks[role].key ? names.get(editing.form.picks[role].key!) : null}

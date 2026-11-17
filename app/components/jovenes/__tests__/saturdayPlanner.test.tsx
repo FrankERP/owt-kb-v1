@@ -309,7 +309,7 @@ describe("ProgramEditor", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Editar programa" }));
     fireEvent.click(screen.getByRole("button", { name: "Agregar línea" }));
-    fireEvent.change(screen.getByPlaceholderText("Oración, dinámica, alabanza…"), { target: { value: "Oración" } });
+    fireEvent.change(screen.getByPlaceholderText("Bienvenida, anuncios…"), { target: { value: "Oración" } });
     fireEvent.change(screen.getByLabelText("Quién — línea 1"), { target: { value: "m2" } });
     fireEvent.click(screen.getByRole("button", { name: "Guardar programa" }));
     await waitFor(() => expect(refresh).toHaveBeenCalled());
@@ -352,7 +352,7 @@ describe("ProgramEditor after a stale save", () => {
 
     // The refresh brings the other person's line under a new revision.
     answer = { status: 200, body: { ok: true, id: "x", rev: "rev-3" } };
-    rerender(view(ev({ rev: "rev-2", program: [{ _key: "l9", label: "Dinámica", memberId: null, name: null, photo: null, mine: false, note: null }] })));
+    rerender(view(ev({ rev: "rev-2", program: [{ _key: "l9", label: "Dinámica", memberId: null, name: null, photo: null, mine: false, note: null, part: null, music: null, helpers: null, second: null }] })));
     fireEvent.click(await screen.findByRole("button", { name: "Editar programa" }));
     fireEvent.click(await screen.findByRole("button", { name: "Guardar programa" }));
     await waitFor(() => expect(calls).toHaveLength(2));

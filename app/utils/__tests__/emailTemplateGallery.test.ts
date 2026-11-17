@@ -165,9 +165,44 @@ add("13-proposal.html", "Nueva propuesta (tabla + notas, sin Mov.)", buildPropos
   notes: "Bajé la tonalidad de Santo a D.\nEnsayo el jueves 7pm.",
 }));
 
+// Jóvenes (ADR-0089): the same shell and palette, its own eyebrow and footer reason.
+const { buildAssignedEmail, buildMusicEmail } = await import("../ministryEventEmail");
+const JOVENES_MEETING = { id: "x.0f8e6a52-1c1b-4d7e-9a43-6a2b1c0d9e11", date: SATURDAY, time: "18:10", arrival: "17:30", place: "Oasis Tlalpan", title: null, kind: "saturday" };
+const JOVENES_LINKS = { link: "https://owt.test/jovenes/reunion/0f8e6a52-1c1b-4d7e-9a43-6a2b1c0d9e11", settingsLink: "https://owt.test/me/ajustes" };
+
+add("14-jovenes-te-toca.html", "Jóvenes: te toca (dos partes, con compañero)", buildAssignedEmail({
+  name: "Beto",
+  meeting: JOVENES_MEETING,
+  roles: [
+    { kind: "part", id: "dinamica1", label: "Dinámica 1", partnerNames: ["Carla"] },
+    { kind: "seat", id: "comparte", label: "comparte", partnerNames: [] },
+    { kind: "line", id: "k1", label: "Anuncios", partnerNames: [] },
+  ],
+  moved: false,
+  ...JOVENES_LINKS,
+}));
+
+add("15-jovenes-musica.html", "Jóvenes: piden música de alabanza (con nota)", buildMusicEmail({
+  meeting: JOVENES_MEETING,
+  part: "oracion",
+  asks: true,
+  note: "Algo suave, sin letra.",
+  who: ["Beto"],
+  ...JOVENES_LINKS,
+}));
+
+add("16-jovenes-musica-retirada.html", "Jóvenes: ya no piden música", buildMusicEmail({
+  meeting: JOVENES_MEETING,
+  part: "platica",
+  asks: false,
+  note: null,
+  who: [],
+  ...JOVENES_LINKS,
+}));
+
 describe("email template gallery", () => {
   it("renders every template without throwing", () => {
-    expect(gallery).toHaveLength(13);
+    expect(gallery).toHaveLength(16);
     for (const g of gallery) expect(g.html.length).toBeGreaterThan(200);
   });
 
