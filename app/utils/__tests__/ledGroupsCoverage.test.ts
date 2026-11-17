@@ -114,6 +114,7 @@ describe("I3: no level comparison with \"leader\" outside the owners", () => {
       "app/utils/ministryEventReads.ts",
       "app/(client)/jovenes/admin/page.tsx",
       "app/(client)/jovenes/page.tsx",
+      "app/(client)/jovenes/calendario/page.tsx",
     ]) {
       expect(stripComments(readFileSync(path.join(REPO_ROOT, file), "utf8")), file).toMatch(/\bledGroupsIn\(/);
     }

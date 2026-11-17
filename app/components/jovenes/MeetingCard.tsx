@@ -49,6 +49,8 @@ export default function JovenesMeetingCard({
   mine,
   countdown,
   featured = false,
+  defaultOpen = false,
+  held = false,
   children,
 }: {
   event: MeetingCardEvent;
@@ -59,6 +61,10 @@ export default function JovenesMeetingCard({
   countdown: string;
   /** The next meeting: open at first, larger, lit once. */
   featured?: boolean;
+  /** Open at first without the featured look: the one meeting of a day picked on the month grid. */
+  defaultOpen?: boolean;
+  /** A meeting already held («Reunión anterior» on Inicio): it says how long ago, as the next one says how soon. */
+  held?: boolean;
   children?: React.ReactNode;
 }) {
   const bodyId = useId();
@@ -67,7 +73,7 @@ export default function JovenesMeetingCard({
   const [toggled, setToggled] = useState<boolean | null>(null);
   // A meeting with only a note has nothing to unfold: the note shows on the card itself.
   const hasBody = entry.seats.length > 0 || entry.program.length > 0 || !!children;
-  const open = hasBody && (toggled ?? featured);
+  const open = hasBody && (toggled ?? (featured || defaultOpen));
   const tone = audienceTone(e.audience);
   const faces = entry.seats.filter((s) => s.name);
 
@@ -109,7 +115,7 @@ export default function JovenesMeetingCard({
           <div>
             <div className="flex flex-wrap items-center gap-1.5">
               <AudienceChips audience={e.audience} />
-              {featured && <span className={COUNTDOWN_CHIP}>{countdown}</span>}
+              {(featured || held) && <span className={COUNTDOWN_CHIP}>{countdown}</span>}
               {mine.length > 0 && <span className={MINE_CHIP}>Tú · {mine.join(" · ")}</span>}
             </div>
             {/* Folded, the card still says who is on it and whether there is a program. */}

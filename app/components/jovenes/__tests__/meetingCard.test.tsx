@@ -41,9 +41,20 @@ function ev(over: Partial<MinistryEventView> = {}): MinistryEventView {
   };
 }
 
-function card(e: MinistryEventView, props: { featured?: boolean; mine?: string[]; children?: React.ReactNode } = {}) {
+function card(
+  e: MinistryEventView,
+  props: { featured?: boolean; defaultOpen?: boolean; held?: boolean; countdown?: string; mine?: string[]; children?: React.ReactNode } = {},
+) {
   return render(
-    <JovenesMeetingCard event={e} entry={jovenesDayEntry(e)} mine={props.mine ?? []} countdown="En 2 días" featured={props.featured}>
+    <JovenesMeetingCard
+      event={e}
+      entry={jovenesDayEntry(e)}
+      mine={props.mine ?? []}
+      countdown={props.countdown ?? "En 2 días"}
+      featured={props.featured}
+      defaultOpen={props.defaultOpen}
+      held={props.held}
+    >
       {props.children}
     </JovenesMeetingCard>,
   );
@@ -153,6 +164,27 @@ describe("JovenesMeetingCard", () => {
     expect(chips.textContent).toContain(G2.name);
     expect(container.querySelectorAll(`.bg-group-${G1.id}`).length).toBeGreaterThan(0);
     expect(container.querySelectorAll(`.bg-group-${G2.id}`).length).toBeGreaterThan(0);
+  });
+
+  it("`defaultOpen` opens the card without the featured look, and the reader can still fold it", () => {
+    // The one meeting of a day picked on the month grid: open, but it is not «the next one».
+    const { container } = card(ev(), { defaultOpen: true });
+    const { button, body } = halves();
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    expect(body.hasAttribute("inert")).toBe(false);
+    expect(container.textContent).not.toContain("En 2 días");
+    fireEvent.click(button);
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("a meeting already held says how long ago, folded", () => {
+    // «Reunión anterior» on Inicio. A later meeting in a list carries no chip: its month label
+    // and its date leaf already place it.
+    const { container } = card(ev(), { held: true, countdown: "Hace 3 días" });
+    expect(container.textContent).toContain("Hace 3 días");
+    expect(halves().button.getAttribute("aria-expanded")).toBe("false");
+    cleanup();
+    expect(card(ev(), { countdown: "En 9 días" }).container.textContent).not.toContain("En 9 días");
   });
 
   it("the program editor makes a seatless meeting foldable, and sits in the body", () => {

@@ -1653,7 +1653,10 @@ the day sheet" — there is still no day sheet.
 
 ### Jóvenes as cards (2026-11-12, ADR-0086)
 
-`/jovenes` and Planear Jóvenes went from hairline rows to cards, and the motion is all borrowed:
+`/jovenes` and Planear Jóvenes went from hairline rows to cards, and the motion is all borrowed
+(since 2026-11-17 the cards are on two pages, Inicio and `/jovenes/calendario`, with the same motion;
+the Calendario's rows drop the stagger once the reader filters or changes view, so a re-entering
+row is `AnimatedList`'s to animate, not the route reveal's):
 
 - **Each card rises with the route reveal**, staggered (`revealProps(1 + i)` on the card's wrapper,
   capped by `REVEAL_STAGGER_CAP` as everywhere).

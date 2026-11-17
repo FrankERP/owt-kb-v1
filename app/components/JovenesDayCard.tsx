@@ -2,8 +2,8 @@
 // A Jóvenes meeting inside the Calendario's day sheet (PR D, ADR-0081), for a member of both
 // Alabanza and Jóvenes. Like `KidsDayCard`, it is only the body: the sheet's title is the date
 // and its line the clock. The meeting as a section title, who it is for, then the seats, the
-// program and the notes (`JovenesMeetingBody`, the same rows `/jovenes` shows). The full list
-// and the planner stay on `/jovenes`, one tap away.
+// program and the notes (`JovenesMeetingBody`, the same rows Jóvenes' own cards show). Jóvenes'
+// Inicio, its Calendario and the planner stay under `/jovenes`, one tap away.
 //
 // NEUTRAL — no hooks — so either side of the boundary can render it.
 import Button from "./ui/Button";

@@ -692,12 +692,26 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   (`compact` = the quiet «Programa» beside a row's «Editar»), `PersonSelect` (its «Escribir un
   nombre…» typed mode is OPT-IN via `onTypedName`, passed only by the meeting's seats — never by the
   program editor, whose lines keep members only). **Since ADR-0086 (2026-11-12) these screens are
-  CARDS**, built from: **`JovenesMeetingList`** [C] (`MeetingList.tsx` — `/jovenes`' list: the filter
-  pills, month labels and cards through `AnimatedList`; the rules are
+  CARDS**, built from: **`jovenesMeetingItems`**/**`anyProgramEditor`** [N]
+  ([meetingItems.tsx](../app/components/jovenes/meetingItems.tsx) — THE one builder of a card's item
+  for both member pages, so a meeting never reads differently on Inicio and the Calendario; the
+  program editor only on a meeting still to come), **`JovenesHome`** [N] (`JovenesHome.tsx` —
+  `/jovenes`, «Inicio» since 2026-11-17: next meeting, «Te toca», «Lo que sigue», the door to the
+  Calendario, «Reunión anterior»; what lands where is **`homeSections`** in
+  [jovenesHomeModel.ts](../app/utils/jovenesHomeModel.ts), with `HOME_UPCOMING`, `HOME_TURNS`,
+  `HOME_LOOKBACK_DAYS`), **`JovenesMeetingList`** [C] (`MeetingList.tsx` — `/jovenes/calendario`: the
+  «Lista · Mes» control, the filter pills over both, and the list itself, month labels and folded
+  cards through `AnimatedList`; the rules are
   [jovenesMeetingList.ts](../app/utils/jovenesMeetingList.ts): `filterOptions`, `applyFilter`,
-  `listRows`, `FILTER_MIN_MEETINGS`), **`JovenesMeetingCard`** [C] (`MeetingCard.tsx` — one meeting:
-  folded to a summary or open, the `featured` one open and the lit pass's only site; `children` is
-  the program editor) and the neutral pieces **`DateTile`** (a date as a calendar leaf; `empty` for a
+  `listRows`, `FILTER_MIN_MEETINGS`), **`JovenesMonthBoard`** [C] (`MonthBoard.tsx` — the «Mes» view:
+  a month grid with the day circles of `DayDots.tsx`, group-colour dots, a pressed day's cards; the
+  rules are [jovenesCalendarModel.ts](../app/utils/jovenesCalendarModel.ts): `calendarMonths`,
+  `monthCells`, `dayMarks`, `monthLegend`, `calendarMonthTitle`), **`PlannerSections`** [C]
+  (Planear's «Sábados · Clases · Grupos» on a phone: one section at a time, hidden by CSS and never
+  unmounted), **`JovenesMeetingCard`** [C] (`MeetingCard.tsx` — one meeting:
+  folded to a summary or open, the `featured` one open and the lit pass's only Jóvenes site;
+  `defaultOpen` opens without that look, `held` shows «Hace N días»; `children` is the program
+  editor) and the neutral pieces **`DateTile`** (a date as a calendar leaf; `empty` for a
   free Saturday), **`AudienceChips`** (who it is for, one chip per group with its monogram),
   **`AudienceRail`** (the card's colour edge, `animate-rail-draw`), **`PersonAvatar`** (the member's profile
   `photo` painted as a background over the initials of `initialsOf`, so a photo that fails leaves
@@ -706,7 +720,7 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   **`MonthMap`** (the planner's month at a glance: a dot per meeting in its audience's colour, hollow
   for a draft; one `role="img"`), **`JovenesMeetingBody`** (`MeetingBody.tsx` — seats as faces, the
   program as a numbered timeline, the notes; `columns` sets team and program side by side from `md`;
-  THE body of both `/jovenes` and the Calendario's `JovenesDayCard`, so a seat is never worded or
+  THE body of the Jóvenes cards and of the worship Calendario's `JovenesDayCard`, so a seat is never worded or
   coloured differently between them) and **`MeetingState`** («Publicada» / «Borrador» as a pill).
   **A group's colour comes only from [jovenesGroupStyle.ts](../app/utils/jovenesGroupStyle.ts)**:
   `groupTone(id)`, `audienceBadges`/`audienceTone`/`audienceRail`, `groupMonogram`,
@@ -718,7 +732,7 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   **`eventLine`** (name · clock · arrival · place · audience), **`audienceLabel`**, **`seatRoleLabel`**,
   **`eventDayLabel`**, **`dayWords`** («sábado 14 de noviembre» inside a sentence; a heading uses
   `dayTitle` from `agenda.ts`, and neither is ever CSS `capitalize`, which writes «14 De Noviembre»),
-  **`meetingsLede`** (`/jovenes`' count line and the reader's next date), **`addDaysIso`**
+  **`meetingsLede`** (the count line and the reader's next date, on Inicio and the Calendario), **`addDaysIso`**
   ([jovenesEventView.ts](../app/utils/jovenesEventView.ts)) — a meeting's words, pure; never decides
   access. What is the READER's on a meeting is the agenda's `mySeats` over **`jovenesDayEntry`**
   (`calendarMinistry.ts`, the one shape of a meeting's people for the list and the day sheet); the

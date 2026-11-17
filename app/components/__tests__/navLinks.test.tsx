@@ -81,6 +81,24 @@ describe("NavLinks", () => {
     expect(screen.queryByRole("button", { name: /Alabanza/ })).toBeNull();
   });
 
+  it("in Jóvenes, the links are its two pages: Inicio and Calendario, one lit at a time", () => {
+    // 2026-11-17: `/jovenes` became Inicio and the whole horizon moved to `/jovenes/calendario`.
+    session = { user: { name: "Noe", email: "noe@x", role: "member", ministries: ["jovenes"] } };
+    pathname = "/jovenes";
+    const first = mount();
+    const row = () => Array.from(screen.getByLabelText("Secciones").querySelectorAll("a")).map((n) => [n.textContent?.trim(), n.getAttribute("href"), n.getAttribute("aria-current")]);
+    expect(row()).toEqual([["Inicio", "/jovenes", "page"], ["Calendario", "/jovenes/calendario", null]]);
+    first.unmount();
+    pathname = "/jovenes/calendario";
+    const second = mount();
+    expect(row()).toEqual([["Inicio", "/jovenes", null], ["Calendario", "/jovenes/calendario", "page"]]);
+    second.unmount();
+    // The planner belongs to neither: nothing is lit, as on worship's /admin for a non-link page.
+    pathname = "/jovenes/admin";
+    mount();
+    expect(row().map((r) => r[2])).toEqual([null, null]);
+  });
+
   it("renders nothing signed out", () => {
     session = null;
     mount();
