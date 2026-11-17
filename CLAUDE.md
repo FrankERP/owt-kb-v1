@@ -380,6 +380,8 @@ built on `ministryAccess.ts` over ONE snapshot, `accessFromDoc`); worship pages 
   read closed); never a wider read filtered in TypeScript (`ministryEventCoverage.test.ts`). Written
   ONLY by `ministryEventCommit.ts` (fresh access, stored `_rev`, 404 for an unreadable event); its
   one other query shape is «Recorrer»'s roster read (one group the actor writes, never returned).
+  The reader's one read with no person is the reminder cron's `readAnnouncedMeetings` (published,
+  whole-ministry, exact days): what every member reads, never widened, one importer.
   A group's CLASS is a one-group meeting with a `lesson` (`ministryLesson.ts` is its one validity
   rule). A route that writes a client-supplied id pins its type first (`storedRevisionOfType`, W9).
   A meeting's fixed PARTS are program lines carrying `part` (`ministryParts.ts`, the one table;
@@ -388,7 +390,9 @@ built on `ministryAccess.ts` over ONE snapshot, `accessFromDoc`); worship pages 
   emails are computed by the writer from the PRE-COMMIT row, sent by the routes in `after()`, and
   go only to the people a write adds on a whole-ministry, published, not-past meeting (everyone on
   it when the write publishes it or moves its date), plus the music request to the super-admins
-  who are people. Both are deliberate.
+  who are people. Both are deliberate. The daily cron's reminders (`ministryEventReminder.ts`, 14
+  and 7 days ahead) go only to whoever still owes something on those same meetings (`partGaps`),
+  and to the encargado of a Saturday whose Oración or a dinámica nobody holds.
   Unreleased features gate on `rolloutAllows` (`app/utils/rollout.ts`) on the server, not the nav.
 - **The days a Jóvenes pastor marked reach ONE page** (ADR-0090): only `/jovenes/admin` calls
   `readJovenesPeople({ awayFor: access, today })`; bare, that read projects no availability, so the
