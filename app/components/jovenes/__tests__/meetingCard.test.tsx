@@ -189,6 +189,23 @@ describe("JovenesMeetingCard", () => {
     expect(card(ev(), { countdown: "En 9 días" }).container.textContent).not.toContain("En 9 días");
   });
 
+  it("a part that is the reader's links to the meeting's page — «Llenar» while it owes something, «Editar» after — unless that page no longer opens the date", () => {
+    const line = (over: Partial<MinistryEventView["program"][number]>) => ({ _key: "o", label: "Oración", note: null, memberId: "m2", name: "Beto", photo: null, mine: true, part: "oracion" as const, music: null, helpers: null, second: null, ...over });
+    const owing = ev({ program: [line({})] });
+    const { unmount } = card(owing, { featured: true });
+    expect(screen.getByRole("link", { name: /Llenar mi parte/ }).getAttribute("href")).toBe("/jovenes/reunion/a");
+    unmount();
+    const done = card(ev({ program: [line({ music: "track" })] }), { featured: true });
+    expect(screen.getByRole("link", { name: /Editar mi parte/ })).toBeTruthy();
+    done.unmount();
+    render(<JovenesMeetingCard event={owing} entry={jovenesDayEntry(owing, undefined, false)} mine={[]} countdown="Hace 40 días" featured />);
+    expect(screen.queryByRole("link", { name: /mi parte/ })).toBeNull();
+    // Nobody else's part carries the link.
+    cleanup();
+    card(ev({ program: [line({ mine: false })] }), { featured: true });
+    expect(screen.queryByRole("link", { name: /mi parte/ })).toBeNull();
+  });
+
   it("the program editor makes a seatless meeting foldable, and sits in the body", () => {
     card(ev({ seats: [], program: [] }), { children: <button type="button">Editar programa</button> });
     const toggle = screen.getByRole("button", { name: "Ver detalles" });

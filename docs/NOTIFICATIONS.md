@@ -640,7 +640,9 @@ debounce, no claim — a meeting names nine people at most, once.
   dated today or later (CDMX). A group's meeting or class announces nothing («Nuevo libro» creates
   up to 60 classes in a row).
 - **«Te toca» — who:** the people the write ADDS to a seat, a part or a program line; everyone on
-  the meeting when the write publishes it or moves its date («Cambió de fecha»); never the actor.
+  the meeting when the write publishes it or moves its date; never the actor. «Cambió de fecha»
+  is said only to someone who already held a role when the old date was announced: a person the
+  same write adds was never told that date, so theirs is a plain «Te toca».
   At send time one read drops anyone who is not an active member of Jóvenes, has no email, is
   outside `EMAIL_ALLOWLIST`, or turned off «Nuevas asignaciones» (`wantsNotification(…,
   "assigned")`). One email per person per write, listing every role; it links

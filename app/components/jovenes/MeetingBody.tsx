@@ -205,7 +205,7 @@ export default function JovenesMeetingBody({
               <Title className={`${SHEET_TITLE} pb-3`}>Programa</Title>
               <ol>
                 {entry.program.map((l, i) => (
-                  <Step key={l.key} line={l} index={i} last={i === entry.program.length - 1} partHref={partLinks ? meetingPath(entry.id) : null} />
+                  <Step key={l.key} line={l} index={i} last={i === entry.program.length - 1} partHref={partLinks && entry.partLinks !== false ? meetingPath(entry.id) : null} />
                 ))}
               </ol>
             </div>

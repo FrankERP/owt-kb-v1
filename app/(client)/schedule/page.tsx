@@ -25,6 +25,7 @@ import {
 import { MinistryEventReadUnavailable, readMinistryEvents, type MinistryEventView } from "@/app/utils/ministryEventReads";
 import { rolloutAllows } from "@/app/utils/rollout";
 import { readSaturdaySets } from "@/app/utils/jovenesWorshipSet";
+import { meetingPageOpens } from "@/app/utils/jovenesPartView";
 
 export const metadata: Metadata = {
   title: "Calendario — Backstage",
@@ -261,7 +262,8 @@ export default async function SchedulePage({
   // Alabanza's songs on a Saturday meeting (ADR-0089): the same published setlist, titles and keys.
   const jovenesSets = await readSaturdaySets(jovenes.filter((e) => e.kind === "saturday").map((e) => e.date));
   for (const e of jovenes) {
-    const entry = jovenesActiveDay(e, e.kind === "saturday" ? (jovenesSets.get(e.date) ?? null) : undefined);
+    // This page browses past months; the meeting's page opens only so far back.
+    const entry = jovenesActiveDay(e, e.kind === "saturday" ? (jovenesSets.get(e.date) ?? null) : undefined, meetingPageOpens(e.date, today));
     if (entry) push(entry.date, entry);
   }
 

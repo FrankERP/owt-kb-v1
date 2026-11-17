@@ -899,7 +899,7 @@ pass.
   importing it. Do not «simplify» it into a wider read plus a TypeScript filter. groq-js does not
   escape the `.` in `path()`, so the matrix avoids ids like `ministryEvent-x`; `mayRead`'s own
   test pins them.
-- **Jóvenes meetings: one writer** (ADR-0081 W1–W9). `ministryEventCommit.ts` is the only module
+- **Jóvenes meetings: one writer** (ADR-0081 W1–W10). `ministryEventCommit.ts` is the only module
   that writes `ministryEvent`, called only by the routes under `app/api/ministries/[ministry]/events`
   (`serviceCommitCallers.test.ts`; never MCP or the admin assistant). It reads the caller's access
   FRESH (`fetchMemberAccessFresh`, never the 30 s cache, so a demotion counts on the next write),

@@ -48,8 +48,13 @@ export type MusicNotice = {
 };
 
 export type MeetingNotices = {
-  assigned: Array<{ memberId: string; roles: AssignedRole[] }>;
-  /** The meeting was already announced on another date: the email says it moved. */
+  /**
+   * `moved`: present only for a person who already held a role on the meeting when it was
+   * announced on another date — their email says it moved. Someone the same write adds was never
+   * told the old date, so theirs is a plain «Te toca».
+   */
+  assigned: Array<{ memberId: string; roles: AssignedRole[]; moved?: true }>;
+  /** The meeting was already announced on another date. */
   moved: boolean;
   music: MusicNotice[];
 };
@@ -181,12 +186,12 @@ export function meetingNotices(
   const assigned: MeetingNotices["assigned"] = [];
   if (isLive) {
     // A publish, a create already published, or a new date: the whole meeting is news.
-    const known = wasLive && !moved ? rolesByMember(before) : new Map<string, AssignedRole[]>();
+    const prior = wasLive ? rolesByMember(before) : new Map<string, AssignedRole[]>();
     for (const [memberId, roles] of rolesByMember(after)) {
       if (memberId === ctx.actorId) continue;
-      const had = known.get(memberId) ?? [];
+      const had = moved ? [] : (prior.get(memberId) ?? []);
       const fresh = roles.filter((r) => !had.some((h) => h.kind === r.kind && h.id === r.id));
-      if (fresh.length > 0) assigned.push({ memberId, roles: fresh });
+      if (fresh.length > 0) assigned.push({ memberId, roles: fresh, ...(moved && prior.has(memberId) ? { moved: true as const } : {}) });
     }
   }
 

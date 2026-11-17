@@ -12,8 +12,7 @@ import { isMinistryManager, ledGroupsIn } from "@/app/utils/ministryAccess";
 import { showsProgramEditor } from "@/app/utils/jovenesPlannerModel";
 import { readJovenesPeople } from "@/app/utils/jovenesPeople";
 import { readSaturdaySets } from "@/app/utils/jovenesWorshipSet";
-import { meetingToken, partViews, writableParts } from "@/app/utils/jovenesPartView";
-import { joinNames } from "@/app/utils/ministryEventEmail";
+import { MEETING_PAGE_BACK_DAYS, joinNames, meetingToken, partViews, writableParts } from "@/app/utils/jovenesPartView";
 import { audienceTone } from "@/app/utils/jovenesGroupStyle";
 import { PAGE_LEDE, SHEET_TITLE } from "@/app/utils/homeHero";
 import Navbar from "@/app/components/Navbar";
@@ -34,8 +33,6 @@ export const metadata: Metadata = {
 };
 
 const TZ = "America/Mexico_City";
-/** How far back a meeting still opens (a page range, not access): the email's link outlives the day. */
-const BACK_DAYS = 30;
 /** No upper bound on purpose: a link to a meeting planned a year ahead must open. */
 const FAR = "9999-12-31";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -78,7 +75,7 @@ export default async function JovenesMeetingPage({ params }: { params: Promise<{
     events = await readMinistryEvents(access, {
       me: sanityId,
       ministry: "jovenes",
-      from: addDaysIso(today, -BACK_DAYS),
+      from: addDaysIso(today, -MEETING_PAGE_BACK_DAYS),
       to: FAR,
       mode: plans ? "editor" : "member",
     });

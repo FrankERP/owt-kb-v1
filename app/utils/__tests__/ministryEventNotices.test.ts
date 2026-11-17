@@ -108,6 +108,15 @@ describe("meetingNotices — who is told they were assigned", () => {
     const n = meetingNotices(snap(), snap({ date: "2026-11-28" }), ctx);
     expect(ids(n)).toEqual(["ana", "andy", "gaby", "jacob"]);
     expect(n.moved).toBe(true);
+    expect(n.assigned.every((a) => a.moved === true)).toBe(true);
+  });
+
+  it("someone the same write adds was never told the old date: theirs is not «cambió de fecha»", () => {
+    const after = snap({ date: "2026-11-28", seats: [...(doc().seats as unknown[]), { _key: "sx", role: "apoyo", member: ref("nueva") }] });
+    const n = meetingNotices(snap(), after, ctx);
+    expect(n.moved).toBe(true);
+    expect(n.assigned.find((a) => a.memberId === "nueva")).not.toHaveProperty("moved");
+    expect(n.assigned.find((a) => a.memberId === "ana")).toMatchObject({ moved: true });
   });
 
   it("never the actor, never a typed name", () => {

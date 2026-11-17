@@ -80,7 +80,7 @@ export function planEventEmails(
       name: nameOf(person) ?? "",
       meeting: effects.meeting,
       roles,
-      moved: effects.moved,
+      moved: a.moved === true,
       link,
       settingsLink,
     });

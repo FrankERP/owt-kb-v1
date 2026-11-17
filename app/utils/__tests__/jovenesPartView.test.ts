@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 import type { MinistryEventLine, MinistryEventSeat, MinistryEventView } from "../ministryEventReads";
-import { freeLines, partPending, partViews, writableParts } from "../jovenesPartView";
+import { freeLines, joinNames, meetingPageOpens, partPending, partViews, writableParts } from "../jovenesPartView";
 
 const seat = (role: string, over: Partial<MinistryEventSeat> = {}): MinistryEventSeat => ({
   _key: `s-${role}-${over.memberId ?? over.name ?? "x"}`,
@@ -156,5 +156,26 @@ describe("writableParts and partPending", () => {
     expect(partPending(d2)).toBe(false); // not mine
     expect(partPending({ ...oracion, note: "Nota", music: null })).toBe(true);
     expect(partPending({ ...oracion, note: "Nota", music: "track" })).toBe(false);
+    // Oración's note is optional: choosing the music is all it owes.
+    expect(partPending({ ...oracion, note: null, music: "track" })).toBe(false);
+    // A dinámica has no music: its description is what it owes.
+    expect(partPending({ ...d1, note: null })).toBe(true);
+    // Plática owes both.
+    const platica = { ...oracion, id: "platica" as const };
+    expect(partPending({ ...platica, note: null, music: "track" })).toBe(true);
+    expect(partPending({ ...platica, note: "Tema", music: "track" })).toBe(false);
+  });
+});
+
+describe("joinNames and meetingPageOpens", () => {
+  it("joins one, two and three names the Spanish way", () => {
+    expect([joinNames([]), joinNames(["Pau"]), joinNames(["Pau", "Mkz"]), joinNames(["Pau", "Mkz", "Lali"])]).toEqual(["", "Pau", "Pau y Mkz", "Pau, Mkz y Lali"]);
+  });
+
+  it("the meeting's page opens today, ahead, and 30 days back — not the day before that", () => {
+    expect(meetingPageOpens("2026-11-17", "2026-11-17")).toBe(true);
+    expect(meetingPageOpens("2027-11-17", "2026-11-17")).toBe(true);
+    expect(meetingPageOpens("2026-10-18", "2026-11-17")).toBe(true);
+    expect(meetingPageOpens("2026-10-17", "2026-11-17")).toBe(false);
   });
 });
