@@ -145,6 +145,10 @@ export default async function DisponibilidadPage({ searchParams }: Props = {}) {
               // Said to the people whose days Planear Jóvenes is handed (ADR-0090): the members
               // of the ministry, which the roster read lists. Not a super-admin outside it, whose
               // days no Jóvenes planner is shown (`levelIn` has no super-admin arm).
+              // `inJovenes` carries the rollout: before it reaches a pastor this page says nothing
+              // of Jóvenes at all (its pages answer 404). The planner read lists every member
+              // whatever the stage, so NARROWING the stage again would leave planners seeing the
+              // days of pastors who are no longer told. The stage is «all» (2026-11-12).
               seenByJovenesPlanners={inJovenes && levelIn(access, "jovenes") !== null}
             />
           </div>

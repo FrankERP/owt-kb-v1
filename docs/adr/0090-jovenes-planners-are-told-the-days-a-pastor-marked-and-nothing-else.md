@@ -66,8 +66,12 @@ approvals on one digest) and its `-review-log.md`, which lists what was decided 
   `teamMembers` is undotted in a public dataset until DEF-A-16 (ADR-0057, ADR-0081).
 - A leader is the first non-manager who sees anyone's availability, and the days shown first were
   marked before this existed (on 2026-11-17, four people, all in Alabanza and Jóvenes). Frank was
-  asked who the audience should be; until he answers, the leader arm does not go to production. If
-  he chooses admins only, `awayVisibleTo` loses its last two lines and nothing else changes.
+  asked who the audience should be; until he answers, the leader arm does not go to production
+  (PR #249 carries it as an open blocker, and no auto-merge is armed on it). If he chooses admins
+  only, `awayVisibleTo` ends at the manager check (`return isMinistryManager(…)`), the leader
+  cases of `jovenesAway.test.ts` and `jovenesPeople.test.ts` flip to «nobody», and the sentences
+  that name the leader here, in CLAUDE.md/AGENTS.md §Auth and in `docs/ROUTES.md` are reworded.
+  No read, component or stored field changes.
 - One calendar: a pastor who blocks a day with Alabanza in mind reads «no disponible» in Jóvenes
   too. There is no «out for one ministry only».
 - In the program editor outside Planear (`/jovenes`, the Calendario, a meeting's page) nobody gets
@@ -76,4 +80,6 @@ approvals on one digest) and its `-review-log.md`, which lists what was decided 
 - «Cambiar con…», «Recorrer» and «Nuevo libro» show no mark in their previews; the card's line
   says it after the save.
 - Undoing the bare/opt-in split (projecting `away` in the one query) sends every pastor's days to
-  any pastor who is a meeting's encargado. The guard test fails first.
+  any pastor who is a meeting's encargado. `jovenesPeople.test.ts` fails first (its bare case
+  refuses any `unavailab…` token in the one query); the source scan would not, since that file may
+  name the dates.

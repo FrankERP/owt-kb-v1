@@ -79,6 +79,14 @@ Rounds B and C left notes after the approved digest. Adopted in the implementati
   its program lines (the plan said «assigned member» without choosing).
 - **P8 — docs**: ADR-0090, a line in CLAUDE.md/AGENTS.md §Auth and its long form, the reworded
   header of `jovenesPeople.ts`.
+- **P9 — smaller differences from the plan's text**, found by the code review of the range: the
+  days query also excludes drafts (`!(_id in path("drafts.**"))`); a person's days are
+  de-duplicated and sorted; two or more people on a card read «Ana y Beto: no disponibles ese
+  día»; the line on `/me/disponibilidad` says «Quien planea en Jóvenes…» where the plan's R5 said
+  «Quien arma el rol de Jóvenes…» (the app calls that screen «Planear»); the picker's line is a
+  `role="status"` and the card's line carries the calendar-off icon; `isAway`, `awayNames` and
+  `awayLine` live beside `awayVisibleTo`, so that pure function is also in the client bundle (it
+  decides nothing there: the client only ever holds what the server sent).
 
 Stated, not built (limits both reviewers asked to have written down):
 
@@ -90,6 +98,12 @@ Stated, not built (limits both reviewers asked to have written down):
 - One calendar per person: a pastor who blocks a day for Alabanza reads «no disponible» in Planear
   Jóvenes too. There is no «out for one ministry only».
 - The days read is one more sequential round trip on the planner page (it needs the people first).
+- The line on `/me/disponibilidad` follows the marker's rollout stage; the planner read does not.
+  With the stage at «all» they agree. Narrowing the stage again would leave planners seeing the
+  days of pastors who are no longer told (a comment at the page says so).
+- P1 is held by people, not by a test: the PR carries it as an open blocker and no auto-merge is
+  armed. The «admins only» fallback is a one-line change to the function plus its two test
+  matrices and the sentences that name the leader.
 
 ## What the reviewers measured (round C, one read-only aggregate query, no names or ids)
 

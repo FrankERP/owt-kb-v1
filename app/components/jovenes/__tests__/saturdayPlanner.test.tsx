@@ -363,6 +363,20 @@ describe("ProgramEditor", () => {
     ]);
   });
 
+  // ADR-0090: the program's pickers carry the MEETING's day (nobody picks a date in this form).
+  it("marks who is out on the meeting's day in a program line's picker", () => {
+    render(
+      <AdminProviders>
+        <ProgramEditor event={ev()} people={[{ ...people[0], away: ["2026-11-07"] }, { ...people[1], away: ["2026-11-14"] }]} />
+      </AdminProviders>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Editar programa" }));
+    fireEvent.click(screen.getByRole("button", { name: "Agregar línea" }));
+    const names = [...(screen.getByLabelText("Quién — línea 1") as HTMLSelectElement).options].map((o) => o.textContent);
+    expect(names).toContain("Ana · no disponible");
+    expect(names).toContain("Beto");
+  });
+
   // Plan 2026-11-10 P7: program lines keep members only — a typed name there would be dropped.
   it("offers no typed name on a program line", () => {
     render(

@@ -7,8 +7,13 @@
 // therefore opt-in (`awayFor`), and that option is a source scan, not a sentence:
 //
 //   (a) under `app/**`, only the roster read and the planner page name `awayFor`;
-//   (b) no file of the Jóvenes tree names the availability fields, except the roster read, which
-//       may name the dates and never the notes.
+//   (b) no file of the Jóvenes tree (its pages, components, API routes, `jovenes*` utils and the
+//       meetings' data layer, `ministryEvent*`/`ministryParts`/`ministryLesson`) names the
+//       availability fields, except the roster read, which may name the dates and never the notes.
+//
+// (a) is a scan for the option's NAME: a wrapper exported from the roster read that passed the
+// option itself would let another page opt in without naming it. Nothing exports one; a review of
+// that file is what holds it.
 //
 // SCOPE, said plainly: (b) covers the Jóvenes tree only. It does not stop a new reader of members'
 // days elsewhere (worship's planner, Kids' and the MCP read them for their own audiences).
@@ -33,13 +38,22 @@ const files = execFileSync("git", ["ls-files", "app"], { cwd: REPO_ROOT, encodin
   .filter((f) => /\.[cm]?[jt]sx?$/.test(f) && !isTest(f));
 const code = (f: string) => stripComments(readFileSync(path.join(REPO_ROOT, f), "utf8"));
 
-const JOVENES_TREE = [/^app\/\(client\)\/jovenes\//, /^app\/components\/jovenes\//, /^app\/api\/ministries\//, /^app\/utils\/jovenes[^/]*\.ts$/];
+const JOVENES_TREE = [
+  /^app\/\(client\)\/jovenes\//,
+  /^app\/components\/jovenes\//,
+  /^app\/api\/ministries\//,
+  /^app\/utils\/jovenes[^/]*\.ts$/,
+  // The meetings' data layer: its reader dereferences `member->`, the one other place a pastor's
+  // days could ride to every page.
+  /^app\/utils\/ministry(Event|Parts|Lesson)[^/]*\.ts$/,
+];
 
 describe("ADR-0090: who asks for a pastor's marked days", () => {
   it("scans a real tree", () => {
     expect(files).toContain(READ);
     expect(files).toContain(PLANNER_PAGE);
     expect(files).toContain("app/(client)/jovenes/page.tsx");
+    expect(files).toContain("app/utils/ministryEventReads.ts");
   });
 
   it("(a) only the roster read and the planner page name `awayFor`", () => {

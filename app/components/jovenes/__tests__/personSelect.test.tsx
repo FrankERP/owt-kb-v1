@@ -40,7 +40,12 @@ describe("PersonSelect and a marked day", () => {
   });
 
   it("a typed name is nobody's day", () => {
-    show(null, "2026-11-21", { typedName: "Ana", onTypedName: () => {} });
+    // The seat still names Ana's id while the planner types another name over it.
+    show("ana", "2026-11-21", { typedName: "Ana de visita", onTypedName: () => {} });
     expect(screen.queryByRole("status")).toBeNull();
+    cleanup();
+    // The same seat, not in typed mode, does say it: the line above is the guard's doing.
+    show("ana", "2026-11-21", { typedName: null, onTypedName: () => {} });
+    expect(screen.getByRole("status").textContent).toBe("No disponible ese día.");
   });
 });
