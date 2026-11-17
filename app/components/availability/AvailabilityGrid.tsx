@@ -114,6 +114,15 @@ const LEGEND: ReadonlyArray<readonly [string, string]> = [
   [TONE_RAIL.sun, "Domingo"],
   [TONE_RAIL.special, "Especial"],
 ];
+/** A Jóvenes meeting's dot joins the legend only on a calendar that draws one (a pastor's). */
+const LEGEND_JOVENES = [TONE_RAIL.jovenes, "Jóvenes"] as const;
+
+/** What a day holds, for its spoken label: a worship service, a Jóvenes meeting, or both. */
+function dayHolds(tones: readonly Tone[]): string {
+  const meeting = tones.includes("jovenes");
+  const service = tones.some((t) => t !== "jovenes");
+  return `${service ? ", hay servicio" : ""}${meeting ? ", hay reunión de Jóvenes" : ""}`;
+}
 
 /** A day the member cannot serve: a faint availability fill inside a thin ring. The
  *  `bg-availability-fg/` prefix is what `availabilityCalendarConflict.test.tsx` reads. */
@@ -143,6 +152,10 @@ function buildCalendar(year: number, month: number): (string | null)[] {
 }
 
 export default function AvailabilityGrid({ state, selecting, services = {}, openNote, closeNote, noteIso = null }: Props) {
+  const legend = useMemo(
+    () => (Object.values(services).some((t) => t.includes("jovenes")) ? [...LEGEND, LEGEND_JOVENES] : LEGEND),
+    [services],
+  );
   const [page, setPage] = useState(0);
 
   // The selection gesture. `drag` is the live span (anchor = where the finger
@@ -527,7 +540,7 @@ export default function AvailabilityGrid({ state, selecting, services = {}, open
                   // Every cell, past ones included — `isoRange` is what drops the
                   // past, so the drag can cross them without losing the finger.
                   data-iso={iso}
-                  aria-label={`${fmtDayLabel(iso)}${unavailable ? ", no disponible" : ""}${hasService ? ", hay servicio" : ""}${hasNote ? ", con nota" : ""}`}
+                  aria-label={`${fmtDayLabel(iso)}${unavailable ? ", no disponible" : ""}${dayHolds(tones)}${hasNote ? ", con nota" : ""}`}
                   className={cls}
                 >
                   {dayNum}
@@ -620,7 +633,7 @@ export default function AvailabilityGrid({ state, selecting, services = {}, open
           <span aria-hidden className="inline-block h-3 w-3 rounded-full bg-availability-fg/15 ring-1 ring-inset ring-availability-fg/60" />
           No puedo
         </span>
-        {LEGEND.map(([dot, label]) => (
+        {legend.map(([dot, label]) => (
           <span key={label} className="inline-flex items-center gap-2">
             <span aria-hidden className={`inline-block h-1.5 w-1.5 rounded-full ${dot}`} />
             {label}

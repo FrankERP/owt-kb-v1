@@ -282,6 +282,8 @@ describe("/jovenes program editor and «Planear» (cosmetic; the server decides)
     expect(html).toContain("[programa ministryEvent.sat · 1]");
     expect(html).not.toContain("[programa ministryEvent.a");
     expect(html).not.toContain(">Planear<");
+    // Every pastor reaches their own availability from here, and that page knows the way back.
+    expect(html).toMatch(/href="\/me\/disponibilidad\?de=jovenes"[^>]*>(<[^>]*>)*Disponibilidad/);
   });
 
   it("«Planear» for a leader of at least one group; none for a `leader` who leads no group", async () => {

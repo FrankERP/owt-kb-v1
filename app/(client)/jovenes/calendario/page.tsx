@@ -19,6 +19,7 @@ import Button from "@/app/components/ui/Button";
 import JovenesMeetingList from "@/app/components/jovenes/MeetingList";
 import { anyProgramEditor, jovenesMeetingItems } from "@/app/components/jovenes/meetingItems";
 import { CalendarIcon, CalendarOffIcon } from "@/app/components/ui/icons";
+import { JOVENES_AVAILABILITY_HREF } from "@/app/components/navSections";
 import { revealProps } from "@/app/utils/reveal";
 
 export const metadata: Metadata = {
@@ -100,12 +101,19 @@ export default async function JovenesCalendarPage() {
               </p>
             )}
           </div>
-          {plans && (
-            <Button href="/jovenes/admin" variant="secondary" size="md" className="mt-5 shrink-0 sm:mb-1 sm:mt-0">
-              <CalendarIcon size={14} />
-              Planear
+          <div className="mt-5 flex shrink-0 flex-wrap gap-2 sm:mb-1 sm:mt-0">
+            {/* The same two buttons as «Inicio»: every pastor's own days, and the planner for those who plan. */}
+            <Button href={JOVENES_AVAILABILITY_HREF} variant="secondary" size="md">
+              <CalendarOffIcon size={14} />
+              Disponibilidad
             </Button>
-          )}
+            {plans && (
+              <Button href="/jovenes/admin" variant="secondary" size="md">
+                <CalendarIcon size={14} />
+                Planear
+              </Button>
+            )}
+          </div>
         </header>
 
         {unavailable ? (
