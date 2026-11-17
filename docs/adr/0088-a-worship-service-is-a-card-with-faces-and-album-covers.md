@@ -108,7 +108,7 @@ schema gains one optional image (`post.albumArt`) and the three service reads pr
   `main` the same day; moving files under an open PR buys a conflict for no behaviour. It is a
   follow-up, and `app/components/service/` holds only what worship added.
 - **Redrawing Biblioteca and the song page in the same pass.** Different screens with a different
-  problem (a 148-row index, a reader); proposed to Frank as a second part.
+  problem (a 148-row index, a reader); proposed to Frank as a second part — see «Part 2» below.
 
 ## Consequences
 
@@ -144,3 +144,58 @@ schema gains one optional image (`post.albumArt`) and the three service reads pr
   (`serviceStartTime`); before, only a special carried its clock there.
 - Undoing the second `data-lit` site means removing `lit` from Inicio's hero and the site from
   `litCard.test.ts`, not editing the guard to pass.
+
+## Part 2 (2026-11-17): the Biblioteca and the song page wear the same covers
+
+Frank, on the before/after of both screens: «Me encanta». The cover a song wears on a service
+card is now the picture it wears everywhere a member meets it. No write path changed; four more
+reads project `cover`: the Biblioteca's catalogue, the song page and `/api/song/[id]` for the sheet
+(`POST_COVER_GROQ`, the same field read from the song document itself), and the song page's
+history query for the songs each past set held (`SONG_COVER_GROQ`).
+
+- **A Biblioteca row leads with the cover** (`LibraryRow`, `SongCover` at 52 px). The key moved
+  to the right edge, still in the display face and the key's own colour (ADR-0071), still one
+  column down the page with the BPM under it. The first theme shows from `md` only: on a phone
+  the cover took its width.
+- **A shelf above the list** (`LibraryShelf`, «Recién agregadas»): the eight songs that joined
+  the catalogue last (`recentSongs`, by `_createdAt`), as covers that scroll sideways. Only while
+  nothing filters. The list is for a song whose name you know; the shelf is for one you don't.
+- **The song page's hero has the cover** (`SongHeroCover`, 124 px, 208 px from `md`) and a faint
+  blurred wash of the same image behind the title (10 % in light, 30 % in dark, masked out toward
+  the bottom). While one of that song's tracks plays, the cover carries the app's `Equalizer`.
+  Section titles carry a glyph on a tile, and «Última vez tocada» is a card per service with the
+  day's `DateTile` and the covers of the songs it shared the set with.
+- **The song sheet shows the cover beside its artist line** (`SongCover size="lg"`, 76 px) when
+  the song has one (a stored cover that fails to load falls back to `SongCover`'s neutral tile,
+  so the line does not jump; the song page's cover removes itself instead). The key, tempo and compás pills keep the sheet's full width under it: beside
+  the cover they wrapped to three rows on a 320 px phone (built, looked at, moved).
+- **Three named sizes, never a free number** (`COVER_SIZE`: tile 160, shelf 400, hero 640 — each
+  the drawn side at 3×). Every distinct `w`/`h` is a distinct image the CDN renders and a phone
+  caches. The sheet reuses `shelf` rather than adding a fourth for its 76 px. The MultiTracks
+  images are 568 px, so `hero` asks the CDN to enlarge those by an eighth; at 208 CSS px that is
+  not visible, and an editor's larger cover is served at its full 640.
+- **The letter rail centres by `top`, not a transform.** `top: 50vh` plus `-translate-y-1/2`
+  moved the box after sticky had placed it, so at the top of the page the rail rose half its
+  height over «Filtros» and, with the shelf there, over the covers. Half the rail's height now
+  lives in `top`, and sticky keeps it inside the list. The height is MEASURED (`ResizeObserver`),
+  with `RAIL_STEP_PX` × letters as the first paint's estimate: the app's text zoom makes the
+  letters taller, and a rail centred on the estimate hung its last letters under the tab bar.
+- **Both loading skeletons carry the new shapes** (the song page's cover, the Biblioteca's shelf
+  and cover rows), so the page that replaces them does not jump.
+
+Rejected in this part:
+
+- **A grid of covers instead of the list.** 148 squares cannot be scanned by key, and the key is
+  what a musician looks for first; the title would have to truncate under a 100 px tile. The list
+  stays the index, and the shelf is the one picture-first surface.
+- **The shelf during a search.** Somebody typing is looking for one song; eight other songs above
+  the results would be in the way.
+- **A neutral tile in the sheet or the song hero for a song with no cover.** In a list the tile
+  keeps the rows aligned. Beside a title it is an empty square that says something is missing;
+  the sheet and the hero simply fall back to their text.
+- **The cover's dominant colour as the hero's background.** It would be a hue per song on a page
+  where every hue already means something (cyan presses, rose is the key). A faint blurred wash
+  of the image itself gives each page its own air without minting a colour.
+- **`SwipeStrip` for the shelf.** It pages a strip that fits the width; the shelf is longer than
+  the width on purpose, so the half cover at the edge says «there is more». Native overflow scroll
+  with snap points does that with no script.

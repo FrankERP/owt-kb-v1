@@ -5,6 +5,7 @@ import { client } from "@/sanity/lib/client";
 import { requireWorshipPage } from "@/app/utils/worshipPageGate";
 import { parseLibraryParams, serializeLibraryParams } from "@/app/utils/libraryIndex";
 import type { Post, Tag, Author } from "@/app/utils/interface";
+import { POST_COVER_GROQ } from "@/app/utils/songCover";
 
 export const metadata: Metadata = {
   title: "Biblioteca — Backstage",
@@ -18,6 +19,7 @@ export const revalidate = 60;
 const QUERY = `{
   "posts": *[_type == "post"] | order(title asc) {
     _id, _createdAt, title, author, slug, publishDate, timeSig, bpm, key,
+    "cover": ${POST_COVER_GROQ},
     tags[]->{ _id, slug, name }, authors[]->{ _id, slug, name }
   },
   "tags": *[_type == "tag"] | order(name asc) { _id, name, slug, "postCount": count(*[_type == "post" && ^._id in tags[]._ref]) },

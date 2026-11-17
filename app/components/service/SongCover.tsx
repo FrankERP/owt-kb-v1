@@ -16,6 +16,8 @@ const SIZE = {
   xs: { box: "h-7 w-7 rounded-md", px: 28, icon: 12 },
   sm: { box: "h-10 w-10 rounded-lg", px: 40, icon: 15 },
   md: { box: "h-[52px] w-[52px] rounded-[10px]", px: 52, icon: 18 },
+  // The song sheet's head: the one place a cover stands beside a title instead of in a row.
+  lg: { box: "h-[76px] w-[76px] rounded-xl", px: 76, icon: 26 },
 } as const;
 
 export default function SongCover({

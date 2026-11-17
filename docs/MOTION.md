@@ -1696,7 +1696,8 @@ nothing new was added to the token or keyframe set:
   list drawing thirty rails at once is noise, and its rows are not revealed one by one.
 - **Faces and song pictures enter one after another**: `animate-scale-in` with
   `animation-delay: calc(var(--reveal-i, 0) * 40ms + <160|200>ms + i * 45ms)` set inline
-  (`FaceStack`, `CoverRow`). `scale-in`, not `pop`: `pop` means «this one just changed». The
+  (`FaceStack`, `CoverRow`; since ADR-0088 part 2 also the Biblioteca shelf's cards, 45 ms apart,
+  and the song page's cover, once). `scale-in`, not `pop`: `pop` means «this one just changed». The
   reduced-motion rule collapses both, like every animation here.
 - **The fold is `Collapse` twice, crossed** (`DayCardDisclosure`): `ServiceFacts` closes as the
   sheet's body opens, its top padding inside the `Collapse`.

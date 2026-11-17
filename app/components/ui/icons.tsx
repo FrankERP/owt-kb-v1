@@ -111,6 +111,35 @@ export function MicIcon(props: IconProps) {
   );
 }
 
+/** Listening to practise — the song page's «Ensayo» section. */
+export function HeadphonesIcon(props: IconProps) {
+  return (
+    <Icon name="headphones" {...props}>
+      <path d="M3 14v-2a9 9 0 0 1 18 0v2" />
+      <path d="M21 14v3a2 2 0 0 1-2 2h-1a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h3z" />
+      <path d="M3 14v3a2 2 0 0 0 2 2h1a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1H3z" />
+    </Icon>
+  );
+}
+
+/** A video to watch — the song page's «Tutoriales» section. */
+export function VideoIcon(props: IconProps) {
+  return (
+    <Icon name="video" {...props}>
+      <rect x="3" y="5" width="18" height="14" rx="3" /><path d="m10 9 5 3-5 3z" />
+    </Icon>
+  );
+}
+
+/** Words to read — the song page's «Letra» section. */
+export function LyricsIcon(props: IconProps) {
+  return (
+    <Icon name="lyrics" {...props}>
+      <path d="M5 6h14" /><path d="M5 11h10" /><path d="M5 16h14" /><path d="M5 21h7" />
+    </Icon>
+  );
+}
+
 export function PlusIcon(props: IconProps) {
   return <Icon name="plus" {...props}><path d="M12 5v14" /><path d="M5 12h14" /></Icon>;
 }

@@ -811,8 +811,14 @@ neutral tile), `ServiceFacts` (the ONE folded summary: lead faces, covers, «Set
 shared with Jóvenes), `SERVICE_TONE`/`MINE_CHIP`/`COUNTDOWN_CHIP` (`app/utils/serviceToneStyle.ts` —
 a service's day colour lives on the rail and the leaf's band ONLY, ADR-0059's rule widened by that
 band; never a wash behind the head), `songCoverUrl`/`SONG_COVER_GROQ` (`app/utils/songCover.ts` — the
-cover is `post.albumArt`, a Sanity image served unconverted; a song without one has no picture and
-the YouTube still is never a stand-in, Frank 2026-11-12), `greetingService`
+cover is `post.albumArt`, a Sanity image always served as a square JPEG (`fm=jpg`); a song without one has no picture and
+the YouTube still is never a stand-in, Frank 2026-11-12; `POST_COVER_GROQ` is the same field read from
+the song document, for the Biblioteca, the song page and the song sheet; `COVER_SIZE` names the only
+three sizes a caller may ask for — tile 160, shelf 400, hero 640 — because every distinct size is a
+distinct image the CDN renders and a phone caches), `recentSongs` (`app/utils/libraryIndex.ts` — the
+songs the Biblioteca's shelf shows), `LibraryShelf` and `song/SongHeroCover` (part 2, 2026-11-17: the
+two drawings larger than a tile; every other cover is `SongCover`, which gained `size="lg"` for the
+song sheet), `greetingService`
 (`app/utils/homeGreeting.ts` — the service Inicio's greeting is about, so the page does not repeat
 in the lede what the card under it says in chips). The lit border pass has two sites (the next
 Jóvenes meeting, Inicio's next service) and ONE worship host; a third is an ADR, then
@@ -832,7 +838,7 @@ Tailwind keys are **gone**; the four non-colour ones (`--brand-radius-*`,
   `text-key-fg`; ADR-0071, 2026-10-24). Every other hue already has a job — cyan is
   navigation, state and action; amber Saturday and warnings; violet specials and info — so the
   rose has exactly one: the key, wherever the song is the protagonist (`LibraryRow`, the song
-  page's and the sheet's key pills and history pills, `.brand-key-dial`). Never a state, an
+  page's and the sheet's key pills, the «Tono X» of a history card, the shelf's key plate, `.brand-key-dial`). Never a state, an
   alert, a button, a link or «tú», and the key stays ink inside a day card, where the 3 px rail
   already owns the colour. Frank chose it over gold (which blurred into Saturday's amber) and
   over more cyan (which turns the accent into wallpaper).

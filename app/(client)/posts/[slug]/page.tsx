@@ -36,7 +36,12 @@ import { revealProps } from "@/app/utils/reveal";
 import { formatKey } from "@/app/utils/formatKey";
 import { splitSongTitle } from "@/app/utils/songTitle";
 import { SHEET_TITLE } from "@/app/utils/homeHero";
-import { ExternalLinkIcon } from "@/app/components/ui/icons";
+import { ClockIcon, ExternalLinkIcon, HeadphonesIcon, LyricsIcon, MusicNoteIcon, VideoIcon } from "@/app/components/ui/icons";
+import SongHeroCover from "@/app/components/song/SongHeroCover";
+import SongCover from "@/app/components/service/SongCover";
+import DateTile from "@/app/components/jovenes/DateTile";
+import { POST_COVER_GROQ, SONG_COVER_GROQ, songCoverUrl } from "@/app/utils/songCover";
+import { SERVICE_TONE } from "@/app/utils/serviceToneStyle";
 import { Fragment } from "react";
 import { formatHistoryDate } from "@/app/utils/historyDate";
 
@@ -67,6 +72,7 @@ async function getPost(slug: string) {
       _id,
       title,
       author,
+      "cover": ${POST_COVER_GROQ},
       authors[] -> { _id, slug, name },
       slug,
       publishDate,
@@ -101,7 +107,7 @@ interface SongHistoryEntry {
   week: string;
   _type: string;
   play_key?: string;
-  pairedSongs: Array<{ title: string; slug: { current: string }; play_key?: string }>;
+  pairedSongs: Array<{ title: string; slug: { current: string }; play_key?: string; cover?: string | null }>;
 }
 
 async function getSongHistory(slug: string): Promise<SongHistoryEntry[]> {
@@ -130,6 +136,7 @@ async function getSongHistory(slug: string): Promise<SongHistoryEntry[]> {
         "pairedSongs": songs[song._ref != ^.^._id][] {
           "title": song->title,
           "slug": song->slug,
+          "cover": ${SONG_COVER_GROQ},
           play_key,
         },
       }
@@ -159,10 +166,21 @@ export const revalidate = 3600;
 // Every section's title is the run sheet's small caps (`SHEET_TITLE`, ADR-0070):
 // the song's title is the one big line on the page, so a section needs no
 // display-size heading or rail of its own. `action` sits on the title's line.
-function SectionHeader({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
+//
+// Each section wears an icon tile and a hairline (ADR-0088), as Inicio's sections do:
+// six small-caps words down a long page were six identical marks, and a reader scrolling
+// for «Letra» found it by reading every one. The tile is the accent's own wash — navigation,
+// like the bar above — and decoration only: the heading's text is the name.
+function SectionHeader({ children, action, icon }: { children: React.ReactNode; action?: React.ReactNode; icon?: React.ReactNode }) {
   return (
-    <div className="mb-4 flex min-h-[1.75rem] items-center justify-between gap-4">
+    <div className="mb-4 flex min-h-[1.75rem] items-center gap-3">
+      {icon && (
+        <span aria-hidden className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent/[0.12] text-accent">
+          {icon}
+        </span>
+      )}
       <h2 className={SHEET_TITLE}>{children}</h2>
+      <span aria-hidden="true" className="h-px flex-1 bg-ink/[0.10]" />
       {action}
     </div>
   );
@@ -199,6 +217,10 @@ const Page = async ({ params }: Params) => {
   // «Cordero y León (Lion and The Lamb)»: the Spanish name is the title, the
   // original joins the authors' line (ADR-0070).
   const title = splitSongTitle(post.title);
+  // The cover twice (ADR-0088): at record-sleeve size beside the title, and the small tile
+  // every list already cached, blurred, as the head's atmosphere.
+  const coverHero = songCoverUrl(post.cover, "hero");
+  const coverTile = songCoverUrl(post.cover);
 
   // Preselection only (spec §8.2): the viewer's declared instruments pick which
   // rehearsal row is highlighted. Plain data — this stays a Server Component.
@@ -274,11 +296,25 @@ const Page = async ({ params }: Params) => {
 
       {/* ── Hero: a title on the plain page, as Inicio's greeting (ADR-0070) —
           no painted band, no centred stack; the edit control keeps its corner. */}
-      <div id="song-hero" className="relative">
+      <div id="song-hero" className="relative overflow-hidden">
+        {/* The cover's own colours behind the head (ADR-0088): the small tile, blurred past
+            recognition and faded into the page — an atmosphere, never a picture, and never a
+            state (ADR-0059's rule is about a day's hue reading as a warning; this is the
+            record's). Fainter on the light theme: there a black-and-white sleeve washes the
+            page grey, not dark. No cover, no wash: the head is the plain page it was. */}
+        {coverTile && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -inset-x-16 -top-16 h-[calc(100%+4rem)] bg-cover bg-center opacity-[0.10] blur-3xl dark:opacity-[0.30] [mask-image:linear-gradient(to_bottom,black_30%,transparent_94%)]"
+            style={{ backgroundImage: `url("${coverTile}")` }}
+          />
+        )}
         <div className="absolute right-4 top-4 z-10 md:right-6 md:top-6">
           <EditSongButton post={post} inline />
         </div>
-        <div className="mx-auto flex max-w-7xl flex-col px-6 pb-10 pt-8 md:pb-12 md:pt-12">
+        <div className="relative mx-auto flex max-w-7xl flex-col gap-6 px-6 pb-10 pt-8 md:flex-row md:items-end md:gap-10 md:pb-12 md:pt-12">
+          {coverHero && <SongHeroCover src={coverHero} songSlug={post.slug.current} />}
+          <div className="flex min-w-0 flex-col">
           <h1 {...revealProps(0)} className="max-w-4xl text-balance break-words pr-14 font-display text-[2.875rem] font-semibold leading-[0.98] tracking-tight text-ink md:pr-0 md:text-[4.75rem]">
             {title.main}
           </h1>
@@ -328,6 +364,7 @@ const Page = async ({ params }: Params) => {
               ))}
             </div>
           )}
+          </div>
         </div>
       </div>
 
@@ -366,7 +403,7 @@ const Page = async ({ params }: Params) => {
         {/* Ensayo */}
         {hasRehearsal && (
           <section id="ensayo" className={side}>
-            <SectionHeader>Ensayo</SectionHeader>
+            <SectionHeader icon={<HeadphonesIcon size={15} />}>Ensayo</SectionHeader>
             <RehearsalPlayer
               mixes={post.rehearsalMixes!}
               songId={post._id}
@@ -380,7 +417,7 @@ const Page = async ({ params }: Params) => {
         {/* Audio */}
         {hasAudio && (
           <section id="audio" className={side}>
-            <SectionHeader>Audio</SectionHeader>
+            <SectionHeader icon={<MusicNoteIcon size={15} />}>Audio</SectionHeader>
             <SongAudioSection
               tracks={post.audioTracks!}
               songTitle={post.title}
@@ -392,7 +429,7 @@ const Page = async ({ params }: Params) => {
         {/* Tutoriales */}
         {hasTutorials && (
           <section id="tutoriales" className={side}>
-            <SectionHeader>Tutoriales</SectionHeader>
+            <SectionHeader icon={<VideoIcon size={15} />}>Tutoriales</SectionHeader>
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
               {post.tutorials2!.filter((tutorial) => tutorial.url).map((tutorial, i) => (
                 <div key={i} {...revealProps(i)}>
@@ -411,7 +448,7 @@ const Page = async ({ params }: Params) => {
         {/* Reference Links */}
         {hasRefLinks && (
           <section id="referencia" className={side}>
-            <SectionHeader>Referencia</SectionHeader>
+            <SectionHeader icon={<ExternalLinkIcon size={15} />}>Referencia</SectionHeader>
             <ul className="divide-y divide-ink/[0.10] border-y border-ink/[0.10]">
               {(post.musicalReferenceUrl || (post.referenceLinks?.[0]?.url)) && (
                 <li>
@@ -453,7 +490,7 @@ const Page = async ({ params }: Params) => {
             member reads mid-rehearsal with one hand busy. */}
         {hasLyrics && (
           <section id="letra" className={LYRIC}>
-            <SectionHeader action={<LyricsAutoscroll targetId="letra" bpm={bpm} lines={lyricLines} />}>Letra</SectionHeader>
+            <SectionHeader icon={<LyricsIcon size={15} />} action={<LyricsAutoscroll targetId="letra" bpm={bpm} lines={lyricLines} />}>Letra</SectionHeader>
             {hasInlineChords ? (
               <ChordChart charts={post.chords!} />
             ) : (
@@ -471,34 +508,39 @@ const Page = async ({ params }: Params) => {
         {/* Historial — one row per play: the day, the set it shared, the key. */}
         {hasHistory && (
           <section id="historial" className={side}>
-            <SectionHeader>Última vez tocada</SectionHeader>
-            <ol className="divide-y divide-ink/[0.10] border-y border-ink/[0.10]">
+            <SectionHeader icon={<ClockIcon size={15} />}>Última vez tocada</SectionHeader>
+            {/* One card per play (ADR-0088): the day as the calendar leaf a service card
+                wears, in that day's colour, and the set it shared as covers — the songs a
+                member will recognise at a glance, each still a link to its own page. */}
+            <ol className="space-y-3">
               {history.map((entry, i) => (
-                <li key={i} {...revealProps(i)} className="flex items-center gap-4 py-3.5">
+                <li key={i} {...revealProps(i)} className="flex gap-3.5 rounded-2xl border border-ink/[0.10] bg-surface-card p-3.5">
+                  <DateTile decorative date={serviceDayKey(entry.week)!} tone={SERVICE_TONE[entry._type === "featuredSongs" ? "sun" : "sat"]} />
                   <div className="min-w-0 flex-1">
                     <p className="font-body text-[17px] font-semibold leading-snug text-ink">
                       {entry._type === "featuredSongs" ? "Domingo" : "Sábado"}{" "}
                       {formatHistoryDate(entry.week)}
                     </p>
-                    {entry.pairedSongs?.length > 0 && (
+                    {/* The key it was played in, NAMED: a bare pill at the row's end said
+                        «D♭» without saying of what. The rose is the key's alone (ADR-0071). */}
+                    {entry.play_key && (
                       <p className="mt-0.5 font-body text-sm leading-snug text-ink-muted">
-                        Con{" "}
-                        {entry.pairedSongs.map((song, j) => (
-                          <Fragment key={j}>
-                            {j > 0 && (j === entry.pairedSongs.length - 1 ? " y " : ", ")}
-                            <Link href={`/posts/${song.slug.current}`} className="font-semibold transition-colors hover:text-accent">
-                              {song.title}
-                            </Link>
-                          </Fragment>
-                        ))}
+                        Tono <span className="font-semibold text-key-fg">{formatKey(entry.play_key)}</span>
                       </p>
                     )}
+                    {entry.pairedSongs?.length > 0 && (
+                      <ul aria-label="Canciones del mismo set" className="mt-2.5 flex flex-wrap gap-x-3 gap-y-2">
+                        {entry.pairedSongs.map((song, j) => (
+                          <li key={j} className="min-w-0 max-w-full">
+                            <Link href={`/posts/${song.slug.current}`} className="group flex min-w-0 items-center gap-2 font-body text-sm font-semibold leading-snug text-ink-muted transition-colors hover:text-accent">
+                              <SongCover src={songCoverUrl(song.cover)} size="xs" />
+                              <span className="truncate">{splitSongTitle(song.title).main}</span>
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
-                  {entry.play_key && (
-                    <span className="shrink-0 rounded-full border border-ink/[0.18] px-2.5 py-1 font-label text-sm font-semibold text-key-fg">
-                      {formatKey(entry.play_key)}
-                    </span>
-                  )}
                 </li>
               ))}
             </ol>
