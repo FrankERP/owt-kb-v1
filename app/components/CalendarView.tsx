@@ -125,6 +125,8 @@ export type JovenesDayEntry = {
   seats: JovenesDayPerson[];
   program: JovenesDayStep[];
   notes: string | null;
+  /** `false`: the meeting's page no longer opens this date, so a part of the reader's gets no link to it. */
+  partLinks?: false;
 };
 
 interface Props {

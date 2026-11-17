@@ -94,9 +94,33 @@ export function writableParts(parts: readonly PartView[], reader: { editsProgram
   return parts.filter((p) => reader.editsProgram || (p.mine && reader.published));
 }
 
-/** Does the reader still owe something on a part of theirs? Its description, always; its music where it has one. */
+/**
+ * Does the reader still owe something on a part of theirs? Its music where it has one; its
+ * description too — except Oración's, whose note is optional («Nota (opcional)» on the form), so
+ * choosing the music is all it owes.
+ */
 export function partPending(p: PartView): boolean {
   if (!p.mine) return false;
   const spec = MEETING_PARTS.find((s) => s.id === p.id);
-  return !p.note || (!!spec?.music && !p.music);
+  return (p.id !== "oracion" && !p.note) || (!!spec?.music && !p.music);
+}
+
+/** «Pau» · «Pau y Mkz» · «Pau, Mkz y Lali». */
+export function joinNames(names: readonly string[]): string {
+  if (names.length <= 1) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} y ${names[names.length - 1]}`;
+}
+
+/** How far back a meeting's page still opens (a page range, not access): the email's link outlives the day. */
+export const MEETING_PAGE_BACK_DAYS = 30;
+
+/**
+ * Does `/jovenes/reunion/[token]` still open a meeting of this date? A screen that can show an
+ * older one (the worship Calendario browses past months) offers no «mi parte» link there, or the
+ * link would land on «not found». `today` is the server's CDMX day.
+ */
+export function meetingPageOpens(date: string, today: string): boolean {
+  const from = new Date(`${today.slice(0, 10)}T12:00:00Z`);
+  from.setUTCDate(from.getUTCDate() - MEETING_PAGE_BACK_DAYS);
+  return date.slice(0, 10) >= from.toISOString().slice(0, 10);
 }

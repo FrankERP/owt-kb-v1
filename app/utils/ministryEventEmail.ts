@@ -9,7 +9,7 @@
 import { escapeHtml as esc } from "./assignmentEmail";
 import { C, shell, td, tr } from "./emailShell";
 import { dayWords } from "./jovenesEventView";
-import { meetingPath } from "./jovenesPartView";
+import { joinNames, meetingPath } from "./jovenesPartView";
 import { MUSIC_WORDS, PART_ASK, PLATICA_SEAT, partSpec, type PartId } from "./ministryParts";
 import type { AssignedRole, MusicPart, NoticeMeeting } from "./ministryEventNotices";
 
@@ -21,14 +21,8 @@ const SHELL = {
   reason: "Recibes esto porque sirves en Jóvenes de Oasis.",
 } as const;
 
-// Re-exported so the sender builds the link from the same place the screens do.
-export { meetingPath };
-
-/** «Pau» · «Pau y Mkz» · «Pau, Mkz y Lali». */
-export function joinNames(names: readonly string[]): string {
-  if (names.length <= 1) return names[0] ?? "";
-  return `${names.slice(0, -1).join(", ")} y ${names[names.length - 1]}`;
-}
+// Re-exported so the sender builds the link, and joins names, from the same place the screens do.
+export { joinNames, meetingPath };
 
 /** «18:10 · llegada 17:30 · Oasis Tlalpan», or "" when the meeting has none of them. */
 function meetingLine(m: EmailMeeting): string {

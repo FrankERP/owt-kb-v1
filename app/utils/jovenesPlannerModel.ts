@@ -323,8 +323,10 @@ export function programForm(lines: readonly MinistryEventLine[], fixed = false):
 
 /**
  * The program PATCH's `program`. A free line with no label is left out, never sent as invalid. A
- * part row is left out only while it holds nothing at all (nobody assigned, nothing filled); one
- * that holds anything is sent WHOLE, so what its responsable wrote goes back as it came.
+ * part row is left out only while it holds nothing at all (nobody assigned, nothing filled). A
+ * STORED part line goes with its people only: the writer writes its stored description, music
+ * and helpers back itself (`keepFilledParts`), and sending them would let a stored value the
+ * table no longer admits refuse every save of that meeting.
  */
 export function programBody(lines: readonly LineForm[]): Array<Record<string, unknown>> {
   const out: Array<Record<string, unknown>> = [];
@@ -340,9 +342,7 @@ export function programBody(lines: readonly LineForm[]): Array<Record<string, un
         part: l.part,
         ...(people[0] ? { member: people[0] } : {}),
         ...(people[1] ? { member2: people[1] } : {}),
-        ...note,
-        ...(l.music ? { music: l.music } : {}),
-        ...(helpers ? { helpers } : {}),
+        ...(l.key ? {} : { ...note, ...(l.music ? { music: l.music } : {}), ...(helpers ? { helpers } : {}) }),
       });
       continue;
     }

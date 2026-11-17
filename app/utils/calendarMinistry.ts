@@ -119,9 +119,10 @@ export const JOVENES_DAY_LABEL = MINISTRIES.jovenes.name;
  * The program (ADR-0089): the Saturday meeting always opens with Alabanza and its four parts,
  * filled or not; any other meeting shows only the parts it holds; then the free lines, in their
  * stored order. `songs` is that Saturday's worship setlist — a list, `null` when the page read it
- * and there is none published, `undefined` when the page did not read it.
+ * and there is none published, `undefined` when the page did not read it. `links: false` when the
+ * meeting's page no longer opens this date (`meetingPageOpens`): its parts then carry no link.
  */
-export function jovenesDayEntry(e: MinistryEventView, songs?: JovenesDaySongs | null): JovenesDayEntry {
+export function jovenesDayEntry(e: MinistryEventView, songs?: JovenesDaySongs | null, links = true): JovenesDayEntry {
   const fixed = hasFixedProgram(e);
   const alabanza: JovenesDayStep[] = fixed
     ? [{ key: "part-alabanza", label: ALABANZA_LABEL, name: null, photo: null, mine: false, note: null, part: "alabanza", ...(songs === undefined ? {} : { songs: songs ? [...songs] : null }) }]
@@ -141,6 +142,7 @@ export function jovenesDayEntry(e: MinistryEventView, songs?: JovenesDaySongs | 
       ...freeLines(e.program).map((l) => ({ key: l._key, label: l.label ?? "—", name: l.memberId ? l.name : null, photo: l.memberId ? l.photo : null, mine: l.mine, note: l.note })),
     ],
     notes: e.notes,
+    ...(links ? {} : { partLinks: false as const }),
   };
 }
 
@@ -152,8 +154,8 @@ export function jovenesDayEntry(e: MinistryEventView, songs?: JovenesDaySongs | 
  * The Saturday meeting is called «Jóvenes» here (2026-11-10), not «Sábado de Jóvenes»: the row
  * already sits under a Saturday, and the long name pushed an agenda row to four lines on a phone.
  */
-export function jovenesActiveDay(e: MinistryEventView, songs?: JovenesDaySongs | null): ActiveDay | null {
+export function jovenesActiveDay(e: MinistryEventView, songs?: JovenesDaySongs | null, links = true): ActiveDay | null {
   const date = serviceDayKey(e.date);
   if (!date) return null;
-  return { day: eventName(e) ?? JOVENES_DAY_LABEL, date, time: e.time, jovenes: jovenesDayEntry(e, songs) };
+  return { day: eventName(e) ?? JOVENES_DAY_LABEL, date, time: e.time, jovenes: jovenesDayEntry(e, songs, links) };
 }

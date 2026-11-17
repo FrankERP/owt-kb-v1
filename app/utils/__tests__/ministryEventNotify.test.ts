@@ -67,6 +67,13 @@ describe("planEventEmails — «Te toca» goes only to the person assigned", () 
     expect(out[0].html).toContain("https://app.example/jovenes/reunion/00000000-0000-4000-8000-000000000001");
   });
 
+  it("«Cambió de fecha» only for who had been told the old date; someone the same write adds gets «Te toca»", async () => {
+    const role = [{ kind: "part" as const, id: "dinamica1", label: "Dinámica 1", partners: [] }];
+    const out = await plan(effects({ moved: true, assigned: [{ memberId: "jacob", roles: role, moved: true }, { memberId: "andy", roles: role }] }));
+    expect(out.find((p) => p.memberId === "jacob")?.subject).toMatch(/^Cambió de fecha: /);
+    expect(out.find((p) => p.memberId === "andy")?.subject).toMatch(/^Te toca: /);
+  });
+
   it("the partner is named but not mailed", async () => {
     expect((await plan(effects())).some((p) => p.memberId === "andy")).toBe(false);
   });

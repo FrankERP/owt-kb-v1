@@ -119,3 +119,25 @@ hint names Jóvenes meetings.
   W10's rule is the approved one.
 - The withdrawal's «who» (C1) and the waves of sends (C8) change M5/M6 details inside the approved
   audience: no recipient is added by either.
+
+## Code review of the merge range (2026-11-17)
+
+One fresh reviewer over `5804fb05..f5c700b3`, with the docs audit in the same dispatch: **APPROVED**,
+no HIGH and no MEDIUM finding. Six LOW, dispositions in the fix commit that follows:
+
+- L1 — Oración stayed «pending» with its optional note empty. Fixed: choosing the music is all it owes.
+- L2 — the editor sent a stored part's content, so a stored value the table no longer admits would
+  refuse every save. Fixed: `programBody` sends a stored part line with its people only (the writer
+  writes the rest back, M2a).
+- L3 — «Cambió de fecha» reached someone the same write added. Fixed: `moved` is per person.
+- L4 — the meeting's page imported the email module for `joinNames`. Fixed: it lives in the neutral
+  `jovenesPartView.ts`.
+- L5 — the worship Calendario could link a part of a meeting older than the page's 30 days to a
+  404. Fixed: `meetingPageOpens`; that entry carries no link.
+- L6 — two quick saves can show the first save's text until the second refresh lands. Accepted: it
+  heals itself and nothing stored is wrong.
+
+Docs audit: the CLAUDE.md/AGENTS.md bullet now names the publish and re-date case and the music
+request; ROUTES.md's `/schedule`, `/jovenes/admin` and meeting rows and UTILITIES were completed;
+project-rules says W1–W10. None of the fixes is HIGH, so per §Review policy they carry the gates on
+the final tree and the author's own re-read of the fix diff, with no re-review.

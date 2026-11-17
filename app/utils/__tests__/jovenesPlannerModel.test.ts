@@ -293,7 +293,7 @@ describe("the program's fixed parts (ADR-0089)", () => {
     expect(form).toEqual([{ key: "p1", label: "Plática", part: "platica", member: null, member2: null, note: "Daniel 3", music: "track", helpers: "" }]);
   });
 
-  it("the body sends a part line WHOLE (what its responsable wrote rides back) and never an empty part row", () => {
+  it("the body sends a STORED part line with its people only (the writer keeps what its responsable wrote) and never an empty part row", () => {
     const form = programForm(
       [
         line({ _key: "o1", label: "Oración", part: "oracion", memberId: "m1", music: "alabanza", note: "Antes de la plática" }),
@@ -303,9 +303,10 @@ describe("the program's fixed parts (ADR-0089)", () => {
     );
     form[1].member2 = "m3"; // Dinámica 1: only a second person picked — sent as its first.
     expect(programBody(form)).toEqual([
-      { _key: "o1", part: "oracion", member: "m1", note: "Antes de la plática", music: "alabanza" },
+      { _key: "o1", part: "oracion", member: "m1" },
       { part: "dinamica1", member: "m3" },
-      { _key: "p1", part: "platica", note: "Daniel 3", music: "track" },
+      // Held only by what was written on it: still sent, so the writer keeps the line.
+      { _key: "p1", part: "platica" },
     ]);
   });
 

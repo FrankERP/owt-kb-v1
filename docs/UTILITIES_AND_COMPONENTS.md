@@ -672,9 +672,16 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   (label, how many people, whether it takes music and helpers), neutral: the writer, the reader, the
   emails and the screens all read it, and nothing else spells a part id or a limit.
   **`partViews`**/**`writableParts`**/**`partPending`**/**`freeLines`**/**`meetingPath`**/
-  **`meetingToken`** ([jovenesPartView.ts](../app/utils/jovenesPartView.ts)) — a meeting's parts as
+  **`meetingToken`**/**`meetingPageOpens`**/**`joinNames`**
+  ([jovenesPartView.ts](../app/utils/jovenesPartView.ts)) — a meeting's parts as
   its screens read them (who answers, what they wrote, whether it is the reader's), neutral, so the
-  card, the day sheet and the meeting's page agree; `writableParts` mirrors W10 and decides nothing.
+  card, the day sheet and the meeting's page agree; `writableParts` mirrors W10 and decides nothing;
+  `meetingPageOpens` is how far back the meeting's page opens (`MEETING_PAGE_BACK_DAYS`), asked by
+  a screen that can show an older meeting before it links there; `joinNames` is «Pau, Mkz y Lali»
+  for screens and emails alike. The planner's pure half
+  ([jovenesPlannerModel.ts](../app/utils/jovenesPlannerModel.ts)) gained `SATURDAY_PICKS`/`pickRole`
+  (the second «Comparte»), `programForm`/`programBody` for part lines (a stored part goes with its
+  people only) and `PROGRAM_MAX_LINES`.
   **`readSaturdaySets(dates)`**/**`saturdaySetsFrom`**
   ([jovenesWorshipSet.ts](../app/utils/jovenesWorshipSet.ts), `server-only`) — Alabanza's songs for
   a Jóvenes Saturday: titles and keys of that date's worship setlist, only when its role is

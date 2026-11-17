@@ -386,7 +386,9 @@ built on `ministryAccess.ts` over ONE snapshot, `accessFromDoc`); worship pages 
   ADR-0089): the program PATCH decides a part's people and writes its stored `note`/`music`/`helpers`
   back (`keepFilledParts`); only «Mi parte» (`updateMinistryEventPart`, W10) changes those. Its
   emails are computed by the writer from the PRE-COMMIT row, sent by the routes in `after()`, and
-  go only to the people a write adds on a whole-ministry, published, not-past meeting.
+  go only to the people a write adds on a whole-ministry, published, not-past meeting (everyone on
+  it when the write publishes it or moves its date), plus the music request to the super-admins
+  who are people. Both are deliberate.
   Unreleased features gate on `rolloutAllows` (`app/utils/rollout.ts`) on the server, not the nav.
 
 ## Continuous improvement
