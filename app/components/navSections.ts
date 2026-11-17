@@ -71,6 +71,12 @@ export function currentSection(pathname: string, a: NavAccess): NavSection | nul
 /** Jóvenes' Calendario, the second of its two pages (`/jovenes` is its Inicio). One spelling for both navs. */
 export const JOVENES_CALENDAR_HREF = "/jovenes/calendario";
 
+/**
+ * «Disponibilidad» as Jóvenes' pages link to it: the member's own calendar (`/me/disponibilidad`,
+ * one for every ministry), with `de=jovenes` so its back link returns here instead of to «Mi semana».
+ */
+export const JOVENES_AVAILABILITY_HREF = "/me/disponibilidad?de=jovenes";
+
 export const SECTION_LABEL: Record<NavSection, string> = {
   worship: MINISTRIES.worship.name,
   kids: MINISTRIES.kids.name,

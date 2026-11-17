@@ -65,11 +65,13 @@ interface Props {
   /** The services per day, in the agenda's tone vocabulary (the grid's dots). */
   services?: Record<string, Tone[]>;
   initialNotes?: { date: string; note: string }[];
+  /** «el viernes es ensayo» is Alabanza's week: the page passes false for someone outside it. */
+  rehearsal?: boolean;
 }
 
 const WEEKDAYS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
-export default function MyAvailabilityPanel({ initialRev, initialDates, services = {}, initialNotes = [] }: Props) {
+export default function MyAvailabilityPanel({ initialRev, initialDates, services = {}, initialNotes = [], rehearsal = true }: Props) {
   const { toast } = useToast();
 
   const [popover, setPopover] = useState<NoteAnchor | null>(null);
@@ -127,14 +129,14 @@ export default function MyAvailabilityPanel({ initialRev, initialDates, services
   return (
     <div>
       {/* The lede: the live count in the availability colour, then the one
-          standing fact about the week. */}
+          standing fact about the week, for the people whose week it is. */}
       <p className="font-body text-[17px] leading-snug text-ink-dim md:text-xl">
         <span className="text-availability-soft">
           {upcomingCount === 0
             ? "Sin días marcados"
             : `${upcomingCount} día${upcomingCount === 1 ? "" : "s"} marcado${upcomingCount === 1 ? "" : "s"}`}
         </span>
-        {" · el viernes es ensayo"}
+        {rehearsal && " · el viernes es ensayo"}
       </p>
 
       {/* The actions, the mode hint, and the recurring panel one of them opens.

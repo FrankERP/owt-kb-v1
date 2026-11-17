@@ -49,8 +49,8 @@ export const SERVICE_DATES_QUERY = `[
  * what Sanity `date` fields compare against.
  */
 export function horizon(): { today: string; limit: string } {
-  // A fresh per-request date is the intended behaviour: these pages are ISR with
-  // `revalidate = 60`, not static. The two `react-hooks/purity` disable comments
+  // A fresh per-request date is the intended behaviour: these pages read the session,
+  // so they render per request (`/me` and `/me/ajustes` also export `revalidate = 60`). The two `react-hooks/purity` disable comments
   // that sat beside these expressions inside the page COMPONENT are not repeated
   // here — the rule does not fire in a plain module, and an unused directive is
   // itself a lint warning.
