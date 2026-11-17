@@ -911,8 +911,10 @@ pass.
   member who answers for a part that still lacks something (`partGaps`, the cards' own rule for
   «pendiente») and to the `encargado` of a Saturday where Oración or a dinámica has nobody, each
   through `assignedAddress` (the «Te toca» narrowing). Exact days and no «sent» marker on purpose
-  (ADR-0080's trade): a missed day is a missed reminder. It never throws, and it starts no wave of
-  sends past `REMINDER_STEP_DEADLINE_MS`, so the cron's alarms and sweep always run.
+  (ADR-0080's trade): a missed day is a missed reminder. It never throws, and no wave of sends
+  ends past `REMINDER_STEP_DEADLINE_MS` of the route, so the cron's alarms always run (the sweep
+  is derated by the time spent, or skipped for layer 1 as ADR-0080 already allows).
+  `readAnnouncedMeetings` has ONE importer, pinned in `ministryEventCoverage.test.ts`.
 - **A group's classes** (plan `2026-11-12-jovenes-group-classes.md`, ADR-0081 addendum 2026-11-12).
   A class is a ONE-group meeting carrying `lesson { series, track, done }`; `ministryLesson.ts`
   (`parseLesson`/`lessonOf`) is the ONE validity rule, used by the writer and the reader, so the two

@@ -659,7 +659,8 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   `ministryEventCoverage.test.ts` fails on any other file that names the type.
   **`readAnnouncedMeetings(ministry, dates)`**/**`buildAnnouncedMeetingsQuery`** — the one read
   with no person behind it, for the reminder cron only: the published whole-ministry meetings of
-  exact days (what every member reads), never a group's meeting or a draft.
+  exact days (what every member reads), never a group's meeting or a draft; its one importer is
+  pinned by `ministryEventCoverage.test.ts`.
 - **`createMinistryEvent`**, **`updateMinistryEvent`**, **`updateMinistryEventProgram`**,
   **`updateMinistryEventPart`**, **`deleteMinistryEvent`**
   ([ministryEventCommit.ts](../app/utils/ministryEventCommit.ts)) — THE one writer of

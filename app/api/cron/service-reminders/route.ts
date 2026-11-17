@@ -35,6 +35,9 @@ async function getHandler(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // The clock the Jóvenes reminders are held to: everything this route spends before them (the
+  // push below, the leads' step) is time their last wave cannot have.
+  const routeStarted = Date.now();
   const day = tomorrowDateStr("America/Mexico_City");
   const roleFilter = `_type in ["sunday_role","saturday_role","special_role"] && (week == $day || date == $day) && published != false`;
   const assigned = await operationalClient.fetch<string[]>(
@@ -56,9 +59,10 @@ async function getHandler(req: NextRequest) {
 
   // Every day: the Jóvenes meetings dated exactly 14 and 7 days ahead remind whoever still owes
   // something on a part of theirs (ADR-0089, addendum). It never throws either, and it is told
-  // what the step above spent so the last wave it starts still ends inside this route. BEFORE the
-  // sweep for the same reason as the leads': a reminder has no second chance, the sweep is lossless.
-  const meetingReminders = await sendMinistryEventReminders(new Date(), { spentMs: leadReminders.elapsedMs ?? 0 });
+  // what the ROUTE has spent so far, so the last wave it starts ends with room left for the
+  // liveness alarm's own email. BEFORE the sweep for the same reason as the leads': a reminder
+  // has no second chance, the sweep is lossless.
+  const meetingReminders = await sendMinistryEventReminders(new Date(), { spentMs: Date.now() - routeStarted });
   const remindersMs = (leadReminders.elapsedMs ?? 0) + (meetingReminders.elapsedMs ?? 0);
 
   // The liveness alarm, BEFORE this request's sweep — and the order is the whole

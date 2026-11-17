@@ -381,7 +381,7 @@ built on `ministryAccess.ts` over ONE snapshot, `accessFromDoc`); worship pages 
   ONLY by `ministryEventCommit.ts` (fresh access, stored `_rev`, 404 for an unreadable event); its
   one other query shape is «Recorrer»'s roster read (one group the actor writes, never returned).
   The reader's one read with no person is the reminder cron's `readAnnouncedMeetings` (published,
-  whole-ministry, exact days): what every member reads, never widened.
+  whole-ministry, exact days): what every member reads, never widened, one importer.
   A group's CLASS is a one-group meeting with a `lesson` (`ministryLesson.ts` is its one validity
   rule). A route that writes a client-supplied id pins its type first (`storedRevisionOfType`, W9).
   A meeting's fixed PARTS are program lines carrying `part` (`ministryParts.ts`, the one table;
@@ -392,7 +392,7 @@ built on `ministryAccess.ts` over ONE snapshot, `accessFromDoc`); worship pages 
   it when the write publishes it or moves its date), plus the music request to the super-admins
   who are people. Both are deliberate. The daily cron's reminders (`ministryEventReminder.ts`, 14
   and 7 days ahead) go only to whoever still owes something on those same meetings (`partGaps`),
-  and to the encargado of a Saturday with a part nobody holds.
+  and to the encargado of a Saturday whose Oración or a dinámica nobody holds.
   Unreleased features gate on `rolloutAllows` (`app/utils/rollout.ts`) on the server, not the nav.
 
 ## Continuous improvement

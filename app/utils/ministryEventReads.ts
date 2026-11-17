@@ -328,8 +328,10 @@ export function buildAnnouncedMeetingsQuery(ministry: MinistryId, dates: readonl
 }
 
 /**
- * The published whole-ministry meetings of these exact days. For the reminder cron ONLY: a page
- * reads through `readMinistryEvents`, with its reader. Throws `MinistryEventReadUnavailable`
+ * The published whole-ministry meetings of these exact days. For the reminder cron ONLY — its
+ * one importer is pinned by `ministryEventCoverage.test.ts`: this read asks nobody's access, so a
+ * page that called it would show Jóvenes' meetings to someone outside Jóvenes. A page reads
+ * through `readMinistryEvents`, with its reader. Throws `MinistryEventReadUnavailable`
  * without the read token (the dotted ids would otherwise read as «no meetings», with no error).
  */
 export async function readAnnouncedMeetings(ministry: MinistryId, dates: readonly string[]): Promise<MinistryEventView[]> {

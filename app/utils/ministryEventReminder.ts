@@ -20,6 +20,10 @@ import "server-only";
 //
 // Why the daily cron and an exact day, with no «already sent» marker: ADR-0080's reasons, said
 // again in the addendum. A day the cron misses is a reminder nobody gets.
+//
+// `readAnnouncedMeetings` is this module's alone: `ministryEventCoverage.test.ts` fails on any
+// other importer, because that read takes no reader and a page calling it would serve meetings
+// to someone who is not in Jóvenes.
 
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import { appBaseUrl, getAllowlist } from "./assignmentEmail";
@@ -40,11 +44,13 @@ export type ReminderDays = (typeof REMINDER_DAYS)[number];
 const COORDINATOR_SEAT = "encargado";
 
 /**
- * The step may not START a wave of sends past this many milliseconds of the route (its own time
- * plus what the route spent before it): one send timeout later the route's 60 s would be gone,
- * and with it the alarms that follow. What a wave leaves unsent is logged, never retried.
+ * No wave of sends may END past this many milliseconds of the route (what the route spent before
+ * this step, plus the step's own time, plus one send timeout): the liveness alarm runs next and
+ * its email to a person may need a send timeout of its own inside the route's 60 s. What the
+ * deadline leaves unsent is logged, never retried. The two Sanity reads have no timeout of their
+ * own, like the leads' step's (ADR-0080).
  */
-export const REMINDER_STEP_DEADLINE_MS = 45_000;
+export const REMINDER_STEP_DEADLINE_MS = 35_000;
 
 /** Adds whole days to a `YYYY-MM-DD` calendar date (UTC arithmetic: no DST drift). */
 function addDays(iso: string, days: number): string {
@@ -185,7 +191,7 @@ export interface MeetingReminderReport {
 /**
  * The route's one call, every day. Never throws: the daily cron's sweep and alarms must run
  * whatever happens here. `spentMs`: what the route already spent before this step, so the last
- * wave it starts still ends inside the route (`REMINDER_STEP_DEADLINE_MS`).
+ * wave it starts ends by `REMINDER_STEP_DEADLINE_MS` of the route.
  */
 export async function sendMinistryEventReminders(now: Date = new Date(), opts: { spentMs?: number } = {}): Promise<MeetingReminderReport> {
   const started = Date.now();

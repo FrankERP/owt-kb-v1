@@ -686,15 +686,17 @@ marker.
   asignaciones» on. Preview mail goes to `EMAIL_REDIRECT_TO` — and Vercel runs crons on
   Production only, so on `preview` the step runs only when the route is called by hand.
 - **Order and budget:** sends go in waves of `SEND_CONCURRENCY`; the step is told what the route
-  already spent (`spentMs`) and starts no wave once one more `SEND_TIMEOUT_MS` would pass
-  `REMINDER_STEP_DEADLINE_MS` (45 s). The sweep's deadline is derated by the leads' step and this
-  one together (`sweepOptionsAfterReminders`), and skipped under the same rule
+  already spent (`spentMs`: the push, the leads' step) and starts no wave once one more
+  `SEND_TIMEOUT_MS` would pass `REMINDER_STEP_DEADLINE_MS` (35 s), which leaves the liveness
+  alarm's own email its timeout inside the route's 60 s. The sweep's deadline is derated by the
+  leads' step and this one together (`sweepOptionsAfterReminders`), and the sweep is skipped
+  under the same rule when they left under 25 s
   (`sweep_skipped_after_lead_reminders` keeps its name; the log carries `leadMs` and `meetingMs`).
 - **No catch-up:** a day the cron does not run, a meeting published inside the 14 or 7 days, or a
   wave the deadline left out is a reminder nobody gets; a duplicated cron event sends it twice.
 - The route's JSON carries `meetingReminders` (`meetings`, `planned`, `emailed`, `failed`,
   `skipped`, `elapsedMs`, or `error: "ministry_reminder_failed"` — it never throws, so the alarms
-  and the sweep always run). Logs: `ministry_reminder_run`, `ministry_reminder_send_failed`,
+  always run and the sweep is at worst skipped for layer 1). Logs: `ministry_reminder_run`, `ministry_reminder_send_failed`,
   `ministry_reminder_skipped`, `ministry_reminder_failed`.
 
 ## The liveness alarm
@@ -1131,7 +1133,7 @@ Things that are counter-intuitive and were each a real defect at some point.
 
 ## Verifying the templates
 
-Renders all sixteen templates (the three Jóvenes ones included), asserts the email-client constraints, and writes
+Renders all eighteen templates (the five Jóvenes ones included), asserts the email-client constraints, and writes
 previews plus `.eml` files:
 
 ```bash

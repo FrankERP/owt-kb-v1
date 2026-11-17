@@ -5,7 +5,8 @@
 //
 // Builders with no I/O of their own: names arrive resolved, everything is escaped here, and the palette is the shared
 // LIGHT email shell (never `brand.css` — CLAUDE.md, «Email templates are LIGHT on purpose»).
-// Who receives each one is decided in `ministryEventNotify.ts`, never here.
+// Who receives each one is decided in `ministryEventNotify.ts` (a write's emails) and in
+// `ministryEventReminder.ts` (the reminders), never here.
 
 import { escapeHtml as esc } from "./assignmentEmail";
 import { C, shell, td, tr } from "./emailShell";

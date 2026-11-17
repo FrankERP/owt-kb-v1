@@ -165,9 +165,13 @@ narrowing as «Te toca» (`assignedAddress`: an active member of Jóvenes, an em
 - A typed-name «comparte» is never written to; when a guest shares alone, nobody is reminded of
   the Plática (an admin or the encargado fills it, as before).
 - The step is told what the route already spent and starts no wave of sends once one more send
-  timeout would pass `REMINDER_STEP_DEADLINE_MS` (45 s of the route's 60); what it leaves is
-  logged (`ministry_reminder_skipped`) and lost. The sweep's deadline is derated by both reminder
-  steps together, and skipped under ADR-0080's rule.
+  timeout would pass `REMINDER_STEP_DEADLINE_MS` (35 s of the route's 60, so the liveness alarm
+  that follows keeps a send timeout for its own email); what it leaves is logged
+  (`ministry_reminder_skipped`) and lost. The sweep's deadline is derated by both reminder steps
+  together, and skipped under ADR-0080's rule.
+- `readAnnouncedMeetings` asks nobody's access, so it has one importer by name
+  (`ministryEventCoverage.test.ts`): a page that called it would show Jóvenes' meetings to
+  someone outside Jóvenes.
 - Vercel runs crons on Production only: on `preview` the step runs only when someone calls the
   route by hand with the secret, and then mails the one redirect address.
 

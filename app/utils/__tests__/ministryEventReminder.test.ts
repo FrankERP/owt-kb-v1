@@ -16,6 +16,7 @@ vi.mock("../ministryEventReads", async (importOriginal) => ({
   readAnnouncedMeetings: h.readAnnounced,
 }));
 
+import { partPending, partViews } from "../jovenesPartView";
 import type { MinistryEventLine, MinistryEventSeat, MinistryEventView } from "../ministryEventReads";
 import { NOTICE_PEOPLE_QUERY } from "../ministryEventNotify";
 import {
@@ -235,6 +236,41 @@ describe("meetingReminders — never for a meeting that was not announced", () =
   });
 });
 
+describe("meetingReminders agrees with the screens about whose part is pending", () => {
+  // The cards say «pendiente» through `partViews` + `partPending`, decided per READER (`mine`).
+  // The reminder has no reader, so it derives the same people from ids. Held together here: for
+  // every member, the parts their own card calls pending are exactly the parts they are reminded of.
+  const asReadBy = (e: MinistryEventView, me: string): MinistryEventView => ({
+    ...e,
+    seats: e.seats.map((s) => ({ ...s, mine: s.memberId === me })),
+    program: e.program.map((l) => ({
+      ...l,
+      mine: l.memberId === me,
+      second: l.second ? { ...l.second, mine: l.second.memberId === me } : null,
+    })),
+  });
+  const CASES: Array<[string, MinistryEventView]> = [
+    ["a Saturday with nothing filled", FULL],
+    [
+      "a Saturday half filled, a guest and two who share",
+      meeting({
+        seats: [seat("encargado", "noemi"), seat("comparte", "gaby"), seat("comparte", "leo"), seat("comparte", null, "Invitado")],
+        program: [line("oracion", "jacob", { note: "Nota", music: null }), line("dinamica1", "andy", { note: "x", second: second("sofi") }), line("platica", null, { note: "La fe" })],
+      }),
+    ],
+    ["a meeting that is not the Saturday", meeting({ kind: "ministry", seats: [seat("comparte", "gaby")], program: [line("dinamica2", "leo")] })],
+    ["a Saturday with everything filled", meeting({ seats: [seat("comparte", "gaby")], program: [line("oracion", "jacob", { music: "track" }), line("dinamica1", "andy", { note: "x" }), line("dinamica2", "leo", { note: "y" }), line("platica", null, { note: "t", music: "track" })] })],
+  ];
+
+  it.each(CASES)("%s", (_name, e) => {
+    const reminded = new Map(meetingReminders(e).map((r) => [r.memberId, r.fill.map((f) => f.part)]));
+    for (const me of ["noemi", "goma", "gaby", "jacob", "andy", "sofi", "leo", "rafa"]) {
+      const pending = partViews(asReadBy(e, me)).filter(partPending).map((p) => p.id);
+      expect([me, reminded.get(me) ?? []]).toEqual([me, pending]);
+    }
+  });
+});
+
 // ── Who is written to ───────────────────────────────────────────────────────
 
 describe("planReminderEmails — the audience only narrows", () => {
@@ -361,12 +397,18 @@ describe("sendMinistryEventReminders", () => {
     expect((h.sendEmail.mock.calls[0][0] as { subject: string }).subject).toMatch(/^\[→ jacob@example\.com\] Recordatorio: /);
   });
 
-  it("a failed send is counted and logged, never thrown or retried", async () => {
+  it("a failed send is counted and logged by member id (never the address), never thrown or retried", async () => {
     h.readAnnounced.mockResolvedValue([FULL]);
     h.sendEmail.mockResolvedValueOnce({ ok: false, error: "throttled" }).mockRejectedValueOnce(new Error("boom"));
     const report = await sendMinistryEventReminders(NOW);
     expect(report).toMatchObject({ planned: 5, emailed: 3, failed: 2, skipped: 0 });
     expect(h.sendEmail).toHaveBeenCalledTimes(5);
+    const logged = error.mock.calls.map((c: unknown[]) => String(c[0])).filter((l: string) => l.includes("ministry_reminder_send_failed"));
+    expect(logged.map((l: string) => JSON.parse(l))).toEqual([
+      { event: "ministry_reminder_send_failed", member: "jacob", reason: "throttled" },
+      { event: "ministry_reminder_send_failed", member: "andy", reason: "Error: boom" },
+    ]);
+    expect(logged.join("")).not.toContain("@");
   });
 
   it("never throws: a read that fails is a report, so the cron's sweep and alarms still run", async () => {
@@ -386,6 +428,25 @@ describe("sendMinistryEventReminders", () => {
     expect(h.sendEmail).not.toHaveBeenCalled();
     // With room for one timeout, the wave goes.
     expect(await sendMinistryEventReminders(NOW, { spentMs: REMINDER_STEP_DEADLINE_MS - 21_000 })).toMatchObject({ emailed: 5, skipped: 0 });
+  });
+
+  it("a slow first wave uses up the step: the clock is read again before every wave", async () => {
+    const many = Array.from({ length: 5 }, (_, i) =>
+      meeting({ _id: `ministryEvent.m${i}`, program: [line("dinamica1", "andy", { second: second("sofi") })] }),
+    );
+    h.readAnnounced.mockResolvedValue(many);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+    let calls = 0;
+    h.sendEmail.mockImplementation(async () => {
+      // The whole first wave (8 sends) takes 18 s: with one more 20 s timeout the second would end at 38 s.
+      if (++calls === 8) vi.setSystemTime(new Date(NOW.getTime() + 18_000));
+      return { ok: true };
+    });
+    const report = await sendMinistryEventReminders(NOW);
+    expect(report).toMatchObject({ planned: 10, emailed: 8, failed: 0, skipped: 2, elapsedMs: 18_000 });
+    expect(h.sendEmail).toHaveBeenCalledTimes(8);
+    expect(error.mock.calls.some((c: unknown[]) => String(c[0]).includes('"ministry_reminder_skipped"'))).toBe(true);
   });
 
   it("more people than the pool is wide go in waves", async () => {
