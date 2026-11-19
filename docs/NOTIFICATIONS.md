@@ -78,7 +78,7 @@ hand-writing a fixture that mirrors them).
 |---|---|---|
 | 1 — primary | **Google Cloud Scheduler**, `*/5` ([ADR-0032](adr/0032-layer-1-runs-on-cloud-scheduler.md); live since 2026-09-10) — plus GitHub Actions, declared `*/5` but starved by this repo's CI volume, kept as an independent second caller — see §"Layer 1 does not run on the schedule it declares" | Scheduler job `flush-notification-outbox` (GCP `eloquent-figure-421401`, `us-central1`) and `.github/workflows/flush-notifications.yml`, both → `/api/cron/flush-notifications` (drains up to 5 sweeps per tick when work is re-pended) |
 | 2 — backstop | opportunistic sweep after any queueing write (not after the MCP saved-service save's inline upserts, above) | end of `commitUpserts()` in `serviceMutationSideEffects.ts` — keeps its report and raises the destroyed-mail alarm |
-| 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` (mails a person about destroyed mail, as layer 2 also does; layer 1 goes red on the same conditions instead — see §"The destroyed-mail alarm"). On Sundays it first sends «Te toca dirigir» to leads, and every day the Jóvenes meeting reminders of 14 and 7 days ahead; then it runs a sweep derated by both, or skips it if they overran — see §"«Te toca dirigir»" and §"Jóvenes meetings — the reminders" |
+| 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` (mails a person about destroyed mail, as layer 2 also does; layer 1 goes red on the same conditions instead — see §"The destroyed-mail alarm"). On Sundays it first sends «Te toca dirigir» to leads, every day «Sirves mañana» to whoever serves tomorrow and the Jóvenes meeting reminders of 14 and 7 days ahead; then it runs a sweep derated by all three, or skips it if they overran — see §"«Te toca dirigir»", §"«Sirves mañana»" and §"Jóvenes meetings — the reminders" |
 
 **Layer 1 also carries the availability proposals' tick** (ADR-0079): after the drain has
 answered, `after()` runs `availabilityTick` on every third 5-minute bucket with at least 40 s left;
@@ -626,6 +626,36 @@ debounce, no claim, one direct send per lead.
 - **No "already sent" marker:** a duplicated cron event sends the reminder twice (ADR-0080).
   Calling the route by hand on a Sunday with `CRON_SECRET` sends it again too.
 
+## «Sirves mañana» — the day-before reminder (ADR-0080, addendum of 2026-11-19)
+
+**Every day at 19:00–19:59 CDMX** the daily cron (`/api/cron/service-reminders`, layer 3) pushes
+«Sirves mañana. ¡Prepárate!» (category `reminders`) and, since 2026-11-19, EMAILS it too —
+`sendServiceEveReminders` in `app/utils/serviceEveReminder.ts`. The push alone reached nobody: 0
+members had push on. Not an outbox notice: no queue, no claim, no «sent» marker.
+
+- **Which services:** tomorrow's (CDMX) published roles (`published != false`), all three types —
+  a weekend role by `week`, a special by `date`. The same `day` the push uses.
+- **Who:** the five member-referencing seats (Lead, BGVs, Chorus, instruments, FOH), then each
+  person with an email, app access (`disabled != true`), inside `EMAIL_ALLOWLIST` and with
+  «Nuevas asignaciones» on (`wantsNotification(…, "assigned")`, legacy all-email opt-out
+  included) — the preference the Jóvenes reminders ride too, so no sixth switch.
+- **What:** ONE email per person, listing each of tomorrow's services they serve on in start-time
+  order: the label (a special's name and time; a weekend service with the team's standing hour,
+  `WEEKEND_SERVICE_TIME`), their seat(s), and the setlist's songs with their key. A weekend
+  service's songs come from its paired setlist by `week`; two setlist documents for one week are
+  ambiguous and show no songs (`pickUnique`). No songs → «Todavía no hay canciones en el
+  setlist.». The button opens Inicio («Ensayar el setlist» when there are songs).
+- **Order and budget:** after the leads' step and BEFORE the Jóvenes reminders (tomorrow is the
+  nearest deadline). Waves of `SEND_CONCURRENCY`; told what the route spent, it starts no wave
+  once one more `SEND_TIMEOUT_MS` would pass `EVE_STEP_DEADLINE_MS` (35 s). Its time is part of
+  what derates the sweep (`eveMs` in `notify_daily_sweep_skipped`).
+- **Volume:** a weekend service seats about 10–20 people, so Friday and Saturday evenings add
+  that many sends — well inside Gmail's ~500 a day.
+- The route's JSON carries `eveReminders` (`services`, `planned`, `emailed`, `failed`,
+  `skipped`, `elapsedMs`, or `error: "service_eve_failed"`; it never throws). Logs:
+  `service_eve_run`, `service_eve_send_failed`, `service_eve_skipped`, `service_eve_failed`.
+  Preview mail goes to `EMAIL_REDIRECT_TO`; Vercel runs crons on Production only.
+
 ## Jóvenes meetings — «Te toca» and the music request (ADR-0089)
 
 A write to a Jóvenes meeting may owe two kinds of email. They are NOT outbox notices: no queue, no
@@ -686,10 +716,10 @@ marker.
   asignaciones» on. Preview mail goes to `EMAIL_REDIRECT_TO` — and Vercel runs crons on
   Production only, so on `preview` the step runs only when the route is called by hand.
 - **Order and budget:** sends go in waves of `SEND_CONCURRENCY`; the step is told what the route
-  already spent (`spentMs`: the push, the leads' step) and starts no wave once one more
+  already spent (`spentMs`: the push, the leads' step, «Sirves mañana») and starts no wave once one more
   `SEND_TIMEOUT_MS` would pass `REMINDER_STEP_DEADLINE_MS` (35 s), which leaves the liveness
   alarm's own email its timeout inside the route's 60 s. The sweep's deadline is derated by the
-  leads' step and this one together (`sweepOptionsAfterReminders`), and the sweep is skipped
+  leads' step, «Sirves mañana» and this one together (`sweepOptionsAfterReminders`), and the sweep is skipped
   under the same rule when they left under 25 s
   (`sweep_skipped_after_lead_reminders` keeps its name; the log carries `leadMs` and `meetingMs`).
 - **No catch-up:** a day the cron does not run, a meeting published inside the 14 or 7 days, or a

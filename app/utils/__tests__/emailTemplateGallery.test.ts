@@ -221,9 +221,37 @@ add("18-jovenes-recordatorio-encargado.html", "Jóvenes: recordatorio a una sema
   ...JOVENES_LINKS,
 }));
 
+// «Sirves mañana» (ADR-0080, addendum of 2026-11-19): the day-before reminder by email.
+const { buildServiceEveEmail } = await import("../serviceEveReminder");
+const EVE_LINKS = { link: "https://owt.test/", settingsLink: "https://owt.test/me/ajustes" };
+
+add("19-sirves-manana.html", "Sirves mañana (un servicio, con setlist)", buildServiceEveEmail({
+  name: "Ana López",
+  items: [{
+    label: "Domingo 16 ago",
+    time: "11:00",
+    roles: ["Líder", "Guitarra"],
+    songs: [
+      { title: "Grande y fuerte", key: "Bb" },
+      { title: "Santo", key: "D" },
+      { title: "Way Maker", key: null },
+    ],
+  }],
+  ...EVE_LINKS,
+}));
+
+add("20-sirves-manana-dos.html", "Sirves mañana (dos servicios, uno sin setlist)", buildServiceEveEmail({
+  name: "Beto",
+  items: [
+    { label: "Domingo 16 ago · Bautizos · 09:00", time: null, roles: ["BGV"], songs: [] },
+    { label: "Domingo 16 ago", time: "11:00", roles: ["Coro"], songs: [{ title: "Santo", key: "D" }] },
+  ],
+  ...EVE_LINKS,
+}));
+
 describe("email template gallery", () => {
   it("renders every template without throwing", () => {
-    expect(gallery).toHaveLength(18);
+    expect(gallery).toHaveLength(20);
     for (const g of gallery) expect(g.html.length).toBeGreaterThan(200);
   });
 

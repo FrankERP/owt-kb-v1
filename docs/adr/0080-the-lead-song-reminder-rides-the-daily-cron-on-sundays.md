@@ -53,3 +53,25 @@ sweep). Switching to "only Sundays" is one constant. A Sunday run reads Sanity o
 spends a few seconds of the route; a failure there is logged (`lead_reminder_failed`) and never
 stops the alarms; if the step overruns (a send timeout), that day's sweep is skipped and left to
 layer 1.
+
+## Addendum, 2026-11-19: «Sirves mañana» by email too
+
+The same route has always pushed «Sirves mañana» to whoever serves tomorrow. On 2026-11-19 no
+member had push on, so that reminder reached nobody. Frank picked the fix from a proposal
+(«Dale con las mejoras»): send it by email as well (`app/utils/serviceEveReminder.ts`,
+`docs/NOTIFICATIONS.md` §«Sirves mañana»). It inherits this record's trades: the daily cron's
+hour (the evening before), no «already sent» marker (a duplicated cron event sends it twice),
+best-effort sends before the sweep.
+
+What it decides on its own:
+
+- **The «Nuevas asignaciones» preference, not a new switch.** A reminder of a seat you were given
+  belongs with the notice that gave it; the Jóvenes reminders made the same choice (ADR-0089,
+  addendum). A sixth switch means a schema field, the preferences route, the member form and the
+  dev-verify seed, for a choice nobody asked for. The row's hint now names it.
+- **One email per person per day, not per service.** Someone on a special and the Sunday service
+  gets one email naming both; two emails the same evening read as a duplicate.
+- **Its own 35 s step deadline, before the Jóvenes reminders.** Tomorrow is the nearest deadline;
+  the Jóvenes step is told what this one spent and shortens itself, as it already did for the
+  leads' step. On an ordinary evening a wave takes about 2.6 s, so neither starves the other.
+- **The push stays.** It costs nothing and will matter once the iOS app ships.
