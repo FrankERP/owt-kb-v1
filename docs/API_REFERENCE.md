@@ -643,7 +643,9 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
 - **`GET /api/cron/service-reminders`** — **secret-based auth** (`Authorization: Bearer
   <CRON_SECRET>` header or `?secret=`, compared to `process.env.CRON_SECRET`; 403 otherwise —
   **not** session-based). Finds members assigned to **tomorrow's** published services
-  (America/Mexico_City) and pushes a `reminders` notification ("Sirves mañana"). **On a CDMX
+  (America/Mexico_City), pushes them a `reminders` notification ("Sirves mañana") and, since
+  2026-11-19, emails it too: one email per person with their seat(s), the hour and the setlist
+  (`eveReminders` in the JSON; ADR-0080's addendum, `docs/NOTIFICATIONS.md` §«Sirves mañana»). **On a CDMX
   Sunday** it also emails «Te toca dirigir» to the leads of next week's published services that
   still need songs (`leadReminders` in the JSON; ADR-0080, `docs/NOTIFICATIONS.md`). **Every
   day** it also emails the reminders of the Jóvenes meetings dated exactly 14 and 7 days ahead, to

@@ -78,7 +78,7 @@ hand-writing a fixture that mirrors them).
 |---|---|---|
 | 1 — primary | **Google Cloud Scheduler**, `*/5` ([ADR-0032](adr/0032-layer-1-runs-on-cloud-scheduler.md); live since 2026-09-10) — plus GitHub Actions, declared `*/5` but starved by this repo's CI volume, kept as an independent second caller — see §"Layer 1 does not run on the schedule it declares" | Scheduler job `flush-notification-outbox` (GCP `eloquent-figure-421401`, `us-central1`) and `.github/workflows/flush-notifications.yml`, both → `/api/cron/flush-notifications` (drains up to 5 sweeps per tick when work is re-pended) |
 | 2 — backstop | opportunistic sweep after any queueing write (not after the MCP saved-service save's inline upserts, above) | end of `commitUpserts()` in `serviceMutationSideEffects.ts` — keeps its report and raises the destroyed-mail alarm |
-| 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` (mails a person about destroyed mail, as layer 2 also does; layer 1 goes red on the same conditions instead — see §"The destroyed-mail alarm"). On Sundays it first sends «Te toca dirigir» to leads, and every day the Jóvenes meeting reminders of 14 and 7 days ahead; then it runs a sweep derated by both, or skips it if they overran — see §"«Te toca dirigir»" and §"Jóvenes meetings — the reminders" |
+| 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` (mails a person about destroyed mail, as layer 2 also does; layer 1 goes red on the same conditions instead — see §"The destroyed-mail alarm"). On Sundays it first sends «Te toca dirigir» to leads, every day «Sirves mañana» to whoever serves tomorrow and the Jóvenes meeting reminders of 14 and 7 days ahead; then it runs a sweep derated by all three, or skips it if they overran — see §"«Te toca dirigir»", §"«Sirves mañana»" and §"Jóvenes meetings — the reminders" |
 
 **Layer 1 also carries the availability proposals' tick** (ADR-0079): after the drain has
 answered, `after()` runs `availabilityTick` on every third 5-minute bucket with at least 40 s left;
@@ -620,11 +620,49 @@ debounce, no claim, one direct send per lead.
   by the time spent (`sweepOptionsAfterReminders`), losslessly. With less than
   `MIN_SWEEP_DEADLINE_MS` (25 s) left the daily sweep is skipped (`notify_daily_sweep_skipped`;
   `sweep: {error: "sweep_skipped_after_lead_reminders"}`) and layer 1 drains it. Since 2026-11-17 the
-  time derated is this step's plus the Jóvenes reminders' (below). The route's JSON carries `leadReminders`
+  time derated is this step's plus «Sirves mañana»'s and the Jóvenes reminders' (below). The route's JSON carries `leadReminders`
   (`{ ran: false }` on other days); Vercel logs carry `lead_reminder_run`,
   `lead_reminder_send_failed` and `lead_reminder_failed`.
 - **No "already sent" marker:** a duplicated cron event sends the reminder twice (ADR-0080).
   Calling the route by hand on a Sunday with `CRON_SECRET` sends it again too.
+
+## «Sirves mañana» — the day-before reminder (ADR-0080, addendum of 2026-11-19)
+
+**Every day at 19:00–19:59 CDMX** the daily cron (`/api/cron/service-reminders`, layer 3) pushes
+«Sirves mañana. ¡Prepárate!» (category `reminders`) and, since 2026-11-19, EMAILS it too —
+`sendServiceEveReminders` in `app/utils/serviceEveReminder.ts`. The push alone reached nobody: 0
+members had push on. Not an outbox notice: no queue, no claim, no «sent» marker.
+
+- **Which services:** tomorrow's (CDMX) published roles (`published != false`), all three types —
+  a weekend role by `week`, a special by `date`. The same `day` the push uses.
+- **Who:** the five member-referencing seats (Lead, BGVs, Chorus, instruments, FOH), then each
+  person with an email, app access (`disabled != true`), inside `EMAIL_ALLOWLIST` and with
+  «Nuevas asignaciones» on (`wantsNotification(…, "assigned")`, legacy all-email opt-out
+  included) — the preference the Jóvenes reminders ride too, so no sixth switch.
+- **What:** ONE email per person, listing each of tomorrow's services they serve on in start-time
+  order: the label (a special's name and time; a weekend service with the team's standing hour,
+  `WEEKEND_SERVICE_TIME`), their seat(s), and the setlist's songs with their key. A weekend
+  service's songs come from its paired setlist by `week`; two setlist documents for one week are
+  ambiguous and show no songs (`pickUnique`). No songs → «Todavía no hay canciones en el
+  setlist.». The button opens Inicio («Ensayar el setlist» when there are songs).
+- **Order and budget:** after the leads' step and BEFORE the Jóvenes reminders (tomorrow is the
+  nearest deadline). Waves of `SEND_CONCURRENCY`; told what the route spent, it starts no wave
+  once one more `SEND_TIMEOUT_MS` would pass `EVE_STEP_DEADLINE_MS` (35 s). Its time is part of
+  what derates the sweep (`eveMs` in `notify_daily_sweep_skipped`).
+- **A slow wave starves the steps after it.** The deadline only stops a wave from STARTING; a
+  send that hangs to its 20 s `SEND_TIMEOUT_MS` here pushes the route past the point where the
+  Jóvenes step may start one, so that evening's Jóvenes reminders (logged `skipped`) are lost.
+  Accepted: tomorrow's service is the nearer deadline, and a Jóvenes part is reminded twice (14 and 7
+  days). On an ordinary evening a wave takes about 2.6 s.
+- **An instrument or FOH slot with a person but no label** (Studio allows it) still gets the
+  email, named «Instrumento» / «Cabina» (`UNLABELLED_SLOT`): the push reaches that person, so the
+  email must. `serviceEveReminder.test.ts` checks the email's people equal `assignedMemberRefsQuery`'s.
+- **Volume:** a weekend service seats about 10–20 people, so Friday and Saturday evenings add
+  that many sends — well inside Gmail's ~500 a day.
+- The route's JSON carries `eveReminders` (`services`, `planned`, `emailed`, `failed`,
+  `skipped`, `elapsedMs`, or `error: "service_eve_failed"`; it never throws). Logs:
+  `service_eve_run`, `service_eve_send_failed`, `service_eve_skipped`, `service_eve_failed`.
+  Preview mail goes to `EMAIL_REDIRECT_TO`; Vercel runs crons on Production only.
 
 ## Jóvenes meetings — «Te toca» and the music request (ADR-0089)
 
@@ -686,12 +724,12 @@ marker.
   asignaciones» on. Preview mail goes to `EMAIL_REDIRECT_TO` — and Vercel runs crons on
   Production only, so on `preview` the step runs only when the route is called by hand.
 - **Order and budget:** sends go in waves of `SEND_CONCURRENCY`; the step is told what the route
-  already spent (`spentMs`: the push, the leads' step) and starts no wave once one more
+  already spent (`spentMs`: the push, the leads' step, «Sirves mañana») and starts no wave once one more
   `SEND_TIMEOUT_MS` would pass `REMINDER_STEP_DEADLINE_MS` (35 s), which leaves the liveness
   alarm's own email its timeout inside the route's 60 s. The sweep's deadline is derated by the
-  leads' step and this one together (`sweepOptionsAfterReminders`), and the sweep is skipped
+  leads' step, «Sirves mañana» and this one together (`sweepOptionsAfterReminders`), and the sweep is skipped
   under the same rule when they left under 25 s
-  (`sweep_skipped_after_lead_reminders` keeps its name; the log carries `leadMs` and `meetingMs`).
+  (`sweep_skipped_after_lead_reminders` keeps its name; the log carries `leadMs`, `eveMs` and `meetingMs`).
 - **No catch-up:** a day the cron does not run, a meeting published inside the 14 or 7 days, or a
   wave the deadline left out is a reminder nobody gets; a duplicated cron event sends it twice.
 - The route's JSON carries `meetingReminders` (`meetings`, `planned`, `emailed`, `failed`,
@@ -962,7 +1000,8 @@ Things that are counter-intuitive and were each a real defect at some point.
 
 - **Same-day special sets notify per document.** Six camp sets are six `special_role`
   documents; a member seated in five Saturday sets gets up to five assignment notices
-  (debounced per the outbox rules) and five reminders. Grouping them is not built.
+  (debounced per the outbox rules). The day-before reminder is grouped: one push (`array::unique`)
+  and one «Sirves mañana» email naming every set. Grouping the assignment notices is not built.
 - **Outbox ids are HEX digests, and the alphabet is the point.** Sanity's id
   grammar is `a-zA-Z0-9._-` with no dot-separated segment starting in `-`.
   `outboxId` originally digested the subject to base64url, whose alphabet
