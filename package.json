@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.132.1",
-    "@capacitor/core": "^8.4.0",
+    "@capacitor/core": "^8.4.3",
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/text-zoom": "^8.0.1",
     "@capgo/capacitor-social-login": "^8.3.25",
@@ -70,9 +70,9 @@
     }
   },
   "devDependencies": {
-    "@capacitor/android": "^8.4.0",
-    "@capacitor/cli": "^8.4.0",
-    "@capacitor/ios": "^8.4.0",
+    "@capacitor/android": "^8.4.3",
+    "@capacitor/cli": "^8.4.3",
+    "@capacitor/ios": "^8.4.3",
     "@modelcontextprotocol/client": "2.1.0",
     "@modelcontextprotocol/ext-apps": "2.0.3",
     "@playwright/test": "^1.60.0",
