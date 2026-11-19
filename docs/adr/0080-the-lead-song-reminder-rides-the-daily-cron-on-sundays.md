@@ -73,5 +73,8 @@ What it decides on its own:
   gets one email naming both; two emails the same evening read as a duplicate.
 - **Its own 35 s step deadline, before the Jóvenes reminders.** Tomorrow is the nearest deadline;
   the Jóvenes step is told what this one spent and shortens itself, as it already did for the
-  leads' step. On an ordinary evening a wave takes about 2.6 s, so neither starves the other.
+  leads' step. On an ordinary evening a wave takes about 2.6 s and both fit. A wave that hangs to
+  the 20 s send timeout here leaves the Jóvenes step no room to start, and that evening's Jóvenes
+  reminders are lost (Saturdays, when tomorrow is Sunday and the meetings are Saturdays, is when
+  they meet). Accepted: tomorrow is nearer, and a Jóvenes part is reminded twice.
 - **The push stays.** It costs nothing and will matter once the iOS app ships.

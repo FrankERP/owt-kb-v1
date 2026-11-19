@@ -437,7 +437,7 @@ flowchart LR
   Added --> Email[sendAssignmentEmails\nallowlist + opt-out gated]
   Propose[Lead submits proposal] --> NotifyAdmins[push+email admins]
   Propose --> NotifyCoLeads[push co-leads]
-  Cron[Daily cron 01:00 UTC] --> Reminder[push: sirves manana\nto tomorrow's assignees]
+  Cron[Daily cron 01:00 UTC] --> Reminder[push + email: sirves manana\nto tomorrow's assignees]
 ```
 
 - **Push categories:** `assignments`, `setlist`, `proposals`, `reminders`. Each gated by the

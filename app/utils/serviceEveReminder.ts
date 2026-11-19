@@ -24,7 +24,7 @@ import { C, td, tr, shell } from "./emailShell";
 import { serviceIdentity, serviceLabel } from "./emailServiceLabel";
 import { wantsNotification } from "./notifyPrefs";
 import { pickUnique } from "./serviceReadSelect";
-import { isServiceTime } from "./serviceTime";
+import { compareServiceTime, isServiceTime } from "./serviceTime";
 import { WEEKEND_SERVICE_TIME } from "./calendarFeed";
 
 /**
@@ -83,7 +83,7 @@ export const SERVICE_EVE_QUERY = `*[_type in ["sunday_role", "saturday_role", "s
 
 /** The people the services name, read for the gates. */
 export const EVE_PEOPLE_QUERY = `*[_type == "teamMembers" && _id in $ids]{
-  _id, "name": coalesce(alias, member_name), email, disabled, notifPrefs
+  _id, "name": coalesce(select(alias != "" => alias), member_name), email, disabled, notifPrefs
 }`;
 
 export interface EvePersonRow {
@@ -94,17 +94,24 @@ export interface EvePersonRow {
   notifPrefs?: unknown;
 }
 
-/** The five seats of a role as `rolesForMember` reads them. Malformed rows are dropped. */
+/** What an instrument or FOH slot is called when Studio left its label empty. */
+export const UNLABELLED_SLOT = { instrument: "Instrumento", role: "Cabina" } as const;
+
+/**
+ * The five seats of a role as `rolesForMember` reads them. A slot with a person but no label keeps
+ * the person under a generic name (`UNLABELLED_SLOT`): the push reaches them through
+ * `instruments[].person._ref` / `foh_team[].person._ref`, so the email must too. Rows without a
+ * person are dropped.
+ */
 export function seatBodyOf(row: EveServiceRow): Required<ServiceBody> {
   const refs = (arr: RefRow[] | null | undefined): string[] =>
     (arr ?? []).map((r) => r?._ref).filter((v): v is string => typeof v === "string" && v.length > 0);
   const slots = (arr: SlotRow[] | null | undefined, field: "instrument" | "role") =>
     (arr ?? []).flatMap((s) => {
       const personId = s?.person?._ref;
+      if (typeof personId !== "string" || !personId) return [];
       const label = s?.[field];
-      return typeof personId === "string" && personId && typeof label === "string" && label.trim()
-        ? [{ label: label.trim(), personId }]
-        : [];
+      return [{ label: (typeof label === "string" && label.trim()) || UNLABELLED_SLOT[field], personId }];
     });
   return {
     leads: refs(row.Lead),
@@ -228,7 +235,7 @@ export function planServiceEveEmails(
   env: { baseUrl: string; allow: string[] },
 ): PlannedEveEmail[] {
   const byId = new Map(people.filter((p) => p && typeof p._id === "string").map((p) => [p._id, p]));
-  const ordered = [...rows].sort((a, b) => (startTimeOf(a) ?? "99:99").localeCompare(startTimeOf(b) ?? "99:99"));
+  const ordered = [...rows].sort((a, b) => compareServiceTime(startTimeOf(a), startTimeOf(b)));
   const items = new Map<string, EveItem[]>();
   for (const row of ordered) {
     const body = seatBodyOf(row);
@@ -240,7 +247,12 @@ export function planServiceEveEmails(
     for (const id of eveMemberIds([row])) {
       const roles = [...new Set(rolesForMember(id, body))];
       if (!roles.length) continue;
-      items.set(id, [...(items.get(id) ?? []), { ...item, roles }]);
+      const list = items.get(id) ?? [];
+      // Two published role documents for one service (an integrity duplicate) name it once.
+      const same = list.find((it) => it.label === item.label && it.time === item.time);
+      if (same) same.roles = [...new Set([...same.roles, ...roles])];
+      else list.push({ ...item, roles });
+      items.set(id, list);
     }
   }
   const out: PlannedEveEmail[] = [];

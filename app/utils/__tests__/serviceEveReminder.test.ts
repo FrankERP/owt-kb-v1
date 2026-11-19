@@ -17,6 +17,7 @@ vi.mock("../email", async (importOriginal) => ({
   sendEmail: (...a: unknown[]) => sendEmail(...a),
 }));
 
+import { assignedMemberRefsQuery } from "../notifyTargets";
 import {
   buildServiceEveEmail,
   EVE_PEOPLE_QUERY,
@@ -59,7 +60,7 @@ const PEOPLE: EvePersonRow[] = [
 ];
 
 describe("seatBodyOf", () => {
-  it("reads all five seats and drops malformed rows", () => {
+  it("reads all five seats, keeps a person whose slot has no label, drops rows with no person", () => {
     const body = seatBodyOf(sunday({
       Chorus: [ref("eva"), null, { _ref: 7 } as never],
       instruments: [slot("instrument", "Guitarra", "caro"), { person: ref("x") }, { instrument: "Bajo" }],
@@ -69,8 +70,8 @@ describe("seatBodyOf", () => {
       leads: ["ana"],
       bgvs: ["beto"],
       chorus: ["eva"],
-      instruments: [{ instrument: "Guitarra", personId: "caro" }],
-      foh: [{ role: "Audio", personId: "dani" }],
+      instruments: [{ instrument: "Guitarra", personId: "caro" }, { instrument: "Instrumento", personId: "x" }],
+      foh: [{ role: "Audio", personId: "dani" }, { role: "Cabina", personId: "y" }],
     });
   });
 
@@ -142,6 +143,14 @@ describe("planServiceEveEmails", () => {
     expect(html.indexOf("Bautizos")).toBeLessThan(html.indexOf("11:00"));
   });
 
+  it("names a service once when two published role documents duplicate it", () => {
+    const planned = planServiceEveEmails([sunday(), sunday({ _id: "sun22-dup", Lead: [], BGVs: [ref("ana")] })], PEOPLE, ENV);
+    const ana = planned.filter((p) => p.memberId === "ana");
+    expect(ana).toHaveLength(1);
+    expect(ana[0].subject).toBe("Sirves mañana — Domingo 22 nov");
+    expect(ana[0].html).toContain("Líder y BGV");
+  });
+
   it("names a person in two seats of one service once, with both seats", () => {
     const planned = planServiceEveEmails([sunday({ BGVs: [ref("ana")] })], PEOPLE, ENV);
     const ana = planned.filter((p) => p.memberId === "ana");
@@ -190,7 +199,7 @@ describe("SERVICE_EVE_QUERY", () => {
     { _id: "p1", _type: "post", title: "Grande y fuerte" },
     { _id: "p2", _type: "post", title: "Santo" },
     { _id: "ana", _type: "teamMembers", member_name: "Ana María", alias: "Ana", email: "ana@oasis.mx", notifPrefs: { emailAssigned: true } },
-    { _id: "caro", _type: "teamMembers", member_name: "Caro", email: "caro@oasis.mx", disabled: true },
+    { _id: "caro", _type: "teamMembers", member_name: "Caro", alias: "", email: "caro@oasis.mx", disabled: true },
   ];
 
   it("reads tomorrow's published services with their seats and songs", async () => {
@@ -201,6 +210,19 @@ describe("SERVICE_EVE_QUERY", () => {
     expect(songsOf(byId.sun22)).toEqual([{ title: "Grande y fuerte", key: "Bb" }]);
     expect(songsOf(byId.sp22)).toEqual([{ title: "Santo", key: "D" }]);
     expect(eveMemberIds(rows).sort()).toEqual(["ana", "caro", "eva"]);
+  });
+
+  it("reaches exactly the people the push reaches (assignedMemberRefsQuery), unlabelled slots included", async () => {
+    const dataset = [
+      ...DATASET,
+      { _id: "sat22", _type: "saturday_role", week: "2026-11-22", BGVs: [ref("fer")], Chorus: [ref("gil")],
+        instruments: [{ _key: "i1", person: ref("hugo") }], foh_team: [{ _key: "f1", role: "", person: ref("ivan") }] },
+    ];
+    const eve = (await (await evaluate(parse(SERVICE_EVE_QUERY), { dataset, params: { day: "2026-11-22" } })).get()) as EveServiceRow[];
+    const roleFilter = `_type in ["sunday_role","saturday_role","special_role"] && (week == $day || date == $day) && published != false`;
+    const push = (await (await evaluate(parse(assignedMemberRefsQuery(roleFilter)), { dataset, params: { day: "2026-11-22" } })).get()) as string[];
+    expect(eveMemberIds(eve).sort()).toEqual([...push].sort());
+    expect(push).toEqual(expect.arrayContaining(["hugo", "ivan"]));
   });
 
   it("reads the people with their gates", async () => {

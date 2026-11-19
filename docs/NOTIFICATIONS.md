@@ -620,7 +620,7 @@ debounce, no claim, one direct send per lead.
   by the time spent (`sweepOptionsAfterReminders`), losslessly. With less than
   `MIN_SWEEP_DEADLINE_MS` (25 s) left the daily sweep is skipped (`notify_daily_sweep_skipped`;
   `sweep: {error: "sweep_skipped_after_lead_reminders"}`) and layer 1 drains it. Since 2026-11-17 the
-  time derated is this step's plus the Jóvenes reminders' (below). The route's JSON carries `leadReminders`
+  time derated is this step's plus «Sirves mañana»'s and the Jóvenes reminders' (below). The route's JSON carries `leadReminders`
   (`{ ran: false }` on other days); Vercel logs carry `lead_reminder_run`,
   `lead_reminder_send_failed` and `lead_reminder_failed`.
 - **No "already sent" marker:** a duplicated cron event sends the reminder twice (ADR-0080).
@@ -649,6 +649,14 @@ members had push on. Not an outbox notice: no queue, no claim, no «sent» marke
   nearest deadline). Waves of `SEND_CONCURRENCY`; told what the route spent, it starts no wave
   once one more `SEND_TIMEOUT_MS` would pass `EVE_STEP_DEADLINE_MS` (35 s). Its time is part of
   what derates the sweep (`eveMs` in `notify_daily_sweep_skipped`).
+- **A slow wave starves the steps after it.** The deadline only stops a wave from STARTING; a
+  send that hangs to its 20 s `SEND_TIMEOUT_MS` here pushes the route past the point where the
+  Jóvenes step may start one, so that evening's Jóvenes reminders (logged `skipped`) are lost.
+  Accepted: tomorrow's service is the nearer deadline, and a Jóvenes part is reminded twice (14 and 7
+  days). On an ordinary evening a wave takes about 2.6 s.
+- **An instrument or FOH slot with a person but no label** (Studio allows it) still gets the
+  email, named «Instrumento» / «Cabina» (`UNLABELLED_SLOT`): the push reaches that person, so the
+  email must. `serviceEveReminder.test.ts` checks the email's people equal `assignedMemberRefsQuery`'s.
 - **Volume:** a weekend service seats about 10–20 people, so Friday and Saturday evenings add
   that many sends — well inside Gmail's ~500 a day.
 - The route's JSON carries `eveReminders` (`services`, `planned`, `emailed`, `failed`,
@@ -721,7 +729,7 @@ marker.
   alarm's own email its timeout inside the route's 60 s. The sweep's deadline is derated by the
   leads' step, «Sirves mañana» and this one together (`sweepOptionsAfterReminders`), and the sweep is skipped
   under the same rule when they left under 25 s
-  (`sweep_skipped_after_lead_reminders` keeps its name; the log carries `leadMs` and `meetingMs`).
+  (`sweep_skipped_after_lead_reminders` keeps its name; the log carries `leadMs`, `eveMs` and `meetingMs`).
 - **No catch-up:** a day the cron does not run, a meeting published inside the 14 or 7 days, or a
   wave the deadline left out is a reminder nobody gets; a duplicated cron event sends it twice.
 - The route's JSON carries `meetingReminders` (`meetings`, `planned`, `emailed`, `failed`,
@@ -992,7 +1000,8 @@ Things that are counter-intuitive and were each a real defect at some point.
 
 - **Same-day special sets notify per document.** Six camp sets are six `special_role`
   documents; a member seated in five Saturday sets gets up to five assignment notices
-  (debounced per the outbox rules) and five reminders. Grouping them is not built.
+  (debounced per the outbox rules). The day-before reminder is grouped: one push (`array::unique`)
+  and one «Sirves mañana» email naming every set. Grouping the assignment notices is not built.
 - **Outbox ids are HEX digests, and the alphabet is the point.** Sanity's id
   grammar is `a-zA-Z0-9._-` with no dot-separated segment starting in `-`.
   `outboxId` originally digested the subject to base64url, whose alphabet
