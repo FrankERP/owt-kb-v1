@@ -130,7 +130,7 @@ itself, and then hope the 303 to our `https` redirect is handed to it. Whether i
 | --- | --- |
 | iOS 17.4+ | No. Universal Links go only to the app the domain's association file names; an unassociated app cannot claim the domain. |
 | Android 12+ | No, unless the person has manually approved our domain for that app under «Abrir de forma predeterminada» (unverified web links open in the browser by default). |
-| Android 6–11, our app installed and verified | No. A verified App Link opens the verified app directly, with no chooser. |
+| Android 6–11, our app installed and verified | No. A verified App Link opens the verified app directly, with no chooser. This row holds only if the Android app declares an `autoVerify` App Link intent filter for `/app/callback/android` (the Auth Tab alone does not need one): a requirement recorded now for the Android and association-file slices. |
 | Android 6–11, our app NOT installed (or its verification failed) | Yes, if the person picks the other app in the system chooser. |
 
 So two residual cases remain, both requiring the person to act on their own phone: picking an
@@ -215,7 +215,11 @@ parameterized over the app config. Constraints, all honoured:
 `app/mcp/oauth/grantStore.ts` keeps importing `writeClient` and `grantDocument` itself and passes
 the client into the factory (so `app/mcp/__tests__/mcpSanityClients.test.ts`'s stale-exemption check
 and `oauthRegisterRoute.test.ts`'s import assertion keep holding without edits); the two new
-document types are added to `studioProtection.test.ts`'s protected list (an intended test change);
+document types join every Studio protection list the MCP types are in — in
+`app/utils/studioProtection.ts`: `PROTECTED_STUDIO_TYPES`, `INTERNAL_STUDIO_TYPES`,
+`INTERNAL_STUDIO_FIELDS` and `PROTECTED_STUDIO_TITLES`; in `studioProtection.test.ts`: its
+expected protected, internal and schema-file lists (intended test changes); plus the Studio
+structure if it lists the MCP types;
 and the new `app/oauthCore/` and `app/appAuth/` modules get their own sanity-client guard entry
 (writes only through the injected `writeClient`).
 
@@ -283,9 +287,14 @@ token and revoke endpoints:
    `aud` = `<origin>/api/app` (exact string), required `sub`, `grant`, `jti`, `exp`.
    Expired → 401 `invalid_token` (the app refreshes and retries once).
 4. Load the grant (30 s cache; revoked/missing/malformed → 401). `grant.sub === token.sub`,
-   `grant.origin === origin`, else 401.
-5. Live access: `getMemberAccess(sub)` (30 s cache); not `active` → 401 (the app signs out and
-   shows «Tu acceso está desactivado»). Errors reading Sanity → 503, never a pass.
+   `grant.origin === origin`, else 401. A failed grant read (Sanity error) → 503, never 401 and
+   never a pass, so an outage does not sign anyone out.
+5. Live access: `getMemberAccess(sub)` (30 s cache); not `active` → 401 with the JSON body
+   `{"error":"account_disabled"}` (distinct from an expired or revoked token, whose body is
+   `{"error":"invalid_token"}`), so the app signs out AND shows «Tu acceso está desactivado»
+   rather than a plain sign-in screen. The token endpoint does the same: an inactive subject is
+   `invalid_grant` with the fixed description `account_disabled`. Errors reading Sanity → 503,
+   never a pass.
 6. Applies the endpoint's declared `needs` level (step 7) with the SAME pure predicates the
    cookie guards use, on the live `access`; a level the person does not meet → 403 `forbidden`.
    Returns `{ sanityId, access, platform, grantId }`.
@@ -296,7 +305,7 @@ token and revoke endpoints:
    | --- | --- | --- |
    | `"self"` | active | `requireActiveSession`; the handler reads or writes ONLY the caller's own record (`/me`, own devices, own preferences) |
    | `{ ministry: m, as: "member" }` | `isMinistryMember(access, m)` | `requireMinistryMember(m)` |
-   | `{ ministry: "jovenes", as: "leader" }` | `ledGroupsIn(access, "jovenes")` non-empty; the handler then scopes to those groups (ADR-0085) | the Jóvenes leader checks |
+   | `{ ministry: "jovenes", as: "planner" }` | `plansInMinistry(access, "jovenes")`: `isMinistryManager(access, "jovenes") \|\| ledGroupsIn(access, "jovenes").length > 0` — a Jóvenes manager (admin level or super-admin) OR a leader of at least one group. The handler then narrows: a manager sees every group, anyone else only `ledGroupsIn` (ADR-0085) | the same predicate, which the four web pages that gate on it today inline (`jovenes/admin`, `jovenes`, `jovenes/calendario`, `jovenes/reunion/[token]`: `isManager \|\| ledGroupsIn(…).length > 0`) switch to calling |
    | `{ ministry: m, as: "manager" }` | `isMinistryManager(access, m)` | `requireMinistryManager(m)` |
    | `"manager"` | role ∈ {super-admin, admin, content-editor} — the predicate `requireActiveManager` applies, read from LIVE access | `requireActiveManager` |
    | `"super-admin"` | role = super-admin | the routes' super-admin checks |
@@ -306,9 +315,15 @@ token and revoke endpoints:
    what a person may then do inside the endpoint is decided by the same writer or read the web
    uses, which may widen by role (e.g. a Jóvenes manager editing any part through
    `updateMinistryEventPart`) — correct here, because every app session is the person themselves. The predicates are the existing pure ones (`isMinistryMember`,
-   `isMinistryManager`, `ledGroupsIn` in `app/utils/ministryAccess.ts`); the role sets are extracted
-   from `authGuards.ts` into named constants both guards import. An equivalence test runs one table of
-   access snapshots through each cookie guard and its bearer twin.
+   `isMinistryManager`, `ledGroupsIn` in `app/utils/ministryAccess.ts`) plus ONE new pure predicate
+   there, `plansInMinistry(access, ministry)`, extracted from the four pages above (it composes the
+   existing two, so `ledGroupsCoverage.test.ts`'s «no level comparison» rule still holds). The level
+   is named `planner`, not `leader`, because `ledGroupsIn` deliberately has no manager arm and a
+   level called «leader» that let admins in would read as a contradiction of it. The role sets are
+   extracted from `authGuards.ts` into named constants both guards import. An equivalence test runs
+   one table of access snapshots (a Jóvenes admin, a super-admin, a leader of one group, a leader
+   with an empty `leaderOf`, a plain member, a worship-only member) through each cookie-side
+   predicate and its bearer level.
 
 Never: impersonation (an app token's `sub` is always the person who signed in; there is no
 impersonate parameter anywhere under `/api/app`), a role read from the token (the role is always
@@ -322,8 +337,11 @@ disabled in the admin stops within 30 s (access cache). Same as the MCP route an
 
 - `POST /api/app/v1/auth/revoke` (RFC 7009 shape): form `token` (a refresh token) + `client_id`.
   If the token verifies and its grant belongs to that client, the grant is revoked
-  (`revokedReason: "app_sign_out"`). Always answers 200 (no oracle). The app calls it on «Cerrar
-  sesión» and then deletes its local tokens and data regardless of the answer.
+  (`revokedReason: "app_sign_out"`). It answers 200 whether or not the token was valid (no oracle),
+  and `503` only when a valid token's revocation write failed (RFC 7009 §2.2.1 allows it). The app
+  calls it on «Cerrar sesión» and then deletes its local tokens and data regardless of the answer;
+  after a 503 that grant stays listed in «Apps conectadas» until the person closes it there or its
+  90 days run out, which the list makes visible.
 - `/me` gets a section «Apps conectadas»: the signed-in person's own live grants (platform,
   created, last used = `lastRefreshAt`), each with «Cerrar sesión en ese teléfono». The button
   calls `POST /api/me/app-sessions/[grantId]/revoke` (cookie session, `requireActiveSession`;
@@ -331,12 +349,15 @@ disabled in the admin stops within 30 s (access cache). Same as the MCP route an
   while impersonating). The read is server-side with the token-carrying client, filtered in GROQ
   by `sub` AND `origin` (both parameters), so a deployment lists only its own grants: local and
   preview test sessions share the dataset but never appear in production's list, matching the
-  store's rule that one deployment never revokes another's grant.
+  store's rule that one deployment never revokes another's grant. While a super-admin is
+  impersonating, the section is not rendered (it would list the target's sessions); it shows
+  «Termina la suplantación para ver las apps conectadas».
 - A super-admin can close every app session of a member (a lost phone): «Cerrar sesiones de la
   app» on the member in `/admin` → `POST /api/admin/members/[id]/app-sessions/revoke`
   (super-admin only, checked in the route on live access; refused while impersonating; revokes every
   live `appAuthGrant` whose `sub` is that member AND whose `origin` is this deployment's,
-  `revokedReason: "admin_revoked"`). Decided: it does not span origins; a stray local or preview
+  `revokedReason: "admin_revoked"`, all in ONE Sanity transaction: either every grant is revoked or
+  none is and the route answers 503 «No se pudo cerrar; intenta de nuevo»). Decided: it does not span origins; a stray local or preview
   grant is a developer's test session and dies with its own deployment's revoke or its 90 days.
 - Disabling a member (existing flow) needs no extra step: D8 step 5 refuses them live.
 - Decided now for later slices: device push tokens registered through the app store the `grantId`
@@ -371,10 +392,23 @@ printable ASCII). Unknown parameters ignored. `scope`/`resource` not accepted (a
 4. The rest (`response_type`, PKCE, `state`) → else error REDIRECT to the request's validated
    `redirect_uri` with `error`, `state` (when present once) and `iss`.
 5. The confirmation screen of D5: a form POST to 3.2 carrying every parameter, submitted only by
-   the person's tap. The page answers `Referrer-Policy: same-origin` (pinned, so the browser sends
-   a real `Origin` on the POST, never `null`), `Cache-Control: no-store`, and
-   `X-Frame-Options: DENY` / `frame-ancestors 'none'` so another page cannot frame it and steal the
-   tap.
+   the person's tap. It is answered with `Referrer-Policy: same-origin` (pinned, so the browser sends
+   a real `Origin` on the POST, never `null`), `Cache-Control: no-store`, `X-Frame-Options: DENY`
+   and `Content-Security-Policy: frame-ancestors 'none'` so another page cannot frame it and steal
+   the tap.
+
+The page lives in its own route group, `app/(appauth)/`, with a minimal layout (brand styles only:
+no navbar, tab bar, assistant bubble or anything else of the `(client)` shell), because it is shown
+inside the app's sign-in sheet. The page itself reads the session; the layout reads nothing.
+
+**Where the headers come from.** A Server Component cannot set response headers, and
+`next.config.mjs` `headers()` already sends `X-Frame-Options: SAMEORIGIN` and
+`Referrer-Policy: strict-origin-when-cross-origin` on `/(.*)`. Next applies the LAST matching entry
+for a repeated key, so new entries AFTER the global ones set: for `/app/authorize` and
+`/app/authorize/submit` — `X-Frame-Options: DENY`, `frame-ancestors 'none'`,
+`Referrer-Policy: same-origin`, `Cache-Control: no-store`; for `/app/callback/:platform` —
+`Referrer-Policy: no-referrer`, `Cache-Control: no-store`, `X-Robots-Tag: noindex`. A test asserts
+these entries on the config object (order included), not by rendering the page.
 
 ### 3.2 `POST /app/authorize/submit` (behind the session middleware, like the page)
 
@@ -415,11 +449,12 @@ Errors: RFC 6749 §5.2 JSON with fixed descriptions, as the MCP token route.
 Reached only when a verified redirect is opened somewhere other than the app (app not installed,
 or before the association files exist). Renders «Abre la app Backstage para terminar de entrar»
 and NOTHING from the query (the code is never echoed, never put in a link). `Referrer-Policy:
-no-referrer`, `Cache-Control: no-store`, `robots: noindex`. Excluded from the session matcher (a
-signed-out browser must not be bounced through sign-in carrying the code in `callbackUrl`). It lives
-in its own route group, `app/(appcallback)/`, with a minimal layout that imports nothing that reads a
-session, cookie, network or env (the pattern of `(gallery)`, ADR-0017), so "renders nothing from the
-query and loads nothing" is structural rather than a promise about the `(client)` layout's
+no-referrer`, `Cache-Control: no-store`, `noindex` (headers set in `next.config.mjs`, §3.1).
+Excluded from the session matcher (a signed-out browser must not be bounced through sign-in
+carrying the code in `callbackUrl`). It lives in the same `app/(appauth)/` group, whose minimal
+layout imports nothing that reads a session, cookie, network or env (the pattern of `(gallery)`,
+ADR-0017), and the callback page itself imports nothing that does either, so "renders nothing from
+the query and loads nothing" is structural rather than a promise about the `(client)` layout's
 components.
 
 ### 3.6 `GET /api/app/v1/me` — the proof endpoint
@@ -458,6 +493,7 @@ under `app/api/app/v1/` and the two callback pages, so each new ungated route is
 | A lost phone | The member closes the session in `/me`, or a super-admin closes all of that member's app sessions (D9); ≤ 30 s |
 | A scheme redirect accepted on production by mistake | Registry lists scheme redirects only for `LOCAL_ORIGIN`; tests on production and preview origins at authorize and token |
 | An MCP token used on the app API, or the reverse | Different secret, `typ` and `aud` (D2) |
+| Another app shows our sign-in in its own embedded WebView | Out of scope, stated in ADR-0091: a WebView shares no cookies with the browser and Google refuses sign-in there, so the person would have to type their password into that app — credential phishing, which no redirect design prevents |
 | A dynamically registered MCP client names an app redirect | The MCP allowlist is unchanged and does not contain them (D1) |
 | Open redirect via `redirect_uri` | Exact match against two fixed strings per client; unverified target → error page, never a redirect |
 | CSRF or clickjacking on the code-minting POST | `Sec-Fetch-Site: same-origin` (or an exact `Origin`; `null` refused); the POST stays behind the session middleware and re-checks the session; the page refuses framing (§3.1, §3.2) |
@@ -477,20 +513,25 @@ under `app/api/app/v1/` and the two callback pages, so each new ungated route is
 - Authorize validator: every rule and the error-page vs error-redirect split; a scheme redirect on
   the production and preview origins → error page.
 - Authorize page: renders the confirmation screen with no auto-submit (no script, no auto-submitting
-  form), `Referrer-Policy: same-origin`, framing refused.
+  form). Headers: the `next.config.mjs` entries of §3.1, asserted on the config (they override the
+  global ones by coming after them).
 - Authorize POST: session absent, impersonating, inactive; `Sec-Fetch-Site` cross-site/same-site
   refused; no `Sec-Fetch-Site` with `Origin` missing, `null` or foreign refused; `decision=deny` →
   `access_denied` redirect and no code minted; 303 target exactness.
 - Token route: the full matrix of 3.3, including replay, PKCE mismatch, redirect of the other client,
   a scheme redirect on production/preview, a refresh whose grant belongs to the other client, reuse →
   revocation, revision conflict → `503 temporarily_unavailable` and not revoked.
-- Guard: every step of D8; every lattice level; a Kids-only member refused worship `member`; the
-  cookie/bearer predicate equivalence table.
+- Guard: every step of D8; every lattice level; a Kids-only member refused worship `member`; a
+  Jóvenes admin and a super-admin pass `planner`; a leader with an empty `leaderOf` is refused it;
+  inactive → `account_disabled`; grant read failure → 503; the cookie/bearer predicate
+  equivalence table.
+- `plansInMinistry`: the four Jóvenes pages call it (static check) and their behaviour is unchanged.
+- Revoke endpoints: a failed write → 503 (app revoke, admin revoke-all with nothing revoked).
 - Store factory: the MCP suite unchanged and green; the same suite over the app config.
 - Matcher: §4 cases; the static «every route calls the guard first» check, which also asserts each
   call passes a literal `needs` (no call without it, no computed level).
 - `/me` list and revoke route: own grants of THIS origin only (a grant of another origin is neither
-  listed nor revocable), impersonation refused. Admin revoke route: super-admin only, impersonation
+  listed nor revocable), impersonation refused, and the list not rendered while impersonating. Admin revoke route: super-admin only, impersonation
   refused, revokes every live grant of that member on this origin and nothing else.
 - Schema constants module: no `import` statement.
 
@@ -531,7 +572,8 @@ newer; an iPhone X, 8 or older cannot run it), and an Android phone needs Chrome
   sign-in, as it does for `/oauth/authorize` (`authRedirectCallback.test.ts`).
 - P5. The MCP grant-store protocol can be extracted without changing any MCP OAuth test file
   (`app/mcp/oauth/__tests__/`, `mcpSanityClients.test.ts`, `oauthRegisterRoute.test.ts`); the only
-  intended test edit outside the new suites is adding the two types to `studioProtection.test.ts`.
+  intended test edit outside the new suites is adding the two types to `studioProtection.test.ts`'s
+  lists (D6).
 - P6. An `https` callback in `ASWebAuthenticationSession` requires the `webcredentials` service type
   in the association file (found in Apple forum threads and third-party guidance; to be confirmed
   against Apple's documentation in the association-file slice).
