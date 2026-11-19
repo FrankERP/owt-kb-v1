@@ -601,3 +601,82 @@ newer; an iPhone X, 8 or older cannot run it), and an Android phone needs Chrome
   deployed origin (ADR-0091)».
 - `next.config.mjs`: its CSP caveat comment also names the app's local-only scheme redirect, so a
   future `form-action` directive does not silently break local development.
+
+## 10. Post-approval amendments (NOT covered by the review approval)
+
+The adversarial review approved the text above this section (§0–§9) at SHA-256
+`704124851b4e39fe7b98e6aaf4998a31a322ca199086b151dbfb3191a9cb6462` (review log beside this file).
+The amendments below adopt the reviewers' non-blocking suggestions after that approval. They were
+not reviewed; where one contradicts the text above, the amendment wins, and the implementation's
+merge-range code review covers them.
+
+**A1. The iOS row of D3 and §5, restated.** The threat is not Universal Links: it is an
+unassociated app opening our authorize URL in its OWN `ASWebAuthenticationSession` with an `https`
+callback for our host. iOS 17.4+ refuses an `https` callback for a domain the app is not associated
+with (`webcredentials`). New premise **P8**, to be confirmed before ADR-0091 presents the iOS row as
+«No»: an unassociated app cannot intercept an `https` navigation through the older initializer with
+`callbackURLScheme: "https"` either (sources disagree). If P8 cannot be confirmed, ADR-0091 lists it
+as a residual Frank accepts, next to the Android ones. The Mac app (same SwiftUI target) has the
+same mechanism from macOS 14.4 and joins the table with the same row.
+
+**A2. Android 12+ row made conditional.** «No» assumes Chrome, inside another app's Custom Tab,
+hands an `https` navigation to Android's link resolution and does not target the hosting app; not
+verified. ADR-0091 states it as «No, as far as Android's link rules go; Chrome's Custom Tab handling
+not device-tested». The visible tap (D5) is unchanged either way.
+
+**A3. Apple minimums and platform label.** iPhone iOS 17.4, iPad iPadOS 17.4, Mac macOS 14.4. iPad
+and Mac use the `backstage-ios` client; `platform` stays `ios` on the grant and the `/me` list shows
+«iPhone, iPad o Mac». The `/me` button reads «Cerrar sesión en ese dispositivo».
+
+**A4. Live grants.** A grant is LIVE when `revoked != true` and
+`coalesce(lastRefreshAt, createdAt)` is within the refresh lifetime (90 days; `lastRefreshAt` is
+null until the first refresh). The `/me` list and the admin revoke-all act only on live grants
+(tests: an idle 91-day grant is neither listed nor counted). Both live in the store factory
+(`listLiveGrants(sub, origin)`, `revokeAllGrants(sub, origin, reason)` in one transaction), so the
+revocation patch and the cache drop keep one owner and the sanity-client guard stays accurate.
+
+**A5. A missing read token is an outage, not a revocation.** If the grant reader's client carries no
+token (`SANITY_WRITE_TOKEN` unset on a deployment), a dotted-id read answers «no record» with no
+error. The app store refuses to run without a token: the guard and the token endpoint answer 503,
+never 401/`invalid_grant`, so a misconfiguration cannot sign every phone out. Test: no token → 503.
+
+**A6. Type pin on the `/me` revoke.** The route writes a client-supplied id: it pins the type first
+(`isGrantId` + the `_type`-filtered `loadGrant`, the equivalent of `storedRevisionOfType`, W9) and a
+test sends the id of another document type.
+
+**A7. Rollout and the Jóvenes wording.** A level is not the whole web gate: every Jóvenes endpoint
+also calls `rolloutAllows("jovenesEvents", access)` first, like the pages, and the equivalence table
+includes a person outside the rollout. Correction to D8: only `jovenes/admin` GATES on the predicate;
+the other three pages use it as the «Planear» flag. All four switch to `plansInMinistry`.
+
+**A8. Callback page.** Two static folders (`app/(appauth)/app/callback/ios`, `…/android`), not
+`[platform]`, so `PUBLIC_ROUTES` lists the two real pages. The page is `force-dynamic` so the
+`no-store` header is what is served. Its isolation gets a guard: an import-closure test (the
+existing walker) over `(appauth)/layout.tsx` and both callback pages (no session, cookie, network,
+env or Sanity import), and a render test that a `?code=…&state=…` query never appears in the output.
+
+**A9. `GET /app/authorize/submit`.** If the session expires between the screen and the tap, the
+middleware sends the POST through sign-in and back as a GET. That GET answers an error page
+«Vuelve a la app y toca Entrar otra vez», never a code.
+
+**A10. Requirements recorded now for the native slices.** The apps ignore any callback with no
+matching pending `state` and verifier (a link opened outside the sign-in sheet). The HTTP layer never
+retries the token POST on its own (OkHttp `retryOnConnectionFailure` off for that call; URLSession
+without automatic retry), because a silent retry of a refresh is a reuse that revokes the grant.
+
+**A11. Release smoke test.** After the production release, one flow by hand on the inert callback
+page with a known verifier, then `curl`: code exchange, `GET /api/app/v1/me`, refresh, a reuse that
+must revoke, and the revoke endpoint. Recorded in `docs/MOBILE.md`, as the MCP door's smoke was.
+
+**A12. Cost.** D7 counts refreshes only. The guard's grant and access reads (30 s cache per instance
+on Fluid compute) add up to two reads per active user per 30 s of use; the post-release
+`sanity.io/manage` check compares against that, not the refresh figure alone.
+
+**A13. Android on a physical device and Play.** Testing on a phone need not wait for the release key:
+the upload or debug key's fingerprint can go in `assetlinks.json` in the association-file slice. A
+Google Play organization account may itself need the D-U-N-S number; `MOBILE.md` says so.
+
+**A14. Docs added to §9.** `docs/agents/project-rules.md` (the long form of the CLAUDE.md line),
+`docs/DATA_MODEL.md` (the two new types), and the CLAUDE.md «Reusable utils» list
+(`requireAppSession`, `plansInMinistry`). `SECRETS.md`: Production and Preview get DIFFERENT
+`APP_AUTH_SECRET` values.
