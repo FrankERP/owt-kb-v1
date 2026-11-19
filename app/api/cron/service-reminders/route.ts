@@ -7,6 +7,7 @@ import { sweepOutbox } from "@/app/utils/outboxSweep";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
 import { sendLeadSongReminders, sweepOptionsAfterReminders } from "@/app/utils/leadSongReminder";
 import { sendMinistryEventReminders } from "@/app/utils/ministryEventReminder";
+import { sendServiceEveReminders } from "@/app/utils/serviceEveReminder";
 
 // The daily cron is the outbox's last-resort flush trigger (§3, Task 11); one
 // sweep can fan out dozens of emails, so give it room to finish.
@@ -57,13 +58,20 @@ async function getHandler(req: NextRequest) {
   // and is derated below by what this spent.
   const leadReminders = await sendLeadSongReminders();
 
+  // Every day: «Sirves mañana» by EMAIL to the same people the push above names (the five seats
+  // of tomorrow's published services), one email per person (ADR-0080, addendum of 2026-11-19).
+  // The push alone reached nobody: 0 members have it on. BEFORE the Jóvenes reminders because
+  // tomorrow is the nearest deadline; told what the route spent, it never throws, and the sweep
+  // below is derated by what it spent.
+  const eveReminders = await sendServiceEveReminders(day, { spentMs: Date.now() - routeStarted });
+
   // Every day: the Jóvenes meetings dated exactly 14 and 7 days ahead remind whoever still owes
   // something on a part of theirs (ADR-0089, addendum). It never throws either, and it is told
   // what the ROUTE has spent so far, so the last wave it starts ends with room left for the
   // liveness alarm's own email. BEFORE the sweep for the same reason as the leads': a reminder
   // has no second chance, the sweep is lossless.
   const meetingReminders = await sendMinistryEventReminders(new Date(), { spentMs: Date.now() - routeStarted });
-  const remindersMs = (leadReminders.elapsedMs ?? 0) + (meetingReminders.elapsedMs ?? 0);
+  const remindersMs = (leadReminders.elapsedMs ?? 0) + (eveReminders.elapsedMs ?? 0) + (meetingReminders.elapsedMs ?? 0);
 
   // The liveness alarm, BEFORE this request's sweep — and the order is the whole
   // point of the alarm, not a detail. The failure it exists to catch is layer 1
@@ -108,6 +116,7 @@ async function getHandler(req: NextRequest) {
       reason: "lead_reminders_slow",
       elapsedMs: remindersMs,
       leadMs: leadReminders.elapsedMs ?? 0,
+      eveMs: eveReminders.elapsedMs ?? 0,
       meetingMs: meetingReminders.elapsedMs ?? 0,
     }));
     sweep = { error: "sweep_skipped_after_lead_reminders" };
@@ -126,5 +135,5 @@ async function getHandler(req: NextRequest) {
   // the JSON below goes to Vercel's scheduler, which reads none of it.
   const destroyed = await reportDestroyedMail(sweep, "El barrido diario");
 
-  return NextResponse.json({ day, ...r, leadReminders, meetingReminders, sweep, liveness, destroyed });
+  return NextResponse.json({ day, ...r, leadReminders, eveReminders, meetingReminders, sweep, liveness, destroyed });
 }

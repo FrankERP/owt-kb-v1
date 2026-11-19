@@ -81,6 +81,11 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   ([leadSongReminder.ts](../app/utils/leadSongReminder.ts)) — the Sunday «Te toca dirigir» email to
   the coming week's leads, run only by the daily cron (ADR-0080); `sweepOptionsAfterReminders`
   derates that cron's sweep deadline by the time it spent (`null` = skip it); `pushTargetsOf` picks the push audience.
+- **`sendServiceEveReminders(day, { spentMs })`**, **`planServiceEveEmails(...)`**,
+  **`buildServiceEveEmail(...)`**, **`SERVICE_EVE_QUERY`**
+  ([serviceEveReminder.ts](../app/utils/serviceEveReminder.ts)) — the «Sirves mañana» email the
+  evening before a service, run only by the daily cron (ADR-0080, addendum of 2026-11-19): the same
+  five seats as the push, one email per person per day, gated by «Nuevas asignaciones».
 - **`notifyLeadsAboutServiceMessage(...)`**, **`buildServiceThreadEmail(...)`**
   ([serviceThreadNotify.ts](../app/utils/serviceThreadNotify.ts)) — an admin's message from a service
   card (ADR-0065): push AND email to that service's Lead seat, never the author; «Mensaje del
