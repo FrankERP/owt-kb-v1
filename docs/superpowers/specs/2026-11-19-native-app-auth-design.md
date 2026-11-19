@@ -122,13 +122,27 @@ to, never changed by a refresh. `requireAppSession` returns it, and:
 - `channel: "verified"` → the session carries the person's full live role (member, content-editor,
   admin, super-admin; ministry management), exactly like a web session.
 - `channel: "scheme"` → the session is **member-level**, whatever the person's role: it passes
-  `needs: "member"` endpoints only. Any endpoint declared `needs: "manager"` (or stronger) refuses
-  it with `403 { "error": "verified_app_required" }`, and the app shows «Para administrar, instala
-  la versión de la tienda».
+  only the `self` and `{ ministry, as: "member" }` levels of D8's lattice. Every other level —
+  `identity`, any management or leadership level, `manager`, `super-admin` — refuses it with
+  `403 { "error": "verified_app_required" }`, and the app shows «Para esto, instala la versión de
+  la tienda».
 
-Why: the phishing-app risk of D3 is bounded to what a member can already do from their own
-account (read the team's schedule and the song library, edit their own availability and profile),
-and never reaches the planner, the solver rules, people or access. Admin screens arrive in phase 3
+**`identity` is its own level, refused to scheme sessions**. Self-service in this
+codebase includes changing one's own email (`PATCH /api/me` → `patchOwnProfile`,
+`app/utils/memberCommit.ts`) and setting a password without the current one when none exists
+(`app/api/me/password/route.ts`), and Google sign-in resolves the member BY EMAIL
+(`getMemberByEmail`, `auth.ts`). A member-level token that could do either could turn itself into a
+full web sign-in at the victim's live role, super-admin included. So every endpoint that changes how
+the person signs in or who they are to the sign-in — email, password, sign-in linkage, a future Sign
+in with Apple link — is declared `needs: "identity"`, which only a verified session passes. Alias,
+photo, theme, notification preferences, availability, push tokens and the calendar-feed link stay at
+`self`/ministry-member: they expose or change only what the member already sees and do not open a
+sign-in.
+
+Why the cap: the phishing-app risk of D3 is bounded to what a member can already see and do in the
+app without changing their identity (read their ministry's schedule and the song library, edit their
+own availability, alias, photo and preferences, fill «Mi parte»), and never reaches sign-in
+credentials, the planner, the solver rules, people or access. Admin screens arrive in phase 3
 (week 9+), after the Apple account exists, on verified sessions only. This mirrors ADR-0083,
 where the kind of client decides which tools a grant gets.
 
@@ -164,7 +178,13 @@ parameterized by document type, id prefix, the code-redemption type/prefix, the 
 and parser. The MCP store becomes `createGrantStore(MCP_CONFIG)` and keeps its exported names; the
 app store is `createGrantStore(APP_CONFIG)`. The guard for the extraction is that every existing
 MCP OAuth test passes UNCHANGED (no edits under `app/mcp/oauth/__tests__/`), plus the same suite
-parameterized over the app config.
+parameterized over the app config. Constraints, all honoured:
+`app/mcp/oauth/grantStore.ts` keeps importing `writeClient` and `grantDocument` itself and passes
+the client into the factory (so `app/mcp/__tests__/mcpSanityClients.test.ts`'s stale-exemption check
+and `oauthRegisterRoute.test.ts`'s import assertion keep holding without edits); the two new
+document types are added to `studioProtection.test.ts`'s protected list (an intended test change);
+and the new `app/oauthCore/` and `app/appAuth/` modules get their own sanity-client guard entry
+(writes only through the injected `writeClient`).
 
 App documents (dotted ids, so the public reader never sees them, like the MCP ones):
 
@@ -189,9 +209,20 @@ drift; the extraction keeps one.
   copied access token would still die within the hour, while every hour of use passes through the
   refresh path, which reads the grant fresh and re-checks the person.
 - Refresh token: **90 days**, rotated on every use, reuse revokes the grant. 90 not 30 because many
-  members open the app weekly or less; a 30-day idle window would sign them out monthly.
-- Cost: a refresh is one fresh grant read plus one patch. With ~60 people refreshing at most when
-  they open the app and their hour has passed, that is well under 1% of the Sanity request quota.
+  members open the app weekly or less; a 30-day idle window would sign them out monthly. **No
+  absolute grant lifetime**, by choice: a grant used at least every 90 days lives until revoked,
+  like the web's rolling session; revocation (D9) and the live access check (D8) are the controls.
+- **Strict reuse detection, no grace window.** A lost refresh response (app suspended, network
+  switch) followed by a retry with the old refresh token revokes the grant and the member signs in
+  again. Accepted for v1: a re-sign-in is the cost, and a grace window would let a copied previous
+  token work. The client contract REQUIRES single-flight refresh (one refresh in flight per app
+  process; every request waiting on it) and stores the new pair before using it. Revocations log
+  their reason (`refresh_token_reuse`), so if the logs show real users hitting this, a grace window
+  is a later, separate decision.
+- Cost, computed: one refresh = one fresh grant read + one patch. Assume ~60 people, each opening
+  the app 3 times a day after their hour expired: ~180 refreshes = ~360 Sanity requests a day,
+  ~11,000 a month, plus one code exchange (≤ 3 requests) per sign-in. This is an estimate to check
+  against `sanity.io/manage` usage after release, not a measurement.
 
 ### D8. `requireAppSession` — the one guard
 
@@ -208,12 +239,32 @@ token and revoke endpoints:
    `grant.origin === origin`, `grant.channel === token.channel`, else 401.
 5. Live access: `getMemberAccess(sub)` (30 s cache); not `active` → 401 (the app signs out and
    shows «Tu acceso está desactivado»). Errors reading Sanity → 503, never a pass.
-6. Returns `{ sanityId, access, channel, platform, grantId }`. The handler then applies the SAME
-   pure predicates the cookie guards use (`isMinistryMember`, `isMinistryManager`, the manager and
-   super-admin checks), extracted where they are not already pure, with an equivalence test that
-   runs one table of access snapshots through both the cookie guard and the bearer guard.
-7. `needs` option: `"member"` (default) or `"manager"`/`"super-admin"`/ministry-scoped; on a
-   `scheme` session anything above `"member"` → 403 `verified_app_required` (D4).
+6. Applies the channel cap (step 8) FIRST, then the endpoint's declared `needs` level (step 7)
+   with the SAME pure predicates the cookie guards use, on the live `access`; a level the person
+   does not meet → 403 `forbidden`. Returns
+   `{ sanityId, access, channel, platform, grantId }`.
+7. **`needs` is REQUIRED — there is no default** (a ministry-agnostic default would
+   break two-way ministry isolation, CLAUDE.md §Auth). The lattice:
+
+   | Level | Passes when (live access) | Scheme session? | Cookie-side twin |
+   | --- | --- | --- | --- |
+   | `"self"` | active | yes | `requireActiveSession`; the handler reads ONLY the caller's own record (`/me`, own devices, own preferences) |
+   | `"identity"` | active | **no** | `requireActiveSession` on `/api/me` email and `/api/me/password` |
+   | `{ ministry: m, as: "member" }` | `isMinistryMember(access, m)` | yes | `requireMinistryMember(m)` |
+   | `{ ministry: "jovenes", as: "leader" }` | `ledGroupsIn(access, "jovenes")` non-empty; the handler then scopes to those groups (ADR-0085) | no | the Jóvenes leader checks |
+   | `{ ministry: m, as: "manager" }` | `isMinistryManager(access, m)` | no | `requireMinistryManager(m)` |
+   | `"manager"` | role ∈ {super-admin, admin, content-editor} — the predicate `requireActiveManager` applies, read from LIVE access | no | `requireActiveManager` |
+   | `"super-admin"` | role = super-admin | no | the routes' super-admin checks |
+
+   Worship reads (schedule, songs, setlists) are `{ ministry: "worship", as: "member" }`, so a Kids-
+   or Jóvenes-only member is refused them exactly as on the web, and a scheme session of a worship
+   member passes them. The predicates are the existing pure ones (`isMinistryMember`,
+   `isMinistryManager`, `ledGroupsIn` in `app/utils/ministryAccess.ts`); the role sets are extracted
+   from `authGuards.ts` into named constants both guards import. An equivalence test runs one table of
+   access snapshots through each cookie guard and its bearer twin.
+8. On a `scheme` session, any level outside `"self"` and `{ as: "member" }` → 403
+   `verified_app_required` (D4), checked BEFORE the role predicate so the answer does not reveal the
+   role.
 
 Never: impersonation (an app token's `sub` is always the person who signed in; there is no
 impersonate parameter anywhere under `/api/app`), a role read from the token (the role is always
@@ -254,8 +305,8 @@ printable ASCII). Unknown parameters ignored. `scope`/`resource` not accepted (a
    page «Termina la suplantación antes de entrar a la app». Live access not active → error page.
 3. `client_id` is one of the two; `redirect_uri` is EXACTLY one of that client's two redirects
    → else error PAGE (never redirect to an unverified target).
-4. The rest (`response_type`, PKCE, `state`) → else error REDIRECT to the verified redirect with
-   `error`, `state` (when present once) and `iss`.
+4. The rest (`response_type`, PKCE, `state`) → else error REDIRECT to the request's own validated
+   `redirect_uri` (whichever channel it is) with `error`, `state` (when present once) and `iss`.
 5. Verified channel → auto-submitting form (no visible step) to 3.2. Scheme channel → the
    confirmation screen of D5.
 
@@ -295,7 +346,7 @@ signed-out browser must not be bounced through sign-in carrying the code in `cal
 
 ### 3.6 `GET /api/app/v1/me` — the proof endpoint
 
-`requireAppSession({ needs: "member" })` → `{ id, name, alias, photoUrl, role, ministries,
+`requireAppSession({ needs: "self" })` → `{ id, name, alias, photoUrl, role, ministries,
 channel, platform }`. Only the person's own record. `role` is reported so the app can hide admin
 tabs; the SERVER still decides every admin call.
 
@@ -306,9 +357,9 @@ tabs; the SERVER still decides every admin call.
 
 - `api/app/v1(?:/|$)` — every handler under it authenticates itself (bearer via D8, or the
   session check of 3.2). A new test asserts that EVERY `route.ts` under `app/api/app/v1/` other
-  than `auth/token`, `auth/revoke` and `auth/authorize` calls `requireAppSession` before any other
-  await (static check over the source, like `serviceCommitCallers.test.ts`), and that
-  `auth/authorize` calls the session check first.
+  than `auth/token`, `auth/revoke` and `auth/authorize` calls `requireAppSession` with a literal
+  `needs` level before any other await (static check over the source, like
+  `serviceCommitCallers.test.ts`), and that `auth/authorize` calls the session check first.
 - `app/callback/(?:ios|android)$` — the inert page of 3.5, exact paths.
 
 `/app/authorize` stays gated. Tests: `/app/authorize`, `/app/callbacks`, `/app/callback/ios/x`,
@@ -321,6 +372,8 @@ tabs; the SERVER still decides every admin call.
 | A stolen access token | 1 h life; revocation in `/me` bites within 30 s; it opens `/api/app/v1` only |
 | A stolen refresh token used after the real app refreshed | Reuse revokes the whole grant; the real app's next refresh fails and it asks to sign in again |
 | A malicious app on the phone starts its own flow (scheme) | D5 confirmation step (no zero-click); D4 caps it at member level; verified channel needed for admin |
+| A member-level token changes the email or sets a password, then signs in on the web | `identity` level, refused to scheme sessions (D4, D8) |
+| A Kids- or Jóvenes-only member reads worship data through the app | No default level; worship reads declare `{ ministry: "worship", as: "member" }` (D8) |
 | Another app intercepts a code sent to the scheme | PKCE: it lacks the verifier |
 | An MCP token used on the app API, or the reverse | Different secret, `typ` and `aud` (D2) |
 | A dynamically registered MCP client names an app redirect | The MCP allowlist is unchanged and does not contain them (D1) |
@@ -342,10 +395,12 @@ tabs; the SERVER still decides every admin call.
 - Token route: the full matrix of 3.3, including replay, PKCE mismatch, redirect of the other
   client, the other channel's redirect, a refresh whose grant belongs to the other client, reuse →
   revocation, revision conflict → refused not revoked, channel taken from the grant.
-- Guard: every step of D8, `scheme` + `needs: "manager"` → 403, and the cookie/bearer predicate
-  equivalence table.
+- Guard: every step of D8; every lattice level × channel (scheme passes only `self` and ministry
+  `member`; `identity` refused to scheme); a Kids-only member refused worship `member`; the
+  cookie/bearer predicate equivalence table.
 - Store factory: the MCP suite unchanged and green; the same suite over the app config.
-- Matcher: §4 cases; the static «every route calls the guard first» check.
+- Matcher: §4 cases; the static «every route calls the guard first» check, which also asserts each
+  call passes a literal `needs` (no call without it, no computed level).
 - `/me` revoke route: own grant only, impersonation refused.
 
 Gates before claiming done: `npx tsc --noEmit`, `npm test`, `npx eslint .` (0 errors). No solver
@@ -360,8 +415,16 @@ and Preview (`vercel env add`) before the merge that reads it; until then the do
 
 Note on testing against dev: the dev deployment is behind Vercel SSO, which a native app cannot
 pass. The apps develop against a local `next dev` (`http://localhost:3000`, the canonical local
-origin) from the iOS Simulator / Android emulator, and against production with Frank's own account
-once released. The scheme redirect works on all three origins (it is not origin-bound); verified
+origin): the iOS Simulator reaches it as `localhost`; the Android emulator must use
+`adb reverse tcp:3000 tcp:3000` (its `10.0.2.2` host would be refused by `resolveOrigin`, by design).
+A physical phone cannot reach local, so Frank's own-iPhone builds sign in against PRODUCTION, which
+means this slice must be released to production before that test.
+
+Narrowing of «toda la app desde v1», stated plainly: administration from a phone needs a verified
+session. On iPhone that waits for the paid Apple account (Associated Domains); on Android it needs
+Chrome 137+ for Auth Tab (the app targets the Chrome package explicitly; another default browser falls
+back to the scheme channel, member-level). The whole app still ships in v1; admin screens simply show
+«instala la versión de la tienda» on a scheme session. ADR-0091 records this. The scheme redirect works on all three origins (it is not origin-bound); verified
 redirects are per-origin.
 
 ## 8. Premises to verify (the review should check these, not assume them)
@@ -376,7 +439,9 @@ redirects are per-origin.
   only embedded WebViews).
 - P4. NextAuth's default `redirect` callback returns to `/app/authorize?…` with the full query after
   sign-in, as it does for `/oauth/authorize` (`authRedirectCallback.test.ts`).
-- P5. The MCP grant-store protocol can be extracted without changing any MCP test file.
+- P5. The MCP grant-store protocol can be extracted without changing any MCP OAuth test file
+  (`app/mcp/oauth/__tests__/`, `mcpSanityClients.test.ts`, `oauthRegisterRoute.test.ts`); the only
+  intended test edit outside the new suites is adding the two types to `studioProtection.test.ts`.
 
 ## 9. Docs in the same delivery
 
@@ -388,5 +453,8 @@ redirects are per-origin.
 - `docs/MOBILE.md`: the native plan replaces the Capacitor phases (Capacitor stays until the native
   apps reach parity).
 - `docs/AUTH_AND_SECURITY.md`, `docs/ROUTES.md`: the new routes and the matcher exclusions.
-- `CLAUDE.md` invariant line: «`/api/app/v1/*` authenticates with `requireAppSession` first; a
-  `scheme` session is member-level only (ADR-0091)».
+- `CLAUDE.md` invariant line: «`/api/app/v1/*` authenticates with `requireAppSession` first, with a
+  declared `needs` level (no default); a `scheme` session passes only `self` and ministry `member`
+  — never `identity` (email, password, sign-in linkage) nor any management level (ADR-0091)».
+- `next.config.mjs`: its CSP caveat comment also names the app's private-scheme redirect targets,
+  so a future `form-action` directive does not silently break the scheme channel.
