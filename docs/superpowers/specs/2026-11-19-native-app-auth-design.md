@@ -45,7 +45,9 @@ In scope:
 Out of scope (later slices, each with its own review where the ladder demands it): every other
 `/api/app/v1/*` endpoint, the OpenAPI contract, push (APNs/FCM), the native projects themselves,
 the `apple-app-site-association` and `assetlinks.json` files (they need the Apple Team ID and the
-Android signing-certificate fingerprint, which do not exist yet), Sign in with Apple (App Store
+Android signing-certificate fingerprint, which do not exist yet; recorded now for that slice: the
+iOS file must list the app under BOTH `webcredentials` and `applinks`, because an `https` callback
+in `ASWebAuthenticationSession` requires the `webcredentials` service type), Sign in with Apple (App Store
 rule 4.8 — decided before the first App Store submission), and the admin endpoints.
 
 ## 2. Decisions, each with the alternative it rejects
@@ -73,9 +75,21 @@ Rejected alternative: add `backstage-ios`/`backstage-android` to the MCP door wi
 branch at every gate. It would put member-level tokens through code whose every comment assumes
 admins only, and one missed branch would hand a member an MCP token.
 
+Rejected alternative: a native Google ID-token exchange. The repo already has a `google-native`
+credentials provider (`auth.ts`, used by the Capacitor wrap's `NativeAuthBootstrap`) that turns a
+Google ID token obtained in the app into a NextAuth cookie session. It is not the native apps'
+door: it covers Google accounts only (members who sign in with email and password could not use
+the app), it yields a cookie session rather than a revocable bearer grant the `/me` list can show
+and close, and it would make the native apps depend on Google's SDK on both platforms for every
+sign-in. It stays as it is for the Capacitor wrap until that wrap is retired; nothing in this slice
+calls or changes it. Likewise `/api/me/push-token` stays cookie-only (the wrap's push
+registration); the native apps' push registration is a later slice under `/api/app/v1` (D9).
+
 ### D2. Its own signing secret: `APP_AUTH_SECRET`
 
-HS256 with the UTF-8 bytes of `APP_AUTH_SECRET` (≥ 32 bytes, same `loadSecret` rule), never
+HS256 with the UTF-8 bytes of `APP_AUTH_SECRET` (≥ 32 bytes, the same rule as the MCP
+`loadSecret`, which is hard-wired to `MCP_OAUTH_SECRET`; the app gets its own `loadAppSecret` in
+`app/appAuth/secret.ts`, so `app/mcp/oauth/origin.ts` stays byte-unchanged), never
 `MCP_OAUTH_SECRET` and never `NEXTAUTH_SECRET`. Key separation makes a token of one door
 unverifiable by the other even if an `aud` or `typ` check were ever dropped. The `typ` values are
 also distinct (`app-code`, `app-at`, `app-rt`). Fail closed: no secret → the app door answers 503.
@@ -96,22 +110,41 @@ exact strings (no port, path or case variance). No client authentication (public
 `token_endpoint_auth_method: none`); a `client_secret` or `Authorization: Basic` is refused as in
 the MCP token route.
 
-**Production and preview accept only the verified `https` redirect.** The OS delivers it only to
-an app whose signature our domain vouches for: iOS `ASWebAuthenticationSession` with an `https`
-callback (iOS 17.4+, Associated Domains, `apple-app-site-association`), Android Auth Tab with an
-`https` redirect verified by Digital Asset Links (`assetlinks.json`). A malicious app on the same
-phone can open our authorize URL, but it can never receive the code: on iOS the session refuses an
-`https` callback for a domain the app is not associated with; on Android the Auth Tab returns the
-result only to an app the domain's `assetlinks.json` names. So every session the door issues on
-production carries the person's full live role, exactly like a web session — there is no
-reduced-power session to leak (D4).
+**Production and preview accept only the verified `https` redirect.** Our own apps receive it
+through a mechanism that delivers it only to an app our domain vouches for: iOS
+`ASWebAuthenticationSession` with an `https` callback (iOS 17.4+, Associated Domains with the
+`webcredentials` service type, `apple-app-site-association`), Android Auth Tab with an `https`
+redirect verified by Digital Asset Links (`assetlinks.json`). The apps must never complete sign-in
+through a plain browser intent, a Custom Tab, or an embedded WebView. If the device cannot run the
+mechanism, the app does not sign in: on Android, no Auth Tab (Chrome older than 137, or a browser
+without it) → the app says «Para entrar necesitas Chrome actualizado» with a link to it; the app
+launches the Auth Tab in the Chrome package explicitly when Chrome is installed, whatever the
+default browser.
 
-The guarantee holds ONLY through those two mechanisms. The apps must never complete sign-in through
-a plain browser intent, a Custom Tab, or an embedded WebView (on Android ≤ 11 an `https` link can be
-offered to other apps in a chooser). If the device cannot run the mechanism, the app does not sign
-in: on Android, no Auth Tab (Chrome older than 137, or a browser without it) → the app says
-«Para entrar necesitas Chrome actualizado» with a link to it; the app launches the Auth Tab in the
-Chrome package explicitly when Chrome is installed, whatever the default browser.
+**The exact guarantee against another app on the same phone.** The rule above binds OUR apps; it
+does not bind an attacker's app, which can open our authorize URL in its own Custom Tab (sharing
+the browser's cookies) with our `client_id`, our `https` redirect and a PKCE pair it generated
+itself, and then hope the 303 to our `https` redirect is handed to it. Whether it can be:
+
+| Platform | Can another app receive our `https` redirect? |
+| --- | --- |
+| iOS 17.4+ | No. Universal Links go only to the app the domain's association file names; an unassociated app cannot claim the domain. |
+| Android 12+ | No, unless the person has manually approved our domain for that app under «Abrir de forma predeterminada» (unverified web links open in the browser by default). |
+| Android 6–11, our app installed and verified | No. A verified App Link opens the verified app directly, with no chooser. |
+| Android 6–11, our app NOT installed (or its verification failed) | Yes, if the person picks the other app in the system chooser. |
+
+So two residual cases remain, both requiring the person to act on their own phone: picking an
+unknown app in the Android ≤ 11 chooser (realistically, someone who installed a fake «Backstage»
+app instead of ours), or approving our domain for another app in Android 12+ settings. The server
+cannot tell which app started a flow, so the control the server CAN apply is that no code is ever
+minted silently: one visible tap on our own page, showing who is signing in (D5). A background flow
+started by another app always stops at a screen the person must deliberately confirm. These
+residuals are recorded in ADR-0091 for Frank to accept explicitly. Not verified on a device: how
+Chrome on Android ≤ 11 dispatches a 303 to an `https` link from inside a Custom Tab when a
+non-browser handler is present; the table assumes the worst (the chooser appears).
+
+Within those bounds, every session the door issues carries the person's full live role, exactly like
+a web session — there is no reduced-power session to leak (D4).
 
 **The private-use scheme exists only on the local origin** (`http://localhost:3000`, what
 `canonicalOrigin` returns when `VERCEL_ENV` is unset or `development`). It lets the iOS Simulator
@@ -141,15 +174,25 @@ against the person's LIVE access, the same predicates the cookie guards use. Thi
 the rejected alternatives lacked: there is exactly one notion of power — the person's — whether the
 request comes from the web or the app.
 
-### D5. No consent screen; the sign-in is the consent
+### D5. One visible tap before any code is minted — never a silent code
 
 `/app/authorize` is a page behind the session middleware (like `/oauth/authorize`: a cookie-less
 browser goes through sign-in and comes back with its query intact, relying on NextAuth's default
 `redirect` callback, already guarded by `authRedirectCallback.test.ts`). After the request validates
-and the person is signed in (not impersonating, live-active), the page submits automatically — no
-screen — and the browser follows the 303 to the verified redirect. A zero-click flow is harmless
-here: whoever opened the URL, the code can only reach our own app (or the inert page of §3.5) and is
-useless without the PKCE verifier that app holds. The local-only scheme gets the same treatment.
+and the person is signed in (not impersonating, live-active), the page shows ONE screen: the
+person's name and photo, «¿Entrar a la app Backstage en este teléfono?», a primary button
+«Entrar a la app» and a secondary «Cancelar», plus one line: «Si no abriste la app Backstage, toca
+Cancelar». Only the button's form POST (§3.2) mints a code; the browser then follows the 303 to the
+redirect. «Cancelar» redirects to the validated `redirect_uri` with `error=access_denied` and `state`.
+
+Why a tap rather than zero-click: on Android ≤ 11 (and Android 12+ after a manual approval) another
+app can start our flow in its own tab and, if the person picks it in a chooser, receive the code
+with a verifier it generated itself (D3). PKCE does not help there, so the code must never be minted
+without the person deliberately confirming on our page. The tap costs one touch per sign-in, which
+happens once per refresh lifetime (D7). Same screen on every origin, local included (one code path).
+
+The page renders the button only; it never auto-submits (no script that clicks it, no `autofocus`
+submit on load), and a test asserts the rendered page has no auto-submitting form.
 
 The apps start the flow with an ephemeral browser session (`prefersEphemeralWebBrowserSession` on
 iOS; Auth Tab without shared state where available), so the person signs in when they sign in to
@@ -183,8 +226,11 @@ App documents (dotted ids, so the public reader never sees them, like the MCP on
   `revokedReason`. Nothing else: no token, no code, no device name, no IP.
 - `appAuthCode.<sha256(jti)>`: `redeemedAt`.
 
-Sanity schema types are added for both (read-only in the Studio, like the MCP ones). Parsing fails
-closed: a missing or malformed document, or one with an unknown `clientId`, reads as revoked.
+Sanity schema types are added for both (read-only in the Studio, like the MCP ones). The two schema
+files import only an import-free constants module (`app/appAuth/documentTypes.ts`: the type names
+and id prefixes as string literals, no imports), never `app/appAuth/*` or `app/oauthCore/*`, so
+`jose` and `node:crypto` never reach the Studio bundle; a test asserts that module has no `import`.
+Parsing fails closed: a missing or malformed document, or one with an unknown `clientId`, reads as revoked.
 
 Rejected alternative: a separate copy of the store for the app. Two copies of a security protocol
 drift; the extraction keeps one.
@@ -204,7 +250,16 @@ drift; the extraction keeps one.
 - **Strict reuse detection, no grace window.** A lost refresh response (app suspended, network
   switch) followed by a retry with the old refresh token revokes the grant and the member signs in
   again. Accepted for v1: a re-sign-in is the cost, and a grace window would let a copied previous
-  token work. The client contract REQUIRES one refresh owner per token store: only the main app
+  token work. (A narrower option, returning the same new pair when the immediately previous token
+  is replayed within a few seconds, is left for a later, separate decision if the logs show real
+  users hitting this.)
+- **A rotation that loses a revision race is not a revocation, and the app can tell.** The store
+  refuses it without revoking (D6); the token endpoint answers it `503` with
+  `{"error":"temporarily_unavailable"}` and `Retry-After: 1`, never `invalid_grant`. The app treats
+  `invalid_grant` as «signed out» and `temporarily_unavailable` (or any 5xx or network error) as
+  «try again»: it retries once with the same refresh token after the delay, then keeps its tokens
+  and shows an offline state. If the race was a concurrent rotation by another holder of the same
+  token, that retry is a reuse and revokes the grant, which is the intended outcome. The client contract REQUIRES one refresh owner per token store: only the main app
   process ever refreshes, single-flight (one refresh in flight, every request waiting on it), and it
   stores the new pair before using it. App extensions that share the keychain (widgets, the
   notification service extension) NEVER refresh; they read what the main app cached or show a
@@ -272,12 +327,17 @@ disabled in the admin stops within 30 s (access cache). Same as the MCP route an
 - `/me` gets a section «Apps conectadas»: the signed-in person's own live grants (platform,
   created, last used = `lastRefreshAt`), each with «Cerrar sesión en ese teléfono». The button
   calls `POST /api/me/app-sessions/[grantId]/revoke` (cookie session, `requireActiveSession`;
-  refuses unless `grant.sub === session.user.sanityId`; refuses while impersonating). The read
-  is server-side with the token-carrying client, filtered by `sub` in GROQ with a parameter.
+  refuses unless `grant.sub === session.user.sanityId` AND `grant.origin === origin`; refuses
+  while impersonating). The read is server-side with the token-carrying client, filtered in GROQ
+  by `sub` AND `origin` (both parameters), so a deployment lists only its own grants: local and
+  preview test sessions share the dataset but never appear in production's list, matching the
+  store's rule that one deployment never revokes another's grant.
 - A super-admin can close every app session of a member (a lost phone): «Cerrar sesiones de la
   app» on the member in `/admin` → `POST /api/admin/members/[id]/app-sessions/revoke`
   (super-admin only, checked in the route on live access; refused while impersonating; revokes every
-  live `appAuthGrant` whose `sub` is that member, `revokedReason: "admin_revoked"`).
+  live `appAuthGrant` whose `sub` is that member AND whose `origin` is this deployment's,
+  `revokedReason: "admin_revoked"`). Decided: it does not span origins; a stray local or preview
+  grant is a developer's test session and dies with its own deployment's revoke or its 90 days.
 - Disabling a member (existing flow) needs no extra step: D8 step 5 refuses them live.
 - Decided now for later slices: device push tokens registered through the app store the `grantId`
   they were registered under, and revoking a grant (any of the three paths) deletes them in the same
@@ -289,8 +349,12 @@ disabled in the admin stops within 30 s (access cache). Same as the MCP route an
 ## 3. Endpoint contracts
 
 All under the deployment's canonical origin only (`resolveOrigin`); a foreign `Host` → 404. All
-answers `Cache-Control: no-store`. Nothing logs a token, code, verifier or client secret; a server
-failure logs a fixed stage name and at most a Sanity status code (as the MCP token route does).
+answers `Cache-Control: no-store`. Our code never logs a token, code, verifier or client secret; a
+server failure logs a fixed stage name and at most a Sanity status code (as the MCP token route
+does). The platform does: Vercel's request logs record full URLs, so a code that lands on the web
+callback page of §3.5 (`/app/callback/*?code=…`) is in those logs. Accepted: the code lives 60 s, is
+single use, and is useless without the PKCE verifier; tokens travel only in POST bodies and the
+`Authorization` header, never in a URL.
 
 ### 3.1 `GET /app/authorize` (page, session-gated)
 
@@ -306,13 +370,26 @@ printable ASCII). Unknown parameters ignored. `scope`/`resource` not accepted (a
    THIS ORIGIN (D3) → else error PAGE (never redirect to an unverified target).
 4. The rest (`response_type`, PKCE, `state`) → else error REDIRECT to the request's validated
    `redirect_uri` with `error`, `state` (when present once) and `iss`.
-5. An auto-submitting form (no visible step) to 3.2.
+5. The confirmation screen of D5: a form POST to 3.2 carrying every parameter, submitted only by
+   the person's tap. The page answers `Referrer-Policy: same-origin` (pinned, so the browser sends
+   a real `Origin` on the POST, never `null`), `Cache-Control: no-store`, and
+   `X-Frame-Options: DENY` / `frame-ancestors 'none'` so another page cannot frame it and steal the
+   tap.
 
-### 3.2 `POST /api/app/v1/auth/authorize` (session-gated by its own check, not the matcher)
+### 3.2 `POST /app/authorize/submit` (behind the session middleware, like the page)
 
-Form re-carrying every parameter; re-runs the SAME validator as 3.1 (one function, two callers),
-re-checks the session, impersonation and live access. Origin check on `Origin`/`Sec-Fetch-Site` (same-origin only)
-against CSRF. Mints the code and answers `303` to `redirect_uri?code=…&state=…&iss=<origin>`.
+Not under `api/app/v1`, so the matcher's session gate covers it as it covers `/api/oauth/authorize`
+on the MCP door; the handler still re-checks everything itself. Form re-carrying every parameter
+plus `decision=allow|deny`; re-runs the SAME validator as 3.1 (one function, two callers), re-checks
+the session, impersonation and live access.
+
+CSRF, in this order: if `Sec-Fetch-Site` is present it must be `same-origin`, else refused. If it
+is absent, `Origin` must be present and equal the canonical origin; a missing `Origin` or the
+literal `null` is refused. (Every browser the apps can sign in through sends `Sec-Fetch-Site`:
+Chrome 137+, and Safari on iOS 17.4+.) A refused POST answers an error page, never a redirect.
+
+`decision=deny` → `303` to `redirect_uri?error=access_denied&state=…&iss=<origin>`.
+`decision=allow` → mints the code and answers `303` to `redirect_uri?code=…&state=…&iss=<origin>`.
 
 ### 3.3 `POST /api/app/v1/auth/token`
 
@@ -326,7 +403,8 @@ against CSRF. Mints the code and answers `303` to `redirect_uri?code=…&state=�
   `{ access_token, token_type: "Bearer", expires_in: 3600, refresh_token }`.
 - `grant_type=refresh_token`: `refresh_token`, `client_id`. Verify the refresh token; read the grant
   FRESH; `grant.clientId === client_id`; `grant.sub === token.sub`; live access active; rotate
-  (reuse → whole grant revoked, logged as a security event without the token). Returns a new pair.
+  (reuse → whole grant revoked, logged as a security event without the token; a lost revision race
+  → `503 temporarily_unavailable`, not revoked, D7). Returns a new pair.
 
 Errors: RFC 6749 §5.2 JSON with fixed descriptions, as the MCP token route.
 
@@ -355,15 +433,16 @@ tabs; the SERVER still decides every admin call.
 `proxy.ts` and its byte-identical copy `app/utils/routeMatcher.ts` (guarded by
 `routeMatcher.test.ts`) gain exactly two anchored exclusions:
 
-- `api/app/v1(?:/|$)` — every handler under it authenticates itself (bearer via D8, or the
-  session check of 3.2). A new test asserts that EVERY `route.ts` under `app/api/app/v1/` other
-  than `auth/token`, `auth/revoke` and `auth/authorize` calls `requireAppSession` with a literal
-  `needs` level before any other await (static check over the source, like
-  `serviceCommitCallers.test.ts`), and that `auth/authorize` calls the session check first.
+- `api/app/v1(?:/|$)` — every handler under it authenticates itself with a bearer token. A new
+  test asserts that EVERY `route.ts` under `app/api/app/v1/` other than `auth/token` and
+  `auth/revoke` calls `requireAppSession` with a literal `needs` level before any other await
+  (static check over the source, like `serviceCommitCallers.test.ts`). No cookie-session handler
+  lives under this prefix.
 - `app/callback/(?:ios|android)$` — the inert page of 3.5, exact paths.
 
-`/app/authorize` stays gated. Tests: `/app/authorize`, `/app/callbacks`, `/app/callback/ios/x`,
-`/api/app`, `/api/apps` remain gated; `/api/app/v1/me` and the two callback paths are excluded.
+`/app/authorize` and `/app/authorize/submit` stay gated. Tests: `/app/authorize`,
+`/app/authorize/submit`, `/app/callbacks`, `/app/callback/ios/x`, `/api/app`, `/api/apps` remain
+gated; `/api/app/v1/me` and the two callback paths are excluded.
 `routeMatcher.test.ts`'s `PUBLIC_ROUTES` list (its disk walk of ungated routes) gains every route
 under `app/api/app/v1/` and the two callback pages, so each new ungated route is reviewed there.
 
@@ -373,17 +452,18 @@ under `app/api/app/v1/` and the two callback pages, so each new ungated route is
 | --- | --- |
 | A stolen access token | 1 h life; revocation in `/me` bites within 30 s; it opens `/api/app/v1` only |
 | A stolen refresh token used after the real app refreshed | Reuse revokes the whole grant; the real app's next refresh fails and it asks to sign in again |
-| A malicious app on the phone starts its own flow | It cannot receive the code: production redirects are `https` on our domain, delivered only via `ASWebAuthenticationSession`/Auth Tab to the app the domain names (D3); the scheme exists only on localhost |
-| A code is intercepted anyway (a browser that opened the link) | PKCE: useless without the verifier the real app holds |
+| A malicious app on the phone starts its own flow | iOS 17.4+ and Android 12+ (no manual approval): it cannot receive our `https` redirect (D3 table). Everywhere: no code is minted without the person's visible tap on our page showing their name (D5), so a background flow always stops. Residual, accepted in ADR-0091: on Android ≤ 11 without our app installed, or after a manual «Abrir de forma predeterminada» approval, a person who taps «Entrar a la app» and then picks the other app in the chooser hands it a session. The scheme exists only on localhost |
+| A code is intercepted by something that did not start the flow (a browser that opened the link, a log) | PKCE: useless without the verifier the real app holds |
 | A Kids- or Jóvenes-only member reads worship data through the app | No default level; worship reads declare `{ ministry: "worship", as: "member" }` (D8) |
 | A lost phone | The member closes the session in `/me`, or a super-admin closes all of that member's app sessions (D9); ≤ 30 s |
 | A scheme redirect accepted on production by mistake | Registry lists scheme redirects only for `LOCAL_ORIGIN`; tests on production and preview origins at authorize and token |
 | An MCP token used on the app API, or the reverse | Different secret, `typ` and `aud` (D2) |
 | A dynamically registered MCP client names an app redirect | The MCP allowlist is unchanged and does not contain them (D1) |
 | Open redirect via `redirect_uri` | Exact match against two fixed strings per client; unverified target → error page, never a redirect |
-| CSRF on the code-minting POST | Same-origin check; session re-checked; and the code can only reach our own app anyway |
-| Code leaks through the web callback page | Never echoed; single use; 60 s; useless without the verifier |
+| CSRF or clickjacking on the code-minting POST | `Sec-Fetch-Site: same-origin` (or an exact `Origin`; `null` refused); the POST stays behind the session middleware and re-checks the session; the page refuses framing (§3.1, §3.2) |
+| Code leaks through the web callback page or the platform's request logs | Never echoed; single use; 60 s; useless without the verifier; tokens never travel in a URL (§3) |
 | A super-admin impersonating someone signs the app in as them | Refused on 3.1 and 3.2 |
+| A momentary write conflict signs the person out | A lost revision race answers `temporarily_unavailable`, distinct from `invalid_grant`; the app retries instead of signing out (D7) |
 | Disabled member keeps using the app | Live access check on every request (≤ 30 s) and at every refresh |
 | Grant documents read publicly | Dotted ids; no secret material stored |
 | Secret missing or kill switch on | 503 everywhere in the door and the guard; nothing passes |
@@ -396,17 +476,23 @@ under `app/api/app/v1/` and the two callback pages, so each new ungated route is
   exactly their one `https` redirect per client.
 - Authorize validator: every rule and the error-page vs error-redirect split; a scheme redirect on
   the production and preview origins → error page.
-- Authorize POST: session absent, impersonating, inactive, cross-site `Origin`, 303 target exactness.
+- Authorize page: renders the confirmation screen with no auto-submit (no script, no auto-submitting
+  form), `Referrer-Policy: same-origin`, framing refused.
+- Authorize POST: session absent, impersonating, inactive; `Sec-Fetch-Site` cross-site/same-site
+  refused; no `Sec-Fetch-Site` with `Origin` missing, `null` or foreign refused; `decision=deny` →
+  `access_denied` redirect and no code minted; 303 target exactness.
 - Token route: the full matrix of 3.3, including replay, PKCE mismatch, redirect of the other client,
   a scheme redirect on production/preview, a refresh whose grant belongs to the other client, reuse →
-  revocation, revision conflict → refused not revoked.
+  revocation, revision conflict → `503 temporarily_unavailable` and not revoked.
 - Guard: every step of D8; every lattice level; a Kids-only member refused worship `member`; the
   cookie/bearer predicate equivalence table.
 - Store factory: the MCP suite unchanged and green; the same suite over the app config.
 - Matcher: §4 cases; the static «every route calls the guard first» check, which also asserts each
   call passes a literal `needs` (no call without it, no computed level).
-- `/me` revoke route: own grant only, impersonation refused. Admin revoke route: super-admin only,
-  impersonation refused, revokes every live grant of that member and nothing else.
+- `/me` list and revoke route: own grants of THIS origin only (a grant of another origin is neither
+  listed nor revocable), impersonation refused. Admin revoke route: super-admin only, impersonation
+  refused, revokes every live grant of that member on this origin and nothing else.
+- Schema constants module: no `import` statement.
 
 Gates before claiming done: `npx tsc --noEmit`, `npm test`, `npx eslint .` (0 errors). No solver
 tree is touched.
@@ -428,7 +514,8 @@ Android for the release signing key's fingerprint.
 
 Narrowing of «toda la app desde v1», stated plainly in ADR-0091: nothing in the app is reduced — the
 whole app, admin included, works on any signed-in session — but a physical iPhone can sign in only
-once the Apple Developer account exists, and an Android phone needs Chrome 137+.
+once the Apple Developer account exists, the iPhone app's minimum is iOS 17.4 (so iPhone XS/XR or
+newer; an iPhone X, 8 or older cannot run it), and an Android phone needs Chrome 137+.
 
 ## 8. Premises to verify (the review should check these, not assume them)
 
@@ -445,12 +532,20 @@ once the Apple Developer account exists, and an Android phone needs Chrome 137+.
 - P5. The MCP grant-store protocol can be extracted without changing any MCP OAuth test file
   (`app/mcp/oauth/__tests__/`, `mcpSanityClients.test.ts`, `oauthRegisterRoute.test.ts`); the only
   intended test edit outside the new suites is adding the two types to `studioProtection.test.ts`.
+- P6. An `https` callback in `ASWebAuthenticationSession` requires the `webcredentials` service type
+  in the association file (found in Apple forum threads and third-party guidance; to be confirmed
+  against Apple's documentation in the association-file slice).
+- P7. On Android 6–11 a verified App Link opens the verified app directly with no chooser, and an
+  unverified one shows the chooser; on Android 12+ unverified web links open in the browser unless
+  the person approves the domain for an app (D3 table). Not device-tested: Chrome's dispatch of a
+  303 from inside a Custom Tab on Android ≤ 11.
 
 ## 9. Docs in the same delivery
 
 - ADR-0091 «Native apps sign in through their own first-party OAuth door, verified redirects
-  only» (D1–D5, both rejected scheme alternatives and why, the device narrowing), linked from
-  `app/appAuth/*` and `docs/MOBILE.md`.
+  only» (D1–D5, both rejected scheme alternatives and the rejected Google ID-token exchange and why,
+  the device narrowing, and the residual Android risk of D3 with Frank's explicit acceptance),
+  linked from `app/appAuth/*` and `docs/MOBILE.md`.
 - `docs/SECRETS.md`: `APP_AUTH_SECRET` (Production + Preview + local; generated with
   `openssl rand -base64 48`; rotation signs every app user out; nothing else breaks) and
   `APP_AUTH_DISABLED` (kill switch, normally unset).
@@ -459,7 +554,8 @@ once the Apple Developer account exists, and an Android phone needs Chrome 137+.
 - `docs/AUTH_AND_SECURITY.md`, `docs/ROUTES.md`: the new routes and the matcher exclusions.
 - `CLAUDE.md` invariant line: «`/api/app/v1/*` authenticates with `requireAppSession` first, with a
   declared `needs` level (no default). The app door accepts only the verified `https` redirects on
-  production and preview; the private scheme exists only on localhost — never add it, or any
-  reduced-power session, to a deployed origin (ADR-0091)».
+  production and preview, and mints a code only on the person's visible tap; the private scheme
+  exists only on localhost — never add it, any auto-submit, or any reduced-power session to a
+  deployed origin (ADR-0091)».
 - `next.config.mjs`: its CSP caveat comment also names the app's local-only scheme redirect, so a
   future `form-action` directive does not silently break local development.
