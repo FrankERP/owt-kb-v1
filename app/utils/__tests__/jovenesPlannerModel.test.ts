@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { MinistryEventView } from "../ministryEventReads";
+import { normalizeMinistryRoles } from "@/app/ministries";
+import type { MinistryEventLine, MinistryEventView } from "../ministryEventReads";
+import { ledGroupsIn } from "../ministryAccess";
 import {
   canCreateGroupEvent,
   canEditGroupEvent,
@@ -9,11 +11,14 @@ import {
   groupEventProblem,
   groupEvents,
   monthRange,
+  monthTitle,
   parseMonth,
+  plannerLede,
   programBody,
   programForm,
   saturdayBody,
   saturdayForm,
+  saturdayProblem,
   saturdayRows,
   saturdaysOfMonth,
   shiftMonth,
@@ -33,6 +38,8 @@ function ev(over: Partial<MinistryEventView> = {}): MinistryEventView {
     arrival: "17:30",
     title: null,
     notes: null,
+    place: null,
+    lesson: null,
     published: true,
     seats: [],
     program: [],
@@ -43,7 +50,7 @@ function ev(over: Partial<MinistryEventView> = {}): MinistryEventView {
 }
 
 const seat = (role: string, memberId: string | null, name: string | null, mine = false, _key = `k-${role}`) =>
-  ({ _key, role, memberId, name, mine });
+  ({ _key, role, memberId, name, photo: null, mine });
 
 describe("months", () => {
   it("parses ?mes and falls back on anything else", () => {
@@ -64,6 +71,52 @@ describe("months", () => {
   it("lists the Saturdays", () => {
     expect(saturdaysOfMonth("2026-11")).toEqual(["2026-11-07", "2026-11-14", "2026-11-21", "2026-11-28"]);
     expect(saturdaysOfMonth("2026-08")).toEqual(["2026-08-01", "2026-08-08", "2026-08-15", "2026-08-22", "2026-08-29"]);
+  });
+});
+
+describe("the planner's head", () => {
+  it("the month as a title: the name and the year apart, capital first, «de» nowhere", () => {
+    expect(monthTitle("2026-11")).toEqual({ name: "Noviembre", year: "2026" });
+    expect(monthTitle("2027-01")).toEqual({ name: "Enero", year: "2027" });
+  });
+
+  it("the lede counts Saturdays, dates with a meeting, drafts of both sections and group meetings", () => {
+    const rows = saturdayRows("2026-11", [
+      ev({ _id: "a", date: "2026-11-14" }),
+      ev({ _id: "b", date: "2026-11-21" }),
+      ev({ _id: "c", date: "2026-11-28", published: false }),
+    ]);
+    const groups = [{ published: true }, { published: false }];
+    expect(plannerLede("2026-11", rows, groups)).toEqual([
+      { text: "4 sábados", strong: false },
+      { text: "3 con reunión", strong: true },
+      { text: "2 borradores", strong: false },
+      { text: "2 de grupo", strong: false },
+    ]);
+  });
+
+  it("«con reunión» counts Saturdays only: a board on a Friday is a row, not a fifth Saturday", () => {
+    const rows = saturdayRows("2026-11", [
+      ev({ _id: "a", date: "2026-11-07" }),
+      ev({ _id: "b", date: "2026-11-14" }),
+      ev({ _id: "c", date: "2026-11-21" }),
+      ev({ _id: "d", date: "2026-11-28" }),
+      ev({ _id: "f", date: "2026-11-20", kind: "ministry", title: "Campamento", published: false }),
+    ]);
+    expect(rows).toHaveLength(5);
+    expect(plannerLede("2026-11", rows, []).map((p) => p.text)).toEqual(["4 sábados", "4 con reunión", "1 borrador"]);
+  });
+
+  it("an empty month says so and leaves the zero counts out", () => {
+    expect(plannerLede("2026-10", saturdayRows("2026-10", []), [])).toEqual([
+      { text: "5 sábados", strong: false },
+      { text: "ninguno con reunión", strong: true },
+    ]);
+    expect(plannerLede("2026-11", saturdayRows("2026-11", [ev({ published: false })]), []).map((p) => p.text)).toEqual([
+      "4 sábados",
+      "1 con reunión",
+      "1 borrador",
+    ]);
   });
 });
 
@@ -96,6 +149,7 @@ describe("the Saturday editor's body", () => {
       time: "18:10",
       arrival: "17:30",
       title: null,
+      place: null,
       notes: null,
       published: false,
       seats: [],
@@ -106,8 +160,8 @@ describe("the Saturday editor's body", () => {
     const f = saturdayForm("2026-11-07", ev({
       seats: [seat("encargado", "m1", "Ana"), seat("apoyo", "m2", "Beto"), seat("apoyo", "m3", "Caro", false, "k-apoyo-2")],
     }));
-    f.picks.apoyo = { key: f.picks.apoyo.key, member: null };
-    f.picks.comparte = { key: null, member: "m4" };
+    f.picks.apoyo = { key: f.picks.apoyo.key, member: null, name: null };
+    f.picks.comparte = { key: null, member: "m4", name: null };
     expect(saturdayBody(f).seats).toEqual([
       { _key: "k-encargado", role: "encargado", member: "m1" },
       { role: "comparte", member: "m4" },
@@ -123,6 +177,50 @@ describe("the Saturday editor's body", () => {
     expect(saturdayBody(saturdayForm("2026-11-07")).kind).toBe("saturday");
   });
 
+  // Plan 2026-11-10 P7: the view's `name` is a member's live name OR a typed text; only a seat with
+  // no member is typed, so a member seat (extras too) is never saved back as text.
+  it("a seat sends its member or its typed name, never both; a blank typed name sends no seat", () => {
+    const f = saturdayForm("2026-11-07", ev({
+      seats: [
+        seat("encargado", null, "Emprendedores"),
+        seat("apoyo", "m2", "Beto"),
+        seat("apoyo", "m3", "Caro", false, "k-apoyo-2"),
+        seat("encargado", null, "Goma", false, "k-encargado-2"),
+      ],
+    }));
+    expect(f.picks.encargado).toEqual({ key: "k-encargado", member: null, name: "Emprendedores" });
+    expect(f.picks.apoyo).toEqual({ key: "k-apoyo", member: "m2", name: null });
+    f.picks.comparte = { key: null, member: null, name: "  Ana  " };
+    expect(saturdayBody(f).seats).toEqual([
+      { _key: "k-encargado", role: "encargado", name: "Emprendedores" },
+      { _key: "k-apoyo", role: "apoyo", member: "m2" },
+      { role: "comparte", name: "Ana" },
+      { _key: "k-apoyo-2", role: "apoyo", member: "m3" },
+      { _key: "k-encargado-2", role: "encargado", name: "Goma" },
+    ]);
+    f.picks.comparte = { key: null, member: null, name: "   " };
+    f.extra = [];
+    expect(saturdayBody(f).seats).toEqual([
+      { _key: "k-encargado", role: "encargado", name: "Emprendedores" },
+      { _key: "k-apoyo", role: "apoyo", member: "m2" },
+    ]);
+  });
+
+  it("a meeting on another weekday is saved as `ministry`, never as a Saturday", () => {
+    expect(saturdayBody({ ...saturdayForm("2026-11-20"), date: "2026-11-20" }).kind).toBe("ministry");
+    expect(saturdayBody(saturdayForm("2026-11-14")).kind).toBe("saturday");
+    const moved = saturdayForm("2026-11-07", ev({ kind: "saturday" }));
+    expect(saturdayBody({ ...moved, date: "2026-11-20" }).kind).toBe("ministry");
+    expect(saturdayBody({ ...saturdayForm("2026-11-07", ev({ kind: "ministry" })), date: "2026-11-14" }).kind).toBe("ministry");
+  });
+
+  it("carries the place both ways, and a cleared one as null", () => {
+    const f = saturdayForm("2026-11-07", ev({ place: "Oasis Tlalpan" }));
+    expect(f.place).toBe("Oasis Tlalpan");
+    expect(saturdayBody({ ...f, place: " Casa Fam Varela " }).place).toBe("Casa Fam Varela");
+    expect(saturdayBody({ ...f, place: " " }).place).toBeNull();
+  });
+
   it("a cleared time or note is sent as null (the server unsets it)", () => {
     const f = saturdayForm("2026-11-07", ev({ notes: "Traer Biblia" }));
     f.time = "";
@@ -132,17 +230,110 @@ describe("the Saturday editor's body", () => {
   });
 });
 
+describe("the clocks the editors accept", () => {
+  // The sheets use the native time field, which hands back "" or HH:mm; these are the belt for
+  // a value that got in another way. (They were component tests while the fields were free text.)
+  it("the Saturday form: an empty or HH:mm clock passes, anything else names the field", () => {
+    const date = "2026-11-14";
+    expect(saturdayProblem({ date, time: "18:10", arrival: "17:30" })).toBeNull();
+    expect(saturdayProblem({ date, time: "", arrival: " " })).toBeNull();
+    expect(saturdayProblem({ date, time: "6pm", arrival: "17:30" })).toBe("La hora debe ser HH:mm (por ejemplo 18:10).");
+    expect(saturdayProblem({ date, time: "18:10", arrival: "5:30" })).toBe("La llegada debe ser HH:mm (por ejemplo 18:10).");
+  });
+
+  it("the meeting form needs a real date first", () => {
+    for (const date of ["", "2026-02-30", "14/11/2026"]) {
+      expect(saturdayProblem({ date, time: "6pm", arrival: "" })).toBe("Elige la fecha.");
+    }
+  });
+});
+
 describe("the program body", () => {
+  const BLANK = { key: null, label: "", part: null, member: null, member2: null, note: "", music: null, helpers: "" } as const;
   it("round-trips stored lines and leaves blank ones out", () => {
     const form = programForm([
-      { _key: "l1", label: "Oración", memberId: "m1", name: "Ana", mine: false, note: null },
+      { _key: "l1", label: "Oración", memberId: "m1", name: "Ana", photo: null, mine: false, note: null, part: null, music: null, helpers: null, second: null },
     ]);
-    form.push({ key: null, label: " Dinámica ", member: null, note: " 10 min " });
-    form.push({ key: null, label: "   ", member: "m2", note: "" });
+    form.push({ ...BLANK, label: " Dinámica ", note: " 10 min " });
+    form.push({ ...BLANK, label: "   ", member: "m2" });
     expect(programBody(form)).toEqual([
       { _key: "l1", label: "Oración", member: "m1" },
       { label: "Dinámica", note: "10 min" },
     ]);
+  });
+});
+
+describe("the program's fixed parts (ADR-0089)", () => {
+  const line = (over: Partial<MinistryEventLine>): MinistryEventLine => ({
+    _key: "k", label: "x", memberId: null, name: null, photo: null, mine: false, note: null, part: null, music: null, helpers: null, second: null, ...over,
+  });
+  const person = (memberId: string, name: string) => ({ _key: "k", memberId, name, photo: null, mine: false });
+
+  it("a Saturday's form always has Oración and the two dinámicas, parts first in the meeting's order, then the free lines", () => {
+    const form = programForm(
+      [
+        line({ _key: "f1", label: "Bienvenida" }),
+        line({ _key: "d2", label: "Dinámica 2", part: "dinamica2", memberId: "m1", second: person("m2", "Beto"), note: "Sillas", helpers: "Dani" }),
+      ],
+      true,
+    );
+    expect(form.map((l) => [l.part, l.key, l.member, l.member2])).toEqual([
+      ["oracion", null, null, null],
+      ["dinamica1", null, null, null],
+      ["dinamica2", "d2", "m1", "m2"],
+      [null, "f1", null, null],
+    ]);
+    // Plática takes no person on its line: no empty row is made for it.
+    expect(form.some((l) => l.part === "platica")).toBe(false);
+  });
+
+  it("another meeting's form holds only the part lines it stores, Plática's included", () => {
+    expect(programForm([line({ _key: "f1", label: "Bienvenida" })]).map((l) => l.part)).toEqual([null]);
+    const form = programForm([line({ _key: "p1", label: "Plática", part: "platica", note: "Daniel 3", music: "track" })]);
+    expect(form).toEqual([{ key: "p1", label: "Plática", part: "platica", member: null, member2: null, note: "Daniel 3", music: "track", helpers: "" }]);
+  });
+
+  it("the body sends a STORED part line with its people only (the writer keeps what its responsable wrote) and never an empty part row", () => {
+    const form = programForm(
+      [
+        line({ _key: "o1", label: "Oración", part: "oracion", memberId: "m1", music: "alabanza", note: "Antes de la plática" }),
+        line({ _key: "p1", label: "Plática", part: "platica", note: "Daniel 3", music: "track" }),
+      ],
+      true,
+    );
+    form[1].member2 = "m3"; // Dinámica 1: only a second person picked — sent as its first.
+    expect(programBody(form)).toEqual([
+      { _key: "o1", part: "oracion", member: "m1" },
+      { part: "dinamica1", member: "m3" },
+      // Held only by what was written on it: still sent, so the writer keeps the line.
+      { _key: "p1", part: "platica" },
+    ]);
+  });
+
+  it("the same person in both slots is sent once; a stored part row emptied of everything is dropped", () => {
+    const form = programForm([line({ _key: "d1", label: "Dinámica 1", part: "dinamica1", memberId: "m1", second: person("m1", "Ana") })], true);
+    expect(programBody(form).find((l) => l.part === "dinamica1")).toEqual({ _key: "d1", part: "dinamica1", member: "m1" });
+    const cleared = form.map((l) => (l.part === "dinamica1" ? { ...l, member: null, member2: null } : l));
+    expect(programBody(cleared)).toEqual([]);
+  });
+});
+
+describe("the second «Comparte» (ADR-0089: the Plática sometimes has two)", () => {
+  it("the first two comparte seats take the two columns; a third rides in extra; both save as `comparte`", () => {
+    const f = saturdayForm("2026-11-07", ev({
+      seats: [seat("comparte", "m1", "Ana", false, "c1"), seat("comparte", "m2", "Beto", false, "c2"), seat("comparte", "m3", "Caro", false, "c3")],
+    }));
+    expect([f.picks.comparte.member, f.picks.comparte2.member, f.extra.map((x) => x.member)]).toEqual(["m1", "m2", ["m3"]]);
+    expect(saturdayBody(f).seats).toEqual([
+      { _key: "c1", role: "comparte", member: "m1" },
+      { _key: "c2", role: "comparte", member: "m2" },
+      { _key: "c3", role: "comparte", member: "m3" },
+    ]);
+  });
+  it("a new second column sends a second seat of the same role, with no key", () => {
+    const f = saturdayForm("2026-11-07", ev({ seats: [seat("comparte", "m1", "Ana", false, "c1")] }));
+    f.picks.comparte2 = { key: null, member: "m9", name: null };
+    expect(saturdayBody(f).seats).toEqual([{ _key: "c1", role: "comparte", member: "m1" }, { role: "comparte", member: "m9" }]);
   });
 });
 
@@ -180,6 +371,44 @@ describe("whatsappRoster", () => {
         "Comparte: Sin asignar",
       ].join("\n"),
     );
+  });
+
+  it("a Friday meeting with a title, a place and typed names", () => {
+    const rows = saturdayRows("2026-11", [
+      ev({
+        date: "2026-11-20", kind: "ministry", time: "20:00", arrival: null, title: "Estudio «Daniel»", place: "Oasis Tlalpan",
+        seats: [seat("encargado", null, "Emprendedores"), seat("comparte", null, "Ana")],
+      }),
+    ]);
+    expect(whatsappRoster("2026-11", rows).split("\n").slice(2)).toEqual([
+      "*Viernes, 20 de noviembre* — 20:00",
+      "Estudio «Daniel»",
+      "Lugar: Oasis Tlalpan",
+      "Encargado: Emprendedores",
+      "Apoyo: Sin asignar",
+      "Comparte: Ana",
+    ]);
+  });
+
+  it("lists the parts that already have someone, with the music they asked for; Plática is the Comparte line", () => {
+    const rows = saturdayRows("2026-11", [
+      ev({
+        date: "2026-11-07",
+        seats: [seat("comparte", "m2", "Beto")],
+        program: [
+          { _key: "o1", label: "Oración", part: "oracion", memberId: "m1", name: "Ana", photo: null, mine: false, note: null, music: "alabanza", helpers: null, second: null },
+          { _key: "d1", label: "Dinámica 1", part: "dinamica1", memberId: "m3", name: "Caro", photo: null, mine: false, note: "Sillas", music: null, helpers: null, second: { _key: "d1", memberId: "m4", name: "Dani", photo: null, mine: false } },
+          { _key: "p1", label: "Plática", part: "platica", memberId: null, name: null, photo: null, mine: false, note: "Daniel 3", music: "track", helpers: null, second: null },
+        ],
+      }),
+    ]);
+    expect(whatsappRoster("2026-11", rows).split("\n").slice(3)).toEqual([
+      "Encargado: Sin asignar",
+      "Apoyo: Sin asignar",
+      "Comparte: Beto",
+      "Oración: Ana (pide alabanza)",
+      "Dinámica 1: Caro y Dani",
+    ]);
   });
 
   it("an empty month is the header alone", () => {
@@ -225,7 +454,7 @@ describe("the groups' calendars (PR D)", () => {
 
   it("a new meeting starts for the leader's first group, unpublished; an existing one keeps its fields", () => {
     expect(groupEventForm("2026-11-10", leader)).toEqual({
-      date: "2026-11-10", time: "", title: "", notes: "", groups: ["otro-nivel"], published: false,
+      date: "2026-11-10", time: "", title: "", place: "", notes: "", groups: ["otro-nivel"], published: false,
     });
     expect(groupEventForm("2026-11-10", admin).groups).toEqual([]);
     const f = groupEventForm("2026-11-01", leader, joint({ date: "2026-11-20", time: "19:30", title: "Campamento", published: true }));
@@ -237,21 +466,84 @@ describe("the groups' calendars (PR D)", () => {
     expect(groupEventProblem(f, leader)).toBeNull();
     expect(groupEventProblem({ ...f, date: "" }, leader)).toBe("Elige la fecha.");
     expect(groupEventProblem({ ...f, groups: [] }, leader)).toBe("Elige al menos un grupo.");
-    expect(groupEventProblem({ ...f, groups: ["invencibles"] }, leader)).toBe("Incluye uno de tus grupos.");
+    expect(groupEventProblem({ ...f, groups: ["invencibles"] }, leader)).toBe("Incluye uno de los grupos que lideras.");
     expect(groupEventProblem({ ...f, groups: ["invencibles"] }, admin)).toBeNull();
   });
 
+  it("refuses more than three groups, after the empty check and before the own-group one (T5a)", () => {
+    const f = groupEventForm("2026-11-10", leader);
+    const four = ["otro-nivel", "invencibles", "emprendedores", "adrenalin"];
+    expect(groupEventProblem({ ...f, groups: four }, leader)).toBe("Elige hasta tres grupos; para todos, usa una reunión de todo Jóvenes.");
+    expect(groupEventProblem({ ...f, groups: four }, admin)).toBe("Elige hasta tres grupos; para todos, usa una reunión de todo Jóvenes.");
+    expect(groupEventProblem({ ...f, groups: four.slice(0, 3) }, leader)).toBeNull();
+    expect(groupEventProblem({ ...f, groups: [] }, leader)).toBe("Elige al menos un grupo.");
+    // Four groups none of which they lead: the count is said first.
+    expect(groupEventProblem({ ...f, groups: ["invencibles", "emprendedores", "adrenalin", "guerreras"] }, leader)).toBe(
+      "Elige hasta tres grupos; para todos, usa una reunión de todo Jóvenes.",
+    );
+    expect(groupEventProblem({ ...f, groups: ["invencibles"] }, leader)).toBe("Incluye uno de los grupos que lideras.");
+  });
+
+  it("checks the clock last, after the rules about groups", () => {
+    const f = groupEventForm("2026-11-10", leader);
+    expect(groupEventProblem({ ...f, time: "19:00" }, leader)).toBeNull();
+    expect(groupEventProblem({ ...f, time: "7pm" }, leader)).toBe("La hora debe ser HH:mm (por ejemplo 19:30).");
+    expect(groupEventProblem({ ...f, time: "7pm", groups: [] }, leader)).toBe("Elige al menos un grupo.");
+  });
+
   it("sends the groups in registry order with no kind (the writer derives it), cleared fields as null", () => {
-    const body = groupEventBody({ date: "2026-11-10", time: " ", title: " Campamento ", notes: "", groups: ["emprendedores", "otro-nivel"], published: true });
+    const body = groupEventBody({ date: "2026-11-10", time: " ", title: " Campamento ", place: " Casa Varela ", notes: "", groups: ["emprendedores", "otro-nivel"], published: true });
     expect(body).toEqual({
       audience: { kind: "groups", groups: ["otro-nivel", "emprendedores"] },
       date: "2026-11-10",
       time: null,
       title: "Campamento",
+      place: "Casa Varela",
       notes: null,
       published: true,
     });
     expect(body).not.toHaveProperty("kind");
+  });
+
+  // Per-group leadership (plan 2026-11-11 T9, ADR-0085): the screens take `viewer.led` from
+  // `ledGroupsIn`, so «leads A, in B» is a viewer whose `led` holds A only.
+  describe("leads Otro Nivel, in Invencibles (T9)", () => {
+    const jacob = {
+      me: "j",
+      isManager: false,
+      led: ledGroupsIn(
+        {
+          role: "member",
+          ministries: ["jovenes"],
+          managesMinistries: [],
+          ministryRoles: normalizeMinistryRoles(
+            [{ _key: "jovenes", ministry: "jovenes", level: "leader", groups: ["otro-nivel", "invencibles"], leaderOf: ["otro-nivel"] }],
+            ["jovenes"],
+          ),
+        },
+        "jovenes",
+      ),
+    };
+
+    it("plans only the group they lead: the form starts on it; a form with only the other says so", () => {
+      expect(jacob.led).toEqual(["otro-nivel"]);
+      expect(canCreateGroupEvent(jacob)).toBe(true);
+      const f = groupEventForm("2026-11-10", jacob);
+      expect(f.groups).toEqual(["otro-nivel"]);
+      expect(groupEventProblem({ ...f, groups: ["invencibles"] }, jacob)).toBe("Incluye uno de los grupos que lideras.");
+      expect(groupEventProblem({ ...f, groups: ["otro-nivel", "invencibles"] }, jacob)).toBeNull();
+    });
+
+    it("cannot edit the other group's meeting, published or not; edits their own", () => {
+      expect(canEditGroupEvent(one("invencibles", { published: true }), jacob)).toBe(false);
+      expect(canEditGroupEvent(one("invencibles", { createdById: "j" }), jacob)).toBe(false);
+      expect(canEditGroupEvent(one("otro-nivel"), jacob)).toBe(true);
+    });
+
+    it("editLosesAccess still warns when sharing someone else's meeting of the group they lead", () => {
+      const theirs = one("otro-nivel", { createdById: "other" });
+      expect(editLosesAccess(theirs, { ...groupEventForm("", jacob, theirs), groups: ["otro-nivel", "invencibles"] }, jacob)).toBe(true);
+    });
   });
 
   it("warns a leader who would share someone else's one-group meeting, and nobody else", () => {

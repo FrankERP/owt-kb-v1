@@ -189,6 +189,7 @@ function validatePatchBody(body: Record<string, unknown>): { ok: true; value: Va
   }
   // Levels in a leveled ministry (Jóvenes, ADR-0075), validated against THIS request's `ministries`:
   // set whole, or a `ministries` that leaves a leveled ministry out unsets its stale level.
+  // What is sent is what is stored: each item's `leaderOf` included (ADR-0085), for a leader only.
   let unsetPaths: string[] = [];
   if (body.ministryRoles !== undefined) {
     const error = validateMinistryRolesWrite(body.ministryRoles, body.ministries);
@@ -243,6 +244,8 @@ async function planPatch(id: string, body: Record<string, unknown>, surface: Sur
   if (!v.ok) return v;
   const { patch } = v.value;
   const touchesIdentity = "member_name" in patch || "alias" in patch || "email" in patch;
+  // A level always travels with `ministries` (`validateMinistryRolesWrite`), so a `ministryRoles` write
+  // is judged against, and pinned to, the read (`touchesRoleOrMinistries`).
   const needsRead = surface !== "admin" || v.value.touchesRoleOrMinistries || touchesIdentity;
 
   const plan: PatchPlan = { id, stored: null, valid: v.value, before: null, after: null, ruleSets: {}, rulesRev: null, ruleLines: [], notes: [], lines: [] };

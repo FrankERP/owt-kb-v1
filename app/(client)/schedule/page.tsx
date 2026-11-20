@@ -8,6 +8,7 @@ import { parseMonthParam, windowBounds, WINDOW_MONTHS } from "@/app/utils/schedu
 import { indexUniqueByKey, serviceDayKey } from "@/app/utils/serviceReadSelect";
 import { requireWorshipPage } from "@/app/utils/worshipPageGate";
 import { seatPhotos } from "@/app/utils/teamSections";
+import { SONG_COVER_GROQ } from "@/app/utils/songCover";
 import { myNameFromSession } from "@/app/utils/agenda";
 import { pastorMessageBodyOf } from "@/app/utils/serviceThread";
 import { getMemberAccess } from "@/app/utils/memberAccess";
@@ -23,10 +24,12 @@ import {
 } from "@/app/utils/calendarMinistry";
 import { MinistryEventReadUnavailable, readMinistryEvents, type MinistryEventView } from "@/app/utils/ministryEventReads";
 import { rolloutAllows } from "@/app/utils/rollout";
+import { readSaturdaySets } from "@/app/utils/jovenesWorshipSet";
+import { meetingPageOpens } from "@/app/utils/jovenesPartView";
 
 export const metadata: Metadata = {
-  title: "Calendario — Oasis Worship Team",
-  description: "Próximos servicios y asignaciones del equipo de alabanza Oasis.",
+  title: "Calendario — Backstage",
+  description: "Próximos servicios, eventos y asignaciones de tus ministerios.",
 };
 
 // No `revalidate` export: the page reads the session (it was already dynamic, so the old
@@ -47,7 +50,8 @@ const SETLIST_FRAGMENT = `songs[]{
   play_key,
   medley_tag,
   "title": song->title, "slug": song->slug, "_id": song->_id,
-  "author": song->author, "timeSig": song->timeSig, "bpm": song->bpm, "key": song->key
+  "author": song->author, "timeSig": song->timeSig, "bpm": song->bpm, "key": song->key,
+  "cover": ${SONG_COVER_GROQ}
 }, week, team_notes`;
 
 // `photo` per seat: the faces in the day sheet's team sections, the same
@@ -79,7 +83,7 @@ const SCHEDULE_QUERY = `{
   "satSetlists": *[_type == "saturdarSongs" && week >= $today && week <= $limit] | order(week asc)  { ${SETLIST_FRAGMENT} },
   "specials":    *[_type == "special_role"  && date >= $weekStart && date <= $limit && published != false] | order(date asc, time asc) {
     _id, date, time, service_name, team_notes,
-    songs[]{ play_key, medley_tag, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "bpm": song->bpm, "key": song->key, "leads": leads[]->{ member_name, alias } },
+    songs[]{ play_key, medley_tag, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "bpm": song->bpm, "key": song->key, "cover": ${SONG_COVER_GROQ}, "leads": leads[]->{ member_name, alias } },
     ${ROLE_FIELDS}
   },
   "viewer": *[_type == "teamMembers" && _id == $me][0]{ memberType },
@@ -255,8 +259,11 @@ export default async function SchedulePage({
   }
 
   // Each meeting is its own entry (keyed by id), so two on one day both show.
+  // Alabanza's songs on a Saturday meeting (ADR-0089): the same published setlist, titles and keys.
+  const jovenesSets = await readSaturdaySets(jovenes.filter((e) => e.kind === "saturday").map((e) => e.date));
   for (const e of jovenes) {
-    const entry = jovenesActiveDay(e);
+    // This page browses past months; the meeting's page opens only so far back.
+    const entry = jovenesActiveDay(e, e.kind === "saturday" ? (jovenesSets.get(e.date) ?? null) : undefined, meetingPageOpens(e.date, today));
     if (entry) push(entry.date, entry);
   }
 

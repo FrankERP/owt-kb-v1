@@ -171,7 +171,9 @@ editing songs (phase 3, S3) adds four more, forty-five in all, registered last: 
 [Creating and editing songs](#creating-and-editing-songs-admin-parity-phase-3)). People (phase 4,
 slice M) adds seven more, fifty-two in all, registered last: `list_members`, `get_member`,
 `check_member_changes`, `save_member_changes`, `check_new_members`, `create_members` and
-`set_member_access` (see [People](#people-admin-parity-phase-4)). Every tool is
+`set_member_access` (see [People](#people-admin-parity-phase-4)). The solver rules (phase 4, slice R)
+add two more, fifty-four in all, registered last: `check_rule_edits` and `save_rule_edits` (see
+[Solver rules](#solver-rules-admin-parity-phase-4)). Every tool is
 registered the same way — one file per tool in `app/mcp/tools/`, exporting a
 `register<Tool>(server, deps?)` function that `registerAllTools` (`app/mcp/toolList.ts`) calls,
 the writes after the reads; `app/api/mcp/route.ts` runs it inside its handler init. Every
@@ -950,7 +952,7 @@ principal refuses before any read (the read only loses `mine`). Decision record:
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `get_service_messages` | `{serviceId}` | The dialog's read (`serviceConversationQuery`): the «Mensaje del pastor» and its `pastorObserved`, the admins' messages (each with `key`, author and `mine: true` for the bearer's own), the leads' proposal conversation if any (read-only), the «Mensaje para el equipo» with its `observed` (null before a setlist exists; «unavailable» on a duplicate weekend setlist), `threadOpen`. Read-only |
+| `get_service_messages` | `{serviceId}` | The dialog's read (`serviceConversationQuery`): the «Mensaje del pastor» and its `pastorObserved`, the admins' messages (each with `key`, author and `mine: true` for the bearer's own), the leads' proposal conversation if any (read-only), the «Mensaje para el equipo» with its `observed` (null before a setlist exists; «unavailable» on a duplicate weekend setlist), `threadOpen`. Read-only `proposal.pastorMessage` is the leads' pastor's message from their proposal (ADR-0087; null for a draft). |
 | `send_service_message` | `{serviceId, body}` | A message to the service's leads, as «Enviar». Not idempotent: an unknown outcome says to read before retrying, or the message is duplicated. Destructive (I14) |
 | `edit_service_message` | `{serviceId, key, body}` or `{serviceId, key, delete: true}` | Edit or delete the bearer's OWN message; another author's answers «solo tus propios mensajes» (the writer's `not_author`). Destructive |
 | `set_pastor_message` | `{serviceId, body, observed}` | Set, change or clear (`body: ""`) the one «Mensaje del pastor»; `observed` is `pastorObserved` unchanged (null when empty), a stale one refuses. Destructive |
@@ -1002,9 +1004,9 @@ read without a principal (the check, which writes nothing, needs none).
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `check_setlist_proposal_review` | `{proposalId, action, note?}` | Runs the writer's own planner in **peek** (`planProposalReview(…, "peek")`; the arguments are parsed by the tool's strict schema, the writer's request parser runs only in the write): the same load, drift, receipt and retry rules, readiness and target, with the proposal's `_rev` reported instead of asserted and a legacy weekend lock's bootstrap reported instead of committed, so it never writes. Answers what the decision would do: for `approve` the songs in order with their keys, the live setlist it REPLACES, the team note it copies and the live one it replaces or blanks (read by id
+| `check_setlist_proposal_review` | `{proposalId, action, note?}` | Runs the writer's own planner in **peek** (`planProposalReview(…, "peek")`; the arguments are parsed by the tool's strict schema, the writer's request parser runs only in the write): the same load, drift, receipt and retry rules, readiness and target, with the proposal's `_rev` reported instead of asserted and a legacy weekend lock's bootstrap reported instead of committed, so it never writes. Answers what the decision would do: for `approve` the songs in order with their keys, the live setlist it REPLACES, the team note it copies and the live one it replaces or blanks (read by id An approve also says, in full, what happens to the proposal's «Mensaje del pastor» (ADR-0087), from a peek-only read of the service's that never refuses the check; the line does not carry it. |
 and revision: the loaders' shared projections do not carry `team_notes`) and, on a worship night, the song leaders kept; who is told; or why it cannot. Its last text line is «Argumentos para review_setlist_proposal: {proposalId, action, rev, line, note}». Read-only |
-| `review_setlist_proposal` | `{proposalId, action, rev, line, note?}` | Re-renders the line from a fresh peek and refuses («La propuesta cambió») when it differs, then calls `reviewProposal`, which asserts `rev` in the transaction. A repeat of a decision already written writes nothing and says «ya estaba». Destructive (I14) |
+| `review_setlist_proposal` | `{proposalId, action, rev, line, note?}` | Re-renders the line from a fresh peek and refuses («La propuesta cambió») when it differs, then calls `reviewProposal`, which asserts `rev` in the transaction. A repeat of a decision already written writes nothing and says «ya estaba». Destructive (I14) An approve's answer reports the pastor's-message copy (`pastorMessage`: `copied` / `same` / `kept_existing` / `failed`) in a line and in the structured output. |
 
 `action` is `approve`, `request_changes` or `reopen`; `reconcile_target` is not exposed. The line
 starts with the action and ends with the songs (approve) or the trimmed note (`· nota: …`, or
@@ -1052,7 +1054,7 @@ Confirmed from the code at `963cd736` (P3 plan, § «Notification audiences»):
 | `set_pastor_message` | the same push AND email to the Leads, only when the message appears on an empty field of a published service | — | an edit or a clear |
 | `edit_service_message`, `set_team_message` | — | — | everything |
 | `save_kids_sundays`, `save_kids_pair`, `set_kids_absences` | — | — | everything (Kids sends nothing, as `/kids/admin`) |
-| `review_setlist_proposal` | push «Propuesta aprobada» / «Cambios solicitados» / «Propuesta reabierta» to the proposal's lead and contributors (`notifyProposalReview`, awaited after the commit, delivery fire-and-forget, as `/admin`) | on `approve` of a published service with songs, dated today or later: the `setlist` notice, audience per ADR-0054 from the stored `before` (the whole worship team when it is empty) | any email from `request_changes` / `reopen` |
+| `review_setlist_proposal` | push «Propuesta aprobada» / «Cambios solicitados» / «Propuesta reabierta» to the proposal's lead and contributors (`notifyProposalReview`, awaited after the commit, delivery fire-and-forget, as `/admin`) | on `approve` of a published service with songs, dated today or later: the `setlist` notice, audience per ADR-0054 from the stored `before` (the whole worship team when it is empty) | any email from `request_changes` / `reopen` The approval's copy of the leads' pastor's message sends nothing (ADR-0087). |
 
 All of these pass the downstream filters: device tokens and push preferences, `EMAIL_ALLOWLIST`,
 and `wantsNotification`. Any outbox upsert through the deferred path also triggers the derated
@@ -1114,11 +1116,11 @@ The throwaway stays in production, disabled; deleting it is Personas' (the conne
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `list_members` | `{ministry?, includeDisabled?}` | Everyone (or one ministry) as Personas shows them: `memberId`, name, alias, role, Tipo, instruments, «Canta y toca a la vez», ministries, Jóvenes level and groups, what they manage, disabled. Never an email. Read-only |
+| `list_members` | `{ministry?, includeDisabled?}` | Everyone (or one ministry) as Personas shows them: `memberId`, name, alias, role, Tipo, instruments, «Canta y toca a la vez», ministries, Jóvenes standing in the chat's words («líder de Otro Nivel y Adrenalin; miembro de Invencibles», «admin (Emprendedores, Guerreras)»), what they manage, disabled. Never an email. Read-only |
 | `get_member` | `{memberId}` | One person, with their email. Read-only |
-| `check_member_changes` | `{memberId, edits[≤30]}` | Applies the edits by parts to the FRESH person (`applyMemberEdits`): `set {field: name/alias/email/role}` (`alias: ""` clears), `singsAndPlays`, `add`/`remove {field: tipo/instruments/ministries/managesMinistries}`, `jovenes {level|null, groups?}`. Runs the writer's own plan (`checkMemberEdits`) and answers the before/after of only what changes, the solver rules a rename would rename, warnings, and a token. Read-only |
+| `check_member_changes` | `{memberId, edits[≤30]}` | Applies the edits by parts to the FRESH person (`applyMemberEdits`): `set {field: name/alias/email/role}` (`alias: ""` clears), `singsAndPlays`, `add`/`remove {field: tipo/instruments/ministries/managesMinistries}`, `jovenes {level|null, groups?, leaderOf?}` (names or ids; `leaderOf` ⊆ `groups`, required for a `leader` — never defaulted — and refused on a member or admin; the body always sends it, `[]` unless a leader; ADR-0085). Runs the writer's own plan (`checkMemberEdits`) and answers the before/after of only what changes, the solver rules a rename would rename, warnings, and a token. Read-only |
 | `save_member_changes` | `{memberId, edits, token}` | Verifies the token's call half (person + edits) FIRST, so a repeat after a landed save answers «ya estaba guardado»; then `saveMemberEdits` re-reads, re-plans and re-renders the lines, which must match the token's result half, and writes the person and any renamed rules in ONE transaction, each under `ifRevisionId`. Destructive (I14) |
-| `check_new_members` | `{members[≤20]}` | Each new person as they would be created (`planNewMembers`, the route's own body), refusals per person («Persona N:»), orphan-rule warnings, and a token valid 30 minutes. Read-only |
+| `check_new_members` | `{members[≤20]}` | Each new person as they would be created (`jovenes {level, groups?, leaderOf?}` under the edit op's rules) (`planNewMembers`, the route's own body), refusals per person («Persona N:»), orphan-rule warnings, and a token valid 30 minutes. Read-only |
 | `create_members` | the same `members` plus `token` | Verifies the token; the ids are HMACs of it in UUID form. All present → «Ya estaban» (even after the 30 minutes); some → refused; otherwise ONE transaction of `createIfNotExists`. Destructive (I14) |
 | `set_member_access` | `{memberId, enabled}` | `setMemberDisabled`, the button's own logic. No token (Frank, 2026-11-05): Claude names the person and waits for the word. Destructive (I14) |
 
@@ -1150,6 +1152,62 @@ retrying; a thrown create says to repeat `create_members` with the same token.
 Content Lake with revision checks), `peopleTokens.test.ts`, the tools' `members.test.ts`, and the
 route tests (`membersMinistries`, `memberInstruments`, `adminMemberVisibility`), unchanged except one
 on purpose: an alias PATCH now reads and pins the person.
+
+### Solver rules (admin parity, phase 4)
+
+What `/admin` → «Generar mes» → Reglas does (the three pools and every person, pair and group rule),
+from the chat, through the same writer: `POST /api/admin/solver-config` now authorizes and calls
+`app/utils/solverConfigCommit.ts`, and so do the tools (`app/mcp/tools/rules.ts`). Decision record:
+[ADR-0084](adr/0084-the-solver-rules-are-edited-from-the-chat-by-parts-through-the-panels-writer.md);
+plan: `docs/superpowers/plans/2026-11-06-owt-mcp-admin-parity-f4r-rules.md`. A rules save notifies
+nobody and changes no saved month; it applies to the next month Auto generates. Not on the worship-admin
+read tier (ADR-0083). In production since 2026-11-10 CDMX (PR #238, `31f3e18c`). Live proof passed
+2026-11-11 CDMX with Frank's consent (a «como máximo» Sunday count added, changed and removed for one person,
+a stale token refused, a pool no-op and an off-Tipo pool refusal; the rules read back unchanged). Every
+answer carries its lines in the text AND in `structuredContent.lines`: the Claude app gives the model only
+the text, Claude Code only the structured half (found in that proof; the member and song tools do the same).
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `check_rule_edits` | `{edits[≤30]}` | Reads the rules and the planner's roster fresh, refuses a stored document the panel would re-save differently (`losslessRules`), applies the edits by parts (`applyRuleEdits`), judges the result (`judgeRuleEdits`), and answers the lines before → after, the no-ops, the notes and a token valid 30 minutes. Read-only |
+| `save_rule_edits` | `{edits, token}` | Repeats the check on its own fresh read and writes the six rule fields under `ifRevisionId` only when the token matches the fresh revision, the edits and the lines. Nothing would change → «Ya estaba así», no write. Destructive (I14) |
+
+**The edits** (`op`): `pool {pool: líder domingo | líder sábado | soporte, add?, remove?}`; `never` /
+`allowAgain {person, pattern}`; `weekOff` / `weekOn {person, week 1–5, pattern}`; `count {person, pattern,
+limit: exactamente | al menos | como máximo, value 0–31 | relative {minus 0–5}}` (adds, or replaces the
+ONE cap with that pattern and limit); `removeCount`; `cadence {person, alternate}` («Mes por medio»);
+`balance {person, exempt}` («Fuera del balance total»); `removePerson`; `notTogether` /
+`removeNotTogether {a, b, pattern?}`; `together` / `removeTogether {persons 2–12, pattern?}`. A pattern
+is `{day: domingo | sábado | ambos, seat: líder | BGV | coro | líder o BGV | todo}`, and only the eleven
+the panel offers (`RULE_PATTERNS`) are accepted; any other is refused with what to send instead. A
+removal may name any stored pattern.
+
+**People are matched the way the solver matches them.** A name added to a rule goes through
+`resolveRulePersonId` (worship members, by name or alias), must have Tipo Voz, and its stored text
+(the display name) must resolve back to that same person; otherwise refused with up to five close
+names. A removal may name an orphaned rule's exact text. Pools take only someone whose Tipo fits
+(`memberFitsPool`); a remove takes anyone in the pool, a stale off-Tipo tick included (someone who has left
+Alabanza is not in the roster, so is refused; the solver ignores their stale id). A person repeated in a group, or added and removed in one pool edit, is refused.
+
+**What the check refuses, and what it only notes.** It runs the v3 eligibility resolver on the stored
+and the edited rules for the next CDMX month: a problem only the edited rules have (an unresolved
+name, «Mes por medio» with an exact Sunday-lead count, two exact counts on one role, a 21st presence
+group…) refuses the whole edit set in the planner's own words; one already stored is a note. Likewise
+two absolute counts no month can satisfy (a minimum above a maximum whose roles contain it), new ones
+only; relative counts are not compared (a known limit, ADR-0084). Notes: «Mes por medio» for someone
+outside Líder Domingo (saves, does nothing yet), and the bound-month note when a balance or cadence
+flag changes.
+
+**Pool lines say what the person can do after** (R13): «Líder Sábado: − Mkz (no cambia nada: sigue en
+Líder Domingo, que también dirige sábados…)», or «(deja de poder: …)» / «(empieza a poder: …)».
+
+**Unknown outcome.** A thrown save says «No sé si se guardó. Lee las reglas con get_solver_rules antes
+de reintentar.» A refused token (other edits, the rules or the team changed, over 30 minutes) writes
+nothing and says to check again.
+
+**Proof.** `ruleEdits.test.ts`, `solverConfigCommit.test.ts`, the tools' `rules.test.ts`,
+`patternRolesV3Sync.test.ts` (the shared pattern list), and `solverConfigRoute.test.ts`, unchanged
+since the move.
 
 ### Admin-surface gates (I15)
 

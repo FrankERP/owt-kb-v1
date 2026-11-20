@@ -96,3 +96,17 @@ Other facts that shaped it: worship's documents carry no ministry field (ADR-001
   reversed: Jóvenes is built on the generic `ministryEvent` type (ADR-0081) and Kids stays on its
   own types, paused, until it is picked up again; the seeded Kids roster with no accounts was removed
   (2026-10-30, `scripts/remove-seeded-kids-roster.mjs`).
+- **Two more Jóvenes groups, by gender, not age** (Frank, 2026-11-11: «Adrenalin y guerreras son
+  grupos dentro de Jóvenes»): «Adrenalin» (the men's group) and «Guerreras» (the women's) join the
+  registry beside the three age groups, with the same closed calendar. A person may be in an age
+  group and a gender group at once; nothing models the two kinds differently. A new group id
+  reaches production before anything stores it (old code drops an unknown id on read, and a later
+  full write of that person would drop it from the document), so the pastors' bulk load that uses
+  them runs only after the release. A joint meeting still names at most three groups; a meeting
+  for everyone uses the ministry audience.
+
+## Addendum — leadership is per group (2026-11-12)
+
+- A Jóvenes `leader` leads only the groups named in `leaderOf` (⊆ `groups`), not every group they
+  are in; `admin` stays ministry-wide and an admin's `groups` are plain membership.
+  [ADR-0085](0085-a-jovenes-leader-leads-named-groups.md).

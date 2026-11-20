@@ -157,7 +157,7 @@ The set is `SMTP_HOST` (`smtp.gmail.com`), `SMTP_PORT` (465), `SMTP_USER` (`dev.
 
 **How to rotate.** Create a NEW app password in that Google account first, update `SMTP_PASS` in Vercel for Production *and* Preview, redeploy, confirm a send works, and only then revoke the old one. Creating before revoking is what keeps the blast radius near zero — in the other order every outbound email is down in between: assignment notifications, the debounced notification sweep, proposal emails, and the outbox liveness alarm.
 
-**Gmail's own limits apply now and did not before.** A free Gmail account is bounded at roughly 500 recipients/day and a Workspace account at 2000; the outbox's batches are far under that today, but a large fan-out is a limit that `mail.oasis.mx` did not impose. Gmail may also refuse a `From` that is not the authenticated account or a verified "Send mail as" alias — which is why `EMAIL_FROM` cannot be an arbitrary `noreply@` address on this sender. **Only the ADDRESS is constrained, not the label:** `EMAIL_FROM` currently carries a display name, `OWT Backstage <dev.raccoon.labs@gmail.com>`, which Gmail accepts because the address is still the authenticated account. A `noreply@` needs a domain this project can publish DNS for — and `oasis.mx` is not one: its zone is served by `ns1/ns2.softlayer.com`, not by the cPanel whose Zone Editor is reachable, which is why the Resend verification for it fails with "all required records are missing" no matter what is entered there.
+**Gmail's own limits apply now and did not before.** A free Gmail account is bounded at roughly 500 recipients/day and a Workspace account at 2000; the outbox's batches are far under that today, but a large fan-out is a limit that `mail.oasis.mx` did not impose. Gmail may also refuse a `From` that is not the authenticated account or a verified "Send mail as" alias — which is why `EMAIL_FROM` cannot be an arbitrary `noreply@` address on this sender. **Only the ADDRESS is constrained, not the label:** `EMAIL_FROM` currently carries a display name, `Backstage <dev.raccoon.labs@gmail.com>` (Production + Preview; it read `OWT Backstage <…>` until 2026-11-10, when the app was renamed for every ministry — the `verify/service-readiness` branch keeps its own placeholder), which Gmail accepts because the address is still the authenticated account. A `noreply@` needs a domain this project can publish DNS for — and `oasis.mx` is not one: its zone is served by `ns1/ns2.softlayer.com`, not by the cPanel whose Zone Editor is reachable, which is why the Resend verification for it fails with "all required records are missing" no matter what is entered there.
 
 ---
 
@@ -475,6 +475,12 @@ and writes nothing. A song already created keeps its id; nothing stored holds a 
 `mcp-member-edits|`, `mcp-member-create-call|` and `mcp-member-create|`, and derives a create's ids
 under `mcp-member-id|`. Rotating the key voids every pending people check (the save or create answers
 «revisa de nuevo» and writes nothing); a person already created keeps their id.
+
+**A seventh use: the solver rule tools** (ADR-0084, admin parity phase 4; no new secret or env var).
+Two more HMACs under their own labels (`app/mcp/rules/ruleTokens.ts`): `mcp-rule-edits|`, over the
+issue time and the rules revision, edit list and lines `check_rule_edits` answered, and `mcp-rule-ids|`,
+the ids of the rule items an edit creates. Rotating the key voids every pending rules check:
+`save_rule_edits` answers «vuelve a revisar» and writes nothing. Stored rules keep their ids.
 
 **Blast radius.** Every access and refresh token that environment's routes ever signed stops
 verifying the instant the new key is live — a rotated secret cannot check a token signed under

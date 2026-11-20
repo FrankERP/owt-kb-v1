@@ -61,6 +61,12 @@ export const post = {
 			type: 'url',
 		},
 		{
+			name: 'albumArt',
+			title: 'Album cover',
+			description: 'The cover of the album the song comes from, square. Shown beside the song on a setlist (ADR-0088). A song without one gets a neutral tile.',
+			type: 'image',
+		},
+		{
 			name: "body",
 			title: "Body",
 			type: "array",

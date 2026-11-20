@@ -61,6 +61,9 @@ export interface Post {
   lyricsVideoUrl?: string;
   tags: Array<Tag>;
   authors?: Array<Author>;
+  /** The song's album cover as a Sanity image URL (`POST_COVER_GROQ`), on the reads that show
+   *  it (`songCoverUrl`). Absent or null: a neutral tile. */
+  cover?: string | null;
   _id: string;
 }
 
@@ -96,6 +99,9 @@ export interface SetlistSong {
   medley_tag?: string;
   /** A worship night's leaders for this song (Lead members). */
   leads?: Array<{ member_name: string; alias?: string }> | null;
+  /** The song's album cover as a Sanity image URL (`SONG_COVER_GROQ`), on the reads whose
+   *  rows show it (`songCoverUrl`). Absent or null: the row draws its neutral tile. */
+  cover?: string | null;
 }
 
 export interface Setlist {

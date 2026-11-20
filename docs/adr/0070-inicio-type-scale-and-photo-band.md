@@ -1,6 +1,6 @@
 # ADR-0070: Inicio is set on one type scale, with small caps on section titles only, over a team photo
 
-**Date:** 2026-10-23 · **Status:** Accepted
+**Date:** 2026-10-23 · **Status:** Accepted, amended by ADR-0088 (the member's services are cards again; the type scale stands)
 
 ## Context
 
@@ -186,7 +186,7 @@ pill; «Equipo» is the small-caps title, «Banda» is 17 px sentence case; a sh
   (`.brand-stage-hero`, kept in `brand.css` for the gallery's swatch fixture only), the spaced
   uppercase «BACKSTAGE» and the cyan «Acceso del equipo» label are gone: the page is the same head
   as every other screen — the mark at 72 px (88 from `md`), «Backstage» as the `PAGE_TITLE`, one
-  `PAGE_LEDE` («Oasis Worship Team · inicia sesión para ver tus servicios y canciones.») — over
+  `PAGE_LEDE` («Oasis · inicia sesión para ver tu calendario y lo que te toca.», reworded 2026-11-10 when the app became «Backstage» for every ministry) — over
   «Continuar con Google» as a full-width secondary, «o con tu correo» as a `SHEET_TITLE` between
   hairlines, Correo and Contraseña as Mi perfil's hairline fields (`ui/hairlineField.ts`, 17 px, a
   visible label each instead of an `aria-label`) with a «Mostrar / Ocultar» ghost on the password's
@@ -207,4 +207,32 @@ pill; «Equipo» is the small-caps title, «Banda» is 17 px sentence case; a sh
   (the standing rule above is untouched: it was about titles, not actions). Guards: `Button.test.tsx`
   and `SegmentedControl.test.tsx` refuse `uppercase`/`font-label` on the base. The theme-gallery VR
   baselines are stale until recaptured on a Mac (`e2e/theme-gallery/README.md`).
+- **Jóvenes took it on 2026-11-10 (thread «Revisar diseño de Jóvenes», review doc + mocks approved).**
+  `/jovenes` and Planear Jóvenes (PRs #226, #227, #233) were built in the style this ADR retired:
+  `rounded-2xl` cards with boxes inside, 24 px titles, 14 px body, 11 px capitals on every label,
+  and «Te toca» as an ACCENT chip while the Calendario's sheet for the same meeting said «Tú» in
+  green. Now `/jovenes` is «Jóvenes» as the `PAGE_TITLE` over a lede («3 reuniones por venir · te
+  toca el sábado 14 de noviembre»), each meeting headed by its DATE in the display face (28/34 px;
+  what tells four Saturdays apart) with the rows of the Calendario's day sheet under it — one
+  component, `JovenesMeetingBody`, so the two cannot drift again. Planear Jóvenes takes the MONTH
+  as its title with the Calendario's round arrows (`monthTitle`, `plannerLede`), «Rol del sábado»
+  and «Calendario de grupos» as `SHEET_TITLE` sections over hairline rows led by the day number,
+  the state as a dot + word for BOTH states (`MeetingState`; only a draft used to say anything),
+  and house buttons (`secondary` / `ghost`; `pill` is a filter toggle and bare `Link`s were not
+  buttons). The three sheets keep CueDialog's own title (they overrode it with a 16 px uppercase
+  span), say a refusal in `CueDialogStatus`, and set Fecha / Hora / Llegada in ONE field —
+  `DateField`'s new `lg` size, the height and face of `Select size="lg"` — where a boxed date sat
+  beside a hairline text clock (and a phone's digits-only keyboard had no «:» to type one with).
+  The program editor is a numbered list between hairlines with icon buttons for order and removal.
+  CSS `capitalize` is gone from these screens: it wrote «14 De Noviembre» (`dayTitle`, `dayWords`).
+  In the Calendario the plain Saturday meeting is named «Jóvenes» (as «Oasis Kids») and its agenda
+  row names only who is in charge: with every seat spelled out it ran to four lines on a phone.
+  No read or write changed (`ministryEventReads.ts`, `ministryEventCommit.ts` untouched). Tests:
+  `jovenesEventView`, `jovenesPlannerModel`, `calendarMinistry`, `jovenesPage`, `saturdayPlanner`,
+  `groupCalendar`, `jovenesDayCard`.
+- **Jóvenes left the row pattern on 2026-11-12 (ADR-0086).** With every meeting of five groups on
+  one screen the hairline rows read, in Frank's words, as «una tabla con texto». `/jovenes` and
+  Planear Jóvenes now draw each meeting as a card with a calendar leaf, group colours and faces;
+  the page title, the lede, the sheets' fields and the copy rules of the bullet above stand, and
+  nothing outside those two screens changed surface. Read ADR-0086 before «restoring» either one.
 - Undoing it means re-adding the eyebrows and frames the mock removed; the tests above will say so.

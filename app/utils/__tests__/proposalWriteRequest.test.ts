@@ -51,8 +51,20 @@ describe("parseProposalSaveRequest", () => {
         songs: [{ songId: "song-1", playKey: "G", medleyTag: null, leadIds: [] }],
         leadNotes: "",
         teamNotes: "",
+        pastorMessage: null,
       },
     });
+  });
+
+  it("carries the lead's pastor's message only when sent: absent = unchanged (null), \"\" = clear (ADR-0087)", () => {
+    const sent = parseProposalSaveRequest({ ...base, pastorMessage: "Efesios 2" });
+    expect(sent.ok && sent.value.pastorMessage).toBe("Efesios 2");
+    const cleared = parseProposalSaveRequest({ ...base, pastorMessage: "" });
+    expect(cleared.ok && cleared.value.pastorMessage).toBe("");
+    const nulled = parseProposalSaveRequest({ ...base, pastorMessage: null });
+    expect(nulled.ok && nulled.value.pastorMessage).toBeNull();
+    expect(parseProposalSaveRequest({ ...base, pastorMessage: 3 })).toEqual({ ok: false, issues: ["pastorMessage"] });
+    expect(parseProposalSaveRequest({ ...base, pastorMessage: "x".repeat(4001) })).toEqual({ ok: false, issues: ["notes_length"] });
   });
 
   it("ignores a client-supplied service type/date (the role is authoritative)", () => {
@@ -63,7 +75,7 @@ describe("parseProposalSaveRequest", () => {
     });
     expect(parsed.ok).toBe(true);
     expect(parsed.ok && Object.keys(parsed.value).sort()).toEqual(
-      ["leadNotes", "observed", "roleId", "songs", "status", "teamNotes"],
+      ["leadNotes", "observed", "pastorMessage", "roleId", "songs", "status", "teamNotes"],
     );
   });
 

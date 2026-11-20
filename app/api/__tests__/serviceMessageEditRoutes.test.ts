@@ -125,6 +125,7 @@ import { DELETE as messageDelete, PATCH as messagePatch } from "@/app/api/admin/
 import { GET as conversationGet } from "@/app/api/admin/service-threads/[roleId]/messages/route";
 import { serviceConversationQuery } from "@/app/utils/serviceReadQueries";
 import { pastorMessageBodyOf } from "@/app/utils/serviceThread";
+import { adoptProposalPastorMessage } from "@/app/utils/serviceThreadCommit";
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -183,6 +184,84 @@ beforeEach(() => {
     if (query.includes(".pastor_message{")) return { body: "leído", at: "2099-03-01T15:00:00.000Z", author: "admin-1", author_name: "Frank" };
     if (query.includes("_id == $threadId")) return { _id: THREAD_ID, _rev: "t9", messages: [{ _key: "m1", body: "fresco" }] };
     return null;
+  });
+});
+
+// ── The approval's copy of the leads' pastor's message (ADR-0087) ───────────
+
+describe("adoptProposalPastorMessage — the approval's post-commit copy", () => {
+  it("copies into a missing thread with `create`, trimmed, authored by the approver, and notifies NOBODY", async () => {
+    expect(await adoptProposalPastorMessage(ROLE_ID, "  Efesios 2  ", "admin-1")).toBe("copied");
+    expect(committed).toHaveLength(1);
+    expect(committed[0][0]).toMatchObject({
+      kind: "create",
+      id: THREAD_ID,
+      doc: {
+        _type: "serviceThread",
+        role_id: ROLE_ID,
+        messages: [],
+        pastor_message: { _type: "pastor_message", body: "Efesios 2", author: { _ref: "admin-1", _type: "reference" } },
+      },
+    });
+    expect(revalidateMock).toHaveBeenCalledTimes(1);
+    await drainAfter();
+    expect(notifyMock).not.toHaveBeenCalled();
+  });
+
+  it("patches an existing thread with no message under its `_rev`", async () => {
+    storedThread = { _id: THREAD_ID, _rev: "t1", pastor_message: null };
+    expect(await adoptProposalPastorMessage(ROLE_ID, "Efesios 2", null)).toBe("copied");
+    expect(committed[0][0]).toMatchObject({ kind: "patch", id: THREAD_ID, ifRevisionId: "t1" });
+    const set = committed[0][0].set?.pastor_message as Record<string, unknown>;
+    expect(set).toMatchObject({ _type: "pastor_message", body: "Efesios 2" });
+    expect(set.author).toBeUndefined();
+  });
+
+  it("NEVER overwrites: a different stored message is kept, the same one is `same`", async () => {
+    storedThread = { _id: THREAD_ID, _rev: "t1", pastor_message: { body: "El del admin" } };
+    expect(await adoptProposalPastorMessage(ROLE_ID, "El de los líderes", "admin-1")).toBe("kept_existing");
+    storedThread = { _id: THREAD_ID, _rev: "t1", pastor_message: { body: "Línea 1\nLínea 2" } };
+    expect(await adoptProposalPastorMessage(ROLE_ID, " Línea 1\r\nLínea 2 ", "admin-1")).toBe("same");
+    expect(committed).toHaveLength(0);
+  });
+
+  it("does nothing for an empty or absent text", async () => {
+    expect(await adoptProposalPastorMessage(ROLE_ID, "   ", "admin-1")).toBe("none");
+    expect(await adoptProposalPastorMessage(ROLE_ID, undefined, "admin-1")).toBe("none");
+    expect(operationalFetch).not.toHaveBeenCalled();
+    expect(committed).toHaveLength(0);
+  });
+
+  it("re-reads once after a conflict and re-decides; a second conflict is `failed`, never a throw", async () => {
+    storedThread = { _id: THREAD_ID, _rev: "t1", pastor_message: null };
+    commitOutcomes.push(conflict());
+    expect(await adoptProposalPastorMessage(ROLE_ID, "Efesios 2", "admin-1")).toBe("copied");
+    expect(committed).toHaveLength(1);
+
+    committed = [];
+    commitOutcomes.push(conflict(), conflict("documentAlreadyExistsError"));
+    expect(await adoptProposalPastorMessage(ROLE_ID, "Efesios 2", "admin-1")).toBe("failed");
+    expect(committed).toHaveLength(0);
+  });
+
+  it("a conflict that turns out to be an admin's message is kept, not overwritten", async () => {
+    storedThread = { _id: THREAD_ID, _rev: "t1", pastor_message: null };
+    commitOutcomes.push(conflict());
+    operationalFetch.mockImplementationOnce(async () => storedThread).mockImplementationOnce(async () => ({
+      _id: THREAD_ID,
+      _rev: "t2",
+      pastor_message: { body: "El del admin" },
+    }));
+    expect(await adoptProposalPastorMessage(ROLE_ID, "El de los líderes", "admin-1")).toBe("kept_existing");
+    expect(committed).toHaveLength(0);
+  });
+
+  it("any other error is `failed` (logged without the text), never thrown", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    operationalFetch.mockRejectedValueOnce(new Error("network"));
+    expect(await adoptProposalPastorMessage(ROLE_ID, "Texto privado del pastor", "admin-1")).toBe("failed");
+    expect(JSON.stringify(log.mock.calls)).not.toContain("Texto privado");
+    log.mockRestore();
   });
 });
 
@@ -554,6 +633,22 @@ describe("the new read parts, evaluated", () => {
       pastor_message: { body: "Efesios 2", at: "2099-03-01T00:00:00Z", author: "admin-1", author_name: "Frank" },
       weekendSetlists: [{ _id: "featuredSongs.2099-03-08", _rev: "s1", _type: "featuredSongs", team_notes: "Nota" }],
     });
+  });
+
+  it("serviceConversationQuery carries the proposal's own pastor's message (ADR-0087)", async () => {
+    const withProposal = [
+      ...dataset,
+      {
+        _id: "setlistProposal.sun",
+        _type: "setlistProposal",
+        service_ref: { _ref: "sun" },
+        status: "pending",
+        pastor_message: "El de los líderes",
+      },
+    ];
+    const q = serviceConversationQuery("sun", "serviceThread.sun");
+    const out = (await (await evaluate(parse(q.query), { dataset: withProposal, params: q.params })).get()) as Record<string, unknown>;
+    expect(out).toMatchObject({ proposal: { _id: "setlistProposal.sun", status: "pending", pastor_message: "El de los líderes" } });
   });
 
   it("a special has no weekend setlists and counts `songs: []` as a setlist", async () => {

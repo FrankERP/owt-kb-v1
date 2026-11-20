@@ -2,6 +2,9 @@
 
 **Date:** 2026-10-21 · **Status:** Accepted · **Amended:** 2026-10-24 (editing, and the pastor's message as one field)
 
+> **2026-11-12:** leads can now hand in the pastor's message with their proposal, and approval copies it into
+> an EMPTY `pastor_message` — [ADR-0087](0087-a-lead-hands-in-the-pastors-message-with-the-proposal.md).
+
 ## Context
 
 The private lead ↔ admin conversation lives in `setlistProposal.messages[]`, so it

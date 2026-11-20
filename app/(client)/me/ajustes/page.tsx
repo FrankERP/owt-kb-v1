@@ -25,7 +25,7 @@ import { loadCalendarFeedState } from "@/app/utils/calendarFeedState";
 // volunteer sees one line saying so instead of links.
 
 export const metadata: Metadata = {
-  title: "Ajustes — Oasis Worship Team",
+  title: "Ajustes — Backstage",
   description: "Tu tema, el tamaño del texto y tu perfil.",
 };
 

@@ -3,7 +3,9 @@
 // ⚠ marks can never disagree.
 import type { ActiveDay } from "../components/CalendarView";
 import { plural } from "./plural";
+import type { TeamSectionId } from "./teamSections";
 import { serviceStartTime, WEEKEND_SERVICE_TIME } from "./calendarFeed";
+import { SEAT_ROLE_LABEL } from "./jovenesEventView";
 
 /** `kids` is an Oasis Kids Sunday and `jovenes` a Jóvenes meeting, each shown only to that
  *  ministry's members (`calendarMinistry.ts`). */
@@ -40,6 +42,9 @@ export function serviceTone(e: Pick<ActiveDay, "day" | "roleId" | "kids" | "jove
   return "special";
 }
 
+/** The one Jóvenes seat an agenda row names: who is in charge of the meeting. */
+const JOVENES_LEAD_SEAT = SEAT_ROLE_LABEL.encargado;
+
 const voices = (e: ActiveDay) => [
   ...(e.leads ?? []),
   ...(e.bgvs ?? []).map((m) => m.alias || m.member_name),
@@ -72,6 +77,16 @@ export function mySeats(e: Pick<ActiveDay, "leads" | "bgvs" | "chorus" | "instru
   return [...new Set(seats)];
 }
 
+/** The team section one of `mySeats`' worship labels belongs to, so «Tú · Stream» takes
+ *  the booth's glyph beside it (`SeatIcon`) — the same one that seat's face wears on the
+ *  card — instead of the unknown-seat note. Undefined for a Kids or Jóvenes label. */
+export function seatSectionOf(e: Pick<ActiveDay, "instruments" | "fohTeam">, seat: string): TeamSectionId | undefined {
+  if (seat === "Lead" || seat === "BGVs" || seat === "Coro") return "voces";
+  if ((e.instruments ?? []).some((s) => s.label === seat)) return "banda";
+  if ((e.fohTeam ?? []).some((s) => s.label === seat)) return "cabina";
+  return undefined;
+}
+
 /** Conflicts = people seated twice within ONE section (voces / instrumentos / foh). */
 export function serviceConflicts(e: ActiveDay): number {
   const instr = (e.instruments ?? []).filter((s) => s.person).map((s) => s.person);
@@ -91,8 +106,10 @@ export function summarizeService(e: ActiveDay): string {
     return filled.length ? filled.join(" · ") : "Sin asignaciones";
   }
   if (e.jovenes) {
-    const filled = e.jovenes.seats.filter((s) => s.name).map((s) => `${s.label} ${s.name}`);
-    return [e.jovenes.audience, ...filled].join(" · ");
+    // Who it is for and who runs it, no more: the row is a glance, and with every seat spelled
+    // out it ran to four lines on a phone (2026-11-10). The sheet behind the row has the rest.
+    const lead = e.jovenes.seats.filter((s) => s.name && s.label === JOVENES_LEAD_SEAT).map((s) => `${s.label} ${s.name}`);
+    return [e.jovenes.audience, ...lead].join(" · ");
   }
   const parts: string[] = [];
   if (e.leads?.length) parts.push(`Lead ${e.leads.join(", ")}`);

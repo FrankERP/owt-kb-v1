@@ -5,9 +5,10 @@ import { client } from "@/sanity/lib/client";
 import { requireWorshipPage } from "@/app/utils/worshipPageGate";
 import { parseLibraryParams, serializeLibraryParams } from "@/app/utils/libraryIndex";
 import type { Post, Tag, Author } from "@/app/utils/interface";
+import { POST_COVER_GROQ } from "@/app/utils/songCover";
 
 export const metadata: Metadata = {
-  title: "Biblioteca — Oasis Worship Team",
+  title: "Biblioteca — Backstage",
   description: "Todas las canciones, por título, artista, tonalidad y tema.",
 };
 
@@ -18,6 +19,7 @@ export const revalidate = 60;
 const QUERY = `{
   "posts": *[_type == "post"] | order(title asc) {
     _id, _createdAt, title, author, slug, publishDate, timeSig, bpm, key,
+    "cover": ${POST_COVER_GROQ},
     tags[]->{ _id, slug, name }, authors[]->{ _id, slug, name }
   },
   "tags": *[_type == "tag"] | order(name asc) { _id, name, slug, "postCount": count(*[_type == "post" && ^._id in tags[]._ref]) },
@@ -43,7 +45,7 @@ export default async function BibliotecaPage({
     <div>
       {/* The page's own heading is «Biblioteca» (ADR-0070), so the bar carries the
           brand on phones, as Inicio's does — not the same word twice, a line apart. */}
-      <Navbar title="OWT" />
+      <Navbar title="Backstage" />
       {/* `key` forces a fresh MOUNT on a real navigation to a new `?q=`/`?tag=`
           (the /tag*, /author* redirects land here with params set). The index
           now mirrors ITS OWN state into the URL with `history.replaceState`,

@@ -15,6 +15,7 @@ import {
   libraryKeys,
   libraryThemes,
   makeLibraryFuse,
+  recentSongs,
   serializeLibraryParams,
   type LibraryFilters as LibraryFiltersState,
 } from "@/app/utils/libraryIndex";
@@ -24,6 +25,7 @@ import Button from "./ui/Button";
 import LibraryFilters from "./LibraryFilters";
 import LibraryLetterRail from "./LibraryLetterRail";
 import LibraryRow from "./LibraryRow";
+import LibraryShelf from "./LibraryShelf";
 import QuickActions, { type QuickAction } from "./ui/QuickActions";
 import { useToast } from "./ui/Toast";
 
@@ -186,6 +188,8 @@ export default function LibraryIndex(props: LibraryIndexProps) {
   // page's heading in the display face; the counts are its body-type subtitle.
   const themeCount = useMemo(() => libraryThemes(tags).length, [tags]);
   const artistCount = useMemo(() => authors.filter((a) => (a.postCount ?? 0) > 0).length, [authors]);
+  // The shelf above the list (ADR-0088) — only while nothing filters, see `LibraryShelf`.
+  const recent = useMemo(() => recentSongs(posts), [posts]);
 
   return (
     <div className="mx-auto max-w-7xl px-6 pb-16 pt-6 md:pt-10">
@@ -258,6 +262,8 @@ export default function LibraryIndex(props: LibraryIndexProps) {
           </Button>
         )}
       </div>
+
+      {!active && <LibraryShelf title="Recién agregadas" posts={recent} />}
 
       <div className="relative">
         {filtered.length === 0 ? (

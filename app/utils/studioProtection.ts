@@ -338,6 +338,7 @@ export const INTERNAL_STUDIO_FIELDS: Readonly<Record<string, readonly string[]>>
     "time",
     "arrival",
     "title",
+    "place",
     "seats",
     "program",
     "notes",

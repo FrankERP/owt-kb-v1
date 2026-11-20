@@ -277,7 +277,12 @@ several exist precisely to stop a plausible-looking change.
   (`app/utils/solverConfigWriteRequest.ts`), because an older client reads away a field it does
   not know and its next save erases it for everyone. A field **or an allowed value** an older
   client would drop or rewrite bumps the version in the same change; `solverConfigVersion.test.ts`
-  is the tripwire. Any other writer that sets or restores a rule value goes through
+  is the tripwire. The rules POST and the chat's rule tools write through ONE module,
+  `app/utils/solverConfigCommit.ts` (ADR-0084): the POST's body verbatim, and the chat's edits by
+  parts on a fresh read, behind a lossless gate (the stored rules must survive the panel's own round
+  trip), judged by the v3 eligibility resolver (only a problem the edit ADDS is refused), check →
+  save bound by a token over `{rev, edits, lines}`. The eleven patterns the panel offers are ONE list,
+  `RULE_PATTERNS` in `ruleCopy.ts`, read by the panel and the chat. Any other writer that sets or restores a rule value goes through
   `solverConfigFromDocument` → `parseSolverConfigWrite` → `solverConfigFields` under
   `ifRevisionId` — never again an `insert`/`append` of caps or restrictions as the two private
   one-off scripts of 2026-09-29/10-01 did (the member DELETE's pool-array patch and the rule-name
@@ -490,7 +495,8 @@ several exist precisely to stop a plausible-looking change.
   A service's conversation (ADR-0065: the leads' thread, «Mensaje del pastor», «Mensaje para el
   equipo») has its writers in `serviceThreadCommit.ts` (admin parity phase 3, ADR-0073): the four
   `/api/admin/service-threads/[roleId]/*` routes and the MCP conversation tools
-  (`app/mcp/tools/serviceMessages.ts`) both call them, so a chat message reaches the leads exactly as
+  (`app/mcp/tools/serviceMessages.ts`) both call them (and `proposalReviewCommit.ts` calls
+  `adoptProposalPastorMessage` after an approval commits, ADR-0087), so a chat message reaches the leads exactly as
   `/admin`'s does. The acting member is the session's on `/admin` and the bearer's (`principalOf`) in
   the chat, never an argument; no principal refuses before any read.
   Oasis Kids' writers (one Sunday, the pair roster, a volunteer's absences) live in `kidsCommit.ts`
@@ -523,6 +529,13 @@ several exist precisely to stop a plausible-looking change.
   parts (`applyMemberEdits`), its tokens bind the rendered change rather than `_rev` (`lastSeen`
   moves it), and `chatAccessRefusal`/`chatAccessToggleRefusal` keep it from revoking management
   (Frank, 2026-11-05); the routes never apply that table. `/me` never names anyone else.
+  The solver rules' writer is `solverConfigCommit.ts` (admin parity phase 4, ADR-0084): the rules POST
+  keeps its session check and calls `saveSolverConfig` (its old body, verbatim); `check_rule_edits` /
+  `save_rule_edits` call `checkRuleEdits`/`saveRuleEdits`, which apply `ruleEdits.ts`'s edits by parts
+  to a fresh read and write through the same parser, under `ifRevisionId`. Names are matched the way
+  the solver matches them (`resolveRulePersonId`, Tipo Voz, the stored text resolves back to the same
+  person); pools take only a Tipo that fits; only the panel's eleven patterns; a pool line says what
+  the person can do after. Nobody is notified.
   The availability proposals' writer is `availabilityFixCommit.ts` (ADR-0079): the four
   `/api/admin/availability-conflicts` routes (the GET and its `apply`/`keep`/`sweep` POSTs) (`requireActiveManager`, never a content-editor, never
   impersonating), the member's `PATCH /api/me/availability` (its `after()` trigger, that member only)
@@ -778,13 +791,36 @@ before any read, the fresh 20 s ledger read, the 58 s solve), `freezeConfirmEntr
 (`v3Confirm.ts`/`v3ConfirmRun.ts` — the ONE v3 confirm: every month's record in one PUT, then drafts month by
 month; critical, reviewed as such), `v3Copy.ts` (the ONLY v3 copy, keyed on codes), `prefillCountedSpecials`
 (`v3Prefill.ts` — counted specials before the solve; uncounted ones keep `fillColumn`).
+**Service cards (ADR-0088, 2026-11-12)** — the member's worship screens (Inicio, the Calendario's
+agenda, `/me`) draw a service as a card, with these and nothing hand-rolled beside them:
+`service/Face` and `FaceStack` (`app/components/service/Face.tsx` — a worship member as a photo with
+an initials fallback, «tú» in the one green ring; NOT the Jóvenes `PersonAvatar`, which is initials
+only because its reader carries no photos), `SongCover`/`CoverRow` (a song's album cover or a
+neutral tile), `ServiceFacts` (the ONE folded summary: lead faces, covers, «Setlist pendiente»),
+`SeatIcon`/`seatIconKind` (a seat's glyph, always beside its word), `DateTile` (the calendar leaf,
+shared with Jóvenes), `SERVICE_TONE`/`MINE_CHIP`/`COUNTDOWN_CHIP` (`app/utils/serviceToneStyle.ts` —
+a service's day colour lives on the rail and the leaf's band ONLY, ADR-0059's rule widened by that
+band; never a wash behind the head), `songCoverUrl`/`SONG_COVER_GROQ` (`app/utils/songCover.ts` — the
+cover is `post.albumArt`, a Sanity image always served as a square JPEG (`fm=jpg`); a song without one has no picture and
+the YouTube still is never a stand-in, Frank 2026-11-12; `POST_COVER_GROQ` is the same field read from
+the song document, for the Biblioteca, the song page and the song sheet; `COVER_SIZE` names the only
+three sizes a caller may ask for — tile 160, shelf 400, hero 640 — because every distinct size is a
+distinct image the CDN renders and a phone caches), `recentSongs` (`app/utils/libraryIndex.ts` — the
+songs the Biblioteca's shelf shows), `LibraryShelf` and `song/SongHeroCover` (part 2, 2026-11-17: the
+two drawings larger than a tile; every other cover is `SongCover`, which gained `size="lg"` for the
+song sheet), `greetingService`
+(`app/utils/homeGreeting.ts` — the service Inicio's greeting is about, so the page does not repeat
+in the lede what the card under it says in chips). The lit border pass has two sites (the next
+Jóvenes meeting, Inicio's next service) and ONE worship host; a third is an ADR, then
+`litCard.test.ts`.
+
 Motion tokens are `--motion-*` /
 `--ease-*`; `motion` is
 importable only under `app/components/ui/**` — see `docs/MOTION.md` and
 ADR-0031.
 
 ## Colour tokens
-Colour lives in **68 base roles + 32 composed tokens** (`app/brand.css` `:root`,
+Colour lives in **73 base roles + 32 composed tokens** (`app/brand.css` `:root`,
 `tailwind.config.ts`). The seven retired `--brand-*` COLOUR variables and their `brand.*`
 Tailwind keys are **gone**; the four non-colour ones (`--brand-radius-*`,
 `--brand-duration-*`) survive.
@@ -792,10 +828,23 @@ Tailwind keys are **gone**; the four non-colour ones (`--brand-radius-*`,
   `text-key-fg`; ADR-0071, 2026-10-24). Every other hue already has a job — cyan is
   navigation, state and action; amber Saturday and warnings; violet specials and info — so the
   rose has exactly one: the key, wherever the song is the protagonist (`LibraryRow`, the song
-  page's and the sheet's key pills and history pills, `.brand-key-dial`). Never a state, an
+  page's and the sheet's key pills, the «Tono X» of a history card, the shelf's key plate, `.brand-key-dial`). Never a state, an
   alert, a button, a link or «tú», and the key stays ink inside a day card, where the 3 px rail
   already owns the colour. Frank chose it over gold (which blurred into Saturday's amber) and
   over more cyan (which turns the accent into wallpaper).
+- **Each Jóvenes group has a colour, and it means only «this group»** (`--group-otro-nivel-rgb`,
+  `--group-invencibles-rgb`, `--group-emprendedores-rgb`, `--group-adrenalin-rgb`,
+  `--group-guerreras-rgb`; ADR-0086, 2026-11-12). They exist because `/jovenes` lists the meetings
+  of five groups and no existing hue was free to say whose a meeting is. Categorical like the
+  `chart-*` six, and as narrow: the audience chip, a card's rail, the date leaf's band, the month
+  map's dots, and the dots and legend of the Calendario's month grid (`MonthBoard`, 2026-11-17). Never a state («Publicada» green, «Borrador» amber), never «tú», never a button, and
+  never access (which meetings a person sees is the reader's, ADR-0081). `jovenesGroupStyle.ts` is
+  the only file that spells the classes (whole, since Tailwind reads it as text); a chip always
+  carries the group's two-letter monogram, so the colour is never the only signal; a meeting for
+  all of Jóvenes uses the accent and an unknown id is neutral. `lightContrast.test.ts` measures
+  each hue on the page AND on its own wash in both themes — the wash is where it is read, and it
+  is the row that failed first (teal, 4.49:1). The values were picked by the implementer; real
+  group colours replace them in `brand.css` and the guard judges them.
 - **Never build a colour by string concatenation.** `` `${hex}55` `` worked on a bare hex;
   a token cannot be appended to, and `rgb(var(--accent-rgb) / 0.2)55` is not a valid
   `<color>` — the browser drops the whole declaration with nothing in the console. Use
@@ -826,7 +875,7 @@ pass.
 - **Two permission shapes, on purpose (ADR-0075).** Worship's level stays `role` and Kids'
   admin stays `managesMinistries` (`requireActiveManager` reads `role` from 35 files). A
   LEVELED ministry (`LEVELED_MINISTRY_IDS`, today Jóvenes) keeps `ministryRoles`
-  (`{_key = ministry, ministry, level: member|leader|admin, groups}`), read only through
+  (`{_key = ministry, ministry, level: member|leader|admin, groups, leaderOf?}` — `leaderOf` on a leader only, ADR-0085), read only through
   `normalizeMinistryRoles`: an item for a ministry the person is not in, an unknown level, or
   two items for one ministry fail closed to plain membership. A Jóvenes admin is a member with
   level `admin`; `managesMinistries` never grants a leveled ministry. `levelIn`/`groupsIn`
@@ -846,7 +895,7 @@ pass.
   importing it. Do not «simplify» it into a wider read plus a TypeScript filter. groq-js does not
   escape the `.` in `path()`, so the matrix avoids ids like `ministryEvent-x`; `mayRead`'s own
   test pins them.
-- **Jóvenes meetings: one writer** (ADR-0081 W1–W9). `ministryEventCommit.ts` is the only module
+- **Jóvenes meetings: one writer** (ADR-0081 W1–W10). `ministryEventCommit.ts` is the only module
   that writes `ministryEvent`, called only by the routes under `app/api/ministries/[ministry]/events`
   (`serviceCommitCallers.test.ts`; never MCP or the admin assistant). It reads the caller's access
   FRESH (`fetchMemberAccessFresh`, never the 30 s cache, so a demotion counts on the next write),
@@ -856,11 +905,74 @@ pass.
   encargado or apoyo of a whole-ministry meeting writes its program only. The routes that write a
   client-supplied id of another type pin it first (`storedRevisionOfType`, `typePin.ts`; W9) —
   a new route that patches or deletes an id it was handed does the same.
+- **The days a Jóvenes pastor marked reach ONE page** (ADR-0090; plan
+  `2026-11-17-jovenes-away-in-planner.md` and its review log). `unavailableDates` is one calendar
+  per person, shared by every ministry. Planear Jóvenes (`/jovenes/admin`) is the only Jóvenes
+  surface that is sent anybody's days, and only through `readJovenesPeople({ awayFor: access,
+  today })`: bare, that read is one query with no availability field (so `/jovenes`,
+  `/jovenes/calendario` and `/jovenes/reunion/[token]`, whose program editor a plain pastor can
+  hold as a meeting's encargado, cannot receive a day); with the option it computes the visible
+  ids in TypeScript and reads the days of those ids alone. `awayVisibleTo` (`jovenesAway.ts`) is
+  the audience, on the access snapshot the page's gate read: a Jóvenes admin sees every Jóvenes
+  member, a leader the members of a group they LEAD (`ledGroupsIn`), nobody else and nobody
+  inactive. The date crosses, never the note (not projected); a year ahead; `away` is ABSENT, not
+  `[]`, for a person the reader is not told about. It informs and never refuses: no writer reads
+  it. The person is told on `/me/disponibilidad` («Quien planea en Jóvenes ve estos días, sin tu
+  nota.»). Guard: `jovenesAwayCoverage.test.ts` (who names `awayFor`; no Jóvenes file names the
+  fields but the read). Do not «simplify» the two queries into one that projects `away` for
+  everyone, and do not pass `awayFor` from another page: either sends every pastor's days to any
+  pastor who edits a program. Not a confidentiality boundary — `teamMembers` is public until
+  DEF-A-16. **The audience is Frank's choice** (2026-11-17, «Admins y líderes de su grupo», over
+  «solo admins»); narrowing it to admins is `awayVisibleTo` ending at the manager check.
+- **A meeting's fixed parts, «Mi parte» and its emails** (ADR-0089; plan
+  `2026-11-17-jovenes-meeting-parts.md`). A part (Oración, Dinámica 1, Dinámica 2, Plática) is a
+  program line carrying `part`; `ministryParts.ts` is the ONE table (label, people per line,
+  whether it takes `music` and `helpers`), read by the writer, the reader, the emails and the
+  screens. Plática's people are the `comparte` seats, never stored on its line. Only the Saturday
+  meeting (`hasFixedProgram`) always shows the five steps; «Alabanza» is never stored — it is that
+  date's PUBLISHED Saturday setlist, titles and keys only (`jovenesWorshipSet.ts`, the one place a
+  Jóvenes pastor sees worship data). **Who assigns writes people; who is assigned writes the
+  content:** the program PATCH writes a kept part line's stored `note`/`music`/`helpers` back
+  whatever the body says (`keepFilledParts`), and refuses a body that names a part line's `_key`
+  without its `part` — do not «simplify» that into trusting the body, or a stale tab erases what a
+  responsable wrote. W10 (`updateMinistryEventPart`) is the only writer of those three fields once
+  the line exists; it rebuilds `program` from the STORED array with one change. **Emails:** the
+  writer computes them (`ministryEventNotices.ts`, pure) from the row it read BEFORE the commit and
+  returns them in `effects.notices`; the four routes send in `after()`
+  (`ministryEventNotify.ts`). Only a whole-ministry, published, not-past meeting announces; only
+  the people a write ADDS (everyone on a publish or a new date); never the actor; never a group or
+  a typed name. A request for the worship team goes to the super-admins who are people. Widening
+  any of these is a notification-audience change (HIGH in §Review policy): the sender is a free
+  Gmail account. **Reminders** (ADR-0089's addendum, Frank 2026-11-17): every day the daily cron
+  runs `sendMinistryEventReminders` (`ministryEventReminder.ts`) for the meetings dated exactly 14
+  and 7 days ahead. It reads them through `readAnnouncedMeetings` — the reader's ONE query with no
+  person behind it, hard-wired to `published == true && audience.kind == "ministry"`, so it is
+  narrower than any member's read; never give it a group or a draft arm — and writes only to a
+  member who answers for a part that still lacks something (`partGaps`, the cards' own rule for
+  «pendiente») and to the `encargado` of a Saturday where Oración or a dinámica has nobody, each
+  through `assignedAddress` (the «Te toca» narrowing). Exact days and no «sent» marker on purpose
+  (ADR-0080's trade): a missed day is a missed reminder. It never throws, and no wave of sends
+  ends past `REMINDER_STEP_DEADLINE_MS` of the route, so the cron's alarms always run (the sweep
+  is derated by the time spent, or skipped for layer 1 as ADR-0080 already allows).
+  `readAnnouncedMeetings` has ONE importer, pinned in `ministryEventCoverage.test.ts`.
+- **A group's classes** (plan `2026-11-12-jovenes-group-classes.md`, ADR-0081 addendum 2026-11-12).
+  A class is a ONE-group meeting carrying `lesson { series, track, done }`; `ministryLesson.ts`
+  (`parseLesson`/`lessonOf`) is the ONE validity rule, used by the writer and the reader, so the two
+  never disagree about which meetings are a roster (a disagreement is a permanent 409 on
+  «Recorrer»). The writer never leaves a lesson on a shared meeting (it unsets it). «Recorrer»
+  (`shift` route) and «Cambiar con…» (`swap` route) are one transaction each under every row's
+  revision; «Recorrer» moves only CLASSES (a «No hubo clase» row is date-bound and is hopped) and
+  refuses unless the ids the screen sends equal the stored roster — so the planner reads the roster
+  with NO upper date bound. Its roster read is the writer's one other query shape: never widen it,
+  never return its rows. The «No hubo clase» marker is a DRAFT so no member view shows a cancelled
+  Sunday as a meeting.
 - **Rollout registry (`app/utils/rollout.ts`).** A feature built but not for everyone yet has
   one entry (`hidden → superAdmin → admins → all`), keyed by a feature name. `rolloutAllows`
   is the SERVER gate each page and route of the feature calls (a page answers 404); the nav's
   `navRolloutAllows` is cosmetic and, since the session carries no ministry level, shows the
-  `admins` stage to the super-admin only. `jovenesEvents` is at `superAdmin`.
+  `admins` stage to the super-admin only. `jovenesEvents` is at `all` since 2026-11-12 (Frank opened
+  Jóvenes to every pastor); each page's and route's own guard still decides who gets in, and
+  `rollout.test.ts` pins the stage so it never moves as a side effect.
 - **Readable ≠ writable (`ASSIGNABLE_MINISTRY_IDS`).** Registering a ministry in `MINISTRIES`
   makes a stored id mean something; only `ASSIGNABLE_MINISTRY_IDS` makes it storable — it feeds
   `validateMinistryWrite("ministries")`, the «Personas» pills and scope bar, and the Studio
@@ -873,16 +985,46 @@ pass.
   `*[_type=="teamMembers" && "jovenes" in ministries]` first, and if it is not zero take it off
   those members (a production write: dry run, then Frank's consent). `jovenes` became
   assignable in phase 1's PR 3, after PR 2 (#212) was verified in production on 2026-10-28.
+- **Who leads a group is `ledGroupsIn`, never a level comparison (ADR-0085; plan
+  `docs/superpowers/plans/2026-11-11-jovenes-per-group-leadership.md`).** A Jóvenes item carries
+  `leaderOf`, the groups the person LEADS — a subset of `groups`, the groups they belong to, and
+  stored on a `leader` only. `ledGroupsIn(access, ministry)` (`app/utils/ministryAccess.ts`) is the
+  one answer: `[]` unless their level is `leader`, then the normalized `leaderOf`; no admin arm. The
+  event writer's `led()`, the reader's leader arm (drafts only of LED groups, published meetings of
+  every group they are in), the `/jovenes/admin` gate and `viewer.led`, and «Planear» on `/jovenes` and
+  `/jovenes/calendario` all call it; a `leader` who leads nothing is a member everywhere. `ledGroupsCoverage.test.ts`
+  fails on any other line comparing a level with `"leader"` (an exact-line allow-list for the form's
+  refusal and «Lidera» row, the chat's request rule and its wording). Membership (`groupsIn`) still
+  decides who fits a seat.
+  - **An absent `leaderOf` on a leader reads as NOTHING (L2, PR 2).** PR 1 read it as every kept
+    group (L1) while its writers (K1) could not yet be told which groups a leader leads; every stored
+    leader had an explicit `leaderOf` before PR 2 (read 2026-11-12: 7 leaders, drafts included), so
+    the flip changed nobody's access and the backfill PR 1 carried was never run and is deleted.
+  - **What is sent is what is stored.** Every request item carries `leaderOf` (`[]` for a member or
+    admin); the writer stores it as validated, nothing kept from the stored item. PR 1's K1
+    (`keepLeaderOf`) is gone; ADR-0085 records it for a rollback to PR 1. A `ministryRoles` write
+    always reads the person and pins the write to that read.
+  - **Never revert PR 1's read side while a narrowed leader exists** — in the words of «Readable ≠
+    writable» below: a revert (git, Vercel instant rollback, promoting an older deployment) reads
+    every leader whose `leaderOf` is narrower than their `groups` as leading all of them. Count
+    those leaders first (`ledGroupsIn` vs `groupsIn` over every Jóvenes leader); never revert while
+    any exists. Same count before moving the `jovenesEvents` stage after any rollback of PR 2.
 - **Writing a level (`validateMinistryRolesWrite`, both member routes).** `ministryRoles` is
   accepted only with `ministries` in the SAME request, naming every item's ministry — judged
   against the stored value instead, an absent `ministries` (= worship) would let a Jóvenes level
   sit on someone who is no Jóvenes member at all. Strict where the read is forgiving: exactly
-  `ministry`/`level`/`groups`, a leveled ministry, a known level, known and unique groups, one
-  item per ministry, a `leader` with at least one group. Stored by `ministryRolesForStorage`
-  (`_key` = ministry, `_type: "ministryRole"`). A `ministries` sent WITHOUT `ministryRoles`
+  `groups`/`leaderOf`/`level`/`ministry` (a body from an older form, with no `leaderOf`, is 400 —
+  refused, never reinterpreted), a leveled ministry, a known level, known and unique groups, one
+  item per ministry; `leaderOf` known, unique and inside `groups` («Solo puede liderar un grupo al
+  que pertenece.»); a `leader` leads at least one («Un líder necesita liderar al menos un grupo.»),
+  a member or admin none («Solo un líder lidera grupos; un admin ya administra todos.»). Stored by
+  `ministryRolesForStorage` (`_key` = ministry, `_type: "ministryRole"`, `leaderOf` on a leader
+  only). A `ministries` sent WITHOUT `ministryRoles`
   unsets the level of each leveled ministry it leaves out (`droppedMinistryRolePaths`), so a
   stale level cannot revive; set and unset never touch one path in one patch. The «Personas»
-  form sends `ministryRoles` whenever it sends `ministries`, without the stored `_key`/`_type`;
+  form sends `ministryRoles` whenever it sends `ministries`, without the stored `_key`/`_type`,
+  each item with `leaderOf` (its «Lidera» pills under «Grupos», shown with «Líder», offer only the
+  ticked groups and pre-tick nothing; the chat's `jovenes` op must name `leaderOf` for a leader);
   `adminMembersQuery` carries the field only on its super-admin (`$all`) arm, and the Jóvenes
   scope tab is the super-admin's only (`ministryScopeIds`).
 - **A worship role needs worship (`worshipRoleWithoutWorship`).** `requireActiveManager` reads

@@ -42,8 +42,10 @@ describe("a Jóvenes-only member (even a Jóvenes admin)", () => {
     expect(await requireMinistryManager("jovenes")).not.toBeNull();
   });
 
-  it("is sent from a worship page to /me, not /kids (the redirect terminates)", async () => {
-    await expect(requireWorshipPage("/")).rejects.toMatchObject({ target: "/me" });
+  // Jóvenes' rollout reaches every pastor since 2026-11-12 (`rollout.ts`), so their home is
+  // /jovenes; before that it was /me (`worshipPageGate.test.ts` still pins the closed stage).
+  it("is sent from a worship page to /jovenes, their home, not /kids (the redirect terminates)", async () => {
+    await expect(requireWorshipPage("/")).rejects.toMatchObject({ target: "/jovenes" });
   });
 
   it("is outside the worship notification audience", async () => {

@@ -10,6 +10,10 @@ import {
 } from "../../app/ministries";
 
 const MINISTRY_LEVEL_TITLE = { member: "Miembro", leader: "Líder", admin: "Admin" } as const;
+/** Every leveled ministry's groups, for both «Grupos» and «Grupos que lidera». */
+const LEVELED_GROUP_OPTIONS = LEVELED_MINISTRY_IDS.flatMap((id) =>
+  MINISTRIES[id].groups.map((g) => ({ title: g.name, value: g.id })),
+);
 
 export const teamMembers = defineType({
   name: "teamMembers",
@@ -86,7 +90,7 @@ export const teamMembers = defineType({
         "Ministerios a los que pertenece este miembro. VACÍO o ausente = solo Alabanza (comportamiento legado; NO rellenar en masa).",
     },
     {
-      // Level and groups in a LEVELED ministry (Jóvenes), ADR-0075. Read-only here:
+      // Level, groups and led groups in a LEVELED ministry (Jóvenes), ADR-0075/0085. Read-only here:
       // its one writer is the members API, which also requires the ministry in
       // `ministries` (a level without membership grants nothing). `_key` is the
       // ministry id, so one person has at most one item per ministry.
@@ -116,11 +120,17 @@ export const teamMembers = defineType({
               title: "Grupos",
               type: "array",
               of: [{ type: "string" }],
-              options: {
-                list: LEVELED_MINISTRY_IDS.flatMap((id) =>
-                  MINISTRIES[id].groups.map((g) => ({ title: g.name, value: g.id })),
-                ),
-              },
+              options: { list: LEVELED_GROUP_OPTIONS },
+            },
+            {
+              // The groups this person LEADS, a subset of «Grupos»; only on a leader
+              // (plan 2026-11-11-jovenes-per-group-leadership, ADR-0085). Read through
+              // `ledGroupsIn`, never on its own: the read also needs level = leader.
+              name: "leaderOf",
+              title: "Grupos que lidera",
+              type: "array",
+              of: [{ type: "string" }],
+              options: { list: LEVELED_GROUP_OPTIONS },
             },
           ],
           preview: { select: { title: "ministry", subtitle: "level" } },

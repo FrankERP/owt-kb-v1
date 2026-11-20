@@ -39,7 +39,8 @@ with a Google **app password**. No code changed: `sendEmail`
 set, so this is the five `SMTP_*`/`EMAIL_FROM` variables in Vercel and nothing
 else. See `docs/SECRETS.md` for the set and its rotation.
 
-`EMAIL_FROM` carries the display name — `OWT Backstage <…@gmail.com>` — which is
+`EMAIL_FROM` carries the display name — `Backstage <…@gmail.com>` (`OWT Backstage` until
+2026-11-10, when the app was renamed for every ministry) — which is
 what a member actually sees in their inbox. Gmail delivers that header unchanged,
 with no rewrite and no "via" annotation (verified 2026-08-24).
 

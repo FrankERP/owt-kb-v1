@@ -55,7 +55,7 @@ export const PROPOSAL_PROJECTION = `{
   ${SONGS_FRAGMENT},
   contributors[]{ _key, "person": person._ref },
   "lead": lead._ref,
-  lead_notes, team_notes, admin_notes,
+  lead_notes, team_notes, admin_notes, pastor_message,
   messages[]{ _key, _type, "author": author._ref, author_role, kind, body, at },
   approval_receipt, last_transition
 }`;
@@ -625,6 +625,8 @@ export function serviceConversationQuery(roleId: string, threadId: string): Boun
       ]{ _id, _rev, _type, team_notes },
       "proposal": *[_type == "setlistProposal" && service_ref._ref == $roleId] | order(_createdAt asc)[0]{
         _id, status,
+        // ADR-0087: the lead's copy, for the dialog's «Usar como mensaje del pastor».
+        pastor_message,
         ${THREAD_MESSAGES}
       }
     }`,

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   parseLibraryParams, serializeLibraryParams, applyLibraryFilters, groupByLetter, libraryKeys, TIPO_SLUGS,
   searchPosts, makeLibraryFuse,
-  libraryThemes,
+  libraryThemes, recentSongs,
 } from "../libraryIndex";
 import type { Post, Tag } from "../interface";
 
@@ -117,5 +117,35 @@ describe("libraryThemes", () => {
     const tags = [tag("alabanza", 10), tag("up-beat", 8), tag("down-beat", 4), tag("vacio", 0), tag("adoracion", 3)];
     expect(libraryThemes(tags).map((t) => t.slug.current)).toEqual(["alabanza", "adoracion"]);
     expect(libraryThemes([])).toEqual([]);
+  });
+});
+
+describe("recentSongs", () => {
+  const dated = [
+    post("Vieja", { _createdAt: "2024-08-01T10:00:00Z" }),
+    post("Nueva", { _createdAt: "2026-11-05T10:00:00Z" }),
+    post("Sin fecha"),
+    post("Media", { _createdAt: "2026-06-25T10:00:00Z" }),
+  ];
+
+  it("lists the last songs that joined the catalogue, newest first", () => {
+    expect(recentSongs(dated).map((p) => p.title)).toEqual(["Nueva", "Media", "Vieja"]);
+  });
+
+  it("never calls a song with no creation date new", () => {
+    expect(recentSongs(dated).some((p) => p.title === "Sin fecha")).toBe(false);
+    expect(recentSongs([post("Sin fecha")])).toEqual([]);
+  });
+
+  it("keeps to the shelf's length, and breaks a tie by title so the shelf never reshuffles", () => {
+    const same = ["Zeta", "Alfa", "Mora"].map((t) => post(t, { _createdAt: "2026-06-25T10:00:00Z" }));
+    expect(recentSongs(same).map((p) => p.title)).toEqual(["Alfa", "Mora", "Zeta"]);
+    expect(recentSongs(same, 2)).toHaveLength(2);
+  });
+
+  it("does not reorder the list it was given", () => {
+    const before = dated.map((p) => p.title);
+    recentSongs(dated);
+    expect(dated.map((p) => p.title)).toEqual(before);
   });
 });

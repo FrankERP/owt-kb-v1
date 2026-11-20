@@ -95,9 +95,25 @@ import { MinistryEventReadUnavailable } from "../ministryEventReads";
 
 // ── People ──────────────────────────────────────────────────────────────────
 
-const J = (level: string, groups: string[]) => ({ ministries: ["jovenes"], ministryRoles: [{ _key: "jovenes", ministry: "jovenes", level, groups }] });
+// A leader leads every group they are in unless `JL` says otherwise (§11 N10: the fixtures store the
+// `leaderOf` every stored leader has, so each test keeps its intent under L2).
+const J = (level: string, groups: string[]) => ({
+  ministries: ["jovenes"],
+  ministryRoles: [{ _key: "jovenes", ministry: "jovenes", level, groups, ...(level === "leader" ? { leaderOf: groups } : {}) }],
+});
+/** A leader who LEADS `leaderOf` and is only IN the rest of `groups` (plan 2026-11-11 §4.1). */
+const JL = (groups: string[], leaderOf: unknown) => ({
+  ministries: ["jovenes"],
+  ministryRoles: [{ _key: "jovenes", ministry: "jovenes", level: "leader", groups, leaderOf }],
+});
 const PEOPLE: Record<string, Record<string, unknown>> = {
   admin: J("admin", []),
+  // Leads Otro Nivel (A), is only IN Invencibles (B) — Jacob's shape before his roster is set.
+  jacob: JL(["otro-nivel", "invencibles"], ["otro-nivel"]),
+  // Leads Invencibles, is only IN Otro Nivel.
+  andy: JL(["invencibles", "otro-nivel"], ["invencibles"]),
+  // `level: "leader"` with an empty leaderOf: for every check, a member.
+  leadsNone: JL(["otro-nivel"], []),
   super: { role: "super-admin", ministries: ["worship"] },
   leaderON: J("leader", ["otro-nivel"]),
   leaderON2: J("leader", ["otro-nivel"]),
@@ -453,5 +469,172 @@ describe("G4: the encargado's program (W3a, W4)", () => {
     const t = await saturday(true, [{ role: "encargado", member: "pastorON" }]);
     const out = await updateMinistryEventProgram("pastorON", "jovenes", t, { _rev: "old", program: [] });
     expect([out.status, out.body]).toEqual([409, { error: EVENT_ERROR.stale }]);
+  });
+});
+
+describe("place and typed seat names (plan 2026-11-10, P1–P2)", () => {
+  it("stores a trimmed place on create, leaves a blank one out, and refuses a long or multi-line one", async () => {
+    expect(stored((await create("admin", { audience: MINISTRY, place: "  Oasis Tlalpan " })).t)!.place).toBe("Oasis Tlalpan");
+    expect(stored((await create("admin", { audience: MINISTRY, place: "   " })).t)!).not.toHaveProperty("place");
+    for (const place of ["x".repeat(121), "Oasis\nTlalpan", "Oasis Tlalpan", 7]) {
+      const { out } = await create("admin", { audience: MINISTRY, place });
+      expect([out.status, out.body]).toEqual([400, { error: EVENT_ERROR.invalidPlace }]);
+    }
+  });
+
+  it("a PATCH sets the place, null unsets it, and absent leaves it", async () => {
+    const { t } = await create("admin", { audience: MINISTRY });
+    expect((await update("admin", t, { place: "Casa Fam Varela" })).status).toBe(200);
+    expect(stored(t)!.place).toBe("Casa Fam Varela");
+    expect((await update("admin", t, { title: "Posada" })).status).toBe(200);
+    expect(stored(t)!.place).toBe("Casa Fam Varela");
+    expect((await update("admin", t, { place: null })).status).toBe(200);
+    expect(stored(t)!).not.toHaveProperty("place");
+  });
+
+  it("the program route never touches the place", async () => {
+    const t = await eventBy("admin", { audience: MINISTRY, published: true, place: "Oasis Tlalpan", seats: [{ role: "encargado", member: "pastorON" }] });
+    expect((await program("pastorON", t, { program: [], place: "Otro" })).status).toBe(200);
+    expect(stored(t)!.place).toBe("Oasis Tlalpan");
+  });
+
+  it("a seat stores a typed name as text, with no member and no validation against the members", async () => {
+    // «worship» is a real person who is NOT in Jóvenes: as a member it is refused, as text it is just text.
+    const { t, out } = await create("admin", {
+      audience: MINISTRY,
+      seats: [{ role: "encargado", name: " Emprendedores " }, { role: "comparte", name: "worship" }],
+    });
+    expect(out.status).toBe(200);
+    const seats = stored(t)!.seats as Record<string, unknown>[];
+    expect(seats.map((s) => [s.role, s.name, s.member])).toEqual([
+      ["encargado", "Emprendedores", undefined],
+      ["comparte", "worship", undefined],
+    ]);
+  });
+
+  it.each([
+    [{ role: "comparte", member: "pastorON", name: "Ana" }],
+    [{ role: "comparte", name: "x".repeat(61) }],
+    [{ role: "comparte", name: "Ana\nMaría" }],
+    [{ role: "comparte", name: 3 }],
+  ])("refuses the seat %j", async (seat) => {
+    const { out } = await create("admin", { audience: MINISTRY, seats: [seat] });
+    expect([out.status, out.body]).toEqual([400, { error: EVENT_ERROR.invalidSeats }]);
+  });
+
+  it("a PATCH turns a member seat into a typed name and back; the member is validated only when added", async () => {
+    const { t } = await create("admin", { audience: MINISTRY, seats: [{ role: "comparte", member: "pastorON" }] });
+    const key = (stored(t)!.seats as { _key: string }[])[0]._key;
+    expect((await update("admin", t, { seats: [{ _key: key, role: "comparte", name: "Ana" }] })).status).toBe(200);
+    expect((stored(t)!.seats as Record<string, unknown>[])[0]).toMatchObject({ _key: key, name: "Ana" });
+    expect((stored(t)!.seats as Record<string, unknown>[])[0]).not.toHaveProperty("member");
+    expect((await update("admin", t, { seats: [{ _key: key, role: "comparte", member: "worship" }] })).body).toEqual({ error: EVENT_ERROR.invalidMember });
+  });
+
+  it("a typed name that reads like a pastor's id grants no program right", async () => {
+    const t = await eventBy("admin", { audience: MINISTRY, published: true, seats: [{ role: "encargado", name: "pastorON" }] });
+    expect((await program("pastorON", t, { program: [] })).body).toEqual({ error: EVENT_ERROR.programForbidden });
+  });
+});
+
+// ── Per-group leadership (plan 2026-11-11-jovenes-per-group-leadership §5.2, §5.3) ──────────────
+
+describe("G4: per-group leadership — leads A, only IN B", () => {
+  it("cannot create a meeting of B alone, nor a joint one of B and C", async () => {
+    expect((await create("jacob", { audience: groups("invencibles") })).out.status).toBe(403);
+    expect((await create("jacob", { audience: groups("invencibles", "emprendedores") })).out.status).toBe(403);
+    expect((await create("jacob", { audience: groups("otro-nivel") })).out.status).toBe(200);
+  });
+
+  it("B's meeting: 404 on every write while a draft (cannot read it), 403 once published", async () => {
+    const draft = await eventBy("andy", { audience: groups("invencibles") });
+    const pub = await eventBy("andy", { audience: groups("invencibles"), published: true });
+    for (const out of [await update("jacob", draft, { title: "x" }), await update("jacob", draft, { published: true }), await remove("jacob", draft)]) {
+      expect(out.status).toBe(404);
+    }
+    for (const out of [await update("jacob", pub, { title: "x" }), await update("jacob", pub, { published: false }), await remove("jacob", pub)]) {
+      expect(out.status).toBe(403);
+    }
+    expect(stored(draft)).toBeDefined();
+    expect(stored(pub)!.published).toBe(true);
+  });
+
+  it("a joint A+B meeting they created: they edit, publish and delete it (§5.3: one led group suffices)", async () => {
+    const t = await eventBy("jacob", { audience: groups("otro-nivel", "invencibles") });
+    expect((await update("jacob", t, { title: "Junta" })).status).toBe(200);
+    expect((await update("jacob", t, { published: true })).status).toBe(200);
+    expect((await remove("jacob", t)).status).toBe(200);
+  });
+
+  it("a joint A+B meeting someone else created: they read the draft but answer 403", async () => {
+    const t = await eventBy("andy", { audience: groups("invencibles", "otro-nivel") });
+    expect((await update("jacob", t, { title: "x" })).status).toBe(403);
+    expect((await remove("jacob", t)).status).toBe(403);
+  });
+
+  it("a stored joint B+C meeting: never theirs, even as its creator (they lead none of its groups)", async () => {
+    const draft = await eventBy("admin", { audience: groups("invencibles", "emprendedores") });
+    const pub = await eventBy("admin", { audience: groups("invencibles", "emprendedores"), published: true });
+    for (const t of [draft, pub]) {
+      db.docs.set(idOf(t), { ...stored(t)!, createdBy: { _type: "reference", _ref: "jacob", _weak: true } });
+    }
+    expect((await update("jacob", draft, { title: "x" })).status).toBe(404);
+    expect((await update("jacob", pub, { title: "x" })).status).toBe(403);
+  });
+
+  it("cannot move their group's meeting to B alone, nor to B+C", async () => {
+    const t = await eventBy("jacob", { audience: groups("otro-nivel") });
+    expect((await update("jacob", t, { audience: groups("invencibles") })).status).toBe(403);
+    expect((await update("jacob", t, { audience: groups("invencibles", "emprendedores") })).status).toBe(403);
+    expect(stored(t)!.audience).toEqual(groups("otro-nivel"));
+  });
+
+  it("A's meeting, not its creator: may widen it to A+B once; afterwards it is its creator's", async () => {
+    const t = await eventBy("leaderON", { audience: groups("otro-nivel") });
+    expect((await update("jacob", t, { audience: groups("otro-nivel", "invencibles") })).status).toBe(200);
+    expect((await update("jacob", t, { title: "y" })).status).toBe(403);
+    expect((await update("leaderON", t, { title: "y" })).status).toBe(200);
+  });
+
+  it("a whole-ministry meeting: 403 to create or edit", async () => {
+    expect((await create("jacob", { audience: MINISTRY })).out.status).toBe(403);
+    const t = await eventBy("admin", { audience: MINISTRY, published: true });
+    expect((await update("jacob", t, { title: "x" })).status).toBe(403);
+  });
+});
+
+describe("G4: a `leader` who leads no group is a member", () => {
+  it("empty or unusable leaderOf: 403 to create, 404 on a draft of their group, 403 on its published meeting", async () => {
+    const draft = await eventBy("leaderON", { audience: groups("otro-nivel") });
+    const pub = await eventBy("leaderON", { audience: groups("otro-nivel"), published: true });
+    for (const leaderOf of [[], "otro-nivel", ["emprendedores"]]) {
+      setPerson("leadsNone", JL(["otro-nivel"], leaderOf));
+      expect((await create("leadsNone", { audience: groups("otro-nivel") })).out.status).toBe(403);
+      expect((await update("leadsNone", draft, { title: "x" })).status).toBe(404);
+      expect((await update("leadsNone", pub, { title: "x" })).status).toBe(403);
+    }
+  });
+
+  it("a legacy leader (no leaderOf, or null) leads nothing — L2, ADR-0085", async () => {
+    const draft = await eventBy("leaderON", { audience: groups("otro-nivel") });
+    for (const leaderOf of [undefined, null]) {
+      setPerson("leadsNone", JL(["otro-nivel"], leaderOf));
+      expect((await create("leadsNone", { audience: groups("otro-nivel") })).out.status).toBe(403);
+      expect((await update("leadsNone", draft, { title: "x" })).status).toBe(404);
+    }
+  });
+});
+
+describe("G4: per-group demotion of a joint meeting's creator (W1's fresh read)", () => {
+  it("keeps it while they still lead one of its groups; loses it once they lead none", async () => {
+    setPerson("jacob", JL(["otro-nivel", "invencibles", "emprendedores"], ["otro-nivel", "emprendedores"]));
+    const pub = await eventBy("jacob", { audience: groups("otro-nivel", "emprendedores"), published: true });
+    const draft = await eventBy("jacob", { audience: groups("otro-nivel", "emprendedores") });
+    setPerson("jacob", JL(["otro-nivel", "invencibles", "emprendedores"], ["emprendedores"]));
+    expect((await update("jacob", pub, { title: "x" })).status).toBe(200);
+    expect((await update("jacob", draft, { title: "x" })).status).toBe(200);
+    setPerson("jacob", JL(["otro-nivel", "invencibles", "emprendedores"], ["invencibles"]));
+    expect((await update("jacob", pub, { title: "y" })).status).toBe(403);
+    expect((await update("jacob", draft, { title: "y" })).status).toBe(404);
   });
 });

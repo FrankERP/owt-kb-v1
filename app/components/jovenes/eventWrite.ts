@@ -1,4 +1,4 @@
-// The one client-side caller of the four Jóvenes event routes (ADR-0081). Each editor calls it
+// The one client-side caller of the Jóvenes event routes (ADR-0081; the part route, ADR-0089). Each editor calls it
 // inside its own try/finally (CLAUDE.md: client mutation handlers check `res.ok` and never close
 // as success on a failure); this answers what happened, in words a pastor can read.
 //
@@ -10,10 +10,24 @@ const CODE_WORDS: Record<string, string> = {
   invalid_member: "Alguna persona elegida ya no está en Jóvenes (o en ese grupo).",
   invalid_time: "La hora debe ser HH:mm.",
   invalid_arrival: "La llegada debe ser HH:mm.",
-  invalid_program: "Revisa el programa: cada línea necesita un nombre corto.",
+  invalid_program: "Revisa el programa: cada línea necesita un nombre corto. Si lo abriste hace rato, recarga la página.",
+  // «Mi parte» (ADR-0089). The form's own limits stop these first; the words are for a hand-made request.
+  invalid_part: "Revisa tu parte: la descripción es de máximo 300 caracteres y los nombres van en una sola línea.",
   invalid_notes: "Las notas son demasiado largas.",
   invalid_title: "El título es demasiado largo.",
+  invalid_place: "El lugar es demasiado largo o tiene saltos de línea.",
+  invalid_seats: "Revisa a las personas: un nombre corto, de una línea, por casilla.",
+  invalid_date: "Elige la fecha.",
+  // The writer's 1–3 bound on a groups audience (the form says the same, `groupEventProblem`). The
+  // code also answers an unknown or repeated group and a whole-ministry audience with groups, which
+  // the form never sends; the sentence is accepted for those too (plan 2026-11-11 §11 N8).
+  invalid_audience: "Elige hasta tres grupos; para todos, usa una reunión de todo Jóvenes.",
   already_created: "Esta reunión ya estaba creada.",
+  // A group's classes (plan 2026-11-12). The screen never sends these shapes; the words are for a
+  // roster that changed under it or a hand-made request.
+  invalid_lesson: "Una clase es de un solo grupo; revisa el grupo y el nombre del rol.",
+  invalid_shift: "No se pudo recorrer este rol; recarga la página e intenta de nuevo.",
+  invalid_swap: "Solo se cambian dos clases del mismo rol que no estén hechas.",
 };
 
 /** The answer's words: the server's Spanish message, else a known code's words, else a plain line. */
@@ -55,3 +69,16 @@ export function tokenOf(id: string): string {
 export const eventsUrl = (ministry: string) => `/api/ministries/${ministry}/events`;
 export const eventUrl = (ministry: string, id: string) => `${eventsUrl(ministry)}/${tokenOf(id)}`;
 export const programUrl = (ministry: string, id: string) => `${eventUrl(ministry, id)}/program`;
+/** «Mi parte»: the one part of a meeting its responsable fills (W10). */
+export const partUrl = (ministry: string, id: string, part: string) => `${eventUrl(ministry, id)}/parts/${part}`;
+
+/**
+ * A native clock left half typed («18:--» on a desktop) reports `""` as its value, so the form
+ * cannot tell it from a cleared one and would save «no time». The browser can tell (`badInput`),
+ * so the editors ask it before sending: the words to show, or `null`. `ids` are the fields' ids.
+ */
+export function halfTypedClock(ids: readonly string[]): string | null {
+  if (typeof document === "undefined") return null;
+  const half = ids.some((id) => (document.getElementById(id) as HTMLInputElement | null)?.validity?.badInput === true);
+  return half ? "Completa la hora o bórrala." : null;
+}

@@ -26,7 +26,8 @@ vi.mock("../memberAccess", () => ({
   getMemberAccess: (id: string) => getMemberAccess(id),
 }));
 
-// The real registry by default; one test widens the stage to see the landing move.
+// The real registry by default (open to every pastor since 2026-11-12); one test closes the stage
+// and one opens it, so the landing is pinned both ways whatever the registry says.
 const rolloutStage = vi.hoisted(() => ({ override: null as null | boolean }));
 vi.mock("../rollout", async (importOriginal) => {
   const real = await importOriginal<typeof import("../rollout")>();
@@ -101,6 +102,7 @@ describe("requireWorshipPage", () => {
   });
 
   it("sends a Jóvenes-only member to /me while Jóvenes' rollout has not reached them", async () => {
+    rolloutStage.override = false;
     requireActiveSession.mockResolvedValue(activeSession);
     requireMinistryMember.mockResolvedValue(null);
     getMemberAccess.mockResolvedValue({

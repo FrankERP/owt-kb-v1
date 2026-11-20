@@ -102,6 +102,8 @@ export function pingResult(version: string, clock: () => Date = () => new Date()
 }
 
 /** Registers `ping` on a per-request MCP server. `version` is the deployment's (`mcpServerVersion`). */
+// The description still says «OWT Backstage» on purpose (2026-11-10): it is model-facing, and any change to it
+// moves this handler's tool-list digest (ADR-0069), which asks every connected person to refresh the connector.
 export function registerPing(server: McpServer, deps: { version: string }): void {
   server.registerTool(
     "ping",

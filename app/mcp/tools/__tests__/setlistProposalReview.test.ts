@@ -34,6 +34,8 @@ import {
   REVIEW_PROPOSAL_INPUT,
   checkProposalReviewResult,
   noteRefusal,
+  pastorMessageCheckLine,
+  pastorMessageResultLine,
   reviewLine,
   reviewProposalResult,
   sameReviewLine,
@@ -396,5 +398,30 @@ describe("review_setlist_proposal", () => {
     h.reviewProposal.mockRejectedValue(new Error("boom"));
     const out = await reviewProposalResult({ proposalId: ID, action: "approve", rev: "prop-rev-1", line }, PRINCIPAL);
     expect(textOf(out as never)).toMatch(/No se pudo confirmar si la decisión se guardó.*check_setlist_proposal_review/);
+  });
+});
+
+describe("the leads' pastor's message in the check and the answer (ADR-0087)", () => {
+  const plan = (pastor: unknown, live: string | null) => ({ doc: { pastor_message: pastor }, livePastorMessage: live });
+
+  it("says nothing when the proposal carries none", () => {
+    expect(pastorMessageCheckLine(plan(undefined, ""))).toBeNull();
+    expect(pastorMessageCheckLine(plan("   ", "Otro"))).toBeNull();
+  });
+
+  it("shows the text in full and what approving would do with it", () => {
+    expect(pastorMessageCheckLine(plan(" Efesios 2 ", ""))).toMatch(/«Efesios 2».*El servicio no tiene; pasa al servicio/);
+    expect(pastorMessageCheckLine(plan("Efesios 2", "Efesios 2\r\n"))).toMatch(/Ya es el mensaje del pastor del servicio/);
+    expect(pastorMessageCheckLine(plan("Efesios 2", "Juan 3"))).toMatch(/ya tiene otro \(«Juan 3»\): no se cambia/);
+    expect(pastorMessageCheckLine(plan("Efesios 2", null))).toMatch(/no se pudo leer el actual/);
+  });
+
+  it("reports every copy outcome, and nothing for none or a transition", () => {
+    expect(pastorMessageResultLine("copied")).toMatch(/quedó como mensaje del pastor del servicio/);
+    expect(pastorMessageResultLine("same")).toMatch(/ya era el del servicio/);
+    expect(pastorMessageResultLine("kept_existing")).toMatch(/no se cambió.*set_pastor_message/);
+    expect(pastorMessageResultLine("failed")).toMatch(/No se pudo pasar.*set_pastor_message/);
+    expect(pastorMessageResultLine("none")).toBeNull();
+    expect(pastorMessageResultLine(null)).toBeNull();
   });
 });

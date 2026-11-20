@@ -27,6 +27,9 @@ export function revalidateKidsViews() {
 export function revalidateMinistryViews(ministry: string) {
   revalidatePath(`/${ministry}`);
   revalidatePath(`/${ministry}/admin`);
+  // Jóvenes' second member page (2026-11-17). Named even where a ministry has none: a path
+  // nobody renders costs nothing to invalidate.
+  revalidatePath(`/${ministry}/calendario`);
   revalidatePath("/schedule");
 }
 

@@ -97,26 +97,60 @@ function mountAgenda(activeDays: Record<string, ActiveDay[]> = ACTIVE, onSelect 
 }
 
 describe("AgendaView", () => {
-  it("lists one row per service in date order, under its month divider", () => {
+  it("lists one card per service in date order, under its month title and the month's count", () => {
     mountAgenda();
     expect(rows().map((b) => b.dataset.date)).toEqual(["2026-09-13", "2026-09-20", "2026-10-04"]);
-    expect(screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual([
-      "Septiembre 2026",
-      "Octubre 2026",
-    ]);
+    const titles = screen.getAllByRole("heading", { level: 3 });
+    // The title's own text, then the count — decorative, so it is not heard as part of the year.
+    expect(titles.map((h) => h.firstChild?.textContent)).toEqual(["Septiembre 2026", "Octubre 2026"]);
+    expect(titles.map((h) => h.lastElementChild?.textContent)).toEqual(["2", "1"]);
+    expect(titles.every((h) => h.lastElementChild?.getAttribute("aria-hidden") === "true")).toBe(true);
   });
 
-  it("leads with the day number, then «Domingo · 11:00» and the service's summary under it", () => {
+  it("is a card (ADR-0088): the date as a leaf, the day as the title, the clock, and the facts as faces and pictures", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 10, 9, 0, 0)); // 2026-09-10 local
     mountAgenda();
     const row = rows()[0];
-    // The number first (the display face, like the library's key), the day word as the
+    expect(row.className).toContain("brand-surface");
+    // The leaf (decorative — the row's label says the date), the day word as the uppercase
     // title, the clock by the feed's one rule (`serviceClock`: a Sunday at 11:00).
+    const leaf = row.querySelector("time")!;
+    expect(leaf.getAttribute("datetime")).toBe("2026-09-13");
+    expect(leaf.getAttribute("aria-hidden")).toBe("true");
     expect(within(row).getByText("13").className).toContain("font-display");
-    expect(within(row).getByText("Domingo")).toBeTruthy();
+    expect(within(row).getByText("Domingo").className).toContain("uppercase");
     expect(within(row).getByText("11:00")).toBeTruthy();
-    expect(within(row).getByText("Lead Ana, Beto · Keys Sofi · 2 canciones")).toBeTruthy();
-    // A Saturday row at the standing 18:00.
+    // Who leads and the set — never the whole team spelled out (that sentence stays in the
+    // label for a screen reader; the eye gets the sheet one tap away).
+    expect(row.textContent).toContain("Lead Ana y Beto");
+    expect(row.textContent).toContain("2 canciones");
+    expect(row.textContent).not.toContain("Keys Sofi");
+    // A Saturday card at the standing 18:00, its songs still to come.
     expect(within(rows()[1]).getByText("18:00")).toBeTruthy();
+    expect(rows()[1].textContent).toContain("Setlist pendiente");
+  });
+
+  it("says «Setlist pendiente» only of a worship service still to come — in the label too", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 10, 9, 0, 0)); // 2026-09-10 local
+    const noSongs = (date: string) => sunday(date, { leads: ["Ana"], setlist: null });
+    render(
+      <MotionProvider>
+        <AgendaView
+          activeDays={{ "2026-09-06": [noSongs("2026-09-06")], "2026-09-13": [noSongs("2026-09-13")] }}
+          todayStr="2026-09-10"
+          onSelect={vi.fn()}
+          emptyMessage="vacío"
+        />
+      </MotionProvider>,
+    );
+    // The past row (a browsed month) simply has no songs; the coming one is waiting for them.
+    expect(rows()[0].textContent).not.toContain("Setlist pendiente");
+    expect(rows()[0].getAttribute("aria-label")).not.toContain("setlist pendiente");
+    expect(rows()[0].textContent).toContain("Lead Ana");
+    expect(rows()[1].textContent).toContain("Setlist pendiente");
+    expect(rows()[1].getAttribute("aria-label")).toContain(", setlist pendiente");
   });
 
   it("names the day, the long date, the countdown and the summary in the row's label", () => {
@@ -458,6 +492,14 @@ describe("CalendarView — ministry filter", () => {
     expect(screen.getByText(/5 servicios por venir/)).toBeTruthy();
     fireEvent.click(screen.getByRole("radio", { name: "Oasis Kids" }));
     expect(screen.getByText(/2 servicios por venir/)).toBeTruthy();
+  });
+
+  it("never says «Setlist pendiente» of a Kids Sunday: it has no setlist to wait for", () => {
+    mountFiltered("kids");
+    for (const row of rows()) {
+      expect(row.textContent).not.toContain("Setlist pendiente");
+      expect(row.getAttribute("aria-label")).not.toContain("setlist pendiente");
+    }
   });
 
   it("marks the reader's Kids seat «Tú» in the row, decided by the server's flag", () => {

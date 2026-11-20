@@ -45,17 +45,20 @@ export const ministryEvent = defineType({
     { name: "time", title: "Hora", type: "string" },
     { name: "arrival", title: "Llegada", type: "string" },
     { name: "title", title: "Título", type: "string" },
+    { name: "place", title: "Ubicación", type: "string" },
     {
       name: "seats",
-      title: "Lugares",
+      title: "Asientos",
       type: "array",
       of: [
         {
           type: "object",
           name: "ministryEventSeat",
           fields: [
-            { name: "role", title: "Lugar", type: "string" },
+            { name: "role", title: "Asiento", type: "string" },
             { name: "member", title: "Persona", ...weakMember },
+            // Someone without an account (or the hosting group), INSTEAD of `member`; never both.
+            { name: "name", title: "Nombre (sin cuenta)", type: "string" },
           ],
         },
       ],
@@ -70,10 +73,30 @@ export const ministryEvent = defineType({
           name: "ministryEventProgramLine",
           fields: [
             { name: "label", title: "Qué", type: "string" },
+            // A fixed part of the meeting (ADR-0089; `app/utils/ministryParts.ts` is the one table):
+            // oracion | dinamica1 | dinamica2 | platica. Absent on a free line.
+            { name: "part", title: "Parte", type: "string" },
             { name: "member", title: "Quién", ...weakMember },
+            { name: "member2", title: "Quién (segundo)", ...weakMember },
+            // A part's description (300), or a free line's note.
             { name: "note", title: "Nota", type: "string" },
+            // track | alabanza — Oración and Plática only.
+            { name: "music", title: "Música", type: "string" },
+            { name: "helpers", title: "Jóvenes que apoyan", type: "string" },
           ],
         },
+      ],
+    },
+    {
+      // A group's class (plan 2026-11-12 L0): only on a ONE-group meeting. `series` is the roster
+      // (the book), `track` libro | corazon | sin_clase, `done` the sheet's «Hecho».
+      name: "lesson",
+      title: "Clase del grupo",
+      type: "object",
+      fields: [
+        { name: "series", title: "Rol (libro)", type: "string" },
+        { name: "track", title: "Tipo", type: "string" },
+        { name: "done", title: "Hecho", type: "boolean" },
       ],
     },
     { name: "notes", title: "Notas", type: "text" },

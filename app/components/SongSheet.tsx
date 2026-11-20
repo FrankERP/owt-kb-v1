@@ -17,6 +17,8 @@ import { groupBySections } from "@/app/utils/lyrics";
 import { LYRIC_EYEBROW } from "@/app/utils/lyricMarkers";
 import { SHEET_TITLE } from "@/app/utils/homeHero";
 import { splitSongTitle } from "@/app/utils/songTitle";
+import { songCoverUrl } from "@/app/utils/songCover";
+import SongCover from "./service/SongCover";
 import { formatHistoryDate } from "@/app/utils/historyDate";
 import Button from "./ui/Button";
 import PlayPauseGlyph from "./ui/PlayPauseGlyph";
@@ -127,6 +129,7 @@ export default function SongSheet() {
   // «Alaba (Praise)»: the Spanish name is CueDialog's title (the one heading, which
   // the sheet's tests pin); the ORIGINAL goes beside the artist, as on the song page.
   const { main, original } = splitSongTitle(sheet?.title);
+  const cover = songCoverUrl(sheet?.cover, "shelf");
   const activeSetEntry = openSetIdx !== null ? sheet?.history?.[openSetIdx] : undefined;
 
   return (
@@ -146,13 +149,24 @@ export default function SongSheet() {
         {/* Under CueDialog's own title (the Spanish name): the original name and the artist, then the
             key / BPM / compás row — the song page's hero at sheet size. */}
         {sheet && (
-          <div className="flex flex-col gap-4 px-5 pt-1">
-            {(original || sheet.author) && (
-              <p className="font-body text-[17px] leading-snug text-ink-muted">
-                {original}
-                {original && sheet.author && <span className="text-ink-dim"> · </span>}
-                {sheet.author}
-              </p>
+          <div className={`flex flex-col gap-4 px-5 ${cover ? "pt-3" : "pt-1"}`}>
+            {/* The album's cover beside the artist line (ADR-0088): the picture the row that
+                opened this sheet wore, so the sheet is recognisably THAT song before it is
+                read. Only for a song that has one — a sheet is not a list, and an empty tile
+                here would be a hole, not a placeholder (a cover that fails to LOAD still
+                falls back to `SongCover`'s neutral tile, so the line does not jump). The pills keep the sheet's full width
+                under it: beside a 76 px cover they wrapped to three rows on a phone. */}
+            {(cover || original || sheet.author) && (
+              <div className="flex items-center gap-3.5">
+                {cover && <SongCover src={cover} size="lg" />}
+                {(original || sheet.author) && (
+                  <p className="min-w-0 flex-1 font-body text-[17px] leading-snug text-ink-muted">
+                    {original}
+                    {original && sheet.author && <span className="text-ink-dim"> · </span>}
+                    {sheet.author}
+                  </p>
+                )}
+              </div>
             )}
             <div className="flex flex-wrap items-center gap-2.5">
               {/* The key the member will PLAY: opened from a setlist the chart below is

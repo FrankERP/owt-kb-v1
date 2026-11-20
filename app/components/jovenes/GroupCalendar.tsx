@@ -5,13 +5,15 @@ import { useRouter } from "next/navigation";
 import Button from "@/app/components/ui/Button";
 import Checkbox from "@/app/components/ui/Checkbox";
 import CueDialog from "@/app/components/ui/CueDialog";
+import CueDialogStatus from "@/app/components/ui/CueDialogStatus";
 import DateField from "@/app/components/ui/DateField";
 import Switch from "@/app/components/ui/Switch";
 import { useToast } from "@/app/components/ui/Toast";
 import { HAIRLINE_INPUT_CLASS, HAIRLINE_LABEL_CLASS } from "@/app/components/ui/hairlineField";
 import type { MinistryEventView } from "@/app/utils/ministryEventReads";
-import { isServiceTime } from "@/app/utils/serviceTime";
-import { audienceLabel, eventDayLabel, eventHeading } from "@/app/utils/jovenesEventView";
+import { dayTitle } from "@/app/utils/agenda";
+import { eventHeading } from "@/app/utils/jovenesEventView";
+import { audienceTone } from "@/app/utils/jovenesGroupStyle";
 import {
   JOVENES_GROUPS,
   canCreateGroupEvent,
@@ -23,7 +25,14 @@ import {
   type GroupEventForm,
   type PlannerViewer,
 } from "@/app/utils/jovenesPlannerModel";
-import { eventUrl, eventsUrl, sendEventWrite } from "./eventWrite";
+import { CalendarOffIcon, NoteIcon, PlusIcon, UsersIcon } from "@/app/components/ui/icons";
+import AudienceChips from "./AudienceChips";
+import AudienceRail from "./AudienceRail";
+import DateTile from "./DateTile";
+import MeetingMeta from "./MeetingMeta";
+import MeetingState from "./MeetingState";
+import SectionHead from "./SectionHead";
+import { eventUrl, eventsUrl, halfTypedClock, sendEventWrite } from "./eventWrite";
 
 const MINISTRY = "jovenes";
 
@@ -36,6 +45,9 @@ type Editing = { event: MinistryEventView | null; form: GroupEventForm; token: s
  * buttons follow those rules from `viewer`, but only to save a refusal: every write is decided
  * again by the server on the stored meeting. The rows come from the editor-mode read, so a leader
  * never receives another group's meetings to begin with.
+ *
+ * A card per meeting in its group's colour, the date as a leaf like the roster above, the state
+ * as a pill, house buttons for the actions (2026-11-12, ADR-0086; hairline rows before).
  */
 export default function GroupCalendar({
   events,
@@ -84,13 +96,9 @@ export default function GroupCalendar({
   async function save() {
     if (!editing || saving) return;
     const { form, event, token } = editing;
-    const problem = groupEventProblem(form, viewer);
+    const problem = groupEventProblem(form, viewer) ?? halfTypedClock(["jovenes-group-time"]);
     if (problem) {
       setError(problem);
-      return;
-    }
-    if (form.time.trim() && !isServiceTime(form.time.trim())) {
-      setError("La hora debe ser HH:mm (por ejemplo 19:30).");
       return;
     }
     if (event && !event.rev) {
@@ -148,55 +156,71 @@ export default function GroupCalendar({
   const losing = editing ? editLosesAccess(editing.event, editing.form, viewer) : false;
 
   return (
-    <section className="space-y-4" aria-labelledby="jovenes-group-calendar">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="jovenes-group-calendar" className="font-display text-xl md:text-2xl font-bold text-ink">
-          Calendario de grupos
-        </h2>
+    <section aria-labelledby="jovenes-group-calendar">
+      <SectionHead
+        id="jovenes-group-calendar"
+        icon={<UsersIcon size={20} />}
+        title="Calendario de grupos"
+        note="Las de cada grupo y las compartidas."
+      >
         {canCreateGroupEvent(viewer) && (
-          <Button variant="secondary" size="md" onClick={() => open(null)}>
-            Nueva reunión de grupo
+          // The section title already says «de grupos»; the name the button answers to keeps it.
+          <Button variant="secondary" size="sm" aria-label="Nueva reunión de grupo" onClick={() => open(null)}>
+            <PlusIcon size={13} />
+            Nueva reunión
           </Button>
         )}
-      </header>
+      </SectionHead>
 
       {events.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-edge-accent-subtle px-4 py-5 font-body text-sm text-mono-500">
+        <p className="flex flex-col items-center gap-3 rounded-[var(--brand-radius-panel)] border border-dashed border-ink/[0.16] px-6 py-10 text-center font-body text-[15px] text-ink-muted">
+          <CalendarOffIcon size={24} className="text-ink-dim" />
           No hay reuniones de grupo este mes.
         </p>
       ) : (
+        // A card per meeting, in its group's colour (ADR-0086): the rail and the date leaf's band
+        // take it, and a shared meeting shows one rail segment and one chip per group.
         <ul className="space-y-3">
           {events.map((e) => {
             const joint = e.audience?.kind === "groups" && e.audience.groups.length > 1;
             return (
-              <li
-                key={e._id}
-                className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-edge-accent-subtle bg-surface-raised px-4 py-3"
-              >
-                <div className="min-w-0 space-y-0.5">
-                  <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">
-                    <span className="capitalize">{eventDayLabel(e.date)}</span>
-                    {e.time && <> · {e.time}</>}
-                  </p>
-                  <p className="font-body text-base text-ink">{eventHeading(e)}</p>
-                  <p className="font-body text-sm text-ink-muted">{audienceLabel(e.audience)}</p>
-                  {joint && (
-                    <p className="font-body text-xs text-mono-500">
-                      Creada por {e.createdByName ?? "alguien que ya no está"}
-                    </p>
-                  )}
-                  {e.notes && <p className="whitespace-pre-line pt-1 font-body text-sm text-ink-muted">{e.notes}</p>}
-                  {!e.published && (
-                    <span className="mt-1 inline-block rounded-full border border-warning-fg/40 px-2 py-0.5 font-label text-[10px] uppercase tracking-widest text-warning-fg">
-                      Borrador
-                    </span>
+              <li key={e._id} className="brand-surface relative overflow-hidden rounded-[var(--brand-radius-panel)]">
+                <AudienceRail audience={e.audience} muted={!e.published} />
+                {/* «Editar» is a band under the meeting on a phone, behind a hairline, and the
+                    column on the right from `sm`: beside the title it took the room a two-word
+                    name needs («Reunión de grupo» broke in two, 2026-11-17). */}
+                <div className="py-4 pl-5 pr-4 sm:grid sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-x-3.5">
+                  <div className="flex min-w-0 gap-3.5">
+                    <DateTile date={e.date} tone={audienceTone(e.audience)} decorative />
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+                        <h3 className="min-w-0 break-words pt-0.5 font-display text-[22px] font-semibold uppercase leading-none tracking-[0.02em] text-ink md:text-2xl">
+                          {eventHeading(e)}
+                          <span className="sr-only">, {dayTitle(e.date)}</span>
+                        </h3>
+                        <MeetingState published={e.published} />
+                      </div>
+                      <MeetingMeta time={e.time} arrival={e.arrival} place={e.place} />
+                      <AudienceChips audience={e.audience} />
+                      {joint && (
+                        <p className="font-body text-[13px] text-ink-dim">Creada por {e.createdByName ?? "alguien que ya no está"}</p>
+                      )}
+                      {e.notes && (
+                        <p className="flex gap-2.5 rounded-xl bg-ink/[0.05] px-3.5 py-2.5 font-body text-[15px] leading-snug text-ink-muted">
+                          <NoteIcon size={15} className="mt-[3px] shrink-0 text-ink-dim" />
+                          <span className="min-w-0 whitespace-pre-line break-words">{e.notes}</span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {canEditGroupEvent(e, viewer) && (
+                    <div className="mt-3.5 grid border-t border-ink/[0.08] pt-3.5 sm:mt-0 sm:block sm:border-t-0 sm:pt-0">
+                      <Button variant="secondary" size="sm" onClick={() => open(e)}>
+                        Editar
+                      </Button>
+                    </div>
                   )}
                 </div>
-                {canEditGroupEvent(e, viewer) && (
-                  <Button variant="pill" size="sm" onClick={() => open(e)}>
-                    Editar
-                  </Button>
-                )}
               </li>
             );
           })}
@@ -209,32 +233,38 @@ export default function GroupCalendar({
         size="lg"
         label={editing?.event ? "Editar reunión de grupo" : "Nueva reunión de grupo"}
         onDismiss={() => !saving && setEditing(null)}
-        title={
-          <span className="block font-display text-base uppercase tracking-wide text-ink">
-            {editing?.event ? "Editar reunión de grupo" : "Nueva reunión de grupo"}
-          </span>
-        }
+        title={editing?.event ? "Editar reunión de grupo" : "Nueva reunión de grupo"}
       >
         {editing && (
-          <div className="flex-1 space-y-4 overflow-y-auto px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="flex-1 space-y-5 overflow-y-auto px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:px-6">
+            {/* Fecha and Hora are the same house field at the same height: a boxed date beside a
+                hairline clock read as two different forms. The native clock also spares the
+                phone's digits-only keyboard, which has no «:» to type «19:30» with. */}
             <div className="grid grid-cols-2 gap-4">
-              <DateField
-                kind="date"
-                id="jovenes-group-date"
-                label="Fecha"
-                value={editing.form.date}
-                onChange={(e) => patchForm({ date: e.target.value })}
-              />
-              <label className="block">
-                <span className={HAIRLINE_LABEL_CLASS}>Hora</span>
-                <input
-                  className={HAIRLINE_INPUT_CLASS}
-                  inputMode="numeric"
-                  placeholder="19:30"
+              <div>
+                <label htmlFor="jovenes-group-date" className={`${HAIRLINE_LABEL_CLASS} mb-1.5 block`}>
+                  Fecha
+                </label>
+                <DateField
+                  kind="date"
+                  size="lg"
+                  id="jovenes-group-date"
+                  value={editing.form.date}
+                  onChange={(e) => patchForm({ date: e.target.value })}
+                />
+              </div>
+              <div>
+                <label htmlFor="jovenes-group-time" className={`${HAIRLINE_LABEL_CLASS} mb-1.5 block`}>
+                  Hora
+                </label>
+                <DateField
+                  kind="time"
+                  size="lg"
+                  id="jovenes-group-time"
                   value={editing.form.time}
                   onChange={(e) => patchForm({ time: e.target.value })}
                 />
-              </label>
+              </div>
             </div>
             <label className="block">
               <span className={HAIRLINE_LABEL_CLASS}>Qué</span>
@@ -246,21 +276,31 @@ export default function GroupCalendar({
                 onChange={(e) => patchForm({ title: e.target.value })}
               />
             </label>
-            <fieldset className="space-y-2">
+            <label className="block">
+              <span className={HAIRLINE_LABEL_CLASS}>Lugar</span>
+              <input
+                className={HAIRLINE_INPUT_CLASS}
+                maxLength={120}
+                placeholder="Por ejemplo Casa Fam Varela"
+                value={editing.form.place}
+                onChange={(e) => patchForm({ place: e.target.value.replace(/[\r\n\u2028\u2029]/g, " ") })}
+              />
+            </label>
+            <fieldset className="space-y-2.5">
               <legend className={HAIRLINE_LABEL_CLASS}>Grupos</legend>
-              <div className="flex flex-wrap gap-x-5 gap-y-2">
+              <div className="flex flex-wrap gap-x-6 gap-y-3">
                 {JOVENES_GROUPS.map((g) => (
                   <Checkbox
                     key={g.id}
                     checked={editing.form.groups.includes(g.id)}
                     onChange={(e) => toggleGroup(g.id, e.target.checked)}
                   >
-                    <span className="font-body text-sm text-ink">{g.name}</span>
+                    <span className="font-body text-[17px] text-ink">{g.name}</span>
                   </Checkbox>
                 ))}
               </div>
               {editing.form.groups.length > 1 && (
-                <p className="font-body text-xs text-mono-500">
+                <p className="font-body text-[13px] leading-snug text-ink-muted">
                   Una reunión compartida la ven completa los grupos que participan. Solo quien la creó y los admins pueden cambiarla.
                 </p>
               )}
@@ -274,9 +314,10 @@ export default function GroupCalendar({
                 onChange={(e) => patchForm({ notes: e.target.value })}
               />
             </label>
-            <div className="flex items-center justify-between gap-3">
-              <span id="jovenes-group-published" className="font-body text-sm text-ink">
-                Publicada (la ven sus grupos)
+            <div className="flex items-center justify-between gap-4 border-t border-ink/[0.10] pt-4">
+              <span id="jovenes-group-published" className="min-w-0">
+                <span className="block font-body text-[17px] text-ink">Publicada</span>
+                <span className="block font-body text-[13px] text-ink-muted">La ven sus grupos</span>
               </span>
               <Switch
                 aria-labelledby="jovenes-group-published"
@@ -285,16 +326,12 @@ export default function GroupCalendar({
               />
             </div>
             {losing && (
-              <p role="status" className="font-body text-sm text-warning-fg">
+              <p role="status" className="border-l-2 border-warning-fg/60 py-1 pl-4 font-body text-[15px] leading-snug text-warning-soft">
                 Al compartirla con otro grupo, ya no podrás editarla: solo quien la creó y los admins.
               </p>
             )}
-            {error && (
-              <p role="alert" className="font-body text-sm text-negative-fg">
-                {error}
-              </p>
-            )}
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+            {error && <CueDialogStatus tone="error">{error}</CueDialogStatus>}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
               {editing.event ? (
                 confirmDelete ? (
                   <Button variant="danger" size="lg" onClick={remove} busy={saving} busyLabel="Borrando…">

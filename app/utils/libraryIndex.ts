@@ -151,6 +151,19 @@ export function groupByLetter(posts: Post[]): LetterGroup[] {
   return groupRowsByLetter(posts, (p) => p.title).map((g) => ({ letter: g.letter, posts: [...g.rows].sort(byTitle) }));
 }
 
+/**
+ * The Biblioteca's «Recién agregadas» shelf (ADR-0088): the last songs that joined the
+ * catalogue, newest first, by the document's own `_createdAt` — no editor keeps it up. A song
+ * with no date is never «new»; two created in the same instant fall back to the title, so the
+ * shelf does not reshuffle between renders.
+ */
+export function recentSongs(posts: readonly Post[], n = 8): Post[] {
+  return posts
+    .filter((p) => typeof p._createdAt === "string" && p._createdAt !== "")
+    .sort((a, b) => (a._createdAt! < b._createdAt! ? 1 : a._createdAt! > b._createdAt! ? -1 : byTitle(a, b)))
+    .slice(0, n);
+}
+
 export function libraryKeys(posts: Post[]): string[] {
   return [...new Set(posts.map((p) => (p.key ?? "").trim()).filter(Boolean))].sort();
 }

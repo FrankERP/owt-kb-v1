@@ -13,7 +13,7 @@ describe("ministry registry", () => {
     expect(MINISTRIES.worship).toEqual({ id: "worship", name: "Alabanza", groups: [] });
     expect(MINISTRIES.kids).toEqual({ id: "kids", name: "Oasis Kids", groups: [] });
     expect(MINISTRIES.jovenes.name).toBe("Jóvenes");
-    expect(MINISTRIES.jovenes.groups.map((g) => g.id)).toEqual(["otro-nivel", "invencibles", "emprendedores"]);
+    expect(MINISTRIES.jovenes.groups.map((g) => g.id)).toEqual(["otro-nivel", "invencibles", "emprendedores", "adrenalin", "guerreras"]);
     expect(ALL_MINISTRY_IDS).toEqual(["worship", "kids", "jovenes"]);
   });
   it("jovenes is assignable — its read side reached production first (ADR-0075)", () => {

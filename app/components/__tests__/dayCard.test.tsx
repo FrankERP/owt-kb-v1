@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-// The run-sheet card (R1 Task 6, spec §12.1/§18/§19.2). What is asserted here is
+// The service card (R1 Task 6, spec §12.1/§18/§19.2; its head and frame: ADR-0088). What is asserted here is
 // the contract Task 7 composes against: the header reads `DÍA · fecha` with no
 // eyebrow, the countdown replaces the `Próximo` pill, `hero` carries the one
 // Ensayar, rows show BPM, and `wide` puts the two sections side by side.
@@ -23,6 +23,8 @@ let mockUser: { name?: string; alias?: string; role?: string } = { name: "Ana", 
 vi.mock("next-auth/react", () => ({
   useSession: () => ({ data: { user: mockUser } }),
 }));
+// «Mensajes» (an admin's action) refreshes the route after a change.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 
 import { DayCard, type DayCardProps } from "../DayCard";
 
@@ -164,7 +166,8 @@ describe("DayCard", () => {
       pastorMessage: "Efesios 2: por gracia",
       setlist: { week: "2026-09-13", songs: [song("s1")], team_notes: "Lleguen 8:30" },
     });
-    const titles = Array.from(container.querySelectorAll("section > p:first-child")).map((p) => p.textContent);
+    // Each note is a `section` whose small-caps title comes before its text.
+    const titles = Array.from(container.querySelectorAll("section p.uppercase")).map((p) => p.textContent);
     expect(titles.indexOf("Mensaje del pastor")).toBeGreaterThan(-1);
     expect(titles.indexOf("Mensaje del pastor")).toBeLessThan(titles.indexOf("Mensaje para el equipo"));
     expect(screen.getByText("Efesios 2: por gracia")).toBeTruthy();
@@ -181,24 +184,75 @@ describe("DayCard", () => {
     expect(screen.queryByRole("button", { name: /Practicar/ })).toBeNull();
   });
 
-  describe("ADR-0070 — the hero is a run sheet, not a card", () => {
-    it("draws no day heading and no countdown pill, but one identity line — the greeting band names the member's OWN next service, not always this one", () => {
+  describe("ADR-0088 — the next service is a card with a head of its own", () => {
+    it("heads the card with the date as a leaf, the day as its title, the clock and the countdown", () => {
       vi.useFakeTimers({ toFake: ["Date"] });
       vi.setSystemTime(new Date(2026, 8, 11, 9, 0, 0));
       const { container } = mount({ hero: true, isNext: true });
-      expect(screen.queryByRole("heading", { level: 3 })).toBeNull();
-      expect(container.textContent).not.toContain("En 2 días");
-      // No panel, no rail: the sheet sits straight on the page.
-      expect(container.querySelector(".brand-surface")).toBeNull();
-      expect(container.querySelector(".w-\\[3px\\]")).toBeNull();
-      // Day · date · the weekend's standing hour, in muted body type, then Ensayar.
-      expect(container.querySelector("p.font-body")?.textContent).toMatch(/Domingo\s*·\s*13\s*sep\s*·\s*11:00/i);
-      expect(container.querySelector("button")?.textContent).toMatch(/Ensayar/);
+      // One object with an edge and the day's rail, drawn once.
+      const card = container.querySelector("article.brand-surface")!;
+      expect(card).toBeTruthy();
+      expect(card.querySelector(".w-\\[3px\\]")!.className).toContain("animate-rail-draw");
+      const head = card.querySelector("header")!;
+      expect(within(head).getByRole("heading", { level: 3 }).textContent).toBe("Domingo");
+      // The leaf says the date to a screen reader too — the title says only the day.
+      const leaf = head.querySelector("time")!;
+      expect(leaf.getAttribute("datetime")).toBe("2026-09-13");
+      expect(leaf.getAttribute("aria-hidden")).toBeNull();
+      // The weekend's standing hour, the countdown as a chip, then the one Ensayar.
+      expect(within(head).getByText("11:00")).toBeTruthy();
+      expect(head.textContent).toContain("En 2 días");
+      expect(within(head).getAllByRole("button", { name: /Ensayar/ })).toHaveLength(1);
+      cleanup();
+      // Without `isNext` (`/me`, whose header already counts down) the card carries no countdown.
+      expect(mount({ hero: true }).container.querySelector("header")!.textContent).not.toMatch(/En \d+ días/);
       cleanup();
       // A special carries its own clock; an untimed one has none.
-      expect(mount({ hero: true, day: "Campamento", roleId: "r1", time: "18:45" }).container.querySelector("p.font-body")?.textContent).toMatch(/Campamento\s*·\s*13\s*sep\s*·\s*18:45/i);
+      expect(mount({ hero: true, day: "Campamento", roleId: "r1", time: "18:45" }).container.querySelector("header")!.textContent).toContain("18:45");
       cleanup();
-      expect(mount({ hero: true, day: "Campamento", roleId: "r1" }).container.querySelector("p.font-body")?.textContent).not.toMatch(/\d\d:\d\d/);
+      expect(mount({ hero: true, day: "Campamento", roleId: "r1" }).container.querySelector("header")!.textContent).not.toMatch(/\d\d:\d\d/);
+    });
+
+    it("says «Tú · Lead» in the card's head, in the positive tone, only for a service the viewer serves", () => {
+      mount({ hero: true, leads: ["Ani"] });
+      const chip = within(document.querySelector("header")!).getByText("Tú · Lead");
+      expect(chip.className).toContain("text-positive-fg");
+      cleanup();
+      mount({ hero: true, leads: ["Beto"] });
+      expect(within(document.querySelector("header")!).queryByText(/^Tú ·/)).toBeNull();
+    });
+
+    it("lights the border once only where the host asks for it (`lit`), and only on a framed card", () => {
+      expect(mount({ hero: true }).container.querySelector("[data-lit]")).toBeNull();
+      cleanup();
+      const lit = mount({ hero: true, lit: true }).container.querySelector(".brand-lit-card[data-lit]")!;
+      expect(lit.firstElementChild?.tagName).toBe("ARTICLE");
+      cleanup();
+      // A sheet whose host names the service has no frame, so nothing to light.
+      expect(mount({ hero: true, identity: false, lit: true }).container.querySelector("[data-lit]")).toBeNull();
+    });
+
+    it("draws the body alone — no frame, no head — where the host already names the service (`identity={false}`)", () => {
+      const { container } = mount({ hero: true, identity: false });
+      expect(screen.queryByRole("heading", { level: 3 })).toBeNull();
+      expect(container.querySelector(".brand-surface")).toBeNull();
+      expect(container.querySelector("time")).toBeNull();
+      // The calendar's day sheet still gets the one Ensayar.
+      expect(screen.getAllByRole("button", { name: /Ensayar/ })).toHaveLength(1);
+    });
+
+    it("says «Setlist pendiente» in the setlist's place when the team was published before the songs", () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(2026, 8, 11, 9, 0, 0)); // still to come: a past service has nothing pending
+      mount({ hero: true, setlist: null, instruments: [{ label: "Keys", person: "Gaby" }] });
+      expect(screen.getByRole("heading", { level: 4, name: "Setlist" })).toBeTruthy();
+      expect(screen.getByText("Setlist pendiente")).toBeTruthy();
+      expect(screen.queryByRole("button", { name: /Ensayar/ })).toBeNull();
+      cleanup();
+      // With songs in, the placeholder is gone and the title counts them.
+      mount({ hero: true });
+      expect(screen.queryByText("Setlist pendiente")).toBeNull();
+      expect(screen.getByRole("heading", { level: 4, name: /^Setlist\s*·\s*1$/ })).toBeTruthy();
     });
 
     it("titles the team «Equipo» in the sheet's small caps, and labels its sections in sentence-case body type", () => {
@@ -215,24 +269,97 @@ describe("DayCard", () => {
       expect(screen.getAllByText(/^Banda/)[0].className).toContain("uppercase");
     });
 
-    it("`sheet` without `hero` is the same rendering minus the head — no identity line, no Ensayar", () => {
+    it("`sheet` without `hero` is the same body minus the head — no frame, no date, no Ensayar", () => {
       const { container } = mount({ sheet: true });
       expect(screen.queryByRole("heading", { level: 3 })).toBeNull();
       expect(screen.queryByRole("button", { name: /Ensayar/ })).toBeNull();
       expect(container.textContent).not.toMatch(/13\s*sep/i);
       expect(container.querySelector(".brand-surface")).toBeNull();
-      expect(screen.getByRole("heading", { level: 4, name: "Setlist" }).className).toContain("tracking-[0.22em]");
+      expect(screen.getByRole("heading", { level: 4, name: /^Setlist/ }).className).toContain("tracking-[0.22em]");
     });
 
-    it("sets a sheet row as display number · 17 px title · artist on its own line · key pill", () => {
-      mount({ hero: true, setlist: { week: "2026-09-13", songs: [song("s1", { author: "Oasis Worship" })] } });
+    it("an open «Después» card (`sheet`) still says what the member leads and gives an admin «Mensajes»", () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(2026, 8, 11, 9, 0, 0)); // before the service: its thread is open
+      mount({ sheet: true, myLeadSongs: ["Canción A"], serviceId: "svc1" });
+      expect(screen.getByText("Diriges: Canción A")).toBeTruthy();
+      // A member has no «Mensajes»; an admin has exactly one, on the sheet too.
+      expect(screen.queryByRole("button", { name: "Mensajes" })).toBeNull();
+      cleanup();
+      mockUser = { name: "Ana", alias: "Ani", role: "admin" };
+      mount({ sheet: true, serviceId: "svc1" });
+      expect(screen.getAllByRole("button", { name: "Mensajes" })).toHaveLength(1);
+      // «Ensayar el setlist» stays the hero's alone: this sheet practises from the Setlist title.
+      expect(screen.queryByRole("button", { name: /Ensayar/ })).toBeNull();
+    });
+
+    it("says «Setlist pendiente» on ANY sheet still to come — an open «Después» card too — and never of a past service", () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(2026, 8, 11, 9, 0, 0));
+      mount({ sheet: true, setlist: null });
+      expect(screen.getByText("Setlist pendiente")).toBeTruthy();
+      cleanup();
+      mount({ hero: true, identity: false, setlist: null });
+      expect(screen.getByText("Setlist pendiente")).toBeTruthy();
+      cleanup();
+      // The calendar opens old services: one with no songs stored has nothing pending.
+      vi.setSystemTime(new Date(2026, 8, 20, 9, 0, 0));
+      mount({ hero: true, identity: false, setlist: null });
+      expect(screen.queryByText("Setlist pendiente")).toBeNull();
+      // The ordinary card (the planner's preview) never says it.
+      cleanup();
+      vi.setSystemTime(new Date(2026, 8, 11, 9, 0, 0));
+      mount({ setlist: null });
+      expect(screen.queryByText("Setlist pendiente")).toBeNull();
+    });
+
+    it("draws a medley on the sheet as ONE panel under its own label, its songs still numbered through", () => {
+      mount({
+        hero: true,
+        setlist: { week: "2026-09-13", songs: [song("s1"), song("s2", { medley_tag: "a" }), song("s3", { medley_tag: "a" })] },
+      });
+      const label = screen.getByText("Medley · 2 canciones seguidas");
+      const panel = label.closest("li")!;
+      expect(panel.className).toContain("rounded-2xl");
+      expect(within(panel).getAllByRole("button").map((b) => within(b).getByText(/^Canción \d:$/).textContent?.trim())).toEqual(["Canción 2:", "Canción 3:"]);
+    });
+
+    it("says the pastor's word with its megaphone tile and no rail of its own — the left rail is the day's", () => {
+      const { container } = mount({ hero: true, pastorMessage: "Hoy hablamos de la gracia." });
+      const note = screen.getByText("Mensaje del pastor").closest("section")!;
+      expect(note.querySelector("svg")).toBeTruthy();
+      expect(note.querySelector(".w-\\[3px\\]")).toBeNull();
+      expect(container.querySelectorAll("article .w-\\[3px\\]")).toHaveLength(1);
+    });
+
+    it("sets a sheet row as picture with its number · 17 px title · artist and tempo under it · key pill", () => {
+      mount({
+        hero: true,
+        setlist: {
+          week: "2026-09-13",
+          songs: [
+            song("s1", { author: "Oasis Worship", bpm: "132", cover: "https://cdn.sanity.io/images/ebb8vcnk/production/abc123-1000x1000.jpg" }),
+            song("s2"),
+          ],
+        },
+      });
       const row = screen.getByRole("button", { name: /Canción s1/ });
-      expect(row.querySelector(".font-display")?.textContent).toBe("1");
+      // The album's cover, with the song's place in the set on the corner.
+      expect(row.querySelector("img")?.getAttribute("src")).toBe("https://cdn.sanity.io/images/ebb8vcnk/production/abc123-1000x1000.jpg?w=160&h=160&fit=crop&fm=jpg");
+      expect(within(row).getByText("1").className).toContain("tabular-nums");
+      // The number on the cover is inside a decorative tile, so the row says its place itself.
+      expect(row.querySelector("[aria-hidden]")!.textContent).toBe("1");
+      expect(within(row).getByText("Canción 1:").className).toBe("sr-only");
       expect(screen.getByText("Canción s1").className).toContain("text-[17px]");
       const author = screen.getByText("Oasis Worship");
-      expect(author.className).toContain("block");
       expect(author.className).not.toContain("hidden");
-      expect(screen.getByText("G").className).toContain("rounded-full");
+      expect(within(row).getByText("132")).toBeTruthy();
+      // The key stays INK inside a day card (ADR-0071), as a hairline pill.
+      const key = within(row).getByText("G");
+      expect(key.className).toContain("rounded-full");
+      expect(key.className).toContain("text-ink");
+      // A song with no cover gets the neutral tile, never a broken picture.
+      expect(screen.getByRole("button", { name: /Canción s2/ }).querySelector("img")).toBeNull();
     });
   });
 
@@ -255,16 +382,17 @@ describe("DayCard", () => {
   });
 
   it("puts the setlist and the team in two columns only when `wide` has both a setlist and a team", () => {
-    const { container, unmount } = mount({ layout: "wide" });
+    // The two columns are the service card's (`hero`): the plain card has no wide caller.
+    const { container, unmount } = mount({ layout: "wide", hero: true });
     expect(container.querySelector(".lg\\:grid")).not.toBeNull();
     unmount();
-    expect(mount().container.querySelector(".lg\\:grid")).toBeNull();
+    expect(mount({ hero: true }).container.querySelector(".lg\\:grid")).toBeNull();
   });
 
   it("keeps «Mensaje para el equipo» in the setlist's column on the run sheet, with the team as the rail", () => {
     // Frank, 2026-10-22: on a big screen the message spanned both columns and
     // pushed the whole sheet down; it belongs over the setlist, beside the team.
-    const { container } = mount({ layout: "wide", setlist: { week: "2026-09-13", songs: [song("s1")], team_notes: "Hoy a las 10" } });
+    const { container } = mount({ layout: "wide", hero: true, setlist: { week: "2026-09-13", songs: [song("s1")], team_notes: "Hoy a las 10" } });
     const grid = container.querySelector(".lg\\:grid") as HTMLElement;
     const main = grid.querySelector("[data-run-sheet-main]") as HTMLElement;
     expect(main).toBe(grid.firstElementChild);
@@ -283,7 +411,7 @@ describe("DayCard", () => {
   });
 
   it("stacks a `wide` card with a setlist but no team, instead of reserving an empty rail", () => {
-    const { container } = mount({ layout: "wide", leads: [] });
+    const { container } = mount({ layout: "wide", hero: true, leads: [] });
     expect(container.querySelector(".lg\\:grid")).toBeNull();
   });
 

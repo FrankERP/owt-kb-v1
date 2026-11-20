@@ -2,9 +2,9 @@
 // «millones» pass, 2026-10-24): one row per place a member goes to about
 // themselves — Disponibilidad, Calendario, Ajustes, and the one-shot `.ics`
 // download — a 17 px title with a one-line status under it, and a chevron.
-// Hairline rows in the page's own type since the «millones» pass: the raised
-// card and the tinted icon squares it had were the last card on a page that is
-// now a run sheet. Before design pass C the page ended on a lone bordered
+// Hairline rows in the page's own type since the «millones» pass (no raised card
+// around the list); each row carries its glyph on a neutral tile again since
+// ADR-0088, the service card's own. Before design pass C the page ended on a lone bordered
 // «Disponibilidad» link, the settings were only in the avatar menu, and «Añadir
 // a calendario» floated top-right above the hero card.
 //
@@ -25,9 +25,16 @@ export const ACCOUNT_ROW_CLASS =
   "flex w-full items-center gap-4 py-4 text-left transition-colors hover:bg-accent/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60";
 
 /** `trailing` is the row's right-hand glyph: the chevron of a link, or what a button row does. */
-export function AccountRowBody({ title, status, trailing }: { title: string; status?: string; trailing?: ReactNode }) {
+export function AccountRowBody({ title, status, trailing, icon }: { title: string; status?: string; trailing?: ReactNode; icon?: ReactNode }) {
   return (
     <>
+      {/* The row's glyph on the service card's own tile (ADR-0088): the four rows
+          are told apart by shape before their words are read. */}
+      {icon && (
+        <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-ink/[0.07] text-ink-muted">
+          {icon}
+        </span>
+      )}
       <span className="min-w-0 flex-1">
         <span className="block font-body text-[17px] font-semibold text-ink">{title}</span>
         {status && <span className="block font-body text-sm text-ink-muted">{status}</span>}
@@ -37,17 +44,17 @@ export function AccountRowBody({ title, status, trailing }: { title: string; sta
   );
 }
 
-export function AccountLinkRow({ href, title, status }: { href: string; title: string; status?: string }) {
+export function AccountLinkRow({ href, title, status, icon }: { href: string; title: string; status?: string; icon?: ReactNode }) {
   return (
     <li>
       <Link href={href} className={ACCOUNT_ROW_CLASS}>
-        <AccountRowBody title={title} status={status} />
+        <AccountRowBody title={title} status={status} icon={icon} />
       </Link>
     </li>
   );
 }
 
-/** The list itself: hairline rows, a hairline above and below. */
+/** The list itself: hairline rows (each with its glyph tile), a hairline above and below. */
 export default function AccountList({ children, labelledBy }: { children: ReactNode; labelledBy: string }) {
   return (
     <ul aria-labelledby={labelledBy} className="divide-y divide-ink/[0.10] border-y border-ink/[0.10]">

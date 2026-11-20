@@ -406,3 +406,103 @@ describe("setMemberDisabled", () => {
     expect(stored("pau").disabled).toBeUndefined();
   });
 });
+
+// ── PR 2: what is sent is what is stored (plan 2026-11-11-jovenes-per-group-leadership T6, ADR-0085)
+
+describe("leaderOf — the request names the groups a leader leads; the writer stores exactly that", () => {
+  const ON = "otro-nivel";
+  const INV = "invencibles";
+  const EM = "emprendedores";
+  const jovenesItem = (p: Record<string, unknown>) => ({ _key: "jovenes", _type: "ministryRole", ministry: "jovenes", ...p });
+  const seedLeader = (p: Record<string, unknown>) =>
+    put({ _id: "jacob", member_name: "Jacob", email: "jacob@example.com", role: "member", ministries: ["jovenes"], ministryRoles: [jovenesItem({ level: "leader", ...p })] });
+  const save = (level: string, groups: string[], leaderOf: string[]) =>
+    patchMember("jacob", { ministries: ["jovenes"], ministryRoles: [{ ministry: "jovenes", level, groups, leaderOf }] }, "frank");
+  const storedItem = () => (stored("jacob").ministryRoles as Array<Record<string, unknown>>)[0];
+
+  it("a leader of a subset is stored as sent: leads those, is a member of the rest", async () => {
+    seedLeader({ groups: [ON, INV], leaderOf: [ON, INV] });
+    expect((await save("leader", [ON, INV, "adrenalin"], [ON, "adrenalin"])).status).toBe(200);
+    expect(storedItem()).toEqual(jovenesItem({ level: "leader", groups: [ON, INV, "adrenalin"], leaderOf: [ON, "adrenalin"] }));
+  });
+
+  it("a stored subset is widened or narrowed only by what the request says (nothing kept from the stored item)", async () => {
+    seedLeader({ groups: [ON, INV], leaderOf: [ON] });
+    expect((await save("leader", [ON, INV, EM], [ON, INV, EM])).status).toBe(200);
+    expect(storedItem().leaderOf).toEqual([ON, INV, EM]);
+    expect((await save("leader", [ON, INV, EM], [EM])).status).toBe(200);
+    expect(storedItem().leaderOf).toEqual([EM]);
+  });
+
+  it("a legacy leader (no leaderOf, read as leading nothing) is given leaderOf by the request", async () => {
+    seedLeader({ groups: [ON, INV] });
+    expect((await save("leader", [ON, INV], [INV])).status).toBe(200);
+    expect(storedItem()).toEqual(jovenesItem({ level: "leader", groups: [ON, INV], leaderOf: [INV] }));
+  });
+
+  it("leader → member (or admin) sends leaderOf [] and stores no key (I2)", async () => {
+    seedLeader({ groups: [ON, INV], leaderOf: [INV] });
+    expect((await save("member", [ON], [])).status).toBe(200);
+    expect(storedItem()).toEqual(jovenesItem({ level: "member", groups: [ON] }));
+    seedLeader({ groups: [ON, INV], leaderOf: [INV] });
+    expect((await save("admin", [], [])).status).toBe(200);
+    expect(storedItem()).toEqual(jovenesItem({ level: "admin", groups: [] }));
+  });
+
+  it("refuses (400, nothing written) a PR 1 body, a leader who leads nothing, a led group outside groups, and leaderOf on a member", async () => {
+    seedLeader({ groups: [ON, INV], leaderOf: [ON] });
+    const before = structuredClone(stored("jacob"));
+    const legacy = await patchMember("jacob", { ministries: ["jovenes"], ministryRoles: [{ ministry: "jovenes", level: "leader", groups: [ON, INV, EM] }] }, "frank");
+    expect(legacy).toMatchObject({ status: 400, body: { error: "Niveles de ministerio inválidos." } });
+    expect(await save("leader", [ON], [])).toMatchObject({ status: 400, body: { error: "Un líder necesita liderar al menos un grupo." } });
+    expect(await save("leader", [ON], [INV])).toMatchObject({ status: 400, body: { error: "Solo puede liderar un grupo al que pertenece." } });
+    expect(await save("member", [ON], [ON])).toMatchObject({ status: 400, body: { error: "Solo un líder lidera grupos; un admin ya administra todos." } });
+    expect(stored("jacob")).toEqual(before);
+    expect(h.writes).toEqual([]);
+  });
+
+  it("the write is pinned to the read: a concurrent change answers 409", async () => {
+    seedLeader({ groups: [ON, INV], leaderOf: [ON] });
+    h.hooks.beforeCommit = () => { stored("jacob")._rev = "moved"; };
+    expect(await save("leader", [ON, INV, EM], [ON, EM])).toMatchObject({ status: 409, body: { error: MEMBER_ERROR.changed } });
+    expect(storedItem().groups).toEqual([ON, INV]);
+  });
+
+  it("a create stores leaderOf as sent for a leader, and no key for a member", async () => {
+    const out = await createMember({ member_name: "Fer", email: "fer@example.com", ministries: ["jovenes"], ministryRoles: [{ ministry: "jovenes", level: "leader", groups: ["adrenalin", EM], leaderOf: ["adrenalin"] }] });
+    expect(out.status).toBe(201);
+    const id = (out as { effects: { id: string } }).effects.id;
+    expect((stored(id).ministryRoles as unknown[])[0]).toEqual(jovenesItem({ level: "leader", groups: ["adrenalin", EM], leaderOf: ["adrenalin"] }));
+    const m = await createMember({ member_name: "Milo", email: "milo@example.com", ministries: ["jovenes"], ministryRoles: [{ ministry: "jovenes", level: "member", groups: [EM], leaderOf: [] }] });
+    expect((stored((m as { effects: { id: string } }).effects.id).ministryRoles as unknown[])[0]).toEqual(jovenesItem({ level: "member", groups: [EM] }));
+    const legacy = await createMember({ member_name: "Old", email: "old@example.com", ministries: ["jovenes"], ministryRoles: [{ ministry: "jovenes", level: "leader", groups: [EM] }] });
+    expect(legacy.status).toBe(400);
+  });
+
+  it("the chat's edit stores the leaderOf it names, and shows it in the lines", async () => {
+    seedLeader({ groups: [ON, INV], leaderOf: [ON, INV] });
+    const out = await saveMemberEdits("jacob", [{ op: "jovenes", level: "leader", groups: [ON, INV, "adrenalin"], leaderOf: [ON, "Adrenalin"] }], { actorId: "frank", verify: () => null });
+    expect(out.status).toBe(200);
+    expect(storedItem()).toEqual(jovenesItem({ level: "leader", groups: [ON, INV, "adrenalin"], leaderOf: [ON, "adrenalin"] }));
+    expect((out as { effects: { lines: string[] } }).effects.lines).toContain(
+      "Jóvenes: líder de Otro Nivel e Invencibles → líder de Otro Nivel y Adrenalin; miembro de Invencibles",
+    );
+  });
+
+  it("a chat change of leaderOf alone is a line and a write, never a chat_access refusal; dropping admin still is", async () => {
+    seedLeader({ groups: [ON, INV], leaderOf: [ON, INV] });
+    const out = await saveMemberEdits("jacob", [{ op: "jovenes", level: "leader", groups: [ON, INV], leaderOf: [ON] }], { actorId: "frank", verify: () => null });
+    expect(out.status).toBe(200);
+    expect(storedItem().leaderOf).toEqual([ON]);
+    put({ _id: "jacob", member_name: "Jacob", email: "jacob@example.com", role: "member", ministries: ["jovenes"], ministryRoles: [jovenesItem({ level: "admin", groups: [ON] })] });
+    const denied = await saveMemberEdits("jacob", [{ op: "jovenes", level: "leader", groups: [ON], leaderOf: [ON] }], { actorId: "frank", verify: () => null });
+    expect(denied).toMatchObject({ status: 403, body: { code: "chat_access" } });
+  });
+
+  it("a member-level chat edit and create of a Jóvenes person succeed (the body always carries leaderOf, §11 N2)", async () => {
+    put({ _id: "milo", member_name: "Milo", email: "milo@example.com", role: "member", ministries: ["worship"] });
+    const out = await saveMemberEdits("milo", [{ op: "add", field: "ministries", value: "Jóvenes" }, { op: "jovenes", level: "member", groups: [EM] }], { actorId: "frank", verify: () => null });
+    expect(out.status).toBe(200);
+    expect((stored("milo").ministryRoles as unknown[])[0]).toEqual(jovenesItem({ level: "member", groups: [EM] }));
+  });
+});

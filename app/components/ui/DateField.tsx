@@ -12,9 +12,15 @@ import Button from "./Button";
 
 // 16 px on a phone, the design's size from `sm` up — see `ui/Select`'s SIZE map and
 // `inputFontSize.test.ts`. `sm` is the admin-density skin and keeps its 11 px.
+//
+// `lg` is the field of a «millones» sheet (2026-11-10, the Jóvenes editors): the 44 px height
+// and the body face of `Select size="lg"`, so a date or a clock beside a person picker is one
+// row of controls, not a small grey box next to a large one. The face rides in the map for that
+// reason: two `font-*` utilities on one element would leave Tailwind's emission order to pick.
 const SIZE = {
-  sm: "px-1.5 py-1 text-[11px]",
-  md: "px-3 py-1.5 text-[16px] sm:text-xs",
+  sm: "px-1.5 py-1 text-[11px] font-label text-ink-muted",
+  md: "px-3 py-1.5 text-[16px] sm:text-xs font-label text-ink-muted",
+  lg: "min-h-[44px] px-3 py-2 text-[16px] sm:text-sm font-body text-ink",
 } as const;
 
 export default function DateField({
@@ -36,7 +42,7 @@ export default function DateField({
     <input
       type={kind}
       {...input}
-      className={`min-w-0 rounded-lg border border-surface-accent-30 bg-transparent font-label text-ink-muted transition-[border-color,box-shadow] duration-fast ease-out-brand focus:border-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50 ${SIZE[size]} ${onStep ? "" : "w-full"}`}
+      className={`min-w-0 rounded-lg border border-surface-accent-30 bg-transparent transition-[border-color,box-shadow] duration-fast ease-out-brand focus:border-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50 ${SIZE[size]} ${onStep ? "" : "w-full"}`}
     />
   );
   return (

@@ -37,7 +37,7 @@ After Android Studio: open it once, install the SDK, and ensure `ANDROID_HOME` i
 
 Both required values are now set:
 1. **`server.url`** → `https://owt-backstage.vercel.app`.
-2. **`appId`** → `com.owtBackstage.app`, **`appName`** → `OWT Backstage` (⚠️ permanent once published).
+2. **`appId`** → `com.owtBackstage.app`, **`appName`** → `Backstage` (renamed from `OWT Backstage` 2026-11-10, before any store release; ⚠️ the `appId` is what is permanent once published — the display name can change in a later release).
 
 Still pending: set **Vercel → Settings → Node.js Version → 22** so prod matches local (`.nvmrc`).
 

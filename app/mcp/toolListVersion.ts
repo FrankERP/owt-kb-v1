@@ -21,7 +21,15 @@ import { z } from "zod";
 
 export const TOOLS_VERSION_ARG = "toolsVersion";
 
-/** Model-facing; appended to a stale caller's answer. Exported for the tests. */
+/**
+ * Model-facing; appended to a stale caller's answer. Exported for the tests.
+ *
+ * Still says «OWT Backstage» on purpose (2026-11-10, the rename to «Backstage»): the model reads it, never
+ * the screen, and the proposal card filters it by this exact prefix (`STALE_NOTE_PREFIX` in
+ * `mcp-app/proposal-card/editorModel.ts`) — a card bundle a client already holds would show a reworded note
+ * as a line. «Conectores → OWT Backstage» is the name each person gave the connector in their own app.
+ * Reword only together with the card prefix, and keep the old prefix filtered for a while.
+ */
 export const STALE_TOOL_LIST_NOTE =
   "Aviso del servidor OWT Backstage: la lista de herramientas que tienes guardada es de una versión anterior " +
   "(este resultado sí es válido). Dile al usuario, en una frase y sin repetirlo si ya se lo dijiste en esta " +

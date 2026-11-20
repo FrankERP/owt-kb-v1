@@ -76,7 +76,7 @@ function SignInForm() {
             className="brand-lockup-mark h-[72px] w-[72px] rounded-[20px] md:h-[88px] md:w-[88px] md:rounded-[24px]"
           />
           <h1 className={PAGE_TITLE}>Backstage</h1>
-          <p className={PAGE_LEDE}>Oasis Worship Team · inicia sesión para ver tus servicios y canciones.</p>
+          <p className={PAGE_LEDE}>Oasis · inicia sesión para ver tu calendario y lo que te toca.</p>
         </div>
 
         <div className="mt-9 space-y-6 md:mt-10" {...revealProps(3)}>

@@ -361,14 +361,29 @@ JSON reaches it as `null` (400). Refusal order, for every write: the body's shap
 `_rev` is `rev_required`) → inactive (403) → an event the caller may not read in either mode (404
 «Ese evento no existe.», the same as a missing id, so a refusal never confirms one exists) → not
 allowed (403) → stale `_rev` (409 «Alguien más cambió este evento; recarga.»). Success is
-`{ok, id, rev}` and calls `revalidateMinistryViews`. Wrapped in `withVerificationRunContext`; the
-writer sends nothing. MCP and the admin assistant never import it (`ministryEventCoverage.test.ts`).
+`{ok, id, rev}` and calls `revalidateMinistryViews`. Wrapped in `withVerificationRunContext`. The
+writer sends nothing itself: create, PATCH, the program PATCH and the part PATCH answer (inside
+`effects`, never in the body) the emails the write owes, computed from the row read BEFORE the
+commit, and the route sends them in `after()` (`ministryEventNotify.ts`, `maxDuration = 60`;
+ADR-0089, `docs/NOTIFICATIONS.md` «Jóvenes meetings»). MCP and the admin assistant never import it
+(`ministryEventCoverage.test.ts`).
+
+**A program line** is `{_key?, label, member?, note?}` (a free line) or, since ADR-0089, a PART
+line `{_key?, part, member?, member2?, note?, music?, helpers?}`: `part` is `oracion` (one person),
+`dinamica1` / `dinamica2` (up to two) or `platica` (none on the line: its people are the
+`comparte` seats); the stored label is the table's (`ministryParts.ts`), `music` is `track` |
+`alabanza` on Oración and Plática only, `helpers` is one line ≤120 on a dinámica only, `note` ≤300
+is the description. One line per part; anything else is 400 `invalid_program`. On a line whose
+`_key` names a stored part line the body must carry that same `part` (else 400) and the STORED
+`note`, `music` and `helpers` are written back whatever the body says: once a part line exists,
+only the part route below changes them.
 
 | Route | Methods | Purpose & rules |
 |-------|---------|-----------------|
-| `/api/ministries/[ministry]/events` | POST | Create. `{token, audience, kind?, date, time?, arrival?, title?, notes?, published?, seats?, program?}`. `token` is a v4 UUID the client mints when the editor opens (lowercased; the id becomes `ministryEvent.<token>`), so a retry names the same meeting: a second create answers 409 `already_created` only to someone who may read it, else 404. A Jóvenes admin creates anything; a leader only a `groups` audience that includes a group they lead (a joint meeting of up to three groups). `createdBy` is the caller, never the body. Every seat and program person must be an active member of the ministry (and, for groups, of one of them) — `invalid_member`. |
+| `/api/ministries/[ministry]/events` | POST | Create. `{token, audience, kind?, date, time?, arrival?, title?, place?, notes?, published?, seats?, program?}` (`place`: one line ≤120, else `invalid_place`; a seat is `{_key?, role, member}`, `{_key?, role, name}` — a typed name, one line ≤60, never with a member, else `invalid_seats` — or `{_key?, role}`, an empty seat). `token` is a v4 UUID the client mints when the editor opens (lowercased; the id becomes `ministryEvent.<token>`), so a retry names the same meeting: a second create answers 409 `already_created` only to someone who may read it, else 404. A Jóvenes admin creates anything; a leader only a `groups` audience that includes a group they lead (a joint meeting of up to three groups). `createdBy` is the caller, never the body. Every seat and program person must be an active member of the ministry (and, for groups, of one of them) — `invalid_member`; a seat's typed `name` is text and is not checked. |
 | `/api/ministries/[ministry]/events/[token]` | PATCH, DELETE | PATCH `{_rev, …any editable field}` edits or publishes; arrays are written whole, a stored item keeps its `_key`, an unchanged kept item is not re-validated. DELETE `{_rev}`: a guarded delete (one transaction, an `ifRevisionId` no-op patch then the delete). Who: a Jóvenes admin any meeting; a leader a one-group meeting of a group they lead; a joint meeting only its creator (while leading one of its groups) and the admins. |
 | `/api/ministries/[ministry]/events/[token]/program` | PATCH | `{_rev, program}` — writes ONLY `program`, whatever else the body says. Who: anyone who may edit the meeting, plus the encargado or apoyo of a whole-ministry meeting who may still read it. |
+| `/api/ministries/[ministry]/events/[token]/parts/[part]` | PATCH | «Mi parte» (ADR-0089, W10). `{_rev, note?, music?, helpers?}` — a key that is present is a change (`null` clears it), at least one is required (`nothing_to_update`), a bad value is 400 `invalid_part`, an unknown `part` is 404. Who: anyone who may edit the meeting or its program, plus the part's RESPONSABLE while they can read the meeting as a member (a person on that part's line; for `platica`, a member in a `comparte` seat; never a typed name, never on a draft), else 403 «No puedes editar esta parte.». Writes ONLY `program`: the stored array with that one line's three fields changed, or — when the part has no line yet and there is something to store — a new part line appended (400 `invalid_program` on a full program; nothing to store ⇒ `ok` with the current revision and no write). Never a person, a label, a seat or `published`. |
 
 ---
 
@@ -495,8 +510,8 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
 ### Members — mostly **super-admin only**
 | Route | Methods | Auth | Notes |
 |-------|---------|------|-------|
-| `/api/admin/members` | GET, POST | GET admin/super-admin; **POST super-admin** | GET is **ministry-scoped**: `admin`/`content-editor` receive worship members only (`WORSHIP_MEMBER_GROQ_FILTER`), while `super-admin` binds `$all` and receives everyone — they are the only role that can edit `ministries`, so filtering them would make a Kids-only member uneditable through the UI. The «Personas» list (`/super-admin`; the `/admin` Miembros tab until 2026-10-29) then offers an Alabanza/Oasis Kids/Todos control, defaulting to Alabanza, filtering client-side. Absent `ministries` counts as worship, so no legacy member is ever hidden. POST create (name+email required), 201. POST and PATCH accept `instruments` (array of strings closed to `DEFAULT_INSTRUMENT_SEATS` after `normalizeSeatName`; duplicates collapse; `[]` stored; absent = untouched) and answer **400** `Instrumento no reconocido: <name>` on any other value. |
-| `/api/admin/members/[id]` | PATCH, DELETE | **super-admin** | PATCH validates role/`memberType`/`instruments`/`ministries`/`managesMinistries` (each applied only when present, so an unrelated edit cannot wipe a privilege), sets `notifPrefs.email` → `revalidateServiceViews()` + `revalidatePath("/me")`. DELETE removes. **Both answer 404 «Miembro no encontrado.» for an id held by another type** (ADR-0081 W9: before it, a PATCH without `role`/`ministries` and the DELETE wrote any id). The PATCH also 404s a missing id (it reads the stored member on every request); the DELETE does not — an id no document holds skips the delete and still runs the solver-pool cleanup, so «Reintenta la eliminación» after a failed cleanup finishes it. |
+| `/api/admin/members` | GET, POST | GET admin/super-admin; **POST super-admin** | GET is **ministry-scoped**: `admin`/`content-editor` receive worship members only (`WORSHIP_MEMBER_GROQ_FILTER`), while `super-admin` binds `$all` and receives everyone — they are the only role that can edit `ministries`, so filtering them would make a Kids-only member uneditable through the UI. The «Personas» list (`/super-admin`; the `/admin` Miembros tab until 2026-10-29) then offers an Alabanza/Oasis Kids/Todos control, defaulting to Alabanza, filtering client-side. Absent `ministries` counts as worship, so no legacy member is ever hidden. POST create (name+email required), 201; a `ministryRoles` item is stored as sent and follows the PATCH's rules (exactly `{ministry, level, groups, leaderOf}`; without `leaderOf` it is 400; ADR-0085). POST and PATCH accept `instruments` (array of strings closed to `DEFAULT_INSTRUMENT_SEATS` after `normalizeSeatName`; duplicates collapse; `[]` stored; absent = untouched) and answer **400** `Instrumento no reconocido: <name>` on any other value. |
+| `/api/admin/members/[id]` | PATCH, DELETE | **super-admin** | PATCH validates role/`memberType`/`instruments`/`ministries`/`managesMinistries` (each applied only when present, so an unrelated edit cannot wipe a privilege); `ministryRoles` items carry exactly `{ministry, level, groups, leaderOf}` (ADR-0085; a body without `leaderOf` is 400): `leaderOf` ⊆ `groups`, no repeats («Solo puede liderar un grupo al que pertenece.»), at least one for a `leader` («Un líder necesita liderar al menos un grupo.»), none for a member or admin («Solo un líder lidera grupos; un admin ya administra todos.»); stored as sent (`leaderOf` on a leader only, as on POST), the write pinned to the person's read, sets `notifPrefs.email` → `revalidateServiceViews()` + `revalidatePath("/me")`. DELETE removes. **Both answer 404 «Miembro no encontrado.» for an id held by another type** (ADR-0081 W9: before it, a PATCH without `role`/`ministries` and the DELETE wrote any id). The PATCH also 404s a missing id (it reads the stored member on every request); the DELETE does not — an id no document holds skips the delete and still runs the solver-pool cleanup, so «Reintenta la eliminación» after a failed cleanup finishes it. |
 | `/api/admin/members/[id]/photo` | POST | **super-admin** | Same photo validation as `/api/me/photo`; sets target's `profilePhoto`. (No revalidation.) 404 for an id that is not a `teamMembers`, before any upload (W9). |
 | `/api/admin/set-password` | POST | **super-admin** | `{sanityMemberId, password}` (≥8) → sets `passwordHash` (cost 12). 404 for an id that is not a `teamMembers` (W9). |
 | `/api/admin/login-events` | GET | admin/super-admin | Per-member last login/active, count, providers, recent 20 events. 500 `activity_unavailable` without `SANITY_API_READ_TOKEN`. |
@@ -628,9 +643,14 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
 - **`GET /api/cron/service-reminders`** — **secret-based auth** (`Authorization: Bearer
   <CRON_SECRET>` header or `?secret=`, compared to `process.env.CRON_SECRET`; 403 otherwise —
   **not** session-based). Finds members assigned to **tomorrow's** published services
-  (America/Mexico_City) and pushes a `reminders` notification ("Sirves mañana"). **On a CDMX
+  (America/Mexico_City), pushes them a `reminders` notification ("Sirves mañana") and, since
+  2026-11-19, emails it too: one email per person with their seat(s), the hour and the setlist
+  (`eveReminders` in the JSON; ADR-0080's addendum, `docs/NOTIFICATIONS.md` §«Sirves mañana»). **On a CDMX
   Sunday** it also emails «Te toca dirigir» to the leads of next week's published services that
-  still need songs (`leadReminders` in the JSON; ADR-0080, `docs/NOTIFICATIONS.md`). Scheduled by
+  still need songs (`leadReminders` in the JSON; ADR-0080, `docs/NOTIFICATIONS.md`). **Every
+  day** it also emails the reminders of the Jóvenes meetings dated exactly 14 and 7 days ahead, to
+  whoever still owes something on a part of theirs (`meetingReminders` in the JSON; ADR-0089's
+  addendum). Scheduled by
   `vercel.json` at `0 1 * * *` (01:00 UTC daily). The only endpoint scheduled by `vercel.json` —
   Vercel Hobby allows one cron per day, so the other two are driven from outside Vercel — the flush by a Google Cloud Scheduler job plus GitHub Actions (ADR-0032), the probe by hand.
 

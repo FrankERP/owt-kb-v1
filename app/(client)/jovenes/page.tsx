@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireActiveSession, requireMinistryMember } from "@/app/utils/authGuards";
 import { getMemberAccess } from "@/app/utils/memberAccess";
@@ -9,37 +8,36 @@ import {
   type MinistryEventView,
 } from "@/app/utils/ministryEventReads";
 import { rolloutAllows } from "@/app/utils/rollout";
-import {
-  addDaysIso,
-  audienceLabel,
-  eventDayLabel,
-  eventHeading,
-  mySeats,
-  seatRoleLabel,
-} from "@/app/utils/jovenesEventView";
-import { isMinistryManager, levelIn } from "@/app/utils/ministryAccess";
-import { showsProgramEditor } from "@/app/utils/jovenesPlannerModel";
-import { readJovenesPeople, type JovenesPerson } from "@/app/utils/jovenesPeople";
+import { addDaysIso, meetingsLede } from "@/app/utils/jovenesEventView";
+import { HOME_LOOKBACK_DAYS, JOVENES_HORIZON_DAYS, homeCards, homeSections } from "@/app/utils/jovenesHomeModel";
+import { isMinistryManager, ledGroupsIn } from "@/app/utils/ministryAccess";
+import { readJovenesPeople } from "@/app/utils/jovenesPeople";
+import { readSaturdaySets } from "@/app/utils/jovenesWorshipSet";
+import { PAGE_LEDE, PAGE_TITLE } from "@/app/utils/homeHero";
 import Navbar from "@/app/components/Navbar";
-import ProgramEditor from "@/app/components/jovenes/ProgramEditor";
+import Button from "@/app/components/ui/Button";
+import JovenesHome from "@/app/components/jovenes/JovenesHome";
+import { jovenesMeetingItems, type JovenesListItem } from "@/app/components/jovenes/meetingItems";
+import { CalendarIcon, CalendarOffIcon } from "@/app/components/ui/icons";
+import { JOVENES_AVAILABILITY_HREF } from "@/app/components/navSections";
 import { revealProps } from "@/app/utils/reveal";
 
 export const metadata: Metadata = {
   title: "Jóvenes — Backstage",
-  description: "Las próximas reuniones de Jóvenes: el sábado y las de tu grupo.",
+  description: "La próxima reunión de Jóvenes, lo que te toca y lo que sigue.",
 };
 
 const TZ = "America/Mexico_City";
-/** How far ahead the list reaches: a page range, not access (plan R8). */
-const HORIZON_DAYS = 120;
-
 // Every read goes through the ONE reader (ADR-0081): it carries the id prefix, the ministry,
 // `published == true` and the reader's groups as a parameter, so Otro Nivel never receives
 // Emprendedores' meetings. This page reads the session, so it is dynamic; it exports no
 // `revalidate` and caches nothing (R6, `ministryEventCoverage.test.ts`).
 //
-// The pastors' list reads in MEMBER mode for everyone, admins included: drafts belong to the
+// The pastors' pages read in MEMBER mode for everyone, admins included: drafts belong to the
 // planner (`/jovenes/admin`), and a page that shows the same thing to every pastor is the one they trust.
+//
+// «Inicio» since 2026-11-17: the next meeting, the reader's turns, the few after it and the last
+// one held (`JovenesHome`). The whole horizon moved to `/jovenes/calendario`.
 
 export default async function JovenesPage() {
   // The two failure cases stay split, as on /kids: no active session goes to sign-in (sending it
@@ -63,8 +61,9 @@ export default async function JovenesPage() {
     events = await readMinistryEvents(access, {
       me: sanityId,
       ministry: "jovenes",
-      from: today,
-      to: addDaysIso(today, HORIZON_DAYS),
+      // A little back, for «Reunión anterior»: the same reader and the same arm, a wider window.
+      from: addDaysIso(today, -HOME_LOOKBACK_DAYS),
+      to: addDaysIso(today, JOVENES_HORIZON_DAYS),
       mode: "member",
     });
   } catch (e) {
@@ -75,111 +74,78 @@ export default async function JovenesPage() {
   // «Editar programa» for an admin, and for the encargado or apoyo of a whole-ministry meeting
   // (W3a). Cosmetic: the program PATCH decides again on the stored event.
   const isManager = isMinistryManager(access, "jovenes");
-  const plans = isManager || levelIn(access, "jovenes") === "leader";
-  const editable = new Set(events.filter((e) => showsProgramEditor(e, isManager)).map((e) => e._id));
-  const people = editable.size > 0 ? await readJovenesPeople() : [];
+  // «Planear» for a manager or a leader of at least one group (per group, plan 2026-11-11 §5.1).
+  const plans = isManager || ledGroupsIn(access, "jovenes").length > 0;
+  const placed = (m: JovenesListItem) => ({ date: m.event.date, mine: m.mine.length > 0 });
+  // The people to pick from are read only when a card this page DRAWS carries the editor. Inicio
+  // reads a year and draws at most five cards, so «some meeting this reader may edit» (the
+  // Calendario's question) would read the roster for an editor that is never on screen. The first
+  // pass builds the items without people to learn which cards those are; where one has the
+  // editor, the items are built again with the roster.
+  // Alabanza's songs on a Saturday meeting (ADR-0089): that date's published worship setlist,
+  // read once here and handed to the one builder, so a card says the same on both pages.
+  const sets = await readSaturdaySets(events.filter((e) => e.kind === "saturday").map((e) => e.date));
+  const draft = jovenesMeetingItems(events, { isManager, people: [], today, sets });
+  const editing = homeCards(homeSections(draft, today, placed)).some((m) => m.editor !== null);
+  const meetings = editing ? jovenesMeetingItems(events, { isManager, people: await readJovenesPeople(), today, sets }) : draft;
+  const sections = homeSections(meetings, today, placed);
+  const coming = meetings.filter((m) => m.event.date >= today);
+  const lede = meetingsLede(coming.map((m) => ({ date: m.event.date, mine: m.mine.length > 0 })));
 
   return (
     <div>
       <Navbar title="Jóvenes" />
-      <div className="mx-auto max-w-4xl px-6 pt-10 pb-16 space-y-8">
-        <div className="flex flex-wrap items-baseline justify-between gap-3" {...revealProps(0)}>
-          <h2 className="font-display text-2xl md:text-3xl font-bold">Próximas reuniones</h2>
-          {plans && (
-            <Link href="/jovenes/admin" className="font-label text-sm text-mono-500 hover:text-accent">
-              Planear
-            </Link>
-          )}
-        </div>
+      <div className="mx-auto max-w-3xl px-5 pb-16 pt-10 sm:px-6">
+        {/* The page's name in the display face and a lede that says what is coming and what is
+            yours (the «millones» scale, ADR-0070). «Planear» is a house button, beside the title
+            from `sm` and under the lede on a phone. */}
+        <header className="sm:flex sm:items-end sm:justify-between sm:gap-6" {...revealProps(0)}>
+          <div className="min-w-0">
+            <h1 className={PAGE_TITLE}>Jóvenes</h1>
+            {coming.length > 0 && (
+              <p className={`${PAGE_LEDE} mt-3`}>
+                {lede.count}
+                {lede.mine && (
+                  <>
+                    {" · "}
+                    <span className="text-ink">{lede.mine}</span>
+                  </>
+                )}
+              </p>
+            )}
+          </div>
+          <div className="mt-5 flex shrink-0 flex-wrap gap-2 sm:mb-1 sm:mt-0">
+            {/* Every pastor marks the days they cannot (Frank, 2026-11-17). The calendar is the
+                member's own page, shared by every ministry; `de` only names the way back. */}
+            <Button href={JOVENES_AVAILABILITY_HREF} variant="secondary" size="md">
+              <CalendarOffIcon size={14} />
+              Disponibilidad
+            </Button>
+            {plans && (
+              <Button href="/jovenes/admin" variant="secondary" size="md">
+                <CalendarIcon size={14} />
+                Planear
+              </Button>
+            )}
+          </div>
+        </header>
 
         {unavailable ? (
-          <p role="alert" className="rounded-2xl border border-edge-accent-subtle bg-surface-raised p-5 font-body text-sm text-ink-muted" {...revealProps(1)}>
+          <p
+            role="alert"
+            className="mt-10 border-l-2 border-negative-strong/60 py-1 pl-4 font-body text-[15px] leading-snug text-negative-fg"
+            {...revealProps(1)}
+          >
             No pudimos leer las reuniones en este momento. Intenta de nuevo más tarde.
           </p>
-        ) : events.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 py-20 text-mono-600" {...revealProps(1)}>
-            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-              <line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-            </svg>
-            <p className="font-label text-sm uppercase tracking-widest">Aún no hay reuniones publicadas</p>
-          </div>
         ) : (
-          <div className="space-y-5">
-            {events.map((e, i) => (
-              <EventCard key={e._id} event={e} index={i} people={editable.has(e._id) ? people : null} />
-            ))}
+          <div className="mt-9">
+            {/* Cards, not rows (ADR-0086): the next meeting open and lit, the reader's turns, the
+                few after it folded, the last one held. The rest is the Calendario's. */}
+            <JovenesHome sections={sections} />
           </div>
         )}
       </div>
     </div>
-  );
-}
-
-/** `people` is set only when this reader may edit the program (then the button shows). */
-function EventCard({ event: e, index, people }: { event: MinistryEventView; index: number; people: JovenesPerson[] | null }) {
-  const mine = mySeats(e);
-  const when = [e.time, e.arrival ? `llegada ${e.arrival}` : null].filter(Boolean).join(" · ");
-  return (
-    <article
-      className={`rounded-2xl border p-5 ${mine.length > 0 ? "border-accent bg-surface-accent-faint" : "border-edge-accent-subtle bg-surface-raised"}`}
-      {...revealProps(1 + index)}
-    >
-      <header className="flex flex-wrap items-baseline justify-between gap-2">
-        <div className="min-w-0">
-          <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">
-            <span className="capitalize">{eventDayLabel(e.date)}</span>
-            {when && <> · {when}</>}
-          </p>
-          <h3 className="mt-1 font-display text-lg md:text-xl font-bold text-ink">{eventHeading(e)}</h3>
-          <p className="mt-1 font-body text-sm text-ink-muted">{audienceLabel(e.audience)}</p>
-        </div>
-        {mine.length > 0 && (
-          <span className="animate-pop rounded-full border border-accent px-3 py-1 font-label text-[11px] uppercase tracking-widest text-accent">
-            Te toca — {mine.join(" · ")}
-          </span>
-        )}
-      </header>
-
-      {e.seats.length > 0 && (
-        <dl className="mt-4 grid gap-2 sm:grid-cols-2">
-          {e.seats.map((s) => (
-            <div key={s._key} className="flex items-baseline justify-between gap-3 rounded-lg bg-surface-sunken px-3 py-2">
-              <dt className="font-label text-[11px] uppercase tracking-widest text-mono-500">{seatRoleLabel(s.role)}</dt>
-              <dd className={`min-w-0 truncate font-body text-sm ${s.mine ? "text-accent" : s.name ? "text-ink-muted" : "text-mono-600 italic"}`}>
-                {s.name ?? "Sin asignar"}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      )}
-
-      {e.program.length > 0 && (
-        <section className="mt-4">
-          <h4 className="font-label text-[11px] uppercase tracking-widest text-mono-500">Programa</h4>
-          <ol className="mt-2 space-y-1">
-            {e.program.map((l) => (
-              <li key={l._key} className="flex flex-wrap items-baseline gap-x-2 font-body text-sm">
-                <span className="text-ink">{l.label ?? "—"}</span>
-                {l.memberId && (
-                  <span className={l.mine ? "text-accent" : l.name ? "text-ink-muted" : "text-mono-600 italic"}>
-                    {l.name ?? "Sin asignar"}
-                  </span>
-                )}
-                {l.note && <span className="text-mono-500">· {l.note}</span>}
-              </li>
-            ))}
-          </ol>
-        </section>
-      )}
-
-      {e.notes && <p className="mt-4 whitespace-pre-line font-body text-sm text-ink-muted">{e.notes}</p>}
-
-      {people && (
-        <div className="mt-4">
-          <ProgramEditor event={e} people={people} />
-        </div>
-      )}
-    </article>
   );
 }

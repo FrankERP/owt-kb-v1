@@ -46,6 +46,7 @@ this is a **song**.
 | `key` | string | Native/original key. |
 | `musicalReferenceUrl` | url | YouTube reference mix musicians rehearse with. |
 | `lyricsVideoUrl` | url | YouTube video with the Spanish lyrics the team sings. |
+| `albumArt` | image | Optional. The cover of the album the song comes from, square — the song's picture on a setlist row ([ADR-0088](adr/0088-a-worship-service-is-a-card-with-faces-and-album-covers.md); read through `SONG_COVER_GROQ`, sized by `songCoverUrl`, never the YouTube still). Absent = a neutral tile. First load: `scripts/set-album-art.mjs`; afterwards an editor replaces it in the Studio. |
 | `body` | array (Portable Text) | `block` + `image` (image has an `alt` text field). Lyrics live here. |
 | `tutorials2` | array of `tutorial` | `{ title, url }`. |
 | `audioTracks` | array of `audioTrack` | `{ title, tone, audioFile (.mp3 file) }`. |
@@ -97,6 +98,7 @@ referenced by every seat, proposal, and login event. **A member's identity in au
 | `passwordHash` | string (hidden) | bcrypt. Set via admin API / CLI. Never edit manually. |
 | `unavailableDates` | array of string | ISO `YYYY-MM-DD` the member can't serve. Set from `/me`. |
 | `unavailabilityNotes` | array (hidden) | `{ date, note }` optional reasons per unavailable date. |
+| `ministryRoles` | array of `ministryRole` (read-only in the Studio) | Level per LEVELED ministry (today Jóvenes, ADR-0075): `{ _key = ministry, _type: "ministryRole", ministry, level: member\|leader\|admin, groups: string[], leaderOf?: string[] }`. `groups` = the groups the person BELONGS to; `leaderOf` = the groups they LEAD, a subset of `groups`, stored on a `leader` only ([ADR-0085](adr/0085-a-jovenes-leader-leads-named-groups.md)). Read only through `normalizeMinistryRoles` and `ledGroupsIn`; an absent or unusable `leaderOf` on a leader leads nothing (L2). Written only by `memberCommit.ts`, as the request sends it: every request item carries exactly `{ ministry, level, groups, leaderOf }` (`leaderOf` `[]` unless a leader; a leader leads at least one group). |
 
 **Auth note:** `role` and `disabled` are read live (bypassing CDN) through the 30s-TTL cache in
 `memberAccess.ts`, so role changes and the kill switch take effect within ~30 seconds instead
@@ -201,6 +203,7 @@ songs/notes are written to the real setlist. See the design spec
 | `status` | string (radio) | `draft` (init) / `pending` / `approved` / `changes_requested`. |
 | `messages` | array of `proposal_message` | **The private lead ↔ admin thread.** `{_key, _type, author → teamMembers (OPTIONAL), author_role, kind, body, at}`. Append-only — this delivery ships no edit or delete path. `author_role` is a snapshot taken at post time, never joined at read time, so an admin who later becomes a member does not have their history re-render as a lead note; `author` is optional because two migrated `admin_notes` had nobody to attribute them to. `kind` and `author_role` reserve `pastor_note` / `system`, unminted, so routing pastor notes here later needs no migration. |
 | `lead_notes` | text | **FROZEN LEGACY ARCHIVE — nothing writes it.** It holds whatever the newest lead message was at the moment Child B removed the mirror, and it is never updated or blanked again. One reader uses the STORED field's value: production's OLD sweep compares the notice's `beforeNotes` snapshot against it during a release window or after a revert. The snapshot itself has a second consumer in this tree — the sweep's legacy-tolerance branch, which reads `before.beforeNotes` for any notice minted before the cutover. Four projections still SELECT it and hand it to callers who ignore it — `PROPOSAL_PROJECTION`, the member and admin proposal GETs, and the propose page — and the editor seeds state from it behind a `!proposalId` gate that can only ever see an empty value. Nothing renders it. Do not "clean it up" — the rollback leans on it. |
+| `pastor_message` | text | The lead's copy of the pastor's message (ADR-0087). Written by the lead's POST (absent = unchanged). On approval it is copied into `serviceThread.pastor_message` **only when that field is empty**, after the commit, with no notification; never shown to the team from here. |
 | `team_notes` | text | Published to the team on approval. **Not** part of the thread — it is the message to the whole team, and it stayed a field deliberately. |
 | `admin_notes` | text | **FROZEN LEGACY ARCHIVE — nothing writes it.** The transition was its last writer and Child B stopped that too, so a `reopen` with an empty note can no longer BLANK it, which is what writing the request verbatim used to do. No notification consumer and nothing that renders it; the same four projections still select it and every caller ignores it. A rollback restores the transition's write, and the e2e fixtures move back with it. |
 | `submitted_at`, `reviewed_at` | datetime (readOnly) | |
@@ -545,7 +548,7 @@ calendario de los de Otro Nivel», Frank). Read **only** through
 `SANITY_API_READ_TOKEN`, carries the id prefix in every query and passes the reader's groups as a
 PARAMETER; `ministryEventCoverage.test.ts` fails on any other file that names the type, and
 `ministryEventReads.test.ts` runs the real GROQ on `groq-js` over a people × events matrix. Written
-only by [`ministryEventCommit.ts`](../app/utils/ministryEventCommit.ts), called by the four
+only by [`ministryEventCommit.ts`](../app/utils/ministryEventCommit.ts), called by the
 `/api/ministries/[ministry]/events*` routes (API_REFERENCE «Jóvenes meetings»): a fresh access read,
 the stored revision authorized and written under `ifRevisionId`, weak references, a client create
 token for the id. The routes that write a client-supplied id of another type (the song DELETE, the
@@ -560,8 +563,9 @@ writes an event.
 | `date` | `YYYY-MM-DD`, rendered at local noon |
 | `time`, `arrival` | `HH:mm`, display only |
 | `title`, `notes` | free text |
-| `seats[]` | `ministryEventSeat`: `role` (`encargado` / `apoyo` / `comparte`), `member` (**weak** reference) |
-| `program[]` | `ministryEventProgramLine`: `label`, `member?` (weak), `note?` |
+| `place` | one line, ≤120 — where it happens («Oasis Tlalpan»), display only (2026-11-10) |
+| `seats[]` | `ministryEventSeat`: `role` (`encargado` / `apoyo` / `comparte`), and EITHER `member` (**weak** reference) OR `name` (one line, ≤60: someone without an account, or the hosting group — text, never validated, never «Tú», no program right; 2026-11-10), never both |
+| `program[]` | `ministryEventProgramLine`: `label`, `member?` (weak), `note?` (≤300). A **part line** (ADR-0089) also carries `part` (`oracion` / `dinamica1` / `dinamica2` / `platica` — `app/utils/ministryParts.ts` is the one table), and may carry `member2` (weak; a dinámica's second responsable), `music` (`track` / `alabanza`; Oración and Plática) and `helpers` (one line ≤120, «Jóvenes que apoyan»; a dinámica). Its `label` is the table's, its `note` is the description its responsable writes, and there is at most one line per part. Plática's line never holds a person: its people are the `comparte` seats. «Alabanza» is not stored: it is that date's published Saturday setlist (`jovenesWorshipSet.ts`). |
 | `published` | boolean, written on every create; members read `published == true` only |
 | `createdBy` | weak reference to the creator, written once at create (a joint meeting is edited only by its creator and the admins) |
 
@@ -827,7 +831,8 @@ The Studio is a *second* writer into the same dataset, so it would otherwise byp
 **Twenty-two** types are closed to it — the six protected service types, the thirteen internal
 types (`notificationOutbox` keeps `delete` alone, so an operator can prune a stray entry), the two
 Oasis Kids types, whose writer is the app (`/api/kids/pairs`, `/api/kids/schedules`), **plus**
-`serviceThread`, written by its four routes (ADR-0073):
+`serviceThread`, written by its four routes (ADR-0073) and the proposal approval's post-commit
+copy of the leads' pastor's message (ADR-0087):
 
 `sunday_role`, `saturday_role`, `special_role`, `featuredSongs`, `saturdarSongs`, `setlistProposal`,
 `roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`, `specialIdentityCoordinator`,

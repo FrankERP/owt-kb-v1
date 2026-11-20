@@ -1,7 +1,8 @@
-// `/jovenes`: its gates (sign-in, membership, the rollout on the SERVER), and that it reads through
-// the one reader in member mode (ADR-0081; plan R1, R4, G6).
+// `/jovenes` («Inicio» de Jóvenes): its gates (sign-in, membership, the rollout on the SERVER),
+// that it reads through the one reader in member mode (ADR-0081; plan R1, R4, G6), and its blocks —
+// the next meeting, the reader's turns, the few after it, the last one held (2026-11-17).
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 class NavSignal extends Error {
@@ -24,7 +25,9 @@ const h = vi.hoisted(() => ({
   getMemberAccess: vi.fn(),
   readMinistryEvents: vi.fn(),
   readJovenesPeople: vi.fn(),
+  readSaturdaySets: vi.fn(),
   rolloutOpen: false,
+  rolloutClosed: false,
 }));
 vi.mock("@/app/utils/authGuards", () => ({
   requireActiveSession: () => h.requireActiveSession(),
@@ -40,13 +43,15 @@ vi.mock("@/app/utils/ministryEventReads", async () => {
 });
 vi.mock("@/app/components/Navbar", () => ({ default: () => null }));
 vi.mock("@/app/utils/jovenesPeople", () => ({ readJovenesPeople: () => h.readJovenesPeople() }));
+vi.mock("@/app/utils/jovenesWorshipSet", () => ({ readSaturdaySets: (dates: string[]) => h.readSaturdaySets(dates) }));
 vi.mock("@/app/components/jovenes/ProgramEditor", () => ({
   default: ({ event, people }: { event: { _id: string }; people: unknown[] }) => `[programa ${event._id} · ${people.length}]`,
 }));
-// The real rollout, unless a row opens it to reach a pastor (the encargado's program button).
+// The real rollout (open to every pastor since 2026-11-12), unless a row forces it open or CLOSED:
+// the server gate is still proven with a stage that has not reached the visitor.
 vi.mock("@/app/utils/rollout", async (orig) => {
   const real = await orig<typeof import("@/app/utils/rollout")>();
-  return { ...real, rolloutAllows: (f: never, a: never) => h.rolloutOpen || real.rolloutAllows(f, a) };
+  return { ...real, rolloutAllows: (f: never, a: never) => !h.rolloutClosed && (h.rolloutOpen || real.rolloutAllows(f, a)) };
 });
 
 import JovenesPage from "../page";
@@ -86,10 +91,18 @@ const EVENT = {
   createdByName: null,
 };
 
+// The page splits what it read at CDMX's today, so the clock is pinned: Tuesday 10 November 2026.
+const TODAY = "2026-11-10";
+afterEach(() => vi.useRealTimers());
+
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(`${TODAY}T18:00:00Z`));
   for (const f of Object.values(h)) if (typeof f === "function") f.mockReset();
   h.rolloutOpen = false;
-  h.readJovenesPeople.mockResolvedValue([{ id: "p9", name: "Ana" }]);
+  h.rolloutClosed = false;
+  h.readJovenesPeople.mockResolvedValue([{ id: "p9", name: "Ana", groups: [] }]);
+  h.readSaturdaySets.mockResolvedValue(new Map());
   h.requireActiveSession.mockResolvedValue(session);
   h.requireMinistryMember.mockResolvedValue(session);
   h.getMemberAccess.mockResolvedValue(SUPER);
@@ -109,7 +122,8 @@ describe("/jovenes gates", () => {
     expect(h.requireMinistryMember).toHaveBeenCalledWith("jovenes");
   });
 
-  it("the rollout holds on the server: a pastor and a Jóvenes admin get 404 while the stage is superAdmin", async () => {
+  it("the rollout holds on the server: a pastor and a Jóvenes admin get 404 while the stage does not reach them", async () => {
+    h.rolloutClosed = true;
     for (const access of [PASTOR, ADMIN]) {
       h.getMemberAccess.mockResolvedValue(access);
       expect(await visit()).toBe("→ 404");
@@ -118,6 +132,7 @@ describe("/jovenes gates", () => {
   });
 
   it("before the rollout reaches someone, a non-member gets the same 404 as a member — no redirect hint", async () => {
+    h.rolloutClosed = true;
     h.getMemberAccess.mockResolvedValue({ ...PASTOR, ministries: ["worship"], ministryRoles: [] });
     h.requireMinistryMember.mockResolvedValue(null);
     expect(await visit()).toBe("→ 404");
@@ -125,25 +140,109 @@ describe("/jovenes gates", () => {
 });
 
 describe("/jovenes read", () => {
-  it("reads through the one reader in member mode, from CDMX today, as the session's member", async () => {
+  it("reads through the one reader in member mode, as the session's member: a little back for «Reunión anterior», a year ahead", async () => {
     await visit();
+    expect(h.readMinistryEvents).toHaveBeenCalledTimes(1);
     const [access, opts] = h.readMinistryEvents.mock.calls[0];
     expect(access).toBe(SUPER);
-    const today = new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
-    expect(opts).toMatchObject({ me: "s1", ministry: "jovenes", mode: "member", from: today });
-    expect(opts.to > opts.from).toBe(true);
+    expect(opts).toEqual({ me: "s1", ministry: "jovenes", mode: "member", from: "2026-10-20", to: "2027-11-10" });
   });
 
-  it("renders a meeting: heading, audience, «Te toca», an empty seat, the program and notes", async () => {
+  it("renders the next meeting as a card: its name as the title, the date as a leaf, chips per group, «Tú», an empty seat, the program and notes", async () => {
     h.readMinistryEvents.mockResolvedValue([EVENT]);
     const html = await visit();
-    expect(html).toContain("Junta de grupos");
-    expect(html).toContain("Otro Nivel · Emprendedores");
-    expect(html).toContain("Te toca — Encargado");
+    // The card's title is the meeting's name, one level under the block's label.
+    expect(html).toMatch(/<h2[^>]*>Próxima reunión/);
+    // The date is drawn as a leaf and READ in the heading (capital first, «de» lowercase), so
+    // two «Sábado de Jóvenes» are two different headings; the drawn leaf is hidden from AT.
+    expect(html).toMatch(/<h3[^>]*>Junta de grupos<span class="sr-only">, Sábado 14 de noviembre<\/span><\/h3>/);
+    expect(html).toMatch(/<time dateTime="2026-11-14" aria-hidden="true"/);
+    // One chip per group, each with its monogram (the colour is never the only signal).
+    expect(html).toMatch(/>ON<\/span>Otro Nivel</);
+    expect(html).toMatch(/>EM<\/span>Emprendedores</);
+    expect(html).toContain("text-group-otro-nivel");
+    expect(html).toContain("text-group-emprendedores");
+    // The clock and the arrival, with their icon.
+    expect(html).toContain('data-icon="clock"');
+    expect(html).toContain(">18:00</span>");
+    expect(html).toContain("llegada 17:30");
+    // «Tú», as the Calendario says it: on the card's chip, in the seat's own name, and in the lede.
+    expect(html).toContain("Tú · Encargado");
+    expect(html).toContain("Tú · Frank");
+    // One turn that IS the next meeting adds no «Te toca» block: the card already says it.
+    expect(html).not.toMatch(/<h2[^>]*>Te toca/);
+    // The next meeting opens: its sections sit one level under the card's title.
+    expect(html).toMatch(/<h4[^>]*>Equipo<\/h4>/);
+    expect(html).toMatch(/<h4[^>]*>Programa<\/h4>/);
+    expect(html).toContain("1 reunión por venir");
+    expect(html).toContain("te toca el sábado 14 de noviembre");
+    expect(html).toContain("En 4 días");
     expect(html).toContain("Sin asignar");
     expect(html).toContain("Oración");
-    expect(html).toContain("llegada 17:30");
+    expect(html).toContain("5 min");
     expect(html).toContain("Traer Biblia");
+    // It is the one lit card.
+    expect(html.match(/data-lit=""/g)).toHaveLength(1);
+    // And the door to the whole horizon, with nothing more to count.
+    expect(html).toMatch(/href="\/jovenes\/calendario"[^>]*>Ver el calendario</);
+  });
+
+  it("after the next one, a few fold under «Lo que sigue» and the rest are counted for the Calendario", async () => {
+    const sat = (n: number, date: string) => ({ ...EVENT, _id: `ministryEvent.s${n}`, date, audience: { kind: "ministry" }, kind: "saturday", seats: [], program: [] });
+    h.readMinistryEvents.mockResolvedValue([EVENT, sat(1, "2026-11-21"), sat(2, "2026-11-28"), sat(3, "2026-12-05"), sat(4, "2026-12-12"), sat(5, "2026-12-19")]);
+    const html = await visit();
+    expect(html).toMatch(/<h2[^>]*>Lo que sigue/);
+    expect(html).toMatch(/<h3[^>]*>Sábado de Jóvenes<span class="sr-only">, Sábado 5 de diciembre<\/span><\/h3>/);
+    expect(html).not.toContain("Sábado 12 de diciembre");
+    expect(html).toContain("Ver el calendario · 2 reuniones más");
+    expect(html).toContain("6 reuniones por venir");
+    // Only the next one is open and lit.
+    expect(html.match(/aria-expanded="true"/g)).toHaveLength(1);
+    expect(html.match(/data-lit=""/g)).toHaveLength(1);
+  });
+
+  it("«Te toca» lists the reader's turns when there is more than the next meeting's own chip", async () => {
+    const mine = { ...EVENT, _id: "ministryEvent.m", date: "2026-11-28", audience: { kind: "ministry" }, kind: "saturday" };
+    h.readMinistryEvents.mockResolvedValue([EVENT, mine]);
+    const html = await visit();
+    expect(html).toMatch(/<h2[^>]*>Te toca/);
+    // The turn's own line: how soon and the clock, then what the reader holds there.
+    expect(html).toContain("En 18 días");
+    expect(html.match(/>Encargado<\/span>/g)).toHaveLength(2);
+  });
+
+  it("a meeting already held is «Reunión anterior»: folded, with how long ago, never counted as coming and never editable", async () => {
+    const held = { ...EVENT, _id: "ministryEvent.h", date: "2026-11-07", audience: { kind: "ministry" }, kind: "saturday" };
+    h.readMinistryEvents.mockResolvedValue([held, EVENT]);
+    const html = await visit();
+    expect(html).toMatch(/<h2[^>]*>Reunión anterior/);
+    expect(html).toContain("Hace 3 días");
+    expect(html).toContain("1 reunión por venir");
+    expect(html).toContain("[programa ministryEvent.a · 1]");
+    expect(html).not.toContain("[programa ministryEvent.h");
+    // With nothing to come, the last one held still shows under the empty state.
+    h.readMinistryEvents.mockResolvedValue([held]);
+    const empty = await visit();
+    // «Aún no hay» would deny the meeting shown right under it.
+    expect(empty).toContain("No hay próximas reuniones publicadas");
+    expect(empty).not.toContain("Aún no hay");
+    expect(empty).toMatch(/<h2[^>]*>Reunión anterior/);
+    expect(empty).not.toContain("por venir");
+    expect(empty).not.toContain("Ver el calendario");
+  });
+
+  it("a Saturday meeting shows Alabanza's songs, read for the Saturdays' dates only; with no setlist it says so (ADR-0089)", async () => {
+    const saturday = { ...EVENT, _id: "ministryEvent.s", audience: { kind: "ministry" }, kind: "saturday", date: "2026-11-21", seats: [], program: [] };
+    const next = { ...saturday, _id: "ministryEvent.s2", date: "2026-11-28" };
+    h.readMinistryEvents.mockResolvedValue([EVENT, saturday, next]);
+    h.readSaturdaySets.mockResolvedValue(new Map([["2026-11-21", [{ title: "Rey de reyes", key: "D" }]]]));
+    const html = await visit();
+    expect(h.readSaturdaySets).toHaveBeenCalledWith(["2026-11-21", "2026-11-28"]);
+    expect(html).toContain("Alabanza");
+    expect(html).toContain("Rey de reyes");
+    // The Saturday with no published setlist says so, once; the joint meeting has no Alabanza step.
+    expect(html.match(/Setlist por definir/g)).toHaveLength(1);
+    expect(html.match(/Alabanza/g)).toHaveLength(2);
   });
 
   it("says when there is nothing published", async () => {
@@ -183,6 +282,21 @@ describe("/jovenes program editor and «Planear» (cosmetic; the server decides)
     expect(html).toContain("[programa ministryEvent.sat · 1]");
     expect(html).not.toContain("[programa ministryEvent.a");
     expect(html).not.toContain(">Planear<");
+    // Every pastor reaches their own availability from here, and that page knows the way back.
+    expect(html).toMatch(/href="\/me\/disponibilidad\?de=jovenes"[^>]*>(<[^>]*>)*Disponibilidad/);
+  });
+
+  it("«Planear» for a leader of at least one group; none for a `leader` who leads no group", async () => {
+    h.rolloutOpen = true;
+    const leader = (leaderOf: string[]) => ({
+      ...PASTOR,
+      ministryRoles: [{ ministry: "jovenes", level: "leader", groups: ["otro-nivel", "invencibles"], leaderOf }],
+    });
+    h.readMinistryEvents.mockResolvedValue([EVENT]);
+    h.getMemberAccess.mockResolvedValue(leader(["invencibles"]));
+    expect(await visit()).toContain(">Planear<");
+    h.getMemberAccess.mockResolvedValue(leader([]));
+    expect(await visit()).not.toContain(">Planear<");
   });
 
   it("nobody who may edit nothing costs a people read", async () => {
@@ -192,5 +306,25 @@ describe("/jovenes program editor and «Planear» (cosmetic; the server decides)
     const html = await visit();
     expect(html).not.toContain("[programa");
     expect(h.readJovenesPeople).not.toHaveBeenCalled();
+  });
+
+  it("an editor on a meeting Inicio does not draw as a card costs no people read either", async () => {
+    // Inicio reads a year and draws five cards. The pastor's own Saturday is the sixth meeting
+    // ahead: it is listed in «Te toca», a line without a card's body, so its editor is never on
+    // screen and the roster is not read for it.
+    h.rolloutOpen = true;
+    h.getMemberAccess.mockResolvedValue(PASTOR);
+    const other = (i: number) => ({ ...EVENT, _id: `ministryEvent.o${i}`, date: `2026-11-${11 + i}`, seats: [], program: [] });
+    const far = { ...SATURDAY, _id: "ministryEvent.far", date: "2026-12-19" };
+    const again = { ...SATURDAY, _id: "ministryEvent.far2", date: "2026-12-26" };
+    h.readMinistryEvents.mockResolvedValue([other(0), other(1), other(2), other(3), other(4), far, again]);
+    const html = await visit();
+    expect(html).toMatch(/<h2[^>]*>Te toca/);
+    expect(html).not.toContain("[programa");
+    expect(h.readJovenesPeople).not.toHaveBeenCalled();
+    // The same Saturday as the NEXT meeting is a card: the editor shows, with the people.
+    h.readMinistryEvents.mockResolvedValue([{ ...far, date: "2026-11-14" }]);
+    expect(await visit()).toContain("[programa ministryEvent.far · 1]");
+    expect(h.readJovenesPeople).toHaveBeenCalledTimes(1);
   });
 });

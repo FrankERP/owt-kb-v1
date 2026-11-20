@@ -12,7 +12,7 @@
 // reads no assignments, so this page is the one that has the events to export.
 
 import { ACCOUNT_ROW_CLASS, AccountRowBody } from "./AccountList";
-import { DownloadIcon } from "@/app/components/ui/icons";
+import { CalendarAddIcon, DownloadIcon } from "@/app/components/ui/icons";
 import type { ICSEvent } from "@/app/utils/ics";
 import { downloadICS } from "@/app/utils/icsDownload";
 
@@ -30,9 +30,10 @@ export default function DownloadCalendarRow({ services }: { services: ICSEvent[]
       <button
         type="button"
         className={ACCOUNT_ROW_CLASS}
-        onClick={() => downloadICS(services, "mis-servicios-owt.ics")}
+        onClick={() => downloadICS(services, "mis-servicios.ics")}
       >
         <AccountRowBody
+          icon={<CalendarAddIcon size={17} />}
           title="Descargar mis servicios"
           status={`${n} servicio${n === 1 ? "" : "s"} · archivo .ics, una sola vez`}
           trailing={<DownloadIcon size={18} className="shrink-0 text-ink-dim" />}
