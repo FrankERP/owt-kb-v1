@@ -532,6 +532,61 @@ nuevo» (it bumps their `calendarFeed.<memberId>` generation).
 
 ---
 
+## `APP_AUTH_SECRET`
+
+**Needed in: Vercel preview AND production — a DIFFERENT value each (`openssl rand -base64 48`),
+and local `.env.local` to try the native apps against `next dev`. Not needed in: GitHub Actions,
+the iOS or Android build (the apps never hold it), GCF.**
+
+**Status: NOT SET yet** (2026-11-20). The native-app sign-in door ([ADR-0091](adr/0091-native-apps-sign-in-through-their-own-first-party-oauth-door.md))
+ships without it, so on each environment every app route answers 503 until it is set and that
+environment is redeployed. Nothing else in the app reads it, so its absence breaks nothing that
+exists today.
+
+**Purpose.** The HS256 key (`jose`) for every authorization code, access token and refresh token
+the native-app door mints or verifies (`app/appAuth/tokens.ts`, loaded by `loadAppSecret` in
+`app/appAuth/preflight.ts`). A missing or under-length (< 32 bytes) value fails closed:
+`/app/authorize` shows «No disponible», and `/api/app/v1/*` answers 503.
+
+**Its own value, never `MCP_OAUTH_SECRET` or `NEXTAUTH_SECRET`:** a token of one door must be
+unverifiable by the other even if an audience or type check were ever dropped, and rotating one
+must not sign out the web or break the connector. **Different per environment** so a token minted
+on preview (or local) can never verify on production; each environment is also its own issuer.
+
+**Where the value came from.** `openssl rand -base64 48`, generated and entered by Frank
+(`printf '%s' "$SECRET" | npx vercel env add APP_AUTH_SECRET <env> --sensitive`, which keeps it out
+of any log). No dashboard issues it.
+
+**How to rotate.** `npx vercel env rm APP_AUTH_SECRET <env>`, add the new value, **redeploy that
+environment** (env vars bind at build time).
+
+**Blast radius / what breaks mid-rotation.** Every app user on that environment is signed out the
+moment the new deployment is live: their access and refresh tokens stop verifying, and the app asks
+them to sign in again (one tap). The `appAuthGrant` documents stay and simply age out after 90
+days. A code minted in the seconds before the switch fails its exchange; the person taps «Entrar»
+again. Nothing else in the app reads this variable.
+
+---
+
+## `APP_AUTH_DISABLED`
+
+**Needed in: Vercel production and preview, ONLY when switching the native-app sign-in off — leave
+unset otherwise. Not needed in: `.env.local`, GitHub Actions, the app builds, GCF.**
+
+**Not a secret** — a kill switch, plain config (ADR-0091). `appPreflight` checks it FIRST, before
+the host and the secret: **any non-empty value (`"0"` included)** makes `/app/authorize` show «No
+disponible» and every `/api/app/v1/*` route answer 503. The app keeps its tokens and retries later
+(a 503 is never a sign-out).
+
+**Where it comes from.** Set directly by Frank in Vercel → Settings → Environment Variables. No
+issuer.
+
+**Rotate:** n/a — set a value to switch the door off, remove it to switch back on. **Takes effect on
+the next deployment.** **Blast radius:** the native apps on that environment, and nothing else; the
+web, the MCP connector and the Capacitor wrap do not read it.
+
+---
+
 ## `ANTHROPIC_API_KEY`
 
 **Needed in: Vercel production AND preview — a DIFFERENT key each, from different Console

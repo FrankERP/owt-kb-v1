@@ -1492,8 +1492,9 @@ by revoking every grant whose effective agent is not `claude` — production wri
 first and Frank's explicit consent — then reverting the PR.
 
 Every non-`--apply` invocation is a dry run that shows exactly what would be revoked. Revocation
-takes effect **within 30 s** (the MCP route's grant cache TTL, `GRANT_CACHE_TTL_MS` in
-`app/mcp/oauth/grantStore.ts`) and needs **no deployment** — the next request bearing that
+takes effect **within 30 s** (the MCP route's grant cache TTL, `GRANT_CACHE_TTL_MS`, re-exported
+by `app/mcp/oauth/grantStore.ts` from the grant-store protocol it shares with the native apps'
+store since ADR-0091, `app/oauthCore/grantStoreProtocol.ts`) and needs **no deployment** — the next request bearing that
 grant's access token gets a 401 once the cache entry expires.
 
 ---

@@ -62,8 +62,18 @@
 // The rewrite destinations themselves (`app/api/oauth/discovery/*`) are
 // ordinary route files under `/api`, so they stay gated; they are reachable
 // only through the rewrite, never directly.
+// `api/app/v1(?:/|$)` (ADR-0091) is the native apps' API: every handler under it
+// authenticates itself with an app bearer token (`requireAppSession`, a declared
+// `needs` level) or, for `auth/token` and `auth/revoke`, a signed code + PKCE or a
+// signed refresh token — never a session cookie (`appApiGuardCoverage.test.ts`
+// asserts each route calls the guard first). No cookie-session handler lives
+// under it: the code-minting POST is `/app/authorize/submit`, which stays gated
+// like `/app/authorize`. `app/callback/(?:ios|android)$` are the two inert pages
+// a verified app redirect lands on outside the app: exact paths, they render
+// nothing from the query, and a signed-out browser must not be bounced through
+// sign-in carrying the code in `callbackUrl`.
 export const MIDDLEWARE_MATCHER =
-  "/((?!auth(?:/|$)|api/auth(?:/|$)|api/cron(?:/|$)|api/calendar(?:/|$)|theme-gallery(?:/|$)|api/service-readiness-verification/identity$|api/mcp(?:/|$)|api/oauth/register$|api/oauth/token$|\\.well-known(?:/|$)|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.ico$|LogoOasis\\.png$|icons(?:/|$)|manifest\\.webmanifest$).*)";
+  "/((?!auth(?:/|$)|api/auth(?:/|$)|api/cron(?:/|$)|api/calendar(?:/|$)|theme-gallery(?:/|$)|api/service-readiness-verification/identity$|api/mcp(?:/|$)|api/oauth/register$|api/oauth/token$|api/app/v1(?:/|$)|app/callback/(?:ios|android)$|\\.well-known(?:/|$)|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.ico$|LogoOasis\\.png$|icons(?:/|$)|manifest\\.webmanifest$).*)";
 
 // Mirrors Next.js matcher semantics (full-path match) so the exclusion logic
 // can be unit-tested without importing the middleware runtime.

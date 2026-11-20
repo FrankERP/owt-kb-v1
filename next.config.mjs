@@ -33,7 +33,12 @@ const nextConfig = {
   // is blocked and the connector never receives its code. Either allow the
   // redirect targets (`form-action 'self' https://claude.ai`, plus the loopback
   // callbacks `http://127.0.0.1:*` / `http://localhost:*` on preview and local,
-  // where app/mcp/oauth/redirects.ts accepts them) or omit `form-action`.
+  // where app/mcp/oauth/redirects.ts accepts them) or omit `form-action`. The same
+  // holds for the native apps' sign-in (ADR-0091): «Entrar a la app» posts to
+  // /app/authorize/submit, which answers 303 to the app's redirect — our own
+  // `https` origin on production and preview, but the private scheme
+  // `app.vercel.owt-backstage:` on LOCAL development, which `form-action 'self'`
+  // would block.
   async headers() {
     return [
       {
@@ -52,6 +57,35 @@ const nextConfig = {
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
         ],
       },
+      // Native-app sign-in (ADR-0091). AFTER the global entry on purpose: when two
+      // entries set the same key on a path, Next sends the LAST one. The
+      // confirmation page and its POST: no framing (another page cannot steal the
+      // tap), `same-origin` referrer (so the POST carries a real `Origin`, never
+      // `null`), no caching, and the client hint that gives the real Android
+      // version (`Critical-CH` makes Chrome retry the navigation with it; the
+      // reduced User-Agent freezes it at «Android 10»). Guarded by
+      // `app/appAuth/__tests__/appAuthHeaders.test.ts`.
+      ...["/app/authorize", "/app/authorize/submit"].map((source) => ({
+        source,
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+          { key: "Referrer-Policy", value: "same-origin" },
+          { key: "Cache-Control", value: "no-store" },
+          { key: "Accept-CH", value: "Sec-CH-UA-Platform-Version" },
+          { key: "Critical-CH", value: "Sec-CH-UA-Platform-Version" },
+        ],
+      })),
+      // The inert callback pages: the URL carries a code, so no referrer, no cache, no index.
+      ...["/app/callback/ios", "/app/callback/android"].map((source) => ({
+        source,
+        headers: [
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "Cache-Control", value: "no-store" },
+          { key: "X-Robots-Tag", value: "noindex" },
+          { key: "X-Frame-Options", value: "DENY" },
+        ],
+      })),
     ];
   },
 

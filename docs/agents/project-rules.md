@@ -439,6 +439,38 @@ several exist precisely to stop a plausible-looking change.
   on NextAuth's DEFAULT `redirect` callback preserving its query** — never add a custom
   `redirect` callback without keeping that. `authRedirectCallback.test.ts` is the guard. See
   [`docs/MCP.md`](docs/MCP.md).
+- **Native apps sign in through their own door (ADR-0091; spec
+  `docs/superpowers/specs/2026-11-19-native-app-auth-design.md`).**
+  - **The guard.** Every `/api/app/v1/*` route except `auth/token` and `auth/revoke` calls
+    `requireAppSession(request, { needs })` as its FIRST statement with a LITERAL level — `"self"`,
+    `{ ministry, as: "member" | "manager" }`, `{ ministry: "jovenes", as: "planner" }`, `"manager"`,
+    `"super-admin"`; there is no default, so a forgotten level is a type error, and
+    `appAuthStatic.test.ts` refuses a computed one. The guard reads the token, the grant (same person,
+    this deployment, not revoked) and the LIVE access, then `meetsNeeds`, which is the cookie guards'
+    own predicates (`isMinistryMember`, `isMinistryManager`, `plansInMinistry`, `MANAGER_ROLES`) — a
+    level means in the app exactly what it means on the web page. A Jóvenes endpoint also calls
+    `rolloutAllows("jovenesEvents", access)` first, like the pages. A handler that writes still goes
+    through the matching `*Commit.ts`; a `"self"` handler reads or writes only `session.sanityId`.
+  - **Verified redirects only on deployed origins.** `app/appAuth/clients.ts` lists ONE `https`
+    callback per client on production and preview; the private scheme
+    `app.vercel.owt-backstage:` is returned only for `LOCAL_ORIGIN`. Adding it to a deployed origin,
+    or a capped/read-only «scheme channel», reopens the attack ADR-0091 rejects: another app on the
+    phone receives the redirect with a verifier it made itself, and the cap does not hold here (a
+    member can change their own email, and writers re-read the live role).
+  - **One visible tap.** Only the same-origin POST `/app/authorize/submit` mints a code; the page
+    never submits itself (no script, no autofocus, tested). Android ≤ 11 is refused at both through
+    `androidVersionAllows` (the `Sec-CH-UA-Platform-Version` hint, requested by `Accept-CH` +
+    `Critical-CH` in `next.config.mjs`; fails closed).
+  - **A Sanity failure is a 503, never a sign-out.** The app store refuses to run without
+    `SANITY_WRITE_TOKEN` (an untokened read of a dotted id answers «no record» = revoked), a lost
+    rotation race is `temporarily_unavailable` and not a revocation, and the apps never retry the
+    token POST on their own (a retried refresh is a reuse, which revokes the grant).
+  - **The store protocol is shared** (`app/oauthCore/grantStoreProtocol.ts`): the MCP store and the
+    app store are its two instances, each handing in its own client, document builders and
+    lifetime. A change to rotation, revocation or the live filter changes BOTH doors; the MCP suite
+    and `app/appAuth/__tests__/grantStore.test.ts` both run it.
+  - **Headers.** The `/app/authorize*` and `/app/callback/*` entries in `next.config.mjs` come AFTER
+    the global one (Next sends the last value); `appAuthHeaders.test.ts`.
 - **Who connects an agent, and what it reaches (ADR-0083).** The four gates (consent page, code POST,
   both token grants, `/api/mcp`) admit `mcpTierOf(access) !== null` on the LIVE access: `"full"` for a
   super-admin, `"read"` for an `admin` with worship; the tier is never stored. The read list is the
@@ -592,7 +624,9 @@ several exist precisely to stop a plausible-looking change.
 anything rather than render `null` — the home page asks it instead of copying
 the guard), `publishVerdict` (`app/utils/publishVerdict.ts` — the ONLY per-service publish
 predicate), `isMemberActive` (30s-TTL auth gate),
-`requireActiveSession`/`requireActiveManager`, `wantsNotification` (the ONLY
+`requireActiveSession`/`requireActiveManager`, `requireAppSession`/`meetsNeeds`
+(`app/appAuth/` — the ONLY guard of `/api/app/v1/*`, ADR-0091), `plansInMinistry` (the ONLY «may plan
+in a leveled ministry» predicate), `wantsNotification` (the ONLY
 per-type email-preference resolver — nothing reads `notifPrefs` directly),
 `sweepOutbox`, `shell`/`td`/`C` (`emailShell.ts` — the shared email palette),
 `serviceLabel`/`serviceIdentity` (`app/utils/emailServiceLabel.ts` — how every notification
@@ -976,8 +1010,10 @@ pass.
   stored on a `leader` only. `ledGroupsIn(access, ministry)` (`app/utils/ministryAccess.ts`) is the
   one answer: `[]` unless their level is `leader`, then the normalized `leaderOf`; no admin arm. The
   event writer's `led()`, the reader's leader arm (drafts only of LED groups, published meetings of
-  every group they are in), the `/jovenes/admin` gate and `viewer.led`, and «Planear» on `/jovenes` and
-  `/jovenes/calendario` all call it; a `leader` who leads nothing is a member everywhere. `ledGroupsCoverage.test.ts`
+  every group they are in), the `/jovenes/admin` gate and `viewer.led`, and «Planear» on `/jovenes`,
+  `/jovenes/calendario` and the meeting page all call it — the gate and «Planear» through
+  `plansInMinistry` («a manager, or `ledGroupsIn` non-empty»), the ONE planner predicate the native
+  app's `planner` level shares (ADR-0091); a `leader` who leads nothing is a member everywhere. `ledGroupsCoverage.test.ts`
   fails on any other line comparing a level with `"leader"` (an exact-line allow-list for the form's
   refusal and «Lidera» row, the chat's request rule and its wording). Membership (`groupsIn`) still
   decides who fits a seat.

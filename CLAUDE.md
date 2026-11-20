@@ -245,6 +245,13 @@ looks wrong** — several exist to stop a plausible-looking change.
   `MCP_OAUTH_SECRET`, and are excluded from `proxy.ts`; `/oauth/authorize` is not, and depends
   on NextAuth's DEFAULT `redirect` callback keeping its query — never add a custom `redirect`
   callback that drops it (`authRedirectCallback.test.ts`; `docs/MCP.md`).
+- **Native apps (ADR-0091):** `/api/app/v1/*` authenticates with `requireAppSession(request, { needs })`
+  as its first statement, with a literal `needs` level (no default; `appAuthStatic.test.ts`). The app
+  door accepts only the verified `https` redirects on production and preview, and mints a code only
+  on the person's visible tap (never on Android ≤ 11); the private scheme exists only on localhost —
+  never add it, any auto-submit, or any reduced-power session to a deployed origin. Its own secret
+  (`APP_AUTH_SECRET`), store (`app/appAuth/grantStore.ts`, 503 without the write token) and
+  matcher exclusions (`/api/app/v1`, the two callback pages).
 - **Who connects an agent (ADR-0083):** `mcpTierOf` on the LIVE access — super-admin `"full"`, worship
   admin `"read"` (`READ_TIER_TOOLS`, an allowlist), never stored; the five app-only tools only on a
   grant whose `client` is `"claude"`; the redirect list stays CLOSED (claude.ai, ChatGPT's stable
@@ -295,7 +302,9 @@ each one owns, and its rules) and `docs/UTILITIES_AND_COMPONENTS.md`. Most are "
   `revalidateServiceViews`, `buildRuns`/`normalizeMedleyTags`, `extractYouTubeId`,
   `computeParticipation`, `summarizeUnfilledSeats`, `paintsDayCard`, `publishVerdict`,
   `isMemberActive`, `requireActiveSession`/`requireActiveManager`, `accessFromDoc`,
-  `isMinistryMember`/`isMinistryManager`, `ledGroupsIn`, `normalizeMinistryRoles`, `wantsNotification` (nothing
+  `isMinistryMember`/`isMinistryManager`, `ledGroupsIn`, `plansInMinistry` (the ONE Jóvenes planner
+  predicate, shared with the app's `planner` level), `requireAppSession`/`meetsNeeds` (the native app
+  API's only guard), `normalizeMinistryRoles`, `wantsNotification` (nothing
   reads `notifPrefs` directly), `sweepOutbox`, `shell`/`td`/`C` (email palette),
   `serviceLabel`/`serviceIdentity`, `findDuplicates`/`serviceConflicts`,
   `daysUntil`/`formatCountdown`, `MEMBER_TYPE_LABEL`, `isWorshipNight`, `songLeads.ts`
