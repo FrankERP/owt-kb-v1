@@ -64,6 +64,7 @@ describe("Miembros — the row menu", () => {
       "Editar",
       "Contraseña",
       "Ver como este miembro",
+      "Cerrar sesiones de la app",
       "Deshabilitar acceso",
       "Eliminar",
     ]);

@@ -43,7 +43,7 @@ rule changes, change both; if they disagree, this file wins.
   then run the suite with `.venv/bin/python` (the system `python` is 3.13 and refuses global
   installs). Keys reach a session only as network secrets the proxy injects (`docs/SECRETS.md`),
   never as readable variables. The long form lists what still needs the Mac. The solver is
-  verified/re-deployed via `solver-v3-ops.yml` (ADR-0091): ask Frank before dispatching `deploy`;
+  verified/re-deployed via `solver-v3-ops.yml` (ADR-0092): ask Frank before dispatching `deploy`;
   **never approve, reject or bypass a pending deployment**, nor change its environments or the WIF
   setup without his OK — the session acts as `FrankERP`, so this rule is the only gate.
 - **On the Mac — worktrees only when two things must be in flight at once** (`Agent` with
@@ -248,6 +248,13 @@ looks wrong** — several exist to stop a plausible-looking change.
   `MCP_OAUTH_SECRET`, and are excluded from `proxy.ts`; `/oauth/authorize` is not, and depends
   on NextAuth's DEFAULT `redirect` callback keeping its query — never add a custom `redirect`
   callback that drops it (`authRedirectCallback.test.ts`; `docs/MCP.md`).
+- **Native apps (ADR-0091):** `/api/app/v1/*` authenticates with `requireAppSession(request, { needs })`
+  as its first statement, with a literal `needs` level (no default; `appAuthStatic.test.ts`). The app
+  door accepts only the verified `https` redirects on production and preview, and mints a code only
+  on the person's visible tap (never on Android ≤ 11); the private scheme exists only on localhost —
+  never add it, any auto-submit, or any reduced-power session to a deployed origin. Its own secret
+  (`APP_AUTH_SECRET`), store (`app/appAuth/grantStore.ts`, 503 without the write token) and
+  matcher exclusions (`/api/app/v1`, the two callback pages).
 - **Who connects an agent (ADR-0083 + addendum):** `mcpTierOf` on the LIVE access — super-admin `"full"`,
   worship admin `"admin"`, never stored. An admin reaches `ADMIN_TIER_TOOLS` (a literal allowlist:
   everything but `SUPER_ADMIN_ONLY_TOOLS` = Kids + people + the two rule tools), or `READ_TIER_TOOLS` on a grant made before
@@ -301,7 +308,9 @@ each one owns, and its rules) and `docs/UTILITIES_AND_COMPONENTS.md`. Most are "
   `revalidateServiceViews`, `buildRuns`/`normalizeMedleyTags`, `extractYouTubeId`,
   `computeParticipation`, `summarizeUnfilledSeats`, `paintsDayCard`, `publishVerdict`,
   `isMemberActive`, `requireActiveSession`/`requireActiveManager`, `accessFromDoc`,
-  `isMinistryMember`/`isMinistryManager`, `ledGroupsIn`, `normalizeMinistryRoles`, `wantsNotification` (nothing
+  `isMinistryMember`/`isMinistryManager`, `ledGroupsIn`, `plansInMinistry` (the ONE Jóvenes planner
+  predicate, shared with the app's `planner` level), `requireAppSession`/`meetsNeeds` (the native app
+  API's only guard), `normalizeMinistryRoles`, `wantsNotification` (nothing
   reads `notifPrefs` directly), `sweepOutbox`, `shell`/`td`/`C` (email palette),
   `serviceLabel`/`serviceIdentity`, `findDuplicates`/`serviceConflicts`,
   `daysUntil`/`formatCountdown`, `MEMBER_TYPE_LABEL`, `isWorshipNight`, `songLeads.ts`

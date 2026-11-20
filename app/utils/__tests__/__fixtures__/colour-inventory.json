@@ -8,28 +8,28 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 329,
-    "filesScanned": 654,
+    "literalRows": 330,
+    "filesScanned": 685,
     "filesWithColour": 72,
     "byCategory": {
       "2": 2,
       "4": 64,
       "5": 2,
-      "8": 85,
+      "8": 86,
       "9": 10,
       "11": 20,
       "12": 146
     },
     "byDisposition": {
       "exempt": 60,
-      "B": 122,
-      "keep": 240,
+      "B": 123,
+      "keep": 241,
       "C": 5,
       "D": 13
     },
     "compositingClasses": 22,
     "compositingSelectorOccurrences": 60,
-    "compositingClassNameOccurrences": 41,
+    "compositingClassNameOccurrences": 42,
     "compositingRuleBodies": 52,
     "lightCounterpartClasses": 13,
     "pairs": 3,
@@ -2360,7 +2360,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1422,
+      "line": 1461,
       "disposition": "B",
       "reason": null
     },
@@ -2372,7 +2372,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1431,
+      "line": 1470,
       "disposition": "B",
       "reason": null
     },
@@ -2384,7 +2384,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1441,
+      "line": 1480,
       "disposition": "B",
       "reason": null
     },
@@ -2396,7 +2396,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1452,
+      "line": 1491,
       "disposition": "B",
       "reason": null
     },
@@ -2408,7 +2408,19 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1463,
+      "line": 1502,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/admin/MembersPanel.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 1511,
       "disposition": "B",
       "reason": null
     },
@@ -4164,6 +4176,14 @@
     },
     {
       "file": "app/(admin)/layout.tsx",
+      "kind": "className",
+      "class": "atmosphere",
+      "count": 1,
+      "disposition": "keep",
+      "reason": "Usage site of a compositing class"
+    },
+    {
+      "file": "app/(appauth)/layout.tsx",
       "kind": "className",
       "class": "atmosphere",
       "count": 1,

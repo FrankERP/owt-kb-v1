@@ -3,10 +3,79 @@
 This repo ships native iOS/Android apps via **Capacitor**, wrapping the existing Next.js app.
 Full strategy: `~/.claude/plans/merry-cuddling-crayon.md`. This doc is the operational runbook.
 
-> **Approach:** Capacitor wrap, one codebase — NOT a React Native rewrite.
-> **Phase 1 (now):** online-only wrap → TestFlight / Play internal testing.
-> **Phase 2:** offline bundled SPA + bearer-token auth.
-> **Phase 3:** push notifications, native camera, add-to-calendar.
+> **Approach (2026-11-20):** native apps — SwiftUI for iPhone, iPad and Mac, Kotlin/Compose for
+> Android — over a server API (`/api/app/v1/*`), with the whole app, admin included, in v1. They
+> replace the Capacitor phases below; the Capacitor wrap stays as it is until the native apps reach
+> parity. Plan: Frank's «apps nativas» doc; sign-in: [ADR-0091](adr/0091-native-apps-sign-in-through-their-own-first-party-oauth-door.md).
+>
+> **Superseded plan (kept for the wrap):** Capacitor wrap, one codebase. Phase 1: online-only wrap →
+> TestFlight / Play internal testing. Phase 2: offline bundled SPA + bearer-token auth. Phase 3:
+> push notifications, native camera, add-to-calendar.
+
+---
+
+## Native apps — sign-in (Fase 0, slice A1; ADR-0091)
+
+**What exists on the server.** A first-party OAuth 2.0 authorization-code + PKCE door for two public
+clients, `backstage-ios` (iPhone, iPad, Mac) and `backstage-android`:
+
+| Step | Route | Notes |
+| --- | --- | --- |
+| Confirm | `GET /app/authorize` (session page) | `response_type=code`, `client_id`, `redirect_uri`, `code_challenge` (S256), `state` (16–256 visible ASCII). No `scope`, no `resource`. Shows «Entrar a la app» / «Cancelar». |
+| Tap | `POST /app/authorize/submit` | Same-origin only; 303 to the redirect with `code`, `state`, `iss` (or `error=access_denied`). |
+| Exchange / refresh | `POST /api/app/v1/auth/token` | Form body. `authorization_code` (code, redirect_uri, client_id, code_verifier) or `refresh_token` (refresh_token, client_id). Answers `access_token` (1 h), `refresh_token` (90 d, rotates on every use), `expires_in`. |
+| Sign out | `POST /api/app/v1/auth/revoke` | Form `token` (the refresh token) + `client_id`. 200 always, 503 only if the revocation write failed. |
+| Who am I | `GET /api/app/v1/me` | `Authorization: Bearer <access_token>`. |
+
+**Redirects.** Production and preview: only `<origin>/app/callback/ios` and
+`<origin>/app/callback/android` (verified `https`; until the association files exist they land on an
+inert page «Abre la app Backstage para terminar de entrar»). Local `next dev` only:
+`app.vercel.owt-backstage:/oauth/callback/{ios,android}`.
+
+**Answers the apps must handle.** `401 invalid_token` → refresh, then sign in again;
+`401 account_disabled` (or `invalid_grant` with `error_description: account_disabled` from the token
+route) → sign out and show «Tu acceso está desactivado»; `403` → the person lacks the level; `503`
+(`temporarily_unavailable`, with `Retry-After`) → keep the tokens and retry later, never sign out
+(a refresh 503 follows the single-flight rule below).
+A refresh `invalid_grant` means the grant is gone (revoked, reused, 90 days): sign in again.
+
+**Requirements recorded for the native slices** (spec §10 A10, D3, A15):
+
+- iOS: `ASWebAuthenticationSession` with an `https` callback (iOS/iPadOS 17.4+, macOS 14.4+),
+  `prefersEphemeralWebBrowserSession`; the `apple-app-site-association` lists the app under BOTH
+  `webcredentials` and `applinks`. iPhone XS/XR or newer.
+- Android: Auth Tab with a verified `https` redirect (Chrome 137+; launch it in the Chrome package
+  explicitly), an `autoVerify` App Link for `/app/callback/android`, minSdk 31 (Android 12). The
+  server refuses Android 11 and older at sign-in. No Chrome Auth Tab → «Para entrar necesitas Chrome
+  actualizado». Testing on a phone can use the debug or upload key's fingerprint in `assetlinks.json`;
+  a Google Play organization account may itself need the D-U-N-S number.
+- Both: ignore any callback without a matching pending `state` and verifier; never retry the token
+  POST automatically (OkHttp `retryOnConnectionFailure` off for that call; URLSession without
+  automatic retry) — a silent retry of a refresh is a reuse, and a reuse revokes the session.
+- Both: **refreshes are single-flight** across the app and everything sharing its keychain or
+  storage (widgets, extensions): one refresh at a time, and every caller waits for it and reads the
+  tokens it stored. After a refresh answers 503, first re-read the stored refresh token: if another
+  flight already replaced it, use the new one. `503` with `error_description: refresh_in_progress`
+  (no `Retry-After`) means a concurrent refresh of the SAME token won: never resend that token —
+  re-read storage. Any other refresh 503 may be retried with the same token after `Retry-After`; if
+  the earlier attempt had in fact committed, that retry is a reuse and the person signs in again
+  (one tap), which is the worst case.
+
+**Developing against local.** The dev deployment is behind Vercel SSO, which an app cannot pass.
+Run `next dev` with `APP_AUTH_SECRET` in `.env.local`; the iOS Simulator reaches it as `localhost`,
+the Android emulator after `adb reverse tcp:3000 tcp:3000` (its `10.0.2.2` host is refused by
+design). Physical phones sign in only against production through the verified redirect.
+
+**Release smoke test** (after the production release, spec §10 A11). One flow by hand: open
+`/app/authorize?...` with `redirect_uri=<origin>/app/callback/ios` and a known verifier, tap
+«Entrar», copy `code` from the callback page's URL, then with `curl`: exchange the code, `GET
+/api/app/v1/me` with the access token, refresh once, present the FIRST refresh token again (must
+answer `invalid_grant` and revoke the grant: the second refresh token must now fail too), and call
+the revoke endpoint. Check «Apps conectadas» in `/me/ajustes` along the way.
+
+**Closing sessions.** The person: `/me/ajustes` → «Apps conectadas» → «Cerrar sesión en ese
+dispositivo». A super-admin, for a lost phone: «Personas» → ⋯ → «Cerrar sesiones de la app».
+Disabling a member's access refuses their app within 30 s (the server's live-access cache); no extra step. A revocation takes effect within the same 30 s.
 
 ---
 

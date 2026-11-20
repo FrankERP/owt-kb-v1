@@ -34,6 +34,9 @@ import { kidsSchedule } from './schemas/kidsSchedule';
 // by hand. See sanity/schemas/mcpOauthGrant.ts and mcpOauthCodeRedemption.ts.
 import { mcpOauthGrant } from './schemas/mcpOauthGrant';
 import { mcpOauthCodeRedemption } from './schemas/mcpOauthCodeRedemption';
+// Native-app sign-in state (ADR-0091): same internal, read-only treatment.
+import { appAuthGrant } from './schemas/appAuthGrant';
+import { appAuthCodeRedemption } from './schemas/appAuthCodeRedemption';
 // The member calendar feed's per-member generation counter (ADR-0057): hidden/read-only,
 // written only by POST /api/me/calendar-feed. See sanity/schemas/calendarFeed.ts.
 import { calendarFeed } from './schemas/calendarFeed';
@@ -56,5 +59,5 @@ import { serviceThread } from './schemas/serviceThread';
 import { homeSettings } from './schemas/homeSettings';
 
 export const schema: { types: SchemaTypeDefinition[] } = {
-  types: [post, tag, author, featuredSongs, saturdaySongs, saturdayRole, sundayRole, teamMembers, specialRole, loginEvent, setlistProposal, roleTargetLock, roleCreationReceipt, notificationOutbox, specialIdentityCoordinator, solverConfig, fairnessMonth, kidsPair, kidsSchedule, mcpOauthGrant, mcpOauthCodeRedemption, calendarFeed, adminChatUsage, mcpProposal, serviceThread, availabilityConflict, ministryEvent, homeSettings],
+  types: [post, tag, author, featuredSongs, saturdaySongs, saturdayRole, sundayRole, teamMembers, specialRole, loginEvent, setlistProposal, roleTargetLock, roleCreationReceipt, notificationOutbox, specialIdentityCoordinator, solverConfig, fairnessMonth, kidsPair, kidsSchedule, mcpOauthGrant, mcpOauthCodeRedemption, appAuthGrant, appAuthCodeRedemption, calendarFeed, adminChatUsage, mcpProposal, serviceThread, availabilityConflict, ministryEvent, homeSettings],
 }

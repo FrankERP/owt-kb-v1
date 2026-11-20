@@ -8,7 +8,7 @@ import { addDaysIso, eventHeading } from "@/app/utils/jovenesEventView";
 import { jovenesDayEntry } from "@/app/utils/calendarMinistry";
 import { dayTitle, mySeats } from "@/app/utils/agenda";
 import { daysUntil, formatCountdown } from "@/app/utils/daysUntil";
-import { isMinistryManager, ledGroupsIn } from "@/app/utils/ministryAccess";
+import { isMinistryManager, plansInMinistry } from "@/app/utils/ministryAccess";
 import { showsProgramEditor } from "@/app/utils/jovenesPlannerModel";
 import { readJovenesPeople } from "@/app/utils/jovenesPeople";
 import { readSaturdaySets } from "@/app/utils/jovenesWorshipSet";
@@ -68,7 +68,7 @@ export default async function JovenesMeetingPage({ params }: { params: Promise<{
 
   const today = new Date().toLocaleDateString("sv", { timeZone: TZ });
   const isManager = isMinistryManager(access, "jovenes");
-  const plans = isManager || ledGroupsIn(access, "jovenes").length > 0;
+  const plans = plansInMinistry(access, "jovenes");
   let events: MinistryEventView[] = [];
   let unavailable = false;
   try {

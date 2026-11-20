@@ -277,6 +277,9 @@ cannot be recovered — see [Retrievability](#retrievability-assume-nothing-is-r
 - **Purpose:** every server-side mutation — proposal writes, role and setlist
   writes, the notification outbox sweep, and the `--apply` half of one-off
   scripts in `scripts/`. Without it, all writes fail and the app is read-only.
+  It is also the native apps' grant store's reader (ADR-0091): the app grant documents have dotted
+  ids, so without it every `/api/app/v1/*` route and the app sign-in answer 503 (fail closed, never
+  a sign-out).
 - **Role needed:** Editor.
 - **Platforms:** Vercel **twice** — once for `Preview, Production`, and once
   branch-scoped to `Preview (verify/service-readiness)`. Also local `.env.local`.
@@ -532,6 +535,61 @@ nuevo» (it bumps their `calendarFeed.<memberId>` generation).
 
 ---
 
+## `APP_AUTH_SECRET`
+
+**Needed in: Vercel preview AND production — a DIFFERENT value each (`openssl rand -base64 48`),
+and local `.env.local` to try the native apps against `next dev`. Not needed in: GitHub Actions,
+the iOS or Android build (the apps never hold it), GCF.**
+
+**Status: NOT SET yet** (2026-11-20). The native-app sign-in door ([ADR-0091](adr/0091-native-apps-sign-in-through-their-own-first-party-oauth-door.md))
+ships without it, so on each environment every app route answers 503 until it is set and that
+environment is redeployed. Nothing else in the app reads it, so its absence breaks nothing that
+exists today.
+
+**Purpose.** The HS256 key (`jose`) for every authorization code, access token and refresh token
+the native-app door mints or verifies (`app/appAuth/tokens.ts`, loaded by `loadAppSecret` in
+`app/appAuth/preflight.ts`). A missing or under-length (< 32 bytes) value fails closed:
+`/app/authorize` shows «No disponible», and `/api/app/v1/*` answers 503.
+
+**Its own value, never `MCP_OAUTH_SECRET` or `NEXTAUTH_SECRET`:** a token of one door must be
+unverifiable by the other even if an audience or type check were ever dropped, and rotating one
+must not sign out the web or break the connector. **Different per environment** so a token minted
+on preview (or local) can never verify on production; each environment is also its own issuer.
+
+**Where the value came from.** `openssl rand -base64 48`, generated and entered by Frank
+(`printf '%s' "$SECRET" | npx vercel env add APP_AUTH_SECRET <env> --sensitive`, which keeps it out
+of any log). No dashboard issues it.
+
+**How to rotate.** `npx vercel env rm APP_AUTH_SECRET <env>`, add the new value, **redeploy that
+environment** (env vars bind at build time).
+
+**Blast radius / what breaks mid-rotation.** Every app user on that environment is signed out the
+moment the new deployment is live: their access and refresh tokens stop verifying, and the app asks
+them to sign in again (one tap). The `appAuthGrant` documents stay and simply age out after 90
+days. A code minted in the seconds before the switch fails its exchange; the person taps «Entrar»
+again. Nothing else in the app reads this variable.
+
+---
+
+## `APP_AUTH_DISABLED`
+
+**Needed in: Vercel production and preview, ONLY when switching the native-app sign-in off — leave
+unset otherwise. Not needed in: `.env.local`, GitHub Actions, the app builds, GCF.**
+
+**Not a secret** — a kill switch, plain config (ADR-0091). `appPreflight` checks it FIRST, before
+the host and the secret: **any non-empty value (`"0"` included)** makes `/app/authorize` show «No
+disponible» and every `/api/app/v1/*` route answer 503. The app keeps its tokens and retries later
+(a 503 is never a sign-out).
+
+**Where it comes from.** Set directly by Frank in Vercel → Settings → Environment Variables. No
+issuer.
+
+**Rotate:** n/a — set a value to switch the door off, remove it to switch back on. **Takes effect on
+the next deployment.** **Blast radius:** the native apps on that environment, and nothing else; the
+web, the MCP connector and the Capacitor wrap do not read it.
+
+---
+
 ## `ANTHROPIC_API_KEY`
 
 **Needed in: Vercel production AND preview — a DIFFERENT key each, from different Console
@@ -681,7 +739,7 @@ secret.
 | Platform | Role |
 |---|---|
 | Vercel Preview + Production | `app/api/admin/solve/route.ts` sends it as the `X-Api-Key` header — to v2 itself, and to v3 through `app/utils/solverV3Upstream.ts` (solver v3 C6; the path production takes since the 2026-10-15 cutover, ADR-0056 — v2's only after a flip-back). The MCP's `solve_month` (P4, in production since 2026-10-20) calls the same `solveV3`, so it sends the same header from `/api/mcp` |
-| GitHub Actions `solver-v3-ops.yml` → `verify` | Reads `owt-solver-api-key:latest` with `owt-gha-verify` (Secret Accessor on this secret only), masks it, and sends it as `X-Api-Key` for the ping and smoke solve (ADR-0091). Nothing is stored in GitHub |
+| GitHub Actions `solver-v3-ops.yml` → `verify` | Reads `owt-solver-api-key:latest` with `owt-gha-verify` (Secret Accessor on this secret only), masks it, and sends it as `X-Api-Key` for the ping and smoke solve (ADR-0092). Nothing is stored in GitHub |
 | Secret Manager `owt-solver-api-key` | Cloud Build deploys each function with `--set-secrets=OWT_SOLVER_API_KEY=owt-solver-api-key:latest`: v2 from `cloudbuild.yaml` (manual: `scripts/deploy-solver-gcf.sh`), v3 from `gcf_v3/cloudbuild.yaml` (manual: a dispatched `deploy` of `solver-v3-ops.yml`, which re-runs that trigger; first creation and last resort: `scripts/deploy-solver-v3-gcf.sh`) |
 
 **Purpose.** The only barrier on each publicly invokable function (`allUsers` holds
@@ -915,7 +973,7 @@ does not use it; it authenticates with its own sign-in.
 ## GitHub Actions → Google (Workload Identity Federation — no secret)
 
 **Needed in: nothing stores a credential.** `.github/workflows/solver-v3-ops.yml` gets a
-short-lived Google token per job by exchanging GitHub's OIDC token (ADR-0091).
+short-lived Google token per job by exchanging GitHub's OIDC token (ADR-0092).
 
 **Status (2026-10-22): designed and merged, NOT yet set up or rehearsed.** Nothing below exists
 in Google Cloud or GitHub until Frank runs the setup script and creates the environments; until
@@ -931,7 +989,7 @@ rehearsal. What it sets up:
   Functions Viewer on `owt-solver-v3`, Secret Accessor on `owt-solver-api-key`) and
   `owt-gha-deploy` (Cloud Build Editor on the project, Service Account User on the deploy
   trigger's account — effectively editor-equivalent, which is why deploy runs need Frank's
-  approval; ADR-0091 says what that approval does and does not guard).
+  approval; ADR-0092 says what that approval does and does not guard).
 - **GitHub** — environments `solver-verify` (deployment branches: `main`) and `solver-deploy`
   (`main`; required reviewer FrankERP; admins cannot bypass), each with the plain **variables**
   `GCP_PROJECT`, `GCP_WIF_PROVIDER` and `GCP_SERVICE_ACCOUNT` (that environment's account). Not
