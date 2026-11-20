@@ -341,3 +341,44 @@ written by `solverConfigFields`' six rule fields, so a client save cannot touch 
 Re-keying rule `_key`s (C5-17/C6 KH-1 say not to); the duplicate Jakey–Hugo conflict; opening the
 rule tools to worship admins (decision C2); removing v2; deleting the rename's rule rewrite (a later
 cleanup once a dry run shows no text token left).
+
+## 9. Post-approval amendments (NOT covered by the plan review)
+
+The plan above (§1–§8) was approved on SHA-256 `dac676f929f6a893995bbedbb084e1936b09ff119ea2cb8d15c11e6872c74863`
+(see `2026-11-20-solver-rules-by-member-id-review-log.md`). The items below came from the approving
+reviewers' non-blocking notes and were adopted afterwards; they are outside that approval and are
+checked by the implementation's merge-range code review. Where one contradicts the text above, this
+section wins.
+
+1. **§3.2 names mode, one rule:** in names mode a token that is a roster `_id` is written as the label
+   `rulePeopleToNames` gives it (never bare `displayMemberName`), so a dangling or outside-Alabanza id
+   never comes back as a bare name that resolves to someone. The sentence in §3.2 saying otherwise is
+   superseded.
+2. **Normalisation mismatch:** `rulePeopleToNames` compares through `normalizeLabel` on both sides
+   (label and member texts) before deciding a label resolves, and a member whose name only differs by
+   whitespace or Unicode form is labelled by their `normalizeLabel(displayMemberName)` with a distinct
+   save refusal reason `<path>:name_unmatched` («El nombre de <nombre> tiene espacios o letras que no
+   coinciden; corrígelo en su perfil.») instead of «(persona repetida)» or the rename-race 409.
+3. **Writer dedupe:** after `rulePeopleToIds`, the core removes duplicate ids inside a `presence[].persons`
+   list and re-runs the exact-cap overlap check keyed by id; an overlap refuses the save. So a stored
+   id-mode document always re-reads lossless.
+4. **Refusal codes:** the rename-race 409 carries `details.detail: "person_changed"` and `saveFailure`
+   shows its own text plus «Recargar reglas»; the `ambiguous_person` text reads «… coincide con más de
+   una persona; recarga las reglas.» (the picker shows a shared name once).
+5. **Copy:** the «persona que ya no está en Alabanza» variant applies to every v3 line that quotes a
+   rule person (`unresolved`, the resolver refusals, `cadenceNameNone`), not only `unresolved`.
+6. **Canary:** the rules POST's response body joins the id canary (the panel adopts it as its new state).
+7. **Studio:** `personTokens` is added to the `solverConfig` field list in `studioProtection.ts` as well
+   as to the schema.
+8. **Dry run:** besides the four checks, it lists every path whose label differs from the stored text
+   or whose label also names a non-worship roster member (the grid, specials fill and v2 match
+   first-hit over a super-admin's all-ministries list), so Frank sees respellings before saying yes.
+   The fingerprint covers the six rule fields and the marker only (not `_updatedAt` or audit fields).
+9. **Names mode is not byte-for-byte a no-op:** the GET and POST now also fail (fail closed, existing
+   «no se pudieron leer las reglas» path) when the roster read fails. Stated in the PR.
+10. **ADR additions:** Sanity references (strong or weak) as a rejected alternative (a strong one would
+    make deleting a person named by a rule refuse through the DELETE's existing referential-integrity
+    path, a behaviour change Frank did not ask for; a weak one is the same id with more ceremony); the
+    `not_worship` refusal tells a worship admin whether a name exists in another ministry (admins are
+    trusted; noted beside the isolation line); the grid's hard blocks stay silent on non-resolving
+    labels, as today (only v3 Auto is loud); the suffix drift case beside the swap limit.
