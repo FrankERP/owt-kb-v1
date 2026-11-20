@@ -209,7 +209,8 @@ export function registerAllTools(target: McpServer, deps: { version: string; sco
   // Super-admin only (ADR-0082, ADR-0083 addendum).
   if (!adminScope) registerMemberTools(server);
   // Admin parity phase 4 (slice R): the solver rules, through /admin's own writer (`solverConfigCommit.ts`).
-  // Super-admin only until Frank decides otherwise (ADR-0084).
+  // Super-admin only for now: slice B was planned and approved before these tools existed, and
+  // opening them to worship admins (who can save rules in /admin) is still Frank's open call.
   if (!adminScope) registerRuleTools(server);
   // The card (MCP Apps), at a URI that carries its build's digest. Fixed per deployment, like the
   // tools. Only for a claude.ai grant: the card calls the app-only tools.

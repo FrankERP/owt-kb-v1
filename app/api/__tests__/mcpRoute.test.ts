@@ -1725,8 +1725,12 @@ describe("/api/mcp — five tool lists: who you are (live), which agent holds th
     // None of the people tools is an admin-tier tool: «Personas sigue siendo solo tuyo».
     for (const name of MEMBER_TOOL_NAMES) expect(ADMIN_TIER_TOOL_NAMES, name).not.toContain(name);
     for (const name of KIDS_TOOL_NAMES) expect(ADMIN_TIER_TOOL_NAMES, name).not.toContain(name);
-    // Nor the slice-R rule tools: super-admin only until Frank decides otherwise (ADR-0084).
-    for (const name of RULE_TOOL_NAMES) expect(ADMIN_TIER_TOOL_NAMES, name).not.toContain(name);
+    // Nor the slice-R rule tools, nor are they read-tier: the save changes what every Auto reads,
+    // and opening them to worship admins is a separate decision.
+    for (const name of RULE_TOOL_NAMES) {
+      expect(ADMIN_TIER_TOOL_NAMES, name).not.toContain(name);
+      expect(READ_TIER_TOOL_NAMES, name).not.toContain(name);
+    }
   });
 
   it("the classification is TOTAL: every tool of the full list is in exactly one of ADMIN_TIER_TOOLS and SUPER_ADMIN_ONLY_TOOLS", () => {
@@ -1764,11 +1768,9 @@ describe("/api/mcp — five tool lists: who you are (live), which agent holds th
   it("the full digest is pinned; the five digests differ; adminRead is exactly slice A's read digest", () => {
     // Update this pin ONLY when a release changes the full list on purpose — that release sends every
     // Claude connector the refresh note. Changed on purpose 2026-11-06 (cf45d5e6, the people tools'
-    // grant rule) and with slice B (every model-visible write carries PERSON_CONFIRMS_RULE).
-    // Changed on purpose 2026-11-11 (per-group leadership PR 1, T5b): the people tools' Jóvenes
-    // `groups` bound follows the registry (five groups, was 3). PR 2 (T7) moves it again.
-    // Changed on purpose 2026-11-12 (per-group leadership PR 2, T7): the people tools take `leaderOf`
-    // in the `jovenes` edit op and in a new person, and both descriptions state its rule.
+    // grant rule), by slice R (ADR-0084, the two rule tools), 2026-11-11/12 (per-group leadership:
+    // the people tools' `groups` bound and `leaderOf`), 2026-11-12 (ADR-0087: the leads' pastor's
+    // message), and with slice B (every model-visible write carries PERSON_CONFIRMS_RULE).
     expect(TOOL_LIST_VERSIONS.full).toBe(FULL_DIGEST_PIN);
     expect(TOOL_LIST_VERSIONS.fullNoApps).toBe(FULL_NO_APPS_DIGEST_PIN);
     expect(TOOL_LIST_VERSIONS.admin).toBe(ADMIN_DIGEST_PIN);

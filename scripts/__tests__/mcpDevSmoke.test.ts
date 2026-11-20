@@ -785,7 +785,7 @@ describe("expectedToolsForTier (ADR-0083)", () => {
     expect(EXPECTED_TOOLS_NO_APPS).toHaveLength(EXPECTED_TOOLS.length - APP_ONLY_TOOL_NAMES.length);
   });
 
-  it("admin = EXPECTED_TOOLS without Kids, people, the rule tools and the app-only tools; no people, Kids or rule tool of any kind", () => {
+  it("admin = EXPECTED_TOOLS without Kids, people, the rule tools and the app-only tools; none of those of any kind", () => {
     expect(expectedToolsForTier("admin")).toEqual(ADMIN_TIER_TOOL_NAMES_NO_APPS);
     expect(SUPER_ADMIN_ONLY_TOOL_NAMES).toEqual([...KIDS_TOOL_NAMES, ...MEMBER_TOOL_NAMES, ...RULE_TOOL_NAMES]);
     expect(ADMIN_TIER_TOOL_NAMES).toEqual(EXPECTED_TOOLS.filter((n: string) => !SUPER_ADMIN_ONLY_TOOL_NAMES.includes(n)));

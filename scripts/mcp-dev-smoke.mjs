@@ -524,7 +524,7 @@ export const READ_TIER_TOOL_NAMES = [
 
 /**
  * The tools only a super-admin reaches (`SUPER_ADMIN_ONLY_TOOLS` in `app/mcp/toolList.ts`; a test
- * pins the two): Oasis Kids and people.
+ * pins the two): Oasis Kids, people and the solver rules' two tools.
  */
 export const SUPER_ADMIN_ONLY_TOOL_NAMES = [...KIDS_TOOL_NAMES, ...MEMBER_TOOL_NAMES, ...RULE_TOOL_NAMES];
 
