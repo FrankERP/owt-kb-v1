@@ -97,8 +97,14 @@ Rejected:
 ### 3.1 Read: `rulePeopleToNames(doc, roster) → { config, back }`
 
 New, pure, in `app/utils/solverConfigWriteRequest.ts` (next to `solverConfigFromDocument`, which it
-wraps; no `server-only`). `roster` = every `teamMembers` document, any ministry, disabled included,
-projected `{ _id, member_name, alias }` (new `rulePeopleRosterQuery()` in `serviceReadQueries.ts`).
+wraps; no `server-only`). `roster` = every published `teamMembers` document, any ministry, disabled
+included, projected `{ _id, member_name, alias, ministries }` with the file's `CANONICAL` drafts filter
+(new `rulePeopleRosterQuery()` in `serviceReadQueries.ts`). `ministries` is required: `resolveRulePersonId`
+reads an absent `ministries` as worship (`sundayCadence.ts`), so a roster without it would make every
+member look like worship. **Every** translation site of §3.3 and the migration script read this one
+query; none passes a roster from another query. A test runs this query's projection shape (a Kids-only
+member, a Jóvenes-only member, a worship member sharing an alias with a Kids member, a member with no
+`ministries`) through `rulePeopleToNames`.
 
 - When the document has no `personTokens: "id"`: `config` = `solverConfigFromDocument(doc)` unchanged.
 - Otherwise every person token (the four fields of §1.2) is mapped to a label, in this order:
@@ -109,15 +115,17 @@ projected `{ _id, member_name, alias }` (new `rulePeopleRosterQuery()` in `servi
   - a token equal to the `_id` of a member **outside Alabanza** → «<display name> (fuera de
     Alabanza)». It must not read as their bare name: a worship member with the same name would then
     receive the rule. It resolves to nobody, as a non-worship name is unresolved today;
-  - a token that is no roster `_id` but has the id shape (no whitespace, `^[A-Za-z0-9_.-]{20,}$`) →
-    «persona que ya no está en Alabanza»;
-  - any other token (a legacy text the migration could not resolve) → itself.
+  - any other token → «persona que ya no está en Alabanza». In id mode every stored token is an id
+    (the migration refuses to set the marker while any token is unresolved or ambiguous, §4.2, and the
+    writer never stores a text in id mode, §3.2), so a token that is no roster `_id` is a deleted
+    member, whatever its shape (Kids-seeded ids like `kidsMember-ana` are shorter than 20 characters).
   - **Labels are unique per stored token:** if two distinct stored tokens would get the same label,
     the later ones (by first appearance) get « (2)», « (3)» (skipping any suffix that would resolve to a
     member). Only non-resolving labels can collide, so `back` is a bijection.
   By construction a label resolves (`resolveRulePersonId`) either to exactly the member whose id it
   came from, or to nobody.
-- `back` is the map from every produced label to the stored token it came from (the write uses it).
+- `back` is the map from every produced label to the stored token it came from (the write uses it);
+  empty in names mode.
 
 A deleted member's rule therefore reads as «persona que ya no está en Alabanza», which resolves to
 nobody: v3 refuses with a named line, the grid skips it, v2 injects a phantom, exactly as a dangling name
@@ -130,30 +138,41 @@ regla.» (no token in it).
 
 Same module, pure. The last step before `solverConfigFields`, in the ONE writer core (§4.1).
 
-- When the stored document has no `personTokens: "id"`: identity.
-- Otherwise, for each person token of the config being saved, using `back` recomputed from the FRESH
-  stored document the writer just read:
-  1. it resolves (`resolveRulePersonId`, worship, exactly one) → that member's `_id`. (A legacy text
-     that has since come to name exactly one member is written as that id: v3 already applied it to
-     that member.);
+- The mode is the **target** mode of the write: the `setMarker` the caller passes (§4.1: the
+  migration passes `"id"`, `--to-names` passes `null`), else the stored document's marker. Names
+  mode: every token is written as a name: a token that is a roster `_id` (only reachable by
+  `--to-names`) becomes `normalizeLabel(displayMemberName(member))`; a name is written as given.
+  `--to-names` refuses while any dangling id exists (it would leave an id in a names-mode document,
+  which the reverted code would show): the dry run lists those rules to remove first in /admin.
+- Id mode, for each person token of the config being saved, using `back` recomputed from the FRESH
+  stored document the writer just read (for the migration, the stored names document: `back` is then
+  empty and every token must resolve):
+  1. it resolves (`resolveRulePersonId`, worship, exactly one) → that member's `_id`;
   2. else it is a label in `back` → the stored token it came from (a dangling id, a non-worship
-     member's id, a legacy text);
-  3. else → refuse the whole save with `{ path }` (HTTP 409 / the chat's `changed`): «Una persona de
-     las reglas cambió mientras editabas (por ejemplo, alguien cambió su nombre). Recarga las reglas y
-     vuelve a guardar; no se guardó nada.» This is the rename race: a tab that read «Vale» saves after
-     Studio renamed her to «Valeria»; step 1 finds nobody named «Vale», step 2 finds no such label, and
-     nothing is written instead of detaching her.
-- Round trip: for an unchanged config, `rulePeopleToIds(rulePeopleToNames(doc).config, doc)` writes
+     member's id, a repeated person's id);
+  3. else → refuse the whole save with `{ path, reason }`, nothing written:
+     - the name matches more than one worship member (`ambiguous`): «"<nombre>" coincide con más de una
+       persona; elige a la persona otra vez.»;
+     - it matches nobody (`changed`, HTTP 409 / the chat's `changed`): «Una persona de las reglas
+       cambió mientras editabas (por ejemplo, alguien cambió su nombre). Recarga las reglas y vuelve a
+       guardar; no se guardó nada.» This is the rename race: a tab that read «Vale» saves after Studio
+       renamed her to «Valeria»; step 1 finds nobody named «Vale», step 2 finds no such label, and
+       nothing is written instead of detaching her.
+     Known limit, stated in the ADR: a SWAP (X renamed away from «Gaby» and Y renamed TO «Gaby» while a
+     tab is open) moves X's rule to Y on that tab's save, exactly as it would today. Closing it would
+     need a fingerprint of the label map echoed by every client, a client-contract change this plan
+     does not make.
+- Round trip (both modes): for an unchanged config, `rulePeopleToIds(rulePeopleToNames(doc).config, doc)` writes
   every token back byte-identical: a label either resolves to its own id (step 1) or to nobody, in which
   case `back` (a bijection) returns its token (step 2). Unit-tested with the repeated-person, outside-
-  Alabanza, several-dangling and legacy-text cases.
+  Alabanza and several-dangling cases.
 
 ### 3.3 Where the translations run (and nowhere else)
 
 | Site (§1.9) | Change |
 |---|---|
 | `solverConfigGetBody(doc, roster)` | gains `roster`; returns `config` through `rulePeopleToNames`. Its two callers (the GET route, `readRules`) read the roster in the same `Promise.all`. The GET's body shape is unchanged. |
-| `solverConfigCommit.ts` | both writers judge on the names view (`losslessRules` gains the roster and compares the names view's re-parse with the names view, so the gate keeps meaning "this version reads what is stored"); the write goes through the core (§4.1), which applies `rulePeopleToIds`. |
+| `solverConfigCommit.ts` | both writers judge edits on the names view; the write goes through the core (§4.1), which applies `rulePeopleToIds`. `losslessRules(raw, roster)` keeps comparing against the **raw** stored fields: it computes the fields an unchanged save would write, `solverConfigFields(rulePeopleToIds(parse(namesView).config, raw, roster))`, and compares them with `raw[field]` for the six fields, so any coercion by `solverConfigFromDocument` (an unknown op, an item without id, an unknown fairness) is still `lossy`, in either mode. |
 | `memberRuleRename.ts` / `memberCommit.ts` | planning the targeted `set` stays on the RAW document (it rewrites text tokens that name the renamed member; an id token never names anyone, so in id mode it rewrites nothing, by construction); the warning and `lines` text are built from the names view, read with the roster after the rename. |
 | `members/[id]` DELETE | unchanged (pools only). |
 | `scripts/lib/reconstructRun.ts` | reads through `rulePeopleToNames` (its own roster read) before `resolveMonthEligibility`. |
@@ -162,9 +181,14 @@ Same module, pure. The last step before `solverConfigFields`, in the ONE writer 
 **Guard:** `solverConfigReadCoverage.test.ts` (the `draftGatingCoverage` pattern): every file under
 `app/**` and `scripts/**` that imports `SOLVER_CONFIG_DOC_ID`, `solverConfigQuery`,
 `loadStoredSolverConfig` or `solverConfigFromDocument` must be in an allowlist naming the site above
-and why; a new reader fails the test until someone decides how it reads. `solverConfigFromDocument`
-alone is allowed only in `solverConfigWriteRequest.ts`, `solverConfigSource.ts` (it normalises the GET
-body, already names) and the seed.
+and why; a new reader fails the test until someone decides how it reads. The allowlist records which
+sites use `solverConfigFromDocument` on a RAW document and why: `memberRuleRename.ts` (plans text
+rewrites on the raw document, by design), `solverConfigWriteRequest.ts` (inside `rulePeopleToNames`),
+`solverConfigSource.ts` (normalises the GET body, already names), the seed (absent-only). Readers that
+use a literal GROQ instead of these symbols are outside the test and named here: the one-off
+`scripts/fix-vale-sosa-rule.mjs` (ran 2026-08-31; it writes text, so it must never run against an
+id-mode document; the PR adds a refusal when the document carries the marker) and the private ADR-0056
+restore (§5.3).
 
 **Id canary (behavioural):** with `personTokens: "id"` and a fixture roster of realistic ids (22- and
 36-character), plus a dangling id and a non-worship member, run `solverConfigGetBody` →
@@ -182,8 +206,10 @@ script cannot import (`scripts/lib/reconstructRun.ts`). Following C4's precedent
 (`executeFairnessMonthWrites` in `fairnessMonthWriteRequest.ts`, imported by
 `scripts/reconstruct-fairness-months.mjs`), the write step moves into a new non-`server-only` module
 `app/utils/solverConfigWrite.ts`: `writeSolverConfig(client, { config, stored, roster, setMarker? })` =
-`parseSolverConfigWrite` → `rulePeopleToIds` → `solverConfigFields` (+ `personTokens` when `setMarker`
-is `"id"` or `null`) → one `ifRevisionId(stored._rev)` set. `saveSolverConfig` and `saveRuleEdits` keep
+`parseSolverConfigWrite` → `rulePeopleToIds` in the TARGET mode (`setMarker` when passed, else the stored
+marker, §3.2) → `solverConfigFields` (+ `personTokens: "id"` set, or unset, when `setMarker` is `"id"` or
+`null`) → one `ifRevisionId(stored._rev)` patch. `personTokens` is declared on the `solverConfig`
+schema (hidden, read-only like the rest). `saveSolverConfig` and `saveRuleEdits` keep
 their auth, version check, fresh read, lossless gate and messages and call it; the migration script
 calls it with its own client. Only `solverConfigCommit.ts` and the script may import it (pinned by the
 coverage test of §3.3).
@@ -200,20 +226,30 @@ written by `solverConfigFields`' six rule fields, so a client save cannot touch 
 
 - **Dry run (default):** reads the document and the full roster with its own client and prints, for
   each distinct person token, `«Vale 𑣲» → Valeria …` (names only; the `_id` is not printed), plus
-  `UNRESOLVED`/`AMBIGUOUS` lines for tokens that stay text. Three checks, any failure exits non-zero:
+  `UNRESOLVED`/`AMBIGUOUS` lines for tokens that block the migration. Four checks, any failure exits
+  non-zero:
   1. **Only person paths change:** the written document (the six fields + marker) differs from the
      stored one only at the four person fields and `personTokens` (a path-by-path diff).
   2. **Same person at every path:** for each changed path, `resolveRulePersonId(stored text)` equals
      the written id.
   3. **Same view:** `rulePeopleToNames(written)` resolves, at every path, to the same member as the
      stored text (labels may differ in spelling, e.g. «vale» vs «Vale 𑣲»; identity may not).
-  It prints a fingerprint (SHA-256 of the document it would write).
+  4. **Target form:** in id mode every person token of the written document is a roster `_id`; and
+     `rulePeopleToNames(written)` re-parsed passes `parseSolverConfigWrite` (no new `exact_overlap`
+     from two spellings of one member collapsing into one id; presence lists keep their length) and
+     the lossless gate of §3.3. For `--to-names`: no token is a roster `_id`.
+  The dry run prints names to the local terminal only (deliberately unlike the seed's ordinals: Frank
+  must recognise the people to consent; nothing is logged or committed). It prints a fingerprint
+  (SHA-256 of the document it would write).
 - **`--apply --fingerprint <hex>`:** recomputes and refuses unless the fingerprint matches; writes a
   JSON snapshot of the stored document to `.backfill-backups/` (gitignored); calls
-  `writeSolverConfig(..., setMarker: "id")` with the `_rev` it read. Unresolved tokens stay text.
-- **`--to-names`:** the reverse for rollback: every id token → `normalizeLabel(displayMemberName)`,
-  dangling ids → kept as stored (and listed), marker removed (`setMarker: null`); same dry run,
-  fingerprint and `--apply` shape.
+  `writeSolverConfig(..., setMarker: "id")` with the `_rev` it read. It refuses (dry run and apply)
+  while any token is `UNRESOLVED` or `AMBIGUOUS`: those rules are fixed or removed in /admin first, so
+  an id-mode document holds only ids.
+- **`--to-names`:** the reverse for rollback: `writeSolverConfig(..., setMarker: null)`, so every id
+  becomes `normalizeLabel(displayMemberName)` (§3.2 names mode) and the marker is removed; it refuses
+  while a dangling id exists (listed by its rule, to remove first); same dry run, fingerprint and
+  `--apply` shape.
 - Expected dry run today: 13 tokens → 13 members, 0 unresolved (§1.6). The names-only output is shown
   to Frank; `--apply` runs only after his explicit «sí».
 - After `--apply`: `get_solver_rules` from the chat prints the same people as before (captured before
@@ -226,21 +262,26 @@ written by `solverConfigFields`' six rule fields, so a client save cannot touch 
    writing the real dataset changes nothing because no writer sets the marker except the script.
 2. Migration (§4.2) after the prod alias: dry run → names-only output to Frank → his «sí» →
    `--apply --fingerprint` → the checks of §4.2. This is the only step that changes stored rules.
-3. **Rollback:** before reverting the PR with the marker set, run `--to-names --apply` (otherwise the
-   reverted code would read ids as names and every Auto would refuse). The ADR and the PR description
-   say so. Reverting with no marker set is safe at any time.
+3. **Rollback:** before reverting the PR with the marker set, or a Vercel instant rollback of
+   production to a deployment older than the PR, run `--to-names --apply` (otherwise the older code
+   would read ids as names: every Auto would refuse and the chat would print ids). The same holds
+   before an ADR-0056 restore of a names-era rules snapshot: writing names into an id-mode document
+   would read them as deleted people. The ADR and the PR description say so. With no marker set, all
+   three are safe at any time.
 4. A v2 flip-back (ADR-0056) keeps working: v2 reads the names view like everything else.
 
 ## 6. Tests
 
 - `solverConfigWriteRequest.test.ts`: `rulePeopleToNames` (no marker = identity; id → display name;
+  a short Kids-style id not in the roster → dangling label;
   colliding display name → `member_name`; double collision → «(persona repetida)»; outside-Alabanza id
   whose name a worship member also has → «(fuera de Alabanza)», resolving to nobody; several dangling
-  ids → distinct labels; legacy text kept; a 20+-character legacy text with no space is labelled as a dangling person,
-  pinned as the known limit); `rulePeopleToIds` (resolve, `back`, refuse on an unknown name, no marker =
-  identity); the round trip byte-identical on a production-shaped fixture (§1.6) in both modes.
+  ids → distinct labels); `rulePeopleToIds` (target mode from `setMarker` in both directions: names →
+  ids with `"id"` on a names document, ids → names with `null` on an id document; resolve, `back`,
+  `ambiguous` and `changed` refusals; names mode = names); the round trip byte-identical on a production-shaped fixture (§1.6) in both modes.
 - `solverConfigCommit.test.ts`: both writers in id mode write ids; a rename between read and save
-  refuses with nothing written; the lossless gate passes on an id-mode document.
+  refuses with nothing written; the lossless gate passes on a clean id-mode document and answers
+  `lossy` for an id-mode document with a coerced value (an unknown cap op).
 - `memberRuleRename.test.ts`: in id mode a rename plans no rule write and its lines name people.
 - `solverConfigWrite.test.ts`: the core never writes `personTokens` unless `setMarker` is passed.
 - The coverage test and the id canary of §3.3.
@@ -253,7 +294,8 @@ written by `solverConfigFields`' six rule fields, so a client save cannot touch 
   rejected alternatives of §2, the marker, the rename-race refusal and the rollback order of §5.3.
 - ADR-0049 addendum: the writer core (`solverConfigWrite.ts`) and `rulePeopleToIds` in the chain.
 - ADR-0084 addendum: storage is ids in id mode; the wire stays names (KH-1 unchanged).
-- ADR-0082 note: in id mode the rename's rule rewrite finds nothing to rewrite (legacy texts only).
+- ADR-0082 note: in id mode the rename's rule rewrite finds nothing to rewrite (a names-mode document
+  only).
 - CLAUDE.md + AGENTS.md + `docs/agents/project-rules.md`: the `solverConfig` invariant gains one line
   («stored rule people are member ids once `personTokens: "id"`; only `rulePeopleToNames` /
   `rulePeopleToIds` translate; every reader goes through `solverConfigGetBody`»), and the two functions
