@@ -1108,8 +1108,8 @@ honesty gate (empty runs over churn).
   chart hides `body` in both readers until every chart is removed (existing
   reader behavior, not a bug).
 - ~15 songs have no lyrics source in the catalog PDF (expected).
-- Android build pending; Apple Developer Program enrollment is waiting on the DUNS
-  number (confirmed 2026-08-27).
+- Android build pending; Apple Developer Program enrollment: the DUNS number is in
+  hand (Frank, 2026-11-20) and Apple has not answered the enrollment yet.
 - **Email templates are LIGHT, deliberately not `brand.css`.** Five attempts to
   hold a dark palette against Outlook for Mac failed (spec §6 has the table).
   Client dark-mode transforms assume email is light; there is no reliable hook to
