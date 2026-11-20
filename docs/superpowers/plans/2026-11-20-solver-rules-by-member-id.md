@@ -285,8 +285,10 @@ written by `solverConfigFields`' six rule fields, so a client save cannot touch 
 - `memberRuleRename.test.ts`: in id mode a rename plans no rule write and its lines name people.
 - `solverConfigWrite.test.ts`: the core never writes `personTokens` unless `setMarker` is passed.
 - The coverage test and the id canary of §3.3.
-- The script's three dry-run checks on fixtures (a clean conversion; an unresolved token kept; a
-  forced non-person diff refused).
+- The script's four dry-run checks on fixtures (a clean conversion; an unresolved token refuses the
+  migration; a forced non-person diff refused; two spellings of one member that would collapse into an
+  `exact_overlap` refused) and `--to-names` (round trip back to names; refused while a dangling id
+  exists).
 
 ## 7. Records
 
