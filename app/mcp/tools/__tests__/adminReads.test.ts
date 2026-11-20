@@ -76,7 +76,7 @@ describe("get_fairness_ledger", () => {
 
 describe("get_solver_rules", () => {
   it("shows pools by name and every rule as a line, with no rule key, member id or revision", async () => {
-    const out = await getSolverRulesResult({}, { rules: async () => ({ config: NAME_SHAPED, rev: "rules-rev-1" } as never), members: async () => MEMBERS });
+    const out = await getSolverRulesResult({}, true, { rules: async () => ({ config: NAME_SHAPED, rev: "rules-rev-1" } as never), members: async () => MEMBERS });
     expect(out.isError).toBeFalsy();
     const payload = out.structuredContent as ReturnType<typeof presentSolverRules>;
     expect(payload.listas).toEqual([
@@ -123,7 +123,7 @@ describe("get_solver_rules", () => {
 
   it("a failed rules read is the fixed tool error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    const out = await getSolverRulesResult({}, { rules: async () => { throw new Error("rules"); }, members: async () => MEMBERS });
+    const out = await getSolverRulesResult({}, true, { rules: async () => { throw new Error("rules"); }, members: async () => MEMBERS });
     expect(text(out)).toBe(READ_TOOL_FAILURE_MESSAGE);
     vi.restoreAllMocks();
   });

@@ -6,7 +6,7 @@
 
 import "server-only";
 
-import type { CallToolResult, McpServer } from "@modelcontextprotocol/server";
+import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import type { SolverConfig } from "@/app/components/admin/plannerModel";
@@ -17,6 +17,7 @@ import { adminMembersQuery } from "@/app/utils/serviceReadQueries";
 import { readRules } from "@/app/utils/v3MonthPlanReads";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import { runReadTool, successResult } from "../reads/errors";
+import { readsAllMembers } from "../monthProposals/principal";
 
 export const GET_SOLVER_RULES_INPUT = z.object({}).strict();
 
@@ -28,13 +29,14 @@ export const GET_SOLVER_RULES_DESCRIPTION =
 
 export interface GetSolverRulesDeps {
   rules: () => Promise<{ config: SolverConfig }>;
-  members: () => Promise<MemberOption[]>;
+  /** `allMembers`: every ministry (a super-admin) or worship only (a worship admin), `readsAllMembers`. */
+  members: (allMembers: boolean) => Promise<MemberOption[]>;
 }
 
 const defaultDeps: GetSolverRulesDeps = {
   rules: readRules,
-  members: async () => {
-    const q = adminMembersQuery(true);
+  members: async (allMembers) => {
+    const q = adminMembersQuery(allMembers);
     const rows: unknown = await operationalClient.fetch(q.query, q.params);
     if (!Array.isArray(rows)) throw new Error("members");
     return rows as MemberOption[];
@@ -64,9 +66,13 @@ export function presentSolverRules(config: SolverConfig, members: readonly Membe
   return { listas: pools, personas, noJuntos, presencia };
 }
 
-export async function getSolverRulesResult(_args: Record<string, never>, deps: GetSolverRulesDeps = defaultDeps): Promise<CallToolResult> {
+export async function getSolverRulesResult(
+  _args: Record<string, never>,
+  allMembers: boolean,
+  deps: GetSolverRulesDeps = defaultDeps,
+): Promise<CallToolResult> {
   return runReadTool("get_solver_rules", async () => {
-    const [{ config }, members] = await Promise.all([deps.rules(), deps.members()]);
+    const [{ config }, members] = await Promise.all([deps.rules(), deps.members(allMembers)]);
     return successResult(presentSolverRules(config, members));
   });
 }
@@ -80,6 +86,6 @@ export function registerGetSolverRules(server: McpServer): void {
       inputSchema: GET_SOLVER_RULES_INPUT,
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
-    async () => getSolverRulesResult({}),
+    async (_args, ctx: ServerContext) => getSolverRulesResult({}, readsAllMembers(ctx)),
   );
 }

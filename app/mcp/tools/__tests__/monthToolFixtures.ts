@@ -15,13 +15,14 @@ import { deps as planDeps, snapshot, sources, successFor } from "@/app/utils/__t
 import type { V3SolveRequest } from "@/app/components/admin/v3Wire";
 import type { V3PlanSources } from "@/app/utils/v3MonthPlanReads";
 import { mergeState, parseProposal, type NewProposalDocument, type StoredProposal } from "../../monthProposals/proposalDocument";
-import type { McpPrincipal } from "../../monthProposals/principal";
+import type { MonthPrincipal } from "../../monthProposals/principal";
 import type { SolveMonthDeps } from "../solveMonth";
 import type { ApplyScheduleDeps } from "../applySchedule";
 
 export const BASE_MS = Date.parse("2026-10-20T18:00:00.000Z");
 export const HANDLE = "0123456789abcdefghjkmnpqrs";
-export const PRINCIPAL: McpPrincipal = { sub: "m-admin", origin: "https://owt.example" };
+/** A super-admin's call (`allMembers: true`, what every month tool read before slice B). */
+export const PRINCIPAL: MonthPrincipal = { sub: "m-admin", origin: "https://owt.example", allMembers: true };
 
 type Row = Record<string, unknown>;
 

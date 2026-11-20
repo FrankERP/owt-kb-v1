@@ -195,7 +195,8 @@ export interface AudienceMember {
 export interface AvailabilityDeps {
   hasToken: () => boolean;
   readRecords: (fromIso: string) => Promise<ConflictRecord[]>;
-  reads: typeof loadV3PlanSources;
+  /** The plan reads, already bound to their member scope (the default: every ministry, see below). */
+  reads: () => ReturnType<typeof loadV3PlanSources>;
   readLedger: (months: readonly string[]) => Promise<FairnessLedgerResponse>;
   engine: () => string;
   acts: () => boolean;
@@ -229,7 +230,10 @@ export function defaultAvailabilityDeps(): AvailabilityDeps {
       if (!Array.isArray(rows)) throw new Error("records");
       return rows as ConflictRecord[];
     },
-    reads: loadV3PlanSources,
+    // Every ministry's members (`allMembers: true`), exactly what this sweep has always read: it runs
+    // outside the MCP, with no caller tier to bind from. Whether it should read worship members only
+    // is a separate decision (MCP slice B plan §8), not changed by binding it out loud here.
+    reads: () => loadV3PlanSources({ allMembers: true }),
     readLedger: loadV3Ledger,
     engine: () => resolveSolverEngine(process.env),
     acts: () => fairnessRecordEnvironment(process.env) === "production" && !sweepDisabled(),

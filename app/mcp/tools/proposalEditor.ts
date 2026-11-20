@@ -48,7 +48,7 @@ import {
 } from "../monthProposals/proposalDocument";
 import { loadProposal, saveRevision, sweepExpired } from "../monthProposals/proposalStore";
 import { observeProposal, phase3Refusals } from "../monthProposals/observe";
-import { principalOf, type McpPrincipal } from "../monthProposals/principal";
+import { monthPrincipalOf, type MonthPrincipal } from "../monthProposals/principal";
 import { memberTokenKey, memberTokens, type MemberTokenKey, type MemberTokens } from "../monthProposals/memberTokens";
 import { boardFindings, childDrafts, proposalBoard, serverPickCandidates, type EditorBoard, type Finding } from "../monthProposals/editorBoard";
 import { NOT_ELIGIBLE_SENTENCE, replayEdits, seatedIds, type EditorEdit, type EditorMember, type ReplayRefusal, type SeatRef } from "../monthProposals/revise";
@@ -188,7 +188,7 @@ const notFound = () => refusal([L.proposalNotFound], { code: "not_found", detail
 // ── Opening a proposal (shared by the three tools) ───────────────────────────
 
 interface EditorContext {
-  principal: McpPrincipal;
+  principal: MonthPrincipal;
   handle: string;
   proposal: StoredProposal;
   root: string;
@@ -205,7 +205,7 @@ const isWorship = (m: EditorMember) => normalizeMinistries(m.ministries).include
 
 async function openProposal(
   handle: string,
-  principal: McpPrincipal | null,
+  principal: MonthPrincipal | null,
   deps: EditorDeps,
 ): Promise<{ ok: true; ctx: EditorContext } | { ok: false; result: CallToolResult }> {
   const fail = (result: CallToolResult) => ({ ok: false as const, result });
@@ -226,7 +226,7 @@ async function openProposal(
     console.error("[mcp-editor] member token secret unavailable");
     return fail(refusal([E.noSecret], { code: "integrity_conflict", detail: "no_secret" }));
   }
-  const read = await deps.reads();
+  const read = await deps.reads({ allMembers: principal.allMembers });
   if (!read.ok) return fail(refusal([L.sources(read.failed)], { code: "integrity_conflict", detail: "sources", retry: true }));
   const sources = read.value;
   const states = sources.snapshot.readiness.sources;
@@ -473,7 +473,7 @@ function refusalView(r: ReplayRefusal, ctx: EditorContext) {
 
 export async function checkProposalEditsResult(
   args: CheckProposalEditsArgs,
-  principal: McpPrincipal | null,
+  principal: MonthPrincipal | null,
   deps: EditorDeps = defaultEditorDeps(),
 ): Promise<CallToolResult> {
   return runWriteTool(
@@ -651,14 +651,14 @@ async function saveEdits(
   }
 
   // E3 (b) again from a fresh roles read: the month check in between took time.
-  const fresh = await deps.reads();
+  const fresh = await deps.reads({ allMembers: ctx.principal.allMembers });
   if (!fresh.ok) return refusal([L.sources(fresh.failed), E.saveFailed], { code: "integrity_conflict", detail: "sources", retry: true });
   if (observeProposal(proposal, fresh.value.snapshot.roles).created.size > 0) {
     return refusal([E.startedApplying], { code: "stale_revision", detail: "started_applying" });
   }
   const saved = await callDomain(() =>
     deps.saveRevision(proposal, built.doc, async (base) => {
-      const again = await deps.reads();
+      const again = await deps.reads({ allMembers: ctx.principal.allMembers });
       if (!again.ok) throw new Error("reads");
       return observeProposal(base, again.value.snapshot.roles).created.size > 0 ? "started_applying" : null;
     }));
@@ -699,7 +699,7 @@ async function saveEdits(
 
 export async function saveProposalEditsResult(
   args: SaveProposalEditsArgs,
-  principal: McpPrincipal | null,
+  principal: MonthPrincipal | null,
   deps: EditorDeps = defaultEditorDeps(),
 ): Promise<CallToolResult> {
   return runWriteTool(
@@ -729,7 +729,7 @@ export async function saveProposalEditsResult(
 
 export async function reviseProposalResult(
   args: ReviseProposalArgs,
-  principal: McpPrincipal | null,
+  principal: MonthPrincipal | null,
   deps: EditorDeps = defaultEditorDeps(),
 ): Promise<CallToolResult> {
   return runWriteTool(
@@ -776,7 +776,7 @@ export function registerProposalEditor(server: McpServer, opts: { appsHost?: boo
       // The card follows a revision into the chat (E8).
       _meta: PROPOSAL_CARD_TOOL_META,
     },
-    async (args, ctx: ServerContext) => reviseProposalResult(args, principalOf(ctx)),
+    async (args, ctx: ServerContext) => reviseProposalResult(args, monthPrincipalOf(ctx)),
   );
 }
 
@@ -791,7 +791,7 @@ function registerProposalAppTools(server: McpServer): void {
       annotations: { readOnlyHint: true, openWorldHint: false },
       _meta: APP_ONLY_META,
     },
-    async (args, ctx: ServerContext) => checkProposalEditsResult(args, principalOf(ctx)),
+    async (args, ctx: ServerContext) => checkProposalEditsResult(args, monthPrincipalOf(ctx)),
   );
   server.registerTool(
     "save_proposal_edits",
@@ -803,6 +803,6 @@ function registerProposalAppTools(server: McpServer): void {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
       _meta: APP_ONLY_META,
     },
-    async (args, ctx: ServerContext) => saveProposalEditsResult(args, principalOf(ctx)),
+    async (args, ctx: ServerContext) => saveProposalEditsResult(args, monthPrincipalOf(ctx)),
   );
 }

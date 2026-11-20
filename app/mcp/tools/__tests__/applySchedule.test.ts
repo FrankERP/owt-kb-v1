@@ -24,7 +24,7 @@ import { APPLY_SCHEDULE_COPY, APPLY_SCHEDULE_INPUT, applyScheduleResult } from "
 import { solveMonthResult, type SolveMonthArgs } from "../solveMonth";
 import { draftLabel } from "../../monthProposals/labels";
 import type { StoredProposal } from "../../monthProposals/proposalDocument";
-import type { McpPrincipal } from "../../monthProposals/principal";
+import type { MonthPrincipal } from "../../monthProposals/principal";
 import { BASE_MS, HANDLE, PRINCIPAL, applyWorld, solveDeps, storedFrom, textOf, type ApplyWorldOptions } from "./monthToolFixtures";
 
 const ARGS = { proposal: HANDLE };
@@ -46,7 +46,7 @@ const creatableCount = (p: StoredProposal) => p.payload.drafts.filter((d) => d.a
 
 /** Every answer this suite produced, for the copy-hygiene sweep at the end. */
 const answers: CallToolResult[] = [];
-async function apply(w: ReturnType<typeof applyWorld>, principal: McpPrincipal | null = PRINCIPAL, args = ARGS) {
+async function apply(w: ReturnType<typeof applyWorld>, principal: MonthPrincipal | null = PRINCIPAL, args = ARGS) {
   const out = await applyScheduleResult(args, principal, w.deps);
   answers.push(out);
   return out;

@@ -3,8 +3,12 @@
 //
 //   - the admin roles rows (`adminRolesQuery`, the roles GET's own GROQ) — the planner's
 //     `existingRoles`, `allRoles` and `storedSource.roles`;
-//   - the members (`adminMembersQuery(true)`: the connector is super-admin only, and a
-//     super-admin's members GET binds `all: true`);
+//   - the members (`adminMembersQuery(allMembers)`, bound by the CALLER as the members GET
+//     binds it from the live role: `true` only for a super-admin (`readsAllMembers` in
+//     `app/mcp/monthProposals/principal.ts`), `false` for a worship admin. `true` does not
+//     add a field: it turns the worship filter OFF (`WORSHIP_MEMBER_GROQ_FILTER`'s `$all`
+//     arm) and returns every ministry's members — ADR-0075's isolation holds at the query,
+//     not downstream. The availability sweep binds `true` explicitly, as it always read;
 //   - the stored rules and their `_rev`, through the route GET's own body and the
 //     browser's own `sourceFromGet` (an absent document solves with the defaults and
 //     binds `rev: null`; a present one without a revision is a failed read, as there);
@@ -72,9 +76,17 @@ export async function readRules(): Promise<V3PlanRules> {
   return { rev: source.status === "ready" ? source.rev : null, config };
 }
 
-export async function loadV3PlanSources(): Promise<V3PlanSourcesResult> {
+/**
+ * Which members the read returns. REQUIRED, with no default, so `tsc` refuses a call site that has
+ * not chosen: `true` is every ministry's members (a super-admin's view), `false` worship only.
+ */
+export interface V3PlanReadScope {
+  allMembers: boolean;
+}
+
+export async function loadV3PlanSources(scope: V3PlanReadScope): Promise<V3PlanSourcesResult> {
   const roles = adminRolesQuery();
-  const members = adminMembersQuery(true);
+  const members = adminMembersQuery(scope.allMembers);
   const [rolesRead, membersRead, rulesRead] = await Promise.all([
     settle(async () => {
       const rows: unknown = await operationalClient.fetch(roles.query, roles.params);
