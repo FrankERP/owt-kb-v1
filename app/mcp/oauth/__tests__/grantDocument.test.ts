@@ -7,7 +7,9 @@ import {
   GRANT_FIELDS,
   GRANT_ID_PREFIX,
   GRANT_READ_FIELDS,
+  ADMIN_WRITES_CUTOFF,
   LEGACY_GRANT_CUTOFF,
+  adminScopeOf,
   effectiveGrantClient,
   MCP_OAUTH_CODE_REDEMPTION_TYPE,
   MCP_OAUTH_GRANT_TYPE,
@@ -218,5 +220,28 @@ describe("effectiveGrantClient (ADR-0083)", () => {
     expect(effectiveGrantClient({ client: null, origin: PROD, createdAt: null })).toBe("loopback");
     expect(effectiveGrantClient({ client: null, origin: PROD, createdAt: "not a date" })).toBe("loopback");
     expect(effectiveGrantClient({ client: null, origin: DEV, createdAt: before })).toBe("loopback");
+  });
+});
+
+describe("adminScopeOf (ADR-0083 addendum)", () => {
+  const at = Date.parse(ADMIN_WRITES_CUTOFF);
+  const iso = (ms: number) => new Date(ms).toISOString();
+
+  it("the cutoff parses and comes after slice A's legacy cutoff", () => {
+    expect(Number.isFinite(at)).toBe(true);
+    expect(at).toBeGreaterThan(Date.parse(LEGACY_GRANT_CUTOFF));
+  });
+
+  it("a grant created at or after the cutoff reaches the admin list", () => {
+    expect(adminScopeOf({ createdAt: ADMIN_WRITES_CUTOFF })).toBe("admin");
+    expect(adminScopeOf({ createdAt: iso(at + 1) })).toBe("admin");
+  });
+
+  it("before the cutoff, absent or unparseable keeps the read-only list its holder approved (fail closed)", () => {
+    expect(adminScopeOf({ createdAt: iso(at - 1) })).toBe("adminRead");
+    expect(adminScopeOf({ createdAt: LEGACY_GRANT_CUTOFF })).toBe("adminRead");
+    expect(adminScopeOf({ createdAt: null })).toBe("adminRead");
+    expect(adminScopeOf({ createdAt: "not a date" })).toBe("adminRead");
+    expect(adminScopeOf({ createdAt: "" })).toBe("adminRead");
   });
 });

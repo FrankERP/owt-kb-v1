@@ -252,10 +252,13 @@ looks wrong** — several exist to stop a plausible-looking change.
   never add it, any auto-submit, or any reduced-power session to a deployed origin. Its own secret
   (`APP_AUTH_SECRET`), store (`app/appAuth/grantStore.ts`, 503 without the write token) and
   matcher exclusions (`/api/app/v1`, the two callback pages).
-- **Who connects an agent (ADR-0083):** `mcpTierOf` on the LIVE access — super-admin `"full"`, worship
-  admin `"read"` (`READ_TIER_TOOLS`, an allowlist), never stored; the five app-only tools only on a
-  grant whose `client` is `"claude"`; the redirect list stays CLOSED (claude.ai, ChatGPT's stable
-  callback, loopback).
+- **Who connects an agent (ADR-0083 + addendum):** `mcpTierOf` on the LIVE access — super-admin `"full"`,
+  worship admin `"admin"`, never stored. An admin reaches `ADMIN_TIER_TOOLS` (a literal allowlist:
+  everything but `SUPER_ADMIN_ONLY_TOOLS` = Kids + people + the two rule tools), or `READ_TIER_TOOLS` on a grant made before
+  `ADMIN_WRITES_CUTOFF` (reset it on ANY re-release); every tool is in exactly one list (test). The five
+  app-only tools only on a grant whose `client` is `"claude"`; every model-visible destructive tool
+  carries `PERSON_CONFIRMS_RULE`; month tools bind the member read from the live tier
+  (`readsAllMembers`); the redirect list stays CLOSED (claude.ai, ChatGPT's stable callback, loopback).
 - **MCP tools register only in `registerAllTools`** (`app/mcp/toolList.ts`): each list's digest
   (`TOOL_LIST_VERSIONS`, one per handler since ADR-0083) is the `toolsVersion` its model-visible tools
   ask for, and a stale copy gets a refresh note (ADR-0069). Guidance that depends on an answer goes in the answer, not the description.

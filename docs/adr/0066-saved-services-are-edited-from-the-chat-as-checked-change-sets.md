@@ -200,3 +200,6 @@ model-visible, read-only `check_service_deletes` and show its lines in the card'
 The app-only tools this record relies on are registered only for a grant whose client is claude.ai.
 Another agent's grant never lists them, so the «host hides them from the model» guarantee holds
 wherever they exist.
+
+Since ADR-0083's addendum (2026-11-09), these tools are also registered for a worship admin's
+claude.ai grant made after `ADMIN_WRITES_CUTOFF`; still never for another agent's grant.
