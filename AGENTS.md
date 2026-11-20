@@ -247,7 +247,7 @@ looks wrong** — several exist to stop a plausible-looking change.
   callback that drops it (`authRedirectCallback.test.ts`; `docs/MCP.md`).
 - **Who connects an agent (ADR-0083 + addendum):** `mcpTierOf` on the LIVE access — super-admin `"full"`,
   worship admin `"admin"`, never stored. An admin reaches `ADMIN_TIER_TOOLS` (a literal allowlist:
-  everything but `SUPER_ADMIN_ONLY_TOOLS` = Kids + people), or `READ_TIER_TOOLS` on a grant made before
+  everything but `SUPER_ADMIN_ONLY_TOOLS` = Kids + people + the two rule tools), or `READ_TIER_TOOLS` on a grant made before
   `ADMIN_WRITES_CUTOFF` (reset it on ANY re-release); every tool is in exactly one list (test). The five
   app-only tools only on a grant whose `client` is `"claude"`; every model-visible destructive tool
   carries `PERSON_CONFIRMS_RULE`; month tools bind the member read from the live tier
