@@ -1,11 +1,17 @@
 # Routes & Rendering — App Router pages
 
-The app uses **three route groups**, each with its own root `<html>`/`<body>` layout:
+The app uses **four route groups**, each with its own root `<html>`/`<body>` layout:
 - **`app/(client)/`** — the member-facing app.
 - **`app/(admin)/`** — only the embedded Sanity Studio.
 - **`app/(gallery)/`** — the theme gallery, a **public** (ADR-0017) review surface for the light-mode
   migration. Its root layout sits **at** the `[theme]` dynamic segment rather than at the
   group root, which is unusual and deliberate — see [ADR-0015](adr/0015-gallery-root-layout.md).
+- **`app/(appauth)/`** — the native apps' sign-in pages (ADR-0091): `/app/authorize` (the
+  confirmation screen, session-gated, `force-dynamic`), its POST `/app/authorize/submit` (a route
+  handler that mints the code on the person's tap) and the two inert callback pages
+  `/app/callback/ios` and `/app/callback/android` (public, `force-dynamic`, render a fixed sentence
+  and nothing from the query). Its root layout imports nothing that reads a session, cookie,
+  network or env (`appAuthStatic.test.ts`), carries none of the `(client)` chrome, and is dark only.
 
 Route groups in parentheses **do not** contribute to the URL. There is no top-level
 `app/layout.tsx` or `app/page.tsx`; each group supplies its own root layout. Access control is

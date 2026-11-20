@@ -132,7 +132,8 @@ Next.js 16 renamed `middleware.ts` → **`proxy.ts`**. It wraps the app in NextA
 
 **Matcher** — protects everything except a small public allow-list (`/auth*`, `/api/auth*`,
 `/api/cron*`, `/api/calendar*`, `/api/service-readiness-verification/identity`, `/theme-gallery*`, `/api/mcp*`,
-`/api/oauth/register`, `/api/oauth/token`, `/.well-known/*`, `_next/static`, `_next/image`,
+`/api/oauth/register`, `/api/oauth/token`, `/.well-known/*`, `/api/app/v1*`, `/app/callback/ios`,
+`/app/callback/android`, `_next/static`, `_next/image`,
 `favicon.ico`, `LogoOasis.png`, `/icons`, `manifest.webmanifest`).
 The cron routes authenticate with `Bearer CRON_SECRET` in-handler; the identity route fails
 closed with a 404; the theme gallery is prerendered and reads nothing (ADR-0017); the MCP/OAuth
@@ -143,6 +144,11 @@ verifier (or a signed refresh token), and `/api/mcp` checks its own bearer token
 appearing in this list.
 Each excluded prefix is anchored with `(?:/|$)` so `/author` is **not** mistaken for the public
 `/auth` route (this was a real login-gate-bypass bug — the anchor is the fix).
+The native-app API (`/api/app/v1/*`) reads no cookie: its two door endpoints take a signed code
+plus its PKCE verifier, or a signed refresh token, and every other route calls `requireAppSession`
+first (ADR-0091, [below](#native-apps)). The two app callback pages render a fixed sentence and
+nothing from the query; a signed-out browser must not be bounced through sign-in carrying the code
+in `callbackUrl`. `/app/authorize` and its POST stay gated.
 The member calendar feed (`/api/calendar/<memberId>/<generation>/<token>.ics`)
 is fetched by calendar apps with no session; its handler verifies an HMAC under
 `CALENDAR_FEED_SECRET` over the member id and generation with zero I/O before any read, then
@@ -182,6 +188,39 @@ relies on the middleware's `redirect` callback staying NextAuth's default — th
 
 ---
 
+## Native apps
+
+The native iPhone/iPad/Mac and Android apps sign in through their OWN first-party OAuth 2.0
+authorization-code + PKCE door ([ADR-0091](adr/0091-native-apps-sign-in-through-their-own-first-party-oauth-door.md);
+the runbook is in [MOBILE.md](MOBILE.md#native-apps--sign-in-fase-0-slice-a1-adr-0091)) — a third
+authentication surface, separate from the cookie session and from MCP:
+
+- **Its own secret and tokens** (`APP_AUTH_SECRET`; `app-code` 60 s, `app-at` 1 h with
+  `aud = <origin>/api/app`, `app-rt` 90 d, rotating, reuse revokes the grant) and its own documents
+  (`appAuthGrant`, `appAuthCodeRedemption`), written only by `app/appAuth/grantStore.ts`, an
+  instance of the protocol it shares with the MCP store (`app/oauthCore/grantStoreProtocol.ts`).
+- **Two static public clients**, `backstage-ios` and `backstage-android`, each with ONE verified
+  `https` redirect on production and preview (`<origin>/app/callback/{ios,android}`); the private
+  scheme exists only on localhost.
+- **One visible tap** on `/app/authorize` before any code: only the same-origin POST to
+  `/app/authorize/submit` mints one, for a signed-in, active, non-impersonating person, never on
+  Android 11 or older (the `Sec-CH-UA-Platform-Version` hint; fails closed).
+- **`requireAppSession(request, { needs })`** (`app/appAuth/requireAppSession.ts`) is the one guard
+  of every other `/api/app/v1/*` route, first statement, with a literal level (guarded): bearer
+  token → grant (not revoked, same person, this deployment) → LIVE access (inactive → 401
+  `account_disabled`) → `meetsNeeds` (`self`, a ministry `member`/`manager`, Jóvenes `planner` =
+  `plansInMinistry`, `manager`, `super-admin` — the cookie guards' own predicates) → 403. A Sanity
+  failure is 503, never 401. Every session carries the person's full live role: there is no
+  reduced-power app session.
+- **Revocation:** the app's sign-out (`/api/app/v1/auth/revoke`), «Apps conectadas» in
+  `/me/ajustes` (`/api/me/app-sessions/[grantId]/revoke`, own grants of this deployment only,
+  refused while impersonating), and a super-admin's «Cerrar sesiones de la app» in «Personas»
+  (`/api/admin/members/[id]/app-sessions/revoke`, LIVE role, one transaction). Disabling a member
+  refuses their app within 30 s (the live-access and grant caches), and a revocation lands within
+  30 s the same way.
+
+---
+
 ## Server-side guards (`app/utils/authGuards.ts`)
 
 ```ts
@@ -203,6 +242,13 @@ Applied to all routes:
 - `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`
 - `Referrer-Policy: strict-origin-when-cross-origin`
 - `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()`
+
+The native-app sign-in pages override some of these, in entries placed AFTER the global one (Next
+sends the last entry's value): `/app/authorize` and `/app/authorize/submit` send
+`X-Frame-Options: DENY`, `frame-ancestors 'none'`, `Referrer-Policy: same-origin`, `no-store`, and
+`Accept-CH`/`Critical-CH: Sec-CH-UA-Platform-Version`; the two callback pages send
+`Referrer-Policy: no-referrer`, `no-store`, `X-Robots-Tag: noindex`, `X-Frame-Options: DENY`
+(`appAuthHeaders.test.ts`).
 
 `poweredByHeader: false`. Image `remotePatterns` allow only `cdn.sanity.io` and
 `lh3.googleusercontent.com`.
@@ -315,6 +361,8 @@ Full list (names only — never print values; `.env.local` is git/claude-ignored
 | `ANTHROPIC_API_KEY` | The admin assistant's Claude API key (prod and preview each its own workspace); see [SECRETS.md](SECRETS.md#anthropic_api_key) |
 | `MCP_OAUTH_SECRET` | Signs every MCP/OAuth client id, code and token; see [SECRETS.md](SECRETS.md#mcp_oauth_secret) |
 | `MCP_DISABLED` | MCP/OAuth kill switch, not a secret; see [SECRETS.md](SECRETS.md#mcp_disabled) |
+| `APP_AUTH_SECRET` | Signs every native-app code and token (prod and preview each their own); see [SECRETS.md](SECRETS.md#app_auth_secret) |
+| `APP_AUTH_DISABLED` | Native-app sign-in kill switch, not a secret; see [SECRETS.md](SECRETS.md#app_auth_disabled) |
 | `VERCEL_ENV` / `VERCEL_GIT_COMMIT_SHA` | Vercel system vars (not configured by hand), read by the MCP/OAuth routes to pick this deployment's canonical origin and report its commit — see the matching entry in [SECRETS.md](SECRETS.md) |
 | `CATALOG_DIR`, `MEMBER_ID`, `PASSWORD` | One-off script args |
 

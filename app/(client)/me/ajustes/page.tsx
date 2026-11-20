@@ -10,6 +10,8 @@ import { revealProps } from "@/app/utils/reveal";
 import { PAGE_TITLE } from "@/app/utils/homeHero";
 import { MEMBER_PROFILE_QUERY } from "../queries";
 import { loadCalendarFeedState } from "@/app/utils/calendarFeedState";
+import ConnectedAppsPanel from "@/app/components/ConnectedAppsPanel";
+import { loadConnectedApps } from "@/app/appAuth/connectedApps";
 
 // Ajustes, alone (R3 F3). Tema, Tamaño de texto and Perfil used to sit at the
 // bottom of `/me`, below the services, the availability calendar and the Kids
@@ -56,6 +58,11 @@ export default async function AjustesPage() {
   // request — `requireActiveSession` reads the session cookie, so `revalidate` never shares it.
   const calendarFeed = await loadCalendarFeedState(session.user);
 
+  // «Apps conectadas» (ADR-0091): the person's live native-app sessions on this deployment.
+  // Empty while impersonating (the panel then says why), and empty (so not rendered) for everyone
+  // until the apps ship.
+  const connectedApps = await loadConnectedApps(session.user);
+
   return (
     <div>
       <Navbar title={member?.alias?.trim() || "Ajustes"} />
@@ -101,6 +108,7 @@ export default async function AjustesPage() {
             <SettingsCard member={null} calendarFeed={calendarFeed} className="mt-11" {...revealProps(2)} />
           </>
         )}
+        <ConnectedAppsPanel initial={connectedApps} impersonating={Boolean(session.user.isImpersonating)} />
       </div>
     </div>
   );

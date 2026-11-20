@@ -848,6 +848,16 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   there is `leader`, then the normalized `leaderOf` (a subset of `groupsIn`). No admin or
   super-admin arm — test `isMinistryManager` first. Never compare a level with `"leader"` to decide
   access (`ledGroupsCoverage.test.ts`).
+- **`plansInMinistry(access, ministry)`** ([ministryAccess.ts](../app/utils/ministryAccess.ts),
+  ADR-0091) — «may plan in a leveled ministry»: its manager (an `admin` level, or super-admin) or a
+  leader of at least one group (`ledGroupsIn` non-empty). The `/jovenes/admin` gate and «Planear» on
+  the other three Jóvenes pages, and the native app's `{ ministry: "jovenes", as: "planner" }`
+  level. A caller then narrows a non-manager to `ledGroupsIn`.
+- **`requireAppSession(request, { needs })`** ([app/appAuth/requireAppSession.ts](../app/appAuth/requireAppSession.ts),
+  ADR-0091) — THE guard of every `/api/app/v1/*` route, first statement, literal level: bearer
+  token → grant → LIVE access → `meetsNeeds` ([levels.ts](../app/appAuth/levels.ts), the cookie
+  guards' own predicates). Returns `{ ok: true, session: { sanityId, access, platform, grantId,
+  origin } }` or a ready `Response` (401 `invalid_token`/`account_disabled`, 403, 404, 503).
 - **`normalizeMinistryRoles(raw, ministries)`**, **`isGroupId(ministry, x)`**,
   **`ASSIGNABLE_MINISTRY_IDS`**, **`LEVELED_MINISTRY_IDS`**, **`MINISTRY_LEVELS`**
   ([ministries.ts](../app/ministries.ts)) — the one reading of `teamMembers.ministryRoles` (fails

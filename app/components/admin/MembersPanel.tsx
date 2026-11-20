@@ -1012,6 +1012,38 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
     }
   };
 
+  /**
+   * «Cerrar sesiones de la app» (ADR-0091, spec D9): a lost phone. Closes every native-app session
+   * the member has on this deployment, all or none. No confirm: it takes nothing the member cannot
+   * get back by signing in again, and access itself is the separate «Deshabilitar acceso».
+   */
+  const handleRevokeAppSessions = async (member: Member) => {
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/admin/members/${encodeURIComponent(member._id)}/app-sessions/revoke`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        showToast(body.error ?? "No se pudo cerrar; intenta de nuevo.");
+        return;
+      }
+      const body = (await res.json().catch(() => ({}))) as { revoked?: number };
+      const n = typeof body.revoked === "number" ? body.revoked : 0;
+      showToast(
+        n === 0
+          ? `${displayName(member)} no tenía sesiones abiertas en la app.`
+          : n === 1
+            ? `Se cerró 1 sesión de la app de ${displayName(member)}.`
+            : `Se cerraron ${n} sesiones de la app de ${displayName(member)}.`,
+      );
+    } catch {
+      showToast("Error de conexión.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // Taking access away is the one row action that asks first (decision O);
   // GIVING it back does not — it restores what the member already had, and a
   // confirm on a reversible, non-destructive action only teaches admins to
@@ -1303,6 +1335,13 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
                             <MenuItem icon={<MaskIcon />} onSelect={() => handleImpersonate(m._id)}>
                               Ver como este miembro
                             </MenuItem>
+                            <MenuItem
+                              icon={<PhoneOffIcon />}
+                              disabled={submitting}
+                              onSelect={() => void handleRevokeAppSessions(m)}
+                            >
+                              Cerrar sesiones de la app
+                            </MenuItem>
                             <MenuSeparator />
                             <MenuItem
                               icon={<BanIcon />}
@@ -1463,6 +1502,16 @@ function BanIcon() {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="10" />
       <line x1="4.9" y1="4.9" x2="19.1" y2="19.1" />
+    </svg>
+  );
+}
+
+function PhoneOffIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="6" y="2" width="12" height="20" rx="2" />
+      <line x1="11" y1="18" x2="13" y2="18" />
+      <line x1="3" y1="3" x2="21" y2="21" />
     </svg>
   );
 }

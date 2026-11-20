@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { requireActiveSession } from "@/app/utils/authGuards";
 import { getMemberAccess } from "@/app/utils/memberAccess";
-import { isMinistryManager, isMinistryMember, ledGroupsIn } from "@/app/utils/ministryAccess";
+import { isMinistryManager, isMinistryMember, ledGroupsIn, plansInMinistry } from "@/app/utils/ministryAccess";
 import {
   MinistryEventReadUnavailable,
   readMinistryEvents,
@@ -55,10 +55,11 @@ export default async function JovenesPlannerPage({ searchParams }: { searchParam
   if (!rolloutAllows("jovenesEvents", access)) notFound();
   if (!access.active || !isMinistryMember(access, "jovenes")) redirect("/");
   const isManager = isMinistryManager(access, "jovenes");
-  // The groups this person LEADS (per group, plan 2026-11-11 §5.1); a pastor who leads none — a
-  // `leader` with an empty `leaderOf` included — has nothing to plan: back to Jóvenes' Inicio.
+  // Only a planner — a manager, or a leader of at least one group (per group, plan 2026-11-11
+  // §5.1) — plans; a pastor who leads none (a `leader` with an empty `leaderOf` included) goes back
+  // to Jóvenes' Inicio. `plansInMinistry` is the ONE predicate the app's `planner` level shares (ADR-0091).
+  if (!plansInMinistry(access, "jovenes")) redirect("/jovenes");
   const led = ledGroupsIn(access, "jovenes");
-  if (!isManager && led.length === 0) redirect("/jovenes");
 
   const today = new Date().toLocaleDateString("sv", { timeZone: TZ });
   const month = parseMonth((await searchParams).mes, today.slice(0, 7));

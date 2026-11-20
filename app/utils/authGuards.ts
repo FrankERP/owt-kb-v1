@@ -3,6 +3,7 @@ import { authOptions } from "@/auth";
 import { getMemberAccess, isMemberActive } from "./memberAccess";
 import { isMinistryManager, isMinistryMember } from "./ministryAccess";
 import type { MinistryId } from "@/app/ministries";
+import { MANAGER_ROLES } from "./managerRoles";
 
 export type ActiveSession = Session | null;
 
@@ -23,7 +24,7 @@ export async function requireActiveSession(): Promise<ActiveSession> {
 export async function requireActiveManager(): Promise<ActiveSession> {
   const session = await requireActiveSession();
   const role = session?.user?.role;
-  if (!session || !role || !["super-admin", "admin", "content-editor"].includes(role)) return null;
+  if (!session || !role || !MANAGER_ROLES.includes(role)) return null;
   return session;
 }
 

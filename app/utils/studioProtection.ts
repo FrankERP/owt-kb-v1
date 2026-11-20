@@ -79,6 +79,10 @@ export const PROTECTED_STUDIO_TYPES = [
   // machine coordination state above, not like `kidsPair`/`kidsSchedule`.
   "mcpOauthGrant",
   "mcpOauthCodeRedemption",
+  // Native-app sign-in state (ADR-0091): the same shape and the same treatment as the MCP
+  // OAuth state above — written only by `app/appAuth/grantStore.ts`.
+  "appAuthGrant",
+  "appAuthCodeRedemption",
   // The member calendar feed's generation counter (ADR-0057): machine state written only by
   // `POST /api/me/calendar-feed`. Internal, like the MCP OAuth state above.
   "calendarFeed",
@@ -193,6 +197,8 @@ export const INTERNAL_STUDIO_TYPES = [
   "fairnessMonth",
   "mcpOauthGrant",
   "mcpOauthCodeRedemption",
+  "appAuthGrant",
+  "appAuthCodeRedemption",
   "calendarFeed",
   "adminChatUsage",
   "mcpProposal",
@@ -289,6 +295,21 @@ export const INTERNAL_STUDIO_FIELDS: Readonly<Record<string, readonly string[]>>
     "revokedReason",
   ],
   mcpOauthCodeRedemption: ["redeemedAt"],
+  // Every field an app sign-in type may carry — written only by `app/appAuth/grantStore.ts`,
+  // mirroring `APP_GRANT_FIELDS` in `app/appAuth/documentTypes.ts` (pinned by its test).
+  appAuthGrant: [
+    "sub",
+    "clientId",
+    "platform",
+    "origin",
+    "createdAt",
+    "lastRefreshAt",
+    "currentRefreshJti",
+    "revoked",
+    "revokedAt",
+    "revokedReason",
+  ],
+  appAuthCodeRedemption: ["redeemedAt"],
   calendarFeed: ["member", "generation", "rotatedAt"],
   adminChatUsage: ["member", "month", "spentMicroUsd", "questions", "updatedAt"],
   // Every field an `mcpProposal` may carry — written only by
@@ -603,6 +624,8 @@ export const PROTECTED_STUDIO_TITLES: Readonly<Record<ProtectedStudioType, strin
   kidsSchedule: "Kids — Roles del domingo (solo lectura)",
   mcpOauthGrant: "MCP OAuth — Concesiones (solo lectura)",
   mcpOauthCodeRedemption: "MCP OAuth — Códigos canjeados (solo lectura)",
+  appAuthGrant: "App — Sesiones (solo lectura)",
+  appAuthCodeRedemption: "App — Códigos canjeados (solo lectura)",
   calendarFeed: "Enlaces de calendario (solo lectura)",
   adminChatUsage: "Asistente — Gasto por admin (solo lectura)",
   mcpProposal: "MCP — Propuestas de mes (solo lectura)",

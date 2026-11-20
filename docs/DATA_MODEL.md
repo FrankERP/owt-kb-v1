@@ -15,11 +15,12 @@ exact strings used in GROQ `_type` filters.
 
 `post`, `tag`, `author`, `featuredSongs`, `saturdarSongs`, `saturday_role`, `sunday_role`,
 `teamMembers`, `special_role`, `loginEvent`, `setlistProposal`, `serviceThread` (ADR-0065),
-`homeSettings` (ADR-0070), the two Oasis Kids types `kidsPair` and `kidsSchedule`, and thirteen
+`homeSettings` (ADR-0070), the two Oasis Kids types `kidsPair` and `kidsSchedule`, and fifteen
 **internal** types never authored by hand:
 `roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`, `specialIdentityCoordinator`,
 `solverConfig`, `fairnessMonth`, `mcpOauthGrant`, `mcpOauthCodeRedemption`, `calendarFeed`,
-`adminChatUsage`, `mcpProposal`, `availabilityConflict` (ADR-0079), `ministryEvent` (ADR-0081).
+`adminChatUsage`, `mcpProposal`, `availabilityConflict` (ADR-0079), `ministryEvent` (ADR-0081),
+`appAuthGrant`, `appAuthCodeRedemption` (ADR-0091).
 
 **Not registered** (present but intentionally unused — do not wire in):
 - `sanity/schemas/youtubeType/youtubeType.ts` — object type `youtube`.
@@ -348,6 +349,36 @@ hash nor a refresh `jti` is usable without `MCP_OAUTH_SECRET`. See
 [AUTH_AND_SECURITY → MCP / OAuth](AUTH_AND_SECURITY.md#mcp--oauth) and
 [ADR-0039](adr/0039-mcp-client-registration-is-stateless-dcr.md) for why registration itself
 writes nothing at all.
+
+---
+
+## `appAuthGrant` / `appAuthCodeRedemption` — native-app sign-in state (ADR-0091)
+
+Files: [`documentTypes.ts`](../app/appAuth/documentTypes.ts) (import-free names, prefixes and field
+lists, imported by both schema files) and [`grantDocument.ts`](../app/appAuth/grantDocument.ts) (the
+pure builders). Hidden and read-only in the Studio; written **only** by
+[`app/appAuth/grantStore.ts`](../app/appAuth/grantStore.ts), an instance of the protocol shared with
+the MCP store ([`app/oauthCore/grantStoreProtocol.ts`](../app/oauthCore/grantStoreProtocol.ts)),
+called by the app token and revoke routes and the two «Apps conectadas» revocations.
+
+**`appAuthGrant.<uuid>`** — one per signed-in phone, tablet or computer: `sub` (the member's `_id`),
+`clientId` (`backstage-ios` / `backstage-android`), `platform` (`ios` / `android`, derived from the
+client; a mismatch reads as revoked), `origin` (the issuing deployment; one deployment never
+rotates or lists another's grant), `createdAt`, `lastRefreshAt` (absent until the first refresh),
+`currentRefreshJti` (a refresh with any other `jti` revokes the whole grant), `revoked` (`true`
+unless exactly `false`), `revokedAt`, `revokedReason` (`app_sign_out`, `member_revoked`,
+`admin_revoked`, `refresh_token_reuse`). No token, code, device name or IP. A grant is **live**
+while not revoked and `coalesce(lastRefreshAt, createdAt)` is within 90 days; the `/me` list and
+the admin revoke-all act on live grants only.
+
+**`appAuthCode.<sha256 of the code's jti>`** (`appAuthCodeRedemption`) — the replay guard,
+`redeemedAt` only: `create()` on the deterministic id refuses a second redemption.
+
+**Dotted ids**: every read carries the write token, and the store refuses to run without it (503) —
+an untokened read would answer «no record», which reads as revoked and would sign every phone out.
+Everything in them is safe to be world-readable: a member id is already public, and a refresh `jti`
+is useless without `APP_AUTH_SECRET`. They live in the dataset preview shares with production;
+`origin` keeps the deployments apart.
 
 ---
 
@@ -838,7 +869,7 @@ copy of the leads' pastor's message (ADR-0087):
 `roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`, `specialIdentityCoordinator`,
 `solverConfig`, `fairnessMonth`, `kidsPair`, `kidsSchedule`, `mcpOauthGrant`, `mcpOauthCodeRedemption`,
 `calendarFeed`, `adminChatUsage`, `mcpProposal`, `serviceThread`, `availabilityConflict`,
-`ministryEvent`.
+`ministryEvent`, `appAuthGrant`, `appAuthCodeRedemption`.
 
 `calendarFeed` and `adminChatUsage` are per-member counters, and `mcpProposal` a stored month plan (see their sections above). `mcpOauthGrant` and
 `mcpOauthCodeRedemption` hold OAuth state for the MCP connector (P0 auth): `mcpOauthGrant` is one document per
