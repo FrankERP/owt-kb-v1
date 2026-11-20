@@ -22,7 +22,7 @@ import {
   REVOKE_REASON_REFRESH_REUSE,
   createGrantStore,
   type Fresh,
-  type GrantLookup,
+  type GrantLookup as ProtocolGrantLookup,
   type GrantStoreFailure,
   type ProtocolClient,
   type RotateRefreshResult,
@@ -43,7 +43,9 @@ import type { RedirectTargetKind } from "./redirects";
 import { REFRESH_TOKEN_TTL_SECONDS } from "./tokens";
 
 export type { StoredGrant } from "./grantDocument";
-export type { GrantLookup, GrantStoreFailure, RotateRefreshResult };
+export type { GrantStoreFailure, RotateRefreshResult };
+/** A grant read's outcome; the default type argument is the one this module always exported. */
+export type GrantLookup<G extends StoredGrant = StoredGrant> = ProtocolGrantLookup<G>;
 export { GRANT_CACHE_TTL_MS, REVOKE_REASON_REFRESH_REUSE };
 
 /** A grant read with `loadGrant(id, { fresh: true })` — the only kind `rotateRefresh` takes. */

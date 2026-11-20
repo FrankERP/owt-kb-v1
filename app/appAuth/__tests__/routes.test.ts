@@ -204,7 +204,9 @@ describe("POST /api/app/v1/auth/token — refresh_token", () => {
     store.rotateAppRefresh.mockResolvedValueOnce({ ok: false, reason: "conflict" });
     let res = await refresh();
     expect(res.status).toBe(503);
-    expect((await res.json()).error).toBe("temporarily_unavailable");
+    // A lost race: never «retry in 1 s» with the same (now superseded) token — that is a reuse.
+    expect(await res.json()).toEqual({ error: "temporarily_unavailable", error_description: "refresh_in_progress" });
+    expect(res.headers.get("retry-after")).toBeNull();
 
     store.rotateAppRefresh.mockResolvedValueOnce({ ok: false, reason: "reuse_revoked" });
     res = await refresh();
@@ -215,7 +217,9 @@ describe("POST /api/app/v1/auth/token — refresh_token", () => {
     expect((await (await refresh()).json()).error).toBe("invalid_grant");
 
     store.rotateAppRefresh.mockResolvedValueOnce({ ok: false, reason: "server_error", cause: new Error("x") });
-    expect((await refresh()).status).toBe(503);
+    res = await refresh();
+    expect(res.status).toBe(503);
+    expect(res.headers.get("retry-after")).toBe("1");
   });
 
   it("refuses a revoked grant, another client's grant and a disabled member", async () => {
@@ -273,6 +277,9 @@ describe("GET /api/app/v1/me (the guard)", () => {
     serverFetch.mockResolvedValueOnce({ _id: "m1", member_name: "Ana", alias: "Anita", photoUrl: null });
     const res = await me(await bearer());
     expect(res.status).toBe(200);
+    serverFetch.mockResolvedValueOnce({ _id: "m1", member_name: "Ana", alias: "Anita", photoUrl: null });
+    // The auth scheme is case-insensitive (RFC 7235 §2.1).
+    expect((await me((await bearer()).replace("Bearer", "bearer"))).status).toBe(200);
     expect(await res.json()).toEqual({ id: "m1", name: "Ana", alias: "Anita", photoUrl: null, role: "member", ministries: ["worship"], platform: "ios" });
   });
 
@@ -377,6 +384,14 @@ describe("POST /api/admin/members/[id]/app-sessions/revoke", () => {
     expect((await call()).status).toBe(403);
     requireActiveSession.mockResolvedValue(null);
     expect((await call()).status).toBe(403);
+    expect(store.revokeAllAppGrants).not.toHaveBeenCalled();
+  });
+
+  it("503s (not 500) when the live-role read fails", async () => {
+    requireActiveSession.mockResolvedValue({ user: { sanityId: "boss" } });
+    fetchMemberAccessFresh.mockRejectedValue(new Error("down"));
+    const res = await call();
+    expect(res.status).toBe(503);
     expect(store.revokeAllAppGrants).not.toHaveBeenCalled();
   });
 

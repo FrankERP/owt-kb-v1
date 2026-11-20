@@ -65,7 +65,7 @@
 // `api/app/v1(?:/|$)` (ADR-0091) is the native apps' API: every handler under it
 // authenticates itself with an app bearer token (`requireAppSession`, a declared
 // `needs` level) or, for `auth/token` and `auth/revoke`, a signed code + PKCE or a
-// signed refresh token — never a session cookie (`appApiGuardCoverage.test.ts`
+// signed refresh token — never a session cookie (`app/appAuth/__tests__/appAuthStatic.test.ts`
 // asserts each route calls the guard first). No cookie-session handler lives
 // under it: the code-minting POST is `/app/authorize/submit`, which stays gated
 // like `/app/authorize`. `app/callback/(?:ios|android)$` are the two inert pages

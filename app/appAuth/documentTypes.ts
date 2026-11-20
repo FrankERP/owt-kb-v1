@@ -4,7 +4,7 @@
 // (`sanity/schemas/appAuthGrant.ts`, `sanity/schemas/appAuthCodeRedemption.ts`)
 // import this module, and the embedded Studio bundles every schema file into a
 // browser build — `app/appAuth/*` pulls in `jose` and `node:crypto`, which must
-// never reach it. `app/appAuth/__tests__/documentTypes.test.ts` asserts this
+// never reach it. `app/appAuth/__tests__/appAuthStatic.test.ts` asserts this
 // file has no `import`.
 
 export const APP_AUTH_GRANT_TYPE = "appAuthGrant";

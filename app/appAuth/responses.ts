@@ -40,9 +40,14 @@ export type AppTokenErrorCode =
   | "temporarily_unavailable"
   | "server_error";
 
-/** RFC 6749 §5.2 token-endpoint error with a fixed description. 503 for `temporarily_unavailable`. */
-export function appTokenError(error: AppTokenErrorCode, description?: string): Response {
+/**
+ * RFC 6749 §5.2 token-endpoint error with a fixed description. 503 for `temporarily_unavailable`,
+ * with `Retry-After: 1` unless `retryAfter: false` (the lost refresh race, where retrying the SAME
+ * refresh token would be a reuse and revoke the grant).
+ */
+export function appTokenError(error: AppTokenErrorCode, description?: string, opts: { retryAfter?: boolean } = {}): Response {
   const status = error === "server_error" ? 500 : error === "temporarily_unavailable" ? 503 : 400;
   const body = description === undefined ? { error } : { error, error_description: description };
-  return jsonNoStore(body, status, error === "temporarily_unavailable" ? { "Retry-After": "1" } : {});
+  const retry = error === "temporarily_unavailable" && opts.retryAfter !== false;
+  return jsonNoStore(body, status, retry ? { "Retry-After": "1" } : {});
 }

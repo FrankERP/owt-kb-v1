@@ -277,6 +277,9 @@ cannot be recovered — see [Retrievability](#retrievability-assume-nothing-is-r
 - **Purpose:** every server-side mutation — proposal writes, role and setlist
   writes, the notification outbox sweep, and the `--apply` half of one-off
   scripts in `scripts/`. Without it, all writes fail and the app is read-only.
+  It is also the native apps' grant store's reader (ADR-0091): the app grant documents have dotted
+  ids, so without it every `/api/app/v1/*` route and the app sign-in answer 503 (fail closed, never
+  a sign-out).
 - **Role needed:** Editor.
 - **Platforms:** Vercel **twice** — once for `Preview, Production`, and once
   branch-scoped to `Preview (verify/service-readiness)`. Also local `.env.local`.

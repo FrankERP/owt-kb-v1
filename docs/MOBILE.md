@@ -35,7 +35,8 @@ inert page «Abre la app Backstage para terminar de entrar»). Local `next dev` 
 **Answers the apps must handle.** `401 invalid_token` → refresh, then sign in again;
 `401 account_disabled` (or `invalid_grant` with `error_description: account_disabled` from the token
 route) → sign out and show «Tu acceso está desactivado»; `403` → the person lacks the level; `503`
-(`temporarily_unavailable`, with `Retry-After`) → keep the tokens and retry later, never sign out.
+(`temporarily_unavailable`, with `Retry-After`) → keep the tokens and retry later, never sign out
+(a refresh 503 follows the single-flight rule below).
 A refresh `invalid_grant` means the grant is gone (revoked, reused, 90 days): sign in again.
 
 **Requirements recorded for the native slices** (spec §10 A10, D3, A15):
@@ -51,6 +52,14 @@ A refresh `invalid_grant` means the grant is gone (revoked, reused, 90 days): si
 - Both: ignore any callback without a matching pending `state` and verifier; never retry the token
   POST automatically (OkHttp `retryOnConnectionFailure` off for that call; URLSession without
   automatic retry) — a silent retry of a refresh is a reuse, and a reuse revokes the session.
+- Both: **refreshes are single-flight** across the app and everything sharing its keychain or
+  storage (widgets, extensions): one refresh at a time, and every caller waits for it and reads the
+  tokens it stored. After a refresh answers 503, first re-read the stored refresh token: if another
+  flight already replaced it, use the new one. `503` with `error_description: refresh_in_progress`
+  (no `Retry-After`) means a concurrent refresh of the SAME token won: never resend that token —
+  re-read storage. Any other refresh 503 may be retried with the same token after `Retry-After`; if
+  the earlier attempt had in fact committed, that retry is a reuse and the person signs in again
+  (one tap), which is the worst case.
 
 **Developing against local.** The dev deployment is behind Vercel SSO, which an app cannot pass.
 Run `next dev` with `APP_AUTH_SECRET` in `.env.local`; the iOS Simulator reaches it as `localhost`,
@@ -66,7 +75,7 @@ the revoke endpoint. Check «Apps conectadas» in `/me/ajustes` along the way.
 
 **Closing sessions.** The person: `/me/ajustes` → «Apps conectadas» → «Cerrar sesión en ese
 dispositivo». A super-admin, for a lost phone: «Personas» → ⋯ → «Cerrar sesiones de la app».
-Disabling a member's access refuses their app on the next request; no extra step.
+Disabling a member's access refuses their app within 30 s (the server's live-access cache); no extra step. A revocation takes effect within the same 30 s.
 
 ---
 

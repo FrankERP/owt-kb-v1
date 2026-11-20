@@ -51,6 +51,10 @@ const D = {
   grant: "the grant is invalid, expired, revoked or was issued to another client",
   disabled: "account_disabled",
   retry: "try again",
+  // A concurrent refresh of the SAME token won the rotation (spec D7). The app must NOT resend this
+  // refresh token — it is already superseded, and presenting it again revokes the grant — but
+  // re-read the tokens the winning call stored (docs/MOBILE.md: refreshes are single-flight).
+  inProgress: "refresh_in_progress",
 } as const;
 
 type Stage = "member lookup" | "code redemption" | "grant creation" | "grant read" | "refresh rotation" | "token signing";
@@ -151,7 +155,7 @@ async function refresh(form: URLSearchParams, ctx: Ctx): Promise<Response> {
   const rotated = await rotateAppRefresh(grant, rt.jti, ctx.origin);
   if (!rotated.ok) {
     if (rotated.reason === "server_error") return unavailable("refresh rotation", rotated.cause);
-    if (rotated.reason === "conflict") return appTokenError("temporarily_unavailable", D.retry);
+    if (rotated.reason === "conflict") return appTokenError("temporarily_unavailable", D.inProgress, { retryAfter: false });
     if (rotated.reason === "reuse_revoked") {
       console.warn(`[app-auth] token: superseded refresh token presented; grant ${grant._id} revoked`);
     }

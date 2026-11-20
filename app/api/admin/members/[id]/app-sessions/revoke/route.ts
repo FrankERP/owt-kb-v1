@@ -28,7 +28,13 @@ export async function POST(
   if (session.user.isImpersonating) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const access = await fetchMemberAccessFresh(actorId);
+  let access;
+  try {
+    access = await fetchMemberAccessFresh(actorId);
+  } catch (cause) {
+    console.error("[app-auth] admin revoke-all: access read failed", cause);
+    return NextResponse.json({ error: "No se pudo cerrar; intenta de nuevo." }, { status: 503 });
+  }
   if (!access.active || access.role !== "super-admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

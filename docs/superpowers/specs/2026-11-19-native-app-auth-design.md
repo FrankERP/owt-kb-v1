@@ -711,3 +711,13 @@ id, not on the Android app:
 
 Un-reviewed like the rest of §10. It only narrows who can sign in: if it is wrong, the failure is a
 refused sign-in, not a wider one.
+
+**A16. Refreshes are single-flight; a lost race says so (implementation code review, 2026-11-20).**
+A10 forbids automatic retries but not a deliberate retry after a 503. When two refreshes of the SAME
+token race, the loser's `conflict` was a 503 with `Retry-After: 1`; retrying that superseded token
+is a reuse and revokes the grant, the winner's new tokens included. So the conflict answer is now
+503 `temporarily_unavailable` with `error_description: refresh_in_progress` and no `Retry-After`,
+and the apps refresh single-flight across the app and its extensions, re-read the stored refresh
+token after any refresh 503, and never resend a token a concurrent refresh superseded
+(`docs/MOBILE.md`). A retry after any other 503 whose rotation had in fact committed still revokes;
+the worst case is one sign-in tap.

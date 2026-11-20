@@ -5,7 +5,7 @@
 // of the `(client)` shell: no navbar, tab bar, assistant bubble, provider or
 // activity ping. This layout imports NOTHING that reads a session, cookie,
 // network or env (the pattern of `(gallery)`, ADR-0017) — guarded by
-// `app/appAuth/__tests__/appAuthPagesIsolation.test.ts`. The authorize page
+// `app/appAuth/__tests__/appAuthStatic.test.ts`. The authorize page
 // reads the session itself; the callback pages read nothing.
 //
 // Dark only (the brand's `:root`): following the device would need a script or

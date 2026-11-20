@@ -31,7 +31,9 @@ export default withAuth(
 export const config = {
   // Protect everything except: auth pages, NextAuth API, the cron routes, the
   // service-readiness identity route, the theme gallery, the MCP route, the
-  // OAuth register/token endpoints, /.well-known discovery, and static assets.
+  // OAuth register/token endpoints, /.well-known discovery, the native apps' API
+  // (/api/app/v1, its own bearer guard, ADR-0091) and their two inert callback
+  // pages (/app/callback/ios, /app/callback/android), and static assets.
   // (The identity route was already excluded and this comment had never said so.)
   // The theme gallery is a prerendered, data-free review surface — see ADR-0017
   // and the rationale block in app/utils/routeMatcher.ts. Studio is now included — it requires login + admin role

@@ -41,7 +41,7 @@ export interface AppSession {
 
 export type AppSessionResult = { ok: true; session: AppSession } | { ok: false; response: Response };
 
-const BEARER_RE = /^Bearer ([A-Za-z0-9\-._~+/]+=*)$/;
+const BEARER_RE = /^Bearer ([A-Za-z0-9\-._~+/]+=*)$/i; // the scheme is case-insensitive (RFC 7235 §2.1)
 
 export async function requireAppSession(request: Request, opts: { needs: AppNeeds }): Promise<AppSessionResult> {
   const preflight = appPreflight(request);

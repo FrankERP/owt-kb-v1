@@ -58,7 +58,9 @@ with every export and every MCP test unchanged, and `app/appAuth/grantStore.ts` 
   grants on this deployment, one at a time; hidden while impersonating); «Cerrar sesiones de la app»
   for a super-admin in «Personas» (every live grant of that member on this deployment, in one
   transaction, on the LIVE role). A grant is live while not revoked and used in the last 90 days.
-  Refresh tokens rotate; a superseded one revokes the whole grant; a lost revision race is a 503,
+  Refresh tokens rotate; a superseded one revokes the whole grant; a lost revision race is a 503
+  `refresh_in_progress` without `Retry-After` (the apps refresh single-flight and never resend a
+  token a concurrent refresh superseded, `docs/MOBILE.md`),
   never a revocation.
 
 ## Rejected

@@ -216,7 +216,8 @@ authentication surface, separate from the cookie session and from MCP:
   `/me/ajustes` (`/api/me/app-sessions/[grantId]/revoke`, own grants of this deployment only,
   refused while impersonating), and a super-admin's «Cerrar sesiones de la app» in «Personas»
   (`/api/admin/members/[id]/app-sessions/revoke`, LIVE role, one transaction). Disabling a member
-  refuses their app on the next request.
+  refuses their app within 30 s (the live-access and grant caches), and a revocation lands within
+  30 s the same way.
 
 ---
 
