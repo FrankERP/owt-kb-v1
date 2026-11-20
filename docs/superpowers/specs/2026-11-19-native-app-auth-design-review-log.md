@@ -97,7 +97,8 @@ minimums; live-grant definition and store-owned list/revoke-all; missing read to
 type pin on the `/me` revoke; rollout gate and the Jóvenes wording; static callback folders,
 `force-dynamic` and an isolation test; the expired-session GET; native-slice requirements; release
 smoke test; cost note; Android device testing and Play D-U-N-S; extra docs and per-environment
-secrets). They are hardening and clarification; the implementation's merge-range code review
+secrets), and A15, the Android 11-and-older sign-in block Frank chose on 2026-11-20 instead of
+accepting the D3 residual. They are hardening and clarification; the implementation's merge-range code review
 covers them.
 
 ## Process failures (author side)

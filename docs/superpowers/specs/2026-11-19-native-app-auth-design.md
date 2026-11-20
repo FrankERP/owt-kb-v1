@@ -680,3 +680,34 @@ Google Play organization account may itself need the D-U-N-S number; `MOBILE.md`
 `docs/DATA_MODEL.md` (the two new types), and the CLAUDE.md «Reusable utils» list
 (`requireAppSession`, `plansInMinistry`). `SECRETS.md`: Production and Preview get DIFFERENT
 `APP_AUTH_SECRET` values.
+
+**A15. Android 11 and older are refused at sign-in (Frank's decision, 2026-11-20).** Frank chose
+«Bloquear Android 11 o anterior» over accepting the D3 residual. Because the attack works with ANY
+`https` redirect on our domain (D3), the gate is on the BROWSER making the request, for every client
+id, not on the Android app:
+
+- `/app/authorize` and `/app/authorize/submit` answer every request with
+  `Accept-CH: Sec-CH-UA-Platform-Version` and `Critical-CH: Sec-CH-UA-Platform-Version`, so Chrome
+  retries the navigation carrying the real Android version (Chrome's reduced user-agent string
+  freezes it at «Android 10» and cannot be used).
+- A request is from Android when `Sec-CH-UA-Platform` is `"Android"` or, when that header is absent,
+  the `User-Agent` contains `Android`. For such a request, the page shows NO confirmation and the
+  POST mints NO code unless `Sec-CH-UA-Platform-Version` is present and its major number is ≥ 12.
+  Absent or unparsable → refused (fail closed). The refusal page reads «La app de Backstage necesita
+  Android 12 o más nuevo. Puedes seguir usando Backstage en el navegador». Anything else (iOS, iPadOS,
+  macOS, desktop) is unaffected.
+- The check is one pure function (`androidVersionAllows(headers)`) called by both the page and the
+  POST, with tests: Android 11 refused, 12 allowed, Android without the version hint refused, a
+  non-Chrome Android user agent without client hints refused, iOS and desktop unaffected.
+- The Android app sets `minSdk` 31 (Android 12), so Play does not offer it to phones that could not
+  sign in anyway. The parent plan's «Android 8 / API 26» changes accordingly.
+- Remaining residual, stated in ADR-0091: the Android 12+ case of D3 (the person manually approving
+  our domain for another app in Settings), and an Android ≤ 11 browser whose user agent hides Android
+  (a «desktop site» mode the person turned on). Both need the person's own deliberate action.
+- New premise P9: Chrome on Android (137+) honours `Critical-CH` for `Sec-CH-UA-Platform-Version` on
+  a top-level navigation, including inside a Custom Tab and an Auth Tab. To verify on a device in
+  the Android slice; until verified, the fail-closed rule means a wrong premise blocks sign-in, never
+  lets an old phone through.
+
+Un-reviewed like the rest of §10. It only narrows who can sign in: if it is wrong, the failure is a
+refused sign-in, not a wider one.
