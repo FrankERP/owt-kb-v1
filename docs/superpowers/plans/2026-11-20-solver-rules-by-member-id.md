@@ -317,8 +317,8 @@ written by `solverConfigFields`' six rule fields, so a client save cannot touch 
 - The coverage test and the id canary of §3.3.
 - The script's four dry-run checks on fixtures (a clean conversion; an unresolved token refuses the
   migration; a forced non-person diff refused; two spellings of one member that would collapse into an
-  `exact_overlap` refused) and `--to-names` (round trip back to names; refused while a dangling id
-  exists).
+  `exact_overlap` refused) and `--to-names` (round trip back to names; a dangling id, an outside-Alabanza id and a repeated person
+  come back as their non-resolving labels, never as an id).
 
 ## 7. Records
 
