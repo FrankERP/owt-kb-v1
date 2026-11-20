@@ -541,10 +541,11 @@ nuevo» (it bumps their `calendarFeed.<memberId>` generation).
 and local `.env.local` to try the native apps against `next dev`. Not needed in: GitHub Actions,
 the iOS or Android build (the apps never hold it), GCF.**
 
-**Status: NOT SET yet** (2026-11-20). The native-app sign-in door ([ADR-0091](adr/0091-native-apps-sign-in-through-their-own-first-party-oauth-door.md))
-ships without it, so on each environment every app route answers 503 until it is set and that
-environment is redeployed. Nothing else in the app reads it, so its absence breaks nothing that
-exists today.
+**Status: SET on Preview and Production** (2026-11-20, with Frank's go-ahead; two different values,
+each generated with `openssl rand -base64 48` and piped straight into `vercel env add … --sensitive`,
+so neither value was ever displayed or stored anywhere else). Not set on Development: local work
+puts its own value in `.env.local`. Without it an environment's app routes answer 503 ([ADR-0091](adr/0091-native-apps-sign-in-through-their-own-first-party-oauth-door.md));
+nothing else in the app reads it.
 
 **Purpose.** The HS256 key (`jose`) for every authorization code, access token and refresh token
 the native-app door mints or verifies (`app/appAuth/tokens.ts`, loaded by `loadAppSecret` in
