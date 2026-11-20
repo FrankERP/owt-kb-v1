@@ -1,9 +1,11 @@
 # MCP connector — operator runbook
 
 > **Worship admins write as in the page ([ADR-0083's addendum](adr/0083-the-connector-opens-to-worship-admins-read-only-through-a-closed-redirect-list.md#addendum--worship-admins-write-as-in-the-page-2026-11-09)):
-> built 2026-11-09 on `claude/project-thread-5fah0x`, NOT released yet.** A worship admin's grant
-> made after `ADMIN_WRITES_CUTOFF` reaches every worship write of `/admin` (`ADMIN_TIER_TOOLS`);
-> people and Oasis Kids stay super-admin only; older admin grants keep the read list. See
+> built 2026-11-09 on `claude/project-thread-5fah0x`, released to production 2026-11-20 with
+> `ADMIN_WRITES_CUTOFF` = `2026-11-20T18:30:00Z`.** A worship admin's grant made at or after the
+> cutoff reaches every worship write of `/admin` (`ADMIN_TIER_TOOLS`); people, Oasis Kids and the
+> solver rules' two tools stay super-admin only; older admin grants keep the read list (the admin
+> connects again to get the new one). See
 > [Tiers](#tiers-who-reaches-what).
 >
 > **Any agent, admins read-only ([ADR-0083](adr/0083-the-connector-opens-to-worship-admins-read-only-through-a-closed-redirect-list.md)):
@@ -1379,7 +1381,8 @@ exchange (the grant's `client`, from the redirect URI):
 - **A worship admin's tool missing from their list** is an unknown tool to the server
   (`Tool <name> not found`): it is never registered there, so nothing runs.
 - **Every tool is classified on purpose** (ADR-0083 addendum). `SUPER_ADMIN_ONLY_TOOLS` is the five
-  Oasis Kids tools and the seven people tools; `ADMIN_TIER_TOOLS` is every other tool, written out by
+  Oasis Kids tools, the seven people tools and the two solver-rule tools (`check_rule_edits`,
+  `save_rule_edits`: added after slice B was approved; opening them to admins is a separate decision); `ADMIN_TIER_TOOLS` is every other tool, written out by
   name. A new tool fails `mcpRoute.test.ts` until it is put in one of the two, and reaches no admin
   until its name is in `ADMIN_TIER_TOOLS` (registration goes through `allowlistedServer`).
 - **An admin's write is the page's write**: the same `*Commit.ts` writer, rules, refusals and

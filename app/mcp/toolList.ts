@@ -71,7 +71,8 @@ export const READ_TIER_TOOLS = [
 /**
  * Tools only a super-admin reaches (ADR-0083 addendum): people (ADR-0082; «Personas sigue siendo solo
  * tuyo») and Oasis Kids (another ministry, gated in the app by `requireMinistryManager("kids")`, not
- * by the worship role — ADR-0075). Every tool of the full list is in exactly one of this list and
+ * by the worship role — ADR-0075), and the solver rules' two tools (slice R, ADR-0084: they reached
+ * main after slice B was approved; opening them to worship admins is an open decision). Every tool of the full list is in exactly one of this list and
  * `ADMIN_TIER_TOOLS`; `mcpRoute.test.ts` fails on a tool that is in neither.
  */
 export const SUPER_ADMIN_ONLY_TOOLS = [

@@ -150,7 +150,8 @@ log beside it. This is the slice the record above announced, so it is an addendu
   | `admin` | after the cutoff, client `claude` | `admin` (40 tools, card and resources) |
   | `admin` | after the cutoff, any other client | `adminNoApps` (35 tools) |
 
-- **One classification, total.** `SUPER_ADMIN_ONLY_TOOLS` (5 Kids + 7 people) and
+- **One classification, total.** `SUPER_ADMIN_ONLY_TOOLS` (5 Kids + 7 people + the 2 slice-R rule tools, which reached main after this
+  addendum was approved) and
   `ADMIN_TIER_TOOLS` (every other tool, written out by name) are literal lists in
   `app/mcp/toolList.ts`; a test fails until every tool of the full list is in exactly one of them.
   Admin registrations go through `allowlistedServer`, so a tool added to a shared bundle later

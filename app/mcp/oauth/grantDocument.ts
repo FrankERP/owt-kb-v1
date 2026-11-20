@@ -209,7 +209,7 @@ export function effectiveGrantClient(grant: Pick<StoredGrant, "client" | "origin
  * that carries the old value; re-release through a new commit with a new cutoff. Moving it later
  * only fails closed.
  */
-export const ADMIN_WRITES_CUTOFF = "2099-01-01T00:00:00.000Z";
+export const ADMIN_WRITES_CUTOFF = "2026-11-20T18:30:00.000Z";
 
 /**
  * Which list a worship admin's grant reaches: the admin list only when its `createdAt` parses and is

@@ -445,8 +445,8 @@ several exist precisely to stop a plausible-looking change.
   (2026-11-09) an admin's grant made at or after `ADMIN_WRITES_CUTOFF` reaches `ADMIN_TIER_TOOLS`
   (`admin`, or `adminNoApps` on another agent): every worship write of `/admin`, through the same
   writers. Older grants (and an unreadable `createdAt`) keep `READ_TIER_TOOLS` (`adminRead`), what
-  their consent said (`adminScopeOf`, fail closed). `SUPER_ADMIN_ONLY_TOOLS` (Oasis Kids + people)
-  never reach an admin. Both lists are literal and every tool of the full list is in exactly one
+  their consent said (`adminScopeOf`, fail closed). `SUPER_ADMIN_ONLY_TOOLS` (Oasis Kids + people + the two
+  solver-rule tools) never reach an admin. Both lists are literal and every tool of the full list is in exactly one
   (`mcpRoute.test.ts`), so a new tool must be classified on purpose; admin registrations go through
   `allowlistedServer`. Never move a Kids or people tool into `ADMIN_TIER_TOOLS` without a reviewed
   plan. **`ADMIN_WRITES_CUTOFF` is reset on any re-release** (revert, Vercel rollback, a fix-forward
