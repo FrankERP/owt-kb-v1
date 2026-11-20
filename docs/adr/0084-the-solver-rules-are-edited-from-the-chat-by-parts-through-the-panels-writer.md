@@ -59,8 +59,9 @@ that document for every month it plans. What made this slice a critical contract
 
 ## Consequences
 
-- 54 tools; `check_rule_edits` is read-only, `save_rule_edits` destructive, both only on write tiers
-  (never the worship-admin read tier, ADR-0083).
+- 54 tools; `check_rule_edits` is read-only, `save_rule_edits` destructive, both super-admin only
+  (`SUPER_ADMIN_ONLY_TOOLS`, ADR-0083 addendum): never the worship-admin read or admin tier. Opening
+  them to worship admins, who can save rules in `/admin`, is an open decision.
 - A known limit, declared in the plan: relative counts and partial pattern overlaps are not checked for
   contradiction (a v3 count is soft and clamped, so such a pair yields a violation line, never a crash).
 - The bound-month note («si un mes ya tiene su registro de equidad guardado…») is shown whenever a

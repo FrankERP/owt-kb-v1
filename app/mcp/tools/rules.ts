@@ -230,7 +230,7 @@ export async function saveRuleEditsResult(
 const WRITE = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false } as const;
 const READ = { readOnlyHint: true, openWorldHint: false } as const;
 
-/** Registers the two rule tools on a per-request MCP server (write tiers only, `toolList.ts`). */
+/** Registers the two rule tools on a per-request MCP server (super-admin lists only, `toolList.ts`). */
 export function registerRuleTools(server: McpServer): void {
   server.registerTool(
     "check_rule_edits",
