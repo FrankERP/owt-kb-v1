@@ -31,7 +31,18 @@ Simulator, on every change under `native/ios/`.
 ## Rules the code keeps (MOBILE.md)
 
 - A callback is redeemed only with the pending `state` AND the server's `iss`.
-- A refresh token is never sent twice: one refresh at a time (`SessionAuthority`), no automatic
-  retry of a token POST, and after a `503` the stored tokens are re-read before giving up.
+- One refresh at a time (`SessionAuthority`), no automatic retry of a token POST. A refresh token
+  the server says was superseded (`refresh_in_progress`) is never presented again: the app adopts a
+  newer stored pair or ends the session. A plain `503` or a lost connection keeps the token for a
+  later try (the server did not rotate it; if a lost response had in fact rotated it, that try is a
+  reuse and the person signs in again, the documented worst case).
+- A sign-out bumps a generation: a token answer still in flight is thrown away, never stored.
 - `401 account_disabled` / `invalid_grant account_disabled` → signed out with «Tu acceso está
-  desactivado»; any `503` keeps the session.
+  desactivado». A `503` or no connection keeps the session and shows «intenta de nuevo»; a
+  Keychain that cannot answer yet (before the first unlock) is «try again», never «signed out».
+- If the Keychain refuses a new pair, the old one is cleared so it cannot become a reuse.
+
+## Bundle id
+
+`com.owtBackstage.app`, Team `2NM4872N5S`. The Capacitor wrap (`ios/`) reserved the same id but was
+never published; this app takes it over, and the wrap must never be uploaded under it.

@@ -430,7 +430,8 @@ cadence.
 - Lyrics (`body`) and chord charts (`chords`) are independent fields — don't re-entangle them
   on save (ADR-0018). A filled chart hides `body` in both readers (expected).
 - ~15 songs have no lyrics source in the catalog PDF (expected).
-- Android build pending; Apple Developer enrollment: the DUNS number is in hand, Apple has not answered yet (2026-11-20).
+- Android build pending. Apple Developer: Team ID `2NM4872N5S`, paid 2026-11-24, activation pending (App Store
+  Connect keys wait on it). The native iPhone app (`native/ios`) takes over `com.owtBackstage.app` from the never-published Capacitor wrap.
 - **Email templates are LIGHT on purpose**, not `brand.css` — five dark palettes lost to
   Outlook for Mac. Don't "restore the brand colours".
 - `MEASURED_MS_PER_SEND` in `outboxSweep.test.ts` is 500 ms, deliberately not the real number,

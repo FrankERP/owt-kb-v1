@@ -86,9 +86,10 @@ with every export and every MCP test unchanged, and `app/appAuth/grantStore.ts` 
 ## Consequences
 
 - **Devices.** iPhone/iPad iOS 17.4+ (XS/XR or newer), Mac macOS 14.4+, Android 12+ with Chrome 137+
-  (Auth Tab). A physical iPhone signs in only once the Apple Developer account exists (the
-  association file needs the Team ID); until then the apps develop against local `next dev`. Until
-  the association files are published, a production redirect lands on the inert callback page.
+  (Auth Tab). The Apple association is served since 2026-11-24 (Team ID `2NM4872N5S`,
+  `/.well-known/apple-app-site-association`); a physical iPhone signs in through it once a signed
+  build of `native/ios` is installed. The Android association is not published yet. Without the app
+  (or before the OS has the file) a production redirect lands on the inert callback page.
 - **Residuals Frank accepted.** (1) Android 12+: another app receives our redirect only if the person
   approved our domain for it in settings — «No, as far as Android's link rules go; Chrome's Custom
   Tab handling not device-tested». (2) iOS: an unassociated app should not receive an `https`

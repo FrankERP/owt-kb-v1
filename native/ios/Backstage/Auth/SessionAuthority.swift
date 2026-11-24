@@ -40,7 +40,8 @@ struct URLSessionTransport: HTTPTransport {
 
 /// The one owner of the tokens. An actor, so refreshes are SINGLE-FLIGHT (MOBILE.md): however
 /// many requests find the access token stale at once, one refresh runs and every caller waits for
-/// it and uses what it stored. A refresh token is never presented twice by this app.
+/// it and uses what it stored. This app presents a refresh token again only when the server never
+/// saw it rotate (a plain 503 or a lost connection); one the server says was superseded is dropped.
 actor SessionAuthority {
     private let config: AppConfig
     private let store: TokenStoring
@@ -48,7 +49,11 @@ actor SessionAuthority {
     private let now: @Sendable () -> Date
 
     private var tokens: TokenSet?
+    private var loaded = false
     private var refreshFlight: Task<TokenSet, Error>?
+    /// Bumped by every sign-out. A token answer that arrives for an older generation is thrown
+    /// away, so a refresh in flight when the person signs out cannot bring the session back.
+    private var generation = 0
 
     init(
         config: AppConfig,
@@ -60,27 +65,37 @@ actor SessionAuthority {
         self.store = store
         self.transport = transport
         self.now = now
-        self.tokens = store.load()
     }
 
-    var hasSession: Bool { tokens != nil }
+    /// Reads the Keychain once. Throws when the Keychain cannot answer (e.g. before the first
+    /// unlock): that is «try again», never «signed out».
+    func restore() throws -> Bool {
+        try ensureLoaded()
+        return tokens != nil
+    }
+
+    private func ensureLoaded() throws {
+        guard !loaded else { return }
+        tokens = try store.load()
+        loaded = true
+    }
 
     // MARK: Sign-in
 
     /// Redeems the code of a callback this app started. Called once per code: a failed exchange
     /// means signing in again, never resending the same code.
     func exchange(code: String, verifier: String) async throws {
+        let started = generation
         let outcome = try await postToken([
             "grant_type": "authorization_code",
             "code": code,
             "redirect_uri": config.redirectURI,
             "client_id": AppConfig.clientID,
             "code_verifier": verifier,
-        ])
+        ], generation: started)
         switch outcome {
         case .tokens(let fresh):
-            try? store.save(fresh)
-            tokens = fresh
+            adopt(fresh)
         case .accountDisabled:
             throw SessionError.accountDisabled
         case .invalidGrant:
@@ -107,16 +122,27 @@ actor SessionAuthority {
 
     /// Drops the tokens without calling the server (the server already ended the session).
     func end() {
+        generation += 1
         refreshFlight?.cancel()
         refreshFlight = nil
         tokens = nil
+        loaded = true
         store.clear()
+    }
+
+    /// Keeps a new pair. If the Keychain refuses it, the stored pair is now superseded and would
+    /// be a reuse on the next launch, so it is cleared: this launch keeps working from memory.
+    private func adopt(_ fresh: TokenSet) {
+        do { try store.save(fresh) } catch { store.clear() }
+        tokens = fresh
+        loaded = true
     }
 
     // MARK: Access tokens
 
     /// A usable access token, refreshing first if it is about to lapse.
     func accessToken() async throws -> String {
+        try loadOrUnavailable()
         guard let current = tokens else { throw SessionError.signedOut }
         if current.accessIsFresh(at: now()) { return current.accessToken }
         return try await refreshed().accessToken
@@ -125,35 +151,52 @@ actor SessionAuthority {
     /// After a `401 invalid_token` on `rejected`: if another call already refreshed, use its
     /// token; otherwise refresh once.
     func accessToken(replacing rejected: String) async throws -> String {
+        try loadOrUnavailable()
         guard let current = tokens else { throw SessionError.signedOut }
         if current.accessToken != rejected { return current.accessToken }
         return try await refreshed().accessToken
     }
 
+    private func loadOrUnavailable() throws {
+        do { try ensureLoaded() } catch { throw SessionError.unavailable }
+    }
+
     private func refreshed() async throws -> TokenSet {
         if let flight = refreshFlight { return try await flight.value }
         guard let presented = tokens?.refreshToken else { throw SessionError.signedOut }
-        let flight = Task { try await self.performRefresh(presenting: presented) }
+        let started = generation
+        let flight = Task { try await self.performRefresh(presenting: presented, generation: started) }
         refreshFlight = flight
         defer { if refreshFlight == flight { refreshFlight = nil } }
         return try await flight.value
     }
 
-    private func performRefresh(presenting refreshToken: String) async throws -> TokenSet {
+    private func performRefresh(presenting refreshToken: String, generation started: Int) async throws -> TokenSet {
         let outcome = try await postToken([
             "grant_type": "refresh_token",
             "refresh_token": refreshToken,
             "client_id": AppConfig.clientID,
-        ])
+        ], generation: started)
+        guard tokens?.refreshToken == refreshToken else { throw SessionError.signedOut }
         switch outcome {
         case .tokens(let fresh):
-            try? store.save(fresh)
-            tokens = fresh
+            adopt(fresh)
             return fresh
-        case .refreshInProgress, .unavailable:
-            // Another flight (another process sharing the keychain) may already hold the new pair:
-            // adopt it rather than resend a superseded token, which would revoke the grant.
-            if let stored = store.load(), stored.refreshToken != refreshToken {
+        case .refreshInProgress:
+            // The server already rotated this token for another request. Adopt the pair that
+            // request stored (another process sharing the Keychain) if there is one; otherwise the
+            // winner's answer is lost, and presenting this token again would be a reuse that
+            // revokes the grant, so the session ends here and the person signs in again.
+            if let stored = try? store.load(), stored.refreshToken != refreshToken {
+                tokens = stored
+                return stored
+            }
+            end()
+            throw SessionError.signedOut
+        case .unavailable:
+            // The server did not rotate (MOBILE.md): the same token may be presented later. A pair
+            // another process stored meanwhile still wins.
+            if let stored = try? store.load(), stored.refreshToken != refreshToken {
                 tokens = stored
                 return stored
             }
@@ -171,7 +214,10 @@ actor SessionAuthority {
 
     // MARK: Transport
 
-    private func postToken(_ fields: [String: String]) async throws -> TokenEndpointOutcome {
+    /// One token POST, never retried. If the person signed out while it was in flight (sign-out
+    /// bumps `generation` and cancels the flight), whatever came back, an answer or an error,
+    /// belongs to a session they ended: it is reported as `.signedOut` and nothing is stored.
+    private func postToken(_ fields: [String: String], generation started: Int) async throws -> TokenEndpointOutcome {
         var request = URLRequest(url: config.tokenURL)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
@@ -182,8 +228,9 @@ actor SessionAuthority {
         do {
             (data, response) = try await transport.send(request)
         } catch {
-            throw SessionError.network
+            throw generation == started ? SessionError.network : SessionError.signedOut
         }
+        guard generation == started else { throw SessionError.signedOut }
         return TokenEndpoint.classify(
             status: response.statusCode,
             body: data,

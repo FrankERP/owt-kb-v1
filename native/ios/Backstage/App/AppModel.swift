@@ -37,7 +37,16 @@ final class AppModel {
     // MARK: Launch
 
     func start() async {
-        guard await authority.hasSession else {
+        let hasSession: Bool
+        do {
+            hasSession = try await authority.restore()
+        } catch {
+            // The Keychain could not answer (e.g. the phone was not unlocked yet): not signed out.
+            phase = .offline
+            banner = "No se pudo abrir tu sesión todavía. Intenta de nuevo."
+            return
+        }
+        guard hasSession else {
             phase = .signedOut(notice: nil)
             return
         }
@@ -73,6 +82,9 @@ final class AppModel {
             switch AuthCallback.parse(callbackURL, expectedState: state, expectedIssuer: config.issuer) {
             case .code(let code):
                 try await authority.exchange(code: code, verifier: verifier)
+                // Signed in from here on: a failure loading the profile is «try again», never the
+                // sign-in screen (a second sign-in would leave this grant behind).
+                phase = .starting
                 await reload()
             case .denied:
                 phase = .signedOut(notice: nil)
@@ -81,6 +93,9 @@ final class AppModel {
             }
         } catch let error as ASWebAuthenticationSessionError where error.code == .canceledLogin {
             phase = .signedOut(notice: nil)
+        } catch SessionError.signedOut {
+            // The code was refused (it lives 60 s, and is good once).
+            phase = .signedOut(notice: "No se pudo terminar de entrar. Intenta de nuevo.")
         } catch {
             show(error)
         }

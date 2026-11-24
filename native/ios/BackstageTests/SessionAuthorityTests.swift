@@ -75,7 +75,7 @@ final class SessionAuthorityTests: XCTestCase {
 
         XCTAssertEqual(tokens, ["a1", "a1", "a1"])
         XCTAssertEqual(transport.requests(to: tokenPath).count, 1, "one refresh for every waiting caller")
-        XCTAssertEqual(store.load()?.refreshToken, "r1")
+        XCTAssertEqual(try store.load()?.refreshToken, "r1")
     }
 
     func testRefreshSendsOnlyTheRefreshGrant() async throws {
@@ -103,9 +103,24 @@ final class SessionAuthorityTests: XCTestCase {
         XCTAssertEqual(transport.requests(to: tokenPath).count, 1, "the superseded token is never resent")
     }
 
-    func testLostRaceWithNothingNewIsUnavailableAndKeepsTheSession() async {
+    func testLostRaceWithNothingNewDropsTheSupersededToken() async throws {
         let transport = ScriptedTransport()
         transport.enqueue(tokenPath, .init(status: 503, json: #"{"error":"temporarily_unavailable","error_description":"refresh_in_progress"}"#))
+        let store = MemoryTokenStore(stale())
+        let now = self.now
+        let authority = SessionAuthority(config: config, store: store, transport: transport, now: { now })
+        do {
+            _ = try await authority.accessToken()
+            XCTFail("expected signedOut")
+        } catch {
+            XCTAssertEqual(error as? SessionError, .signedOut)
+        }
+        XCTAssertNil(try store.load(), "the superseded token is never kept to be presented again")
+    }
+
+    func testPlainOutageKeepsTheSessionForALaterRetry() async throws {
+        let transport = ScriptedTransport()
+        transport.enqueue(tokenPath, .init(status: 503, json: #"{"error":"temporarily_unavailable","error_description":"try again"}"#, headers: ["Retry-After": "1"]))
         let store = MemoryTokenStore(stale())
         let now = self.now
         let authority = SessionAuthority(config: config, store: store, transport: transport, now: { now })
@@ -115,10 +130,61 @@ final class SessionAuthorityTests: XCTestCase {
         } catch {
             XCTAssertEqual(error as? SessionError, .unavailable)
         }
-        XCTAssertNotNil(store.load())
+        XCTAssertEqual(try store.load()?.refreshToken, "r0")
     }
 
-    func testGoneGrantSignsOutAndDisabledSaysSo() async {
+    func testSignOutDuringARefreshNeverBringsTheSessionBack() async throws {
+        let transport = ScriptedTransport()
+        transport.enqueue(tokenPath, .init(status: 200, json: tokensJSON("a1", "r1"), delay: 200_000_000))
+        let store = MemoryTokenStore(stale())
+        let now = self.now
+        let authority = SessionAuthority(config: config, store: store, transport: transport, now: { now })
+        let pending = Task { try await authority.accessToken() }
+        try await Task.sleep(nanoseconds: 50_000_000)
+        await authority.signOut()
+        do {
+            _ = try await pending.value
+            XCTFail("expected signedOut")
+        } catch {
+            XCTAssertEqual(error as? SessionError, .signedOut)
+        }
+        XCTAssertNil(try store.load())
+        let restored = try await authority.restore()
+        XCTAssertFalse(restored)
+    }
+
+    func testAFailedKeychainSaveClearsTheSupersededPair() async throws {
+        let transport = ScriptedTransport()
+        transport.enqueue(tokenPath, .init(status: 200, json: tokensJSON("a1", "r1")))
+        let store = MemoryTokenStore(stale())
+        store.failSaves = true
+        let now = self.now
+        let authority = SessionAuthority(config: config, store: store, transport: transport, now: { now })
+        let token = try await authority.accessToken()
+        XCTAssertEqual(token, "a1", "this launch keeps working from memory")
+        XCTAssertNil(try store.load(), "the old refresh token is not left behind to be a reuse next launch")
+    }
+
+    func testALockedKeychainIsUnavailableNotSignedOut() async throws {
+        let store = MemoryTokenStore(stale())
+        store.failLoads = true
+        let authority = SessionAuthority(config: config, store: store, transport: ScriptedTransport())
+        do {
+            _ = try await authority.restore()
+            XCTFail("expected a Keychain error")
+        } catch {}
+        do {
+            _ = try await authority.accessToken()
+            XCTFail("expected unavailable")
+        } catch {
+            XCTAssertEqual(error as? SessionError, .unavailable)
+        }
+        store.failLoads = false
+        let restored = try await authority.restore()
+        XCTAssertTrue(restored)
+    }
+
+    func testGoneGrantSignsOutAndDisabledSaysSo() async throws {
         for (json, expected) in [
             (#"{"error":"invalid_grant","error_description":"the grant is invalid"}"#, SessionError.signedOut),
             (#"{"error":"invalid_grant","error_description":"account_disabled"}"#, SessionError.accountDisabled),
@@ -134,13 +200,13 @@ final class SessionAuthorityTests: XCTestCase {
             } catch {
                 XCTAssertEqual(error as? SessionError, expected)
             }
-            XCTAssertNil(store.load())
-            let stillSignedIn = await authority.hasSession
+            XCTAssertNil(try store.load())
+            let stillSignedIn = try await authority.restore()
             XCTAssertFalse(stillSignedIn)
         }
     }
 
-    func testNetworkFailureIsNeverRetriedAndKeepsTheSession() async {
+    func testNetworkFailureIsNeverRetriedAndKeepsTheSession() async throws {
         let transport = ScriptedTransport() // no reply queued: the transport throws
         let store = MemoryTokenStore(stale())
         let now = self.now
@@ -152,7 +218,7 @@ final class SessionAuthorityTests: XCTestCase {
             XCTAssertEqual(error as? SessionError, .network)
         }
         XCTAssertEqual(transport.requests(to: tokenPath).count, 1)
-        XCTAssertNotNil(store.load())
+        XCTAssertNotNil(try store.load())
     }
 
     func testExchangeSendsTheExactRedirectAndVerifier() async throws {
@@ -169,15 +235,15 @@ final class SessionAuthorityTests: XCTestCase {
             "client_id": "backstage-ios",
             "code_verifier": "v1",
         ])
-        XCTAssertEqual(store.load()?.accessToken, "a1")
+        XCTAssertEqual(try store.load()?.accessToken, "a1")
     }
 
-    func testSignOutForgetsLocallyEvenWhenTheRevokeFails() async {
+    func testSignOutForgetsLocallyEvenWhenTheRevokeFails() async throws {
         let transport = ScriptedTransport() // the revoke throws
         let store = MemoryTokenStore(stale())
         let authority = SessionAuthority(config: config, store: store, transport: transport)
         await authority.signOut()
-        XCTAssertNil(store.load())
+        XCTAssertNil(try store.load())
         XCTAssertEqual(body(of: transport.requests(to: "/api/app/v1/auth/revoke")[0]), ["token": "r0", "client_id": "backstage-ios"])
     }
 }
@@ -205,7 +271,7 @@ final class APIClientTests: XCTestCase {
         XCTAssertEqual(auth, ["Bearer a0", "Bearer a1"])
     }
 
-    func testAccountDisabledEndsTheSession() async {
+    func testAccountDisabledEndsTheSession() async throws {
         let transport = ScriptedTransport()
         transport.enqueue(mePath, .init(status: 401, json: #"{"error":"account_disabled"}"#))
         let store = MemoryTokenStore(fresh())
@@ -217,10 +283,10 @@ final class APIClientTests: XCTestCase {
         } catch {
             XCTAssertEqual(error as? APIError, .session(.accountDisabled))
         }
-        XCTAssertNil(store.load())
+        XCTAssertNil(try store.load())
     }
 
-    func testOutageKeepsTheSession() async {
+    func testOutageKeepsTheSession() async throws {
         let transport = ScriptedTransport()
         transport.enqueue(mePath, .init(status: 503, json: #"{"error":"temporarily_unavailable"}"#))
         let store = MemoryTokenStore(fresh())
@@ -232,7 +298,7 @@ final class APIClientTests: XCTestCase {
         } catch {
             XCTAssertEqual(error as? APIError, .session(.unavailable))
         }
-        XCTAssertNotNil(store.load())
+        XCTAssertNotNil(try store.load())
     }
 }
 

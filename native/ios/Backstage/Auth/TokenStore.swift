@@ -4,7 +4,8 @@ import Security
 /// Where the tokens live between launches: the Keychain, this device only, readable after the
 /// first unlock (so a background refresh can run). Never `UserDefaults`, never iCloud.
 protocol TokenStoring: Sendable {
-    func load() -> TokenSet?
+    /// nil when there is no session; throws when the Keychain cannot answer right now.
+    func load() throws -> TokenSet?
     func save(_ tokens: TokenSet) throws
     func clear()
 }
@@ -23,14 +24,16 @@ struct KeychainTokenStore: TokenStoring {
         ]
     }
 
-    func load() -> TokenSet? {
+    func load() throws -> TokenSet? {
         var q = query
         q[kSecReturnData as String] = true
         q[kSecMatchLimit as String] = kSecMatchLimitOne
         var item: CFTypeRef?
-        guard SecItemCopyMatching(q as CFDictionary, &item) == errSecSuccess, let data = item as? Data else {
-            return nil
-        }
+        let status = SecItemCopyMatching(q as CFDictionary, &item)
+        if status == errSecItemNotFound { return nil }
+        // errSecInteractionNotAllowed (before the first unlock) and the like: not «no session».
+        guard status == errSecSuccess, let data = item as? Data else { throw KeychainError(status: status) }
+        // An unreadable item is no usable session; it is replaced at the next sign-in.
         return try? JSONDecoder().decode(TokenSet.self, from: data)
     }
 
@@ -59,10 +62,24 @@ struct KeychainTokenStore: TokenStoring {
 final class MemoryTokenStore: TokenStoring, @unchecked Sendable {
     private let lock = NSLock()
     private var tokens: TokenSet?
+    /// Test hooks: make the next loads or saves fail like a locked Keychain.
+    var failLoads = false
+    var failSaves = false
 
     init(_ tokens: TokenSet? = nil) { self.tokens = tokens }
 
-    func load() -> TokenSet? { lock.withLock { tokens } }
-    func save(_ tokens: TokenSet) throws { lock.withLock { self.tokens = tokens } }
+    func load() throws -> TokenSet? {
+        try lock.withLock {
+            if failLoads { throw KeychainTokenStore.KeychainError(status: errSecInteractionNotAllowed) }
+            return tokens
+        }
+    }
+
+    func save(_ tokens: TokenSet) throws {
+        try lock.withLock {
+            if failSaves { throw KeychainTokenStore.KeychainError(status: errSecInteractionNotAllowed) }
+            self.tokens = tokens
+        }
+    }
     func clear() { lock.withLock { tokens = nil } }
 }
