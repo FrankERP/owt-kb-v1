@@ -169,7 +169,7 @@ looks wrong** — several exist to stop a plausible-looking change.
   (`app/utils/solverConfigWriteRequest.ts`), and a field or allowed value an older client would
   drop bumps it (`solverConfigVersion.test.ts`). No writer sets a rule value around
   `solverConfigFromDocument` → `parseSolverConfigWrite` → `solverConfigFields` under
-  `ifRevisionId` in `solverConfigCommit.ts` (the rules POST and the chat, ADR-0084; the only targeted writers: the member DELETE's pool patch, the rule-name
+  `ifRevisionId` in `solverConfigWrite.ts`, called by `solverConfigCommit.ts` (the rules POST and the chat, ADR-0084; the only targeted writers: the member DELETE's pool patch, the rule-name
   repair script, a member rename's person-path `set` in `memberCommit.ts`, ADR-0082). One `==` count per person per role key (`exactCapOverlaps`; C2). ADR-0049.
   Rule people are member ids once the document carries `personTokens: "id"` (set only by the consented
   `scripts/rekey-solver-rule-people.ts`); only `rulePeopleToNames`/`rulePeopleToIds` translate, every

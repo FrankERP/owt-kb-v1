@@ -265,7 +265,7 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   roster is always `rulePeopleRosterQuery()` (`serviceReadQueries.ts`). `solverConfigGetBody(doc, roster)`
   (`solverConfigRead.ts`) is the read boundary; `prepareSolverConfigWrite`/`writeSolverConfig`/
   `losslessRules` (`app/utils/solverConfigWrite.ts`, no `server-only`) the one write core, imported only
-  by `solverConfigCommit.ts` and `scripts/rekey-solver-rule-people.ts`.
+  by `solverConfigCommit.ts` and `scripts/lib/rekeySolverRulePeople.ts` (the migration's core).
 - **`ruleCopy.ts`** ([app/components/admin/ruleCopy.ts](../app/components/admin/ruleCopy.ts), pure;
   diseño para admins bloque 2, 2026-10-22) — the ONE Spanish wording of a rule: `restrictionChips`
   (one chip per clause of a person restriction, with its tone and the notation it replaced),

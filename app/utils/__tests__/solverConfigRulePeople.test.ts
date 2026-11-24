@@ -112,7 +112,7 @@ describe("rulePeopleToNames", () => {
     const ids = ["Gone0000000000000000003", "Gone0000000000000000001", "Gone0000000000000000002"];
     const a = rulePeopleToNames(doc(config({ r: ids }), true), ROSTER).config;
     expect(a.restrictions.map((r) => r.person)).toEqual([`${RULE_PERSON_GONE} (3)`, RULE_PERSON_GONE, `${RULE_PERSON_GONE} (2)`]);
-    // Deleting the first rule does not move the others' suffixes.
+    // Deleting the rule of the highest-sorted token moves no other suffix (a lower-sorted one can; ADR-0092).
     const b = rulePeopleToNames(doc(config({ r: ids.slice(1) }), true), ROSTER).config;
     expect(b.restrictions.map((r) => r.person)).toEqual([RULE_PERSON_GONE, `${RULE_PERSON_GONE} (2)`]);
   });

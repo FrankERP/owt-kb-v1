@@ -654,7 +654,8 @@ const byString = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
  * A member outside Alabanza is «<nombre> (fuera de Alabanza)» (never the bare name: a worship
  * namesake would receive the rule); an id that is no member is `RULE_PERSON_GONE`. Every
  * non-resolving label that collides, or that names any roster member, takes « (2)», « (3)»…
- * in the order of the stored token strings, so deleting or reordering rules moves no suffix.
+ * in the order of the stored token strings, so reordering rules moves no suffix (deleting the rule of a
+ * lower-sorted token can; the save still finds each label in the fresh `back`, ADR-0092).
  */
 function labelIds(tokens: readonly string[], roster: RosterMember[], reserved: readonly string[] = []): Map<string, string> {
   const byId = new Map(roster.map((m) => [m._id, m]));

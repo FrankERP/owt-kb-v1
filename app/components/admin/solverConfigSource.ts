@@ -225,7 +225,14 @@ export function saveFailure(
     if (issues.includes("configVersion")) return { message: SAVE_OUTDATED_TAB_MESSAGE, stale: false };
     for (const issue of issues) {
       const m = EXACT_OVERLAP_ISSUE.exec(issue);
-      if (m) return { message: exactOverlapRefusal(sent, Number(m[1]), Number(m[2])), stale: false };
+      if (m) {
+        const message = exactOverlapRefusal(sent, Number(m[1]), Number(m[2]));
+        // ADR-0092: two spellings of one member that the server keyed to one id. The client's
+        // name-keyed check cannot pair them; the server's own words (a rule-person refusal carries
+        // `details.person`) say which person.
+        const server = typeof details.person === "string" && isObj(body) && typeof body.message === "string" ? body.message : null;
+        return { message: message === EXACT_OVERLAP_UNPAIRED_MESSAGE && server ? server : message, stale: false };
+      }
       // ADR-0092: a name the server could not turn into one Alabanza member. Only a repeated
       // name is helped by «Recargar reglas» (the re-read labels both people apart).
       const p = RULE_PERSON_ISSUE.exec(issue);

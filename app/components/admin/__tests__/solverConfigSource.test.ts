@@ -189,6 +189,15 @@ describe("saveFailure — a rule person the server could not store (ADR-0092)", 
     });
   });
 
+  it("two spellings of one member keyed to one id: the server's words, since the client cannot pair them", () => {
+    const body = {
+      error: "invalid_request",
+      message: "Dos reglas de Valeria fijarían el mismo rol con «exactamente»; deja una sola. No se guardó nada.",
+      details: { issues: ["restrictions[1].caps[0]:exact_overlap"], person: "Valeria" },
+    };
+    expect(saveFailure(400, body)).toEqual({ message: body.message, stale: false });
+  });
+
   it("someone outside Alabanza, and a name that matches only after spacing, without a reload", () => {
     expect(saveFailure(400, refused("conflicts[0].personB:not_worship", "Ana"))).toEqual({
       message: "Ana no está en Alabanza; las reglas solo pueden nombrar a alguien de Alabanza. No se guardó nada.",
