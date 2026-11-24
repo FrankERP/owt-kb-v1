@@ -110,6 +110,9 @@ actor SessionAuthority {
     /// Forgets the session here at once, then tells the server (best effort: a failed revoke still
     /// signs this phone out; the person can close the grant from «Apps conectadas»).
     func signOut() async {
+        // The pair may not be read yet (the Keychain is read lazily): read it so it can be revoked.
+        // A Keychain that cannot answer leaves nothing to revoke; the local sign-out still happens.
+        try? ensureLoaded()
         let refreshToken = tokens?.refreshToken
         end()
         guard let refreshToken else { return }

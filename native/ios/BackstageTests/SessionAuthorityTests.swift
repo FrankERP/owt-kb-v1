@@ -95,7 +95,8 @@ final class SessionAuthorityTests: XCTestCase {
         let store = MemoryTokenStore(stale())
         let now = self.now
         let authority = SessionAuthority(config: config, store: store, transport: transport, now: { now })
-        // Another process sharing the keychain won the rotation meanwhile.
+        // This launch read the old pair; then another process sharing the keychain won the rotation.
+        _ = try await authority.restore()
         try store.save(TokenSet(accessToken: "a9", refreshToken: "r9", accessExpiresAt: now.addingTimeInterval(3600)))
 
         let token = try await authority.accessToken()
@@ -238,13 +239,15 @@ final class SessionAuthorityTests: XCTestCase {
         XCTAssertEqual(try store.load()?.accessToken, "a1")
     }
 
+    /// Also covers a sign-out before anything read the Keychain: the stored pair is still revoked.
     func testSignOutForgetsLocallyEvenWhenTheRevokeFails() async throws {
         let transport = ScriptedTransport() // the revoke throws
         let store = MemoryTokenStore(stale())
         let authority = SessionAuthority(config: config, store: store, transport: transport)
         await authority.signOut()
         XCTAssertNil(try store.load())
-        XCTAssertEqual(body(of: transport.requests(to: "/api/app/v1/auth/revoke")[0]), ["token": "r0", "client_id": "backstage-ios"])
+        let revoke = try XCTUnwrap(transport.requests(to: "/api/app/v1/auth/revoke").first, "the stored pair is revoked")
+        XCTAssertEqual(body(of: revoke), ["token": "r0", "client_id": "backstage-ios"])
     }
 }
 
