@@ -575,7 +575,8 @@ again. Nothing else in the app reads this variable.
 ## `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` (GitHub `testflight` environment — the App Store Connect API key)
 
 **Needed in: GitHub Actions only, as secrets of the `testflight` ENVIRONMENT** (Settings →
-Environments → `testflight`, deployment branches limited to `main`), read by
+Environments → `testflight`, «Deployment branches and tags» → **Selected branches and tags** →
+`main` only; not «Protected branches», which would also admit `preview` if it is ever protected), read by
 `.github/workflows/ios-testflight.yml`. **Never as repository secrets:** anyone (or any session)
 that can push a branch could add a workflow there that reads a repository secret; an environment
 limited to `main` refuses a job from any other ref. **Not needed in:** Vercel, GCF, the app itself, a

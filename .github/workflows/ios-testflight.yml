@@ -12,7 +12,8 @@
 # `if:` below only skips a run started elsewhere; the environment is the boundary.
 #
 # Build number = "<run number>.<attempt>" (project.yml maps CFBundleVersion to it), so every upload,
-# a re-run included, is higher than the last: App Store Connect refuses a repeated number. The
+# a re-run included, is higher than the last: App Store Connect refuses a repeated number. The run
+# number belongs to this file: renaming it restarts at 1, so bump MARKETING_VERSION if you ever do. The
 # version shown to testers is project.yml's MARKETING_VERSION. Built with Xcode 26 because App
 # Store Connect refuses an older SDK. Not part of ci.yml's `gates`, like ios.yml (docs/CI.md).
 name: iOS TestFlight
