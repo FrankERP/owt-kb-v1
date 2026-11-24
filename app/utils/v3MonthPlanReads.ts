@@ -29,7 +29,7 @@ import "server-only";
 
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import { adminMembersQuery, adminRolesQuery } from "@/app/utils/serviceReadQueries";
-import { loadStoredSolverConfig, solverConfigGetBody } from "@/app/utils/solverConfigRead";
+import { loadSolverConfigWithRoster, solverConfigGetBody } from "@/app/utils/solverConfigRead";
 import { loadFairnessLedger } from "@/app/utils/fairnessLedgerRead";
 import { fairnessRecordEnvironment, resolveSolverEngine } from "@/app/utils/solverDeployment";
 import type { FairnessLedgerResponse } from "@/app/utils/fairnessVocabulary";
@@ -70,7 +70,8 @@ async function settle<T>(run: () => Promise<T>): Promise<{ ok: true; value: T } 
 
 /** The stored rules as the planner reads them (exported for `get_solver_rules`). */
 export async function readRules(): Promise<V3PlanRules> {
-  const source = sourceFromGet(true, viaJson(solverConfigGetBody(await loadStoredSolverConfig())));
+  const { doc, roster } = await loadSolverConfigWithRoster();
+  const source = sourceFromGet(true, viaJson(solverConfigGetBody(doc, roster)));
   const config = editableConfig(source);
   if (!config) throw new Error("rules");
   return { rev: source.status === "ready" ? source.rev : null, config };

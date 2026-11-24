@@ -52,8 +52,14 @@ if (!process.env.SANITY_WRITE_TOKEN) {
   process.exit(1);
 }
 
-const cfg = await client.fetch(`*[_type == "solverConfig"][0]{ _id, _rev, restrictions }`);
+const cfg = await client.fetch(`*[_type == "solverConfig"][0]{ _id, _rev, restrictions, personTokens }`);
 if (!cfg) { console.error("No solverConfig document."); process.exit(1); }
+// ADR-0092: once the rules name people by member id, this script's name text would read as a
+// deleted person. It ran once (2026-08-31) and must never run against an id-keyed document.
+if (cfg.personTokens === "id") {
+  console.error("The rules name people by member id (personTokens: \"id\"); a rename no longer detaches a rule. Nothing done.");
+  process.exit(1);
+}
 
 const rule = (cfg.restrictions ?? []).find((r) => r._key === KEY);
 if (!rule) {

@@ -31,6 +31,7 @@ import {
   EXACT_ROLE_LABEL,
   PLANNER_UPDATED_MESSAGE,
   READ_FAILED_MESSAGE,
+  RULE_PERSON_CHANGED_MESSAGE,
   SAVE_ABSENT_MESSAGE,
   SAVE_FORBIDDEN_MESSAGE,
   SAVE_OUTDATED_TAB_MESSAGE,
@@ -168,6 +169,44 @@ describe("saveFailure — branching on the machine code, never on prose", () => 
     const unknown = saveFailure(500, null);
     expect(unknown.stale).toBe(false);
     expect(unknown.message).toContain("500");
+  });
+});
+
+describe("saveFailure — a rule person the server could not store (ADR-0092)", () => {
+  const refused = (issue: string, person: string) => ({ error: "invalid_request", details: { issues: [issue], person } });
+
+  it("the rename race: its own words, with «Recargar reglas»", () => {
+    expect(saveFailure(409, { error: "stale_revision", details: { detail: "person_changed" } })).toEqual({
+      message: RULE_PERSON_CHANGED_MESSAGE,
+      stale: true,
+    });
+  });
+
+  it("a name two people share: reload, which labels them apart", () => {
+    expect(saveFailure(400, refused("restrictions[0].person:ambiguous_person", "Gaby"))).toEqual({
+      message: "«Gaby» coincide con más de una persona; recarga las reglas. No se guardó nada.",
+      stale: true,
+    });
+  });
+
+  it("two spellings of one member keyed to one id: the server's words, since the client cannot pair them", () => {
+    const body = {
+      error: "invalid_request",
+      message: "Dos reglas de Valeria fijarían el mismo rol con «exactamente»; deja una sola. No se guardó nada.",
+      details: { issues: ["restrictions[1].caps[0]:exact_overlap"], person: "Valeria" },
+    };
+    expect(saveFailure(400, body)).toEqual({ message: body.message, stale: false });
+  });
+
+  it("someone outside Alabanza, and a name that matches only after spacing, without a reload", () => {
+    expect(saveFailure(400, refused("conflicts[0].personB:not_worship", "Ana"))).toEqual({
+      message: "Ana no está en Alabanza; las reglas solo pueden nombrar a alguien de Alabanza. No se guardó nada.",
+      stale: false,
+    });
+    expect(saveFailure(400, refused("presence[0].persons[1]:name_unmatched", "Rex Ruiz"))).toEqual({
+      message: "El nombre de Rex Ruiz tiene espacios o letras que no coinciden; corrígelo en su perfil. No se guardó nada.",
+      stale: false,
+    });
   });
 });
 

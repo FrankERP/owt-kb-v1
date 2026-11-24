@@ -118,3 +118,10 @@ the newer one may have extended.
   next save (its old bundle cannot say more) — reload open admin tabs after the release.
 - **A pair of exact counts saved before C3 blocks every save** until one cap is removed; the
   panel marks both cards so it is never a dead end.
+
+## Addendum — ADR-0092, 2026-11-24
+
+The one writer chain gains a step and a home: `parseSolverConfigWrite` → `rulePeopleToIds` (rule people
+to member ids once the document carries `personTokens: "id"`) → `solverConfigFields`, under
+`ifRevisionId`, in `app/utils/solverConfigWrite.ts` (no `server-only`, so the consented migration
+script writes through it too). The bodies still carry names, so the version guard is unchanged.

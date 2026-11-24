@@ -133,3 +133,21 @@ describe("D12 helpers", () => {
     expect(orphanRuleWarnings(doc, names, [{ member_name: "Gabriela" }])).toEqual([]);
   });
 });
+
+describe("id mode (ADR-0092)", () => {
+  const ids = () => rules({ personTokens: "id", restrictions: [restriction("r1", "vale"), restriction("r2", "Gaby")] });
+
+  it("planRuleRename plans no set and no line: a rule keyed by id cannot be detached", () => {
+    expect(planRuleRename({ rulesDoc: ids(), roster, selfId: "vale", before: vale, after: { ...vale, alias: "Valeria" } })).toEqual({
+      ok: true,
+      sets: {},
+      lines: [],
+      ambiguous: [],
+      renamed: 0,
+    });
+  });
+
+  it("orphanRuleWarnings warns about nothing: a rule keyed by id cannot be inherited", () => {
+    expect(orphanRuleWarnings(ids(), roster.map((r) => ({ member_name: String(r.member_name), alias: r.alias as string })), [{ member_name: "Gabriela", alias: "Gaby" }])).toEqual([]);
+  });
+});
