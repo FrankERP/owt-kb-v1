@@ -7,7 +7,7 @@
 // exclusion actually exposes. This test closes that gap directly: it pins the
 // full set of `/.well-known/*` rewrites so a future rewrite added anywhere
 // other than `beforeFiles`, or pointed at anything other than the two
-// discovery handlers, fails the suite instead of shipping quietly public.
+// discovery handlers and the static Apple app association (ADR-0091), fails the suite instead of shipping quietly public.
 //
 // `next.config.mjs` runs `assertDeploymentCoherence(process.env)` at import
 // time (A3 §3), but that guard is a no-op without `VERCEL_GIT_COMMIT_REF` (an
@@ -31,6 +31,10 @@ const WELL_KNOWN_REWRITES = [
     source: "/.well-known/oauth-protected-resource/api/mcp",
     destination: "/api/oauth/discovery/protected-resource",
   },
+  {
+    source: "/.well-known/apple-app-site-association",
+    destination: "/api/app/association/apple",
+  },
 ];
 
 describe("next.config.mjs /.well-known rewrites (I11)", () => {
@@ -46,7 +50,7 @@ describe("next.config.mjs /.well-known rewrites (I11)", () => {
     expect(Array.isArray(rewrites)).toBe(false);
   });
 
-  it("the beforeFiles /.well-known/* rewrites are EXACTLY the two discovery handlers", async () => {
+  it("the beforeFiles /.well-known/* rewrites are EXACTLY the discovery handlers and the Apple association", async () => {
     const rewrites = (await nextConfig.rewrites!()) as {
       beforeFiles?: Array<{ source: string; destination: string }>;
       afterFiles?: Array<{ source: string; destination: string }>;

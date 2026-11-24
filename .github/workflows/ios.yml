@@ -1,0 +1,53 @@
+# The native iPhone/iPad app (native/ios, ADR-0091): generate the Xcode project from
+# project.yml, then build and run its unit tests on a Simulator. A cloud session runs on
+# Linux and cannot compile Swift for iOS, so this job is where the app is compiled at all.
+#
+# Path-scoped on purpose: it runs only when the app or this file changes. It is NOT part of
+# ci.yml's `gates` (main's one required check), because a web change must never wait on a
+# macOS runner, and a red iOS build must never block a web hotfix. TestFlight uploads are a
+# separate, later job that needs the App Store Connect key (docs/SECRETS.md).
+name: iOS
+
+on:
+  push:
+    paths:
+      - "native/ios/**"
+      - ".github/workflows/ios.yml"
+  pull_request:
+    paths:
+      - "native/ios/**"
+      - ".github/workflows/ios.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate the Xcode project
+        working-directory: native/ios
+        run: xcodegen generate
+      - name: Pick a Simulator
+        id: sim
+        run: |
+          udid=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(x["udid"] for k in sorted(d, reverse=True) if "iOS" in k for x in d[k] if x["name"].startswith("iPhone")))')
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+      - name: Build and test
+        working-directory: native/ios
+        run: |
+          set +e
+          xcodebuild test -project Backstage.xcodeproj -scheme Backstage -destination "id=${{ steps.sim.outputs.udid }}" CODE_SIGNING_ALLOWED=NO > xcodebuild.log 2>&1
+          status=$?
+          grep -E "error:|Test Case .*(passed|failed)|Executed|\*\* " xcodebuild.log
+          if [ "$status" -ne 0 ]; then tail -n 80 xcodebuild.log; fi
+          exit "$status"

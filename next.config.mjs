@@ -120,6 +120,12 @@ const nextConfig = {
           source: "/.well-known/oauth-protected-resource/api/mcp",
           destination: "/api/oauth/discovery/protected-resource",
         },
+        // Native apps (ADR-0091): the static Apple association, so iOS hands the sign-in
+        // callback only to our app. Apple's CDN fetches it without a session or redirect.
+        {
+          source: "/.well-known/apple-app-site-association",
+          destination: "/api/app/association/apple",
+        },
       ],
     };
   },

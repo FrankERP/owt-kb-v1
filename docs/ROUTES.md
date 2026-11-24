@@ -12,6 +12,8 @@ The app uses **four route groups**, each with its own root `<html>`/`<body>` lay
   `/app/callback/ios` and `/app/callback/android` (public, `force-dynamic`, render a fixed sentence
   and nothing from the query). Its root layout imports nothing that reads a session, cookie,
   network or env (`appAuthStatic.test.ts`), carries none of the `(client)` chrome, and is dark only.
+  Beside it, `/.well-known/apple-app-site-association` is a `beforeFiles` rewrite to the static
+  route `/api/app/association/apple` (which app may receive the iOS callback; `wellKnownRewrites.test.ts`).
 
 Route groups in parentheses **do not** contribute to the URL. There is no top-level
 `app/layout.tsx` or `app/page.tsx`; each group supplies its own root layout. Access control is

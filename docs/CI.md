@@ -292,6 +292,11 @@ commit it with the runner image it came from.
   branches. Repeating it here would roughly double CI wall time to re-prove
   something a deploy already proves, and a Vercel build failure is already
   visible.
+- **The native iPhone app** (`native/ios`) is NOT in `gates`: its own workflow,
+  `.github/workflows/ios.yml`, generates the Xcode project and runs the app's tests on a macOS
+  runner, only when `native/ios/**` or that file changes. Outside `gates` on purpose: a web change
+  never waits on a macOS runner, and a red iOS build never blocks a web hotfix. Read its result on
+  the PR or the Actions tab before merging a change to the app.
 
 ### Secrets
 

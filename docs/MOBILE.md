@@ -28,8 +28,8 @@ clients, `backstage-ios` (iPhone, iPad, Mac) and `backstage-android`:
 | Who am I | `GET /api/app/v1/me` | `Authorization: Bearer <access_token>`. |
 
 **Redirects.** Production and preview: only `<origin>/app/callback/ios` and
-`<origin>/app/callback/android` (verified `https`; until the association files exist they land on an
-inert page «Abre la app Backstage para terminar de entrar»). Local `next dev` only:
+`<origin>/app/callback/android` (verified `https`; when the app is not installed, or before the OS has the association file, they
+land on an inert page «Abre la app Backstage para terminar de entrar»). Local `next dev` only:
 `app.vercel.owt-backstage:/oauth/callback/{ios,android}`.
 
 **Answers the apps must handle.** `401 invalid_token` → refresh, then sign in again;
@@ -43,7 +43,13 @@ A refresh `invalid_grant` means the grant is gone (revoked, reused, 90 days): si
 
 - iOS: `ASWebAuthenticationSession` with an `https` callback (iOS/iPadOS 17.4+, macOS 14.4+),
   `prefersEphemeralWebBrowserSession`; the `apple-app-site-association` lists the app under BOTH
-  `webcredentials` and `applinks`. iPhone XS/XR or newer.
+  `webcredentials` and `applinks`. iPhone XS/XR or newer. **Served** at
+  `/.well-known/apple-app-site-association` (a `beforeFiles` rewrite to the static
+  `/api/app/association/apple`, `app/appAuth/appleAssociation.ts`): app id
+  `2NM4872N5S.com.owtBackstage.app` (Team ID + bundle id, both public), `applinks` limited to
+  `/app/callback/ios`. Apple's CDN refreshes its copy on its own schedule (hours to a day), so a
+  first TestFlight build may need a day before the https callback reaches the app. The app itself
+  is `native/ios` (README there).
 - Android: Auth Tab with a verified `https` redirect (Chrome 137+; launch it in the Chrome package
   explicitly), an `autoVerify` App Link for `/app/callback/android`, minSdk 31 (Android 12). The
   server refuses Android 11 and older at sign-in. No Chrome Auth Tab → «Para entrar necesitas Chrome
