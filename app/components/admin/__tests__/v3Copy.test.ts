@@ -116,3 +116,15 @@ describe("horizonTitle — the grid's heading names every planned month", () => 
     expect(horizonTitle(["2026-12", "2027-01"])).toBe("Diciembre 2026 y enero 2027");
   });
 });
+
+describe("a rule whose member is gone (ADR-0092)", () => {
+  const GONE = "No se puede correr Auto: una regla nombra a una persona que ya no está en Alabanza. Quita o cambia esa regla.";
+  it("every line that quotes the rule person says so plainly, numbered labels included", () => {
+    for (const p of ["persona que ya no está en Alabanza", "persona que ya no está en Alabanza (2)"]) {
+      expect(V3_RESOLVER_REFUSAL.unresolved(p, "2026-11", null)).toBe(GONE);
+      expect(V3_RESOLVER_REFUSAL.ambiguous(p, "2026-11", null)).toBe(GONE);
+      expect(V3_LINES.cadenceName(p, V3_LINES.cadenceNameNone)).toBe(GONE);
+    }
+    expect(V3_RESOLVER_REFUSAL.unresolved("Vale", "2026-11", null)).toContain("«Vale»");
+  });
+});

@@ -37,6 +37,7 @@ import {
   SOLVER_CONFIG_VERSION,
   exactCapOverlaps,
   solverConfigFromDocument,
+  type RulePersonRefusalReason,
 } from "@/app/utils/solverConfigWriteRequest";
 
 export const SOLVER_CONFIG_ENDPOINT = "/api/admin/solver-config";
@@ -85,6 +86,34 @@ export const SAVE_FAILED_MESSAGE = "No se pudieron guardar las reglas.";
 /** The route refused this tab's version (C3 §6.2). No reload button: reloading the PAGE is the fix. */
 export const SAVE_OUTDATED_TAB_MESSAGE =
   "Esta pestaña tiene una versión anterior del planificador y no guardó nada. Recarga la página y vuelve a aplicar tu cambio.";
+/**
+ * A rule person the server could not store (ADR-0092). The panel and the chat show the same
+ * words; `person` is the name the save carried, never an id. `person_changed` is the rename race:
+ * someone renamed a person while this tab was open, and nothing was written instead of detaching
+ * their rule.
+ */
+export const RULE_PERSON_CHANGED_MESSAGE =
+  "Una persona de las reglas cambió mientras editabas (por ejemplo, alguien cambió su nombre). Recarga las reglas y vuelve a guardar; no se guardó nada.";
+
+export function rulePersonRefusalMessage(reason: RulePersonRefusalReason, person: string): string {
+  const who = person.trim() || "una persona";
+  switch (reason) {
+    case "ambiguous_person":
+      return `«${who}» coincide con más de una persona; recarga las reglas. No se guardó nada.`;
+    case "not_worship":
+      return `${who} no está en Alabanza; las reglas solo pueden nombrar a alguien de Alabanza. No se guardó nada.`;
+    case "name_unmatched":
+      return `El nombre de ${who} tiene espacios o letras que no coinciden; corrígelo en su perfil. No se guardó nada.`;
+    case "exact_overlap":
+      return `Dos reglas de ${who} fijarían el mismo rol con «exactamente»; deja una sola. No se guardó nada.`;
+    case "person_changed":
+      return RULE_PERSON_CHANGED_MESSAGE;
+  }
+}
+
+/** A refused rule person's issue suffix, as `rulePersonIssue` writes it (ADR-0092). */
+const RULE_PERSON_ISSUE = /:(ambiguous_person|not_worship|name_unmatched)$/;
+
 /** The server echoed another version: saving is off until the page is reloaded (C3 §6.2). */
 export const PLANNER_UPDATED_MESSAGE =
   "El planificador se actualizó. Recarga la página para poder guardar las reglas.";
@@ -181,7 +210,10 @@ export function saveFailure(
   sent?: SolverConfig,
 ): { message: string; stale: boolean } {
   const code = isObj(body) && typeof body.error === "string" ? body.error : "";
-  if (code === "stale_revision") return { message: SAVE_STALE_MESSAGE, stale: true };
+  if (code === "stale_revision") {
+    const detail = isObj(body) && isObj(body.details) ? body.details.detail : undefined;
+    return { message: detail === "person_changed" ? RULE_PERSON_CHANGED_MESSAGE : SAVE_STALE_MESSAGE, stale: true };
+  }
   if (code === "not_found") return { message: SAVE_ABSENT_MESSAGE, stale: false };
   if (code === "invalid_request") {
     const details = isObj(body) && isObj(body.details) ? body.details : {};
@@ -193,7 +225,22 @@ export function saveFailure(
     if (issues.includes("configVersion")) return { message: SAVE_OUTDATED_TAB_MESSAGE, stale: false };
     for (const issue of issues) {
       const m = EXACT_OVERLAP_ISSUE.exec(issue);
-      if (m) return { message: exactOverlapRefusal(sent, Number(m[1]), Number(m[2])), stale: false };
+      if (m) {
+        const message = exactOverlapRefusal(sent, Number(m[1]), Number(m[2]));
+        // ADR-0092: two spellings of one member that the server keyed to one id. The client's
+        // name-keyed check cannot pair them; the server's own words (a rule-person refusal carries
+        // `details.person`) say which person.
+        const server = typeof details.person === "string" && isObj(body) && typeof body.message === "string" ? body.message : null;
+        return { message: message === EXACT_OVERLAP_UNPAIRED_MESSAGE && server ? server : message, stale: false };
+      }
+      // ADR-0092: a name the server could not turn into one Alabanza member. Only a repeated
+      // name is helped by «Recargar reglas» (the re-read labels both people apart).
+      const p = RULE_PERSON_ISSUE.exec(issue);
+      if (p) {
+        const reason = p[1] as RulePersonRefusalReason;
+        const person = typeof details.person === "string" ? details.person : "";
+        return { message: rulePersonRefusalMessage(reason, person), stale: reason === "ambiguous_person" };
+      }
     }
     return { message: SAVE_REJECTED_MESSAGE, stale: false };
   }

@@ -541,10 +541,11 @@ nuevo» (it bumps their `calendarFeed.<memberId>` generation).
 and local `.env.local` to try the native apps against `next dev`. Not needed in: GitHub Actions,
 the iOS or Android build (the apps never hold it), GCF.**
 
-**Status: NOT SET yet** (2026-11-20). The native-app sign-in door ([ADR-0091](adr/0091-native-apps-sign-in-through-their-own-first-party-oauth-door.md))
-ships without it, so on each environment every app route answers 503 until it is set and that
-environment is redeployed. Nothing else in the app reads it, so its absence breaks nothing that
-exists today.
+**Status: SET on Preview and Production** (2026-11-20, with Frank's go-ahead; two different values,
+each generated with `openssl rand -base64 48` and piped straight into `vercel env add … --sensitive`,
+so neither value was ever displayed or stored anywhere else). Not set on Development: local work
+puts its own value in `.env.local`. Without it an environment's app routes answer 503 ([ADR-0091](adr/0091-native-apps-sign-in-through-their-own-first-party-oauth-door.md));
+nothing else in the app reads it.
 
 **Purpose.** The HS256 key (`jose`) for every authorization code, access token and refresh token
 the native-app door mints or verifies (`app/appAuth/tokens.ts`, loaded by `loadAppSecret` in
@@ -739,7 +740,7 @@ secret.
 | Platform | Role |
 |---|---|
 | Vercel Preview + Production | `app/api/admin/solve/route.ts` sends it as the `X-Api-Key` header — to v2 itself, and to v3 through `app/utils/solverV3Upstream.ts` (solver v3 C6; the path production takes since the 2026-10-15 cutover, ADR-0056 — v2's only after a flip-back). The MCP's `solve_month` (P4, in production since 2026-10-20) calls the same `solveV3`, so it sends the same header from `/api/mcp` |
-| GitHub Actions `solver-v3-ops.yml` → `verify` | Reads `owt-solver-api-key:latest` with `owt-gha-verify` (Secret Accessor on this secret only), masks it, and sends it as `X-Api-Key` for the ping and smoke solve (ADR-0092). Nothing is stored in GitHub |
+| GitHub Actions `solver-v3-ops.yml` → `verify` | Reads `owt-solver-api-key:latest` with `owt-gha-verify` (Secret Accessor on this secret only), masks it, and sends it as `X-Api-Key` for the ping and smoke solve (ADR-0093). Nothing is stored in GitHub |
 | Secret Manager `owt-solver-api-key` | Cloud Build deploys each function with `--set-secrets=OWT_SOLVER_API_KEY=owt-solver-api-key:latest`: v2 from `cloudbuild.yaml` (manual: `scripts/deploy-solver-gcf.sh`), v3 from `gcf_v3/cloudbuild.yaml` (manual: a dispatched `deploy` of `solver-v3-ops.yml`, which re-runs that trigger; first creation and last resort: `scripts/deploy-solver-v3-gcf.sh`) |
 
 **Purpose.** The only barrier on each publicly invokable function (`allUsers` holds
@@ -973,7 +974,7 @@ does not use it; it authenticates with its own sign-in.
 ## GitHub Actions → Google (Workload Identity Federation — no secret)
 
 **Needed in: nothing stores a credential.** `.github/workflows/solver-v3-ops.yml` gets a
-short-lived Google token per job by exchanging GitHub's OIDC token (ADR-0092).
+short-lived Google token per job by exchanging GitHub's OIDC token (ADR-0093).
 
 **Status (2026-10-22): designed and merged, NOT yet set up or rehearsed.** Nothing below exists
 in Google Cloud or GitHub until Frank runs the setup script and creates the environments; until
@@ -989,7 +990,7 @@ rehearsal. What it sets up:
   Functions Viewer on `owt-solver-v3`, Secret Accessor on `owt-solver-api-key`) and
   `owt-gha-deploy` (Cloud Build Editor on the project, Service Account User on the deploy
   trigger's account — effectively editor-equivalent, which is why deploy runs need Frank's
-  approval; ADR-0092 says what that approval does and does not guard).
+  approval; ADR-0093 says what that approval does and does not guard).
 - **GitHub** — environments `solver-verify` (deployment branches: `main`) and `solver-deploy`
   (`main`; required reviewer FrankERP; admins cannot bypass), each with the plain **variables**
   `GCP_PROJECT`, `GCP_WIF_PROVIDER` and `GCP_SERVICE_ACCOUNT` (that environment's account). Not

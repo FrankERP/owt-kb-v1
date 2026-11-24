@@ -1,4 +1,4 @@
-# ADR-0092: The solver is verified and re-deployed from GitHub Actions with no Google key
+# ADR-0093: The solver is verified and re-deployed from GitHub Actions with no Google key
 
 **Date:** 2026-10-22 · **Status:** Accepted
 
@@ -23,6 +23,8 @@
 > reach `main` first.
 > Renumbered 0090 → 0091 on `preview` 2026-11-17: the days a Jóvenes pastor marked, in Planear
 > (ADR-0090, PR #249), is ahead of it for `main`.
+> Renumbered 0092 → 0093 on `preview` 2026-11-24: the solver rules by member id (ADR-0092, C1) reach
+> `main` first.
 
 ## Context
 

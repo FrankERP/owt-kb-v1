@@ -293,6 +293,45 @@ describe("D12 — a name or alias another member has is refused", () => {
   });
 });
 
+// ADR-0092: once the rules name people by member id, a rename has nothing to rewrite or warn about.
+describe("rules keyed by member id (ADR-0092)", () => {
+  function idRules() {
+    const cfg = stored("solverConfig");
+    cfg.personTokens = "id";
+    (cfg.restrictions as Array<Record<string, unknown>>)[0].person = "vale";
+    (cfg.conflicts as Array<Record<string, unknown>>)[0].personA = "pau";
+    (cfg.conflicts as Array<Record<string, unknown>>)[0].personB = "vale";
+    (cfg.presence as Array<Record<string, unknown>>)[0].persons = ["vale", "tony"];
+    // A rule naming someone deleted: in names mode «Gaby» would warn «empezaría a aplicarle».
+    (cfg.restrictions as unknown[]).push({ _type: "solverRestriction", _key: "r9", id: "r9", person: "gone-member", excludedPatterns: ["Sat.*"], fairness: "none", fairnessSlack: 1, weekExclusions: [], caps: [] });
+    return structuredClone(cfg);
+  }
+
+  it("/me: an alias change of a member who has rules is accepted and leaves the rules untouched", async () => {
+    const before = idRules();
+    const out = await patchOwnProfile("vale", { alias: "Valeria", email: "vale@example.com" });
+    expect(out.status).toBe(200);
+    expect(stored("vale").alias).toBe("Valeria");
+    expect(stored("solverConfig")).toEqual(before);
+  });
+
+  it("/admin and the chat: a rename plans no rule write and no «empezaría a aplicarle» line", async () => {
+    const before = idRules();
+    const admin = await patchMember("pau", { alias: "Paulina" }, "frank");
+    expect(admin.status).toBe(200);
+    expect(admin.body).not.toHaveProperty("ruleNotes");
+    const checked = await checkMemberEdits("vale", [{ op: "set", field: "alias", value: "Valeria" }]);
+    expect(checked.ok && checked.lines).toEqual(["Alias: «Vale» → «Valeria»"]);
+    expect(stored("solverConfig")).toEqual(before);
+  });
+
+  it("creating a person whose name a gone rule once had warns about nothing", async () => {
+    idRules();
+    const plan = await planNewMembers([{ member_name: "gone-member", email: "g@example.com", ministries: ["worship"] }], "chat");
+    expect(plan.ok && plan.plan.lines.some((l) => l.includes("empezaría a aplicarle"))).toBe(false);
+  });
+});
+
 describe("the chat (§3.1, D3)", () => {
   it("check renders the field lines and the renamed rules; save writes exactly that under the token's verify", async () => {
     const edits = [{ op: "set" as const, field: "alias" as const, value: "Valeria" }];

@@ -80,3 +80,10 @@ that document for every month it plans. What made this slice a critical contract
 - Any day × seat, any member in any pool, ids on the wire.
 - Letting the save or the solver find the contradiction after Frank's «sí».
 - Random ids at save, or ids derived from the token (circular).
+
+## Addendum — ADR-0092, 2026-11-24
+
+Once `personTokens: "id"` is set, the rules STORE member ids; the chat still judges and answers on
+names (`rulePeopleToNames` at the read, `rulePeopleToIds` in the shared write core), so KH-1 is
+unchanged: no member id on the wire, in a line or in a log. The lossless gate (R4) moved to
+`solverConfigWrite.ts` and compares the raw stored fields through that core.

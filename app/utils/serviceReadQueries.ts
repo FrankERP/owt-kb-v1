@@ -556,6 +556,20 @@ export function solverConfigQuery(): BoundQuery {
   };
 }
 
+/**
+ * ADR-0092 — the roster every rule-person translation reads (`rulePeopleToNames`,
+ * `rulePeopleToIds`): every published member, ANY ministry, disabled included, with
+ * `ministries` (an absent field reads as worship, so a roster without it would make every
+ * member look like worship). No caller passes a roster from another query: a narrower one
+ * would read a deleted-looking id for a member it filtered out.
+ */
+export function rulePeopleRosterQuery(): BoundQuery {
+  return {
+    query: `*[_type == "teamMembers" && ${CANONICAL}]{ _id, member_name, alias, ministries }`,
+    params: {},
+  };
+}
+
 // ── Admin panel reads (the planner's sources) ───────────────────────────────
 // The GROQ of `GET /api/admin/roles` and `GET /api/admin/members`, moved here so a
 // server caller (the MCP month planner) reads exactly the rows `/admin` reads.
