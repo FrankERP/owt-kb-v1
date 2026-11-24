@@ -2,6 +2,29 @@
 
 **Date:** 2026-10-22 · **Status:** Accepted
 
+> **Numbering.** Renumbered 0072 → 0073 on `preview` 2026-10-24: admin parity phase 2's ADR-0072
+> reaches `main` first (ADR numbers follow the order records reach `main`).
+> Renumbered 0073 → 0074 on `preview` 2026-10-27: admin parity phase 3's ADR-0073 (a service's
+> messages from the chat) reaches `main` first.
+> Renumbered 0074 → 0076 on `preview` 2026-10-28: Fluid compute reached `main` as ADR-0074 and the
+> multi-ministry decision as ADR-0075 first.
+> Renumbered 0076 → 0077 → 0078 on `preview` 2026-10-28: admin parity phase 3's proposal decisions
+> (ADR-0076) and song editing (ADR-0077) reached `main` first.
+> Renumbered 0083 → 0084 on `preview` 2026-11-05: the connector's tiers (ADR-0083) reach `main`
+> first.
+> Renumbered 0084 → 0085 on `preview` 2026-11-11: the solver rules from the chat (ADR-0084) reach
+> `main` first. Its own branch renumbers to the next free number on `main` before it merges.
+> Renumbered 0085 → 0086 on `preview` 2026-11-11: Jóvenes per-group leadership's ADR-0085
+> reaches `main` first.
+> Renumbered 0086 → 0089 on `preview` 2026-11-12: Jóvenes cards (ADR-0086), the worship card
+> (ADR-0087) and the pastor's message from the lead (ADR-0088) reached `preview` first; two records
+> were 0086 there.
+> Renumbered 0089 → 0090 on `preview` 2026-11-17: the Jóvenes meeting's fixed parts (ADR-0089)
+> reach `main` first.
+> Renumbered 0090 → 0091 on `preview` 2026-11-17: the days a Jóvenes pastor marked, in Planear
+> (ADR-0090, PR #249), is ahead of it for `main`.
+> Renumbered 0071 → 0092 on its own branch 2026-11-24: ADR-0071 on main is the rose key colour.
+
 ## Context
 
 Frank wants no work to depend on his laptop being open (2026-10-21). For the production solver
