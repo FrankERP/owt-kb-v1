@@ -15,6 +15,7 @@ import type { capValueForMonth } from "./serviceRuleContext";
 import type { V3TransportReason } from "./v3Wire";
 import type { FairnessPutRefusal } from "@/app/utils/fairnessVocabulary";
 import type { EligibilityIssueCode, EligibilityRefusalReason } from "@/app/utils/fairnessEligibility";
+import { isGoneRulePerson } from "@/app/utils/solverConfigWriteRequest";
 
 // ─── Formatting ─────────────────────────────────────────────────────────────
 
@@ -315,13 +316,19 @@ export function transportLine(reason: V3TransportReason | "unknown_service"): st
 const AUTO = "No se puede correr Auto: ";
 
 /**
+ * ADR-0092: a rule whose member was deleted reads «persona que ya no está en Alabanza» (numbered when
+ * there are several). Every line that would quote it says so plainly instead of «no coincide con nadie».
+ */
+const GONE_PERSON_LINE = `${AUTO}una regla nombra a una persona que ya no está en Alabanza. Quita o cambia esa regla.`;
+
+/**
  * One line per IF2-15 `refusals` item, keyed on ITS union: a reason C2 adds without copy fails
  * `tsc`. `exactLeadLabel` is the card label of the person's exact `Sun.Lead` rule when the caller
  * found one (only `cadence_and_exact` reads it).
  */
 export const V3_RESOLVER_REFUSAL: Record<EligibilityRefusalReason, (person: string, month: string, exactLeadLabel: string | null) => string> = {
-  unresolved: (p) => `${AUTO}«${p}» en las reglas no coincide con nadie. Corrige el nombre en la regla.`,
-  ambiguous: (p) => `${AUTO}«${p}» en las reglas coincide con más de una persona. Corrige el nombre en la regla.`,
+  unresolved: (p) => (isGoneRulePerson(p) ? GONE_PERSON_LINE : `${AUTO}«${p}» en las reglas no coincide con nadie. Corrige el nombre en la regla.`),
+  ambiguous: (p) => (isGoneRulePerson(p) ? GONE_PERSON_LINE : `${AUTO}«${p}» en las reglas coincide con más de una persona. Corrige el nombre en la regla.`),
   no_tipo: (p) => `${AUTO}«${p}» en las reglas no tiene Tipo. Corrige el nombre en la regla.`,
   cadence_and_exact: (p, _m, label) => cadenceAndExactLine(p, label ?? "regla fija"),
   overlapping_exact: (p) => `${AUTO}${p} tiene dos números fijos para el mismo rol. Deja una sola regla.`,
@@ -441,7 +448,9 @@ export const V3_LINES = {
     `El plan es demasiado grande para el solver (${what}: ${n} de ${max}). Planea 1 mes.`,
   // WN-2
   cadenceName: (person: string, motivo: string) =>
-    `No se puede correr Auto: «Mes por medio» de «${person}» no corresponde a una sola persona (${motivo}). Corrige el nombre en la regla.`,
+    isGoneRulePerson(person)
+      ? GONE_PERSON_LINE
+      : `No se puede correr Auto: «Mes por medio» de «${person}» no corresponde a una sola persona (${motivo}). Corrige el nombre en la regla.`,
   cadenceNameNone: "no coincide con nadie",
   cadenceNameMany: (n: number) => `coincide con ${n} personas`,
   cadenceAndExact: cadenceAndExactLine,

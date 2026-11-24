@@ -39,6 +39,9 @@
 // so on the route this parser never sees a body written for another shape.
 
 import { normalizeLabel } from "./normalizeLabel";
+import { normalizeMinistries } from "@/app/ministries";
+import { displayMemberName, rulePersonNamesMember } from "./memberRuleNames";
+import { resolveRulePersonId, type RosterMember } from "./sundayCadence";
 // A RUNTIME import since C3: `rolesOfPattern` is the ONE solver-synced pattern →
 // role map (`patternRolesSync.test.ts`). `plannerModel` is neutral — no
 // "use client", no `server-only` — and does not import this module, so the
@@ -345,16 +348,21 @@ export interface ExactCapOverlap {
  * `Sat.Choir` alone (not one of the five keys), are C2's to refuse by member id
  * at build time (C3 §6.2).
  */
-export function exactCapOverlaps(config: Pick<SolverConfig, "restrictions">): ExactCapOverlap[] {
+export function exactCapOverlaps(
+  config: Pick<SolverConfig, "restrictions">,
+  // ADR-0092: the writer passes the identity on an id-keyed config, so two spellings of one
+  // member that resolved to one id pair, and two ids are never folded by case.
+  keyOf: (person: string) => string | null = (person) => normalizeLabel(person)?.toLowerCase() ?? null,
+): ExactCapOverlap[] {
   const exact: Array<{ ref: CapRef; key: string; person: string; roles: string[] }> = [];
   (config.restrictions ?? []).forEach((r, ri) => {
-    const name = normalizeLabel(r.person);
-    if (name === null) return;
+    const key = keyOf(r.person);
+    if (key === null) return;
     (r.caps ?? []).forEach((c, ci) => {
       if (c.op !== "==") return;
       const roles: string[] = rolesOfPattern(normalizeLabel(c.pattern) ?? "");
       if (roles.length === 0) return;
-      exact.push({ ref: { restriction: ri, cap: ci }, key: name.toLowerCase(), person: r.person, roles });
+      exact.push({ ref: { restriction: ri, cap: ci }, key, person: r.person, roles });
     });
   });
   const out: ExactCapOverlap[] = [];
@@ -553,4 +561,248 @@ export function solverConfigFromDocument(doc: unknown): SolverConfig {
  */
 function storedId(item: Record<string, unknown>): string | null {
   return idOf(item.id) ?? idOf(item._key);
+}
+
+// ─── C1: rule people are member ids in storage, names everywhere else (ADR-0092) ───
+//
+// The four person fields (`restrictions[].person`, `conflicts[].personA/personB`,
+// `presence[].persons[]`) hold a member's `_id` once the document carries
+// `personTokens: "id"`, which only the consented script `scripts/rekey-solver-rule-people.ts`
+// sets. Exactly two functions translate, and nothing else ever sees an id:
+//
+//   · `rulePeopleToNames` at every READ (`solverConfigGetBody`, the writer's own judging view,
+//     the reconstruction script): each id becomes a label that resolves (`resolveRulePersonId`)
+//     to exactly that member, or to nobody;
+//   · `rulePeopleToIds` at the WRITE (`solverConfigWrite.ts`, the one writer core): each name
+//     becomes the id it resolves to, or the token its label came from (`back`), or the save is
+//     refused with nothing written.
+//
+// Without the marker both are the identity, so shipping this changes no stored byte. Why
+// boundary translation and not a label at every printer: two plan reviews each found printers
+// an inventory missed; a translation at the boundary needs no printer to remember anything.
+// The roster is `rulePeopleRosterQuery()` (every published member, any ministry, with
+// `ministries`: an absent field reads as worship, so a roster without it would make everyone
+// look like worship).
+
+/** The marker value. Anything else (absent included) means the four fields hold names. */
+export const PERSON_TOKENS_ID = "id" as const;
+
+/** The label of an id that is no member any more. Resolves to nobody (v3 refuses it loudly). */
+export const RULE_PERSON_GONE = "persona que ya no está en Alabanza";
+const OUTSIDE_ALABANZA = "(fuera de Alabanza)";
+const REPEATED_PERSON = "(persona repetida)";
+const NAMELESS = "persona sin nombre";
+
+/** A roster row as `rulePeopleRosterQuery()` projects it. */
+export interface RulePeopleRosterMember {
+  _id: string;
+  member_name?: unknown;
+  alias?: unknown;
+  ministries?: unknown;
+}
+
+/** Does this stored document key its rule people by member id? */
+export function storesPersonIds(doc: unknown): boolean {
+  return isObj(doc) && doc.personTokens === PERSON_TOKENS_ID;
+}
+
+/** Is this rule person the label of a member who is gone (any numbered variant)? */
+export function isGoneRulePerson(person: string): boolean {
+  return person.startsWith(RULE_PERSON_GONE);
+}
+
+/** The four person fields of a config, mapped with their issue paths (the parser's own paths). */
+function mapRulePeople(config: SolverConfig, f: (token: string, path: string) => string): SolverConfig {
+  return {
+    ...config,
+    restrictions: config.restrictions.map((r, i) => ({ ...r, person: f(r.person, `restrictions[${i}].person`) })),
+    conflicts: config.conflicts.map((c, i) => ({
+      ...c,
+      personA: f(c.personA, `conflicts[${i}].personA`),
+      personB: f(c.personB, `conflicts[${i}].personB`),
+    })),
+    presence: config.presence.map((p, i) => ({ ...p, persons: p.persons.map((t, j) => f(t, `presence[${i}].persons[${j}]`)) })),
+  };
+}
+
+/** Every person token of a config, in document order (repeats kept). */
+export function rulePeopleOf(config: SolverConfig): string[] {
+  const out: string[] = [];
+  mapRulePeople(config, (t) => (out.push(t), t));
+  return out;
+}
+
+function asRoster(roster: readonly RulePeopleRosterMember[]): RosterMember[] {
+  return roster.map((m) => ({
+    _id: m._id,
+    member_name: typeof m.member_name === "string" ? m.member_name : "",
+    ...(typeof m.alias === "string" ? { alias: m.alias } : {}),
+    ministries: m.ministries,
+  }));
+}
+
+const isWorship = (m: RosterMember) => normalizeMinistries(m.ministries).includes("worship");
+const foldKey = (s: string) => s.toLowerCase();
+const byString = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+
+/**
+ * A label for each id token, unique case-insensitively against each other and `reserved`.
+ *
+ * A worship member's label is the text that resolves to them (display name, else
+ * `member_name`); two worship members sharing both texts get «(persona repetida)»; a name
+ * that only fails to resolve through spacing or Unicode form is its normalised display name.
+ * A member outside Alabanza is «<nombre> (fuera de Alabanza)» (never the bare name: a worship
+ * namesake would receive the rule); an id that is no member is `RULE_PERSON_GONE`. Every
+ * non-resolving label that collides, or that names any roster member, takes « (2)», « (3)»…
+ * in the order of the stored token strings, so deleting or reordering rules moves no suffix.
+ */
+function labelIds(tokens: readonly string[], roster: RosterMember[], reserved: readonly string[] = []): Map<string, string> {
+  const byId = new Map(roster.map((m) => [m._id, m]));
+  const labels = new Map<string, string>();
+  const used = new Set(reserved.map(foldKey));
+  const pending: Array<{ token: string; base: string }> = [];
+  const resolvesTo = (text: string | null, id: string) => {
+    if (text === null) return false;
+    const r = resolveRulePersonId(text, roster);
+    return r.ok && r.id === id;
+  };
+  for (const token of [...new Set(tokens)].sort(byString)) {
+    const m = byId.get(token);
+    if (!m) {
+      pending.push({ token, base: RULE_PERSON_GONE });
+      continue;
+    }
+    const display = normalizeLabel(displayMemberName(m));
+    if (!isWorship(m)) {
+      pending.push({ token, base: `${display ?? NAMELESS} ${OUTSIDE_ALABANZA}` });
+      continue;
+    }
+    const name = normalizeLabel(m.member_name);
+    const own = resolvesTo(display, token) ? display : resolvesTo(name, token) ? name : null;
+    if (own !== null) {
+      labels.set(token, own);
+      used.add(foldKey(own));
+      continue;
+    }
+    const repeated = roster.some(
+      (o) => o._id !== token && isWorship(o) && [displayMemberName(m), m.member_name].some((t) => rulePersonNamesMember(t, o)),
+    );
+    pending.push({ token, base: repeated ? `${display ?? NAMELESS} ${REPEATED_PERSON}` : display ?? NAMELESS });
+  }
+  const namesAnyone = (label: string) => roster.some((o) => rulePersonNamesMember(label, o));
+  for (const { token, base } of pending) {
+    let label = normalizeLabel(base) ?? NAMELESS;
+    for (let n = 2; used.has(foldKey(label)) || namesAnyone(label); n++) label = normalizeLabel(`${base} (${n})`) ?? NAMELESS;
+    used.add(foldKey(label));
+    labels.set(token, label);
+  }
+  return labels;
+}
+
+/**
+ * READ: the stored document as names (ADR-0092). `back` maps every label it produced, folded
+ * to lower case, to the stored token it came from (the write's step 2); empty in names mode,
+ * where `config` is `solverConfigFromDocument(doc)` unchanged.
+ */
+export function rulePeopleToNames(
+  doc: unknown,
+  roster: readonly RulePeopleRosterMember[],
+): { config: SolverConfig; back: Map<string, string> } {
+  const config = solverConfigFromDocument(doc);
+  const back = new Map<string, string>();
+  if (!storesPersonIds(doc)) return { config, back };
+  const labels = labelIds(rulePeopleOf(config), asRoster(roster));
+  for (const [token, label] of labels) back.set(foldKey(label), token);
+  return { config: mapRulePeople(config, (t) => labels.get(t) ?? t), back };
+}
+
+/**
+ * Why a save may not store a rule person. Each is the refused save's issue suffix
+ * (`<path>:<reason>`), except `person_changed`, which the rules POST answers as a 409
+ * `stale_revision` (`details.detail: "person_changed"`): the rename race (a tab read «Vale»,
+ * Studio renamed her, the tab saves) refuses instead of detaching her.
+ */
+export type RulePersonRefusalReason = "ambiguous_person" | "not_worship" | "name_unmatched" | "person_changed" | "exact_overlap";
+
+export interface RulePersonRefusal {
+  /** The parser's issue path: `restrictions[0].person`, `presence[1].persons[2]`, `restrictions[0].caps[1]`. */
+  path: string;
+  /** The text the save carried (a name, never an id read from storage). */
+  person: string;
+  reason: RulePersonRefusalReason;
+}
+
+/** The issue a refusal adds to an `invalid_request` (every reason but `person_changed`). */
+export function rulePersonIssue(refusal: RulePersonRefusal): string {
+  return `${refusal.path}:${refusal.reason}`;
+}
+
+function whyNotStored(token: string, resolved: ReturnType<typeof resolveRulePersonId>, roster: RosterMember[]): RulePersonRefusalReason {
+  if (!resolved.ok && resolved.reason === "ambiguous") return "ambiguous_person";
+  if (roster.some((m) => !isWorship(m) && rulePersonNamesMember(token, m))) return "not_worship";
+  const folded = foldKey(normalizeLabel(token) ?? "");
+  const normalisedMatch = (t: string | undefined) => !!t && foldKey(normalizeLabel(t) ?? "") === folded;
+  if (folded && roster.some((m) => isWorship(m) && (normalisedMatch(m.member_name) || normalisedMatch(m.alias)))) return "name_unmatched";
+  return "person_changed";
+}
+
+/**
+ * WRITE: a names config (as the panel, the chat or the parser holds it) to what is stored
+ * (ADR-0092). The mode is the TARGET's: `setMarker` when passed (`"id"` = the migration,
+ * `null` = its `--to-names` rollback), else the stored document's marker.
+ *
+ *   · names mode: names are written as given; a token that is a roster `_id` (only reachable
+ *     from an id document) is written as its `rulePeopleToNames` label, never an id;
+ *   · id mode: each token that resolves to one worship member → that `_id`; else a label in
+ *     `back` (recomputed from `stored`, the FRESH read) → the token it came from; else the whole
+ *     save is refused. Then a `presence` list keeps each id once, and two `==` caps that now fix
+ *     a common role for one id refuse the save (`exact_overlap`), so a stored document always
+ *     re-reads lossless.
+ *
+ * An unchanged names view round-trips byte-identical: a label resolves to its own id or to
+ * nobody, and then `back` (a bijection) returns its token.
+ */
+export function rulePeopleToIds(
+  config: SolverConfig,
+  stored: unknown,
+  roster: readonly RulePeopleRosterMember[],
+  setMarker?: typeof PERSON_TOKENS_ID | null,
+): { ok: true; config: SolverConfig } | { ok: false; refusal: RulePersonRefusal } {
+  const people = asRoster(roster);
+  const toIds = setMarker === undefined ? storesPersonIds(stored) : setMarker === PERSON_TOKENS_ID;
+  if (!toIds) {
+    const ids = new Set(people.map((m) => m._id));
+    const tokens = rulePeopleOf(config);
+    const idTokens = tokens.filter((t) => ids.has(t));
+    if (!idTokens.length) return { ok: true, config };
+    const labels = labelIds(idTokens, people, tokens.filter((t) => !ids.has(t)));
+    return { ok: true, config: mapRulePeople(config, (t) => labels.get(t) ?? t) };
+  }
+
+  const { back } = rulePeopleToNames(stored, roster);
+  let refusal = null as RulePersonRefusal | null; // `as`: set inside the callback below
+  const keyed = mapRulePeople(config, (token, path) => {
+    if (refusal) return token;
+    const resolved = resolveRulePersonId(token, people);
+    if (resolved.ok) return resolved.id;
+    const stored = back.get(foldKey(normalizeLabel(token) ?? token));
+    if (stored !== undefined) return stored;
+    refusal = { path, person: token, reason: whyNotStored(token, resolved, people) };
+    return token;
+  });
+  if (refusal) return { ok: false, refusal };
+
+  const deduped: SolverConfig = { ...keyed, presence: keyed.presence.map((p) => ({ ...p, persons: [...new Set(p.persons)] })) };
+  const overlap = exactCapOverlaps(deduped, (id) => id)[0];
+  if (overlap) {
+    return {
+      ok: false,
+      refusal: {
+        path: `restrictions[${overlap.later.restriction}].caps[${overlap.later.cap}]`,
+        person: config.restrictions[overlap.later.restriction]?.person ?? "",
+        reason: "exact_overlap",
+      },
+    };
+  }
+  return { ok: true, config: deduped };
 }

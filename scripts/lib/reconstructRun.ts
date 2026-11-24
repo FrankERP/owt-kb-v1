@@ -39,13 +39,14 @@ import {
 import { displayMemberName } from "../../app/utils/memberRuleNames";
 import {
   fairnessMonthsThroughQuery,
+  rulePeopleRosterQuery,
   serviceCountsInMonths,
   solverConfigQuery,
   voiceRolesInRangeQuery,
   worshipRosterQuery,
   type BoundQuery,
 } from "../../app/utils/serviceReadQueries";
-import { solverConfigFromDocument } from "../../app/utils/solverConfigWriteRequest";
+import { rulePeopleToNames, type RulePeopleRosterMember } from "../../app/utils/solverConfigWriteRequest";
 import { fairnessRecordEnvironment } from "../../app/utils/solverDeployment";
 import { joinAnomalies, lostBlocks, monthAnomalies, poolAnomalies, sortAnomalies } from "./reconstructAnomalies";
 import { USAGE, defaultPreviewRun, notPastMonths, parseReconstructArgs, privatePathRefusals, type ReconstructArgs, type RunMode } from "./reconstructArgs";
@@ -321,6 +322,8 @@ function writeRunFile(ctx: Ctx, name: string, text: string): string {
 interface WorldReads {
   config: Record<string, unknown>;
   roster: RosterRow[];
+  /** ADR-0092: the rule-person roster (every member, any ministry) the rules are read through. */
+  peopleRoster: RulePeopleRosterMember[];
   records: Array<Record<string, unknown>>;
   /** IF2-24's freezing services per requested month: weekend + counted specials. */
   freezing: Map<string, number>;
@@ -351,6 +354,8 @@ async function readWorld(read: SanityClient, months: string[], previewRun: strin
   if (typeof config !== "object" || Array.isArray(config)) throw new ReadFailure("solverConfig");
   const roster = asRows(await fetchStep(read, "roster", worshipRosterQuery()), "roster");
   if (roster.some((m) => typeof m._id !== "string")) throw new ReadFailure("roster");
+  const peopleRoster = asRows(await fetchStep(read, "roster", rulePeopleRosterQuery()), "roster");
+  if (peopleRoster.some((m) => typeof m._id !== "string")) throw new ReadFailure("roster");
   const last = months[months.length - 1];
   const records = asRows(await fetchStep(read, "records", fairnessMonthsThroughQuery(maxMonth(last, shiftMonth(previewRun, -1)))), "records");
   const freezing = new Map<string, number>();
@@ -361,7 +366,14 @@ async function readWorld(read: SanityClient, months: string[], previewRun: strin
   if (months.some((m) => !freezing.has(m))) throw new ReadFailure("counts");
   const readEnd = `${maxMonth(shiftMonth(last, 1), previewRun)}-01`;
   const services = toLedgerServices(await fetchStep(read, "services", voiceRolesInRangeQuery(JOIN_WINDOW_FLOOR, readEnd)));
-  return { config: config as Record<string, unknown>, roster: roster as unknown as RosterRow[], records, freezing, services };
+  return {
+    config: config as Record<string, unknown>,
+    roster: roster as unknown as RosterRow[],
+    peopleRoster: peopleRoster as unknown as RulePeopleRosterMember[],
+    records,
+    freezing,
+    services,
+  };
 }
 
 // ─── Derivation (R1, R4–R18) — shared by the dry run and the apply ──────────────
@@ -400,7 +412,8 @@ function derive(input: {
 }): DeriveOutcome {
   const { reads, target, months, previewRun, currentMonth, environment } = input;
   if (reads === null) return { kind: "absent_config" };
-  const config = solverConfigFromDocument(reads.config);
+  // ADR-0092: the rules as names, like every other reader; an id-keyed document reads through the roster.
+  const config = rulePeopleToNames(reads.config, reads.peopleRoster).config;
   const roster = reads.roster;
   const rosterIds = new Set(roster.map((m) => m._id));
   const names = new Map(roster.map((m) => [m._id, displayMemberName({ member_name: m.member_name ?? undefined, alias: m.alias ?? undefined })]));

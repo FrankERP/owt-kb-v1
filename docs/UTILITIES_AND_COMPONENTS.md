@@ -259,6 +259,13 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   most one `==` count per role key, run by the parser, the rule form, the panel and the client's
   refusal mapping. `parseSolverConfigWrite`/`solverConfigFields`/`solverConfigFromDocument` are the
   only way any writer sets or restores a rule value.
+- **`rulePeopleToNames(doc, roster)` / `rulePeopleToIds(config, stored, roster, setMarker?)`**
+  (`solverConfigWriteRequest.ts`, neutral; ADR-0092) — the ONLY translation between stored rule people
+  (member ids once `personTokens: "id"`) and the names every reader, form and MCP tool works on. The
+  roster is always `rulePeopleRosterQuery()` (`serviceReadQueries.ts`). `solverConfigGetBody(doc, roster)`
+  (`solverConfigRead.ts`) is the read boundary; `prepareSolverConfigWrite`/`writeSolverConfig`/
+  `losslessRules` (`app/utils/solverConfigWrite.ts`, no `server-only`) the one write core, imported only
+  by `solverConfigCommit.ts` and `scripts/rekey-solver-rule-people.ts`.
 - **`ruleCopy.ts`** ([app/components/admin/ruleCopy.ts](../app/components/admin/ruleCopy.ts), pure;
   diseño para admins bloque 2, 2026-10-22) — the ONE Spanish wording of a rule: `restrictionChips`
   (one chip per clause of a person restriction, with its tone and the notation it replaced),
@@ -630,7 +637,7 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   writer of `solverConfig` after authorization (ADR-0084): `saveSolverConfig(body, actorId)` (the rules
   POST's body, verbatim) and `checkRuleEdits`/`saveRuleEdits` (the chat: read, `losslessRules` gate,
   apply, judge, then ONE six-field `set` under `ifRevisionId`, only when the save's `verify` accepts
-  the fresh rev and lines).
+  the fresh rev and lines). Both judge the names view and write through `solverConfigWrite.ts` (ADR-0092).
 - **`applyRuleEdits(stored, edits, roster, newId)`** ([ruleEdits.ts](../app/utils/ruleEdits.ts), pure) —
   the chat's rule edits by parts (pools, never/allowAgain, week off/on, counts, «Mes por medio»,
   «Fuera del balance total», pairs and groups), people matched as the solver matches them, only

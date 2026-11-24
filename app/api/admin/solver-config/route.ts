@@ -4,7 +4,7 @@ import { requireActiveManager } from "@/app/utils/authGuards";
 import { serviceError } from "@/app/utils/serviceMutation";
 import { saveSolverConfig } from "@/app/utils/solverConfigCommit";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
-import { loadStoredSolverConfig, solverConfigGetBody } from "@/app/utils/solverConfigRead";
+import { loadSolverConfigWithRoster, solverConfigGetBody } from "@/app/utils/solverConfigRead";
 
 /**
  * The shared planner rule set (P6) — read and update.
@@ -70,8 +70,6 @@ async function gate() {
   return session;
 }
 
-// The raw read, shared with the MCP month planner (`app/utils/solverConfigRead.ts`).
-const loadStored = loadStoredSolverConfig;
 
 /**
  * The rule set, or an explicit "absent".
@@ -90,8 +88,11 @@ export async function GET() {
   const session = await gate();
   if (!session) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  // `configVersion` on every answer, absent included (`solverConfigGetBody`).
-  return NextResponse.json(solverConfigGetBody(await loadStored()));
+  // `configVersion` on every answer, absent included (`solverConfigGetBody`). The document and the
+  // roster are read together, shared with the MCP month planner (`solverConfigRead.ts`): the body
+  // carries names in both modes (ADR-0092). A failed read of either throws, never «absent».
+  const { doc, roster } = await loadSolverConfigWithRoster();
+  return NextResponse.json(solverConfigGetBody(doc, roster));
 }
 
 /**

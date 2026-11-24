@@ -11,10 +11,12 @@
 // to load the route unchanged.
 
 import { operationalClient } from "@/sanity/lib/operationalClient";
+import { rulePeopleRosterQuery } from "@/app/utils/serviceReadQueries";
 import {
   SOLVER_CONFIG_DOC_ID,
   SOLVER_CONFIG_VERSION,
-  solverConfigFromDocument,
+  rulePeopleToNames,
+  type RulePeopleRosterMember,
 } from "@/app/utils/solverConfigWriteRequest";
 
 export interface StoredSolverConfigDoc {
@@ -31,20 +33,46 @@ export async function loadStoredSolverConfig(): Promise<(StoredSolverConfigDoc &
 }
 
 /**
+ * The roster the rule-person translation reads (ADR-0092): every published member, any
+ * ministry. A failed read THROWS, like the document's: a GET without it could not turn ids into
+ * names, and a save without it could not turn names into ids.
+ */
+export async function loadRulePeopleRoster(): Promise<RulePeopleRosterMember[]> {
+  const q = rulePeopleRosterQuery();
+  const rows: unknown = await operationalClient.fetch(q.query, q.params);
+  if (!Array.isArray(rows)) throw new Error("rule people roster read failed");
+  return rows as RulePeopleRosterMember[];
+}
+
+/** The stored document and the roster, read together: what every rules reader needs. */
+export async function loadSolverConfigWithRoster(): Promise<{
+  doc: (StoredSolverConfigDoc & Record<string, unknown>) | null;
+  roster: RulePeopleRosterMember[];
+}> {
+  const [doc, roster] = await Promise.all([loadStoredSolverConfig(), loadRulePeopleRoster()]);
+  return { doc, roster };
+}
+
+/**
  * The body `GET /api/admin/solver-config` answers for a stored document (or its
  * absence). The route sends it; the MCP month planner hands the same body, through a
  * JSON round trip, to the browser's own `sourceFromGet`, so both surfaces derive the
- * rule set the same way. `configVersion` on every answer, absent included: a client
+ * rule set the same way. The config is always NAMES (`rulePeopleToNames`, ADR-0092): no member
+ * id leaves this function. `configVersion` on every answer, absent included: a client
  * that speaks another version disables its own save on reading it (C3 §6.2).
  */
-export function solverConfigGetBody(doc: (StoredSolverConfigDoc & Record<string, unknown>) | null) {
+export function solverConfigGetBody(
+  doc: (StoredSolverConfigDoc & Record<string, unknown>) | null,
+  roster: readonly RulePeopleRosterMember[],
+) {
   if (!doc) {
     return { present: false, rev: null, config: null, configVersion: SOLVER_CONFIG_VERSION };
   }
   return {
     present: true,
     rev: typeof doc._rev === "string" ? doc._rev : null,
-    config: solverConfigFromDocument(doc),
+    // Names, in both modes (ADR-0092): an id-keyed document is read through the roster.
+    config: rulePeopleToNames(doc, roster).config,
     configVersion: SOLVER_CONFIG_VERSION,
   };
 }

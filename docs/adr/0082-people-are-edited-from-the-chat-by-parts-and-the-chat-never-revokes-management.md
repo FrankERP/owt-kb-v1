@@ -110,3 +110,9 @@ connector is super-admin only») still holds for every tool this record adds.
 
 ADR-0083's addendum (2026-11-09) gives worship admins the page's worship writes; this record's
 seven tools are in `SUPER_ADMIN_ONLY_TOOLS`, so the same still holds.
+
+## Note — ADR-0092, 2026-11-24
+
+The rename's rule rewrite (D6) and the orphan warning (D12) apply to a names-mode rules document only.
+Once the rules name people by member id (`personTokens: "id"`), a rename can neither detach nor hand
+over a rule: `planRuleRename` plans nothing and `orphanRuleWarnings` warns about nothing.

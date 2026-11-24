@@ -171,6 +171,10 @@ looks wrong** — several exist to stop a plausible-looking change.
   `solverConfigFromDocument` → `parseSolverConfigWrite` → `solverConfigFields` under
   `ifRevisionId` in `solverConfigCommit.ts` (the rules POST and the chat, ADR-0084; the only targeted writers: the member DELETE's pool patch, the rule-name
   repair script, a member rename's person-path `set` in `memberCommit.ts`, ADR-0082). One `==` count per person per role key (`exactCapOverlaps`; C2). ADR-0049.
+  Rule people are member ids once the document carries `personTokens: "id"` (set only by the consented
+  `scripts/rekey-solver-rule-people.ts`); only `rulePeopleToNames`/`rulePeopleToIds` translate, every
+  reader goes through `solverConfigGetBody`, every write through `solverConfigWrite.ts`
+  (`solverConfigReadCoverage.test.ts`). Run `--to-names` BEFORE any revert or rollback (ADR-0092).
 - **The fairness ledger has one definition, and its records one writer** (ADR-0050).
   `app/utils/fairnessLedger.ts` is the only TS definition of F2–F7 and X1;
   `fixtures/fairness/golden.json` is asserted by vitest and `gcf_v3/tests/test_golden.py` and
@@ -326,6 +330,7 @@ each one owns, and its rules) and `docs/UTILITIES_AND_COMPONENTS.md`. Most are "
   `resolveSolverEngine` (server only), `SOLVER_HISTORY_SOURCE`, `SOLVER_SENDS_HISTORY`,
   `loadSolverHistory`, `deriveSolverHistory`/`historyWindow`, `fetchDerivedHistory`,
   `useIntegrityQueue`, `ruleCopy.ts` (the ONE Spanish wording of a rule — card, forms, MCP),
+  `rulePeopleToNames`/`rulePeopleToIds` + `rulePeopleRosterQuery` (rule people ↔ member ids, ADR-0092),
   `seatsClash` (the ONE «two seats one person may not hold on a service»: same category, or voz +
   instrumento unless the member is marked «Canta y toca a la vez» — ADR-0078; the four seat writers
   refuse a clash the write ADDS, `addedSeatClashes`, and the month confirm before its records).
