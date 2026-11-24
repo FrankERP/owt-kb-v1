@@ -48,6 +48,7 @@ function deps(raw: Record<string, unknown> | null = storedDoc(), over: Partial<R
   const d: RuleEditsDeps = {
     loadRaw: vi.fn(async () => raw),
     roster: vi.fn(async () => ROSTER),
+    peopleRoster: vi.fn(async () => ROSTER),
     write,
     month: () => "2026-12",
     ...over,
@@ -60,25 +61,25 @@ const conflict = () =>
 
 describe("losslessRules (R4)", () => {
   it("accepts what the panel's own save stores", () => {
-    expect(losslessRules(storedDoc())).toMatchObject({ support: ["m-gaby", "m-pau"] });
+    expect(losslessRules(storedDoc(), ROSTER)).toMatchObject({ support: ["m-gaby", "m-pau"] });
   });
 
   it("ignores key order", () => {
     const raw = storedDoc();
     const [r] = raw.restrictions as Record<string, unknown>[];
     const reversed = Object.fromEntries(Object.entries(r!).reverse());
-    expect(losslessRules({ ...raw, restrictions: [reversed] })).not.toBeNull();
+    expect(losslessRules({ ...raw, restrictions: [reversed] }, ROSTER)).not.toBeNull();
   });
 
   it("refuses a stored value the reader would coerce", () => {
     const raw = storedDoc();
     const [r] = raw.restrictions as Record<string, unknown>[];
-    expect(losslessRules({ ...raw, restrictions: [{ ...r, fairness: "mystery" }] })).toBeNull();
+    expect(losslessRules({ ...raw, restrictions: [{ ...r, fairness: "mystery" }] }, ROSTER)).toBeNull();
   });
 
   it("refuses a stored item the reader would drop", () => {
     const raw = storedDoc();
-    expect(losslessRules({ ...raw, conflicts: [{ _key: "x", personA: "Pau" }] })).toBeNull();
+    expect(losslessRules({ ...raw, conflicts: [{ _key: "x", personA: "Pau" }] }, ROSTER)).toBeNull();
   });
 });
 
@@ -132,7 +133,7 @@ describe("saveRuleEdits", () => {
     expect(wRev).toBe("rev-7");
     expect(actor).toBe("m-admin");
     // What reaches Sanity is the panel's serializer output, so the panel reads it back unchanged.
-    expect(losslessRules({ _rev: "rev-8", ...fields })).not.toBeNull();
+    expect(losslessRules({ _rev: "rev-8", ...fields }, ROSTER)).not.toBeNull();
     expect(JSON.stringify(fields.restrictions)).toContain("Sun.Lead");
   });
 
@@ -170,5 +171,33 @@ describe("saveRuleEdits", () => {
       expect(out.ok).toBe(false);
       expect(write).not.toHaveBeenCalled();
     }
+  });
+});
+
+// ADR-0092: the chat's writer on an id-keyed document.
+describe("the chat's writer in id mode (ADR-0092)", () => {
+  const ID_CONFIG: SolverConfig = { ...CONFIG, restrictions: [{ ...CONFIG.restrictions[0], person: "m-pau" }] };
+  const idDoc = (rev = "rev-1") => ({ ...storedDoc(ID_CONFIG, rev), personTokens: "id" });
+
+  it("judges on names and writes ids, with no id in a line", async () => {
+    const { d, write } = deps(idDoc());
+    const out = await saveRuleEdits(NEVER_SUN_LEAD, newIdFor, { actorId: "m-admin", verify: () => null }, d);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.lines.join("\n")).not.toMatch(/m-(pau|gaby|mkz)/);
+    const [, fields] = write.mock.calls[0]!;
+    const people = (fields.restrictions as Array<{ person: string }>).map((r) => r.person);
+    expect(people).toEqual(["m-pau", "m-gaby"]);
+    expect(fields.personTokens).toBeUndefined();
+    expect(losslessRules({ ...idDoc("rev-2"), ...fields }, ROSTER)).not.toBeNull();
+  });
+
+  it("refuses with «cambió» and writes nothing when the person was renamed between read and save", async () => {
+    // The check read «Pau»; by the save she is «Paula», so an edit naming «Pau» names nobody.
+    const renamed = ROSTER.map((m) => (m._id === "m-pau" ? { ...m, alias: "Paula" } : m));
+    const { d, write } = deps(idDoc(), { peopleRoster: vi.fn(async () => renamed), roster: vi.fn(async () => ROSTER) });
+    const out = await saveRuleEdits([{ op: "never", person: "Pau", pattern: { day: "domingo", seat: "líder" } }], newIdFor, { actorId: "m-admin", verify: () => null }, d);
+    expect(out).toMatchObject({ ok: false, status: 409, code: "changed" });
+    expect(write).not.toHaveBeenCalled();
   });
 });

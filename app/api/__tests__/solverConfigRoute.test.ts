@@ -24,6 +24,9 @@ const h = vi.hoisted(() => ({
   revisions: [] as (string | undefined)[],
   commit: vi.fn(),
   created: [] as unknown[],
+  /** ADR-0092: the rule-person roster read beside the document. */
+  roster: [] as Array<Record<string, unknown>>,
+  unsets: [] as unknown[],
 }));
 
 vi.mock("server-only", () => ({}));
@@ -32,14 +35,22 @@ vi.mock("@/app/utils/authGuards", () => ({
   requireActiveManager: () => h.requireActiveManager(),
 }));
 
+// ADR-0092: the rule-person roster is read beside the document; every member here is worship and
+// named in the fixtures' rules, so names mode round-trips them unchanged.
+const ROSTER = ["Frank", "Lucía", "Niza", "Hugo", "Jakey"].map((n) => ({ _id: `m-${n}-000000000000000`, member_name: n }));
+
 vi.mock("@/sanity/lib/operationalClient", () => ({
-  operationalClient: { fetch: (...a: unknown[]) => h.fetch(...a) },
+  operationalClient: {
+    fetch: (...a: unknown[]) =>
+      typeof a[0] === "string" && a[0].includes(`_type == "teamMembers"`) ? Promise.resolve(h.roster) : h.fetch(...a),
+  },
 }));
 
 vi.mock("@/sanity/lib/serverClient", () => {
   const chain: Record<string, unknown> = {};
   chain.ifRevisionId = (rev: string) => { h.revisions.push(rev); return chain; };
   chain.set = (v: Record<string, unknown>) => { h.sets.push(v); return chain; };
+  chain.unset = (v: unknown) => { h.unsets.push(v); return chain; };
   chain.commit = () => h.commit();
   return {
     serverClient: { fetch: vi.fn() },
@@ -101,6 +112,8 @@ beforeEach(() => {
   h.patchedIds.length = 0;
   h.revisions.length = 0;
   h.created.length = 0;
+  h.unsets.length = 0;
+  h.roster = ROSTER;
   h.requireActiveManager.mockResolvedValue({
     user: { sanityId: "admin-1", role: "admin" },
   });
@@ -403,5 +416,68 @@ describe("POST — one exact count per person per role (C3 T14, parent A38)", ()
     expect(body.details.issues).toEqual(["restrictions[0].caps[1]:exact_overlap"]);
     expect(h.fetch).not.toHaveBeenCalled();
     expect(h.patchedIds).toEqual([]);
+  });
+});
+
+// ─── ADR-0092: rule people stored as member ids ─────────────────────────────
+
+describe("rule people as member ids (ADR-0092)", () => {
+  const id = (n: string) => `m-${n}-000000000000000`;
+  const ID_STORED = {
+    ...STORED,
+    personTokens: "id",
+    restrictions: STORED.restrictions.map((r) => ({ ...r, _key: r.id, person: id("Frank") })),
+    conflicts: STORED.conflicts.map((c) => ({ ...c, _key: c.id, personA: id("Lucía"), personB: id("Niza") })),
+    presence: STORED.presence.map((p) => ({ ...p, _key: p.id, persons: [id("Hugo"), id("Jakey")] })),
+  };
+
+  it("the GET answers names, never an id", async () => {
+    h.fetch.mockResolvedValue(ID_STORED);
+    const body = await (await GET()).json();
+    expect(body.config.conflicts[0]).toMatchObject({ personA: "Lucía", personB: "Niza" });
+    expect(JSON.stringify(body)).not.toContain("000000000000000");
+  });
+
+  it("a save of the names writes the ids back, keeps the marker untouched, and answers names", async () => {
+    h.fetch.mockResolvedValue(ID_STORED);
+    const res = await POST(req({ configVersion: SOLVER_CONFIG_VERSION, rev: "rev-1", config: config() }));
+    expect(res.status).toBe(200);
+    const set = h.sets[0];
+    expect((set.restrictions as Array<{ person: string }>)[0].person).toBe(id("Frank"));
+    expect((set.presence as Array<{ persons: string[] }>)[0].persons).toEqual([id("Hugo"), id("Jakey")]);
+    expect(set.personTokens).toBeUndefined();
+    expect(h.unsets).toEqual([]);
+    const body = await res.json();
+    expect(JSON.stringify(body)).not.toContain("000000000000000");
+    expect(body.config.restrictions[0].person).toBe("Frank");
+  });
+
+  it("a name renamed away while the tab was open refuses as a stale revision, writing nothing", async () => {
+    h.fetch.mockResolvedValue(ID_STORED);
+    h.roster = ROSTER.map((m) => (m.member_name === "Frank" ? { ...m, member_name: "Francisco" } : m));
+    const res = await POST(req({ configVersion: SOLVER_CONFIG_VERSION, rev: "rev-1", config: config() }));
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toBe("stale_revision");
+    expect(body.details.detail).toBe("person_changed");
+    expect(h.sets).toEqual([]);
+  });
+
+  it("a name outside Alabanza is refused with its own issue", async () => {
+    h.fetch.mockResolvedValue(ID_STORED);
+    h.roster = [...ROSTER, { _id: "kids-ana", member_name: "Ana", ministries: ["kids"] }];
+    const res = await POST(req({ configVersion: SOLVER_CONFIG_VERSION, rev: "rev-1", config: config({ conflicts: [{ id: "x1", personA: "Ana", personB: "Niza", pattern: "*.LeadBGV" }] }) }));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.details.issues).toEqual(["conflicts[0].personA:not_worship"]);
+    expect(body.details.person).toBe("Ana");
+    expect(h.sets).toEqual([]);
+  });
+
+  it("a failed roster read fails the save closed, writing nothing", async () => {
+    h.fetch.mockResolvedValue(ID_STORED);
+    h.roster = null as unknown as Array<Record<string, unknown>>;
+    await expect(POST(req({ configVersion: SOLVER_CONFIG_VERSION, rev: "rev-1", config: config() }))).rejects.toThrow();
+    expect(h.sets).toEqual([]);
   });
 });

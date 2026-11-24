@@ -260,6 +260,8 @@ export const INTERNAL_STUDIO_FIELDS: Readonly<Record<string, readonly string[]>>
     "restrictions",
     "conflicts",
     "presence",
+    // ADR-0092: the person-token marker, set only by the consented re-key script.
+    "personTokens",
     "updatedAt",
     "updatedBy",
   ],

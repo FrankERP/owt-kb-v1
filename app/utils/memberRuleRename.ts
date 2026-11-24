@@ -19,12 +19,18 @@
 //     name or alias equal to a rule text that names nobody today («la regla … empezaría a aplicarle»).
 //
 // It never decides who may rename; the commit does (`memberCommit.ts`).
+//
+// Names mode only (ADR-0092). Once the rules document carries `personTokens: "id"`, a rule names a
+// member by `_id`: a rename can neither detach a rule nor hand one to someone else, so `planRuleRename`
+// plans nothing and `orphanRuleWarnings` warns about nothing, by an explicit check of the stored marker
+// (a warning built from a post-rename names view would flag the renamed person's own rules, and `/me`
+// refuses an alias change on any such line).
 
 import type { ConflictRule, PresenceRule, PersonRestriction, SolverConfig } from "@/app/components/admin/plannerModel";
 import { conflictSentence, presenceSentence, restrictionText, sentenceText } from "@/app/components/admin/ruleCopy";
 import { normalizeLabel } from "./normalizeLabel";
 import { displayMemberName, rulePersonNamesMember } from "./memberRuleNames";
-import { exactCapOverlaps, parseSolverConfigWrite, solverConfigFromDocument } from "./solverConfigWriteRequest";
+import { exactCapOverlaps, parseSolverConfigWrite, solverConfigFromDocument, storesPersonIds } from "./solverConfigWriteRequest";
 
 /** A name as the rule matcher takes it; a missing `member_name` reads as `""` (§7.8). */
 export interface PersonNames {
@@ -100,7 +106,7 @@ const namesSomeone = (text: string, roster: readonly PersonNames[]) => roster.so
  * today is never reported here; it is D6's.
  */
 export function orphanRuleWarnings(rulesDoc: unknown, roster: readonly PersonNames[], after: readonly PersonNames[]): string[] {
-  if (!rulesDoc) return [];
+  if (!rulesDoc || storesPersonIds(rulesDoc)) return [];
   const config = solverConfigFromDocument(rulesDoc);
   const out: string[] = [];
   for (const o of occurrences(config)) {
@@ -168,7 +174,7 @@ export function planRuleRename(input: {
   after: PersonNames;
 }): RenamePlan {
   const empty: RenamePlan = { ok: true, sets: {}, lines: [], ambiguous: [], renamed: 0 };
-  if (!input.rulesDoc || !namesChanged(input.before, input.after)) return empty;
+  if (!input.rulesDoc || storesPersonIds(input.rulesDoc) || !namesChanged(input.before, input.after)) return empty;
   const raw = input.rulesDoc as Record<string, unknown>;
   const config = solverConfigFromDocument(raw);
   const others = input.roster.filter((r) => r._id !== input.selfId).map(namesOf);

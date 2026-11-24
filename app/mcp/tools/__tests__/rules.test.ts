@@ -272,6 +272,11 @@ describe("KH-1 through the real writer (no fakes between the tool and ruleEdits)
         { _id: "m-gaby", member_name: "Gabriela Soto", alias: "Gaby", memberType: ["voz", "support"] },
         { _id: "m-pau", member_name: "Paulina Ríos", alias: "Pau", memberType: ["voz", "support"] },
       ],
+      peopleRoster: async () => [
+        { _id: "m-mkz", member_name: "Marco Kuri", alias: "Mkz" },
+        { _id: "m-gaby", member_name: "Gabriela Soto", alias: "Gaby" },
+        { _id: "m-pau", member_name: "Paulina Ríos", alias: "Pau" },
+      ],
       write: async (rev, fields) => { writes.push({ rev, fields }); },
       month: () => "2026-12",
     };

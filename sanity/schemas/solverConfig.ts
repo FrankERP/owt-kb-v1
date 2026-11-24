@@ -178,6 +178,15 @@ export const solverConfig = defineType({
       ],
     },
     {
+      // ADR-0092 (C1): "id" once the consented script `scripts/rekey-solver-rule-people.ts` re-keyed
+      // the four person fields to member ids; absent = they hold names. Only `writeSolverConfig`
+      // (`app/utils/solverConfigWrite.ts`) with `setMarker` writes it; no client sends it.
+      name: "personTokens",
+      title: "Personas guardadas como",
+      type: "string",
+      description: "Interno: «id» = las reglas guardan el id de la persona; vacío = su nombre.",
+    },
+    {
       name: "updatedAt",
       title: "Actualizado",
       type: "datetime",
