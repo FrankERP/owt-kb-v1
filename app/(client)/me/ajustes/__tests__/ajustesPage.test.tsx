@@ -51,6 +51,11 @@ vi.mock("@/app/components/CalendarFeedPanel", () => ({
   default: ({ initial }: { initial: { kind: string } }) => <p>CALENDARIO:{initial.kind}</p>,
 }));
 
+// «Apps conectadas» (ADR-0091) reads the native-app grants on the server; it has its own tests
+// (app/appAuth). Here it lists nothing, so the panel renders nothing unless impersonating.
+vi.mock("@/app/appAuth/connectedApps", () => ({ loadConnectedApps: async () => [] }));
+vi.mock("@/app/components/ConnectedAppsPanel", () => ({ default: () => null }));
+
 import AjustesPage from "../page";
 import { MEMBER_PROFILE_QUERY } from "../../queries";
 

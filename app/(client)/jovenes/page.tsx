@@ -10,7 +10,7 @@ import {
 import { rolloutAllows } from "@/app/utils/rollout";
 import { addDaysIso, meetingsLede } from "@/app/utils/jovenesEventView";
 import { HOME_LOOKBACK_DAYS, JOVENES_HORIZON_DAYS, homeCards, homeSections } from "@/app/utils/jovenesHomeModel";
-import { isMinistryManager, ledGroupsIn } from "@/app/utils/ministryAccess";
+import { isMinistryManager, plansInMinistry } from "@/app/utils/ministryAccess";
 import { readJovenesPeople } from "@/app/utils/jovenesPeople";
 import { readSaturdaySets } from "@/app/utils/jovenesWorshipSet";
 import { PAGE_LEDE, PAGE_TITLE } from "@/app/utils/homeHero";
@@ -75,7 +75,7 @@ export default async function JovenesPage() {
   // (W3a). Cosmetic: the program PATCH decides again on the stored event.
   const isManager = isMinistryManager(access, "jovenes");
   // «Planear» for a manager or a leader of at least one group (per group, plan 2026-11-11 §5.1).
-  const plans = isManager || ledGroupsIn(access, "jovenes").length > 0;
+  const plans = plansInMinistry(access, "jovenes");
   const placed = (m: JovenesListItem) => ({ date: m.event.date, mine: m.mine.length > 0 });
   // The people to pick from are read only when a card this page DRAWS carries the editor. Inicio
   // reads a year and draws at most five cards, so «some meeting this reader may edit» (the

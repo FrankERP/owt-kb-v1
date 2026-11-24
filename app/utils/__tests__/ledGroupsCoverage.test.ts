@@ -108,15 +108,23 @@ describe("I3: no level comparison with \"leader\" outside the owners", () => {
   });
 
   it("the owners still own it: ledGroupsIn exists and the planner pages call it", () => {
-    expect(readFileSync(path.join(REPO_ROOT, "app/utils/ministryAccess.ts"), "utf8")).toMatch(/export function ledGroupsIn\(/);
+    const access = readFileSync(path.join(REPO_ROOT, "app/utils/ministryAccess.ts"), "utf8");
+    expect(access).toMatch(/export function ledGroupsIn\(/);
+    // `plansInMinistry` (ADR-0091) is «a manager, or ledGroupsIn is non-empty» — the ONE planner
+    // predicate the pages and the native app's `planner` level share — so calling it IS calling
+    // ledGroupsIn.
+    expect(stripComments(access)).toMatch(
+      /export function plansInMinistry\([^)]*\)[^{]*\{\s*return isMinistryManager\(a, ministry\) \|\| ledGroupsIn\(a, ministry\)\.length > 0;\s*\}/,
+    );
+    for (const file of ["app/utils/ministryEventCommit.ts", "app/utils/ministryEventReads.ts"]) {
+      expect(stripComments(readFileSync(path.join(REPO_ROOT, file), "utf8")), file).toMatch(/\bledGroupsIn\(/);
+    }
     for (const file of [
-      "app/utils/ministryEventCommit.ts",
-      "app/utils/ministryEventReads.ts",
       "app/(client)/jovenes/admin/page.tsx",
       "app/(client)/jovenes/page.tsx",
       "app/(client)/jovenes/calendario/page.tsx",
     ]) {
-      expect(stripComments(readFileSync(path.join(REPO_ROOT, file), "utf8")), file).toMatch(/\bledGroupsIn\(/);
+      expect(stripComments(readFileSync(path.join(REPO_ROOT, file), "utf8")), file).toMatch(/\b(?:ledGroupsIn|plansInMinistry)\(/);
     }
   });
 });

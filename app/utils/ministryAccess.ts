@@ -61,3 +61,13 @@ export function ledGroupsIn(a: Access, ministry: MinistryId): string[] {
   if (item?.level !== "leader" || !Array.isArray(item.leaderOf) || !Array.isArray(item.groups)) return [];
   return item.leaderOf.filter((g) => item.groups.includes(g));
 }
+
+/**
+ * Who may PLAN in a leveled ministry: its manager (an `admin` level, or a super-admin) OR a leader
+ * of at least one group (ADR-0085, ADR-0091). The ONE predicate the Jóvenes pages gate their
+ * «Planear» on and the native app's `{ ministry, as: "planner" }` level applies, so the two can
+ * never disagree. A caller then narrows: a manager sees every group, anyone else `ledGroupsIn`.
+ */
+export function plansInMinistry(a: Access, ministry: MinistryId): boolean {
+  return isMinistryManager(a, ministry) || ledGroupsIn(a, ministry).length > 0;
+}
