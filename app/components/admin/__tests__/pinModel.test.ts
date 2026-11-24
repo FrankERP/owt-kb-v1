@@ -120,7 +120,7 @@ describe("pinRefusal", () => {
   it("names the cell of a member with no member_name", () => {
     const who = [ANA, BETO, { ...LU, member_name: "" }];
     expect(pinRefusal({ ...base, members: who, collected: collect([cell(SUN1, "bgv", ["lu"])], who) })).toBe(
-      "No se puede usar «Solo llenar vacíos»: Lucía (en BGV del domingo 1 mar) no tiene nombre en su ficha. Complétalo en Miembros o quítalo de ese lugar.",
+      "No se puede usar «Solo llenar vacíos»: Lucía (en BGV del domingo 1 mar) no tiene nombre en su ficha. Complétalo en Personas (super admin) o quítalo de ese lugar.",
     );
   });
 
@@ -130,7 +130,7 @@ describe("pinRefusal", () => {
     expect(collected.unnamed).toEqual([{ columnId: SUN1, rowId: "bgv", memberId: "lu", occurrence: 0 }]);
     expect(collected.pins).toEqual([]);
     expect(pinRefusal({ ...base, members: who, collected })).toBe(
-      "No se puede usar «Solo llenar vacíos»: Lucía (en BGV del domingo 1 mar) no tiene nombre en su ficha. Complétalo en Miembros o quítalo de ese lugar.",
+      "No se puede usar «Solo llenar vacíos»: Lucía (en BGV del domingo 1 mar) no tiene nombre en su ficha. Complétalo en Personas (super admin) o quítalo de ese lugar.",
     );
   });
 
@@ -158,7 +158,7 @@ describe("pinRefusal", () => {
       ...base, members: who, poolNames: [...base.poolNames, "Hugo Villa"],
       collected: collect([cell(SUN1, "lead", ["hugo2"])], who),
     })).toBe(
-      "No se puede usar «Solo llenar vacíos»: « hugo villa» (en Lead del domingo 1 mar) solo se distingue de «Hugo Villa» por mayúsculas o espacios, y el solver no puede saber cuál es cuál. Corrige el nombre en Miembros.",
+      "No se puede usar «Solo llenar vacíos»: « hugo villa» (en Lead del domingo 1 mar) solo se distingue de «Hugo Villa» por mayúsculas o espacios, y el solver no puede saber cuál es cuál. Corrige el nombre en Personas (super admin).",
     );
     // A pin on a pool member's exact name is always fine, whatever its spelling.
     expect(pinRefusal({

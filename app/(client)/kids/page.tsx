@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { requireActiveSession, requireMinistryMember } from "@/app/utils/authGuards";
 import { getMemberAccess } from "@/app/utils/memberAccess";
+import { isMinistryManager } from "@/app/utils/ministryAccess";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import Navbar from "@/app/components/Navbar";
 import Button from "@/app/components/ui/Button";
@@ -81,7 +82,7 @@ export default async function KidsPage() {
   const { sanityId } = session.user;
   // Free: the same 30s-TTL cache entry `requireMinistryMember` just filled.
   const access = await getMemberAccess(sanityId);
-  const managesKids = access.role === "super-admin" || access.managesMinistries.includes("kids");
+  const managesKids = isMinistryManager(access, "kids");
 
   const today = new Date().toLocaleDateString("sv", { timeZone: TZ });
 

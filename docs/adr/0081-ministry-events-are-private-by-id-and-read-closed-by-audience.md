@@ -1,0 +1,153 @@
+# ADR-0081: Ministry events are private by id, read closed by audience, and written by one module
+
+**Date:** 2026-11-05 · **Status:** Accepted
+
+Implements [ADR-0075](0075-ministries-share-one-app-and-a-youth-group-is-a-security-boundary.md)
+Decision 2 for Jóvenes. Plan (critical, adversarially reviewed and approved three times as Frank's
+answers arrived): `docs/superpowers/plans/2026-10-30-jovenes-events-access.md`, with its review log.
+
+## Context
+
+Jóvenes needs its Saturday roster, each group's own calendar and joint meetings in the app, and Frank
+asked that the groups not see each other's: «No me gustaría que los pastores de Emprendedores vean el
+calendario de los de Otro Nivel y viceversa». Two facts decide how:
+
+- **The Sanity dataset answers anyone.** An untokened query counted 37 `teamMembers` (2026-10-31), so
+  a filter in the app protects nothing for a document anyone can query directly. Sanity serves no
+  document whose `_id` contains a dot to an untokened read (the `fairnessMonth` precedent, ADR-0050).
+- **Three different actors write one document.** An admin writes the Saturday roster, a group's
+  leader writes the group's events, and the Saturday's «encargado» adds program lines («quién da la
+  oración, quién hace una dinámica»; Frank, 2026-10-30).
+
+## Decision
+
+- **One type, `ministryEvent`, with a dotted id** (`ministryEvent.<uuid>`), so it is unreadable
+  without a token. `ministry: "jovenes"`, an explicit `audience` (`{kind: "ministry"}` for the
+  Saturday and other whole-ministry meetings, or `{kind: "groups", groups}`), `seats`, `program`,
+  `published`, and `createdBy` written once at create time.
+- **One reader, `app/utils/ministryEventReads.ts`.** Every query carries the id prefix, the ministry
+  and, for a member, `published == true` and the audience overlap with the reader's groups as a query
+  parameter. An absent or malformed audience matches no member (closed, not «whole ministry»). The
+  reader throws without the read token. `mayRead` is the same rule in TypeScript, held equal to the
+  GROQ by a `groq-js` matrix.
+- **One writer, `app/utils/ministryEventCommit.ts`**, on a FRESH (uncached) read of the actor's
+  access, against the stored revision under `ifRevisionId`:
+  - a Jóvenes admin or the super-admin writes any event;
+  - a leader writes a one-group event of a group they lead, and creates a joint event that includes
+    one of their groups (Frank, 2026-11-04: «Un líder de alguno de esos grupos»);
+  - a joint event is edited, published or deleted only by its `createdBy` (while they still lead one
+    of its groups) and the admins (Frank, 2026-11-04: «Solo quien la creó y los admins»);
+  - the encargado or apoyo of a whole-ministry meeting writes only its `program`, and only while
+    they may still read it.
+  An event the actor cannot read answers 404, never 403; writes answer no content.
+- **The writers that ignore types are closed** (`DELETE /api/content/posts/[id]`, and the
+  super-admin member routes pinned to `teamMembers`), so nothing else can write the type.
+
+## Rejected
+
+- **An undotted id plus a filter in the app.** The dataset answers anyone; the filter would hide the
+  calendar only from people who use the app.
+- **«Absent audience = whole ministry».** The fail-open direction; worship's «absent = visible»
+  exists only because worship predates the field.
+- **Authorizing the encargado from the stored seats alone.** A pastor moved out of Jóvenes would keep
+  writing an event they can no longer read; the seat is a reason to write, never to read.
+- **Testing isolation with a hand-written evaluator.** It would test a twin of the query, not the
+  query. Note that `groq-js` itself diverges from Content Lake on `path()` (it does not escape the
+  `.`), so the prefix arm is tested on ids both engines agree on and probed live on dev.
+- **Any leader of the included groups edits a joint event.** Frank chose the creator and the admins.
+
+## Consequences
+
+- Group membership stays public (`teamMembers` is undotted) until DEF-A-16 moves member data behind a
+  token; the calendar itself does not.
+- Reads trail a group change by up to 30 s (the cached access snapshot); writes do not.
+- Anyone with a Sanity project account reads every event in Studio and Vision; who holds one is
+  checked before the rollout reaches everyone. Checked on 2026-11-12, before the stage moved to
+  `all`: besides Frank and two robot tokens, two worship team members who are also Jóvenes pastors
+  hold Administrator accounts, so the plan's belief («Frank only») was wrong. Frank was told before
+  the release; whether those two accounts stay is his call, and until he removes them they can read
+  and edit every group's meetings from the Studio, outside the app's group boundary.
+- A joint event whose creator stops leading its groups, or is deleted, belongs to the admins.
+- Do not «simplify» the reader into a wider read plus a TypeScript filter, drop the id prefix arm, or
+  copy the Kids writer (it stores no `_weak` references and authorizes no audience).
+
+## Addendum — any date, a place, typed seat names (2026-11-10)
+
+Frank: «Que se puedan crear en cualquier fecha», «Ana comparte» (Ana has no account), and a
+«Lugar» column. Plan `docs/superpowers/plans/2026-11-10-jovenes-place-and-names.md` (critical,
+approved by two fresh reviews; log beside it).
+
+- `place` is a one-line display text on the meeting. It decides nothing.
+- A seat holds a member OR a typed `name`, never both. A name is text: never validated against the
+  members, never «Tú», and it grants no program right (W3a matches a member). So a meeting whose
+  Encargado is typed as a group («Emprendedores») gives that group's leaders no program right; its
+  program is the admins'. Program lines keep members only — the typed option is opt-in in
+  `PersonSelect` and the program editor does not pass it.
+- Who reads and who writes is unchanged; a meeting a group hosts is still for all pastors (`audience`
+  ministry, Frank 2026-11-10).
+- Rejected: an account for every guest (Ana would need a Google email and would appear in Personas);
+  free text in Notas (what happened first, and it hid who shares).
+- Rollback: reverting hides typed names («Sin asignar») and the old editor drops them on the next
+  save of that meeting; `place` survives.
+
+## Addendum — «the groups the actor leads» is `ledGroupsIn` (2026-11-12)
+
+- W3's and R3's «groups the actor leads» are `ledGroupsIn(access, "jovenes")` — the groups in the
+  person's `leaderOf` — no longer every group of a `leader`. One led group still suffices to create
+  or retarget a joint meeting. [ADR-0085](0085-a-jovenes-leader-leads-named-groups.md).
+
+## Addendum — a seat carries its member's profile photo (2026-11-12)
+
+- The projection's people (`seats[]`, `program[]`) gain
+  `"photo": member->{ "p": coalesce(profilePhoto.asset->url, googlePhotoUrl) }.p`, beside the name
+  it already read the same way (Frank: the profile is global, photo and alias; [ADR-0086](0086-jovenes-meetings-are-cards-and-each-group-has-a-colour.md)'s addendum).
+- It widens nothing this ADR guards: the filter, the id prefix arm and the audience parameters are
+  untouched, so no reader gets a meeting or a person they did not already get by name. The URL is
+  a field of `teamMembers`, which is undotted and public until DEF-A-16, and the same two fields
+  every worship read already projects.
+- A typed name has no member, so no photo. A seat or line whose member is gone reads a null name and
+  a null photo (the reference no longer resolves), and `jovenesDayEntry` drops both for a program
+  line with no member.
+
+## Addendum — a group's classes (2026-11-12)
+
+Frank: each group plans its own class roster in the app instead of a Google Sheet («Rol Clases»),
+before Jóvenes opens to the pastors. Plan `docs/superpowers/plans/2026-11-12-jovenes-group-classes.md`
+(critical; review log beside it).
+
+- A class is a ONE-group meeting carrying `lesson { series, track: libro | corazon | sin_clase, done }`.
+  It is read and written by exactly the rules above; `lesson` never decides access.
+  `app/utils/ministryLesson.ts` is the one validity rule, shared by the writer and the reader.
+- The writer never leaves a `lesson` on a shared or whole-ministry meeting: a PATCH that makes one
+  shared unsets it.
+- «Recorrer» (`POST …/events/[token]/shift`) and «Cambiar con…» (`POST …/swap`) are two new
+  writes of the same module, each one transaction under every touched row's revision. «Recorrer»
+  reads the anchor's roster with a second query shape — R1's identity filters, ONE group the actor
+  was already found to write, never returned to the client — and refuses (409) unless its classes
+  are exactly the ids the screen showed. A «No hubo clase» row is date-bound: it never moves and
+  classes hop over it. The row «Recorrer» leaves on the cancelled date is a DRAFT, so no member view
+  shows a cancelled Sunday as a meeting.
+- Rejected: a separate «plan» document per group with a table of rows (a second boundary to build
+  and review, and classes absent from the calendars); three flat fields (`series`, `track`, `done`
+  are generic names the protected-read audit would have to list); creating a whole roster in one
+  server write (the client's token-keyed creates already retry without duplicates).
+
+## Addendum — fixed parts, «Mi parte» (W10) and the emails (2026-11-17)
+
+[ADR-0089](0089-a-jovenes-meeting-has-fixed-parts-each-filled-by-its-responsable.md); plan
+`docs/superpowers/plans/2026-11-17-jovenes-meeting-parts.md` (critical; review log beside it).
+
+- **W10, a seventh write of the same module** (`updateMinistryEventPart`, the `parts/[part]`
+  route): a part's responsable writes that line's `note`, `music` and `helpers`. It follows W2's
+  order and adds one arm to «who may»: a person named on the part (for Plática, a member in a
+  `comparte` seat) **while `mayRead(…, "member")` holds** — W3a's «a seat is a reason to write,
+  never to read», so a draft, another group's meeting or a pastor who left answers 404 or 403
+  exactly as before. The arm has no audience or kind condition; it moves no group boundary.
+- **W4 narrowed on purpose:** the program PATCH still writes only `program`, but on a kept part
+  line it writes the stored `note`, `music` and `helpers` back (`keepFilledParts`). Assigning is
+  the encargado's; the content is the responsable's.
+- **«The writer sends nothing» still holds.** It computes the notices from the row read before
+  its commit and returns them in `effects`; the routes send. Nothing in a write's BODY changed
+  (W3b).
+- No reader filter changed: the projection gained the line's new fields and a second person,
+  whose «mine» is decided by member id in the query like the first.

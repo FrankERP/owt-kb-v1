@@ -230,29 +230,14 @@ describe("POST /api/admin/service-threads/[roleId]/messages", () => {
     expect(data.messages).toEqual([{ _key: "m1", body: "Tema: gracia" }]);
   });
 
-  it("marks the pastor's message as `pastor_note`, relayed by the admin", async () => {
+  it("no longer marks a post as the pastor's: that message has its own writer (2026-10-24)", async () => {
     const res = await post({ body: "Hermanos, este domingo: Efesios 2.", pastor: true });
     expect(res.status).toBe(200);
-    expect(txs[0].appended[0]).toMatchObject({
-      author: { _ref: "admin-1" },
-      author_role: "admin",
-      kind: "pastor_note",
-      body: "Hermanos, este domingo: Efesios 2.",
-    });
+    expect(txs[0].appended[0]).toMatchObject({ author_role: "admin", kind: "admin_change_request" });
     await drainAfter();
-    expect(sendPushMock.mock.calls[0][2]).toMatchObject({ title: "Mensaje del pastor" });
-    const [{ subject, html }] = sendEmailMock.mock.calls[0];
-    expect(subject).toMatch(/^Mensaje del pastor para tu servicio — /);
-    expect(html).toContain("Mensaje del pastor");
-  });
-
-  it("refuses a `pastor` flag that is not a boolean, writing nothing", async () => {
-    for (const pastor of ["true", 1, null]) {
-      const res = await post({ body: "hola", pastor });
-      expect(res.status).toBe(400);
-      expect(await res.json()).toMatchObject({ details: { issues: ["pastor"] } });
-    }
-    expect(txs).toHaveLength(0);
+    expect(sendPushMock.mock.calls[0][2]).toMatchObject({ title: "Nuevo mensaje" });
+    const [{ subject }] = sendEmailMock.mock.calls[0];
+    expect(subject).not.toMatch(/Mensaje del pastor/);
   });
 
   it("writes nothing the role-dependency scan sees, so the role stays deletable and movable", async () => {
@@ -453,7 +438,8 @@ describe("GET /api/admin/service-threads/[roleId]/messages", () => {
     operationalFetch.mockResolvedValueOnce(body);
     const res = await get();
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual(body);
+    // `teamNotes` is where the dialog edits the team note (null: no setlist).
+    expect(await res.json()).toEqual({ ...body, teamNotes: null });
     expect(operationalFetch.mock.calls[0][1]).toEqual({ roleId: ROLE_ID, threadId: THREAD_ID });
   });
 });

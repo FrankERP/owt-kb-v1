@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
-import { writeClient } from "@/sanity/lib/serverClient";
 import { operationalClient } from "@/sanity/lib/operationalClient";
-import { validateMinistryWrite } from "@/app/ministries";
 import { adminMembersQuery } from "@/app/utils/serviceReadQueries";
-import { parseMemberInstruments } from "@/app/components/admin/seatModel";
+import { createMember } from "@/app/utils/memberCommit";
+import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
+
+// Wrapped because the module it calls is a `*Commit` (`srVerificationRunContext.test.ts` scans by
+// import); a people write sends nothing, and an unmarked request behaves as before.
+export const POST = withVerificationRunContext(postHandler);
 
 // Reading the member list is needed by the Servicios/Disponibilidad panels (admin-accessible).
 // Creating/editing members stays super-admin only (Miembros section).
@@ -27,7 +30,7 @@ export async function GET() {
   return NextResponse.json(members);
 }
 
-export async function POST(req: NextRequest) {
+async function postHandler(req: NextRequest) {
   const session = await requireActiveManager();
   if (!session) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -36,54 +39,8 @@ export async function POST(req: NextRequest) {
   if (session.user.role !== "super-admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-
-  const body = await req.json() as {
-    member_name?: string;
-    alias?: string;
-    email?: string;
-    role?: string;
-    memberType?: string[];
-    instruments?: string[];
-    ministries?: string[];
-    managesMinistries?: string[];
-  };
-  const { member_name, alias, email, role, memberType, ministries, managesMinistries } = body;
-
-  if (!member_name?.trim() || !email?.trim()) {
-    return NextResponse.json({ error: "name and email required" }, { status: 400 });
-  }
-
-  // The SAME validator PATCH uses, so create and edit cannot drift: an
-  // explicitly empty `ministries` is rejected rather than stored, and an
-  // absent one stays absent (absent ⇒ worship by the storage contract; writing
-  // `[]` here would read back as full worship access).
-  for (const field of ["ministries", "managesMinistries"] as const) {
-    if (body[field] === undefined) continue;
-    const error = validateMinistryWrite(field, body[field]);
-    if (error) return NextResponse.json({ error }, { status: 400 });
-  }
-
-  let instruments: string[] | undefined;
-  if (body.instruments !== undefined) {
-    const parsed = parseMemberInstruments(body.instruments);
-    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
-    instruments = parsed.value;
-  }
-
-  const slug = member_name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-
-  const doc = await writeClient.create({
-    _type: "teamMembers",
-    member_name: member_name.trim(),
-    ...(alias?.trim() ? { alias: alias.trim() } : {}),
-    email: email.trim().toLowerCase(),
-    role: role ?? "member",
-    memberType: memberType ?? [],
-    ...(instruments !== undefined ? { instruments } : {}),
-    ...(ministries !== undefined ? { ministries } : {}),
-    ...(managesMinistries !== undefined ? { managesMinistries } : {}),
-    slug: { _type: "slug", current: slug },
-  });
-
-  return NextResponse.json(doc, { status: 201 });
+  // Everything after authorization is `createMember` (`app/utils/memberCommit.ts`), which the MCP
+  // `create_members` shares: the same validation, plus a refused repeated email (D5) and name (D12).
+  const outcome = await createMember(await req.json());
+  return NextResponse.json(outcome.body, { status: outcome.status });
 }

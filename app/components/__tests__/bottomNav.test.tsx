@@ -53,6 +53,22 @@ describe("BottomNav", () => {
     expect(screen.queryByRole("button", { name: "Más" })).toBeNull();
   });
 
+  // Management never implies membership (ADR-0075): a Kids manager outside both
+  // worship and Kids still needs the bar to reach Planear Kids on a phone.
+  // Since Jóvenes opened to every pastor (2026-11-12) they also have the Jóvenes section, so
+  // «Más» appears and switches to it.
+  it("keeps Kids · Planear Kids for a Kids manager who is only in Jóvenes, with «Más» to switch to Jóvenes", () => {
+    session = { user: { ...worshipUser, ministries: ["jovenes"], managesMinistries: ["kids"] } };
+    pathname = "/kids/admin";
+    mount();
+    const nav = screen.getByRole("navigation", { name: "Navegación principal" });
+    expect(Array.from(nav.querySelectorAll("a, button")).map((n) => n.textContent?.trim())).toEqual(["Kids", "Planear Kids", "Más"]);
+    fireEvent.click(screen.getByRole("button", { name: "Más" }));
+    const dialog = screen.getByRole("dialog", { name: "Más" });
+    expect(Array.from(dialog.querySelectorAll("a")).map((a) => a.textContent?.trim())).toEqual(["Jóvenes"]);
+    expect(screen.getByRole("link", { name: "Jóvenes" }).getAttribute("href")).toBe("/jovenes");
+  });
+
   it("shows Kids · Planear Kids for a kids manager with no worship ministry, and NO «Más» button", () => {
     session = { user: { ...worshipUser, ministries: ["kids"], managesMinistries: ["kids"] } };
     mount();
@@ -105,14 +121,69 @@ describe("BottomNav", () => {
     expect(screen.getByRole("link", { name: "Admin" }).getAttribute("href")).toBe("/admin");
   });
 
-  // (c) a super-admin spans both ministries and is a manager everywhere, so
-  // the sheet lists all three rows, in tab-bar-then-admin order.
-  it("shows «Más» for a super-admin and the sheet lists Kids, Planear Kids, Admin", () => {
+  // (c) One ministry at a time (Frank, 2026-10-29): a super-admin in worship
+  // sees worship's tabs, and «Más» holds the switch to Kids and worship's Admin —
+  // never Kids' own tabs. Super admin lives in the avatar menu.
+  it("shows «Más» for a super-admin in worship with the switch to Oasis Kids and Admin", () => {
     session = { user: { ...worshipUser, role: "super-admin" } };
     mount();
     fireEvent.click(screen.getByRole("button", { name: "Más" }));
     const dialog = screen.getByRole("dialog", { name: "Más" });
-    expect(Array.from(dialog.querySelectorAll("a")).map((a) => a.textContent?.trim())).toEqual(["Kids", "Planear Kids", "Admin"]);
+    expect(Array.from(dialog.querySelectorAll("a")).map((a) => a.textContent?.trim())).toEqual(["Oasis Kids", "Jóvenes", "Admin"]);
+    expect(screen.getByRole("link", { name: "Oasis Kids" }).getAttribute("href")).toBe("/kids");
+    expect(screen.getByRole("link", { name: "Jóvenes" }).getAttribute("href")).toBe("/jovenes");
+  });
+
+  // Jóvenes' meetings reach every pastor (rollout stage `all`, `rollout.ts`).
+  it("in Jóvenes, a super-admin sees Inicio and Calendario and the switch to the other two", () => {
+    pathname = "/jovenes";
+    session = { user: { ...worshipUser, role: "super-admin" } };
+    mount();
+    const nav = screen.getByRole("navigation", { name: "Navegación principal" });
+    const tabs = Array.from(nav.querySelectorAll("a"));
+    expect(tabs.map((n) => [n.textContent?.trim(), n.getAttribute("href"), n.getAttribute("aria-current")])).toEqual([
+      ["Inicio", "/jovenes", "page"],
+      ["Calendario", "/jovenes/calendario", null],
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: "Más" }));
+    const dialog = screen.getByRole("dialog", { name: "Más" });
+    expect(Array.from(dialog.querySelectorAll("a")).map((a) => a.textContent?.trim())).toEqual(["Alabanza", "Oasis Kids"]);
+  });
+
+  it("in Kids, a super-admin sees Kids' tabs and the switch back to Alabanza — no Admin", () => {
+    pathname = "/kids/admin";
+    session = { user: { ...worshipUser, role: "super-admin" } };
+    mount();
+    const nav = screen.getByRole("navigation", { name: "Navegación principal" });
+    expect(Array.from(nav.querySelectorAll("a")).map((n) => n.textContent?.trim())).toEqual(["Kids", "Planear Kids"]);
+    fireEvent.click(screen.getByRole("button", { name: "Más" }));
+    const dialog = screen.getByRole("dialog", { name: "Más" });
+    expect(Array.from(dialog.querySelectorAll("a")).map((a) => a.textContent?.trim())).toEqual(["Alabanza", "Jóvenes"]);
+    expect(screen.getByRole("link", { name: "Alabanza" }).getAttribute("href")).toBe("/");
+  });
+
+  // A Jóvenes-only pastor has ONE section and nothing to switch to, but since 2026-11-17 it has
+  // TWO pages, so they get a bar (until then «Reuniones» was a lone tab and the bar hid, as it
+  // still does for a kids-only volunteer). No «Más»: there is nothing for it to hold.
+  it("a Jóvenes-only pastor gets Inicio and Calendario, and no «Más»", () => {
+    pathname = "/jovenes/calendario";
+    session = { user: { ...worshipUser, ministries: ["jovenes"], managesMinistries: [] } };
+    mount();
+    const nav = screen.getByRole("navigation", { name: "Navegación principal" });
+    expect(Array.from(nav.querySelectorAll("a")).map((n) => [n.textContent?.trim(), n.getAttribute("aria-current")])).toEqual([
+      ["Inicio", null],
+      ["Calendario", "page"],
+    ]);
+    expect(screen.queryByRole("button", { name: "Más" })).toBeNull();
+  });
+
+  // The planner is not a tab (who leads a group is not in the session): there, no tab is lit.
+  it("on Planear Jóvenes neither tab is the current page", () => {
+    pathname = "/jovenes/admin";
+    session = { user: { ...worshipUser, ministries: ["jovenes"], managesMinistries: [] } };
+    mount();
+    const nav = screen.getByRole("navigation", { name: "Navegación principal" });
+    expect(Array.from(nav.querySelectorAll("a")).map((n) => n.getAttribute("aria-current"))).toEqual([null, null]);
   });
 
   // (d) Tema and Cerrar sesión moved to the avatar menu (NavMenu) — the sheet

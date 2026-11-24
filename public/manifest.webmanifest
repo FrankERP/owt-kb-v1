@@ -1,7 +1,7 @@
 {
-  "name": "Backstage — Oasis Worship Team",
+  "name": "Backstage",
   "short_name": "Backstage",
-  "description": "Cancionero, listas de servicio y asignaciones del equipo de alabanza Oasis.",
+  "description": "La app de los ministerios de Oasis: servicios, calendario, canciones y equipos.",
   "lang": "es",
   "id": "/",
   "start_url": "/",

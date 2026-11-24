@@ -100,6 +100,21 @@ function weekendDatesOfWeek(month: string, week: number): Array<{ date: string; 
   });
 }
 
+/**
+ * RES-1 — pools → roles: whether a `voz` member is "in" a role key BEFORE any personal rule, `==`
+ * cap or cadence takes them out: the EFFECTIVE pool (ticked and fitting by current Tipo), and the
+ * role only when the Tipo fits it. A stale tick puts nobody anywhere. The ONE definition: the
+ * availability fallback search asks it to tell «off the list because of a personal rule» from
+ * «off the list anyway» (ADR-0079).
+ */
+export function pooledForRoleKey(m: { _id: string; memberType?: string[] }, config: Pick<SolverConfig, "sundayLeads" | "saturdayLeads" | "support">, k: RoleKey): boolean {
+  const sunday = config.sundayLeads.includes(m._id) && memberFitsPool(m, "sundayLeads");
+  const saturday = config.saturdayLeads.includes(m._id) && memberFitsPool(m, "saturdayLeads");
+  const support = config.support.includes(m._id) && memberFitsPool(m, "support");
+  const pooled = k === "Sun.Lead" ? sunday : k === "Sat.Lead" ? sunday || saturday : sunday || saturday || support;
+  return pooled && memberFitsRoleKey(m, k);
+}
+
 export function resolveMonthEligibility(input: {
   month: string;
   config: SolverConfig;
@@ -134,15 +149,7 @@ export function resolveMonthEligibility(input: {
   for (const m of [...roster].sort((a, b) => compareCodepoint(a._id, b._id))) {
     if (!(m.memberType ?? []).includes("voz")) continue;
     const roles = Object.fromEntries(ROLE_KEYS.map((k) => [k, "out"])) as Record<RoleKey, Status>;
-    // RES-1 — pools → roles: the EFFECTIVE pool (ticked and fitting by current Tipo), each
-    // role only when the Tipo fits it. A stale tick puts nobody anywhere.
-    const sunday = config.sundayLeads.includes(m._id) && memberFitsPool(m, "sundayLeads");
-    const saturday = config.saturdayLeads.includes(m._id) && memberFitsPool(m, "saturdayLeads");
-    const support = config.support.includes(m._id) && memberFitsPool(m, "support");
-    for (const k of ROLE_KEYS) {
-      const pooled = k === "Sun.Lead" ? sunday : k === "Sat.Lead" ? sunday || saturday : sunday || saturday || support;
-      if (pooled && memberFitsRoleKey(m, k)) roles[k] = "in";
-    }
+    for (const k of ROLE_KEYS) if (pooledForRoleKey(m, config, k)) roles[k] = "in";
     items.set(m._id, { roles, exactRules: [], cadence: false, exempt: false, blocks: new Map() });
   }
   const block = (item: Item, date: string) => {

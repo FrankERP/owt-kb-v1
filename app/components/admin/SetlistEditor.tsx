@@ -683,8 +683,8 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
         <Button variant="secondary" size="lg" className="w-full justify-start" onClick={() => setCreateOpen(true)}>
           <PlusIcon size={14} /> Crear{" "}
           {searchQ.trim()
-            ? <span className="min-w-0 truncate font-body text-xs normal-case tracking-normal text-mono-400">&quot;{searchQ}&quot;</span>
-            : <span className="font-body text-xs normal-case tracking-normal text-mono-400">nueva canción</span>}
+            ? <span className="min-w-0 truncate font-normal text-mono-400">&quot;{searchQ}&quot;</span>
+            : <span className="font-normal text-mono-400">nueva canción</span>}
         </Button>
       </div>
 

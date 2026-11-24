@@ -22,6 +22,7 @@ import { ToastProvider } from "../../ui/Toast";
 import { CueDialogProvider } from "../../ui/CueDialogProvider";
 import { SOURCE_ENDPOINTS } from "../serviceSourceState";
 import { buildServicesOverview } from "../servicesOverviewModel";
+import { formatMonthTab } from "../monthPills";
 import type { MemberOption, ServiceRole, ServiceType } from "../serviceCardModel";
 
 const m = (id: string, member_name: string, alias?: string): MemberOption => ({
@@ -158,7 +159,7 @@ function mount() {
 
 const monthPill = (ym: string) =>
   screen.getByRole("button", {
-    name: new Date(ym + "-01T12:00:00").toLocaleDateString("es-MX", { month: "short", year: "2-digit" }),
+    name: formatMonthTab(ym, new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" }).slice(0, 7)),
   });
 
 const overviewColumns = () =>

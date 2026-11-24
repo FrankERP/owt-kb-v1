@@ -11,12 +11,14 @@
 // `server-only` keeps the tokened clients out of any client bundle.
 
 import "server-only";
+import { memberDisplayName } from "@/app/utils/seatClashGuard";
 
 import { randomUUID } from "node:crypto";
 
 import { operationalClient, rawIntegrityClient } from "@/sanity/lib/operationalClient";
 import { writeClient } from "@/sanity/lib/serverClient";
 import {
+  adminRolesQuery,
   canonicalMembersByIdsQuery,
   canonicalRoleByIdQuery,
   canonicalRolesByIdsQuery,
@@ -24,6 +26,7 @@ import {
   canonicalSpecialRolesForDateQuery,
   canonicalWeekendRolesForTargetQuery,
   documentsReferencingRoleQuery,
+  fairnessMembersByIdsQuery,
   proposalsForRoleOrDatesQuery,
   rawProposalDraftsForRoleOrDatesQuery,
   rawRoleDraftForBaseQuery,
@@ -124,6 +127,21 @@ async function runRaw<T>(bound: { query: string; params: Record<string, unknown>
   return Array.isArray(rows) ? rows : [];
 }
 
+// The STRICT twins of `run`/`runRaw`, on the same clients: a non-array answer THROWS instead of
+// reading as `[]`. The MCP delete (admin parity phase 2) needs them: an empty answer there would
+// make every service it was asked to delete look already gone («ya no existe»).
+async function runStrict<T>(bound: { query: string; params: Record<string, unknown> }): Promise<T[]> {
+  const rows: unknown = await operationalClient.fetch<T[]>(bound.query, bound.params);
+  if (!Array.isArray(rows)) throw new Error("role read: not an array");
+  return rows as T[];
+}
+
+async function runRawStrict<T>(bound: { query: string; params: Record<string, unknown> }): Promise<T[]> {
+  const rows: unknown = await rawIntegrityClient.fetch<T[]>(bound.query, bound.params);
+  if (!Array.isArray(rows)) throw new Error("raw role read: not an array");
+  return rows as T[];
+}
+
 // ── Role identity ───────────────────────────────────────────────────────────
 
 export interface CanonicalRoleLookup {
@@ -161,6 +179,48 @@ export async function loadRawRoleDraftIdsForBaseIds(ids: string[]): Promise<stri
   return rows.map((r) => r._id);
 }
 
+/**
+ * The MCP delete's ONE read of the services it names (admin parity phase 2, D2): the canonical
+ * roles by id — the shape `loadRoleForWrite` reads, raw `_ref`s — plus the raw `drafts.` overlay ids
+ * on any of them. Both strict: a malformed answer throws, never «no service».
+ */
+export async function loadRolesForDelete(ids: string[]): Promise<{ roles: StoredRole[]; overlayIds: string[] }> {
+  if (!ids.length) return { roles: [], overlayIds: [] };
+  const [roles, overlays] = await Promise.all([
+    runStrict<StoredRole>(canonicalRolesByIdsQuery(ids)),
+    runRawStrict<{ _id: string }>(rawRoleDraftsForBaseIdsQuery(ids)),
+  ]);
+  return { roles, overlayIds: overlays.map((r) => r._id) };
+}
+
+/**
+ * Display names (alias, else `member_name`) of the given members, strict. The MCP delete reads them
+ * BEFORE any delete, so an answer can name who a failed notice did not reach once the role is gone.
+ */
+export async function loadMemberNamesByIds(ids: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (!ids.length) return out;
+  const rows = await runStrict<{ _id?: unknown; member_name?: unknown; alias?: unknown }>(fairnessMembersByIdsQuery(ids));
+  for (const r of rows) {
+    if (typeof r._id !== "string") continue;
+    const name = memberDisplayName(r);
+    if (name) out.set(r._id, name);
+  }
+  return out;
+}
+
+
+/**
+ * The ids of a month's services as `/admin` lists them (`adminRolesQuery`, `date` = week or date),
+ * strict. It only CHOOSES the candidates of a delete check; no line is ever rendered from it.
+ */
+export async function loadAdminRoleIdsForMonth(month: string): Promise<string[]> {
+  const rows = await runStrict<{ _id?: unknown; date?: unknown }>(adminRolesQuery());
+  return rows
+    .filter((r) => typeof r._id === "string" && typeof r.date === "string" && r.date.slice(0, 7) === month)
+    .map((r) => r._id as string);
+}
+
 // ── Coordination documents ──────────────────────────────────────────────────
 
 export async function loadLock(lockId: string | null): Promise<StoredLock | null> {
@@ -189,13 +249,38 @@ export async function loadReceiptsForRole(roleId: string): Promise<StoredReceipt
   return run<StoredReceipt>(roleCreationReceiptsForRoleQuery(roleId));
 }
 
+export interface CanonicalMember {
+  /** Only `true` counts as marked («Canta y toca a la vez»), as in `seatsClash`. */
+  singsAndPlays: boolean;
+  /** `memberDisplayName`; "" when the member has neither alias nor name. */
+  name: string;
+}
+
+/**
+ * Canonical members that actually resolve, keyed by id — the ONE member read
+ * each seat writer makes: its keys feed the dangling-assignment refusal, its
+ * flag and name the seat-clash guard (`addedSeatClashes`, ADR-0078). No extra
+ * round trip.
+ */
+export async function loadCanonicalMembers(ids: string[]): Promise<Map<string, CanonicalMember>> {
+  const unique = [...new Set(ids)].filter(Boolean);
+  const out = new Map<string, CanonicalMember>();
+  if (!unique.length) return out;
+  const rows = await run<{ _id?: unknown; singsAndPlays?: unknown; alias?: unknown; member_name?: unknown }>(
+    canonicalMembersByIdsQuery(unique),
+  );
+  for (const r of rows) {
+    if (typeof r._id !== "string") continue;
+    out.set(r._id, { singsAndPlays: r.singsAndPlays === true, name: memberDisplayName(r) });
+  }
+  return out;
+}
+
 /** Canonical member ids that actually resolve, for dangling-assignment refusal. */
 export async function loadCanonicalMemberIds(ids: string[]): Promise<Set<string>> {
-  const unique = [...new Set(ids)].filter(Boolean);
-  if (!unique.length) return new Set();
-  const rows = await run<{ _id: string }>(canonicalMembersByIdsQuery(unique));
-  return new Set(rows.map((r) => r._id).filter((id): id is string => typeof id === "string"));
+  return new Set((await loadCanonicalMembers(ids)).keys());
 }
+
 
 // ── Shared write-target resolution (§2/§4) ──────────────────────────────────
 
@@ -289,16 +374,18 @@ export type RoleCoordination =
   | { ok: false; failure: RoleWriteFailure };
 
 /**
- * Resolve the coordination token every involved role must already own, so ONE
- * business transaction can assert all of them. A wrong-owner, vacant or malformed
- * token is an integrity conflict and is never repaired implicitly; exactly one
- * legacy weekend role with no token runs the §1 bootstrap maintenance transaction.
- * Any maintenance commit, concurrent maintenance, or uncertain persistence stops
- * the complete logical operation; callers never continue into a business write.
+ * The coordination plan for every involved role, read-only: each role's owned
+ * token, or the first legacy weekend role that would need the §1 bootstrap
+ * (and the roles planned before it). Shared by the writer
+ * (`resolveOwnedCoordination`) and the read-only check (`peekOwnedCoordination`),
+ * so both judge a target by the same rule.
  */
-export async function resolveOwnedCoordination(
-  targets: readonly RoleWriteTarget[],
-): Promise<RoleCoordination> {
+type CoordinationPlan =
+  | { ok: true; roles: CoordinatedRole[]; bootstrap: null }
+  | { ok: true; roles: CoordinatedRole[]; bootstrap: RoleWriteTarget }
+  | { ok: false; failure: RoleWriteFailure };
+
+async function planOwnedCoordination(targets: readonly RoleWriteTarget[]): Promise<CoordinationPlan> {
   const out: CoordinatedRole[] = [];
   const lockIds = targets
     .map((t) => t.lockId)
@@ -323,28 +410,7 @@ export async function resolveOwnedCoordination(
         failure: { code: "integrity_conflict", details: { lockId, detail: plan.detail } },
       };
     }
-    if (plan.kind === "bootstrap") {
-      const boot = await bootstrapLegacyLock({
-        roleId: target.role._id,
-        roleRev: target.role._rev,
-        targetKey,
-        dateField: roleDateField(target.role._type),
-        date: target.date,
-      });
-      const code =
-        boot.outcome === "committed_reload"
-          ? "bootstrap_completed_reload"
-          : boot.outcome === "unknown"
-            ? "bootstrap_outcome_unknown"
-            : "stale_revision";
-      return {
-        ok: false,
-        failure: {
-          code,
-          details: { ...boot.details, id: target.role._id },
-        },
-      };
-    }
+    if (plan.kind === "bootstrap") return { ok: true, roles: out, bootstrap: target };
     out.push({
       role: target.role,
       targetKey,
@@ -352,7 +418,80 @@ export async function resolveOwnedCoordination(
       lock: locks.get(lockId) as StoredLock,
     });
   }
-  return { ok: true, roles: out, bootstrapped: false };
+  return { ok: true, roles: out, bootstrap: null };
+}
+
+/**
+ * Resolve the coordination token every involved role must already own, so ONE
+ * business transaction can assert all of them. A wrong-owner, vacant or malformed
+ * token is an integrity conflict and is never repaired implicitly; exactly one
+ * legacy weekend role with no token runs the §1 bootstrap maintenance transaction.
+ * Any maintenance commit, concurrent maintenance, or uncertain persistence stops
+ * the complete logical operation; callers never continue into a business write.
+ */
+export async function resolveOwnedCoordination(
+  targets: readonly RoleWriteTarget[],
+): Promise<RoleCoordination> {
+  const plan = await planOwnedCoordination(targets);
+  if (!plan.ok) return plan;
+  const target = plan.bootstrap;
+  if (target) {
+    const boot = await bootstrapLegacyLock({
+      roleId: target.role._id,
+      roleRev: target.role._rev,
+      targetKey: target.targetKey,
+      dateField: roleDateField(target.role._type),
+      date: target.date,
+    });
+    const code =
+      boot.outcome === "committed_reload"
+        ? "bootstrap_completed_reload"
+        : boot.outcome === "unknown"
+          ? "bootstrap_outcome_unknown"
+          : "stale_revision";
+    return {
+      ok: false,
+      failure: {
+        code,
+        details: { ...boot.details, id: target.role._id },
+      },
+    };
+  }
+  return { ok: true, roles: plan.roles, bootstrapped: false };
+}
+
+/** `peekOwnedCoordination`'s answer: the writer's plan, with the bootstrap reported instead of run. */
+export type RoleCoordinationPeek =
+  | { ok: true; roles: CoordinatedRole[]; needsBootstrap: false }
+  | {
+      ok: true;
+      /** The roles planned before it, then the one that needs it (with `lock: null`). */
+      roles: CoordinatedRole[];
+      needsBootstrap: true;
+    }
+  | { ok: false; failure: RoleWriteFailure };
+
+/**
+ * The read-only twin of `resolveOwnedCoordination` for a check that must never
+ * write (admin parity S1, D4): the same plan, but a legacy weekend role with no
+ * token is REPORTED (`needsBootstrap: true`, its role carried with `lock: null`)
+ * instead of bootstrapped. It never calls `bootstrapLegacyLock` or any client
+ * that writes. Its own type, so the writers' callers keep the one they narrow on.
+ */
+export async function peekOwnedCoordination(
+  targets: readonly RoleWriteTarget[],
+): Promise<RoleCoordinationPeek> {
+  const plan = await planOwnedCoordination(targets);
+  if (!plan.ok) return plan;
+  const target = plan.bootstrap;
+  if (target) {
+    return {
+      ok: true,
+      roles: [...plan.roles, { role: target.role, targetKey: target.targetKey, date: target.date, lock: null }],
+      needsBootstrap: true,
+    };
+  }
+  return { ok: true, roles: plan.roles, needsBootstrap: false };
 }
 
 // ── Target occupancy ────────────────────────────────────────────────────────

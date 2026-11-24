@@ -49,7 +49,7 @@ const REAL_SITES: ProtectedSite[] = AUDITED_FILES.flatMap((file) =>
   scanSource(file, readFileSync(path.join(REPO_ROOT, file), "utf8")),
 );
 
-const GUARD_FILE = "app/api/content/posts/[id]/route.ts";
+const GUARD_FILE = "app/utils/songSaveCommit.ts";
 const CLIENT_IMPORTS = `
 import { serverClient, writeClient } from "@/sanity/lib/serverClient";
 import { operationalClient } from "@/sanity/lib/operationalClient";
@@ -360,24 +360,24 @@ export async function commit(months) {
 
 describe("defensive type-rejection guard exclusion", () => {
   const guardSource = `${CLIENT_IMPORTS}
-export async function PATCH() {
+export async function patchSong() {
   const target = await writeClient.fetch(\`*[_id == $id][0]{ _type }\`, { id });
   if (target._type !== "post") return new Response(null, { status: 400 });
   await writeClient.patch(id).set({ title: "x" }).commit();
 }`;
 
-  it("recognizes the posts/[id] PATCH _type-only guard as its documented exclusion", () => {
+  it("recognizes the song writer's _type-only guard as its documented exclusion", () => {
     const sites = scanSource(GUARD_FILE, guardSource);
     expect(sites).toHaveLength(1);
-    expect(sites[0]).toMatchObject({ operation: "PATCH", kind: "type-rejection-guard" });
+    expect(sites[0]).toMatchObject({ operation: "module", kind: "type-rejection-guard" });
     expect(auditViolations(sites)).toHaveLength(0);
   });
 
-  it("still fails a protected-field generic _id read in the same file and method", () => {
+  it("still fails a protected-field generic _id read in the same file", () => {
     const sites = scanSource(
       GUARD_FILE,
       `${CLIENT_IMPORTS}
-export async function PATCH() {
+export async function patchSong() {
   const target = await writeClient.fetch(
     \`*[_id == $id][0]{ _type, "leads": Lead[]._ref, service_ref }\`, { id },
   );
@@ -389,10 +389,9 @@ export async function PATCH() {
     expect(auditViolations(sites)).toHaveLength(1);
   });
 
-  it("does not extend the guard exclusion to another file or another method", () => {
+  it("does not extend the guard exclusion to another file", () => {
     expect(auditViolations(scanSource("app/api/other/route.ts", guardSource))).toHaveLength(1);
-    const otherMethod = guardSource.replace("function PATCH", "function PUT");
-    expect(auditViolations(scanSource(GUARD_FILE, otherMethod))).toHaveLength(1);
+    expect(auditViolations(scanSource("app/utils/otherCommit.ts", guardSource))).toHaveLength(1);
   });
 
   it("keeps the guard registry separate from, and disjoint with, the A2 allowlist", () => {
@@ -401,11 +400,11 @@ export async function PATCH() {
     expect(DEFENSIVE_TYPE_REJECTION_GUARDS).toHaveLength(2);
     expect(DEFENSIVE_TYPE_REJECTION_GUARDS[0]).toMatchObject({
       file: GUARD_FILE,
-      operation: "PATCH",
+      operation: "module",
     });
     expect(DEFENSIVE_TYPE_REJECTION_GUARDS[1]).toMatchObject({
-      file: "app/api/kids/pairs/[id]/route.ts",
-      operation: "PATCH",
+      file: "app/utils/kidsCommit.ts",
+      operation: "module",
     });
     // A2 never removes it.
     expect(DEFENSIVE_TYPE_REJECTION_GUARDS[0].removalOwner).not.toBe("A2");
@@ -472,13 +471,13 @@ describe("A2 handoff allowlist", () => {
     expect(A2_HANDOFF_ALLOWLIST).toEqual([]);
   });
 
-  it("licenses the eighteen permanent runtime writers for WRITES ONLY, never reads", () => {
+  it("licenses the twenty permanent runtime writers for WRITES ONLY, never reads", () => {
     expect(PROTECTED_RUNTIME_WRITERS.map((e) => `${e.file}#${e.operation}`).sort()).toEqual(
       [
         "app/utils/outboxSweep.ts#module",
         "app/utils/serviceMutationSideEffects.ts#module",
-        "app/api/admin/proposals/[id]/route.ts#PATCH",
-        "app/api/admin/roles/[id]/route.ts#DELETE",
+        "app/utils/proposalReviewCommit.ts#module",
+        "app/utils/roleDeleteCommit.ts#module",
         "app/utils/roleEditCommit.ts#module",
         "app/utils/copyInstrumentsCommit.ts#module",
         "app/api/admin/roles/publish/route.ts#POST",
@@ -493,7 +492,8 @@ describe("A2 handoff allowlist", () => {
         "app/api/me/proposals/route.ts#POST",
         "app/api/me/proposals/[id]/messages/route.ts#POST",
         "app/api/admin/proposals/[id]/messages/route.ts#POST",
-        "app/api/admin/service-threads/[roleId]/messages/route.ts#POST",
+        "app/utils/serviceThreadCommit.ts#module",
+        "app/utils/availabilityFixCommit.ts#module",
       ].sort(),
     );
     // Nothing removes a writer: item 12 must never be "satisfied" by moving reads here.
@@ -723,6 +723,8 @@ describe("git-tracked protected read inventory", () => {
       "setlistProposal",
       "specialIdentityCoordinator",
       "fairnessMonth",
+      "availabilityConflict",
+      "ministryEvent",
     ]);
   });
 });

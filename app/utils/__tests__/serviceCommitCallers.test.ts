@@ -50,10 +50,77 @@ const EXPECTED_CALLERS: Record<string, string[]> = {
   roleSwapCommit: ["app/api/admin/roles/swap/route.ts", "app/mcp/tools/swapAssignment.ts"],
   // Admin parity phase 1: the PATCH route and `save_service_edits` (T2.5, ADR-0066); the copy
   // route and `copy_instruments` (S3).
-  roleEditCommit: ["app/api/admin/roles/[id]/route.ts", "app/mcp/tools/serviceEditor.ts"],
+  // ADR-0079: «Aplicar» on an availability proposal saves through the same PATCH writer.
+  roleEditCommit: [
+    "app/api/admin/roles/[id]/route.ts",
+    "app/mcp/tools/serviceEditor.ts",
+    "app/utils/availabilityFixCommit.ts",
+  ],
+  // ADR-0079: the availability proposals — the four admin routes, the member's availability
+  // PATCH (its `after()` trigger) and layer 1's flush cron (the tick). Never an MCP tool.
+  availabilityFixCommit: [
+    "app/api/admin/availability-conflicts/apply/route.ts",
+    "app/api/admin/availability-conflicts/keep/route.ts",
+    "app/api/admin/availability-conflicts/route.ts",
+    "app/api/admin/availability-conflicts/sweep/route.ts",
+    "app/api/cron/flush-notifications/route.ts",
+    "app/api/me/availability/route.ts",
+  ],
   copyInstrumentsCommit: ["app/api/admin/roles/copy-instruments/route.ts", "app/mcp/tools/serviceEditor.ts"],
+  // ADR-0081 (G1c): Jóvenes' meetings — the six route files of its seven handlers, never MCP
+  // (the shift and swap of a group's classes: plan 2026-11-12 L3, L4; «Mi parte»: ADR-0089, W10).
+  ministryEventCommit: [
+    "app/api/ministries/[ministry]/events/[token]/parts/[part]/route.ts",
+    "app/api/ministries/[ministry]/events/[token]/program/route.ts",
+    "app/api/ministries/[ministry]/events/[token]/route.ts",
+    "app/api/ministries/[ministry]/events/[token]/shift/route.ts",
+    "app/api/ministries/[ministry]/events/[token]/swap/route.ts",
+    "app/api/ministries/[ministry]/events/route.ts",
+  ],
+  // Admin parity phase 2 (T1): the DELETE route and `delete_services`/`delete_services_app`.
+  roleDeleteCommit: ["app/api/admin/roles/[id]/route.ts", "app/mcp/tools/serviceDeletes.ts"],
   roleUnpublishCommit: ["app/api/admin/roles/unpublish/route.ts", "app/mcp/tools/unpublishService.ts"],
   setlistSaveCommit: ["app/api/admin/setlists/route.ts", "app/mcp/tools/editSetlist.ts"],
+  // Admin parity phase 3: the four service-conversation routes (ADR-0065), the MCP message tools,
+  // and the proposal approval (ADR-0087).
+  serviceThreadCommit: [
+    "app/api/admin/service-threads/[roleId]/messages/[key]/route.ts",
+    "app/api/admin/service-threads/[roleId]/messages/route.ts",
+    "app/api/admin/service-threads/[roleId]/pastor-message/route.ts",
+    "app/api/admin/service-threads/[roleId]/team-notes/route.ts",
+    "app/mcp/tools/serviceMessages.ts",
+    // ADR-0087: an approval's post-commit copy of the leads' pastor's message
+    // (`adoptProposalPastorMessage`), never a route of its own.
+    "app/utils/proposalReviewCommit.ts",
+  ],
+  // Admin parity phase 3 (S4): the four Kids write routes and the MCP Kids tools.
+  kidsCommit: [
+    "app/api/kids/members/[id]/availability/route.ts",
+    "app/api/kids/pairs/[id]/route.ts",
+    "app/api/kids/pairs/route.ts",
+    "app/api/kids/schedules/route.ts",
+    "app/mcp/tools/kids.ts",
+  ],
+  // Admin parity phase 3 (S1): the proposals PATCH route and the MCP proposal-decision tools.
+  proposalReviewCommit: ["app/api/admin/proposals/[id]/route.ts", "app/mcp/tools/setlistProposalReview.ts"],
+  // Admin parity phase 3 (S3): /admin's song and author routes and the MCP song tools.
+  songSaveCommit: [
+    "app/api/content/authors/route.ts",
+    "app/api/content/posts/[id]/route.ts",
+    "app/api/content/posts/route.ts",
+    "app/mcp/tools/songEdits.ts",
+  ],
+  // Admin parity phase 4 (slice M): /admin's three people routes, the member's own /me PATCH and the
+  // MCP people tools.
+  memberCommit: [
+    "app/api/admin/members/[id]/disable/route.ts",
+    "app/api/admin/members/[id]/route.ts",
+    "app/api/admin/members/route.ts",
+    "app/api/me/route.ts",
+    "app/mcp/tools/members.ts",
+  ],
+  // Admin parity phase 4 (slice R): the rules POST and the MCP rule tools (ADR-0084).
+  solverConfigCommit: ["app/api/admin/solver-config/route.ts", "app/mcp/tools/rules.ts"],
   // Solver v3 C2 WR-16 / IF2-23: the ONE mutation path of `fairnessMonth`. Its importer
   // list grows only by a reviewed edit here — C2 adds `fairnessMonthCommit.ts` and
   // `fairnessLedgerRead.ts`; C4 adds its CLI file and its `scripts/lib` core.

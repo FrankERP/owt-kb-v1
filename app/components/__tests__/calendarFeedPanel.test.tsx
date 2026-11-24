@@ -1,8 +1,10 @@
 /** @vitest-environment jsdom */
 // «Calendario» in /me/ajustes after design pass D (2026-10-22): one «Todos / Solo
-// los míos» switch drives ONE row of Google / iPhone-Mac / Copiar, the how-it-works
+// los míos» switch drives ONE set of Google / Apple / Copiar, the how-it-works
 // text folds behind «¿Cómo funciona?», and the one-shot `.ics` is a link to
-// «Tu cuenta» on /me, because this page reads no assignments.
+// «Tu cuenta» on /me, because this page reads no assignments. Since the
+// «millones» pass (2026-10-26) the three are hairline rows with a status line
+// under each title, so a link's accessible name starts with the title.
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { MotionProvider } from "@/app/components/ui/MotionProvider";
@@ -54,10 +56,10 @@ describe("CalendarFeedPanel", () => {
   it("leads with «Todos» and ONE row of links for that scope", () => {
     mount();
     expect(screen.getByRole("radio", { name: "Todos" }).getAttribute("aria-checked")).toBe("true");
-    expect(href("Google Calendar")).toBe(urls.googleAll);
-    expect(href("iPhone / Mac")).toBe(urls.webcalAll);
-    // One row, not two: the old panel repeated the three buttons per scope.
-    expect(screen.getAllByRole("link", { name: "Google Calendar" })).toHaveLength(1);
+    expect(href(/^Google Calendar/)).toBe(urls.googleAll);
+    expect(href(/^Apple Calendar/)).toBe(urls.webcalAll);
+    // One set, not two: the old panel repeated the three buttons per scope.
+    expect(screen.getAllByRole("link", { name: /^Google Calendar/ })).toHaveLength(1);
     expect(screen.getAllByRole("button", { name: /Copiar enlace/ })).toHaveLength(1);
   });
 
@@ -66,8 +68,8 @@ describe("CalendarFeedPanel", () => {
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
     mount();
     fireEvent.click(screen.getByRole("radio", { name: "Solo los míos" }));
-    expect(href("Google Calendar")).toBe(urls.googleMine);
-    expect(href("iPhone / Mac")).toBe(urls.webcalMine);
+    expect(href(/^Google Calendar/)).toBe(urls.googleMine);
+    expect(href(/^Apple Calendar/)).toBe(urls.webcalMine);
     fireEvent.click(screen.getByRole("button", { name: /Copiar enlace/ }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(urls.mine));
   });

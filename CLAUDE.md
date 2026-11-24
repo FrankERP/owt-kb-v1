@@ -43,7 +43,7 @@ rule changes, change both; if they disagree, this file wins.
   then run the suite with `.venv/bin/python` (the system `python` is 3.13 and refuses global
   installs). Keys reach a session only as network secrets the proxy injects (`docs/SECRETS.md`),
   never as readable variables. The long form lists what still needs the Mac. The solver is
-  verified/re-deployed via `solver-v3-ops.yml` (ADR-0071): ask Frank before dispatching `deploy`;
+  verified/re-deployed via `solver-v3-ops.yml` (ADR-0092): ask Frank before dispatching `deploy`;
   **never approve, reject or bypass a pending deployment**, nor change its environments or the WIF
   setup without his OK — the session acts as `FrankERP`, so this rule is the only gate.
 - **On the Mac — worktrees only when two things must be in flight at once** (`Agent` with
@@ -123,6 +123,10 @@ the budget goes there, once.
 - **`preview` writes to the real Sanity dataset** — a rehearsal of the UI, never a dry run of data.
 - **`OWT_SOLVER_ENGINE` on Preview is for rehearsals only and normally unset** (branch-scoped to
   `preview` while set; Production and `verify/service-readiness` ignore it). See `docs/SECRETS.md`.
+- **Functions run on Fluid compute in `iad1`**, both pinned in `vercel.json` (ADR-0074): concurrent requests share
+  one instance, so module-level state must be safe to share. Sanity lives in Europe; read the ADR
+  before moving the region. A server module that spawns a process gates it on
+  `NODE_ENV === "production"` or the tracer packs the whole repo (`functionTraceGuard.test.ts`).
 - **Preview email reaches one address only because `EMAIL_REDIRECT_TO` is set** on Preview
   (since 2026-07-24): a publish on dev does not notify the team, and clearing that variable
   makes preview mail the whole team. Check `vercel env ls preview`. Production has no redirect.
@@ -161,15 +165,15 @@ looks wrong** — several exist to stop a plausible-looking change.
   not carry it; the planner Switch is disabled for a past CDMX month (client-only, C1-D7).
 - **Draft gating:** member-facing **worship** reads filter `published != false` (absent =
   visible). **Every `kidsSchedule` read under `app/**` uses `published == true`**, manager
-  reads included (ADR-0022), except its two draft editors (`api/kids/schedules/route.ts`, the
+  reads included (ADR-0022), except its two draft editors (`utils/kidsScheduleReads.ts`, the
   planner page's `"schedules"` projection). Guard: `draftGatingCoverage.test.ts`.
 - **Sanity array-of-object writes need a `_key` per item.**
 - **`solverConfig`:** saves carry `SOLVER_CONFIG_VERSION`; the rules POST refuses any other
   (`app/utils/solverConfigWriteRequest.ts`), and a field or allowed value an older client would
   drop bumps it (`solverConfigVersion.test.ts`). No writer sets a rule value around
   `solverConfigFromDocument` → `parseSolverConfigWrite` → `solverConfigFields` under
-  `ifRevisionId` (the only targeted writers: the member DELETE's pool patch, the rule-name
-  repair script). One `==` count per person per role key (`exactCapOverlaps`; C2). ADR-0049.
+  `ifRevisionId` in `solverConfigCommit.ts` (the rules POST and the chat, ADR-0084; the only targeted writers: the member DELETE's pool patch, the rule-name
+  repair script, a member rename's person-path `set` in `memberCommit.ts`, ADR-0082). One `==` count per person per role key (`exactCapOverlaps`; C2). ADR-0049.
 - **The fairness ledger has one definition, and its records one writer** (ADR-0050).
   `app/utils/fairnessLedger.ts` is the only TS definition of F2–F7 and X1;
   `fixtures/fairness/golden.json` is asserted by vitest and `gcf_v3/tests/test_golden.py` and
@@ -244,14 +248,44 @@ looks wrong** — several exist to stop a plausible-looking change.
   `MCP_OAUTH_SECRET`, and are excluded from `proxy.ts`; `/oauth/authorize` is not, and depends
   on NextAuth's DEFAULT `redirect` callback keeping its query — never add a custom `redirect`
   callback that drops it (`authRedirectCallback.test.ts`; `docs/MCP.md`).
-- **MCP tools register only in `registerAllTools`** (`app/mcp/toolList.ts`): its digest is the
-  `toolsVersion` every model-visible tool asks for, and a stale Claude copy gets a refresh note
-  (ADR-0069). Guidance that depends on an answer goes in the answer, not the description.
-- **The eight admin write paths** (setlists PUT, roles create, roles PATCH, copy-instruments, swap,
-  publish-ready, unpublish, the fairness PUT) delegate everything after authorization to
-  `app/utils/*Commit.ts`; MCP writes go only through them (`apply_schedule`: roles create + fairness
-  PUT, ADR-0061; the saved-month editor: PATCH, copy, create, ADR-0066;
-  `serviceCommitCallers.test.ts`); `/api/mcp` buffers SSE so a tool finishes in the handler.
+- **Native apps (ADR-0091):** `/api/app/v1/*` authenticates with `requireAppSession(request, { needs })`
+  as its first statement, with a literal `needs` level (no default; `appAuthStatic.test.ts`). The app
+  door accepts only the verified `https` redirects on production and preview, and mints a code only
+  on the person's visible tap (never on Android ≤ 11); the private scheme exists only on localhost —
+  never add it, any auto-submit, or any reduced-power session to a deployed origin. Its own secret
+  (`APP_AUTH_SECRET`), store (`app/appAuth/grantStore.ts`, 503 without the write token) and
+  matcher exclusions (`/api/app/v1`, the two callback pages).
+- **Who connects an agent (ADR-0083 + addendum):** `mcpTierOf` on the LIVE access — super-admin `"full"`,
+  worship admin `"admin"`, never stored. An admin reaches `ADMIN_TIER_TOOLS` (a literal allowlist:
+  everything but `SUPER_ADMIN_ONLY_TOOLS` = Kids + people + the two rule tools), or `READ_TIER_TOOLS` on a grant made before
+  `ADMIN_WRITES_CUTOFF` (reset it on ANY re-release); every tool is in exactly one list (test). The five
+  app-only tools only on a grant whose `client` is `"claude"`; every model-visible destructive tool
+  carries `PERSON_CONFIRMS_RULE`; month tools bind the member read from the live tier
+  (`readsAllMembers`); the redirect list stays CLOSED (claude.ai, ChatGPT's stable callback, loopback).
+- **MCP tools register only in `registerAllTools`** (`app/mcp/toolList.ts`): each list's digest
+  (`TOOL_LIST_VERSIONS`, one per handler since ADR-0083) is the `toolsVersion` its model-visible tools
+  ask for, and a stale copy gets a refresh note (ADR-0069). Guidance that depends on an answer goes in the answer, not the description.
+- **The ten admin write paths** (setlists PUT, roles create, roles PATCH, roles DELETE,
+  copy-instruments, swap, publish-ready, unpublish, the fairness PUT, the proposals PATCH) delegate everything after
+  authorization to `app/utils/*Commit.ts`; MCP writes go only through them (`apply_schedule`: roles
+  create + fairness PUT, ADR-0061; the saved-month editor: PATCH, copy, create, ADR-0066;
+  `delete_services`: DELETE, only with the check's echoed list and token, never a past service,
+  ADR-0072; the proposal tools: proposals PATCH, its planner in peek for the check, ADR-0076;
+  `serviceCommitCallers.test.ts`). The service conversation's writers live in
+  `serviceThreadCommit.ts` too, called by its four routes, the MCP conversation tools (ADR-0073) and the
+  proposal approval's post-commit pastor's-message copy (ADR-0087);
+  Oasis Kids' in `kidsCommit.ts`, called by the four `/api/kids/*` writes and the MCP Kids tools;
+  the song library's in `songSaveCommit.ts`, called by the song and author routes and the MCP song
+  tools (edits by parts, a lossless lyrics gate, `ifRevisionId`, a token-keyed create; ADR-0077);
+  people's in `memberCommit.ts`, called by the three `/api/admin/members` routes, `/me`'s PATCH and
+  the MCP people tools (a taken email or name refused, a rename renames its rules in the same
+  transaction, the chat grants but never revokes management; ADR-0082);
+  the solver rules' in `solverConfigCommit.ts`, called by the rules POST and the MCP rule tools (edits
+  by parts on a fresh read, a lossless gate, only problems the edit ADDS refused; ADR-0084);
+  the availability proposals' in `availabilityFixCommit.ts`, called by the four
+  `/api/admin/availability-conflicts` routes, the member's availability PATCH and the flush cron,
+  never by an MCP tool — its sweep NEVER writes a service, only «Aplicar» does, through `editRole`
+  (ADR-0079); `/api/mcp` buffers SSE so a tool finishes in the handler.
 - **The MCP proposal editor: the server judges, the card only shows** (ADR-0062). Every check and
   save replays the whole edit list through the planner's gate in `editorBoard.ts` only; a saved edit
   is a NEW `mcpProposal` (base `supersededBy` in the same transaction), never a mutated payload;
@@ -260,7 +294,8 @@ looks wrong** — several exist to stop a plausible-looking change.
   (ADR-0066) are change sets judged as diffs by `storedJudge.ts`, written one service at a time
   through `roleEditCommit`; the save sorts first («ya estaba»/«cambió»/«por guardar»), derives move
   groups on the server, compares the prompt's `lines`, and only `check_service_edits_app` (app-only)
-  mints waiver tokens; the card hands «Guardar» to the chat.
+  mints waiver tokens; the card's «Guardar» saves through the app-only twin `save_service_edits_app`
+  (the same function) after its own confirmation, and never replays its edit list once a save starts.
 - **The admin assistant (`/api/admin/chat`, a bubble on every page) is READ-ONLY**: super-admin or
   worship admin, never impersonating; its tools call the MCP read handlers in process, never a write
   tool or the connector; spend is capped per admin per CDMX month in `adminChatUsage.*` (fail
@@ -272,12 +307,18 @@ each one owns, and its rules) and `docs/UTILITIES_AND_COMPONENTS.md`. Most are "
 - **Data/logic:** `normalizeText`, `assignedMemberRefsQuery`, `revalidateSongViews`/
   `revalidateServiceViews`, `buildRuns`/`normalizeMedleyTags`, `extractYouTubeId`,
   `computeParticipation`, `summarizeUnfilledSeats`, `paintsDayCard`, `publishVerdict`,
-  `isMemberActive`, `requireActiveSession`/`requireActiveManager`, `wantsNotification` (nothing
+  `isMemberActive`, `requireActiveSession`/`requireActiveManager`, `accessFromDoc`,
+  `isMinistryMember`/`isMinistryManager`, `ledGroupsIn`, `plansInMinistry` (the ONE Jóvenes planner
+  predicate, shared with the app's `planner` level), `requireAppSession`/`meetsNeeds` (the native app
+  API's only guard), `normalizeMinistryRoles`, `wantsNotification` (nothing
   reads `notifPrefs` directly), `sweepOutbox`, `shell`/`td`/`C` (email palette),
   `serviceLabel`/`serviceIdentity`, `findDuplicates`/`serviceConflicts`,
   `daysUntil`/`formatCountdown`, `MEMBER_TYPE_LABEL`, `isWorshipNight`, `songLeads.ts`
   (`sortedLeadIds` must agree byte for byte on the queue and flush sides), `transpose.ts`,
-  `practice.ts`, `rehearsalMixes.ts`, `rehearsalQueue.ts` (the setlist run), `themeColour`.
+  `practice.ts`, `rehearsalMixes.ts`, `rehearsalQueue.ts` (the setlist run), `themeColour`,
+  `songCoverUrl`/`SONG_COVER_GROQ`/`POST_COVER_GROQ` (a song's album cover, `post.albumArt` — never the
+  YouTube still; three sizes only, `COVER_SIZE`), `recentSongs` (the Biblioteca's shelf),
+  `greetingService`, `SERVICE_TONE` (a service's day colour: rail + date leaf only, ADR-0088).
 - **Planner/solver:** `fillSpecialGroup`/`orderGroup`, `collectPins`/`pinRefusal`/
   `pinHandshakeHolds`, `planClear`, `upcomingMonthPills`/`addMonths`, `trailingSaturday`
   (ADR-0048), `rolesOfPattern`/`rolesOfPatternV3` (`patternRolesSync`/`patternRolesV3Sync`
@@ -287,14 +328,17 @@ each one owns, and its rules) and `docs/UTILITIES_AND_COMPONENTS.md`. Most are "
   `countsForFairnessDefault`/`COUNTS_FOR_FAIRNESS_GROQ`, `FairnessSwitch`, `SOLVER_ENGINE` +
   `resolveSolverEngine` (server only), `SOLVER_HISTORY_SOURCE`, `SOLVER_SENDS_HISTORY`,
   `loadSolverHistory`, `deriveSolverHistory`/`historyWindow`, `fetchDerivedHistory`,
-  `useIntegrityQueue`, `ruleCopy.ts` (the ONE Spanish wording of a rule — card, forms, MCP).
+  `useIntegrityQueue`, `ruleCopy.ts` (the ONE Spanish wording of a rule — card, forms, MCP),
+  `seatsClash` (the ONE «two seats one person may not hold on a service»: same category, or voz +
+  instrumento unless the member is marked «Canta y toca a la vez» — ADR-0078; the four seat writers
+  refuse a clash the write ADDS, `addedSeatClashes`, and the month confirm before its records).
 - **UI — never hand-roll these:** `Button` (the only button; `tone`, never a `hover:` pair in
   `className`), `CueDialog` (every dialog; `<CueDialog open={x}>`, never a literal `open` —
   `cueDialogMount.test.ts`), `Menu`, `Select`, `DateField`, `Switch`, `Checkbox` (never a bare
-  `<select>`/`<input type="checkbox|date|month">`), `SegmentedControl`, `Collapse`,
+  `<select>`/`<input type="checkbox|date|month">`), `SegmentedControl`, `FiltersPill` + `SearchLine` (a filter sheet's opener and the hairline search), `Collapse`,
   `Presence`, `Skeleton`/`SkeletonGroup`, `AnimatedList`, `SlidingIndicator`, `NumberRoll`,
   `SwipeStrip`, `useToast` (fixed stack) vs `useTransientValue` (inline flash) — not
-  interchangeable, `useLongPress`, `QuickActions`, `PullToRefresh` (mounted once),
+  interchangeable, `useLongPress`, `useMediaQuery` (a media query a RENDER depends on; server/jsdom = false), `QuickActions`, `PullToRefresh` (mounted once),
   `blackout()`, `Equalizer`/`PlayPauseGlyph`, `revealProps`, `haptic()`, `CueStrip`,
   `NAVBAR_H_CLASS`, `AdminRail`, `PanelSkeleton`/`PanelBoundary`, `MembersPanel`,
   `BottomNavBar` (presentational half of `BottomNav`).
@@ -302,6 +346,10 @@ each one owns, and its rules) and `docs/UTILITIES_AND_COMPONENTS.md`. Most are "
   picker), `TempoPill` + `createMetronome` (one metronome app-wide), `LyricsAutoscroll`,
   `lyricMarkers.tsx`, `TutorialPoster`, `RehearsalPlayer`/`Waveform` (URLs always
   `/api/audio/[song]/[key]`), `PracticeCluster`.
+- **Service cards (ADR-0088):** `service/Face`/`FaceStack` (a worship member as a photo), `SongCover`/
+  `CoverRow`, `ServiceFacts` (the ONE folded summary), `SeatIcon`/`seatIconKind`, `DateTile`.
+  A cover anywhere else is `SongCover` too (Biblioteca rows, the song sheet); `LibraryShelf` and
+  `SongHeroCover` are the two larger drawings.
 - **Availability:** `useAvailability` is the ONLY client-side writer — one hook call per page.
 - **Solver v3 planner (C6, behind the engine prop):** `buildV3SolveRequest` (the ONE v3 request
   builder), `runV3Auto`, `freezeConfirmEntries`/`runV3ConfirmAttempt` (the ONE v3 confirm —
@@ -310,8 +358,10 @@ each one owns, and its rules) and `docs/UTILITIES_AND_COMPONENTS.md`. Most are "
   `app/components/ui/**` (`docs/MOTION.md`, ADR-0031).
 
 ## Colour tokens
-**67 base roles + 32 composed tokens** (`app/brand.css` `:root`, `tailwind.config.ts`); the
-retired `--brand-*` colour variables are gone. **Never build a colour by string
+**73 base roles + 32 composed tokens** (`app/brand.css` `:root`, `tailwind.config.ts`); the
+retired `--brand-*` colour variables are gone. **The five `group-*` hues are the Jóvenes groups' identity** —
+never a state, never access, only through `jovenesGroupStyle.ts`, a monogram beside each (ADR-0086). **Rose (`key-fg`) is the second brand colour and
+means the musical KEY only** — never a state, button or link; ink inside a day card (ADR-0071). **Never build a colour by string
 concatenation** — use `themeColour(rgbVar, alpha?)`. **`var()` is not substituted in SVG
 presentation attributes** — set `color` on an ancestor and inherit `currentColor`. **Composed
 tokens bake their own alpha** — no opacity modifier (a lint clause bans it). **Collapsing a
@@ -322,17 +372,51 @@ Roles: `super-admin` > `admin` > `content-editor` > `member`. Gate via `requireA
 some actions are super-admin-only (checked in the route). Impersonation is super-admin-only,
 enforced server-side in `auth.ts`.
 
-**Ministries** (`worship`, `kids` — `app/ministries.ts`) are a SECOND axis, not a role tier:
-`requireMinistryMember(id)`/`requireMinistryManager(id)` (`app/utils/authGuards.ts`); worship
-pages call `requireWorshipPage` (dynamic — ADR-0020).
-- **Isolation is two-way**; only `super-admin` spans both; role never implies ministry,
-  management never implies membership. `/studio` is not ministry-scoped.
+**Ministries** (`worship`, `kids`, `jovenes` — `app/ministries.ts`; ADR-0075) are a SECOND axis,
+not a role tier: `requireMinistryMember(id)`/`requireMinistryManager(id)` (`app/utils/authGuards.ts`,
+built on `ministryAccess.ts` over ONE snapshot, `accessFromDoc`); worship pages call
+`requireWorshipPage` (dynamic — ADR-0020).
+- **Isolation is two-way**; only `super-admin` spans every ministry; role never implies ministry,
+  management never implies membership (in Jóvenes, management is a member's `admin` level in
+  `ministryRoles`). `/studio` is not ministry-scoped.
 - **Absent `ministries` ⇒ worship** (`normalizeMinistries`, `WORSHIP_MEMBER_GROQ_FILTER`);
   explicitly empty is rejected at every write (`validateMinistryWrite`) — a stored `[]` would
-  read back as worship.
+  read back as worship. A `ministryRoles` level counts only for a ministry named in `ministries`.
+- **Readable ≠ writable:** `ASSIGNABLE_MINISTRY_IDS`, not `ALL_MINISTRY_IDS`, gates every write and
+  offer; old code reads a new id as WORSHIP, so never undo its read side while anyone holds it.
+- **Who leads a group is `ledGroupsIn`, never a level comparison** (ADR-0085; `ledGroupsCoverage.test.ts`):
+  a Jóvenes `leader` leads only `leaderOf` (⊆ `groups`; absent = none, every write names it); never revert its read
+  side while a narrowed leader exists.
+- **A worship role needs worship:** `admin`/`content-editor` outside Alabanza is refused by the members
+  API (on change, pinned with `ifRevisionId`, 409) and the Studio (`worshipRoleWithoutWorship`) —
+  `requireActiveManager` reads `role` alone. A `ministryRoles` write carries `ministries` with it.
 - **"Tipo" (`memberType`) is the ONLY worship eligibility axis** — an empty Tipo is in no seat
   and no pool. Do not reintroduce a second axis (ADR-0029 removed `retiredFrom`). `disabled`
   removes app ACCESS, not schedulability, and `handleEdit` never writes it.
+- **A Jóvenes group is a security boundary** (ADR-0081): `ministryEvent` has dotted ids and is
+  read ONLY through `readMinistryEvents` (id prefix + the reader's groups as a parameter, audience
+  read closed); never a wider read filtered in TypeScript (`ministryEventCoverage.test.ts`). Written
+  ONLY by `ministryEventCommit.ts` (fresh access, stored `_rev`, 404 for an unreadable event); its
+  one other query shape is «Recorrer»'s roster read (one group the actor writes, never returned).
+  The reader's one read with no person is the reminder cron's `readAnnouncedMeetings` (published,
+  whole-ministry, exact days): what every member reads, never widened, one importer.
+  A group's CLASS is a one-group meeting with a `lesson` (`ministryLesson.ts` is its one validity
+  rule). A route that writes a client-supplied id pins its type first (`storedRevisionOfType`, W9).
+  A meeting's fixed PARTS are program lines carrying `part` (`ministryParts.ts`, the one table;
+  ADR-0089): the program PATCH decides a part's people and writes its stored `note`/`music`/`helpers`
+  back (`keepFilledParts`); only «Mi parte» (`updateMinistryEventPart`, W10) changes those. Its
+  emails are computed by the writer from the PRE-COMMIT row, sent by the routes in `after()`, and
+  go only to the people a write adds on a whole-ministry, published, not-past meeting (everyone on
+  it when the write publishes it or moves its date), plus the music request to the super-admins
+  who are people. Both are deliberate. The daily cron's reminders (`ministryEventReminder.ts`, 14
+  and 7 days ahead) go only to whoever still owes something on those same meetings (`partGaps`),
+  and to the encargado of a Saturday whose Oración or a dinámica nobody holds.
+  Unreleased features gate on `rolloutAllows` (`app/utils/rollout.ts`) on the server, not the nav.
+- **The days a Jóvenes pastor marked reach ONE page** (ADR-0090): only `/jovenes/admin` calls
+  `readJovenesPeople({ awayFor: access, today })`; bare, that read projects no availability, so the
+  member pages cannot receive a day. `awayVisibleTo` (`jovenesAway.ts`) is the audience: an admin
+  everyone, a leader the members of a group they LEAD; the date, never the note; it informs
+  (`PersonSelect` `date`, `AwayNote`) and never refuses. Guard: `jovenesAwayCoverage.test.ts`.
 
 ## Continuous improvement
 Run `/loop /improve` — the `/improve` command (`.claude/commands/improve.md`)

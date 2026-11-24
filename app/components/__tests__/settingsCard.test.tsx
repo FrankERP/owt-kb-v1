@@ -1,10 +1,10 @@
 /** @vitest-environment jsdom */
-// Task 4 (motion R3, Mi semana): the three Ajustes subsections live in ONE card
-// now — Tema, Tamaño de texto and (when a profile read landed) Perfil. This file
-// pins the card's own contract: both anchors a page-level link depends on
-// (`#ajustes`, `#tema`) survive the merge, all three headings render, the Perfil
-// subsection is the one that's conditional on `member`, and the profile editor
-// nested inside it still works end to end (EmailPrefToggles' `Switch` rows).
+// Task 4 (motion R3, Mi semana): the Ajustes sections live under ONE `#ajustes`
+// — Tema, Tamaño de texto and (when a profile read landed) Perfil, Contraseña,
+// Correos. This file pins that contract: both anchors a page-level link depends
+// on (`#ajustes`, `#tema`) survive, the headings render, the profile sections
+// are the ones conditional on `member`, and the email switches render INLINE
+// (the «millones» pass, 2026-10-26: no «Editar perfil» sheet to open first).
 
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -48,36 +48,46 @@ describe("SettingsCard", () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({}) })));
   });
 
-  it("renders one #ajustes card holding #tema as a direct child, with all three headings when a profile is present", () => {
+  it("renders one #ajustes holding #tema, with every section heading when a profile is present", () => {
     const { container } = renderCard(baseMember);
     const ajustes = container.querySelector("#ajustes");
     expect(ajustes).not.toBeNull();
-    // #tema is a direct child of #ajustes, not wrapped in a div
-    expect(ajustes?.querySelector(":scope > #tema")).not.toBeNull();
-    expect(screen.queryByRole("heading", { name: "Tema" })).not.toBeNull();
-    expect(screen.queryByRole("heading", { name: "Tamaño de texto" })).not.toBeNull();
-    expect(screen.queryByRole("heading", { name: "Perfil" })).not.toBeNull();
+    expect(ajustes?.querySelector("#tema")).not.toBeNull();
+    for (const name of ["Tema", "Tamaño de texto", "Perfil", "Contraseña", "Correos"]) {
+      expect(screen.queryByRole("heading", { name }), name).not.toBeNull();
+    }
   });
 
-  it("drops the Perfil subsection (and its editor) when there is no member", () => {
+  it("drops the profile sections (and the password row) when there is no member", () => {
     const { container } = renderCard(null);
     expect(container.querySelector("#ajustes")).not.toBeNull();
     expect(container.querySelector("#tema")).not.toBeNull();
     expect(screen.queryByRole("heading", { name: "Tema" })).not.toBeNull();
     expect(screen.queryByRole("heading", { name: "Tamaño de texto" })).not.toBeNull();
     expect(screen.queryByRole("heading", { name: "Perfil" })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Editar perfil/i })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Correos" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Cambiar contraseña/i })).toBeNull();
+    expect(screen.queryByRole("switch")).toBeNull();
   });
 
-  it("still renders EmailPrefToggles' Switch rows once the nested profile editor opens", () => {
+  it("renders EmailPrefToggles' Switch rows inline, with no editor to open first", () => {
     renderCard(baseMember);
-    act(() => {
-      fireEvent.click(screen.getByRole("button", { name: /Editar perfil/i }));
-    });
+    expect(screen.queryByRole("button", { name: /Editar perfil/i })).toBeNull();
     const switches = screen.getAllByRole("switch");
     // Four, not five — the member role hides the admin-only "Propuestas" row
     // (see emailPrefToggles.test.tsx for the full resolution contract).
     expect(switches).toHaveLength(4);
+  });
+
+  it("keeps the password form behind its row: the fields mount only once the row opens the sheet", () => {
+    renderCard(baseMember);
+    expect(screen.queryByLabelText("Nueva contraseña")).toBeNull();
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: /Cambiar contraseña/i }));
+    });
+    expect(screen.getByLabelText("Nueva contraseña")).toBeTruthy();
+    // `hasPassword: true` → the current password is asked for too.
+    expect(screen.getByLabelText("Contraseña actual")).toBeTruthy();
   });
 
   it("drops #tema entirely while impersonating (ThemeControl returns null) with no empty box", () => {
@@ -89,9 +99,9 @@ describe("SettingsCard", () => {
       const { container } = renderCard(null);
       // #tema should be null since ThemeControl returns null when impersonating
       expect(container.querySelector("#tema")).toBeNull();
-      // The first element child of #ajustes should be Tamaño de texto, not an empty div
-      const ajustes = container.querySelector("#ajustes");
-      expect(ajustes?.firstElementChild?.textContent).toContain("Tamaño de texto");
+      // The column starts on Tamaño de texto, with no empty slot where Tema was.
+      const column = container.querySelector("#ajustes")?.firstElementChild;
+      expect(column?.firstElementChild?.textContent).toContain("Tamaño de texto");
     } finally {
       (useSession as any).mockReset();
     }

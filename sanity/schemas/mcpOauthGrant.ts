@@ -7,9 +7,9 @@ import { GRANT_FIELD, MCP_OAUTH_GRANT_TYPE } from "../../app/mcp/oauth/documentT
  *
  * One document per authorized MCP connection: the member id (`sub`), a HASH of
  * the client id (never the raw client id, never a token or code), the issuing
- * origin, timestamps, the current refresh `jti` and the revocation flag. The
- * dataset answers unauthenticated PUBLISHED reads, so every field here is
- * treated as public (O5) — a member id is already public, and a refresh `jti`
+ * origin, the kind of agent it went to (`client`, ADR-0083), timestamps, the
+ * current refresh `jti` and the revocation flag. The dataset answers
+ * unauthenticated PUBLISHED reads, so every field here is treated as public (O5) — a member id is already public, and a refresh `jti`
  * or client hash cannot be replayed without the signing secret.
  *
  * NOT editable content: hidden and read-only in the Studio; never authored by
@@ -55,6 +55,13 @@ export const mcpOauthGrant = defineType({
       title: "Origin",
       type: "string",
       description: "Origen canónico que emitió la concesión.",
+    },
+    {
+      name: GRANT_FIELD.client,
+      title: "Agente",
+      type: "string",
+      description:
+        "Qué tipo de agente recibió la concesión (claude, chatgpt o loopback). Ausente en las anteriores a ADR-0083.",
     },
     { name: GRANT_FIELD.createdAt, title: "Creado", type: "datetime" },
     {

@@ -37,13 +37,21 @@ writer commits ──▶ after() queues a notice (own transaction, writeClient)
    sweep: gate ▶ select ▶ claim ▶ classify ▶ filter ▶ group ▶ send ▶ consume
 ```
 
-**One writer queues inline instead.** The MCP saved-service save (`save_service_edits`,
-`copy_instruments`; admin parity phase 1, ADR-0066) writes several services in one call, and Next
+**One writer queues inline instead.** The MCP saved-service save (`save_service_edits`
+and its card twin `save_service_edits_app`, one function; `copy_instruments`; admin parity phase 1, ADR-0066) writes several services in one call, and Next
 runs `after()` only once the response closes, so a call stopped at its time limit would lose the
-notices of every service it had already written. Those two tools call the shared commits with
+notices of every service it had already written. Those tools call the shared commits with
 `notices: "inline"`: the same notices, from the same pre-commit `before`, are upserted with
 `queueRoleNoticesNow` and AWAITED before the next service is written, with **no layer-2 sweep** —
 layers 1 and 3 deliver them. `/admin`'s routes keep the deferred path above.
+
+The chat's delete (`delete_services` and its card twin `delete_services_app`; admin parity phase 2,
+ADR-0072) does the same through `deleteRole` (`roleDeleteCommit.ts`): a published service's
+«Ya no participas» notice to each assignee of its pre-commit `beforeSeats` is upserted inline and
+awaited before the next delete; a draft sends nothing. If that upsert fails, the service is already
+gone, so a repeat answers «ya no existe» and can never queue it: the answer names those people
+for Frank to tell himself. The check's line counts them as «se avisa a hasta N personas» with the
+notice builder's own `seatAssignees` («hasta»: `wantsNotification` still drops at flush).
 
 Reading live state at send time rather than storing an "after" snapshot is what
 makes the email never stale, and makes any change that nets out to nothing inside
@@ -70,7 +78,12 @@ hand-writing a fixture that mirrors them).
 |---|---|---|
 | 1 — primary | **Google Cloud Scheduler**, `*/5` ([ADR-0032](adr/0032-layer-1-runs-on-cloud-scheduler.md); live since 2026-09-10) — plus GitHub Actions, declared `*/5` but starved by this repo's CI volume, kept as an independent second caller — see §"Layer 1 does not run on the schedule it declares" | Scheduler job `flush-notification-outbox` (GCP `eloquent-figure-421401`, `us-central1`) and `.github/workflows/flush-notifications.yml`, both → `/api/cron/flush-notifications` (drains up to 5 sweeps per tick when work is re-pended) |
 | 2 — backstop | opportunistic sweep after any queueing write (not after the MCP saved-service save's inline upserts, above) | end of `commitUpserts()` in `serviceMutationSideEffects.ts` — keeps its report and raises the destroyed-mail alarm |
-| 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` (mails a person about destroyed mail, as layer 2 also does; layer 1 goes red on the same conditions instead — see §"The destroyed-mail alarm") |
+| 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` (mails a person about destroyed mail, as layer 2 also does; layer 1 goes red on the same conditions instead — see §"The destroyed-mail alarm"). On Sundays it first sends «Te toca dirigir» to leads, every day «Sirves mañana» to whoever serves tomorrow and the Jóvenes meeting reminders of 14 and 7 days ahead; then it runs a sweep derated by all three, or skips it if they overran — see §"«Te toca dirigir»", §"«Sirves mañana»" and §"Jóvenes meetings — the reminders" |
+
+**Layer 1 also carries the availability proposals' tick** (ADR-0079): after the drain has
+answered, `after()` runs `availabilityTick` on every third 5-minute bucket with at least 40 s left;
+it never changes the drain's response, and its failure is only logged. See §"The availability
+conflicts email".
 
 **Layer 1 is load-bearing, not one of three redundant paths.** Layer 2 only
 flushes subjects that have *already* gone quiet, so it can never flush the
@@ -425,9 +438,12 @@ real proposal notified NOBODY, in either direction.
 | Lead, on `approved` — **the dominant real case** | thread | **push to admins**, `/admin` |
 | Lead, on `draft` | thread | nothing — a draft is not in front of admins yet |
 | Admin, standalone message | thread | **push to the lead** + contributors, "Nuevo mensaje" |
-| Admin, via `request_changes` / `reopen` | transition | unchanged review push, exactly one |
+| Admin, via `request_changes` / `reopen` | transition | unchanged review push, exactly one. The MCP's `review_setlist_proposal` (admin parity phase 3, ADR-0076) is the same writer (`proposalReviewCommit.ts`) and sends the same; its `approve` sends the same review push and queues the same setlist notice as «Aprobar» |
 | Lead, first submission | save | unchanged `notifyProposalSubmitted` |
-| Admin, from a **service card** («Mensajes», with or without a proposal; ADR-0065) | `serviceThread` | **push AND email to the service's Leads** (never the author), `/me/propose/<roleId>`; «Nuevo mensaje» / «Mensaje para tu servicio», or «Mensaje del pastor» when marked as the pastor's (`pastor_note`); email gated on `emailProposals` + allowlist, redirected on Preview; nothing while the service is unpublished |
+| Admin, from a **service card** («Mensajes», with or without a proposal; ADR-0065) | `serviceThread` | **push AND email to the service's Leads** (never the author), `/me/propose/<roleId>`; «Nuevo mensaje» / «Mensaje para tu servicio»; email gated on `emailProposals` + allowlist, redirected on Preview; nothing while the service is unpublished. Editing or deleting one's own message (`PATCH`/`DELETE …/messages/[key]`) sends nothing. The MCP's `send_service_message` / `edit_service_message` (admin parity phase 3) go through the same writer (`serviceThreadCommit.ts`) and send the same |
+| Admin, the service's **«Mensaje del pastor»** (`PUT …/pastor-message`; ADR-0065, 2026-10-24) | `serviceThread.pastor_message` | the same push AND email to the Leads, worded «Mensaje del pastor», **only when it appears on an empty field** of a published service (so «Quitar» then «Agregar» sends again; one set while unpublished sends nothing, then or at publish); an edit or a clear sends nothing (the DayCard always shows the current text to the whole team). The MCP's `set_pastor_message` is the same writer |
+| Proposal approval copying the leads' «Mensaje del pastor» into an EMPTY service field (`adoptProposalPastorMessage`; ADR-0087) | `serviceThread.pastor_message` | **nothing** — the leads wrote it and the approval already queues the setlist notice; the DayCard shows it. «Usar como mensaje del pastor» in the dialog goes through the PUT above and follows ITS rule (mails the leads only when it appears on an empty field of a published service) |
+| Admin, editing the **«Mensaje para el equipo»** after publishing (`PUT …/team-notes`) | setlist `team_notes` | **nothing** — deliberately not the setlist PUT, whose save notifies the team |
 
 **AT MOST ONE SIGNAL PER MESSAGE** (on the proposal thread — the service-card `serviceThread` row above sends both on purpose, Frank 2026-10-21, ADR-0065) — never both, and in one named case neither — an email or a push, never the pair. The
 gate for the lead→admin push is `status === "approved"`, nothing looser: "a
@@ -544,6 +560,182 @@ The rules:
 The admin routes ignore the return value. The MCP tools turn it into their `notifications[]`
 report, worded «encolada», never «enviada». **Unpublish queues nothing and runs no sweep**, from
 `/admin` or from the MCP alike (`roleUnpublishCommit.ts`).
+
+## The availability conflicts email — admins only (ADR-0079)
+
+When someone marks a day they already serve on, the availability sweep
+(`app/utils/availabilityFixCommit.ts`) records a proposal and sends ONE email per sweep that claimed
+new events: «Conflictos de disponibilidad (N)», sections «Propuestas» and «Sin reemplazo», a link to
+`/admin?tab=availability` (`availabilityConflictEmail.ts`, the light palette). **It never changes a
+service**, so it queues no role notice; the notices go out only when an admin presses «Aplicar»,
+which saves through `/admin`'s own `editRole` exactly like a hand edit (on a published service the
+person removed and the person added hear about it; on a draft nobody does). An instrument or FOH
+seat nobody can take is proposed as «queda vacío»; applying it notifies only the person removed. A
+proposal that moves a singer up («Lead → Marianne (pasa de BGV), BGV → Liu») changes three people on
+that one service, and «Aplicar» notifies the three as any hand edit would.
+
+- **Audience:** `teamMembers` with `role` admin or super-admin, `disabled != true`, in worship
+  (`WORSHIP_AUDIENCE_GROQ_FILTER`), not the system accounts (`service-account-*`,
+  `member-dev-verify`), with an email, on `EMAIL_ALLOWLIST`, and with the «Propuestas» switch on
+  (`wantsNotification(prefs, "proposals")`). Serial sends; `EMAIL_REDIRECT_TO` honoured.
+- **Not the outbox.** The sweep sends directly, after claiming its records (`notifiedSeq` =
+  `eventSeq` under `ifRevisionId`); a claimed event whose send fails is NOT retried — the claim is
+  the de-duplication. The audience is read before any claim, so a failed audience read claims
+  nothing.
+- **Triggers:** the member's own save (`after()` on `PATCH /api/me/availability`, that member's
+  conflicts only), every third tick of layer 1 (`/api/cron/flush-notifications` runs
+  `availabilityTick` in `after()`, after the drain answered; a cheap seat pre-check first, so a
+  tick with nothing new, nothing unemailed and nothing older than 6 hours reads three small queries
+  and stops; a conflict that cannot be judged is re-checked at most every 6 hours), and «Revisar
+  ahora» in the panel.
+- **Only Production sends** (`fairnessRecordEnvironment`). On Preview the sweep runs dry: no
+  record, no email. But «Aplicar» and «Mantener» pressed on dev write the REAL dataset, like every
+  admin button there.
+- **Kill switch:** `AVAILABILITY_SWEEP_DISABLED=1` (`docs/SECRETS.md`).
+- **No liveness alarm.** A sweep that cannot judge (a raw Studio draft, the engine on v2, no read
+  token) is visible only as «No se pudo revisar» in the panel and in the `[availability-sweep]`
+  logs — an accepted cost (ADR-0079).
+
+## «Te toca dirigir» — the Sunday reminder to leads (ADR-0080)
+
+Every **Sunday at 19:00–19:59 CDMX** the daily cron (`/api/cron/service-reminders`, layer 3)
+emails the leads of the coming week's services that still need songs —
+`sendLeadSongReminders` in `app/utils/leadSongReminder.ts`. It is NOT an outbox notice: no
+debounce, no claim, one direct send per lead.
+
+- **Which services:** published (`published != false`), Monday to the next Sunday, with someone
+  in Lead (`LEAD_REMINDER_SCOPE = "week"` — Saturdays six days ahead and specials on their day;
+  `"sunday"` narrows it to the next Sunday's `sunday_role`).
+- **Silent when** the setlist already has songs (paired `featuredSongs`/`saturdarSongs` by
+  `week`, or a special's own `songs`) or the proposal is `pending` or `approved`. A draft with
+  songs reads «Tu propuesta no se ha enviado»; `changes_requested` reads «Tu propuesta tiene
+  cambios pedidos»; anything else «Te toca dirigir».
+- **Who:** each Lead with an email, app access (`disabled != true`) and inside
+  `EMAIL_ALLOWLIST` whose «Propuestas» preference resolves on (`wantsNotification`, legacy
+  all-email opt-out included; the switch is shown only to admins); the co-lead is named; the
+  pastor's message is included when set. Preview mail goes to `EMAIL_REDIRECT_TO`. A best-effort
+  push (titled by the state, category `reminders`) goes to every lead with access of those
+  services, email or not.
+- **Order and budget:** sends run in parallel BEFORE the sweep; the sweep's deadline is derated
+  by the time spent (`sweepOptionsAfterReminders`), losslessly. With less than
+  `MIN_SWEEP_DEADLINE_MS` (25 s) left the daily sweep is skipped (`notify_daily_sweep_skipped`;
+  `sweep: {error: "sweep_skipped_after_lead_reminders"}`) and layer 1 drains it. Since 2026-11-17 the
+  time derated is this step's plus «Sirves mañana»'s and the Jóvenes reminders' (below). The route's JSON carries `leadReminders`
+  (`{ ran: false }` on other days); Vercel logs carry `lead_reminder_run`,
+  `lead_reminder_send_failed` and `lead_reminder_failed`.
+- **No "already sent" marker:** a duplicated cron event sends the reminder twice (ADR-0080).
+  Calling the route by hand on a Sunday with `CRON_SECRET` sends it again too.
+
+## «Sirves mañana» — the day-before reminder (ADR-0080, addendum of 2026-11-19)
+
+**Every day at 19:00–19:59 CDMX** the daily cron (`/api/cron/service-reminders`, layer 3) pushes
+«Sirves mañana. ¡Prepárate!» (category `reminders`) and, since 2026-11-19, EMAILS it too —
+`sendServiceEveReminders` in `app/utils/serviceEveReminder.ts`. The push alone reached nobody: 0
+members had push on. Not an outbox notice: no queue, no claim, no «sent» marker.
+
+- **Which services:** tomorrow's (CDMX) published roles (`published != false`), all three types —
+  a weekend role by `week`, a special by `date`. The same `day` the push uses.
+- **Who:** the five member-referencing seats (Lead, BGVs, Chorus, instruments, FOH), then each
+  person with an email, app access (`disabled != true`), inside `EMAIL_ALLOWLIST` and with
+  «Nuevas asignaciones» on (`wantsNotification(…, "assigned")`, legacy all-email opt-out
+  included) — the preference the Jóvenes reminders ride too, so no sixth switch.
+- **What:** ONE email per person, listing each of tomorrow's services they serve on in start-time
+  order: the label (a special's name and time; a weekend service with the team's standing hour,
+  `WEEKEND_SERVICE_TIME`), their seat(s), and the setlist's songs with their key. A weekend
+  service's songs come from its paired setlist by `week`; two setlist documents for one week are
+  ambiguous and show no songs (`pickUnique`). No songs → «Todavía no hay canciones en el
+  setlist.». The button opens Inicio («Ensayar el setlist» when there are songs).
+- **Order and budget:** after the leads' step and BEFORE the Jóvenes reminders (tomorrow is the
+  nearest deadline). Waves of `SEND_CONCURRENCY`; told what the route spent, it starts no wave
+  once one more `SEND_TIMEOUT_MS` would pass `EVE_STEP_DEADLINE_MS` (35 s). Its time is part of
+  what derates the sweep (`eveMs` in `notify_daily_sweep_skipped`).
+- **A slow wave starves the steps after it.** The deadline only stops a wave from STARTING; a
+  send that hangs to its 20 s `SEND_TIMEOUT_MS` here pushes the route past the point where the
+  Jóvenes step may start one, so that evening's Jóvenes reminders (logged `skipped`) are lost.
+  Accepted: tomorrow's service is the nearer deadline, and a Jóvenes part is reminded twice (14 and 7
+  days). On an ordinary evening a wave takes about 2.6 s.
+- **An instrument or FOH slot with a person but no label** (Studio allows it) still gets the
+  email, named «Instrumento» / «Cabina» (`UNLABELLED_SLOT`): the push reaches that person, so the
+  email must. `serviceEveReminder.test.ts` checks the email's people equal `assignedMemberRefsQuery`'s.
+- **Volume:** a weekend service seats about 10–20 people, so Friday and Saturday evenings add
+  that many sends — well inside Gmail's ~500 a day.
+- The route's JSON carries `eveReminders` (`services`, `planned`, `emailed`, `failed`,
+  `skipped`, `elapsedMs`, or `error: "service_eve_failed"`; it never throws). Logs:
+  `service_eve_run`, `service_eve_send_failed`, `service_eve_skipped`, `service_eve_failed`.
+  Preview mail goes to `EMAIL_REDIRECT_TO`; Vercel runs crons on Production only.
+
+## Jóvenes meetings — «Te toca» and the music request (ADR-0089)
+
+A write to a Jóvenes meeting may owe two kinds of email. They are NOT outbox notices: no queue, no
+debounce, no claim — a meeting names nine people at most, once.
+
+- **Computed by the writer, pre-commit.** `ministryEventCommit.ts` builds `before` from the row it
+  read at step 3 (the state its `ifRevisionId` write replaces) and `after` from the fields it
+  stores, and `meetingNotices` (`ministryEventNotices.ts`, pure) says what the write owes. Nothing
+  is read after the commit — the rule under «Landmines» below, for the same reason. The result
+  rides in `effects.notices`; the four routes (create, PATCH, program PATCH, part PATCH) send it in
+  `after()` through `sendMinistryEventNotices` (`ministryEventNotify.ts`), `maxDuration = 60`.
+- **Which meetings:** for all of Jóvenes (`audience.kind == "ministry"`), `published == true`,
+  dated today or later (CDMX). A group's meeting or class announces nothing («Nuevo libro» creates
+  up to 60 classes in a row).
+- **«Te toca» — who:** the people the write ADDS to a seat, a part or a program line; everyone on
+  the meeting when the write publishes it or moves its date; never the actor. «Cambió de fecha»
+  is said only to someone who already held a role when the old date was announced: a person the
+  same write adds was never told that date, so theirs is a plain «Te toca».
+  At send time one read drops anyone who is not an active member of Jóvenes, has no email, is
+  outside `EMAIL_ALLOWLIST`, or turned off «Nuevas asignaciones» (`wantsNotification(…,
+  "assigned")`). One email per person per write, listing every role; it links
+  `/jovenes/reunion/<token>`, where «Mi parte» is. Never a group, never a typed name.
+- **The music request — who:** when Oración or Plática starts or stops asking for the worship team
+  (`music == "alabanza"` on a live meeting), or a standing request sits on a meeting whose date
+  moved: the super-admins who are people (`service-account-*` and `member-dev-verify` excluded),
+  minus the actor, under «Propuestas». Today that is Frank. A withdrawal names who had asked.
+- **Not sent:** a «ya no te toca»; anything on a delete, «Recorrer» or «Cambiar con…»; a note
+  edited under a standing request.
+- **No debounce, accepted (ADR-0089):** track ↔ alabanza mails each time; removing someone and
+  adding them back mails them again; unpublish then publish announces everyone again.
+- **Best-effort:** it never throws and never retries (a retry would be a second email to the
+  people the first try reached). Logs: `ministry_event_notices` (`planned`, `emailed`),
+  `ministry_event_notice_failed`, `ministry_event_notices_failed`. Preview mail goes to
+  `EMAIL_REDIRECT_TO`; sends go through `sendEmail`, so the delivery firewall stands in front.
+- **Subjects** are constants plus a date and a part's table label; a free line's typed label never
+  reaches one.
+
+## Jóvenes meetings — the reminders, 14 and 7 days ahead (ADR-0089, addendum)
+
+**Every day at 19:00–19:59 CDMX** the daily cron (`/api/cron/service-reminders`, layer 3) runs
+`sendMinistryEventReminders` (`app/utils/ministryEventReminder.ts`) after the leads' step and
+before the sweep. Like «Te toca dirigir» it is NOT an outbox notice: no queue, no claim, no «sent»
+marker.
+
+- **Which meetings:** dated EXACTLY 14 and exactly 7 days after today (CDMX), for all of Jóvenes
+  (`audience.kind == "ministry"`) and `published == true` — read by `readAnnouncedMeetings`
+  (`ministryEventReads.ts`), the reader's one query with no person behind it. A group's meeting,
+  a class or a draft reminds nobody.
+- **Who, and of what** (`meetingReminders`, pure): each member who answers for a part that still
+  lacks something (`partGaps`: a dinámica's description, Plática's topic and music, Oración's
+  music) — «Recordatorio: falta llenar Dinámica 1 — sábado 5 de diciembre», naming only what is
+  missing; and each `encargado` of a Saturday meeting where Oración or a dinámica has nobody —
+  «Recordatorio: falta asignar Oración y Dinámica 2 — …». One email per person per meeting, both
+  blocks in it when both apply. A filled part, a free program line, the `apoyo` seat and a
+  typed-name guest get nothing.
+- **Narrowed at send time** exactly as «Te toca» (`assignedAddress`, `ministryEventNotify.ts`):
+  an active member of Jóvenes, with an email, inside `EMAIL_ALLOWLIST`, with «Nuevas
+  asignaciones» on. Preview mail goes to `EMAIL_REDIRECT_TO` — and Vercel runs crons on
+  Production only, so on `preview` the step runs only when the route is called by hand.
+- **Order and budget:** sends go in waves of `SEND_CONCURRENCY`; the step is told what the route
+  already spent (`spentMs`: the push, the leads' step, «Sirves mañana») and starts no wave once one more
+  `SEND_TIMEOUT_MS` would pass `REMINDER_STEP_DEADLINE_MS` (35 s), which leaves the liveness
+  alarm's own email its timeout inside the route's 60 s. The sweep's deadline is derated by the
+  leads' step, «Sirves mañana» and this one together (`sweepOptionsAfterReminders`), and the sweep is skipped
+  under the same rule when they left under 25 s
+  (`sweep_skipped_after_lead_reminders` keeps its name; the log carries `leadMs`, `eveMs` and `meetingMs`).
+- **No catch-up:** a day the cron does not run, a meeting published inside the 14 or 7 days, or a
+  wave the deadline left out is a reminder nobody gets; a duplicated cron event sends it twice.
+- The route's JSON carries `meetingReminders` (`meetings`, `planned`, `emailed`, `failed`,
+  `skipped`, `elapsedMs`, or `error: "ministry_reminder_failed"` — it never throws, so the alarms
+  always run and the sweep is at worst skipped for layer 1). Logs: `ministry_reminder_run`, `ministry_reminder_send_failed`,
+  `ministry_reminder_skipped`, `ministry_reminder_failed`.
 
 ## The liveness alarm
 
@@ -808,7 +1000,8 @@ Things that are counter-intuitive and were each a real defect at some point.
 
 - **Same-day special sets notify per document.** Six camp sets are six `special_role`
   documents; a member seated in five Saturday sets gets up to five assignment notices
-  (debounced per the outbox rules) and five reminders. Grouping them is not built.
+  (debounced per the outbox rules). The day-before reminder is grouped: one push (`array::unique`)
+  and one «Sirves mañana» email naming every set. Grouping the assignment notices is not built.
 - **Outbox ids are HEX digests, and the alphabet is the point.** Sanity's id
   grammar is `a-zA-Z0-9._-` with no dot-separated segment starting in `-`.
   `outboxId` originally digested the subject to base64url, whose alphabet
@@ -979,7 +1172,7 @@ Things that are counter-intuitive and were each a real defect at some point.
 
 ## Verifying the templates
 
-Renders all thirteen templates, asserts the email-client constraints, and writes
+Renders all eighteen templates (the five Jóvenes ones included), asserts the email-client constraints, and writes
 previews plus `.eml` files:
 
 ```bash

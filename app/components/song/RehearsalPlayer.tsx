@@ -16,7 +16,11 @@ import type { RehearsalMix } from "@/app/utils/interface";
 import { groupMixes, mixLabel, mixTones, mixesForKey, preselectMix } from "@/app/utils/rehearsalMixes";
 import { useTransposeOptional } from "./TransposeProvider";
 import Waveform from "./Waveform";
+import SeekBar from "./SeekBar";
 import { formatKey } from "@/app/utils/formatKey";
+import { semitonesBetween } from "@/app/utils/transpose";
+import SegmentedControl from "@/app/components/ui/SegmentedControl";
+import { formatClock } from "@/app/utils/formatClock";
 
 export default function RehearsalPlayer({
   mixes, songId, songTitle, songSlug, preselect,
@@ -124,48 +128,76 @@ export default function RehearsalPlayer({
 
   return (
     <div className="space-y-6">
-      {tones.length > 1 && shared?.soundingKey && selection.tone && (
-        <p className="font-label text-[11px] uppercase tracking-widest text-mono-500" aria-live="polite">
-          {selection.exact
-            ? <>Tono {formatKey(selection.tone)} · hay mixes en {tones.map(formatKey).join(", ")}</>
-            : <>No hay mix en {formatKey(shared?.soundingKey)} — se muestra {formatKey(selection.tone)} · hay mixes en {tones.map(formatKey).join(", ")}</>}
-        </p>
+      {/* The keys a song has mixes in, as the picker they already were in the
+          hero (Frank, 2026-10-24: «no hay forma de cambiar de tono en la vista de
+          ensayo»). It writes the SAME seat the hero dial writes, so the chart and
+          the hero follow; pressed = the key whose rows are shown. */}
+      {tones.length > 1 && shared?.soundingKey && shared.nativeKey && selection.tone && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <p className="font-body text-sm text-ink-muted" aria-live="polite">
+            {selection.exact
+              ? <>Tono {formatKey(selection.tone)} · mixes en</>
+              : <>No hay mix en {formatKey(shared.soundingKey)} — se muestra {formatKey(selection.tone)} · mixes en</>}
+          </p>
+          <SegmentedControl
+            size="sm"
+            label="Tono del mix"
+            value={selection.tone}
+            onChange={(k) => shared.setSemitones(semitonesBetween(shared.nativeKey!, k))}
+            options={tones.map((t) => ({
+              value: t,
+              label: <span className="normal-case">{formatKey(t)}</span>,
+              ariaLabel: formatKey(t),
+            }))}
+          />
+        </div>
       )}
       {groups.map((g) => (
-        <div key={g.family} className="space-y-2">
-          <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">{g.label}</p>
-          <ul className="space-y-2">
+        <div key={g.family} className="space-y-1.5">
+          <p className="font-body text-sm text-ink-muted">{g.label}</p>
+          {/* Rows on hairlines, not bordered modules (ADR-0070): the page is a
+              sheet, and the one row that differs is the LOADED one — a filled
+              play control, the clock after the key, and its seek control under
+              the name. */}
+          <ul className="divide-y divide-ink/[0.10] border-y border-ink/[0.10]">
             {g.mixes.map((m) => {
               const label = mixLabel(m);
               const current = isCurrent(m);
               const playing = current && player.isPlaying;
+              const mine = highlighted === m._key;
               return (
                 <li
                   key={m._key}
                   aria-label={label}
-                  aria-current={highlighted === m._key ? "true" : undefined}
-                  className={`brand-library-module flex flex-col gap-1.5 px-3 py-1.5 ${
-                    current ? "border-accent/50 bg-accent/10" : highlighted === m._key ? "border-accent/30" : "border-accent-deep/30"
-                  }`}
+                  aria-current={mine ? "true" : undefined}
+                  className="flex flex-col gap-1 py-2.5"
                 >
-                  {/* A 56px row (E): the play control, the name over its key · BPM, the
-                      equalizer while it sounds, and an icon-only download — the word
-                      «Descargar» on every row said the same thing eight times. Both
-                      controls keep the 44px hit box every playback control has
-                      (`size="lg"` on the icon variant); the glyph sets the weight. */}
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="icon"
-                      size="lg"
-                      onClick={() => play(m)}
-                      aria-label={`${playing ? "Pausar" : "Reproducir"} ${label}`}
-                    >
-                      <PlayPauseGlyph playing={playing} size={14} />
-                    </Button>
+                  <div className="flex items-center gap-3">
+                    {/* Both controls keep the 44px hit box every playback control
+                        has; the loaded row's play is FILLED (the house `cta`
+                        fill, `roundCta`), an idle row's is a ring (`round`). */}
+                    {current ? (
+                      <Button
+                        variant="roundCta"
+                        onClick={() => play(m)}
+                        aria-label={`${playing ? "Pausar" : "Reproducir"} ${label}`}
+                      >
+                        <PlayPauseGlyph playing={playing} size={14} />
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="round"
+                        onClick={() => play(m)}
+                        aria-label={`Reproducir ${label}`}
+                      >
+                        <PlayPauseGlyph playing={false} size={14} />
+                      </Button>
+                    )}
                     <div className="min-w-0 flex-1">
-                      <p className="font-body text-sm font-semibold leading-tight truncate">{label}</p>
-                      <p className="font-label text-[10px] uppercase tracking-widest text-mono-500">
+                      <p className={`truncate font-body text-[17px] font-semibold leading-tight ${mine ? "text-accent" : "text-ink"}`}>{label}</p>
+                      <p className="font-body text-sm text-ink-muted tabular-nums">
                         {formatKey(m.tone)}{m.bpm ? ` · ${m.bpm} BPM` : ""}
+                        {current && time.duration > 0 ? ` · ${formatClock(time.current)} / ${formatClock(time.duration)}` : ""}
                       </p>
                     </div>
                     {playing && <Equalizer playing />}
@@ -182,15 +214,28 @@ export default function RehearsalPlayer({
                       <DownloadIcon size={16} />
                     </a>
                   </div>
-                  {m.kind === "up" && m.peaks && current && (
-                    <Waveform
-                      peaks={m.peaks}
-                      active={m.active}
-                      duration={current ? time.duration : 0}
-                      progress={current ? progress : 0}
-                      label={`Onda ${label}`}
-                      onSeek={current ? seek : undefined}
-                    />
+                  {/* ONE seek control on the page, the loaded row's: the envelope
+                      when the mix has one (an isolated instrument, with the accent
+                      spans where that part sounds), a plain seek bar when it does
+                      not (the full-band mix carries no peaks). */}
+                  {/* The indent lives on a wrapper, never on the seek control: the
+                      control maps a click over its OWN box, so padding inside it
+                      would seek ahead of the pointer. */}
+                  {current && (
+                    <div className="pl-14">
+                      {m.kind === "up" && m.peaks ? (
+                        <Waveform
+                          peaks={m.peaks}
+                          active={m.active}
+                          duration={time.duration}
+                          progress={progress}
+                          label={`Onda ${label}`}
+                          onSeek={seek}
+                        />
+                      ) : (
+                        <SeekBar progress={progress} label={`Posición ${label}`} onSeek={seek} />
+                      )}
+                    </div>
                   )}
                 </li>
               );

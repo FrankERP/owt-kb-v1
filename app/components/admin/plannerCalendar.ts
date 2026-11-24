@@ -13,6 +13,8 @@ import { draftTargetKey } from "./plannerModel";
 export interface CalendarSpecial {
   date: string;
   name: string;
+  /** The composer's «Cuenta para equidad» (solver v3 C1 §6.3); the planner passes it, the list names it. */
+  countsForFairness?: boolean;
 }
 
 /** The subset of a Sanity role this picker reads (fact: `date` may be a datetime). */

@@ -50,9 +50,8 @@ describe("MeHeader", () => {
       />,
     );
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Ana Rocha");
-    expect(screen.getByText("Ani")).toBeTruthy();
-    expect(screen.getByText("Voz")).toBeTruthy();
-    expect(screen.getByText("Líder Domingo")).toBeTruthy();
+    // One muted line under the name — alias, then the Tipo labels — not a row of chips.
+    expect(screen.getByText("Ani · Voz · Líder Domingo")).toBeTruthy();
     // Initials stand in for a member with no photo.
     expect(screen.getByText("AN")).toBeTruthy();
   });
@@ -64,7 +63,9 @@ describe("MeHeader", () => {
     );
     // ICU spells the weekday lowercase in es-MX; the separator is the house «·».
     expect(container.textContent).toMatch(/Te toca el domingo 13 · Lead/i);
-    expect(container.textContent).toContain("En 3 días");
+    // The countdown ends the sentence, lowercase, with no pill around it.
+    expect(container.textContent).toContain("· en 3 días");
+    expect(container.querySelector(".rounded-full.border")).toBeNull();
   });
 
   it("D — the countdown pill carries the start time the page computed, and none without one", () => {
@@ -72,7 +73,7 @@ describe("MeHeader", () => {
     const { container } = mount(
       <MeHeader name="Ana" inWorship next={{ dateKey: "2026-09-13", day: "Domingo", seat: "Lead", time: "11:00" }} />,
     );
-    expect(container.textContent).toContain("En 3 días · 11:00");
+    expect(container.textContent).toContain("· Lead · 11:00 · en 3 días");
     cleanup();
     // A Kids Sunday has no clock.
     expect(mount(<MeHeader name="Ana" kidsNext="2026-09-13" />).container.textContent).not.toMatch(/\d\d:\d\d/);
@@ -84,7 +85,7 @@ describe("MeHeader", () => {
       <MeHeader name="Ana" inWorship next={{ dateKey: "2026-09-11", day: "Noche de Adoración", seat: "" }} />,
     );
     expect(container.textContent).toMatch(/Te toca el viernes 11 · Noche de Adoración/i);
-    expect(container.textContent).toContain("Mañana");
+    expect(container.textContent).toContain("· mañana");
   });
 
   it("says so when a worship member has nothing assigned", () => {
@@ -97,7 +98,7 @@ describe("MeHeader", () => {
     freezeToday();
     const { container } = mount(<MeHeader name="Ana" kidsNext="2026-09-13" />);
     expect(container.textContent).toMatch(/En Oasis Kids te toca el domingo 13/i);
-    expect(container.textContent).toContain("En 3 días");
+    expect(container.textContent).toContain("· en 3 días");
     expect(container.textContent).not.toContain("Sin servicios asignados próximamente");
   });
 
@@ -121,7 +122,7 @@ describe("MeHeader", () => {
 
   it("handles a null memberTypes (Sanity null for unset array) without throwing", () => {
     freezeToday();
-    mount(
+    const { container } = mount(
       <MeHeader
         name="Dev Verificador"
         memberTypes={null}
@@ -131,6 +132,6 @@ describe("MeHeader", () => {
     );
     // Should render the name and line without crashing.
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Dev Verificador");
-    expect(screen.getByText(/Te toca el domingo/i)).toBeTruthy();
+    expect(container.textContent).toMatch(/Te toca el domingo/i);
   });
 });

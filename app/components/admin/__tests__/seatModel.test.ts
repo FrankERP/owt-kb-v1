@@ -16,6 +16,7 @@ import {
   occupantDeclaresInstrument,
   occupantFitsSeat,
   SEAT_MEMBER_TYPE,
+  seatsClash,
 } from "../seatModel";
 import { INSTRUMENT_SEAT_OPTIONS } from "@/sanity/schemas/instrumentSeats";
 
@@ -153,5 +154,37 @@ describe("occupantDeclaresInstrument", () => {
 describe("the Studio option list", () => {
   it("is exactly the seat vocabulary, so a member can only ever declare a seat that exists", () => {
     expect([...INSTRUMENT_SEAT_OPTIONS]).toEqual(DEFAULT_INSTRUMENT_SEATS);
+  });
+});
+
+// ADR-0078 — which two seats one person may not hold on one service.
+describe("seatsClash", () => {
+  const coro = { seatId: "coro", category: "voz" as const };
+  const lead = { seatId: "lead", category: "voz" as const };
+  const bgv = { seatId: "bgv", category: "voz" as const };
+  const drums = { seatId: "instrumento:Drums", category: "instrumento" as const };
+  const keys = { seatId: "instrumento:Keys", category: "instrumento" as const };
+  const console = { seatId: "foh:Console", category: "foh" as const };
+
+  it("same category always clashes, marked or not — and so does the same seat twice", () => {
+    for (const marked of [undefined, false, true]) {
+      expect(seatsClash(lead, bgv, marked)).toBe(true);
+      expect(seatsClash(keys, drums, marked)).toBe(true);
+      expect(seatsClash(coro, coro, marked)).toBe(true);
+    }
+  });
+
+  it("voz + instrumento clashes unless the member is marked «Canta y toca a la vez», in either order", () => {
+    for (const voice of [lead, bgv, coro]) {
+      expect(seatsClash(voice, drums, undefined)).toBe(true);
+      expect(seatsClash(drums, voice, false)).toBe(true);
+      expect(seatsClash(voice, drums, true)).toBe(false);
+      expect(seatsClash(drums, voice, true)).toBe(false);
+    }
+  });
+
+  it("FOH beside a voice or an instrument does not clash", () => {
+    expect(seatsClash(console, coro, undefined)).toBe(false);
+    expect(seatsClash(drums, console, undefined)).toBe(false);
   });
 });

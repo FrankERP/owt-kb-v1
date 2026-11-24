@@ -24,8 +24,12 @@ export async function GET() {
   const [members, events] = await Promise.all([
     // Same ministry scoping as GET /api/admin/members: worship admins see
     // worship members only, super-admins see everyone.
-    serverClient.fetch<Array<{ _id: string; member_name: string; alias?: string; lastSeen?: string }>>(
-      `*[_type == "teamMembers" && ${WORSHIP_MEMBER_GROQ_FILTER}] | order(member_name asc) { _id, member_name, alias, lastSeen }`,
+    serverClient.fetch<Array<{ _id: string; member_name: string; alias?: string; lastSeen?: string; photoUrl?: string | null }>>(
+      // The photo as the member list reads it (`serviceReadQueries`): the Admin pass
+      // draws the row with it, initials when there is none. `disabled != true`: the
+      // panel says «De N personas con acceso» and lists who has not come in — a
+      // member whose access was removed cannot, so they are not an answer.
+      `*[_type == "teamMembers" && disabled != true && ${WORSHIP_MEMBER_GROQ_FILTER}] | order(member_name asc) { _id, member_name, alias, lastSeen, "photoUrl": coalesce(profilePhoto.asset->url, googlePhotoUrl) }`,
       { all: session.user.role === "super-admin" }
     ),
     serverClient.fetch<Array<{ _id: string; memberId: string; email: string; provider: string; timestamp: string }>>(
@@ -59,6 +63,7 @@ export async function GET() {
         _id:         m._id,
         member_name: m.member_name,
         alias:       m.alias,
+        photoUrl:    m.photoUrl ?? null,
         lastSeen:    m.lastSeen ?? null,
         lastLogin,
         lastActive,

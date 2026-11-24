@@ -1,6 +1,6 @@
 "use client";
 
-// The Miembros tab — the member list, its filters, its modals and every member
+// «Personas» on /super-admin (the /admin Miembros tab until 2026-10-29, ADR-0075) — the member list, its filters, its modals and every member
 // write. Extracted from `AdminPanel` in R5 Task 3: the body used to be a VALUE
 // built on every render of every tab (wrapping it in a function turned
 // `react-hooks/refs` into an error at `handlePhotoClick`), and a component is
@@ -11,6 +11,9 @@
 // touch gets the same affordance, and the kill switch asks before it fires
 // (decision O).
 
+import { PAGE_LEDE, PAGE_TITLE, SHEET_TITLE } from "@/app/utils/homeHero";
+import { groupRowsByLetter } from "@/app/utils/libraryIndex";
+import { plural } from "@/app/utils/plural";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -18,6 +21,7 @@ import Fuse from "fuse.js";
 import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
 import Button from "../ui/Button";
+import Checkbox from "../ui/Checkbox";
 import Menu, { MenuItem, MenuSeparator } from "../ui/Menu";
 import Skeleton, { SkeletonGroup } from "../ui/Skeleton";
 import Select from "@/app/components/ui/Select";
@@ -27,15 +31,24 @@ import SegmentedControl from "../ui/SegmentedControl";
 import { PlusIcon } from "../ui/icons";
 import {
   ALL_MINISTRY_IDS,
+  ASSIGNABLE_MINISTRY_IDS,
+  LEVELED_MINISTRY_IDS,
   MANAGEABLE_MINISTRY_IDS,
   MINISTRIES,
+  MINISTRY_LEVELS,
   normalizeMinistries,
+  normalizeMinistryRoles,
   type MinistryId,
+  type MinistryLevel,
+  type MinistryRole,
 } from "@/app/ministries";
 import { interpretMemberDeleteResponse } from "@/app/utils/memberDelete";
+import { MEMBER_TYPES as MEMBER_TYPE_IDS, type MemberType } from "@/app/utils/memberTypes";
+import FiltersPill from "../ui/FiltersPill";
+import SearchLine from "../ui/SearchLine";
 import { DEFAULT_INSTRUMENT_SEATS } from "./seatModel";
 
-type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
+import { ROLE_LABEL, type OWTRole } from "@/app/utils/roleLabel";
 
 interface Member {
   _id: string;
@@ -46,6 +59,8 @@ interface Member {
   memberType?: string[];
   /** Declared instrument seats; absent or empty = declares nothing (spec D6). */
   instruments?: string[];
+  /** «Canta y toca a la vez»: may hold a voice and an instrument on one service (ADR-0078). */
+  singsAndPlays?: boolean;
   hasPassword: boolean;
   photoUrl?: string;
   notifPrefs?: Record<string, unknown>;
@@ -53,6 +68,10 @@ interface Member {
    *  `normalizeMinistries`, never raw (see `MemberForm`). */
   ministries?: string[];
   managesMinistries?: string[];
+  /** Level and groups in a leveled ministry (Jóvenes, ADR-0075), as stored.
+   *  Only the super-admin's list carries it; read it through
+   *  `normalizeMinistryRoles`, never raw. */
+  ministryRoles?: unknown;
   /** Stored as-is — absent means enabled (same contract as `isMemberActive`). */
   disabled?: boolean;
 }
@@ -70,6 +89,8 @@ interface MemberFormData {
    * field and a new member is not frozen at `[]` for the backfill (spec §4.4).
    */
   instruments?: string[];
+  /** Present only when the admin touched «Canta y toca a la vez» (on CREATE, only when ticked). */
+  singsAndPlays?: boolean;
   /**
    * Only the per-type email toggles the admin actually touched this editing
    * session, sent flat to PATCH. Absent (or empty) when adding, or when
@@ -85,23 +106,62 @@ interface MemberFormData {
    */
   ministries?: string[];
   managesMinistries?: string[];
+  /**
+   * Sent whenever `ministries` is (the route judges a level against the
+   * ministries of the same request): one item per ticked leveled ministry,
+   * without the stored `_key`/`_type`. Unticking Jóvenes therefore drops its
+   * item, and the route stores what is left. Each item carries `leaderOf`
+   * (the groups a leader leads; `[]` for a member or admin), exactly as the
+   * route stores it (ADR-0085).
+   */
+  ministryRoles?: MinistryRole[];
 }
 
 // The table's own abbreviations — deliberately not `MEMBER_TYPE_LABEL`'s full
 // words (`app/utils/memberTypes.ts`): this is a dense list, not the member's
 // own profile, where there is room to spell "Líder Domingo" out.
-const TYPE_ABBR: Record<string, string> = {
-  voz: "Voz", instrumento: "Instr.", foh: "FOH",
+/**
+ * The row's words for a Tipo: full words since the Admin pass turned the chips
+ * into a line of text, with the two leader types kept short («Líder Dom») so
+ * «Voz · Líder Dom · Guitarra» fits a phone row. Keyed on `MemberType`, so a
+ * Tipo added to `memberTypes.ts` fails to compile here instead of going
+ * silently unlabelled; the Filtros sheet lists `MEMBER_TYPES` with these words.
+ */
+const TYPE_ABBR: Record<MemberType, string> = {
+  voz: "Voz", instrumento: "Instrumento", foh: "FOH",
   sunday_lead: "Líder Dom", saturday_lead: "Líder Sáb", support: "Soporte",
 };
+const typeWord = (t: string) => (t in TYPE_ABBR ? TYPE_ABBR[t as MemberType] : t);
 
-type FilterKey = "type" | "role";
+const TYPE_OPTIONS = MEMBER_TYPE_IDS.map((value) => ({ value, label: TYPE_ABBR[value] }));
+
 type SortDir  = "asc" | "desc";
+
+/**
+ * The list by letter of the shown name, like Biblioteca (ADR-0070): the letter
+ * follows `sortDir`, the rows keep the order the caller sorted them in. A query
+ * orders by relevance, so the caller passes one unlettered group then.
+ */
+export function groupMembersByLetter<T extends { member_name: string; alias?: string }>(
+  rows: T[],
+  sortDir: SortDir,
+): { letter: string; rows: T[] }[] {
+  return groupRowsByLetter(rows, (m) => m.alias?.trim() || m.member_name, sortDir);
+}
 
 /** Which ministry's people the Miembros list is showing. */
 export type MinistryScope = MinistryId | "all";
 
-const MINISTRY_SCOPES: MinistryScope[] = [...ALL_MINISTRY_IDS, "all"];
+/**
+ * The ministries the Miembros scope bar may offer. ASSIGNABLE, not ALL: a
+ * ministry the app can read but not yet store (ADR-0075) gets no tab until its
+ * write side ships. A LEVELED ministry (Jóvenes) is a tab for the super-admin
+ * only: a worship admin's list can hold someone who is also in Jóvenes, and a
+ * «Jóvenes» tab there would be another ministry's noise (access plan §8.5).
+ */
+export function ministryScopeIds(superAdmin: boolean): MinistryId[] {
+  return superAdmin ? ASSIGNABLE_MINISTRY_IDS : ASSIGNABLE_MINISTRY_IDS.filter((id) => !LEVELED_MINISTRY_IDS.includes(id));
+}
 
 const MINISTRY_SCOPE_LABEL = (s: MinistryScope) => (s === "all" ? "Todos" : MINISTRIES[s].name);
 
@@ -129,12 +189,13 @@ const displayName = (m: Member) => m.alias?.trim() || m.member_name;
 export function resolveMinistryScope<T extends { ministries?: string[] }>(
   members: T[],
   scope: MinistryScope,
+  scopeIds: readonly MinistryId[] = ministryScopeIds(false),
 ): { counts: Record<MinistryId, number>; visible: boolean; scoped: T[] } {
   const counts = Object.fromEntries(ALL_MINISTRY_IDS.map((id) => [id, 0])) as Record<MinistryId, number>;
   for (const m of members) {
     for (const id of normalizeMinistries(m.ministries)) counts[id] += 1;
   }
-  const visible = ALL_MINISTRY_IDS.filter((id) => counts[id] > 0).length > 1;
+  const visible = scopeIds.filter((id) => counts[id] > 0).length > 1;
   const scoped = visible && scope !== "all"
     ? members.filter((m) => normalizeMinistries(m.ministries).includes(scope))
     : members;
@@ -147,12 +208,15 @@ export function MinistryScopeBar({
   visible,
   value,
   onChange,
+  scopeIds = ministryScopeIds(false),
 }: {
   counts: Record<MinistryId, number>;
   total: number;
   visible: boolean;
   value: MinistryScope;
   onChange: (next: MinistryScope) => void;
+  /** Pass the same list `resolveMinistryScope` got. */
+  scopeIds?: readonly MinistryId[];
 }) {
   if (!visible) return null;
   return (
@@ -164,7 +228,7 @@ export function MinistryScopeBar({
       className="brand-search-console self-start"
       value={value}
       onChange={onChange}
-      options={MINISTRY_SCOPES.map((s) => ({
+      options={[...scopeIds, "all" as const].map((s) => ({
         value: s,
         label: (
           <>
@@ -187,26 +251,14 @@ export function MinistryScopeBar({
  */
 type ModalKind = "add" | "edit" | "password" | "delete";
 
+const MINISTRY_LEVEL_LABEL: Record<MinistryLevel, string> = { member: "Miembro", leader: "Líder", admin: "Admin" };
+
 const ROLES: { value: OWTRole; label: string }[] = [
   { value: "super-admin", label: "Super Admin" },
   { value: "admin",       label: "Admin" },
   { value: "content-editor", label: "Content Editor" },
   { value: "member",      label: "Miembro" },
 ];
-
-const ROLE_BADGE: Record<OWTRole, string> = {
-  "super-admin":    "bg-accent/15 text-accent border border-accent/30",
-  "admin":          "bg-badge-azure-deep/15 text-badge-azure-fg border border-badge-azure-deep/30",
-  "content-editor": "bg-badge-violet-deep/15 text-badge-violet-fg border border-badge-violet-deep/30",
-  "member":         "bg-mono-500/15 text-mono-400 border border-mono-500/30",
-};
-
-const ROLE_LABEL: Record<OWTRole, string> = {
-  "super-admin":    "Super Admin",
-  "admin":          "Admin",
-  "content-editor": "Editor",
-  "member":         "Miembro",
-};
 
 // ─── Shared input style ────────────────────────────────────────────────────────
 // 16px on the phone: anything smaller makes iOS Safari zoom the page on focus.
@@ -241,7 +293,7 @@ function Avatar({
         <img src={photoUrl} alt={name} className="w-full h-full object-cover" />
       ) : (
         <div className="w-full h-full bg-surface-accent-l100-d10 text-on-fill flex items-center justify-center">
-          <span className="font-label text-xs text-accent">{initials}</span>
+          <span className="font-label text-sm text-accent">{initials}</span>
         </div>
       )}
       {onClick && (
@@ -268,7 +320,7 @@ function Avatar({
         type="button"
         onClick={onClick}
         title="Cambiar foto"
-        className="relative w-9 h-9 rounded-full overflow-hidden shrink-0 group/avatar cursor-pointer"
+        className="relative w-11 h-11 rounded-full overflow-hidden shrink-0 group/avatar cursor-pointer"
       >
         {inner}
       </button>
@@ -276,7 +328,7 @@ function Avatar({
   }
 
   return (
-    <div className="relative w-9 h-9 rounded-full overflow-hidden shrink-0">
+    <div className="relative w-11 h-11 rounded-full overflow-hidden shrink-0">
       {inner}
     </div>
   );
@@ -342,6 +394,8 @@ export function MemberForm({
   // Kept even while `instrumento` is unticked, so re-ticking restores it.
   const [instruments, setInstruments] = useState<string[]>(initial?.instruments ?? []);
   const [touchedInstruments, setTouchedInstruments] = useState(false);
+  const [singsAndPlays, setSingsAndPlays] = useState(initial?.singsAndPlays === true);
+  const [touchedSingsAndPlays, setTouchedSingsAndPlays] = useState(false);
   const toggleInstrument = (value: string) => {
     setInstruments(prev => prev.includes(value) ? prev.filter(i => i !== value) : [...prev, value]);
     setTouchedInstruments(true);
@@ -369,8 +423,44 @@ export function MemberForm({
   // Same discipline as `touchedPrefFields`: an edit that never touches a
   // ministry row must PATCH neither key.
   const [touchedMinistryFields, setTouchedMinistryFields] =
-    useState<ReadonlySet<"ministries" | "managesMinistries">>(() => new Set());
+    useState<ReadonlySet<"ministries" | "managesMinistries" | "ministryRoles">>(() => new Set());
   const [ministryError, setMinistryError] = useState<string | null>(null);
+  // Level and groups per LEVELED ministry (Jóvenes, ADR-0075), seeded through the
+  // read's own normalizer — so what the form shows is what the guards see, and a
+  // stored `_key`/`_type` never travels back. Kept while the ministry is
+  // unticked, so re-ticking restores it; the submit sends ticked ones only.
+  // `leaderOf` (the groups a leader LEADS, ADR-0085) is always a subset of
+  // `groups`: unticking a group drops it, and changing the level clears it —
+  // choosing «Líder» pre-ticks nothing (an explicit choice, fail closed).
+  type LevelState = { level: MinistryLevel; groups: string[]; leaderOf: string[] };
+  const [levels, setLevels] = useState<Partial<Record<MinistryId, LevelState>>>(() =>
+    Object.fromEntries(
+      normalizeMinistryRoles(initial?.ministryRoles, normalizeMinistries(initial?.ministries))
+        .map((r) => [r.ministry, { level: r.level, groups: r.groups, leaderOf: r.leaderOf }]),
+    ),
+  );
+  const NO_LEVEL: LevelState = { level: "member", groups: [], leaderOf: [] };
+  const levelOf = (id: MinistryId) => levels[id] ?? NO_LEVEL;
+  const editLevel = (id: MinistryId, next: (cur: LevelState) => Partial<LevelState>) => {
+    setLevels((prev) => {
+      const cur = prev[id] ?? NO_LEVEL;
+      return { ...prev, [id]: { ...cur, ...next(cur) } };
+    });
+    setTouchedMinistryFields((prev) => new Set(prev).add("ministryRoles"));
+    setMinistryError(null);
+  };
+  const toggleGroup = (id: MinistryId, group: string) =>
+    editLevel(id, ({ groups, leaderOf }) =>
+      groups.includes(group)
+        ? { groups: groups.filter((g) => g !== group), leaderOf: leaderOf.filter((g) => g !== group) }
+        : { groups: [...groups, group] },
+    );
+  const toggleLed = (id: MinistryId, group: string) =>
+    editLevel(id, ({ leaderOf }) => ({
+      leaderOf: leaderOf.includes(group) ? leaderOf.filter((g) => g !== group) : [...leaderOf, group],
+    }));
+  const setLevel = (id: MinistryId, next: MinistryLevel) =>
+    editLevel(id, (cur) => (cur.level === next ? {} : { level: next, leaderOf: [] }));
 
   const toggleType = (value: string) => {
     setMemberType(prev =>
@@ -409,6 +499,15 @@ export function MemberForm({
         // would submit `[]`, which reads back as `["worship"]`. The route
         // rejects both too — this is the friendly half, not the enforcement.
         if (ministries.length === 0) { setMinistryError("Elige al menos un ministerio."); return; }
+        const tickedLeveled = LEVELED_MINISTRY_IDS.filter((id) => ministries.includes(id));
+        // `ministryRoles` travels WITH `ministries`, always: the route judges a
+        // level against the ministries of the same request. Only what is sent is
+        // judged here, so an untouched legacy leader can still fix a typo.
+        const sendsMinistries = !initial || touchedMinistryFields.has("ministries") || touchedMinistryFields.has("ministryRoles");
+        if (sendsMinistries && tickedLeveled.some((id) => levelOf(id).level === "leader" && levelOf(id).leaderOf.length === 0)) {
+          setMinistryError("Un líder necesita liderar al menos un grupo.");
+          return;
+        }
         setMinistryError(null);
         // Only an edit carries preferences, and only the fields actually touched
         // this session — never the full resolved snapshot. That snapshot can be
@@ -420,14 +519,18 @@ export function MemberForm({
         // On CREATE both arrays go unconditionally — there is no stored value to
         // clobber, and a Kids volunteer must be created kids-only rather than
         // existing as a worship member until someone remembers a second edit.
-        const touchedMinistries: Partial<Pick<MemberFormData, "ministries" | "managesMinistries">> = {};
-        if (!initial || touchedMinistryFields.has("ministries")) touchedMinistries.ministries = ministries;
+        const touchedMinistries: Partial<Pick<MemberFormData, "ministries" | "managesMinistries" | "ministryRoles">> = {};
+        if (sendsMinistries) {
+          touchedMinistries.ministries = ministries;
+          touchedMinistries.ministryRoles = tickedLeveled.map((id) => ({ ministry: id, ...levelOf(id) }));
+        }
         if (!initial || touchedMinistryFields.has("managesMinistries")) touchedMinistries.managesMinistries = managesMinistries;
         onSubmit({
           member_name: name, alias, email, role, memberType,
           ...(initial && touchedPrefFields.size > 0 ? { emailPrefs: touchedEmailPrefs } : {}),
           ...touchedMinistries,
           ...(touchedInstruments && (initial || instruments.length > 0) ? { instruments } : {}),
+          ...(touchedSingsAndPlays && (initial || singsAndPlays) ? { singsAndPlays } : {}),
         });
       }}
       className="space-y-4"
@@ -445,7 +548,7 @@ export function MemberForm({
         <input className={inputCls} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="correo@ejemplo.com" />
       </div>
       <div className="space-y-1">
-        <Select id="member-role" label="Rol" value={role} onChange={(e) => setRole(e.target.value as OWTRole)}>
+        <Select id="member-role" label="Rol en Alabanza" value={role} onChange={(e) => setRole(e.target.value as OWTRole)}>
           {ROLES.map((r) => (
             <option key={r.value} value={r.value}>{r.label}</option>
           ))}
@@ -482,10 +585,24 @@ export function MemberForm({
           </p>
         </div>
       )}
+      {memberType.includes("voz") && memberType.includes("instrumento") && (
+        <div className="space-y-1">
+          <Checkbox
+            className="font-body text-sm text-mono-300"
+            checked={singsAndPlays}
+            onChange={(e) => { setSingsAndPlays(e.target.checked); setTouchedSingsAndPlays(true); }}
+          >
+            Canta y toca a la vez
+          </Checkbox>
+          <p className="font-body text-[11px] text-mono-500">
+            Sin marcar, nunca tiene una voz y un instrumento en el mismo servicio.
+          </p>
+        </div>
+      )}
       <div className="space-y-2">
         <label className="font-label text-xs uppercase tracking-widest text-mono-500">Ministerios</label>
         <div className="flex flex-wrap gap-2">
-          {ALL_MINISTRY_IDS.map((id) => {
+          {ASSIGNABLE_MINISTRY_IDS.map((id) => {
             const active = ministries.includes(id);
             return (
               <Button key={id} variant="pill" active={active} onClick={() => toggleMinistry(id)}>
@@ -498,6 +615,50 @@ export function MemberForm({
           <p className="text-sm text-negative-fg bg-negative-surface-deep/20 border border-negative-surface rounded-lg px-3 py-2">{ministryError}</p>
         )}
       </div>
+      {LEVELED_MINISTRY_IDS.filter((id) => ministries.includes(id)).map((id) => {
+        const { level, groups, leaderOf } = levelOf(id);
+        const name = MINISTRIES[id].name;
+        // Offered in the registry's order, ticked groups only (`leaderOf` ⊆ `groups`).
+        const ledOptions = MINISTRIES[id].groups.filter((g) => groups.includes(g.id));
+        return (
+          <div key={id} className="space-y-2">
+            <label className="font-label text-xs uppercase tracking-widest text-mono-500">{name}</label>
+            <SegmentedControl
+              label={`Nivel en ${name}`}
+              value={level}
+              onChange={(next) => setLevel(id, next)}
+              options={MINISTRY_LEVELS.map((l) => ({ value: l, label: MINISTRY_LEVEL_LABEL[l] }))}
+            />
+            <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">Grupos</p>
+            <div className="flex flex-wrap gap-2" role="group" aria-label={`Grupos en ${name}`}>
+              {MINISTRIES[id].groups.map((g) => (
+                <Button key={g.id} variant="pill" active={groups.includes(g.id)} onClick={() => toggleGroup(id, g.id)}>
+                  {g.name}
+                </Button>
+              ))}
+            </div>
+            {level === "leader" && (
+              <>
+                <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">Lidera</p>
+                {ledOptions.length > 0 ? (
+                  <div className="flex flex-wrap gap-2" role="group" aria-label={`Lidera en ${name}`}>
+                    {ledOptions.map((g) => (
+                      <Button key={g.id} variant="pill" active={leaderOf.includes(g.id)} onClick={() => toggleLed(id, g.id)}>
+                        {g.name}
+                      </Button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="font-body text-xs text-mono-500">Marca primero sus grupos.</p>
+                )}
+              </>
+            )}
+            <p className="font-body text-xs text-mono-500">
+              Admin administra todo {name}. Un líder planea solo los grupos que lidera; en los demás es miembro. No da acceso a Alabanza.
+            </p>
+          </div>
+        );
+      })}
       <div className="space-y-2">
         <label className="font-label text-xs uppercase tracking-widest text-mono-500">Administra ministerios</label>
         <div className="flex flex-wrap gap-2">
@@ -590,7 +751,31 @@ function PasswordForm({
   );
 }
 
+/** The route's own words when it sent any (the worship-role 400, the stale-edit
+ *  409), else the generic line — a refusal Frank can act on, not «Error». */
+async function serverError(res: Response, fallback: string): Promise<string> {
+  try {
+    const body: unknown = await res.json();
+    const error = typeof body === "object" && body !== null ? (body as { error?: unknown }).error : undefined;
+    return typeof error === "string" && error.trim() ? error : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 // ─── The panel ────────────────────────────────────────────────────────────────
+/**
+ * The edit's toast. A name or alias change renames the solver rules that named the person (slice M,
+ * D6) and may land on a rule that names nobody yet (D12): the PATCH answers both, and the toast says so.
+ */
+function memberUpdatedToast(body: unknown): string {
+  const b = body && typeof body === "object" ? (body as { renamedRules?: unknown; ruleNotes?: unknown }) : {};
+  const n = typeof b.renamedRules === "number" ? b.renamedRules : 0;
+  const notes = Array.isArray(b.ruleNotes) ? b.ruleNotes.filter((x): x is string => typeof x === "string") : [];
+  const head = n === 0 ? "Miembro actualizado." : `Miembro actualizado; ${n === 1 ? "1 regla cambió" : `${n} reglas cambiaron`} de nombre.`;
+  return [head, ...notes].join(" ");
+}
+
 export default function MembersPanel({ role }: { role: OWTRole }) {
   const { update } = useSession();
   const router = useRouter();
@@ -615,9 +800,12 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
   const { toast } = useToast();
   const showToast = useCallback((msg: string) => toast({ message: msg }), [toast]);
   const [query, setQuery]           = useState("");
-  const [filterKey, setFilterKey]   = useState<FilterKey>("type");
-  const [filterValue, setFilterValue] = useState("");
+  // Tipo and Rol filter together now (the Admin pass): both live in the
+  // «Filtros» sheet, so a key picker choosing ONE of them is gone.
+  const [typeFilter, setTypeFilter] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
   const [sortDir, setSortDir]       = useState<SortDir>("asc");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   // Frank sees the whole church here; "Alabanza" is the view he actually works in.
   const [ministryScope, setMinistryScope] = useState<MinistryScope>("worship");
   const [uploadingPhoto, setUploadingPhoto] = useState<string | null>(null);
@@ -645,19 +833,19 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
   // Ministry scope first, so the type/role filter and the Fuse index below both
   // work on the visible ministry only — searching inside "Oasis Kids" searches
   // Kids members, not the whole church.
+  const scopeIds = useMemo(() => ministryScopeIds(role === "super-admin"), [role]);
   const ministry = useMemo(
-    () => resolveMinistryScope(members, ministryScope),
-    [members, ministryScope],
+    () => resolveMinistryScope(members, ministryScope, scopeIds),
+    [members, ministryScope, scopeIds],
   );
 
   // Category filter — independent of the search query.
   const categoryFiltered = useMemo(() => {
-    const base = ministry.scoped;
-    if (!filterValue) return base;
-    return filterKey === "type"
-      ? base.filter((m) => m.memberType?.includes(filterValue))
-      : base.filter((m) => m.role === filterValue);
-  }, [ministry, filterKey, filterValue]);
+    let base = ministry.scoped;
+    if (typeFilter) base = base.filter((m) => m.memberType?.includes(typeFilter));
+    if (roleFilter) base = base.filter((m) => m.role === roleFilter);
+    return base;
+  }, [ministry, typeFilter, roleFilter]);
 
   // Build the Fuse index only when the filtered set changes — NOT on every
   // keystroke. Typing then just re-runs .search() against the existing index.
@@ -682,6 +870,13 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
       return sortDir === "asc" ? na.localeCompare(nb, "es") : nb.localeCompare(na, "es");
     });
   }, [categoryFiltered, fuse, query, sortDir]);
+
+  // A query orders by relevance, so the letters only exist while idle.
+  const groups = useMemo(
+    () => (query.trim() ? [{ letter: "", rows: filteredMembers }] : groupMembersByLetter(filteredMembers, sortDir)),
+    [filteredMembers, query, sortDir],
+  );
+  const activeFilters = (typeFilter ? 1 : 0) + (roleFilter ? 1 : 0) + (sortDir === "desc" ? 1 : 0);
 
   const openModal = (kind: ModalKind, member?: Member) => {
     setModalError(null);
@@ -722,17 +917,18 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
       // without them, a Kids volunteer normalizes to `["worship"]` and holds the
       // whole song catalog, schedule, tags and authors until someone remembers a
       // second edit — with no signal to the admin that it happened.
-      const { member_name, alias, email, role: memberRole, memberType, ministries, managesMinistries, instruments } = data;
+      const { member_name, alias, email, role: memberRole, memberType, ministries, managesMinistries, ministryRoles, instruments, singsAndPlays } = data;
       const res = await fetch("/api/admin/members", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          member_name, alias, email, role: memberRole, memberType, ministries, managesMinistries,
+          member_name, alias, email, role: memberRole, memberType, ministries, managesMinistries, ministryRoles,
           ...(instruments !== undefined ? { instruments } : {}),
+          ...(singsAndPlays !== undefined ? { singsAndPlays } : {}),
         }),
       });
       if (res.ok) { setModalOpen(false); setModalError(null); fetchMembers(); showToast("Miembro agregado."); }
-      else setModalError("Error al agregar miembro.");
+      else setModalError(await serverError(res, "Error al agregar miembro."));
     } catch {
       setModalError("Error de conexión.");
     } finally {
@@ -753,8 +949,12 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...rest, ...(emailPrefs ?? {}) }),
       });
-      if (res.ok) { setModalOpen(false); setModalError(null); fetchMembers(); showToast("Miembro actualizado."); }
-      else setModalError("Error al actualizar.");
+      if (res.ok) {
+        setModalOpen(false);
+        setModalError(null);
+        fetchMembers();
+        showToast(memberUpdatedToast(await res.json().catch(() => null)));
+      } else setModalError(await serverError(res, "Error al actualizar."));
     } catch {
       setModalError("Error de conexión.");
     } finally {
@@ -807,6 +1007,38 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
     } catch {
       showToast("Error de conexión.");
       return false;
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  /**
+   * «Cerrar sesiones de la app» (ADR-0091, spec D9): a lost phone. Closes every native-app session
+   * the member has on this deployment, all or none. No confirm: it takes nothing the member cannot
+   * get back by signing in again, and access itself is the separate «Deshabilitar acceso».
+   */
+  const handleRevokeAppSessions = async (member: Member) => {
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/admin/members/${encodeURIComponent(member._id)}/app-sessions/revoke`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        showToast(body.error ?? "No se pudo cerrar; intenta de nuevo.");
+        return;
+      }
+      const body = (await res.json().catch(() => ({}))) as { revoked?: number };
+      const n = typeof body.revoked === "number" ? body.revoked : 0;
+      showToast(
+        n === 0
+          ? `${displayName(member)} no tenía sesiones abiertas en la app.`
+          : n === 1
+            ? `Se cerró 1 sesión de la app de ${displayName(member)}.`
+            : `Se cerraron ${n} sesiones de la app de ${displayName(member)}.`,
+      );
+    } catch {
+      showToast("Error de conexión.");
     } finally {
       setSubmitting(false);
     }
@@ -899,21 +1131,21 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-2xl uppercase tracking-wide">Miembros</h1>
+          <h1 className={PAGE_TITLE}>Personas</h1>
           {!loading && (
-            <p className="font-label text-xs uppercase tracking-widest text-mono-500 mt-0.5">
+            <p className={`mt-2 ${PAGE_LEDE}`}>
               {/* `filterValue` is in here deliberately: with scope "Todos", no query
                   and a type/role filter active, the heading used to read "57 miembros"
                   above a list of 5 — a silently shortened list is how someone concludes
                   a member was deleted. Any narrowing input must make the count honest. */}
-              {(query.trim() || filterValue || ministryScope !== "all") && filteredMembers.length !== members.length
+              {(query.trim() || typeFilter || roleFilter || ministryScope !== "all") && filteredMembers.length !== members.length
                 ? `${filteredMembers.length} de ${members.length} ${members.length === 1 ? "miembro" : "miembros"}`
                 : `${members.length} ${members.length === 1 ? "miembro" : "miembros"}`
               }
             </p>
           )}
         </div>
-        <Button variant="primary" onClick={() => openModal("add")}>
+        <Button variant="primary" size="lg" onClick={() => openModal("add")}>
           <PlusIcon size={14} />
           Agregar
         </Button>
@@ -928,95 +1160,71 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
           visible={ministry.visible}
           value={ministryScope}
           onChange={setMinistryScope}
+          scopeIds={scopeIds}
         />
 
-        {/* Row 1: filter key + filter value + sort direction */}
-        <div className="flex gap-2 flex-wrap">
-          <SegmentedControl
-            label="Filtrar por"
-            tone="filled"
-            // brand-search-console deliberately wins over the primitive's filled chrome
-            // so the control matches the search input beside it.
-            className="brand-search-console shrink-0"
-            value={filterKey}
-            onChange={(k) => { setFilterKey(k); setFilterValue(""); }}
-            options={[
-              { value: "type", label: "Tipo" },
-              { value: "role", label: "Rol" },
-            ]}
-          />
-
-          {/* Filter value dropdown */}
-          <Select
-            aria-label={filterKey === "type" ? "Tipo" : "Rol"}
-            // Below `sm` the dropdown is its own full line under the two segmented
-            // controls (bloque 5): the row wrapped wherever it ran out, with the
-            // dropdown squeezed between them.
-            className="order-last min-w-[120px] basis-full sm:order-none sm:flex-1"
-            value={filterValue}
-            onChange={(e) => setFilterValue(e.target.value)}
-          >
-            <option value="">{filterKey === "type" ? "Todos los tipos" : "Todos los roles"}</option>
-            {filterKey === "type"
-              ? [
-                  { value: "voz",           label: "Voz"         },
-                  { value: "instrumento",   label: "Instrumento" },
-                  { value: "foh",           label: "FOH"         },
-                  { value: "sunday_lead",   label: "Líder Dom"   },
-                  { value: "saturday_lead", label: "Líder Sáb"   },
-                  { value: "support",       label: "Soporte"     },
-                ].map((o) => <option key={o.value} value={o.value}>{o.label}</option>)
-              : ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)
-            }
-          </Select>
-
-          <SegmentedControl
-            label="Orden"
-            tone="filled"
-            // brand-search-console deliberately wins over the primitive's filled chrome
-            // so the control matches the search input beside it.
-            className="brand-search-console shrink-0"
-            value={sortDir}
-            onChange={setSortDir}
-            options={[
-              { value: "asc", label: "A→Z" },
-              { value: "desc", label: "Z→A" },
-            ]}
-          />
-        </div>
-
-        {/* Row 2: search */}
-        <div className="brand-search-console relative">
-          <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-mono-500 pointer-events-none"
-            width="14" height="14" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-          >
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          {/* 16px on the phone: anything smaller makes iOS Safari zoom the page
-              on focus. `inputFontSize.test.ts` excludes `admin/` by path, so this
-              is the convention holding rather than the guard. */}
-          <input
-            className="w-full bg-transparent py-2.5 pl-9 pr-8 font-body text-[16px] sm:text-sm placeholder:text-placeholder focus:outline-none"
+        {/* Row 1: the search as a hairline beside the «Filtros» pill (ADR-0070's
+            Biblioteca pattern): Tipo, Rol and Orden live in the sheet. */}
+        <div className="flex items-center gap-3">
+          <SearchLine
+            label="Buscar miembros"
             placeholder="Buscar por nombre, alias o email…"
-            aria-label="Buscar miembros"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={setQuery}
+            className="flex-1"
           />
-          {query && (
-            <Button
-              variant="icon"
-              size="lg"
-              aria-label="Limpiar búsqueda"
-              onClick={() => setQuery("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-lg normal-case leading-none tracking-normal"
-            >
-              ×
-            </Button>
-          )}
+          <FiltersPill count={activeFilters} open={filtersOpen} onClick={() => setFiltersOpen(true)} />
         </div>
       </div>
+
+      {/* The filter sheet: Tipo and Rol as pills with a «Todos» each (a pill does
+          fire on re-press, but «Todos» reads clearer than "tap it again"), Orden
+          as the house segmented control. The primary says what it will show. */}
+      <CueDialog open={filtersOpen} mode="sheet" size="md" title="Filtros" label="Filtros" onDismiss={() => setFiltersOpen(false)}>
+        <div className="min-h-0 flex-1 space-y-8 overflow-y-auto p-5">
+          <section>
+            <p className={`mb-3 ${SHEET_TITLE}`}>Tipo</p>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Tipo">
+              <Button variant="pill" size="md" active={typeFilter === ""} onClick={() => setTypeFilter("")}>Todos</Button>
+              {TYPE_OPTIONS.map((o) => (
+                <Button key={o.value} variant="pill" size="md" active={typeFilter === o.value} onClick={() => setTypeFilter(o.value)}>{o.label}</Button>
+              ))}
+            </div>
+          </section>
+          <section>
+            <p className={`mb-3 ${SHEET_TITLE}`}>Rol</p>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Rol">
+              <Button variant="pill" size="md" active={roleFilter === ""} onClick={() => setRoleFilter("")}>Todos</Button>
+              {ROLES.map((r) => (
+                <Button key={r.value} variant="pill" size="md" active={roleFilter === r.value} onClick={() => setRoleFilter(r.value)}>{r.label}</Button>
+              ))}
+            </div>
+          </section>
+          <section>
+            <p className={`mb-3 ${SHEET_TITLE}`}>Orden</p>
+            <SegmentedControl
+              label="Orden"
+              tone="filled"
+              size="sm"
+              className="w-fit"
+              value={sortDir}
+              onChange={setSortDir}
+              options={[
+                { value: "asc", label: "A→Z" },
+                { value: "desc", label: "Z→A" },
+              ]}
+            />
+          </section>
+          <div className="flex items-center justify-between gap-3 border-t border-ink/[0.10] pt-5">
+            <Button variant="ghost" onClick={() => { setTypeFilter(""); setRoleFilter(""); setSortDir("asc"); }}>Limpiar filtros</Button>
+            <Button variant="cta" onClick={() => setFiltersOpen(false)}>
+              {/* What the FILTERS show — without the search box's own narrowing, which
+                  the sheet does not touch. */}
+              {`Ver ${plural(categoryFiltered.length, "miembro", "miembros")}`}
+            </Button>
+          </div>
+        </div>
+      </CueDialog>
 
       {/* States */}
       {loading && (
@@ -1031,127 +1239,141 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
         <p className="text-sm text-negative-fg bg-negative-surface-deep/20 border border-negative-surface rounded-xl px-4 py-3">{error}</p>
       )}
 
-      {/* Members list */}
+      {/* Members list: letter sections over hairline rows (ADR-0070, the Admin
+          pass PR B). The letter is the display face, muted — an index, not a
+          label; the row is photo, alias at 17 px, «Voz · Líder Dom» at 14 px, the
+          role as a muted word («Sin acceso» in red) and ONE menu. */}
       {!loading && !error && (
-        <div className="space-y-2">
+        <div>
           {members.length === 0 && (
-            <p className="font-body text-sm text-mono-500 text-center py-12">No hay miembros todavía.</p>
+            <p className="font-body text-[15px] text-ink-dim py-12">No hay miembros todavía.</p>
           )}
           {members.length > 0 && filteredMembers.length === 0 && (
-            <p className="font-body text-sm text-mono-500 text-center py-12">
+            <p className="font-body text-[15px] text-ink-dim py-12">
               {query.trim() ? <>Sin resultados para &ldquo;{query}&rdquo;</> : "Sin resultados"}
             </p>
           )}
-          {filteredMembers.map((m) => (
-            <div
-              key={m._id}
-              // `:hover` moves the border colour and the shadow; its `background` is a
-              // GRADIENT (background-image), which does not interpolate, so listing
-              // background-color would animate nothing and say otherwise.
-              className="brand-member-row group flex items-center gap-4 rounded-xl px-4 py-3 transition-[box-shadow,border-color] duration-base ease-out-brand"
-            >
-              <Avatar
-                name={displayName(m)}
-                photoUrl={m.photoUrl}
-                uploading={uploadingPhoto === m._id}
-                onClick={() => handlePhotoClick(m._id)}
-              />
-
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-baseline gap-2 flex-wrap">
-                  {m.alias?.trim()
-                    ? <p className="font-display text-base leading-tight truncate">{m.alias.trim()}</p>
-                    : <p className="font-body text-sm font-semibold truncate">{m.member_name}</p>
-                  }
-                  {m.alias?.trim() && (
-                    <span className="font-body text-sm text-accent/70 truncate">{m.member_name}</span>
-                  )}
-                </div>
-                <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                  <p className="font-body text-sm text-surface-ink-l50-d35 truncate">{m.email}</p>
-                  {(m.memberType ?? []).map(t => (
-                    <span key={t} className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-accent/10 text-mono-400 border border-accent/15">
-                      {TYPE_ABBR[t] ?? t}
-                    </span>
-                  ))}
-                  {(m.instruments ?? []).map(i => (
-                    <span key={`instr-${i}`} className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-mono-500/10 text-mono-400 border border-mono-500/20">
-                      {i}
-                    </span>
-                  ))}
-                  {/* The chip is the row's only statement about access now that the
-                      kill switch lives in the menu — it stays. */}
-                  {m.disabled === true && (
-                    <span className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-negative-strong/15 text-negative-fg border border-negative-strong/30">
-                      Sin acceso
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Role badge */}
-              <span className={`hidden sm:inline-flex font-label text-[11px] uppercase tracking-widest px-2 py-0.5 rounded-full ${ROLE_BADGE[m.role ?? "member"]}`}>
-                {ROLE_LABEL[m.role ?? "member"]}
-              </span>
-
-              {/* Password indicator */}
-              <span
-                title={m.hasPassword ? "Tiene contraseña" : "Sin contraseña"}
-                className={`w-2 h-2 rounded-full shrink-0 ${m.hasPassword ? "bg-positive-deep" : "bg-mono-600"}`}
-              />
-
-              {/* Actions — ONE menu per row (R5 ruling 6). The four hover-only icon
-                  buttons are gone: nothing on this row depends on hover, so a phone
-                  reaches every action the desktop does. */}
-              <Menu
-                label={`Acciones de ${displayName(m)}`}
-                align="end"
-                trigger={
-                  <Button variant="icon" size="lg" aria-label={`Acciones de ${displayName(m)}`}>
-                    <span aria-hidden="true" className="text-base leading-none">⋯</span>
-                  </Button>
-                }
-              >
-                <MenuItem icon={<PencilIcon />} onSelect={() => openModal("edit", m)}>
-                  Editar
-                </MenuItem>
-                <MenuItem icon={<KeyIcon />} onSelect={() => openModal("password", m)}>
-                  Contraseña
-                </MenuItem>
-                {role === "super-admin" && (
-                  <>
-                    <MenuItem icon={<MaskIcon />} onSelect={() => handleImpersonate(m._id)}>
-                      Ver como este miembro
-                    </MenuItem>
-                    <MenuSeparator />
-                    <MenuItem
-                      icon={<BanIcon />}
-                      danger={m.disabled !== true}
-                      // `submitting` covers a second pick while the previous
-                      // access write is still in flight — the confirm's own
-                      // button is `busy`, and this is the path that has none.
-                      disabled={submitting}
-                      onSelect={() =>
-                        m.disabled === true ? handleDisableAccess(m._id, false) : openConfirm(m)
-                      }
+          {groups.map((g) => (
+            <section key={g.letter || "resultados"} aria-label={g.letter ? `Letra ${g.letter}` : "Resultados"}>
+              {g.letter && (
+                <h2 className="pb-1.5 pt-7 font-display text-[28px] font-semibold leading-none text-ink-dim md:text-[34px]">
+                  {g.letter}
+                </h2>
+              )}
+              <div className="border-t border-ink/[0.10]">
+                {g.rows.map((m) => {
+                  const facts = [
+                    ...(m.memberType ?? []).map(typeWord),
+                    ...(m.instruments ?? []),
+                  ];
+                  return (
+                    <div
+                      key={m._id}
+                      data-member-row=""
+                      className="flex min-h-[68px] items-center gap-3.5 border-b border-ink/[0.10] py-2.5"
                     >
-                      {m.disabled === true ? "Habilitar acceso" : "Deshabilitar acceso"}
-                    </MenuItem>
-                    <MenuItem icon={<TrashIcon />} danger disabled={submitting} onSelect={() => openModal("delete", m)}>
-                      Eliminar
-                    </MenuItem>
-                  </>
-                )}
-              </Menu>
-            </div>
+                      <Avatar
+                        name={displayName(m)}
+                        photoUrl={m.photoUrl}
+                        uploading={uploadingPhoto === m._id}
+                        onClick={() => handlePhotoClick(m._id)}
+                      />
+
+                      {/* Info */}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-baseline gap-2">
+                          <p className="truncate font-body text-[17px] font-semibold leading-tight text-ink">{displayName(m)}</p>
+                          {m.alias?.trim() && (
+                            <span className="hidden truncate font-body text-sm text-ink-muted sm:inline">{m.member_name}</span>
+                          )}
+                        </div>
+                        {/* No Tipo and no instrument: the line exists only from `md`, where the
+                            email fills it — a phone row must not carry an empty 14 px line. */}
+                        <p className={`mt-1 truncate font-body text-sm leading-tight text-ink-muted ${facts.length > 0 ? "" : "hidden md:block"}`}>
+                          {facts.join(" · ")}
+                          <span className="hidden md:inline">
+                            {facts.length > 0 && <span className="text-ink-dim"> · </span>}
+                            {m.email}
+                          </span>
+                        </p>
+                      </div>
+
+                      {/* Access or role, as a word. «Sin acceso» is the row's only statement
+                          about access now that the kill switch lives in the menu — it stays. */}
+                      {m.disabled === true ? (
+                        <span className="shrink-0 font-body text-sm text-negative-fg">Sin acceso</span>
+                      ) : (m.role ?? "member") !== "member" ? (
+                        <span className="hidden shrink-0 font-body text-sm text-ink-muted sm:inline">{ROLE_LABEL[m.role ?? "member"]}</span>
+                      ) : null}
+
+                      {/* Password indicator */}
+                      <span
+                        title={m.hasPassword ? "Tiene contraseña" : "Sin contraseña"}
+                        className={`w-2 h-2 rounded-full shrink-0 ${m.hasPassword ? "bg-positive-deep" : "bg-mono-600"}`}
+                      />
+
+                      {/* Actions — ONE menu per row (R5 ruling 6). The four hover-only icon
+                          buttons are gone: nothing on this row depends on hover, so a phone
+                          reaches every action the desktop does. */}
+                      <Menu
+                        label={`Acciones de ${displayName(m)}`}
+                        align="end"
+                        trigger={
+                          <Button variant="icon" size="lg" aria-label={`Acciones de ${displayName(m)}`}>
+                            <span aria-hidden="true" className="text-base leading-none">⋯</span>
+                          </Button>
+                        }
+                      >
+                        <MenuItem icon={<PencilIcon />} onSelect={() => openModal("edit", m)}>
+                          Editar
+                        </MenuItem>
+                        <MenuItem icon={<KeyIcon />} onSelect={() => openModal("password", m)}>
+                          Contraseña
+                        </MenuItem>
+                        {role === "super-admin" && (
+                          <>
+                            <MenuItem icon={<MaskIcon />} onSelect={() => handleImpersonate(m._id)}>
+                              Ver como este miembro
+                            </MenuItem>
+                            <MenuItem
+                              icon={<PhoneOffIcon />}
+                              disabled={submitting}
+                              onSelect={() => void handleRevokeAppSessions(m)}
+                            >
+                              Cerrar sesiones de la app
+                            </MenuItem>
+                            <MenuSeparator />
+                            <MenuItem
+                              icon={<BanIcon />}
+                              danger={m.disabled !== true}
+                              // `submitting` covers a second pick while the previous
+                              // access write is still in flight — the confirm's own
+                              // button is `busy`, and this is the path that has none.
+                              disabled={submitting}
+                              onSelect={() =>
+                                m.disabled === true ? handleDisableAccess(m._id, false) : openConfirm(m)
+                              }
+                            >
+                              {m.disabled === true ? "Habilitar acceso" : "Deshabilitar acceso"}
+                            </MenuItem>
+                            <MenuItem icon={<TrashIcon />} danger disabled={submitting} onSelect={() => openModal("delete", m)}>
+                              Eliminar
+                            </MenuItem>
+                          </>
+                        )}
+                      </Menu>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
           ))}
         </div>
       )}
 
       {/* Legend */}
       {!loading && members.length > 0 && (
-        <p className="font-label text-[11px] uppercase tracking-widest text-mono-600 flex items-center gap-2">
+        <p className="flex items-center gap-2 font-body text-xs text-ink-dim">
           <span className="w-2 h-2 rounded-full bg-positive-deep inline-block" /> Con contraseña
           <span className="w-2 h-2 rounded-full bg-mono-600 inline-block ml-2" /> Solo SSO
         </p>
@@ -1280,6 +1502,16 @@ function BanIcon() {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="10" />
       <line x1="4.9" y1="4.9" x2="19.1" y2="19.1" />
+    </svg>
+  );
+}
+
+function PhoneOffIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="6" y="2" width="12" height="20" rx="2" />
+      <line x1="11" y1="18" x2="13" y2="18" />
+      <line x1="3" y1="3" x2="21" y2="21" />
     </svg>
   );
 }

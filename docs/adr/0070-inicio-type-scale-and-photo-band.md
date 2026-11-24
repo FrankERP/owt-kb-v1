@@ -1,6 +1,6 @@
 # ADR-0070: Inicio is set on one type scale, with small caps on section titles only, over a team photo
 
-**Date:** 2026-10-23 · **Status:** Accepted
+**Date:** 2026-10-23 · **Status:** Accepted, amended by ADR-0088 (the member's services are cards again; the type scale stands)
 
 ## Context
 
@@ -84,4 +84,155 @@ pill; «Equipo» is the small-caps title, «Banda» is 17 px sentence case; a sh
   needs a border. Its CSS and `--lit-beam` stay in `brand.css` (removing the token would move the
   pinned composed-token count for nothing), and `litCard.test.ts` now asserts that NOTHING sets
   `data-lit` — a framed surface may adopt it again on purpose, never by accident.
+- **Canción took the system second (2026-10-23, same thread, branch `claude/project-thread-bkhhgz`):**
+  the page's title IS the song's name in the display face (`splitSongTitle` moves a trailing
+  «(Original Title)» to the authors' line), the key / BPM / compás pills share one 48 px ring in the
+  body face (`KeyDial`, `SongHeroPills`, `TempoPill` `md` — the sheet's `.brand-key-dial` badge and
+  the `sm` pill are unchanged), sections are `SHEET_TITLE` headings over hairline rows (`Referencia`,
+  `Historial`, the mixes), the lyric wrapper is 17 px body with no `prose`, and the loaded mix row is
+  the ONE row that differs: a filled `cta` control, «Tono · BPM · 1:42 / 4:36» from the `<audio>`
+  (`formatClock`), and its seek control under the name — the `Waveform` when the mix has peaks, a
+  `SeekBar` when it does not (the full-band mix). The play control is `Button`'s new `round` /
+  `roundCta` pair (a fixed 44 px circle, so no caller overrides `SIZE.lg` padding from `className`);
+  the seek maths is shared (`seekFractionAt` / `seekStep`). Without a lyric the page drops its
+  two-column grid and stacks one readable column; `loading.tsx` and the gallery's song fixture
+  mirror the new hero, and `.brand-song-hero` (the painted band) is deleted from `brand.css`
+  (`tokenLayer.test.ts` 42 → 37 occurrences). Tests: `keyDial`, `tempoPill`, `rehearsalPlayer`,
+  `seekBar`, `songTitle`, `formatClock`, `lyricMarkers` (the gallery fixture mirrors the new wrapper).
+- **Biblioteca and the song sheet took it third (2026-10-24, same thread):** «Biblioteca» is the
+  page's display-face title over one count line, the search is a hairline line beside a round
+  «Filtros» pill, the letter headings are the display face in the accent (an index, not a label),
+  the rows are hairlines with the key glyph on the left, and the drawer's primary says «Ver N
+  canciones». The sheet mirrors the song page's hero (key / BPM / compás rings under CueDialog's
+  own title), `SHEET_TITLE` sections over hairline rows («Ensayo», «Audio», «Acordes», «Últimas
+  veces tocada») and «Ver la página completa» as its last row. This pass also brought the second
+  brand colour: Frank saw the neutral mock as «casi todo blanco y negro» and chose rose for the
+  musical key (ADR-0071) — the library row's glyph, the song page's and the sheet's key pills,
+  `.brand-key-dial`. Tests: `libraryIndex`, `libraryRow`, `libraryFilters`, `songSheet`,
+  `tokenLayer` (37 → 33), `brandCss` (99 → 100), `lightContrast`.
+- **Calendario (PR #199) and Disponibilidad / Ajustes / Mi perfil (PR #200) followed on 2026-10-25/26**
+  (same thread; the calendar's own decisions are ADR-0067).
+- **The Control Room took it on 2026-10-27 (same thread, PR A of the Admin pass):** the TAB is the
+  page's title — every panel's `h1` is `PAGE_TITLE` and its count line the new `PAGE_LEDE` (17 px
+  body, `app/utils/homeHero.ts`) — and «Control Room» becomes the rail's `SHEET_TITLE` (a small
+  label over the strip below `lg`), with sentence-case rail items at 15 px. Servicios: the month
+  multi-select is text tabs (`MonthTab` / `formatMonthTab`) instead of pills, the integrity panel's
+  clean shape is one 14 px line behind a green dot, the cards keep their uppercase title (Frank's
+  standing rule) but say their state as a dot + word instead of a chip, print instruments as running
+  text instead of chips, and show a REVIEW action as a small amber flag in the icon cluster
+  (`ServiceReviewFlag`) — Frank rejected the big «Revisar datos» button on an incomplete draft («un
+  pequeño ícono en alguna esquina»). Participaciones stays the desktop board's first column, unboxed
+  (`BOARD_BASE`): he asked why the mock had dropped it. `ReadinessBadge` is deleted. Generar mes,
+  Editar mes and Editar servicio are untouched; Propuestas, Miembros and Disponibilidad as hairline
+  rows are PR B. Tests: `servicesBoard`, `ServiceReadinessCard`, `participationAlongside`,
+  `useIntegrityQueue`, `adminPanelsPolish`, `serviceCardModel`, `servicesOverview`.
+- **PR B of the Admin pass (2026-10-27, same thread): Propuestas, Miembros and Disponibilidad as hairline
+  rows.** A proposal is a row with the day in the display face, «Domingo 1 de noviembre» at 17 px and
+  «Propuesta de Gaby · 4 canciones · Pendiente» at 14 px, folding its setlist, message, thread and actions
+  under a chevron (what needs review opens on arrival, history stays folded); Miembros is letter sections
+  (the letter in the display face, muted) over rows of photo, alias, «Voz · Líder Dom» and the role as a
+  muted word («Sin acceso» in red), its Tipo / Rol / Orden filters in a «Filtros» sheet behind the
+  round pill Biblioteca uses, the search a hairline; Disponibilidad says its verdict in the lede («Sin
+  conflictos» green) and lists conflicts and upcoming unavailability as rows with the dates as one
+  Spanish run («20, 21 y 22 de noviembre», `adminRowCopy.ts`). The availability matrix, Generar mes, Editar
+  mes and Editar servicio are untouched. Tests: `adminRowCopy`, `groupMembersByLetter`,
+  `proposalsPanelHandoff`, `proposalsPanelThread`, `membersPanelMenu`, `availabilityPanelFailure`.
+- **Phase 6 of the Admin pass (2026-10-29, same thread, mock approved «Se ve bien»): Canciones and
+  Actividad, the two tabs PR A/B left.** The «Contenido» tab is named after its page, «Canciones»
+  (the tab IS the page title): «Agregar» primary, a `SearchLine` beside the «Filtros» pill (Tags /
+  Artista in the Biblioteca sheet), and the catalog as hairline rows under a display-face letter —
+  title, artist and tags as one quiet line, the key in the display face and the KEY colour
+  (ADR-0071: here the song is the protagonist), one menu per row instead of two icon buttons; the
+  tag chips, the note icon and the row frames are gone, the song sheets untouched. Actividad: the
+  three stat tiles become the lede («21 activos esta semana · 28 este mes · 4 sin entrar»), a new
+  Todos / Activos / Inactivos filter (finding who has not come in meant reading 34 rows), and one
+  hairline row per person with their photo, the state as dot + word, and the open row's history
+  with the provider as a word instead of a coloured badge. The letter rule is ONE function now,
+  `groupRowsByLetter` (`app/utils/libraryIndex.ts`), read by Biblioteca, Miembros and Canciones.
+  Tests: `adminPanelsPolish`, `activityPanelFailure`, `libraryIndex`.
+- **Phase 7 of the Admin pass (2026-10-29, same thread, mock v9 approved «Se ve bien»): the three
+  editors — Generar mes, Editar mes and Editar servicio.** Each editor owns its page head now: a
+  «← Servicios» ghost, the `PAGE_TITLE` («Generar mes» / «Editar mes» / «Editar servicio» — the
+  board's h1 is gone) and a `PAGE_LEDE` that states the step («Paso 1 de 2 · fechas y reglas») or
+  the month and its counts («Noviembre 2026 · 9 servicios · 2 con cambios», the service's date and
+  «publicado»/«borrador» for one service), with the month tools and «Ver mes completo» at its
+  right. Step 1 is `SHEET_TITLE` sections («Fechas», «Grupos del solver», «Reglas · N») over
+  hairlines: the pools are open checkbox clouds with a «Todos / Ninguno» ghost pair and a
+  `SearchLine` each (NOT fold rows — a closed `Collapse` is inert, and the pools are what the
+  step is for), a rule is a hairline row of its sentence with the pencil and «×» as 44 px targets
+  (the «≠»/«≥1» kind badges are gone), and the warnings (Tipo, cadence, coherence, the discard and
+  clear prompts) are `border-l-2` strips. The calendar's specials are hairline rows naming the date
+  and «cuenta / no cuenta para equidad», the composer a `SHEET_TITLE` block, the unavailable list a
+  ghost fold. The grid's chrome: the day in the display face at 30 px with the month under it, the
+  service type as a dot + word (`CARD_RAIL`, the Servicios cards' rail: accent Sunday, warning
+  Saturday, info special — the calendar's cells and legend now draw the same three; its Saturday
+  was the recency tone, the one Saturday colour in admin that differed), «Publicado / Borrador / Guardado» as words, row labels at 15 px semibold,
+  chips as pills, the candidates column titled `SHEET_TITLE` «Candidatos» over hairline rows with
+  the check at the left. **Below `xl` the candidates are a `CueDialog` sheet** (`useMediaQuery`,
+  `app/components/ui/useMediaQuery.ts` — the one media-query hook, `Select`'s pointer tests moved
+  onto it) with a `SearchLine` and a «Listo» primary, because a list stacked under a whole month
+  was a scroll away from the seat that was tapped; never in full screen, whose overlay inerts the
+  page, and leaving full screen on a narrow viewport closes the picker rather than mounting the
+  sheet already open. The sheet stays mounted after its first open and is driven by `open={…}`
+  over the last seat and the last list it drew, so it animates out with its body; `restoreFocusRef`
+  hands the post-exit focus to the seat's action, and a candidate row carries `aria-pressed`. One service alone narrows the label track to `minmax(96px, 9rem)` so a phone shows the seat
+  and its chips side by side. The create footer is «Cancelar» · «Nada se guarda hasta crear los
+  borradores.» · «Crear y publicar» · «Crear N borradores», the stored save bar a hairline.
+  Tests: `PlannerGrid` (the sheet, via a `matchMedia` stub), `MonthCalendar`, the `MonthGenerator`
+  suites (cards by `[data-rule-card]`, the back control by its `aria-label`), `servicesBoard`
+  (the h1 arrives with the editor), `houseButtonSweep` (MonthGenerator 26 → 19).
+- **Phase 8 of the Admin pass (2026-10-30, same thread, mock approved «Apruebo»): the sign-in screen
+  and «Acceso no autorizado», the last screens of the rollout.** The glass card, its beam
+  (`.brand-stage-hero`, kept in `brand.css` for the gallery's swatch fixture only), the spaced
+  uppercase «BACKSTAGE» and the cyan «Acceso del equipo» label are gone: the page is the same head
+  as every other screen — the mark at 72 px (88 from `md`), «Backstage» as the `PAGE_TITLE`, one
+  `PAGE_LEDE` («Oasis · inicia sesión para ver tu calendario y lo que te toca.», reworded 2026-11-10 when the app became «Backstage» for every ministry) — over
+  «Continuar con Google» as a full-width secondary, «o con tu correo» as a `SHEET_TITLE` between
+  hairlines, Correo and Contraseña as Mi perfil's hairline fields (`ui/hairlineField.ts`, 17 px, a
+  visible label each instead of an `aria-label`) with a «Mostrar / Ocultar» ghost on the password's
+  rule (new: a phone is where a member cannot see what they typed), and «Iniciar sesión» as the
+  full-width primary; the error is a `border-l-2` strip, the forgotten-password line stays at 13 px.
+  «Acceso no autorizado» follows the same head with a 15 px explanation and a full-width primary
+  («Salir y entrar con otra cuenta»). The reveal stagger (0, 3, 4, 5, 6, 7) is unchanged. Tests:
+  `signin.test.tsx`, `fallbackPages.test.tsx`.
+- **The house controls went sentence case (2026-10-27, same thread, Frank: «cambialos»).** `Button` and
+  `SegmentedControl` were label-styled — Jura, uppercase, `tracking-widest` — and every screen of this
+  pass overrode them (`normal-case tracking-normal font-body` on a dozen pills) because the mocks set
+  every action in the body face at 600. That is the base now: body face, semibold, sentence case, sizes
+  up with the case on the theme's own steps (11/13/13 px → xs 13 / sm 15 / sm 15 for `Button`, 11/13 →
+  xs/sm for the control) and `leading-tight` so no adopter's row grew. The ~40 bare `<button>`s that
+  mirrored the old face (dialog footers, rule-form links, the song FAB, the banner's «Salir») carry
+  the same three utilities, so nothing shouts beside a house control. Small caps stay where they are
+  LABELS — `SHEET_TITLE`, field labels, `Menu` rows, toasts — and the CARD titles keep their uppercase
+  (the standing rule above is untouched: it was about titles, not actions). Guards: `Button.test.tsx`
+  and `SegmentedControl.test.tsx` refuse `uppercase`/`font-label` on the base. The theme-gallery VR
+  baselines are stale until recaptured on a Mac (`e2e/theme-gallery/README.md`).
+- **Jóvenes took it on 2026-11-10 (thread «Revisar diseño de Jóvenes», review doc + mocks approved).**
+  `/jovenes` and Planear Jóvenes (PRs #226, #227, #233) were built in the style this ADR retired:
+  `rounded-2xl` cards with boxes inside, 24 px titles, 14 px body, 11 px capitals on every label,
+  and «Te toca» as an ACCENT chip while the Calendario's sheet for the same meeting said «Tú» in
+  green. Now `/jovenes` is «Jóvenes» as the `PAGE_TITLE` over a lede («3 reuniones por venir · te
+  toca el sábado 14 de noviembre»), each meeting headed by its DATE in the display face (28/34 px;
+  what tells four Saturdays apart) with the rows of the Calendario's day sheet under it — one
+  component, `JovenesMeetingBody`, so the two cannot drift again. Planear Jóvenes takes the MONTH
+  as its title with the Calendario's round arrows (`monthTitle`, `plannerLede`), «Rol del sábado»
+  and «Calendario de grupos» as `SHEET_TITLE` sections over hairline rows led by the day number,
+  the state as a dot + word for BOTH states (`MeetingState`; only a draft used to say anything),
+  and house buttons (`secondary` / `ghost`; `pill` is a filter toggle and bare `Link`s were not
+  buttons). The three sheets keep CueDialog's own title (they overrode it with a 16 px uppercase
+  span), say a refusal in `CueDialogStatus`, and set Fecha / Hora / Llegada in ONE field —
+  `DateField`'s new `lg` size, the height and face of `Select size="lg"` — where a boxed date sat
+  beside a hairline text clock (and a phone's digits-only keyboard had no «:» to type one with).
+  The program editor is a numbered list between hairlines with icon buttons for order and removal.
+  CSS `capitalize` is gone from these screens: it wrote «14 De Noviembre» (`dayTitle`, `dayWords`).
+  In the Calendario the plain Saturday meeting is named «Jóvenes» (as «Oasis Kids») and its agenda
+  row names only who is in charge: with every seat spelled out it ran to four lines on a phone.
+  No read or write changed (`ministryEventReads.ts`, `ministryEventCommit.ts` untouched). Tests:
+  `jovenesEventView`, `jovenesPlannerModel`, `calendarMinistry`, `jovenesPage`, `saturdayPlanner`,
+  `groupCalendar`, `jovenesDayCard`.
+- **Jóvenes left the row pattern on 2026-11-12 (ADR-0086).** With every meeting of five groups on
+  one screen the hairline rows read, in Frank's words, as «una tabla con texto». `/jovenes` and
+  Planear Jóvenes now draw each meeting as a card with a calendar leaf, group colours and faces;
+  the page title, the lede, the sheets' fields and the copy rules of the bullet above stand, and
+  nothing outside those two screens changed surface. Read ADR-0086 before «restoring» either one.
 - Undoing it means re-adding the eyebrows and frames the mock removed; the tests above will say so.

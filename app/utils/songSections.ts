@@ -37,6 +37,13 @@ export interface SongSectionInput {
 const filled = (v: unknown[] | null | undefined): boolean => (v?.length ?? 0) > 0;
 
 /**
+ * Whether a song has a «Letra» section at all: lyrics OR a chord chart (ADR-0018 —
+ * a chart-only song still shows one). The Canciones lede counts the rest as «sin letra».
+ */
+export const hasSongLyrics = (post: { body?: unknown[] | null; chords?: unknown[] | null } | null | undefined): boolean =>
+  filled(post?.body) || filled(post?.chords);
+
+/**
  * The sections that will paint, in page order. `historyCount` is separate
  * because play history is a second read, not a field on the song.
  */
@@ -46,7 +53,7 @@ export function songSections(
 ): SongSection[] {
   // Chords count as lyrics: they render inside the «Letra» section, so a song
   // with a chart and no words still has something to show there.
-  const hasLyrics = filled(post?.body) || filled(post?.chords);
+  const hasLyrics = hasSongLyrics(post);
   const hasRefLinks =
     !!post?.musicalReferenceUrl || !!post?.lyricsVideoUrl || filled(post?.referenceLinks);
 

@@ -85,9 +85,48 @@ describe("MyAvailabilityPanel — one surface (R3 F3)", () => {
         <MyAvailabilityPanel initialRev="rev-1" initialDates={["2026-09-20", "2026-10-04"]} initialNotes={[]} />
       </MotionProvider>,
     );
-    expect(screen.getByText(/2 fechas marcadas como no disponible/)).toBeTruthy();
+    // The lede's live count (the «millones» pass): «2 días marcados · el viernes es ensayo».
+    expect(screen.getByText(/2 días marcados/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Guardar" })).toBeNull();
     expect(document.querySelector("[data-availability-save-bar]")).toBeNull();
+  });
+
+  it("a Jóvenes pastor's calendar: no rehearsal line, the meeting's dot in the legend and in the day's label", () => {
+    const { rerender } = render(
+      <MotionProvider>
+        <MyAvailabilityPanel initialRev="rev-1" initialDates={[]} services={{ "2026-09-19": ["sat"] }} />
+      </MotionProvider>,
+    );
+    // Alabanza's calendar, as it was: the rehearsal line, three dots in the legend.
+    expect(screen.getByText(/el viernes es ensayo/)).toBeTruthy();
+    expect(screen.queryByText("Jóvenes")).toBeNull();
+    expect(screen.getByRole("button", { name: /19 de septiembre.*, hay servicio$/ })).toBeTruthy();
+
+    rerender(
+      <MotionProvider>
+        <MyAvailabilityPanel
+          initialRev="rev-1"
+          initialDates={[]}
+          rehearsal={false}
+          services={{ "2026-09-19": ["sat", "jovenes"], "2026-09-20": ["jovenes"] }}
+        />
+      </MotionProvider>,
+    );
+    expect(screen.queryByText(/el viernes es ensayo/)).toBeNull();
+    expect(screen.getByText("Jóvenes")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /19 de septiembre.*, hay servicio, hay reunión de Jóvenes$/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /20 de septiembre[^,]*, hay reunión de Jóvenes$/ })).toBeTruthy();
+  });
+
+  it("tells a Jóvenes pastor that whoever plans there sees these days, and nobody else (ADR-0090)", () => {
+    const { rerender } = renderPanel();
+    expect(screen.queryByText(/Quien planea en Jóvenes/)).toBeNull();
+    rerender(
+      <MotionProvider>
+        <MyAvailabilityPanel initialRev="rev-1" initialDates={[]} initialNotes={[]} seenByJovenesPlanners />
+      </MotionProvider>,
+    );
+    expect(screen.getByText("Quien planea en Jóvenes ve estos días, sin tu nota.")).toBeTruthy();
   });
 
   it("«Marcar días» becomes «Listo» and arms the grid; the mode is the host's", () => {
@@ -99,12 +138,12 @@ describe("MyAvailabilityPanel — one surface (R3 F3)", () => {
     fireEvent.click(mark);
     const done = screen.getByRole("button", { name: "Listo" });
     expect(done.getAttribute("aria-pressed")).toBe("true");
-    expect(months.style.touchAction).toBe("none");
-    expect(screen.getByText(/Arrastra sobre los días/)).toBeTruthy();
+    expect(months.style.touchAction).toBe("pan-y");
+    expect(screen.getByText(/Mantén presionado y arrastra/)).toBeTruthy();
     fireEvent.click(done);
     expect(screen.getByRole("button", { name: "Marcar días" })).toBeTruthy();
     // One hint line in both states, so the flip never shifts the months.
-    expect(screen.queryByText(/Arrastra sobre los días/)).toBeNull();
+    expect(screen.queryByText(/Mantén presionado y arrastra/)).toBeNull();
     expect(screen.getByText(/Toca «Marcar días»/)).toBeTruthy();
   });
 

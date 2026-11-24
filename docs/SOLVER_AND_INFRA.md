@@ -270,7 +270,12 @@ ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Be
   HTTP 422 as a valid business response.
 - **Local dev:** if `OWT_SOLVER_URL` is unset, spawns `gcf/owt_solver_v2.py --json-mode`
   (python from `OWT_SOLVER_PYTHON`, default a local miniforge `owt-roles` env), SIGKILL after
-  120s.
+  120s. **Only under `next dev`:** a production build (`NODE_ENV === "production"`, so also a local
+  `next start`) answers `OWT_SOLVER_URL is not set` (422, `transport_error`) instead, and v3's
+  `solveV3` answers `not_configured`. The gate is a build-time constant so the bundler drops the
+  spawn; left in, its `process.cwd()` script path made the file tracer pack the whole repository
+  into `/api/admin/solve` and `/api/mcp` (57–59 MB each, 2026-10-27). Guard:
+  `functionTraceGuard.test.ts`.
 - Every `ok: false` from a solve is answered with a 422 (the auth and body checks answer 403 and
   400 before any solve). The ones the route makes when it could not get the solver's answer carry
   `transport_error: true` (see Input / output); the solver's own never do. Guard:
@@ -438,7 +443,8 @@ re-pin locally), `functions-framework>=3.0,<4`. Entry point `solve`.
 ### Instrument seats are filled locally, not by the solver
 `app/components/admin/instrumentFill.ts` runs inside «Generar mes» on every exit (like the
 specials filler, `localFill.ts`). It seats only EMPTY `instrumento:` cells on weekend columns,
-through `rankCandidates` per placement (Tipo, availability, same-category block), among
+through `rankCandidates` per placement (Tipo, availability, the seat-clash block — same category, or a
+voice seat for someone not marked «Canta y toca a la vez», ADR-0078), among
 members who DECLARE the instrument (`teamMembers.instruments`). Ordering: fewest instrument
 seats this month **per member, all instruments** → did not play the previous weekend
 service → name. Guarantee: per-member total balance in the month; for instruments whose
@@ -593,7 +599,7 @@ and `checker.py` follows, the Python test goes red until the fixture and the Typ
   `roles/secretmanager.secretAccessor` on `owt-solver-api-key` is checked
   (`gcloud secrets get-iam-policy owt-solver-api-key`), and the trigger is created. Until then the
   function does not exist and a merge that touches `gcf_v3/**` deploys nothing. **Manual fallback
-  (2026-10-22, ADR-0071):** dispatch `deploy` of `.github/workflows/solver-v3-ops.yml` from `main`
+  (2026-10-22, ADR-0092):** dispatch `deploy` of `.github/workflows/solver-v3-ops.yml` from `main`
   (Actions → Solver v3 ops → Run workflow; a phone browser works). It re-runs this same trigger at
   `main`'s tip — the same config, account and `$COMMIT_SHA` — after Frank approves the run, then
   verifies. It refuses when `main` moved since the dispatch (re-dispatch), and a `gcf_v3` merge
@@ -603,7 +609,7 @@ and `checker.py` follows, the Python test goes red until the fixture and the Typ
 
 #### Verifying a v3 deploy
 
-**From GitHub Actions (ADR-0071; status 2026-10-22: merged, NOT yet set up or rehearsed — use
+**From GitHub Actions (ADR-0092; status 2026-10-22: merged, NOT yet set up or rehearsed — use
 the manual steps until `docs/SECRETS.md` «GitHub Actions → Google» says otherwise, and treat the
 automatic push path as unproven until a `gcf_v3/**` merge after setup shows a green `verify`):** `.github/workflows/solver-v3-ops.yml`
 runs `verify` automatically after every push to `main` that touches `gcf_v3/**` (it waits up to
@@ -1032,7 +1038,7 @@ Strategy: **wrap the existing Next.js app** (not a React Native rewrite). Full r
 [MOBILE.md](MOBILE.md).
 
 - **`capacitor.config.ts`** — `appId: "com.owtBackstage.app"` (permanent once published),
-  `appName: "OWT Backstage"`, `webDir: "mobile/fallback"`. **Phase 1** (current): online-only
+  `appName: "Backstage"` (was `OWT Backstage` until 2026-11-10), `webDir: "mobile/fallback"`. **Phase 1** (current): online-only
   wrap loading `server.url = "https://owt-backstage.vercel.app"`.
 - **`mobile/fallback/index.html`** — minimal offline shell shown when the remote app is
   unreachable.

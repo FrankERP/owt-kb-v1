@@ -25,7 +25,8 @@
 //
 // CLIENT (it owns pointer state). Server Components may still render it as JSX.
 
-import React, { useCallback, useRef, useState, useSyncExternalStore, type ComponentPropsWithoutRef, type ReactNode } from "react";
+import React, { useCallback, useRef, useState, type ComponentPropsWithoutRef, type ReactNode } from "react";
+import { useMediaQuery } from "./useMediaQuery";
 import { normalizeText } from "@/app/utils/normalizeText";
 import Button from "./Button";
 import Menu, { MenuItem } from "./Menu";
@@ -47,27 +48,9 @@ const CHROME =
 const FINE_POINTER = "(hover: hover) and (pointer: fine)";
 const ANY_COARSE_POINTER = "(any-pointer: coarse)";
 
-/** `matchMedia` is absent in jsdom and on the server; both answer `false` (the COARSE path for `useFinePointer`). */
-function mql(query: string) {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return null;
-  return window.matchMedia(query);
-}
-function subscribe(query: string) {
-  return (onChange: () => void) => {
-    const q = mql(query);
-    q?.addEventListener?.("change", onChange);
-    return () => q?.removeEventListener?.("change", onChange);
-  };
-}
-const subscribeFine = subscribe(FINE_POINTER);
-const fineSnapshot = () => mql(FINE_POINTER)?.matches ?? false;
-const subscribeAnyCoarse = subscribe(ANY_COARSE_POINTER);
-const anyCoarseSnapshot = () => mql(ANY_COARSE_POINTER)?.matches ?? false;
-const serverSnapshot = () => false;
-
 /** True on a mouse/trackpad: the pointer test `Select` uses to pick the house menu over the OS one. */
 export function useFinePointer(): boolean {
-  return useSyncExternalStore(subscribeFine, fineSnapshot, serverSnapshot);
+  return useMediaQuery(FINE_POINTER);
 }
 
 /**
@@ -76,7 +59,7 @@ export function useFinePointer(): boolean {
  * screen, so HTML5 drag (which iOS turns into a scroll hijack) stays off there.
  */
 export function useAnyCoarsePointer(): boolean {
-  return useSyncExternalStore(subscribeAnyCoarse, anyCoarseSnapshot, serverSnapshot);
+  return useMediaQuery(ANY_COARSE_POINTER);
 }
 
 /**

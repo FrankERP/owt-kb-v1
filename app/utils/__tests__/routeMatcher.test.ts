@@ -32,6 +32,9 @@ function appRoutes(): string[] {
  * a route cannot happen as a side effect of widening a regex.
  */
 const PUBLIC_ROUTES = [
+  "/api/app/v1/auth/revoke", // native-app sign-out — authenticated by the refresh token itself; 200 either way (ADR-0091)
+  "/api/app/v1/auth/token", // native-app token endpoint — a signed code + PKCE or a signed refresh token, no session (ADR-0091)
+  "/api/app/v1/me", // native-app API — requireAppSession (bearer + live access + declared level) first (ADR-0091)
   "/api/auth/sample", // NextAuth's own catch-all — it IS the login flow
   "/api/calendar/sample/sample/sample", // member calendar feed — HMAC over member id + generation verified with zero I/O before any read; 404 otherwise (ADR-0057)
   "/api/cron/flush-notifications", // Bearer CRON_SECRET, checked in-handler
@@ -41,6 +44,8 @@ const PUBLIC_ROUTES = [
   "/api/oauth/register", // stateless DCR — validates the body itself, no session (P0 step 6)
   "/api/oauth/token", // OAuth token endpoint — a signed code + PKCE or a signed refresh token, no session (P0 step 8)
   "/api/service-readiness-verification/identity", // A3 §4; fails closed with 404
+  "/app/callback/android", // inert landing page of the verified Android redirect — renders nothing from the query (ADR-0091)
+  "/app/callback/ios", // inert landing page of the verified iOS redirect — renders nothing from the query (ADR-0091)
   "/auth/not-a-member",
   "/auth/signin",
   // The theme gallery: statically prerendered, reads nothing (no Sanity client,
@@ -62,6 +67,26 @@ describe("auth middleware route matcher", () => {
 
     const ungated = routes.filter((p) => !middlewareRuns(p));
     expect(ungated).toEqual(PUBLIC_ROUTES);
+  });
+
+  it("opens the native-app API and the two callback pages, and nothing near them (ADR-0091)", () => {
+    for (const p of ["/api/app/v1/me", "/api/app/v1/auth/token", "/api/app/v1/auth/revoke", "/api/app/v1", "/app/callback/ios", "/app/callback/android"]) {
+      expect(middlewareRuns(p), p).toBe(false);
+    }
+    for (const p of [
+      "/app/authorize",
+      "/app/authorize/submit",
+      "/app/callbacks",
+      "/app/callback/ios/x",
+      "/app/callback/web",
+      "/app/callback",
+      "/api/app",
+      "/api/apps",
+      "/api/app/v2/me",
+      "/api/app/v1x",
+    ]) {
+      expect(middlewareRuns(p), p).toBe(true);
+    }
   });
 
   it("gates protected app routes", () => {

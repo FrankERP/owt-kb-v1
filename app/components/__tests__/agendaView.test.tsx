@@ -97,23 +97,60 @@ function mountAgenda(activeDays: Record<string, ActiveDay[]> = ACTIVE, onSelect 
 }
 
 describe("AgendaView", () => {
-  it("lists one row per service in date order, under its month divider", () => {
+  it("lists one card per service in date order, under its month title and the month's count", () => {
     mountAgenda();
     expect(rows().map((b) => b.dataset.date)).toEqual(["2026-09-13", "2026-09-20", "2026-10-04"]);
-    expect(screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual([
-      "Septiembre 2026",
-      "Octubre 2026",
-    ]);
+    const titles = screen.getAllByRole("heading", { level: 3 });
+    // The title's own text, then the count — decorative, so it is not heard as part of the year.
+    expect(titles.map((h) => h.firstChild?.textContent)).toEqual(["Septiembre 2026", "Octubre 2026"]);
+    expect(titles.map((h) => h.lastElementChild?.textContent)).toEqual(["2", "1"]);
+    expect(titles.every((h) => h.lastElementChild?.getAttribute("aria-hidden") === "true")).toBe(true);
   });
 
-  it("reads the day and its short date, with the service's summary under it", () => {
+  it("is a card (ADR-0088): the date as a leaf, the day as the title, the clock, and the facts as faces and pictures", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 10, 9, 0, 0)); // 2026-09-10 local
     mountAgenda();
     const row = rows()[0];
-    // jsdom's ICU renders es-MX `weekday: short` as "dom." and `month: short` as
-    // "sept."; only the day number is stable across ICU builds, so the words are
-    // matched loosely (the uppercase is CSS, invisible to textContent).
-    expect(row.textContent).toMatch(/dom.*13.*sep/i);
-    expect(within(row).getByText("Lead Ana, Beto · Keys Sofi · 2 canciones")).toBeTruthy();
+    expect(row.className).toContain("brand-surface");
+    // The leaf (decorative — the row's label says the date), the day word as the uppercase
+    // title, the clock by the feed's one rule (`serviceClock`: a Sunday at 11:00).
+    const leaf = row.querySelector("time")!;
+    expect(leaf.getAttribute("datetime")).toBe("2026-09-13");
+    expect(leaf.getAttribute("aria-hidden")).toBe("true");
+    expect(within(row).getByText("13").className).toContain("font-display");
+    expect(within(row).getByText("Domingo").className).toContain("uppercase");
+    expect(within(row).getByText("11:00")).toBeTruthy();
+    // Who leads and the set — never the whole team spelled out (that sentence stays in the
+    // label for a screen reader; the eye gets the sheet one tap away).
+    expect(row.textContent).toContain("Lead Ana y Beto");
+    expect(row.textContent).toContain("2 canciones");
+    expect(row.textContent).not.toContain("Keys Sofi");
+    // A Saturday card at the standing 18:00, its songs still to come.
+    expect(within(rows()[1]).getByText("18:00")).toBeTruthy();
+    expect(rows()[1].textContent).toContain("Setlist pendiente");
+  });
+
+  it("says «Setlist pendiente» only of a worship service still to come — in the label too", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 10, 9, 0, 0)); // 2026-09-10 local
+    const noSongs = (date: string) => sunday(date, { leads: ["Ana"], setlist: null });
+    render(
+      <MotionProvider>
+        <AgendaView
+          activeDays={{ "2026-09-06": [noSongs("2026-09-06")], "2026-09-13": [noSongs("2026-09-13")] }}
+          todayStr="2026-09-10"
+          onSelect={vi.fn()}
+          emptyMessage="vacío"
+        />
+      </MotionProvider>,
+    );
+    // The past row (a browsed month) simply has no songs; the coming one is waiting for them.
+    expect(rows()[0].textContent).not.toContain("Setlist pendiente");
+    expect(rows()[0].getAttribute("aria-label")).not.toContain("setlist pendiente");
+    expect(rows()[0].textContent).toContain("Lead Ana");
+    expect(rows()[1].textContent).toContain("Setlist pendiente");
+    expect(rows()[1].getAttribute("aria-label")).toContain(", setlist pendiente");
   });
 
   it("names the day, the long date, the countdown and the summary in the row's label", () => {
@@ -192,13 +229,15 @@ describe("AgendaView", () => {
     expect(rows()[0].getAttribute("aria-label")).not.toMatch(/conflicto/);
   });
 
-  it("names a special service after its date — Sábado/Domingo rows don't repeat the day word", () => {
-    mountAgenda({ "2026-09-13": [special("2026-09-13")] });
+  it("titles a special row with its own name and no day word; a Sunday row says «Domingo» once", () => {
+    mountAgenda({ "2026-09-13": [special("2026-09-13", { time: "19:30" })] });
     expect(within(rows()[0]).getByText("Noche de alabanza")).toBeTruthy();
-    // A regular Sunday/Saturday row carries no second name — the day word already said it.
+    expect(within(rows()[0]).queryByText("Domingo")).toBeNull();
+    // A special's clock is its own `time`; a weekend's is the standing hour.
+    expect(within(rows()[0]).getByText("19:30")).toBeTruthy();
     cleanup();
     mountAgenda({ "2026-09-13": [sunday("2026-09-13")] });
-    expect(within(rows()[0]).queryByText("Domingo")).toBeNull();
+    expect(within(rows()[0]).getAllByText("Domingo")).toHaveLength(1);
   });
 
   it("F1 — pills «Tú · Keys» for the row where the signed-in member is seated", () => {
@@ -323,13 +362,15 @@ describe("CalendarView host", () => {
     // The grid's today cell (the strip has one too, without `aspect-square`). After the
     // pick the day sheet opens and the page behind it goes inert, so the cell is read
     // from the DOM rather than by role.
-    const gridToday = () => document.querySelector<HTMLButtonElement>('button.aspect-square[aria-current="date"]')!;
-    expect(gridToday().className).toContain("ring-accent/50");
+    // (The grid's circle is `h-9`; the strip's is `h-10`.)
+    const gridToday = () => document.querySelector<HTMLButtonElement>('button.h-9[aria-current="date"]')!;
+    expect(gridToday().className).toContain("ring-ink/70");
     fireEvent.click(gridToday());
-    expect(screen.getByRole("dialog", { name: "Detalle del día" })).toBeTruthy();
+    // The sheet is titled by the date now, not «Detalle del día».
+    expect(screen.getByRole("dialog", { name: /jueves.*10.*septiembre/i })).toBeTruthy();
     expect(gridToday().className).toContain("bg-accent");
     expect(gridToday().className).toContain("ring-surface-base/70");
-    expect(gridToday().className).not.toContain("ring-accent/50");
+    expect(gridToday().className).not.toContain("ring-ink/70");
   });
 
   it("retires «Lista» — the mode is Agenda or Mes", () => {
@@ -338,11 +379,24 @@ describe("CalendarView host", () => {
     expect(screen.queryByRole("radio", { name: "Calendario" })).toBeNull();
   });
 
-  it("opens the day sheet with the full card when a row is picked", () => {
+  it("opens the day sheet — titled by the date, the clock under it, the run sheet with «Ensayar» — when a row is picked", () => {
     mountHost();
     fireEvent.click(rows()[0]);
-    const dialog = screen.getByRole("dialog", { name: "Detalle del día" });
-    expect(within(dialog).getByRole("heading", { level: 3 }).textContent).toMatch(/Domingo/);
+    // The same run sheet Inicio opens on (`DayCard hero`), not the default card with its
+    // own uppercase header inside a sheet called «Detalle del día».
+    const dialog = screen.getByRole("dialog", { name: /domingo.*13.*septiembre/i });
+    expect(within(dialog).getByText("11:00")).toBeTruthy();
+    expect(within(dialog).getByText("Setlist")).toBeTruthy();
+    expect(within(dialog).getByText(/Ensayar el setlist/)).toBeTruthy();
+    // One service on the day: the sheet's line names it, so the card's own identity
+    // line («Domingo · 13 sep · 11:00») is not said twice.
+    expect(within(dialog).queryByText(/Domingo · 13/)).toBeNull();
+  });
+
+  it("switches to Mes: the legend names the green dot too", () => {
+    mountHost();
+    fireEvent.click(screen.getByRole("radio", { name: "Mes" }));
+    expect(screen.getByText("Te toca")).toBeTruthy();
   });
 
   it("brings the agenda along when the strip pages to another week", () => {
@@ -360,5 +414,122 @@ describe("CalendarView host", () => {
   it("carries the month header as the route's only heading level 2", () => {
     mountHost();
     expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual(["Septiembre 2026"]);
+  });
+});
+
+// 2026-10-29 — the ministry filter, for a member of Alabanza and Oasis Kids.
+describe("CalendarView — ministry filter", () => {
+  const kidsSunday = (date: string, mine = false): ActiveDay => ({
+    day: "Oasis Kids",
+    date,
+    kids: {
+      seats: [
+        { seat: "ensenanza", label: "Enseñanza", pair: "Ana y Luis", mine: false },
+        { seat: "chiquitos", label: "RG Chiquitos", pair: "Beto y Sofi", mine },
+        { seat: "medianos", label: "RG Medianos", pair: null, mine: false },
+        { seat: "grandes", label: "RG Grandes", pair: "Mkz y Caro", mine: false },
+      ],
+    },
+  });
+  const BOTH: Record<string, ActiveDay[]> = {
+    ...ACTIVE,
+    "2026-09-13": [...ACTIVE["2026-09-13"], kidsSunday("2026-09-13", true)],
+    "2026-09-27": [kidsSunday("2026-09-27")],
+  };
+
+  function mountFiltered(view: "all" | "worship" | "kids" | undefined, activeDays = BOTH) {
+    render(
+      <MotionProvider>
+        <ToastProvider>
+          <CueDialogProvider>
+            <CalendarView activeDays={activeDays} viewMonth={null} todayStr="2026-09-10" ministryView={view} />
+          </CueDialogProvider>
+        </ToastProvider>
+      </MotionProvider>,
+    );
+  }
+
+  afterEach(() => {
+    document.cookie = "owt_calendar_view=; path=/; max-age=0";
+  });
+
+  it("shows no ministry control to a reader of one ministry", () => {
+    mountHost();
+    expect(screen.queryByRole("radiogroup", { name: "Ministerio" })).toBeNull();
+    expect(screen.queryByRole("radio", { name: "Todos" })).toBeNull();
+  });
+
+  it("opens on the remembered view and lists both ministries under «Todos»", () => {
+    mountFiltered("all");
+    expect(screen.getByRole("radio", { name: "Todos" }).getAttribute("aria-checked")).toBe("true");
+    expect(rows().map((r) => r.getAttribute("aria-label")?.split(",")[0])).toEqual([
+      "Domingo", "Oasis Kids", "Sábado", "Oasis Kids", "Domingo",
+    ]);
+  });
+
+  it("«Alabanza» hides every Kids Sunday; «Oasis Kids» hides every worship service", () => {
+    mountFiltered("all");
+    fireEvent.click(screen.getByRole("radio", { name: "Alabanza" }));
+    expect(rows().map((r) => r.getAttribute("aria-label")?.split(",")[0])).toEqual(["Domingo", "Sábado", "Domingo"]);
+    fireEvent.click(screen.getByRole("radio", { name: "Oasis Kids" }));
+    expect(rows().map((r) => r.getAttribute("aria-label")?.split(",")[0])).toEqual(["Oasis Kids", "Oasis Kids"]);
+  });
+
+  it("starts on a remembered single ministry", () => {
+    mountFiltered("kids");
+    expect(screen.getByRole("radio", { name: "Oasis Kids" }).getAttribute("aria-checked")).toBe("true");
+    expect(rows()).toHaveLength(2);
+  });
+
+  it("remembers the choice on this device", () => {
+    mountFiltered("all");
+    fireEvent.click(screen.getByRole("radio", { name: "Alabanza" }));
+    expect(document.cookie).toContain("owt_calendar_view=worship");
+  });
+
+  it("counts only what the chosen view shows", () => {
+    mountFiltered("all");
+    expect(screen.getByText(/5 servicios por venir/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("radio", { name: "Oasis Kids" }));
+    expect(screen.getByText(/2 servicios por venir/)).toBeTruthy();
+  });
+
+  it("never says «Setlist pendiente» of a Kids Sunday: it has no setlist to wait for", () => {
+    mountFiltered("kids");
+    for (const row of rows()) {
+      expect(row.textContent).not.toContain("Setlist pendiente");
+      expect(row.getAttribute("aria-label")).not.toContain("setlist pendiente");
+    }
+  });
+
+  it("marks the reader's Kids seat «Tú» in the row, decided by the server's flag", () => {
+    mountFiltered("kids");
+    const row = rows()[0];
+    // «te tocó» or «te toca» by the real clock; the seat is what this pins.
+    expect(row.getAttribute("aria-label")).toMatch(/te toc[aó]: RG Chiquitos$/);
+    expect(within(row).getByText("Tú · RG Chiquitos")).toBeTruthy();
+  });
+
+  it("opens a Kids Sunday as the four seats, with «Tú» on the reader's pair", () => {
+    mountFiltered("kids");
+    fireEvent.click(rows()[0]);
+    const sheet = screen.getByRole("dialog");
+    const kids = within(sheet).getByRole("region", { name: "Oasis Kids" });
+    expect(within(kids).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
+      "EnseñanzaAna y Luis",
+      "RG ChiquitosTú · Beto y Sofi",
+      "RG MedianosSin asignar",
+      "RG GrandesMkz y Caro",
+    ]);
+    expect(within(kids).getByRole("link", { name: "Ver Oasis Kids" }).getAttribute("href")).toBe("/kids");
+  });
+
+  it("names Oasis Kids in the Mes legend only while a Kids Sunday is shown", () => {
+    mountFiltered("all");
+    fireEvent.click(screen.getByRole("radio", { name: "Mes" }));
+    const legendKids = () => screen.queryAllByText("Oasis Kids").filter((el) => el.className.includes("text-[13px]"));
+    expect(legendKids()).toHaveLength(1);
+    fireEvent.click(screen.getByRole("radio", { name: "Alabanza" }));
+    expect(legendKids()).toHaveLength(0);
   });
 });

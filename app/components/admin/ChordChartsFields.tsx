@@ -22,7 +22,7 @@ export function ChordChartsFields({
         <button
           type="button"
           onClick={() => onChange(addChart(charts, defaultKey))}
-          className="font-label text-[11px] uppercase tracking-widest text-accent transition-colors hover:text-accent/70"
+          className="font-body font-semibold leading-tight text-xs text-accent transition-colors hover:text-accent/70"
         >
           + Agregar cifrado
         </button>
@@ -72,7 +72,7 @@ export function ChordChartsFields({
                       type="button"
                       onClick={() => onChange(removeChart(charts, chart.id))}
                       aria-label={`Eliminar cifrado ${i + 1}`}
-                      className="rounded border border-accent/20 px-2 py-1.5 font-label text-[10px] uppercase tracking-widest text-mono-500 transition-colors hover:border-negative-fg hover:text-negative-fg"
+                      className="rounded border border-accent/20 px-2 py-1.5 font-body font-semibold leading-tight text-xs text-mono-500 transition-colors hover:border-negative-fg hover:text-negative-fg"
                     >
                       Eliminar
                     </button>

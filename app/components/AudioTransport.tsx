@@ -2,13 +2,7 @@
 
 import { AudioTrack } from "@/app/context/PlayerContext";
 import PlayPauseGlyph from "@/app/components/ui/PlayPauseGlyph";
-
-function fmtTime(s: number) {
-  if (!s || isNaN(s)) return "0:00";
-  const m = Math.floor(s / 60);
-  const sec = Math.floor(s % 60);
-  return `${m}:${sec.toString().padStart(2, "0")}`;
-}
+import { formatClock } from "@/app/utils/formatClock";
 
 export default function AudioTransport({
   track,
@@ -84,7 +78,7 @@ export default function AudioTransport({
               «Máximo», where the same string is ~48px. A minimum keeps the two
               readouts aligned without capping them. */}
           <span className="min-w-8 shrink-0 text-right font-label text-[11px] tabular-nums text-mono-600">
-            {fmtTime(currentTime)}
+            {formatClock(currentTime)}
           </span>
           <div
             role="slider"
@@ -93,7 +87,7 @@ export default function AudioTransport({
             aria-valuemin={0}
             aria-valuemax={Math.round(duration)}
             aria-valuenow={Math.round(currentTime)}
-            aria-valuetext={fmtTime(currentTime)}
+            aria-valuetext={formatClock(currentTime)}
             className="group relative h-1.5 flex-1 cursor-pointer rounded-full bg-accent-deep/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised-alt"
             onClick={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();
@@ -127,7 +121,7 @@ export default function AudioTransport({
             <div className="absolute inset-y-0 -bottom-1 -top-1 left-0 right-0 opacity-0 group-hover:opacity-100" style={{ cursor: "pointer" }} />
           </div>
           <span className="min-w-8 shrink-0 font-label text-[11px] tabular-nums text-mono-600">
-            {fmtTime(duration)}
+            {formatClock(duration)}
           </span>
         </div>
       </div>

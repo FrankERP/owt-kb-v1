@@ -17,6 +17,24 @@ describe("Button", () => {
     expect(b.className).toContain("active:translate-y-px");
   });
 
+  it("is sentence case in the body face, never a label-styled control (2026-10-27)", () => {
+    // Frank: «cambialos». The three sizes grew with the case; `leading-tight`
+    // keeps the box the height it was, so no adopter's row changed.
+    for (const size of ["sm", "md", "lg"] as const) {
+      const cls = buttonClass("secondary", size);
+      expect(cls).toContain("font-body");
+      expect(cls).toContain("font-semibold");
+      expect(cls).toContain("leading-tight");
+      expect(cls).not.toMatch(/\buppercase\b/);
+      expect(cls).not.toContain("tracking-widest");
+      expect(cls).not.toContain("font-label");
+    }
+    // The theme's own steps (xs = 13 px, sm = 15 px), never a pixel literal.
+    expect(buttonClass("secondary", "sm")).toContain("text-xs");
+    expect(buttonClass("secondary", "md")).toContain("text-sm");
+    expect(buttonClass("secondary", "lg")).toContain("text-sm");
+  });
+
   it.each([
     ["primary", "bg-surface-accent-solid"],
     ["ghost", "text-mono-500"],
@@ -31,6 +49,40 @@ describe("Button", () => {
   it("primary carries the hover sheen class; no other variant does", () => {
     expect(buttonClass("primary", "md")).toContain("brand-btn-sheen");
     expect(buttonClass("secondary", "md")).not.toContain("brand-btn-sheen");
+  });
+
+  it("round / roundCta are a fixed 44 px circle that takes no size padding", () => {
+    for (const v of ["round", "roundCta"] as const) {
+      for (const size of ["sm", "md", "lg"] as const) {
+        const cls = buttonClass(v, size);
+        expect(cls).toContain("rounded-full");
+        expect(cls).toContain("h-11 w-11");
+        expect(cls).toContain("p-0");
+        expect(cls).not.toMatch(/\bpx-\d/);
+      }
+    }
+    expect(buttonClass("roundCta", "lg")).toContain("bg-accent");
+    expect(buttonClass("round", "lg")).toContain("border-ink/[0.28]");
+    expect(buttonClass("round", "lg")).not.toContain("bg-accent");
+  });
+
+  it("disclosure is a round ink pill that arms through data-active, never aria-pressed", () => {
+    render(
+      <Button variant="disclosure" active aria-haspopup="dialog" aria-expanded={false}>
+        Filtros · 2
+      </Button>,
+    );
+    const b = screen.getByRole("button", { name: "Filtros · 2" });
+    expect(b.className).toContain("rounded-full");
+    expect(b.className).toContain("border-ink/[0.18]");
+    expect(b.className).toContain("data-[active=true]:border-accent");
+    expect(b.getAttribute("data-active")).toBe("true");
+    // A disclosure is not a toggle: `aria-pressed` beside `aria-expanded` would
+    // announce «pressed, collapsed».
+    expect(b.hasAttribute("aria-pressed")).toBe(false);
+    cleanup();
+    render(<Button variant="disclosure" active={false}>Filtros</Button>);
+    expect(screen.getByRole("button").hasAttribute("data-active")).toBe(false);
   });
 
   it("size lg is the 44 px touch target", () => {

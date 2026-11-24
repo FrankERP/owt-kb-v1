@@ -2,7 +2,7 @@
 // without a browser.
 //
 // The point of these tests: "we configured the Studio" is not evidence. The
-// policy is code, so every capability of every one of the twenty protected types
+// policy is code, so every capability of every one of the twenty-three protected types
 // is asserted here, plus the wiring in `sanity.config.ts` / `sanity/structure.ts`
 // that actually installs it — and the fact that the v5-inert
 // `__experimental_actions` is used nowhere.
@@ -58,7 +58,7 @@ function gitTracked(): string[] {
 // ── The policy ──────────────────────────────────────────────────────────────
 
 describe("studio protection policy", () => {
-  it("covers exactly the twenty protected types, keeping the saturdarSongs typo", () => {
+  it("covers exactly the twenty-three protected types, keeping the saturdarSongs typo", () => {
     expect([...PROTECTED_STUDIO_TYPES]).toEqual([
       "sunday_role",
       "saturday_role",
@@ -82,6 +82,9 @@ describe("studio protection policy", () => {
       // MCP OAuth-state (P0 auth spec O5/O9): written only by grantStore.ts.
       "mcpOauthGrant",
       "mcpOauthCodeRedemption",
+      // Native-app sign-in state (ADR-0091): written only by app/appAuth/grantStore.ts.
+      "appAuthGrant",
+      "appAuthCodeRedemption",
       // The member calendar feed's generation counter (ADR-0057): written only by the rotate route.
       "calendarFeed",
       // The admin assistant's monthly spend counter (ADR-0060): written only by the chat route.
@@ -91,6 +94,10 @@ describe("studio protection policy", () => {
       // The conversation before a service's proposal exists (ADR-0065): written only by
       // the admin service-thread messages route.
       "serviceThread",
+      // The availability proposals' records (ADR-0079): written only by availabilityFixCommit.ts.
+      "availabilityConflict",
+      // Jóvenes' meetings (ADR-0081): written only by ministryEventCommit.ts.
+      "ministryEvent",
     ]);
     expect(PROTECTED_STUDIO_TYPES).toContain("saturdarSongs");
     expect(PROTECTED_STUDIO_TYPES as readonly string[]).not.toContain("saturdaySongs");
@@ -111,10 +118,14 @@ describe("studio protection policy", () => {
       "kidsSchedule",
       "mcpOauthGrant",
       "mcpOauthCodeRedemption",
+      "appAuthGrant",
+      "appAuthCodeRedemption",
       "calendarFeed",
       "adminChatUsage",
       "mcpProposal",
       "serviceThread",
+      "availabilityConflict",
+      "ministryEvent",
     ]);
   });
 
@@ -194,9 +205,13 @@ describe("studio protection policy", () => {
       "fairnessMonth",
       "mcpOauthGrant",
       "mcpOauthCodeRedemption",
+      "appAuthGrant",
+      "appAuthCodeRedemption",
       "calendarFeed",
       "adminChatUsage",
       "mcpProposal",
+      "availabilityConflict",
+      "ministryEvent",
     ]);
     for (const type of INTERNAL_STUDIO_TYPES) {
       expect(isInternalStudioType(type)).toBe(true);
@@ -476,6 +491,8 @@ describe("studio config installs the policy", () => {
       "sanity/schemas/kidsSchedule.ts",
       "sanity/schemas/mcpOauthGrant.ts",
       "sanity/schemas/mcpOauthCodeRedemption.ts",
+      "sanity/schemas/appAuthGrant.ts",
+      "sanity/schemas/appAuthCodeRedemption.ts",
     ];
     const tracked = new Set(gitTracked());
     for (const file of owned) {
@@ -490,7 +507,7 @@ describe("studio config installs the policy", () => {
     expect(structure).toContain("PROTECTED_STUDIO_TYPES");
   });
 
-  it("marks all twenty protected schema types read-only", () => {
+  it("marks all twenty-three protected schema types read-only", () => {
     const files: Record<string, string> = {
       sunday_role: "sanity/schemas/sunRole.ts",
       saturday_role: "sanity/schemas/satRole.ts",
@@ -508,10 +525,14 @@ describe("studio config installs the policy", () => {
       kidsSchedule: "sanity/schemas/kidsSchedule.ts",
       mcpOauthGrant: "sanity/schemas/mcpOauthGrant.ts",
       mcpOauthCodeRedemption: "sanity/schemas/mcpOauthCodeRedemption.ts",
+      appAuthGrant: "sanity/schemas/appAuthGrant.ts",
+      appAuthCodeRedemption: "sanity/schemas/appAuthCodeRedemption.ts",
       calendarFeed: "sanity/schemas/calendarFeed.ts",
       adminChatUsage: "sanity/schemas/adminChatUsage.ts",
       mcpProposal: "sanity/schemas/mcpProposal.ts",
       serviceThread: "sanity/schemas/serviceThread.ts",
+      availabilityConflict: "sanity/schemas/availabilityConflict.ts",
+      ministryEvent: "sanity/schemas/ministryEvent.ts",
     };
     expect(Object.keys(files).sort()).toEqual([...PROTECTED_STUDIO_TYPES].sort());
     // The two MCP OAuth types declare `name:` as an IMPORTED constant
@@ -521,6 +542,8 @@ describe("studio config installs the policy", () => {
     const NAME_DECLARATION: Partial<Record<string, RegExp>> = {
       mcpOauthGrant: /name:\s*MCP_OAUTH_GRANT_TYPE\b/,
       mcpOauthCodeRedemption: /name:\s*MCP_OAUTH_CODE_REDEMPTION_TYPE\b/,
+      appAuthGrant: /name:\s*APP_AUTH_GRANT_TYPE\b/,
+      appAuthCodeRedemption: /name:\s*APP_AUTH_CODE_REDEMPTION_TYPE\b/,
       mcpProposal: /name:\s*MCP_PROPOSAL_TYPE\b/,
     };
     for (const type of PROTECTED_STUDIO_TYPES) {
@@ -558,9 +581,13 @@ describe("studio config installs the policy", () => {
       "sanity/schemas/fairnessMonth.ts",
       "sanity/schemas/mcpOauthGrant.ts",
       "sanity/schemas/mcpOauthCodeRedemption.ts",
+      "sanity/schemas/appAuthGrant.ts",
+      "sanity/schemas/appAuthCodeRedemption.ts",
       "sanity/schemas/calendarFeed.ts",
       "sanity/schemas/adminChatUsage.ts",
       "sanity/schemas/mcpProposal.ts",
+      "sanity/schemas/availabilityConflict.ts",
+      "sanity/schemas/ministryEvent.ts",
     ]) {
       const src = read(file);
       expect(src, `${file} must be a hidden type`).toMatch(/^\s*hidden:\s*true,\s*$/m);
@@ -580,9 +607,13 @@ describe("studio config installs the policy", () => {
         "fairnessMonth",
         "mcpOauthGrant",
         "mcpOauthCodeRedemption",
+        "appAuthGrant",
+        "appAuthCodeRedemption",
         "calendarFeed",
         "adminChatUsage",
         "mcpProposal",
+        "availabilityConflict",
+        "ministryEvent",
       ].sort(),
     );
   });

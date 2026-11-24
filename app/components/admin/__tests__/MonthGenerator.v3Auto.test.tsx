@@ -245,7 +245,7 @@ describe("after the press, the LATEST render (review fixes: the derived path's r
     hold.on = true;
     runAuto();
     await waitFor(() => expect(hold.sent).toBe(true));
-    fireEvent.click(screen.getByRole("button", { name: "← Volver" }));
+    fireEvent.click(screen.getByRole("button", { name: "Volver a fechas y reglas" }));
     fireEvent.click(within(screen.getByRole("radiogroup", { name: "Planear" })).getByRole("radio", { name: "2 meses" }));
     preview();
     place(container, "lead", "2026-11-08", "Bruno");                       // a seat on the NEW board
@@ -265,7 +265,7 @@ describe("after the press, the LATEST render (review fixes: the derived path's r
     hold.on = true;
     runAuto();
     await waitFor(() => expect(hold.sent).toBe(true));
-    fireEvent.click(screen.getByRole("button", { name: "← Volver" }));
+    fireEvent.click(screen.getByRole("button", { name: "Volver a fechas y reglas" }));
     fireEvent.click(within(screen.getByRole("radiogroup", { name: "Planear" })).getByRole("radio", { name: "2 meses" }));
     preview();
     await act(async () => { hold.release(); });

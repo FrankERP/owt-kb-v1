@@ -7,9 +7,9 @@ import "../brand.css";
 import { bodyFont, displayFont, labelFont } from "../brandFonts";
 
 export const metadata: Metadata = {
-	title: "OWT Content Studio",
+	title: "Content Studio — Backstage",
 	applicationName: "Backstage",
-	description: "Panel de administración del equipo de alabanza Oasis.",
+	description: "Panel de contenido de Backstage.",
 	manifest: "/manifest.webmanifest",
 	icons: {
 		icon: [

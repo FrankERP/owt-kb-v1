@@ -302,7 +302,7 @@ to rotate, nothing to configure in GitHub → Settings → Secrets. If a future 
 needs one, it gets an entry in `docs/SECRETS.md` in the same change.
 
 **Not CI: `solver-v3-ops.yml`.** A separate workflow verifies and re-deploys the production
-solver function with keyless Google access (ADR-0071; `docs/SOLVER_AND_INFRA.md` «Verifying a v3
+solver function with keyless Google access (ADR-0092; `docs/SOLVER_AND_INFRA.md` «Verifying a v3
 deploy»). It is operations, not a gate: `gates` does not and must not depend on it, and branch
 protection does not require it. Each of its runs creates a GitHub Deployment record in the
 `solver-verify` or `solver-deploy` environment; that is not an app release. Its shape is pinned by
@@ -428,9 +428,10 @@ observation that separates the two.
 **Second occurrence (2026-10-20).** PR #152's merge (`e3d3a221`, a visual-only
 change to the planner) failed with the same signature, under
 `./app/(admin)/layout.tsx`; its tree had built `READY` on `preview` 15 minutes
-earlier and the release diff touched no font, layout, config or lockfile. A
-session's own production redeploy is refused by its permission classifier, so
-it would have been Frank's to click. Nobody redeployed: PR #153 (docs only)
+earlier and the release diff touched no font, layout, config or lockfile. That
+session's own production redeploy was refused by its permission classifier, so
+it would have been Frank's to click (the fourth occurrence below shows the
+call going through from a cloud session). Nobody redeployed: PR #153 (docs only)
 merged on top about 15 minutes later as `76fdaac0`, and that build — the
 normal cache-backed `main` build, not a no-cache redeploy — went `READY` and
 took the alias, carrying #152 with it. So a later commit's ordinary build is
@@ -446,6 +447,24 @@ included, and the identical tree passed `tsc`, `vitest` and `eslint`. One no-cac
 that deployment (`POST /v13/deployments?forceNew=1`, preview, no `target`) went `READY` and took
 `dev-owt-backstage`. Like the first time, the retry skipped the cache, so it does not separate the
 two causes.
+
+**Fourth occurrence (2026-10-30).** PR #219's merge (`4434020a`, the sign-in page
+in the type system) failed with the same signature under `./app/(admin)/layout.tsx`;
+its tree had built `READY` on `preview` about 25 minutes earlier and the release
+diff (`5c3b66d1..4434020a`) touched no font, layout, config or lockfile. The cloud
+session's own `POST /v13/deployments` (Vercel MCP `create_deployment` with the
+failed `deploymentId`, `target: "production"`, `forceNew=1`) was accepted this
+time; the redeploy went `READY` in about 3 minutes and took the alias. Again a
+no-cache retry, so still no observation that separates the two causes.
+
+**Fifth occurrence (2026-11-11, on `preview`) — the first cache-backed retry.** The merge of the
+solver rules from the chat into `preview` (`f79868ac`) failed with the same signature under
+`./app/(admin)/layout.tsx`; the release diff (`976dcdc1..f79868ac`) touched no font, layout, config
+or lockfile. One redeploy of that deployment WITHOUT `forceNew` (Vercel MCP `create_deployment`
+with the failed `deploymentId`, no `target`) restored the build cache from the previous `READY`
+deployment, went `READY` in about 3 minutes and took `dev-owt-backstage`. So a retry that kept the
+cache fixed it: the observation that separates the two causes points to a failed fetch from Google,
+not a bad font entry in the cache. Prefer the cache-backed retry; a no-cache one is not needed.
 
 **Recognising it** — all of these, not some:
 

@@ -31,4 +31,26 @@ export const DELIVERY_CAPABLE_IMPORTS: readonly string[] = [
   // Admin parity phase 1 (T2.1): the edit and copy writers, extracted from their routes.
   "roleEditCommit",
   "copyInstrumentsCommit",
+  // Admin parity phase 2 (T1): the delete writer, extracted from its route.
+  "roleDeleteCommit",
+  // Admin parity phase 3: the service conversation's writers (ADR-0065).
+  "serviceThreadCommit",
+  // Admin parity phase 3 (S4): Oasis Kids' writers, extracted from the `/api/kids/*` routes.
+  "kidsCommit",
+  // Admin parity phase 3 (S1): the proposal-decision writer, extracted from its route.
+  "proposalReviewCommit",
+  // Admin parity phase 3 (S3): the song writer, extracted from /admin's song and author routes.
+  "songSaveCommit",
+  // ADR-0079: the availability proposals' writer (its admin email, and «Aplicar» through `editRole`).
+  "availabilityFixCommit",
+  // ADR-0081: Jóvenes' meetings — the writer sends nothing itself; the name keeps its routes in the scan.
+  "ministryEventCommit",
+  // ADR-0089: the «Te toca» and music emails a meeting write owes, sent by its routes in `after()`.
+  "ministryEventNotify",
+  // ADR-0089 (addendum): the reminders 14 and 7 days before a meeting, sent by the daily cron.
+  "ministryEventReminder",
+  // Admin parity phase 4 (slice M): the people writer, extracted from the members routes and /me.
+  "memberCommit",
+  // Admin parity phase 4 (slice R): the solver rules writer, extracted from the rules POST; it sends nothing.
+  "solverConfigCommit",
 ];

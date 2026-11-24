@@ -235,7 +235,7 @@ function AssistantDock({ pathname }: { pathname: string }) {
                     key={s}
                     variant="pill"
                     size="sm"
-                    className="h-auto py-1.5 text-left normal-case tracking-normal"
+                    className="h-auto py-1.5 text-left"
                     onClick={() => void ask(s)}
                   >
                     {s}

@@ -1,0 +1,215 @@
+/** @vitest-environment jsdom */
+// The meeting card on `/jovenes` (ADR-0086): what is folded and what is open, that the fold is a
+// real disclosure (a button with `aria-expanded`, the closed half inert), and that only the next
+// meeting wears the light pass.
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
+import { installMotionTestEnv } from "@/app/components/ui/__tests__/motionTestSetup";
+import type { MinistryEventView } from "@/app/utils/ministryEventReads";
+import { jovenesDayEntry } from "@/app/utils/calendarMinistry";
+import { MINISTRIES } from "@/app/ministries";
+import JovenesMeetingCard from "../MeetingCard";
+
+installMotionTestEnv();
+afterEach(cleanup);
+
+const [G1, G2] = MINISTRIES.jovenes.groups;
+
+function ev(over: Partial<MinistryEventView> = {}): MinistryEventView {
+  return {
+    _id: "ministryEvent.a",
+    rev: "r1",
+    ministry: "jovenes",
+    audience: { kind: "ministry" },
+    kind: "saturday",
+    date: "2026-11-14",
+    time: "18:10",
+    arrival: "17:30",
+    title: null,
+    notes: null,
+    place: "Oasis Tlalpan",
+    lesson: null,
+    published: true,
+    seats: [
+      { _key: "s1", role: "encargado", memberId: "m1", name: "Ana", photo: null, mine: false },
+      { _key: "s2", role: "predica", memberId: "m2", name: "Beto", photo: null, mine: true },
+    ],
+    program: [{ _key: "l1", label: "Dinámica", note: "10 min", memberId: "m1", name: "Ana", photo: null, mine: false, part: null, music: null, helpers: null, second: null }],
+    createdById: null,
+    createdByName: null,
+    ...over,
+  };
+}
+
+function card(
+  e: MinistryEventView,
+  props: { featured?: boolean; defaultOpen?: boolean; held?: boolean; countdown?: string; mine?: string[]; children?: React.ReactNode } = {},
+) {
+  return render(
+    <JovenesMeetingCard
+      event={e}
+      entry={jovenesDayEntry(e)}
+      mine={props.mine ?? []}
+      countdown={props.countdown ?? "En 2 días"}
+      featured={props.featured}
+      defaultOpen={props.defaultOpen}
+      held={props.held}
+    >
+      {props.children}
+    </JovenesMeetingCard>,
+  );
+}
+
+/** The fold's two halves: the summary sits in the head, the body is what the button controls. */
+function halves() {
+  const button = screen.getByRole("button");
+  const body = document.getElementById(button.getAttribute("aria-controls")!)!;
+  return { button, body };
+}
+
+describe("JovenesMeetingCard", () => {
+  it("a later meeting is folded: the summary shows, the body is inert, and a tap opens it", () => {
+    card(ev());
+    const { button, body } = halves();
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+    expect(button.getAttribute("aria-label")).toBe("Ver detalles");
+    expect(body.hasAttribute("inert")).toBe(true);
+    expect(screen.getByText("Ana, Beto")).toBeTruthy();
+    // A Saturday always has its five steps (ADR-0089), plus this meeting's one free line.
+    expect(screen.getByText("Programa · 6 partes")).toBeTruthy();
+
+    fireEvent.click(button);
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    expect(button.getAttribute("aria-label")).toBe("Ocultar detalles");
+    expect(body.hasAttribute("inert")).toBe(false);
+
+    fireEvent.click(button);
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+    // `inert` returns only after the close animation, which never runs without the app's
+    // MotionProvider — `Collapse.test.tsx` owns that half.
+  });
+
+  it("the next meeting opens by itself, shows its countdown, and is the lit one", () => {
+    const { container } = card(ev(), { featured: true, mine: ["Predica"] });
+    const { button, body } = halves();
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    expect(body.hasAttribute("inert")).toBe(false);
+    expect(screen.getByText("En 2 días")).toBeTruthy();
+    expect(screen.getByText("Tú · Predica")).toBeTruthy();
+    expect(container.querySelectorAll(".brand-lit-card[data-lit]").length).toBe(1);
+    expect(screen.getByRole("article").getAttribute("aria-label")).toMatch(/, en 2 días$/);
+  });
+
+  it("a folded card is not lit and hides its countdown chip", () => {
+    const { container } = card(ev());
+    expect(container.querySelector("[data-lit]")).toBeNull();
+    expect(screen.queryByText("En 2 días")).toBeNull();
+  });
+
+  it("a meeting with only a note has no fold: the note is on the card", () => {
+    // Not a Saturday: that one always has a program to unfold (its five steps, ADR-0089).
+    card(ev({ kind: "ministry", seats: [], program: [], notes: "Traer Biblia" }));
+    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.getByText("Traer Biblia")).toBeTruthy();
+  });
+
+  it("a single seat reads «Role · Name» in the summary, and an empty seat shows no face there", () => {
+    card(ev({ seats: [{ _key: "s1", role: "encargado", memberId: "m1", name: "Ana", photo: null, mine: false }, { _key: "s2", role: "predica", memberId: null, name: null, photo: null, mine: false }], program: [] }));
+    const summary = screen.getByText("Encargado · Ana");
+    // One face in the folded summary: Ana's initials, nothing for the seat with nobody.
+    const faces = summary.parentElement!.querySelectorAll(".-space-x-1\\.5 > *");
+    expect(faces.length).toBe(1);
+    expect(faces[0].textContent).toBe("AN");
+  });
+
+  it("the folded summary draws each person's own photo, and a tap on a face still reaches the card", () => {
+    card(
+      ev({
+        seats: [
+          { _key: "s1", role: "encargado", memberId: "m1", name: "Ana", photo: "https://lh3.googleusercontent.com/a/ana", mine: false },
+          { _key: "s2", role: "predica", memberId: "m2", name: "Beto", photo: null, mine: false },
+        ],
+        program: [],
+      }),
+    );
+    const faces = [...screen.getByText("Ana, Beto").parentElement!.querySelectorAll<HTMLElement>(".-space-x-1\\.5 > *")];
+    expect(faces.map((f) => f.querySelector<HTMLElement>("[data-photo]")?.style.backgroundImage ?? null)).toEqual([
+      'url("https://lh3.googleusercontent.com/a/ana")',
+      null,
+    ]);
+    // The head's hit area is the fold button's stretched `::after`; a face must not sit on top of
+    // it and swallow the tap (jsdom has no hit-testing, so the class is what can be pinned).
+    for (const face of faces) expect(face.className).toContain("pointer-events-none");
+  });
+
+  it("the heading says the date to a screen reader, and the drawn leaf is hidden from it", () => {
+    const { container } = card(ev());
+    expect(screen.getByRole("heading", { level: 3 }).textContent).toBe("Sábado de Jóvenes, Sábado 14 de noviembre");
+    expect(container.querySelector("time")!.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("the toggle stretches over the head and gives up the press transform that would shrink it", () => {
+    // A transformed button is the containing block of its own `::after`: with the house press
+    // (`active:scale`) the stretched hit area collapsed to the circle mid-tap and a tap on the
+    // title never clicked. jsdom has no layout, so the class is the contract.
+    card(ev());
+    const cls = screen.getByRole("button").className;
+    expect(cls).toContain("after:absolute");
+    expect(cls).toContain("after:inset-0");
+    expect(cls).toContain("active:!transform-none");
+  });
+
+  it("names every group of a shared meeting, monogram and name, and draws a rail segment each", () => {
+    const { container } = card(ev({ audience: { kind: "groups", groups: [G1.id, G2.id] } }));
+    const chips = screen.getByRole("list", { name: "Para" });
+    expect(chips.textContent).toContain(G1.name);
+    expect(chips.textContent).toContain(G2.name);
+    expect(container.querySelectorAll(`.bg-group-${G1.id}`).length).toBeGreaterThan(0);
+    expect(container.querySelectorAll(`.bg-group-${G2.id}`).length).toBeGreaterThan(0);
+  });
+
+  it("`defaultOpen` opens the card without the featured look, and the reader can still fold it", () => {
+    // The one meeting of a day picked on the month grid: open, but it is not «the next one».
+    const { container } = card(ev(), { defaultOpen: true });
+    const { button, body } = halves();
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    expect(body.hasAttribute("inert")).toBe(false);
+    expect(container.textContent).not.toContain("En 2 días");
+    fireEvent.click(button);
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("a meeting already held says how long ago, folded", () => {
+    // «Reunión anterior» on Inicio. A later meeting in a list carries no chip: its month label
+    // and its date leaf already place it.
+    const { container } = card(ev(), { held: true, countdown: "Hace 3 días" });
+    expect(container.textContent).toContain("Hace 3 días");
+    expect(halves().button.getAttribute("aria-expanded")).toBe("false");
+    cleanup();
+    expect(card(ev(), { countdown: "En 9 días" }).container.textContent).not.toContain("En 9 días");
+  });
+
+  it("a part that is the reader's links to the meeting's page — «Llenar» while it owes something, «Editar» after — unless that page no longer opens the date", () => {
+    const line = (over: Partial<MinistryEventView["program"][number]>) => ({ _key: "o", label: "Oración", note: null, memberId: "m2", name: "Beto", photo: null, mine: true, part: "oracion" as const, music: null, helpers: null, second: null, ...over });
+    const owing = ev({ program: [line({})] });
+    const { unmount } = card(owing, { featured: true });
+    expect(screen.getByRole("link", { name: /Llenar mi parte/ }).getAttribute("href")).toBe("/jovenes/reunion/a");
+    unmount();
+    const done = card(ev({ program: [line({ music: "track" })] }), { featured: true });
+    expect(screen.getByRole("link", { name: /Editar mi parte/ })).toBeTruthy();
+    done.unmount();
+    render(<JovenesMeetingCard event={owing} entry={jovenesDayEntry(owing, undefined, false)} mine={[]} countdown="Hace 40 días" featured />);
+    expect(screen.queryByRole("link", { name: /mi parte/ })).toBeNull();
+    // Nobody else's part carries the link.
+    cleanup();
+    card(ev({ program: [line({ mine: false })] }), { featured: true });
+    expect(screen.queryByRole("link", { name: /mi parte/ })).toBeNull();
+  });
+
+  it("the program editor makes a seatless meeting foldable, and sits in the body", () => {
+    card(ev({ seats: [], program: [] }), { children: <button type="button">Editar programa</button> });
+    const toggle = screen.getByRole("button", { name: "Ver detalles" });
+    const body = document.getElementById(toggle.getAttribute("aria-controls")!)!;
+    expect(body.textContent).toContain("Editar programa");
+  });
+});

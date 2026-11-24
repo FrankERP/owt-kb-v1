@@ -1,8 +1,8 @@
 // Every presentational decision `/admin -> Servicios` makes, as pure functions
 // (Plan B items 7-9).
 //
-// The components in `ServiceReadinessCard` / `ReadinessBadge` /
-// `ServicePrimaryAction` / `ServiceIssueList` render what this module returns and
+// The components in `ServiceReadinessCard` /
+// `ServicePrimaryAction` (+ `ServiceReviewFlag`) / `ServiceIssueList` render what this module returns and
 // decide nothing themselves, so card ordering, issue copy, the
 // command-summary counters, bulk-publish selection copy, action routing and the
 // per-target month preflight are all table-testable in vitest's `node`
@@ -85,6 +85,7 @@ import {
 import type { IntegrityIssueTarget, ProposalHandoffInput } from "./proposalHandoff";
 import { unreadyMessage } from "./serviceSourceState";
 import { isServiceTime } from "@/app/utils/serviceTime";
+import { plural } from "@/app/utils/plural";
 
 function nonEmptyString(v: unknown): v is string {
   return typeof v === "string" && v.length > 0;
@@ -108,6 +109,8 @@ export interface MemberOption {
    * worship); carried so the planner hands it to `sundayCadence.ts` intact (C3 E25).
    */
   ministries?: unknown;
+  /** «Canta y toca a la vez» (Personas, ADR-0078): may hold a voice and an instrument on one service. */
+  singsAndPlays?: boolean;
   /**
    * Stable stored `_key` of the seat this member occupies, when it came from a
    * role seat rather than the member directory. Swaps address seats by this key,
@@ -172,15 +175,6 @@ export type SwapSource =
     };
 
 export const dn = (m: MemberOption) => m.alias?.trim() || m.member_name;
-
-/**
- * Rough rendered width of an instrument/FOH pill (label chip + name), in
- * char-widths, so pills can be sorted narrow→wide. Names/labels at or below the
- * CSS min-width floor count as equal; an emoji suffix adds a bit of width.
- */
-export const pillWidth = (label: string, value: string) =>
-  Math.max(label.length, 4) +
-  Math.max([...value].length + (/\p{Extended_Pictographic}/u.test(value) ? 2 : 0), 4);
 
 // ── Identity labels + colours ────────────────────────────────────────────────
 //
@@ -1059,15 +1053,14 @@ export function commandSummaryCounters(input: {
   return counters;
 }
 
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-
 /**
  * The Spanish command line that replaces the plain count header. `próximos` is
  * always shown (a zero there is information); every other segment appears only
  * when it is non-zero, so the line stays readable at 320px.
  */
 export function commandSummarySegments(c: CommandSummaryCounters): string[] {
-  const segments = [plural(c.upcoming, "próximo", "próximos")];
+  // «7 por venir», as Inicio and the calendar say it — never «próximos».
+  const segments = [`${c.upcoming} por venir`];
   if (c.readyToPublish > 0) {
     segments.push(
       `${plural(c.readyToPublish, "listo", "listos")} para publicar`,

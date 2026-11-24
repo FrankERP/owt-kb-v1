@@ -26,6 +26,8 @@ const h = vi.hoisted(() => ({
   created: [] as unknown[],
 }));
 
+vi.mock("server-only", () => ({}));
+
 vi.mock("@/app/utils/authGuards", () => ({
   requireActiveManager: () => h.requireActiveManager(),
 }));

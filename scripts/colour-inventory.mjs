@@ -85,6 +85,10 @@ const EXEMPT_VALUES = new Map([
   ["app/(client)/auth/signin/page.tsx|#FBBC05", "Google brand mark — a third-party mark that must not be themed"],
   ["app/(client)/auth/signin/page.tsx|#EA4335", "Google brand mark — a third-party mark that must not be themed"],
   ["app/(client)/layout.tsx|#010b17", "Static viewport themeColor. Child E makes it theme-responsive under parent invariant 17."],
+  // The one place a literal rgb() is BUILT: `colourFromTriplet` resolves a token's
+  // triplet for a <canvas>, which never substitutes var(). The numbers come from the
+  // token at run time, so the row is themed — the template just has to say `rgb(`.
+  ["app/utils/themeColour.ts|rgb(${r} ${g} ${b}", "resolvedThemeColour: a token's triplet resolved for a canvas fillStyle, which cannot read var()"],
   // NOTE: `appleWebApp.statusBarStyle: "black-translucent"` on both root layouts is
   // theme-dependent but is NOT a colour literal — it is a PWA enum, so no category
   // matches it and no row exists to exempt. Seeding it would leave a value that never
@@ -555,6 +559,8 @@ const TOKEN_LAYER_ROLES = new RegExp(
       // Added in B4: the shadow black and the six categorical hues.
       "elevation", "surface-lift", "scrim", "on-fill",
       "chart-lead", "chart-bgv", "chart-coro", "chart-especial", "chart-instr", "chart-foh",
+      // The five Jóvenes group hues (ADR-0086).
+      "group-otro-nivel", "group-invencibles", "group-emprendedores", "group-adrenalin", "group-guerreras",
       // Child C's 34 palette-family roles. Without these the category-12 scan
       // dispositions them to B, and C1 — a slice that migrates nothing — would move
       // byDisposition.B from 124 to 158.

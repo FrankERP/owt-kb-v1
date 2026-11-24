@@ -61,6 +61,18 @@ not look like the app.
   on a whole cell has no dot, and scaling the cell shifts seven columns. The keyframes
   are removed rather than left orphaned.
 
+## Update 2026-10-24 — the «millones» pass
+
+The type pass that reached the calendar kept the decision and changed the cell's
+dress: a lit day is no longer a raised `surface-card` cell but the number alone, in
+the display face, inside a round target, with the dots UNDER the circle (outside it,
+so a fill never recolours them — `onFill` is gone); today is an inset INK ring, not
+an accent one, since the accent now means only the selected day; and the day the
+signed-in member serves adds a fourth, green dot (`DayDots mine`) instead of
+painting its number positive — «tú» looked like a second kind of day, and as a dot it
+can be named in the legend («Te toca»). `DayStrip` and `MonthGrid` still share the one
+set of classes (`DAY_CELL_*`).
+
 ## Consequences
 
 Re-tinting a cell brings back the alert-coloured Saturday the audit found; adding a
@@ -70,3 +82,9 @@ drawn. The month sheet shows one year at a time; reaching 2024 is two presses of
 «Año anterior», not a scroll. `lightContrast.test.ts` measures `surface-base` on
 `accent` for the selected cell (the `warning-fg`/`info-fg` selected fills no longer
 exist).
+
+**Amendment (2026-10-29):** an Oasis Kids Sunday on the Calendario (ADR-0075) takes a
+fourth tone, `kids`, and it is NEUTRAL (`bg-ink-dim`): amber, cyan and violet are the
+three worship days, rose is the musical key only (ADR-0071) and green is «tú». A Kids
+Sunday is another ministry's day, not a fourth kind of worship service, so it gets a
+dot and a rail without a colour of its own. The legend names it only while one is shown.

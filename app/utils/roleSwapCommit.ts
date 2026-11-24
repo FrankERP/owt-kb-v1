@@ -65,13 +65,14 @@ import {
   type SeatPersonReplacement,
 } from "@/app/utils/roleWriteRequest";
 import {
-  loadCanonicalMemberIds,
+  loadCanonicalMembers,
   loadRoleForWrite,
   nowIso,
   resolveOwnedCoordination,
   type RoleWriteTarget,
   type StoredRole,
 } from "@/app/utils/roleWriteOps";
+import { addedSeatClashes, clashInputsOf, seatClashErrorDetails } from "@/app/utils/seatClashGuard";
 import type { CommitOutcome } from "@/app/utils/commitOutcome";
 
 /**
@@ -283,13 +284,30 @@ export async function swapRoles(body: unknown): Promise<CommitOutcome<RoleSwapEf
 
   // ── Dangling assignment refusal ───────────────────────────────────────────
   const wanted = [...new Set(involvedPersonIds)];
-  const resolvedMembers = await loadCanonicalMemberIds(wanted);
+  const members = await loadCanonicalMembers(wanted);
+  const resolvedMembers = new Set(members.keys());
   const dangling = wanted.filter((id) => !resolvedMembers.has(id));
   if (dangling.length) {
     return {
       ok: false,
       ...serviceError("integrity_conflict", { details: { danglingRefs: dangling } }),
     };
+  }
+
+  // ── Seat-clash refusal (ADR-0078), per role, before any coordination ──────
+  // Each changed role is judged on its own: a pair it did not hold before is
+  // added, even when the other service already held it (a team swap that
+  // carries an old clash across is refused where it lands). Only the moved
+  // people were read; anyone else keeps the same seats on both sides.
+  const { singsAndPlays, names } = clashInputsOf(members);
+  const clashes = [...patchOf.keys()].flatMap((roleId) => {
+    const role = targetById.get(roleId)?.role;
+    if (!role) return [];
+    const after = afterSeatsOf.get(roleId) ?? normalizeStoredSeats(role, replacementsOf.get(roleId) ?? []);
+    return addedSeatClashes(normalizeStoredSeats(role), after, singsAndPlays);
+  });
+  if (clashes.length) {
+    return { ok: false, ...serviceError("invalid_request", { details: seatClashErrorDetails(clashes, names) }) };
   }
 
   // ── Coordination: assert every owned token (legacy locks bootstrap first) ──

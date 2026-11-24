@@ -40,7 +40,7 @@ import { createRole } from "@/app/utils/roleCreateCommit";
 import { resolveSolverEngine } from "@/app/utils/solverDeployment";
 import { loadV3PlanSources } from "@/app/utils/v3MonthPlanReads";
 import type { FairnessMonthsPut } from "@/app/utils/fairnessVocabulary";
-import type { DraftPostOutcome, draftCreateBody } from "@/app/utils/monthDraftCreate";
+import { confirmMembersFrom, type DraftPostOutcome, type draftCreateBody } from "@/app/utils/monthDraftCreate";
 import { serviceRefusalLine, type DomainRefusal } from "../writes/refusals";
 import { runWriteTool, type WriteFailureCopy } from "../writes/runWriteTool";
 import { isProposalHandle } from "../monthProposals/handle";
@@ -48,7 +48,7 @@ import { admitsProposal, PROPOSAL_MAX_WAIVERS, WAIVER_SENTENCE_MAX, type Proposa
 import { loadProposal, sweepExpired, writeState } from "../monthProposals/proposalStore";
 import { observeProposal, phase3Refusals, type ProposalObservation } from "../monthProposals/observe";
 import { draftLabel } from "../monthProposals/labels";
-import { principalOf, type McpPrincipal } from "../monthProposals/principal";
+import { monthPrincipalOf, type MonthPrincipal } from "../monthProposals/principal";
 import { proposalBoard } from "../monthProposals/editorBoard";
 import { sameWaiverItems, waiverItems, type WaiverItem } from "../monthProposals/editorView";
 
@@ -221,7 +221,7 @@ function existsLine(proposal: StoredProposal, obs: ProposalObservation): string[
 /** The tool's whole behaviour, callable without a server. */
 export async function applyScheduleResult(
   args: ApplyScheduleArgs,
-  principal: McpPrincipal | null,
+  principal: MonthPrincipal | null,
   deps: ApplyScheduleDeps = defaultApplyScheduleDeps(),
 ): Promise<CallToolResult> {
   return runWriteTool(
@@ -246,7 +246,7 @@ export async function applyScheduleResult(
       const months = proposal.header.months;
 
       // ── 1. Observe (R-OBS) ───────────────────────────────────────────────
-      const read = await deps.reads();
+      const read = await deps.reads({ allMembers: principal.allMembers });
       if (!read.ok) return refusal([L.sources(read.failed), L.noWriteThisCall], { code: "integrity_conflict", detail: "sources", retry: true });
       const sources = read.value;
       const states = sources.snapshot.readiness.sources;
@@ -349,6 +349,7 @@ export async function applyScheduleResult(
           published: false,
           state: { recordsDone: false, createdLocalIds: new Set(obs.created.keys()) },
           currentMonth,
+          members: confirmMembersFrom(sources.members),
           putRecords,
           postDraft,
         }),
@@ -382,6 +383,18 @@ export async function applyScheduleResult(
       const tail = saveFailed ? [L.stateSaveFailed] : [];
 
       // ── The answer, per outcome ──────────────────────────────────────────
+      if (result.kind === "refused_guard" && result.reason === "seat_clash") {
+        // Names and seat labels only (the runner's lines); nothing of this call was written.
+        return refusal(
+          [...head, ...result.lines, L.noWriteThisCall, obs.created.size === 0 ? L.seatClashRevise : L.seatClashResolve, ...existsLine(proposal, obs), ...tail],
+          { code: "invalid_request", detail: "seat_clash" },
+        );
+      }
+      if (result.kind === "refused_guard" && result.reason === "outside_horizon") {
+        return refusal([...head, ...result.lines, L.noWriteThisCall, ...existsLine(proposal, obs), ...tail], {
+          code: "integrity_conflict", detail: "outside_horizon", next: "solve_month",
+        });
+      }
       if (result.kind === "refused_guard") {
         const guard = confirmGuard(months, currentMonth);
         const line = guard?.kind === "ceiling" ? V3_LINES.horizonCeiling(guard.month, guard.limit) : L.guardPast(guard?.month ?? months[0]);
@@ -442,6 +455,6 @@ export function registerApplySchedule(server: McpServer): void {
       // D13: P3's write annotations.
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     },
-    async (args, ctx: ServerContext) => applyScheduleResult(args, principalOf(ctx)),
+    async (args, ctx: ServerContext) => applyScheduleResult(args, monthPrincipalOf(ctx)),
   );
 }

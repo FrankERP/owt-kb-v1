@@ -1,5 +1,5 @@
 // The MCP editor over a SAVED month (admin parity phase 1, S2:
-// docs/superpowers/plans/2026-10-21-owt-mcp-admin-parity-f1.md, T2.4–T2.5 and S3; ADR-0066). Four
+// docs/superpowers/plans/2026-10-21-owt-mcp-admin-parity-f1.md, T2.4–T2.5 and S3; ADR-0066). Five
 // entries over one judge:
 //
 //   check_service_edits      model-visible, read-only: edits asked for in the chat (services by id
@@ -10,6 +10,9 @@
 //                            token for every rule finding a forced edit created (F5).
 //   save_service_edits       destructive: writes the checked change set, one service at a time,
 //                            through `/admin`'s own PATCH writer (`roleEditCommit.ts`, F1).
+//   save_service_edits_app   app-only, destructive: the SAME save, called by the card after its own
+//                            confirmation (ADR-0066 addendum, 2026-10-23). One function behind both
+//                            names; only the log label differs.
 //   copy_instruments         destructive (S3): one service's instruments onto another, through
 //                            `/admin`'s own copy writer (`copyInstrumentsCommit.ts`). Checked first as
 //                            `copy` in check_service_edits: the destination's target judged as a diff,
@@ -60,7 +63,6 @@ import { savedWindowFor } from "@/app/components/admin/plannerMonth";
 import { classifyPatchOutcome } from "@/app/components/admin/plannerSaveModel";
 import { effectiveStoredCounts, isStoredColumnPast } from "@/app/components/admin/fairnessToggleModel";
 import type { ServiceRole } from "@/app/components/admin/serviceCardModel";
-import type { V3ConfirmEntry } from "@/app/components/admin/v3Confirm";
 import { isWorshipNightFormat } from "@/app/utils/serviceFormat";
 import { fairnessRecordEnvironment, resolveSolverEngine } from "@/app/utils/solverDeployment";
 import { loadFairnessLedgerWith } from "@/app/utils/fairnessLedgerRead";
@@ -68,7 +70,7 @@ import type { LedgerService } from "@/app/utils/fairnessLedger";
 import { shiftMonth, type FairnessLedgerResponse, type LogicalRecord, type RecordEnvironment } from "@/app/utils/fairnessVocabulary";
 import { loadV3Ledger, loadV3PlanSources, type V3PlanSources } from "@/app/utils/v3MonthPlanReads";
 import { runWriteTool, type WriteFailureCopy } from "../writes/runWriteTool";
-import { principalOf, type McpPrincipal } from "../monthProposals/principal";
+import { monthPrincipalOf, type MonthPrincipal } from "../monthProposals/principal";
 import { memberTokenKey, type MemberTokenKey, type MemberTokens } from "../monthProposals/memberTokens";
 import { canonicalJson, changeMac, monthMemberTokens, sameMac, waiverToken } from "../monthProposals/changeSetTokens";
 import { findingIsRule, serverPickCandidates, type EditorBoard } from "../monthProposals/editorBoard";
@@ -104,6 +106,7 @@ import {
   type TargetJudgement,
 } from "../monthProposals/storedJudge";
 import { PROPOSAL_CARD_TOOL_META } from "../apps/proposalCard";
+import { entryFromRecord } from "../monthProposals/storedEntries";
 import { draftLabel } from "../monthProposals/labels";
 import { kindOfType } from "@/app/components/admin/v3Services";
 import { ROLE_TYPES } from "@/app/utils/serviceReadModel";
@@ -368,7 +371,7 @@ function personNamer(members: readonly EditorMember[]): (id: string) => string {
 
 async function openMonth(
   month: string,
-  principal: McpPrincipal | null,
+  principal: MonthPrincipal | null,
   deps: ServiceEditorDeps,
 ): Promise<{ ok: true; ctx: MonthContext } | { ok: false; result: CallToolResult }> {
   const fail = (result: CallToolResult) => ({ ok: false as const, result });
@@ -379,7 +382,7 @@ async function openMonth(
     console.error("[mcp-service-editor] member token secret unavailable");
     return fail(refusal([E.noSecret], { code: "integrity_conflict", detail: "no_secret" }));
   }
-  const read = await deps.reads();
+  const read = await deps.reads({ allMembers: principal.allMembers });
   if (!read.ok) return fail(refusal([L.sources(read.failed)], { code: "integrity_conflict", detail: "sources", retry: true }));
   const sources = read.value;
   const states = sources.snapshot.readiness.sources;
@@ -680,22 +683,6 @@ function changeSets(
   return { ok: true, changes };
 }
 
-/** The month's frozen eligibility, from its fairness record (T2.3); none = «sin revisar» where it is needed (E7). */
-function entryFromRecord(record: LogicalRecord): V3ConfirmEntry {
-  return {
-    month: record.month,
-    state: "bound",
-    write: {
-      month: record.month,
-      source: record.source === "auto" ? "auto" : "manual",
-      expectedRev: record.rev,
-      people: record.people.map(({ name: _name, ...p }) => p),
-      presence: record.presence,
-    },
-    expects: ["unchanged"],
-  };
-}
-
 /** The ledger's stored services with each editable service replaced by the board's seats. */
 function storedFairShareAdjust(board: EditorBoard): (stored: { records: LogicalRecord[]; services: LedgerService[] }) => { records: LogicalRecord[]; services: LedgerService[] } {
   return (stored) => {
@@ -910,7 +897,7 @@ async function checkMonth(
 
 export async function checkServiceEditsResult(
   args: CheckServiceEditsArgs,
-  principal: McpPrincipal | null,
+  principal: MonthPrincipal | null,
   deps: ServiceEditorDeps = defaultServiceEditorDeps(),
 ): Promise<CallToolResult> {
   return runWriteTool(
@@ -942,7 +929,7 @@ export async function checkServiceEditsResult(
 
 export async function checkServiceEditsAppResult(
   args: CheckServiceEditsAppArgs,
-  principal: McpPrincipal | null,
+  principal: MonthPrincipal | null,
   deps: ServiceEditorDeps = defaultServiceEditorDeps(),
 ): Promise<CallToolResult> {
   return runWriteTool(
@@ -1038,7 +1025,7 @@ async function checkCopy(ctx: MonthContext, copy: { from: string; to: string }, 
 
 export async function copyInstrumentsResult(
   args: CopyInstrumentsArgs,
-  principal: McpPrincipal | null,
+  principal: MonthPrincipal | null,
   deps: ServiceEditorDeps = defaultServiceEditorDeps(),
 ): Promise<CallToolResult> {
   return runWriteTool(
@@ -1108,7 +1095,8 @@ export async function copyInstrumentsResult(
       if (transport.code === "stale_revision" && now !== "failed" && now !== null && now.rev === baseRev && !sourceMoved) {
         return answer(true, [S.copy.repeat], { ok: false, month: ctx.month, status: "not_saved", next: "repeat_same_call" });
       }
-      return answer(true, [S.copy.recheck(S.reason[transport.code] ?? S.reason.invalid_request)], {
+      const reason = clashReasonOf(transport) ?? S.reason[transport.code] ?? S.reason.invalid_request;
+      return answer(true, [S.copy.recheck(reason)], {
         ok: false,
         month: ctx.month,
         status: "not_saved",
@@ -1125,13 +1113,20 @@ export async function copyInstrumentsResult(
  * A write's outcome as the planner classifies a PATCH (`classifyPatchOutcome`). A maintenance reload
  * (the commit bootstrapped a lock and then refused) wrote nothing to the role: a proven refusal.
  */
-function classifyWrite(outcome: { status: number; body: unknown } | null): { kind: "knownCommitted" } | { kind: "knownFailure"; code: string } | { kind: "unknown" } {
+function classifyWrite(
+  outcome: { status: number; body: unknown } | null,
+): { kind: "knownCommitted" } | { kind: "knownFailure"; code: string; seatClashSentences?: string[] } | { kind: "unknown" } {
   if (!outcome) return { kind: "unknown" };
   const t = classifyPatchOutcome({ status: outcome.status, body: outcome.body });
   if (t.kind === "maintenanceReload") return { kind: "knownFailure", code: "bootstrap_completed_reload" };
   if (t.kind === "knownCommitted") return { kind: "knownCommitted" };
-  if (t.kind === "knownFailure") return { kind: "knownFailure", code: t.code };
+  if (t.kind === "knownFailure") return t;
   return { kind: "unknown" };
+}
+
+/** A seat-clash refusal's sentences as a reason clause (ADR-0078): the copy around it adds its own stop. */
+function clashReasonOf(t: { seatClashSentences?: string[] }): string | undefined {
+  return t.seatClashSentences?.length ? t.seatClashSentences.join(" ").replace(/\.$/, "") : undefined;
 }
 
 type SaveStatus =
@@ -1140,7 +1135,8 @@ type SaveStatus =
   | { kind: "unknown" }
   | { kind: "pending" }
   | { kind: "notSavedRepeat" }
-  | { kind: "notSavedRecheck"; code: string }
+  /** `reason`: the server's seat-clash sentence(s) (ADR-0078), shown instead of the code's copy. */
+  | { kind: "notSavedRecheck"; code: string; reason?: string }
   | { kind: "notSavedGroup" };
 
 function statusText(s: SaveStatus): string {
@@ -1150,7 +1146,7 @@ function statusText(s: SaveStatus): string {
     case "unknown": return S.status.unknown;
     case "pending": return S.status.pending;
     case "notSavedRepeat": return S.status.notSavedRepeat;
-    case "notSavedRecheck": return S.status.notSavedRecheck(S.reason[s.code] ?? S.reason.invalid_request);
+    case "notSavedRecheck": return S.status.notSavedRecheck(s.reason ?? S.reason[s.code] ?? S.reason.invalid_request);
     case "notSavedGroup": return S.status.notSavedGroup;
   }
 }
@@ -1178,11 +1174,12 @@ interface SortedChange {
 
 export async function saveServiceEditsResult(
   args: SaveServiceEditsArgs,
-  principal: McpPrincipal | null,
+  principal: MonthPrincipal | null,
   deps: ServiceEditorDeps = defaultServiceEditorDeps(),
+  tool: "save_service_edits" | "save_service_edits_app" = "save_service_edits",
 ): Promise<CallToolResult> {
   return runWriteTool(
-    "save_service_edits",
+    tool,
     async ({ callDomain }) => {
       const startedAt = deps.nowMs();
       const elapsed = () => deps.nowMs() - startedAt;
@@ -1304,7 +1301,7 @@ export async function saveServiceEditsResult(
           let st: SaveStatus;
           if (now !== "failed" && now !== null && sameRoleSemantics(targetSnapshot(now.target), targetSnapshot(s.target))) st = { kind: "already" };
           else if (transport.code === "stale_revision" && now !== "failed" && now !== null && now.rev === s.change.baseRev) st = { kind: "notSavedRepeat" };
-          else st = { kind: "notSavedRecheck", code: transport.code };
+          else st = { kind: "notSavedRecheck", code: transport.code, ...(clashReasonOf(transport) ? { reason: clashReasonOf(transport) } : {}) };
           status.set(id, st);
           if (st.kind === "already") continue;
           if (st.kind === "notSavedRepeat") repeatAdvised = true;
@@ -1367,7 +1364,8 @@ export async function saveServiceEditsResult(
 /** MCP Apps: a tool only the card may call; a host that honours it hides it from the model (ADR-0062 Q1 (1)). */
 const APP_ONLY_META = { ui: { resourceUri: PROPOSAL_CARD_TOOL_META.ui.resourceUri, visibility: ["app"] } } as const;
 
-export function registerServiceEditor(server: McpServer): void {
+/** `appsHost: false` leaves out the card's two app-only twins (a grant whose agent is not claude.ai, ADR-0083). */
+export function registerServiceEditor(server: McpServer, opts: { appsHost?: boolean } = {}): void {
   server.registerTool(
     "check_service_edits",
     {
@@ -1377,19 +1375,21 @@ export function registerServiceEditor(server: McpServer): void {
       annotations: { readOnlyHint: true, openWorldHint: false },
       _meta: PROPOSAL_CARD_TOOL_META,
     },
-    async (args, ctx: ServerContext) => checkServiceEditsResult(args, principalOf(ctx)),
+    async (args, ctx: ServerContext) => checkServiceEditsResult(args, monthPrincipalOf(ctx)),
   );
-  server.registerTool(
-    "check_service_edits_app",
-    {
-      title: "Revisar cambios a servicios guardados (tarjeta)",
-      description: "Solo para la tarjeta del mes guardado: revisa una lista de cambios sin guardar nada.",
-      inputSchema: CHECK_SERVICE_EDITS_APP_INPUT,
-      annotations: { readOnlyHint: true, openWorldHint: false },
-      _meta: APP_ONLY_META,
-    },
-    async (args, ctx: ServerContext) => checkServiceEditsAppResult(args, principalOf(ctx)),
-  );
+  if (opts.appsHost !== false) {
+    server.registerTool(
+      "check_service_edits_app",
+      {
+        title: "Revisar cambios a servicios guardados (tarjeta)",
+        description: "Solo para la tarjeta del mes guardado: revisa una lista de cambios sin guardar nada.",
+        inputSchema: CHECK_SERVICE_EDITS_APP_INPUT,
+        annotations: { readOnlyHint: true, openWorldHint: false },
+        _meta: APP_ONLY_META,
+      },
+      async (args, ctx: ServerContext) => checkServiceEditsAppResult(args, monthPrincipalOf(ctx)),
+    );
+  }
   server.registerTool(
     "save_service_edits",
     {
@@ -1400,8 +1400,23 @@ export function registerServiceEditor(server: McpServer): void {
       // `idempotentHint: false`, as the four P3 writes and apply_schedule do (I14).
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     },
-    async (args, ctx: ServerContext) => saveServiceEditsResult(args, principalOf(ctx)),
+    async (args, ctx: ServerContext) => saveServiceEditsResult(args, monthPrincipalOf(ctx)),
   );
+  if (opts.appsHost !== false) {
+    server.registerTool(
+      "save_service_edits_app",
+      {
+        title: "Guardar cambios a servicios (tarjeta)",
+        description: "Solo para la tarjeta del mes guardado: guarda los cambios que la tarjeta revisó y la persona confirmó.",
+        inputSchema: SAVE_SERVICE_EDITS_INPUT,
+        // The same save as `save_service_edits` (one function): it re-checks every change set whoever calls it.
+        // The card asks the person first (ADR-0066 addendum); a host that honours MCP Apps hides it from the model.
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+        _meta: APP_ONLY_META,
+      },
+      async (args, ctx: ServerContext) => saveServiceEditsResult(args, monthPrincipalOf(ctx), undefined, "save_service_edits_app"),
+    );
+  }
   server.registerTool(
     "copy_instruments",
     {
@@ -1410,6 +1425,6 @@ export function registerServiceEditor(server: McpServer): void {
       inputSchema: COPY_INSTRUMENTS_INPUT,
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     },
-    async (args, ctx: ServerContext) => copyInstrumentsResult(args, principalOf(ctx)),
+    async (args, ctx: ServerContext) => copyInstrumentsResult(args, monthPrincipalOf(ctx)),
   );
 }

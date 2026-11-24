@@ -38,6 +38,11 @@ rendering nor a stable one.
 | Full page | `swatches`, `controls`, `song`, `kids-planner`, `nav`. `dialog` and `planner` are viewport-only: both are `fixed inset-0`, so a full-page shot adds only the scroll height underneath them |
 | On disk | ~8.5 MB, committed under `__screenshots__/{project}/{platform}/` |
 
+**The baselines predate the sentence-case house controls (2026-10-27, ADR-0070):** `Button`
+and `SegmentedControl` changed face, case and size, so `controls`, `dialog`, `song` and `nav`
+will exceed the tolerance by design until someone recaptures on a Mac (`--update-snapshots`);
+that recapture is the fix, not a wider tolerance.
+
 **Baselines are darwin-only, and the path template says so.** `{platform}` is in
 `snapshotPathTemplate`, so a linux run compares against nothing rather than against macOS
 font rasterisation. **VR is not in CI** (`docs/CI.md`) — it needs a built server and a

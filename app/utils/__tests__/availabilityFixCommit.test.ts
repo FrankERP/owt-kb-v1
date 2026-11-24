@@ -1,0 +1,734 @@
+// The availability proposals' writer (ADR-0079; plan §5–§6), over mocked clients. Fictitious people.
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
+vi.mock("@/sanity/env", () => ({ apiVersion: "2024-07-23", dataset: "test", projectId: "test" }));
+vi.mock("next/server", () => ({ after: () => undefined }));
+
+import { ALL_IN, config, ledgerResponse, record } from "@/app/components/admin/__tests__/v3Fixtures";
+import type { SolverConfig } from "@/app/components/admin/plannerModel";
+import type { LogicalRecord } from "@/app/utils/fairnessVocabulary";
+import type { RoleDomainSummary } from "@/app/utils/serviceReadSummary";
+import { snapshot, sources } from "@/app/utils/__tests__/v3MonthPlanFixtures";
+import { MEMBERS, RULES } from "@/app/mcp/monthProposals/__tests__/editorFixtures";
+import type { EditorMember } from "@/app/mcp/monthProposals/revise";
+import { NOVEMBER, applyPatch, storedRow, summaryFor, type StoredRow } from "@/app/mcp/tools/__tests__/serviceEditorFixtures";
+import type { ParsedEditRequest } from "../roleWriteRequest";
+import {
+  applyAvailabilityFix,
+  availabilityTick,
+  conflictRecordId,
+  memberTick,
+  precheckOpens,
+  readConflictPanel,
+  setConflictKept,
+  sweepAvailabilityConflicts,
+  transition,
+  type AvailabilityDeps,
+  type ConflictRecord,
+} from "../availabilityFixCommit";
+
+const TODAY = "2026-10-21";
+const ELSA = { _id: "m-elsa", member_name: "Elsa Mora", alias: "Elsa", memberType: ["voz", "support"], ministries: ["worship"] };
+const listed = (memberId: string): LogicalRecord["people"][number] => ({ memberId, name: memberId, roles: { ...ALL_IN }, exactRules: [], exempt: false, blocks: [] });
+const conflictErr = () => Object.assign(new Error("conflict"), { statusCode: 409, details: { type: "mutationError", items: [] } });
+const viaJson = <T>(v: unknown): T => JSON.parse(JSON.stringify(v)) as T;
+
+interface World {
+  roles: Map<string, StoredRow>;
+  members: EditorMember[];
+  records: Map<string, ConflictRecord>;
+  sent: Array<{ to: string; subject: string; html: string }>;
+  summary: { current: ((rows: StoredRow[]) => RoleDomainSummary) | null };
+  engine: { current: string };
+  acts: { current: boolean };
+  blocked: { current: boolean };
+  clock: { now: number };
+  /** Runs inside the next record write, before it lands: another run acting meanwhile. */
+  beforeRecordWrite: Array<(() => void) | null>;
+  deps: AvailabilityDeps & { editRole: ReturnType<typeof vi.fn> };
+  unavailable(memberId: string, ...dates: string[]): void;
+}
+
+let revs = 0;
+
+function world(opts: { rows?: StoredRow[]; members?: EditorMember[]; listed?: string[]; recordPeople?: LogicalRecord["people"]; config?: SolverConfig } = {}): World {
+  const roles = new Map((opts.rows ?? NOVEMBER()).map((r) => [r._id, r]));
+  const members = (opts.members ?? [...MEMBERS, ELSA]).map((m) => ({ ...m, ministries: (m as { ministries?: unknown }).ministries ?? ["worship"] })) as EditorMember[];
+  const records = new Map<string, ConflictRecord>();
+  const sent: World["sent"] = [];
+  const summary: World["summary"] = { current: null };
+  const engine = { current: "v3" };
+  const acts = { current: true };
+  const blocked = { current: false };
+  const clock = { now: Date.parse("2026-10-21T18:00:00Z") };
+  const beforeRecordWrite: World["beforeRecordWrite"] = [];
+  const people = opts.listed ?? ["m-ana", "m-bruno", "m-carla", "m-dani", "m-elsa"];
+  const rows = () => [...roles.values()];
+  const deps = {
+    hasToken: () => true,
+    readRecords: vi.fn(async (from: string) => viaJson<ConflictRecord[]>([...records.values()].filter((r) => r.date >= from))),
+    reads: vi.fn(async () => ({
+      ok: true as const,
+      value: sources({
+        adminRoles: viaJson(rows()),
+        members: members as never,
+        rules: { rev: "rules-rev-1", config: opts.config ?? RULES },
+        snapshot: (() => {
+          const snap = snapshot({ roles: viaJson(rows()) });
+          (snap.readiness as { roleSummary: RoleDomainSummary }).roleSummary = (summary.current ?? summaryFor)(rows());
+          return snap;
+        })(),
+      }),
+    })),
+    readLedger: vi.fn(async (months: readonly string[]) =>
+      ledgerResponse([...months], { horizon: [{ record: record(months[0], opts.recordPeople ?? people.map(listed)), storedServices: roles.size, recordBinds: true }] })),
+    engine: () => engine.current,
+    acts: () => acts.current,
+    todayIso: () => TODAY,
+    now: () => clock.now,
+    create: vi.fn(async (doc: Omit<ConflictRecord, "_rev">) => {
+      beforeRecordWrite.shift()?.();
+      if (records.has(doc._id)) throw conflictErr();
+      records.set(doc._id, { ...viaJson<ConflictRecord>(doc), _rev: `r${++revs}` });
+    }),
+    patch: vi.fn(async (id: string, rev: string, set: Partial<ConflictRecord>, unset: string[] = []) => {
+      beforeRecordWrite.shift()?.();
+      const cur = records.get(id);
+      if (!cur || cur._rev !== rev) throw conflictErr();
+      const next = { ...cur, ...viaJson<Partial<ConflictRecord>>(set), _rev: `r${++revs}` } as ConflictRecord;
+      for (const f of unset) delete (next as unknown as Record<string, unknown>)[f];
+      records.set(id, next);
+    }),
+    readAudience: vi.fn(async () => [{ _id: "m-frank", email: "frank@example.test", notifPrefs: {} }]),
+    deliveryBlocked: () => blocked.current,
+    send: vi.fn(async (to: string, subject: string, html: string) => {
+      sent.push({ to, subject, html });
+      return { ok: true };
+    }),
+    editRole: vi.fn(async (id: string, request: ParsedEditRequest) => {
+      const row = roles.get(id);
+      if (!row) return { ok: false, status: 404, body: { error: "not_found" } };
+      if (row._rev !== request.rev) return { ok: false, status: 409, body: { error: "stale_revision" } };
+      roles.set(id, applyPatch(row, request));
+      return { ok: true, status: 200, body: { ok: true } };
+    }),
+    readSeats: vi.fn(async (_filter: string, params: Record<string, unknown>) => {
+      const dates = params.dates as string[] | undefined;
+      return rows()
+        .filter((r) => (dates ? dates.includes(r.date) : r.date >= (params.today as string) && r.date <= (params.end as string)))
+        .map((r) => ({
+          _id: r._id,
+          date: r.date,
+          members: [...new Set([...r.leads, ...r.bgvs, ...r.chorus].map((x) => x._id).concat([...r.instruments, ...r.foh].map((x) => x.person._id)))],
+        }));
+    }),
+    readUnavailable: vi.fn(async () => members.map((m) => ({ _id: m._id, unavailableDates: m.unavailableDates ?? [] }))),
+  } as unknown as World["deps"];
+  return {
+    roles, members, records, sent, summary, engine, acts, blocked, clock, beforeRecordWrite, deps,
+    unavailable(memberId, ...dates) {
+      const m = members.find((x) => x._id === memberId)!;
+      m.unavailableDates = dates;
+    },
+  };
+}
+
+const sweep = (w: World, over: Partial<Parameters<typeof sweepAvailabilityConflicts>[0]> = {}) =>
+  sweepAvailabilityConflicts({ trigger: "manual", deadlineMs: w.clock.now + 50_000, mode: "act", ...over }, w.deps);
+const DANI_SUN1 = conflictRecordId("sun1", "m-dani", "2026-11-01");
+
+let w: World;
+beforeEach(() => {
+  w = world();
+  vi.spyOn(console, "error").mockImplementation(() => undefined);
+  vi.spyOn(console, "info").mockImplementation(() => undefined);
+});
+
+describe("the sweep", () => {
+  it("records a proposal, emails once, and never writes a role", async () => {
+    w.unavailable("m-dani", "2026-11-01");
+    const report = await sweep(w);
+    expect(report.proposed).toEqual([DANI_SUN1]);
+    expect(w.deps.editRole).not.toHaveBeenCalled();
+    const rec = w.records.get(DANI_SUN1)!;
+    expect(rec).toMatchObject({ status: "proposed", eventSeq: 1, notifiedSeq: 1, published: true });
+    expect(rec.seats[0]).toMatchObject({ rowId: "coro", from: "m-dani" });
+    expect(w.sent).toHaveLength(1);
+    expect(w.sent[0].subject).toBe("Conflictos de disponibilidad (1)");
+    expect(w.sent[0].html).toContain("Dani");
+    // A second sweep: nothing new, nothing sent.
+    await sweep(w);
+    expect(w.sent).toHaveLength(1);
+    expect(w.records.get(DANI_SUN1)!.eventSeq).toBe(1);
+  });
+
+  it("never writes a role on a draft either", async () => {
+    const rows = NOVEMBER().map((r) => (r._id === "sun1" ? { ...r, published: false } : r));
+    w = world({ rows });
+    w.unavailable("m-dani", "2026-11-01");
+    await sweep(w);
+    expect(w.deps.editRole).not.toHaveBeenCalled();
+    expect(w.records.get(DANI_SUN1)).toMatchObject({ status: "proposed", published: false });
+  });
+
+  it("dry mode writes and sends nothing and answers what act would do", async () => {
+    w.unavailable("m-dani", "2026-11-01");
+    const report = await sweep(w, { mode: "dry" });
+    expect(report).toMatchObject({ mode: "dry", proposed: [DANI_SUN1] });
+    expect(w.records.size).toBe(0);
+    expect(w.sent).toHaveLength(0);
+  });
+
+  it("makes no transition on an unjudgeable read: incoherent, engine v2, unready", async () => {
+    w.unavailable("m-dani", "2026-11-01");
+    await sweep(w);
+    const before = JSON.stringify([...w.records.values()]);
+    w.unavailable("m-dani");
+    w.summary.current = (rows) => ({ ...summaryFor(rows), recordIssues: [{ code: "raw_draft" } as never] });
+    expect(await sweep(w)).toMatchObject({ ok: false, reason: "incoherent" });
+    w.summary.current = null;
+    w.engine.current = "v2";
+    expect(await sweep(w)).toMatchObject({ ok: false, reason: "engine" });
+    expect(JSON.stringify([...w.records.values()])).toBe(before);
+  });
+
+  it("refuses before any read without the read token", async () => {
+    w.deps.hasToken = () => false;
+    expect(await sweep(w)).toMatchObject({ ok: false, reason: "no_token" });
+    expect(w.deps.readRecords).not.toHaveBeenCalled();
+    expect(w.deps.reads).not.toHaveBeenCalled();
+  });
+
+  it("proposed → date cleared → gone → re-marked → proposed, with one more email", async () => {
+    w.unavailable("m-dani", "2026-11-01");
+    await sweep(w);
+    w.unavailable("m-dani");
+    expect((await sweep(w)).gone).toEqual([DANI_SUN1]);
+    expect(w.records.get(DANI_SUN1)!.status).toBe("gone");
+    w.unavailable("m-dani", "2026-11-01");
+    await sweep(w);
+    expect(w.records.get(DANI_SUN1)).toMatchObject({ status: "proposed", eventSeq: 2, notifiedSeq: 2 });
+    expect(w.sent).toHaveLength(2);
+  });
+
+  it("«Mantener» silences while the conflict lasts; it ends with the conflict and a re-mark is news", async () => {
+    w.unavailable("m-dani", "2026-11-01");
+    await sweep(w);
+    const rec = w.records.get(DANI_SUN1)!;
+    await setConflictKept({ roleId: "sun1", memberId: "m-dani", date: "2026-11-01", serviceKind: "sunday_role", published: true, rev: rec._rev, kept: true, actor: "m-frank" }, w.deps);
+    w.clock.now += 7 * 3600_000;
+    await sweep(w);
+    expect(w.records.get(DANI_SUN1)!.status).toBe("kept");
+    expect(w.sent).toHaveLength(1);
+    w.unavailable("m-dani");
+    await sweep(w);
+    expect(w.records.get(DANI_SUN1)!.status).toBe("gone");
+    w.unavailable("m-dani", "2026-11-01");
+    await sweep(w);
+    expect(w.records.get(DANI_SUN1)!.status).toBe("proposed");
+    expect(w.sent).toHaveLength(2);
+  });
+
+  it("a conflict on a service the board cannot edit is «sin revisar», never gone", async () => {
+    // A weekend role with no lock yet: shown, never edited (bootstrap-eligible, not approved).
+    w.summary.current = (rows) => {
+      const sum = summaryFor(rows);
+      return { ...sum, targets: sum.targets.map((t) => (t.canonicalIds[0] === "sun1" ? { ...t, lock: null } : t)) };
+    };
+    w.unavailable("m-dani", "2026-11-01");
+    expect((await sweep(w)).ok).toBe(true);
+    expect(w.records.get(DANI_SUN1)).toMatchObject({ status: "none", reason: "unchecked" });
+  });
+
+  it("an unfixable conflict stops reopening the tick once checked, and is re-judged once editable", async () => {
+    const locked = (rows: StoredRow[]) => {
+      const sum = summaryFor(rows);
+      return { ...sum, targets: sum.targets.map((t) => (t.canonicalIds[0] === "sun1" ? { ...t, lock: null } : t)) };
+    };
+    w.summary.current = locked;
+    w.unavailable("m-dani", "2026-11-01");
+    await sweep(w, { trigger: "cron" });
+    const rec = w.records.get(DANI_SUN1)!;
+    expect(rec.checkedAt).toBeTruthy();
+    const seats = [{ _id: "sun1", date: "2026-11-01", members: ["m-dani"] }];
+    const off = new Map([["m-dani", new Set(["2026-11-01"])]]);
+    expect(precheckOpens({ seats, unavailable: off, records: [{ ...rec, notifiedSeq: rec.eventSeq }], nowMs: w.clock.now })).toBe(false);
+    // The service becomes editable: the next run re-judges the «unchecked» record at once, tick or not.
+    w.summary.current = null;
+    w.clock.now += 60_000;
+    await sweep(w, { trigger: "cron" });
+    expect(w.records.get(DANI_SUN1)!.status).toBe("proposed");
+  });
+
+  it("a person's own trigger re-judges a fresh open record; the tick waits for it to go stale", async () => {
+    w.unavailable("m-dani", "2026-11-01");
+    await sweep(w);
+    const proposed = w.records.get(DANI_SUN1)!;
+    expect(proposed.status).toBe("proposed");
+    // Every candidate leaves: the tick keeps the fresh judgement, «Revisar ahora» re-judges it.
+    for (const m of w.members) if (m._id !== "m-dani") m.unavailableDates = ["2026-11-01"];
+    w.clock.now += 60_000;
+    await sweep(w, { trigger: "cron" });
+    expect(w.records.get(DANI_SUN1)!._rev).toBe(proposed._rev);
+    await sweep(w, { trigger: "manual" });
+    expect(w.records.get(DANI_SUN1)!.status).toBe("none");
+  });
+
+  it("the member scope never touches another member's identity", async () => {
+    w.unavailable("m-dani", "2026-11-01");
+    w.unavailable("m-ana", "2026-11-07");
+    const report = await sweep(w, { trigger: "member", memberId: "m-ana" });
+    expect(report.proposed.concat(report.none)).toEqual([conflictRecordId("sat7", "m-ana", "2026-11-07")]);
+    expect(w.records.has(DANI_SUN1)).toBe(false);
+  });
+
+  it("two concurrent sweeps on one new identity: one create wins, one email", async () => {
+    w.unavailable("m-dani", "2026-11-01");
+    w.beforeRecordWrite.push(() => {
+      w.records.set(DANI_SUN1, { _id: DANI_SUN1, _rev: "other", _type: "availabilityConflict", roleId: "sun1", memberId: "m-dani", date: "2026-11-01", serviceKind: "sunday_role", published: true, status: "proposed", seats: [], eventSeq: 1, notifiedSeq: 1, firstSeenAt: "", updatedAt: "", trigger: "cron" });
+    });
+    await sweep(w);
+    expect(w.records.get(DANI_SUN1)!._rev).toBe("other");
+    expect(w.sent).toHaveLength(0);
+  });
+
+  it("delivery blocked: nothing is claimed and the event stays due", async () => {
+    w.blocked.current = true;
+    w.unavailable("m-dani", "2026-11-01");
+    await sweep(w);
+    expect(w.records.get(DANI_SUN1)).toMatchObject({ eventSeq: 1, notifiedSeq: 0 });
+    expect(w.sent).toHaveLength(0);
+    w.blocked.current = false;
+    await sweep(w);
+    expect(w.sent).toHaveLength(1);
+  });
+
+  it("the deadline stops new judgements and leaves no claim without room to send", async () => {
+    w.unavailable("m-dani", "2026-11-01");
+    const report = await sweep(w, { deadlineMs: w.clock.now + 5_000 });
+    expect(report.skipped).toEqual([DANI_SUN1]);
+    expect(w.records.size).toBe(0);
+  });
+
+  it("a failed ledger read leaves the month untouched", async () => {
+    w.unavailable("m-dani", "2026-11-01");
+    w.deps.readLedger = vi.fn(async () => { throw new Error("down"); });
+    const report = await sweep(w);
+    expect(report.skipped).toEqual([DANI_SUN1]);
+    expect(w.records.size).toBe(0);
+  });
+});
+
+describe("transition (§5.2)", () => {
+  const conflict = { roleId: "sun1", roleRev: "r", roleType: "sunday_role" as const, memberId: "m-dani", date: "2026-11-01", published: true };
+  const rec = (status: ConflictRecord["status"], over: Partial<ConflictRecord> = {}): ConflictRecord => ({
+    _id: "x", _rev: "r", _type: "availabilityConflict", roleId: "sun1", memberId: "m-dani", date: "2026-11-01", serviceKind: "sunday_role",
+    published: true, status, seats: [{ _key: "s0", rowId: "coro", from: "m-dani" }], reason: "no_candidate", eventSeq: 1, notifiedSeq: 1, firstSeenAt: "", updatedAt: "", trigger: "cron", ...over,
+  });
+  const pick = { c: true as const, conflict, e: true as const, proposal: { kind: "replace" as const, target: {} as never, seats: [{ rowId: "coro", from: "m-dani", to: "m-ana" }] } };
+  const none = { c: true as const, conflict, e: true as const, proposal: { kind: "none" as const, reason: "no_candidate" as const } };
+  const notE = { c: true as const, conflict, e: false as const };
+
+  it("covers every cell of the table", () => {
+    // no record / gone / applied + C → new event
+    for (const r of [null, rec("gone"), rec("applied")]) {
+      expect(transition(r, pick, ["coro"], false)).toMatchObject({ status: "proposed", event: true });
+      expect(transition(r, notE, ["coro"], false)).toMatchObject({ status: "none", reason: "unchecked", event: true });
+    }
+    expect(transition(null, { c: false }, [], false)).toBeNull();
+    expect(transition(rec("applied"), { c: false }, [], false)).toBeNull();
+    // proposed/none
+    expect(transition(rec("none"), none, ["coro"], false)).toBeNull();
+    expect(transition(rec("none"), pick, ["coro"], false)).toMatchObject({ status: "proposed", event: true });
+    expect(transition(rec("proposed", { reason: undefined, seats: [{ _key: "s0", rowId: "coro", from: "m-dani", to: "m-ana" }] }), none, ["coro"], false)).toMatchObject({ status: "none", event: true });
+    expect(transition(rec("proposed", { reason: undefined, seats: [{ _key: "s0", rowId: "coro", from: "m-dani", to: "m-elsa" }] }), pick, ["coro"], false)).toMatchObject({ status: "proposed", event: false });
+    expect(transition(rec("none"), none, ["coro"], true)).toMatchObject({ status: "none", event: false, checked: true });
+    expect(transition(rec("proposed", { reason: undefined }), notE, ["coro"], false)).toMatchObject({ status: "none", reason: "unchecked", event: true });
+    expect(transition(rec("none"), { c: false }, [], false)).toMatchObject({ status: "gone", event: false });
+    // kept
+    expect(transition(rec("kept"), pick, ["coro"], false)).toBeNull();
+    expect(transition(rec("kept"), notE, ["coro"], false)).toBeNull();
+    expect(transition(rec("kept"), { c: false }, [], false)).toMatchObject({ status: "gone" });
+  });
+});
+
+describe("«Aplicar»", () => {
+  it("writes through editRole (deferred notices) and records `applied`", async () => {
+    w.unavailable("m-dani", "2026-11-01");
+    await sweep(w);
+    const rec = w.records.get(DANI_SUN1)!;
+    // A record left with a stale `waived` (an earlier «Aplicar de todos modos»): a strict apply unsets it.
+    w.records.set(DANI_SUN1, { ...rec, waived: ["m:old"] });
+    const to = rec.seats[0].to!;
+    const out = await applyAvailabilityFix({ roleId: "sun1", rev: "sun1-r1", memberId: "m-dani", replacements: [{ rowId: "coro", to }], actor: "m-frank" }, w.deps);
+    expect(out).toMatchObject({ ok: true, body: { recorded: true } });
+    expect(w.deps.editRole).toHaveBeenCalledTimes(1);
+    expect(w.deps.editRole.mock.calls[0][2]).toEqual({ notices: "deferred" });
+    expect(w.roles.get("sun1")!.chorus.map((s) => s._id)).toEqual([to]);
+    expect(w.records.get(DANI_SUN1)).toMatchObject({ status: "applied", appliedBy: "m-frank" });
+    expect(w.records.get(DANI_SUN1)!.reason).toBeUndefined();
+    expect(w.records.get(DANI_SUN1)!.waived).toBeUndefined();
+  });
+
+  it("refuses a stale rev, a partial cover and a replacement that no longer passes", async () => {
+    w.unavailable("m-dani", "2026-11-01");
+    expect(await applyAvailabilityFix({ roleId: "sun1", rev: "old", memberId: "m-dani", replacements: [{ rowId: "coro", to: "m-ana" }], actor: "a" }, w.deps)).toMatchObject({ status: 409, body: { error: "stale_revision" } });
+    expect(await applyAvailabilityFix({ roleId: "sun1", rev: "sun1-r1", memberId: "m-dani", replacements: [], actor: "a" }, w.deps)).toMatchObject({ status: 400 });
+    // Bruno already serves sun1: he never passes.
+    expect(await applyAvailabilityFix({ roleId: "sun1", rev: "sun1-r1", memberId: "m-dani", replacements: [{ rowId: "coro", to: "m-bruno" }], actor: "a" }, w.deps)).toMatchObject({ status: 409, body: { error: "refused" } });
+    expect(w.deps.editRole).not.toHaveBeenCalled();
+  });
+
+  it("an instrument nobody else plays: proposed, mailed and applied as «queda vacío»", async () => {
+    w.unavailable("m-tomas", "2026-11-01");
+    await sweep(w);
+    const id = conflictRecordId("sun1", "m-tomas", "2026-11-01");
+    expect(w.records.get(id)).toMatchObject({ status: "proposed", seats: [{ rowId: "instrumento:Bass", from: "m-tomas", empty: true }] });
+    expect(w.records.get(id)!.seats[0].to).toBeUndefined();
+    expect(w.sent).toHaveLength(1);
+    expect(w.sent[0].html).toContain("Propuestas");
+    expect(w.sent[0].html).toContain("queda vacío");
+
+    const read = await readConflictPanel(w.deps);
+    if (!read.ok) throw new Error("expected a read");
+    // One option only: leaving the seat empty names nobody, so there is no other to offer.
+    expect(read.open[0].options).toEqual([{ seats: [{ rowId: "instrumento:Bass", seat: "Bass", to: null, toName: null }] }]);
+
+    const out = await applyAvailabilityFix({ roleId: "sun1", rev: "sun1-r1", memberId: "m-tomas", replacements: [{ rowId: "instrumento:Bass", to: null }], actor: "m-frank" }, w.deps);
+    expect(out).toMatchObject({ ok: true });
+    expect(w.roles.get("sun1")!.instruments.map((i) => i.person._id)).not.toContain("m-tomas");
+    expect(w.records.get(id)).toMatchObject({ status: "applied", seats: [{ empty: true }] });
+  });
+
+  it("alternatives vary the voice seats and keep the instrument pick: the one other bassist stays in every option", async () => {
+    const teo = { _id: "m-teo", member_name: "Teo Gil", alias: "Teo", memberType: ["voz", "sunday_lead", "instrumento"], instruments: ["Bass"], ministries: ["worship"] };
+    w = world({ rows: [storedRow("sun1", "sunday_role", "2026-11-01", { leads: ["m-teo"], instruments: [["Bass", "m-teo"]] })], members: [...MEMBERS, ELSA, teo] as EditorMember[] });
+    w.unavailable("m-teo", "2026-11-01");
+    const read = await readConflictPanel(w.deps);
+    if (!read.ok) throw new Error("expected a read");
+    const options = read.open[0].options;
+    expect(options.length).toBeGreaterThanOrEqual(2);
+    for (const o of options) expect(o.seats.find((x) => x.rowId === "instrumento:Bass")?.to).toBe("m-tomas");
+    const leads = options.map((o) => o.seats.find((x) => x.rowId === "lead")?.to);
+    expect(new Set(leads).size).toBe(leads.length);
+  });
+
+  it("an instrument-only conflict still offers the other bassists as alternatives, then «queda vacío» once", async () => {
+    const raul = { _id: "m-raul", member_name: "Raúl Paz", alias: "Raúl", memberType: ["instrumento"], instruments: ["Bass"], ministries: ["worship"] };
+    w = world({ members: [...MEMBERS, ELSA, raul] as EditorMember[] });
+    w.unavailable("m-tomas", "2026-11-01");
+    const read = await readConflictPanel(w.deps);
+    if (!read.ok) throw new Error("expected a read");
+    expect(read.open[0].options.map((o) => o.seats[0].to)).toEqual(["m-raul", null]);
+  });
+
+  it("a singer moves up when nobody free can lead: shown, mailed and applied as one change of three people", async () => {
+    const lia = { _id: "m-lia", member_name: "Lía Paz", alias: "Lía", memberType: ["voz", "sunday_lead"], ministries: ["worship"] };
+    const noLead = (id: string) => ({ ...listed(id), roles: { ...ALL_IN, "Sun.Lead": "out" as const } });
+    w = world({
+      rows: [storedRow("sun1", "sunday_role", "2026-11-01", { leads: ["m-bruno"], bgvs: ["m-lia"] })],
+      members: [...MEMBERS, ELSA, lia] as EditorMember[],
+      recordPeople: [listed("m-bruno"), listed("m-lia"), noLead("m-ana"), noLead("m-dani"), noLead("m-elsa")],
+    });
+    w.unavailable("m-bruno", "2026-11-01");
+    await sweep(w);
+    const id = conflictRecordId("sun1", "m-bruno", "2026-11-01");
+    const rec = w.records.get(id)!;
+    expect(rec).toMatchObject({ status: "proposed", seats: [{ rowId: "lead", from: "m-bruno", to: "m-lia" }, { rowId: "bgv", from: "m-lia" }] });
+    expect(w.sent[0].html).toContain("(pasa de BGV)");
+
+    const read = await readConflictPanel(w.deps);
+    if (!read.ok) throw new Error("expected a read");
+    expect(read.open[0].options[0].seats[0]).toMatchObject({ seat: "Lead", toName: "Lía", movedFrom: "BGV" });
+
+    const filler = rec.seats[1].to!;
+    // A seat the proposal does not touch is refused; the move itself is applied.
+    expect(await applyAvailabilityFix({ roleId: "sun1", rev: "sun1-r1", memberId: "m-bruno", replacements: [{ rowId: "lead", to: "m-lia" }, { rowId: "coro", to: filler }], actor: "a" }, w.deps))
+      .toMatchObject({ status: 409, body: { error: "refused" } });
+    const out = await applyAvailabilityFix({ roleId: "sun1", rev: "sun1-r1", memberId: "m-bruno", replacements: [{ rowId: "lead", to: "m-lia" }, { rowId: "bgv", to: filler }], actor: "a" }, w.deps);
+    expect(out).toMatchObject({ ok: true });
+    expect(w.roles.get("sun1")!.leads.map((x) => x._id)).toEqual(["m-lia"]);
+    expect(w.roles.get("sun1")!.bgvs.map((x) => x._id)).toEqual([filler]);
+  });
+
+  it("refuses to leave a voice seat empty", async () => {
+    w.unavailable("m-dani", "2026-11-01");
+    expect(await applyAvailabilityFix({ roleId: "sun1", rev: "sun1-r1", memberId: "m-dani", replacements: [{ rowId: "coro", to: null }], actor: "a" }, w.deps))
+      .toMatchObject({ status: 409, body: { error: "refused" } });
+    expect(w.deps.editRole).not.toHaveBeenCalled();
+  });
+
+  it("a lost record write still answers ok, and the next sweep records `gone`", async () => {
+    w.unavailable("m-dani", "2026-11-01");
+    await sweep(w);
+    const to = w.records.get(DANI_SUN1)!.seats[0].to!;
+    w.beforeRecordWrite.push(() => {
+      const r = w.records.get(DANI_SUN1)!;
+      w.records.set(DANI_SUN1, { ...r, _rev: "moved" });
+    });
+    const out = await applyAvailabilityFix({ roleId: "sun1", rev: "sun1-r1", memberId: "m-dani", replacements: [{ rowId: "coro", to }], actor: "a" }, w.deps);
+    expect(out).toMatchObject({ ok: true, body: { recorded: false } });
+    await sweep(w);
+    expect(w.records.get(DANI_SUN1)!.status).toBe("gone");
+  });
+});
+
+describe("«Aplicar de todos modos» (nobody passes every rule)", () => {
+  // Every Sunday leader already leads another Sunday; Ximena, who leads the 15th, marked it.
+  const lead = (id: string, name: string) => ({ _id: id, member_name: `${name} Test`, alias: name, memberType: ["voz", "sunday_lead"], ministries: ["worship"] });
+  const PEOPLE = [lead("m-lia", "Lía"), lead("m-mar", "Mar"), lead("m-noe", "Noé"), lead("m-oto", "Oto"), lead("m-xim", "Ximena"),
+    { _id: "m-pau", member_name: "Pau Test", alias: "Pau", memberType: ["voz", "support"], ministries: ["worship"] }];
+  const XIM15 = conflictRecordId("s15", "m-xim", "2026-11-15");
+  function sundays(): World {
+    const x = world({
+      rows: [
+        storedRow("s1", "sunday_role", "2026-11-01", { leads: ["m-lia"] }),
+        storedRow("s8", "sunday_role", "2026-11-08", { leads: ["m-mar"] }),
+        storedRow("s15", "sunday_role", "2026-11-15", { leads: ["m-xim"], bgvs: ["m-noe"], chorus: ["m-pau"] }),
+        storedRow("s22", "sunday_role", "2026-11-22", { leads: ["m-noe"] }),
+        storedRow("s29", "sunday_role", "2026-11-29", { leads: ["m-oto"] }),
+      ],
+      members: PEOPLE as EditorMember[],
+      recordPeople: PEOPLE.map((m) => (m._id === "m-pau" ? { ...listed(m._id), roles: { ...ALL_IN, "Sun.Lead": "out" as const } } : listed(m._id))),
+      config: config({ sundayLeads: ["m-lia", "m-mar", "m-noe", "m-oto", "m-xim"], support: ["m-pau"] }),
+    });
+    x.unavailable("m-xim", "2026-11-15");
+    return x;
+  }
+  const body = (lia: { seats: Array<{ rowId: string; to: string | null }> }) => lia.seats.map((s) => ({ rowId: s.rowId, to: s.to }));
+
+  it("the panel lists two or more options with their broken rules; applying one with exactly its keys writes once and records them", async () => {
+    w = sundays();
+    await sweep(w);
+    expect(w.records.get(XIM15)).toMatchObject({ status: "none", reason: "no_candidate" });
+    expect(w.sent[0].html).toContain("nadie disponible pasa todas las reglas");
+
+    const read = await readConflictPanel(w.deps);
+    if (!read.ok) throw new Error("expected a read");
+    const c = read.open[0];
+    expect(c.options).toEqual([]);
+    expect(c.fallbacks!.length).toBeGreaterThanOrEqual(2);
+    expect(c.fallbacks![0].breaks[0].line).toMatch(/dirige 2 domingos en noviembre; lo normal es uno\./);
+    const pick = c.fallbacks![0];
+    const waive = pick.breaks.map((b) => b.key);
+
+    // No waiver: the strict «Aplicar» still refuses it.
+    expect(await applyAvailabilityFix({ roleId: "s15", rev: "s15-r1", memberId: "m-xim", replacements: body(pick), actor: "m-frank" }, w.deps))
+      .toMatchObject({ status: 409, body: { error: "refused" } });
+    // A key missing, an extra key: refused, nothing written.
+    if (waive.length > 1) {
+      expect(await applyAvailabilityFix({ roleId: "s15", rev: "s15-r1", memberId: "m-xim", replacements: body(pick), waive: waive.slice(1), actor: "m-frank" }, w.deps))
+        .toMatchObject({ status: 409, body: { error: "refused", reason: "changed" } });
+    }
+    expect(await applyAvailabilityFix({ roleId: "s15", rev: "s15-r1", memberId: "m-xim", replacements: body(pick), waive: [...waive, "m:other"], actor: "m-frank" }, w.deps))
+      .toMatchObject({ status: 409, body: { error: "refused", reason: "changed" } });
+    expect(await applyAvailabilityFix({ roleId: "s15", rev: "s15-r1", memberId: "m-xim", replacements: body(pick), waive: [], actor: "m-frank" }, w.deps))
+      .toMatchObject({ status: 409, body: { error: "refused" } });
+    // Another option's keys with this option's seats: refused.
+    const other = c.fallbacks!.find((f) => f.seats[0].to !== pick.seats[0].to)!;
+    expect(await applyAvailabilityFix({ roleId: "s15", rev: "s15-r1", memberId: "m-xim", replacements: body(pick), waive: other.breaks.map((b) => b.key), actor: "m-frank" }, w.deps))
+      .toMatchObject({ status: 409, body: { error: "refused", reason: "changed" } });
+    expect(w.deps.editRole).not.toHaveBeenCalled();
+
+    const out = await applyAvailabilityFix({ roleId: "s15", rev: "s15-r1", memberId: "m-xim", replacements: body(pick), waive, actor: "m-frank" }, w.deps);
+    expect(out).toMatchObject({ ok: true, body: { recorded: true } });
+    expect(w.deps.editRole).toHaveBeenCalledTimes(1);
+    expect(w.deps.editRole.mock.calls[0][2]).toEqual({ notices: "deferred" });
+    expect(w.roles.get("s15")!.leads.map((x) => x._id)).toEqual([pick.seats[0].to]);
+    expect(w.records.get(XIM15)).toMatchObject({ status: "applied", appliedBy: "m-frank", waived: [...waive].sort() });
+  });
+
+  it("refuses someone who marked the day, and a stale revision, even with matching-looking keys", async () => {
+    w = sundays();
+    w.unavailable("m-oto", "2026-11-15");
+    const read = await readConflictPanel(w.deps);
+    if (!read.ok) throw new Error("expected a read");
+    expect(read.open.find((c) => c.memberId === "m-xim")!.fallbacks!.some((f) => f.seats[0].to === "m-oto")).toBe(false);
+    expect(await applyAvailabilityFix({ roleId: "s15", rev: "s15-r1", memberId: "m-xim", replacements: [{ rowId: "lead", to: "m-oto" }], waive: ["m:sunday_cap_exceeded|m-oto|2026-11|2"], actor: "a" }, w.deps))
+      .toMatchObject({ status: 409, body: { error: "refused" } });
+    const lia = read.open.find((c) => c.memberId === "m-xim")!.fallbacks!.find((f) => f.seats[0].to === "m-lia")!;
+    expect(await applyAvailabilityFix({ roleId: "s15", rev: "old", memberId: "m-xim", replacements: body(lia), waive: lia.breaks.map((b) => b.key), actor: "a" }, w.deps))
+      .toMatchObject({ status: 409, body: { error: "stale_revision" } });
+    expect(w.deps.editRole).not.toHaveBeenCalled();
+  });
+
+  it("never offers nor applies a «Soporte» singer as Lead, even when her own «No líder en domingo» rule could pass for the reason", async () => {
+    const zoe = { _id: "m-zoe", member_name: "Zoe Test", alias: "Zoe", memberType: ["voz", "support"], ministries: ["worship"] };
+    w = world({
+      rows: [
+        storedRow("s1", "sunday_role", "2026-11-01", { leads: ["m-lia"] }),
+        storedRow("s8", "sunday_role", "2026-11-08", { leads: ["m-mar"] }),
+        storedRow("s15", "sunday_role", "2026-11-15", { leads: ["m-xim"], bgvs: ["m-noe"], chorus: ["m-pau"] }),
+        storedRow("s22", "sunday_role", "2026-11-22", { leads: ["m-noe"] }),
+        storedRow("s29", "sunday_role", "2026-11-29", { leads: ["m-oto"] }),
+      ],
+      members: [...PEOPLE, zoe] as EditorMember[],
+      recordPeople: [...PEOPLE, zoe].map((m) => (m._id === "m-pau" || m._id === "m-zoe" ? { ...listed(m._id), roles: { ...ALL_IN, "Sun.Lead": "out" as const } } : listed(m._id))),
+      config: config({
+        sundayLeads: ["m-lia", "m-mar", "m-noe", "m-oto", "m-xim"], support: ["m-pau", "m-zoe"],
+        restrictions: [{ id: "x-zoe", person: "Zoe", excludedPatterns: ["Sun.Lead"], fairness: "none", fairnessSlack: 0, weekExclusions: [], caps: [] }],
+      }),
+    });
+    w.unavailable("m-xim", "2026-11-15");
+    const read = await readConflictPanel(w.deps);
+    if (!read.ok) throw new Error("expected a read");
+    expect(read.open[0].fallbacks!.some((f) => f.seats.some((s) => s.rowId === "lead" && s.to === "m-zoe"))).toBe(false);
+    // The keys her option would carry (her rule on the Lead seat): still refused, nothing written.
+    const key = `s:${JSON.stringify(["exclusion", "restriction[0].pattern[0]", "s15", "lead", ["m-zoe"]])}`;
+    expect(await applyAvailabilityFix({ roleId: "s15", rev: "s15-r1", memberId: "m-xim", replacements: [{ rowId: "lead", to: "m-zoe" }], waive: [key], actor: "a" }, w.deps))
+      .toMatchObject({ status: 409, body: { error: "refused" } });
+    expect(w.deps.editRole).not.toHaveBeenCalled();
+  });
+
+  it("judges with today's availability: someone who freed the day after the month was recorded is proposed and applied", async () => {
+    const ana = lead("m-ana", "Ana");
+    const block = { date: "2026-11-15", unavailable: true, excludedRoles: [] };
+    w = world({
+      rows: [
+        storedRow("s1", "sunday_role", "2026-11-01", { leads: ["m-lia"] }),
+        storedRow("s8", "sunday_role", "2026-11-08", { leads: ["m-mar"] }),
+        storedRow("s15", "sunday_role", "2026-11-15", { leads: ["m-xim"], bgvs: ["m-noe"], chorus: ["m-pau"] }),
+        storedRow("s22", "sunday_role", "2026-11-22", { leads: ["m-noe"] }),
+        storedRow("s29", "sunday_role", "2026-11-29", { leads: ["m-oto"] }),
+      ],
+      members: [...PEOPLE, ana] as EditorMember[],
+      // The record still has Ana's old «no puedo el 15» (she has since unmarked it).
+      recordPeople: [...PEOPLE, ana].map((m) => (m._id === "m-pau" ? { ...listed(m._id), roles: { ...ALL_IN, "Sun.Lead": "out" as const } }
+        : m._id === "m-ana" ? { ...listed(m._id), blocks: [block] } : listed(m._id))),
+      config: config({ sundayLeads: ["m-lia", "m-mar", "m-noe", "m-oto", "m-xim", "m-ana"], support: ["m-pau"] }),
+    });
+    w.unavailable("m-xim", "2026-11-15");
+    const read = await readConflictPanel(w.deps);
+    if (!read.ok) throw new Error("expected a read");
+    const c = read.open[0];
+    expect(c.options[0].seats).toEqual([expect.objectContaining({ rowId: "lead", to: "m-ana" })]);
+    expect(c.fallbacks).toBeUndefined();
+    expect(await applyAvailabilityFix({ roleId: "s15", rev: "s15-r1", memberId: "m-xim", replacements: [{ rowId: "lead", to: "m-ana" }], actor: "a" }, w.deps))
+      .toMatchObject({ ok: true });
+    expect(w.roles.get("s15")!.leads.map((x) => x._id)).toEqual(["m-ana"]);
+  });
+
+  it("a waiver over a change that is now clean is refused: the panel shows it as a normal proposal", async () => {
+    w = sundays();
+    const read = await readConflictPanel(w.deps);
+    if (!read.ok) throw new Error("expected a read");
+    const lia = read.open[0].fallbacks!.find((f) => f.seats[0].to === "m-lia")!;
+    // Lía's other Sunday moves away: she no longer breaks anything on the 15th.
+    const s1 = w.roles.get("s1")!;
+    w.roles.set("s1", { ...s1, leads: [] });
+    expect(await applyAvailabilityFix({ roleId: "s15", rev: "s15-r1", memberId: "m-xim", replacements: body(lia), waive: lia.breaks.map((b) => b.key), actor: "a" }, w.deps))
+      .toMatchObject({ status: 409, body: { error: "refused", reason: "changed" } });
+    expect(w.deps.editRole).not.toHaveBeenCalled();
+  });
+
+  it("«Mantener» and «Deshacer» never keep a stale `appliedBy`/`waived`", async () => {
+    w = sundays();
+    const read = await readConflictPanel(w.deps);
+    if (!read.ok) throw new Error("expected a read");
+    const pick = read.open[0].fallbacks![0];
+    await applyAvailabilityFix({ roleId: "s15", rev: "s15-r1", memberId: "m-xim", replacements: body(pick), waive: pick.breaks.map((b) => b.key), actor: "a" }, w.deps);
+    expect(w.records.get(XIM15)).toMatchObject({ appliedBy: "a", waived: expect.any(Array) });
+    const keep = { roleId: "s15", memberId: "m-xim", date: "2026-11-15", serviceKind: "sunday_role" as const, published: true, actor: "a" };
+    expect(await setConflictKept({ ...keep, kept: true }, w.deps)).toMatchObject({ ok: true });
+    expect(w.records.get(XIM15)).toMatchObject({ status: "kept" });
+    expect(w.records.get(XIM15)!.waived).toBeUndefined();
+    expect(w.records.get(XIM15)!.appliedBy).toBeUndefined();
+    // Put both back as a hand-edited record could have them, then «Deshacer».
+    w.records.set(XIM15, { ...w.records.get(XIM15)!, appliedBy: "a", waived: ["m:old"] });
+    expect(await setConflictKept({ ...keep, kept: false }, w.deps)).toMatchObject({ ok: true });
+    expect(w.records.get(XIM15)).toMatchObject({ status: "none" });
+    expect(w.records.get(XIM15)!.waived).toBeUndefined();
+    expect(w.records.get(XIM15)!.appliedBy).toBeUndefined();
+  });
+
+  it("a later sweep transition never keeps a stale `waived`", async () => {
+    w = sundays();
+    const read = await readConflictPanel(w.deps);
+    if (!read.ok) throw new Error("expected a read");
+    const pick = read.open[0].fallbacks![0];
+    await applyAvailabilityFix({ roleId: "s15", rev: "s15-r1", memberId: "m-xim", replacements: body(pick), waive: pick.breaks.map((b) => b.key), actor: "a" }, w.deps);
+    expect(w.records.get(XIM15)!.waived).toBeDefined();
+    // Ximena is seated on the 15th again: a new event, judged afresh.
+    const s15 = w.roles.get("s15")!;
+    w.roles.set("s15", { ...s15, _rev: "s15-r9", leads: [{ ...s15.leads[0], _id: "m-xim" }] });
+    await sweep(w);
+    expect(w.records.get(XIM15)!.status).toBe("none");
+    expect(w.records.get(XIM15)!.waived).toBeUndefined();
+    expect(w.records.get(XIM15)!.appliedBy).toBeUndefined();
+  });
+});
+
+describe("the triggers", () => {
+  it("memberTick sweeps only when a date the member serves on moved", async () => {
+    expect(await memberTick({ memberId: "m-dani", addedDates: ["2026-11-02"], removedDates: [], startedAt: w.clock.now }, w.deps)).toBeNull();
+    w.unavailable("m-dani", "2026-11-01");
+    const report = await memberTick({ memberId: "m-dani", addedDates: ["2026-11-01"], removedDates: [], startedAt: w.clock.now }, w.deps);
+    expect(report?.proposed).toEqual([DANI_SUN1]);
+    // A clear of a kept conflict opens a sweep too (it ends the keep).
+    await setConflictKept({ roleId: "sun1", memberId: "m-dani", date: "2026-11-01", serviceKind: "sunday_role", published: true, kept: true, actor: "a" }, w.deps);
+    w.unavailable("m-dani");
+    await memberTick({ memberId: "m-dani", addedDates: [], removedDates: ["2026-11-01"], startedAt: w.clock.now }, w.deps);
+    expect(w.records.get(DANI_SUN1)!.status).toBe("gone");
+  });
+
+  it("the tick skips outside its bucket and with too little time left", async () => {
+    w.clock.now = 300_000 * 3 * 1000 + 300_000; // bucket % 3 === 1
+    expect(await availabilityTick({ startedAt: w.clock.now }, w.deps)).toBe("skipped");
+    w.clock.now = 300_000 * 3 * 1000;
+    expect(await availabilityTick({ startedAt: w.clock.now - 20_000 }, w.deps)).toBe("skipped");
+    expect(await availabilityTick({ startedAt: w.clock.now }, w.deps)).toBe("clear");
+    w.unavailable("m-dani", "2026-11-01");
+    expect(await availabilityTick({ startedAt: w.clock.now }, w.deps)).toBe("swept");
+  });
+
+  it("«Deshacer» empties the old judgement and the next sweep re-judges it", async () => {
+    w.unavailable("m-dani", "2026-11-01");
+    await sweep(w);
+    let rec = w.records.get(DANI_SUN1)!;
+    await setConflictKept({ roleId: "sun1", memberId: "m-dani", date: "2026-11-01", serviceKind: "sunday_role", published: true, rev: rec._rev, kept: true, actor: "m-frank" }, w.deps);
+    rec = w.records.get(DANI_SUN1)!;
+    await setConflictKept({ roleId: "sun1", memberId: "m-dani", date: "2026-11-01", serviceKind: "sunday_role", published: true, rev: rec._rev, kept: false, actor: "m-frank" }, w.deps);
+    rec = w.records.get(DANI_SUN1)!;
+    expect(rec).toMatchObject({ status: "none", seats: [] });
+    expect(rec.reason).toBeUndefined();
+    await sweep(w, { trigger: "cron" });
+    expect(w.records.get(DANI_SUN1)!.status).toBe("proposed");
+  });
+
+  it("the pre-check opens for each case §5.4 names and not otherwise", () => {
+    const now = Date.parse("2026-10-21T18:00:00Z");
+    const id = conflictRecordId("sun1", "m-dani", "2026-11-01");
+    const seats = [{ _id: "sun1", date: "2026-11-01", members: ["m-dani"] }];
+    const off = new Map<string, Set<string>>([["m-dani", new Set(["2026-11-01"])]]);
+    const rec = (over: Partial<ConflictRecord>): ConflictRecord => ({
+      _id: id, _rev: "r", _type: "availabilityConflict", roleId: "sun1", memberId: "m-dani", date: "2026-11-01", serviceKind: "sunday_role", published: true,
+      status: "proposed", seats: [], eventSeq: 1, notifiedSeq: 1, firstSeenAt: "", updatedAt: "", checkedAt: new Date(now).toISOString(), trigger: "cron", ...over,
+    });
+    expect(precheckOpens({ seats, unavailable: off, records: [], nowMs: now })).toBe(true);
+    expect(precheckOpens({ seats, unavailable: off, records: [rec({})], nowMs: now })).toBe(false);
+    expect(precheckOpens({ seats, unavailable: off, records: [rec({ status: "applied" })], nowMs: now })).toBe(true);
+    expect(precheckOpens({ seats, unavailable: new Map(), records: [rec({})], nowMs: now })).toBe(true);
+    expect(precheckOpens({ seats, unavailable: new Map(), records: [rec({ status: "kept" })], nowMs: now })).toBe(true);
+    expect(precheckOpens({ seats, unavailable: off, records: [rec({ status: "kept" })], nowMs: now })).toBe(false);
+    expect(precheckOpens({ seats, unavailable: off, records: [rec({ checkedAt: new Date(now - 7 * 3600_000).toISOString() })], nowMs: now })).toBe(true);
+    expect(precheckOpens({ seats, unavailable: off, records: [rec({ notifiedSeq: 0 })], nowMs: now })).toBe(true);
+    expect(precheckOpens({ seats, unavailable: new Map(), records: [rec({ status: "gone" })], nowMs: now })).toBe(false);
+  });
+});
+
+describe("the panel's read", () => {
+  it("lists the open conflict with its proposal and alternatives, and the blocked reason", async () => {
+    w.unavailable("m-dani", "2026-11-01");
+    const read = await readConflictPanel(w.deps);
+    expect(read).toMatchObject({ ok: true, blocked: null });
+    if (!read.ok) return;
+    expect(read.open).toHaveLength(1);
+    expect(read.open[0]).toMatchObject({ roleId: "sun1", memberId: "m-dani", person: "Dani", roleRev: "sun1-r1" });
+    expect(read.open[0].options.length).toBeGreaterThanOrEqual(1);
+    const firsts = read.open[0].options.map((o) => o.seats[0].to);
+    expect(new Set(firsts).size).toBe(firsts.length);
+    w.engine.current = "v2";
+    expect(await readConflictPanel(w.deps)).toMatchObject({ ok: true, blocked: "engine", open: [] });
+  });
+});

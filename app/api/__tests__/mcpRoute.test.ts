@@ -50,6 +50,8 @@ const h = await vi.hoisted(async () => {
      * before that test's call can reach `swapRoles` at all.
      */
     loadSwapAdmission: vi.fn(),
+    /** `edit_service_message`'s writer, stubbed for the admin-actor test only (the real one reads Sanity). */
+    editServiceThreadMessage: vi.fn(),
   };
 });
 
@@ -78,6 +80,12 @@ vi.mock("@/app/utils/roleUnpublishCommit", () => ({ unpublishRoles: h.domain.unp
 vi.mock("@/app/mcp/writes/swapAdmission", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/app/mcp/writes/swapAdmission")>();
   return { ...actual, loadSwapAdmission: (...args: Parameters<typeof actual.loadSwapAdmission>) => h.loadSwapAdmission(...args) };
+});
+
+// `edit_service_message`'s writer: only the admin-actor test calls it; every other export is real.
+vi.mock("@/app/utils/serviceThreadCommit", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/app/utils/serviceThreadCommit")>();
+  return { ...actual, editServiceThreadMessage: (...args: unknown[]) => h.editServiceThreadMessage(...args) };
 });
 
 // The REAL mcp-handler, observed: the wrapper records every request the route
@@ -127,13 +135,42 @@ import { songResponder } from "@/app/mcp/reads/__tests__/songFixtures";
 // The dev-smoke script's own expectation of the route's registration — imported,
 // never re-typed, so the two can't drift apart silently (a 9th tool would fail
 // THIS test, not just surface on Frank's next `--reads` run).
-import { ADMIN_READ_TOOL_NAMES, EDITOR_TOOL_NAMES, EXPECTED_TOOLS, MONTH_TOOL_NAMES, SERVICE_EDITOR_TOOL_NAMES, WRITE_TOOL_NAMES, expectedAnnotations } from "@/scripts/mcp-dev-smoke.mjs";
+import { ADMIN_READ_TOOL_NAMES, EDITOR_TOOL_NAMES, EXPECTED_TOOLS, MONTH_TOOL_NAMES, SERVICE_DELETE_TOOL_NAMES, SERVICE_EDITOR_TOOL_NAMES, SERVICE_MESSAGE_TOOL_NAMES, KIDS_TOOL_NAMES, PROPOSAL_REVIEW_TOOL_NAMES, SONG_TOOL_NAMES, MEMBER_TOOL_NAMES, RULE_TOOL_NAMES, WRITE_TOOL_NAMES, expectedAnnotations } from "@/scripts/mcp-dev-smoke.mjs";
 import { WRITE_REREAD_RULE } from "@/app/mcp/writes/runWriteTool";
 import { NOTHING_WRITTEN, STALE_COPY } from "@/app/mcp/writes/refusals";
 import { serviceError } from "@/app/utils/serviceMutation";
 import * as mcpRoute from "@/app/api/mcp/route";
-import { TOOL_LIST_VERSION } from "@/app/mcp/toolList";
-import { STALE_TOOL_LIST_NOTE, TOOLS_VERSION_ARG } from "@/app/mcp/toolListVersion";
+import {
+  ADMIN_TIER_TOOLS,
+  READ_TIER_TOOLS,
+  SUPER_ADMIN_ONLY_TOOLS,
+  TOOL_LIST_SCOPES,
+  TOOL_LIST_VERSION,
+  TOOL_LIST_VERSIONS,
+  allowlistedServer,
+  registerAllTools,
+} from "@/app/mcp/toolList";
+import {
+  ADMIN_TIER_TOOL_NAMES,
+  ADMIN_TIER_TOOL_NAMES_NO_APPS,
+  APP_ONLY_TOOL_NAMES,
+  EXPECTED_TOOLS_NO_APPS,
+  READ_TIER_TOOL_NAMES,
+  SUPER_ADMIN_ONLY_TOOL_NAMES,
+} from "@/scripts/mcp-dev-smoke.mjs";
+import { ADMIN_WRITES_CUTOFF, LEGACY_GRANT_CUTOFF } from "@/app/mcp/oauth/grantDocument";
+import { STALE_TOOL_LIST_NOTE, TOOLS_VERSION_ARG, recordToolList, toolListDigest } from "@/app/mcp/toolListVersion";
+import { PERSON_CONFIRMS_RULE } from "@/app/mcp/writes/confirmRule";
+
+/**
+ * The tool-list digests (ADR-0069), pinned. `SLICE_A_READ_DIGEST` is what a worship admin's slice A
+ * connection holds: `adminRead` must keep it, so that connection sees no change and no refresh note.
+ */
+const FULL_DIGEST_PIN = "196f90ac";
+const FULL_NO_APPS_DIGEST_PIN = "e6787c94";
+const ADMIN_DIGEST_PIN = "44cfe71a";
+const ADMIN_NO_APPS_DIGEST_PIN = "d20a3a8b";
+const SLICE_A_READ_DIGEST = "f75b2615";
 import { buildGrantDocument, newGrantId } from "@/app/mcp/oauth/grantDocument";
 import { __clearGrantCache, createGrant, revokeGrant } from "@/app/mcp/oauth/grantStore";
 import { PREVIEW_ORIGIN, PRODUCTION_ORIGIN, resourceFor } from "@/app/mcp/oauth/origin";
@@ -184,8 +221,8 @@ const MODERN_META = {
   "io.modelcontextprotocol/clientInfo": { name: "vitest", version: "0" },
 };
 
-function liveAccess(role: string | null, active = true) {
-  return { active, role, ministries: ["worship"], managesMinistries: [] };
+function liveAccess(role: string | null, active = true, ministries: string[] = ["worship"]) {
+  return { active, role, ministries, managesMinistries: [] };
 }
 
 function stubEnv(env: { vercelEnv?: string; disabled?: string; secret?: string } = {}) {
@@ -195,8 +232,15 @@ function stubEnv(env: { vercelEnv?: string; disabled?: string; secret?: string }
 }
 
 /** A live grant in the in-memory dataset, created by the real grant store. */
-async function liveGrant(opts: { sub?: string; origin?: string } = {}): Promise<string> {
-  const created = await createGrant({ sub: opts.sub ?? MEMBER, clientId: CLIENT_ID, origin: opts.origin ?? PREVIEW_ORIGIN });
+async function liveGrant(
+  opts: { sub?: string; origin?: string; client?: "claude" | "chatgpt" | "loopback" } = {},
+): Promise<string> {
+  const created = await createGrant({
+    sub: opts.sub ?? MEMBER,
+    clientId: CLIENT_ID,
+    origin: opts.origin ?? PREVIEW_ORIGIN,
+    client: opts.client ?? "claude",
+  });
   if (!created.ok) throw new Error("fixture: grant not created");
   return created.grantId;
 }
@@ -521,6 +565,7 @@ describe("/api/mcp — the grant and the live principal (spec O2, R13): 401 inva
         sub: MEMBER,
         clientId: CLIENT_ID,
         origin: PRODUCTION_ORIGIN,
+        client: "claude",
         refreshJti: "j",
         createdAt: new Date().toISOString(),
       }),
@@ -531,7 +576,7 @@ describe("/api/mcp — the grant and the live principal (spec O2, R13): 401 inva
   });
 
   it.each([
-    ["an admin", liveAccess("admin")],
+    ["an admin outside worship", liveAccess("admin", true, ["kids"])],
     ["a content-editor", liveAccess("content-editor")],
     ["a member", liveAccess("member")],
     ["a member with no role", liveAccess(null)],
@@ -634,7 +679,7 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     expect(result.capabilities).toMatchObject({ tools: { listChanged: false } });
   });
 
-  it("tools/list shows exactly the seventeen tools — ping, the seven reads, the four writes, the two month tools, then the three editor tools — each with its own annotations (I14), strict (I13), described in Spanish", async () => {
+  it("tools/list shows exactly the fifty-four tools — ping, the ten reads, the four writes, the two month tools, the three proposal-editor tools, the six saved-month tools, the three delete tools, the five conversation tools, the five Kids tools, the two proposal-decision tools, the four song tools, then the seven people tools, then the two rule tools — each with its own annotations (I14), strict (I13), described in Spanish", async () => {
     const token = await accessToken(await liveGrant());
     const result = await rpcResult(await POST(mcpRequest(rpc("tools/list"), { token })));
     const tools = result.tools as Record<string, unknown>[];
@@ -651,12 +696,20 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     expect(group(MONTH_TOOL_NAMES)).toEqual(MONTH_TOOL_NAMES);
     expect(group(EDITOR_TOOL_NAMES)).toEqual(EDITOR_TOOL_NAMES);
     expect(group(SERVICE_EDITOR_TOOL_NAMES)).toEqual(SERVICE_EDITOR_TOOL_NAMES);
+    expect(group(SERVICE_DELETE_TOOL_NAMES)).toEqual(SERVICE_DELETE_TOOL_NAMES);
+    expect(group(SERVICE_MESSAGE_TOOL_NAMES)).toEqual(SERVICE_MESSAGE_TOOL_NAMES);
+    expect(group(KIDS_TOOL_NAMES)).toEqual(KIDS_TOOL_NAMES);
+    expect(group(PROPOSAL_REVIEW_TOOL_NAMES)).toEqual(PROPOSAL_REVIEW_TOOL_NAMES);
+    expect(group(SONG_TOOL_NAMES)).toEqual(SONG_TOOL_NAMES);
+    expect(group(MEMBER_TOOL_NAMES)).toEqual(MEMBER_TOOL_NAMES);
+    expect(group(RULE_TOOL_NAMES)).toEqual(RULE_TOOL_NAMES);
+    expect(EXPECTED_TOOLS).toHaveLength(54);
     // The same per-tool annotations the smoke checks on dev. Written out here as
     // well, so a change to the smoke's own map cannot quietly redefine what a
     // read or a destructive write declares.
     for (const tool of tools) {
       const name = String(tool.name);
-      const write = (WRITE_TOOL_NAMES as string[]).includes(name) || name === "apply_schedule" || ["save_service_edits", "copy_instruments", "create_service"].includes(name);
+      const write = (WRITE_TOOL_NAMES as string[]).includes(name) || name === "apply_schedule" || ["save_service_edits", "save_service_edits_app", "copy_instruments", "create_service", "delete_services", "delete_services_app", "send_service_message", "edit_service_message", "set_pastor_message", "set_team_message", "save_kids_sundays", "save_kids_pair", "set_kids_absences", "review_setlist_proposal", "save_song_edits", "create_song", "save_member_changes", "create_members", "set_member_access", "save_rule_edits"].includes(name);
       expect(tool.annotations, name).toEqual(
         name === "solve_month" || name === "save_proposal_edits" || name === "revise_proposal"
           ? { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }
@@ -690,7 +743,8 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
       "query",
       "tags",
     ]);
-    expect(argsOf(getSong!).sort()).toEqual(["slug", "songId"]);
+    // `full` (S3) is the MCP-only flag: the in-app assistant's schema refuses it (`adminChatViews.test.ts`).
+    expect(argsOf(getSong!).sort()).toEqual(["full", "slug", "songId"]);
     expect(argsOf(getMemberAvailability!).sort()).toEqual([
       "memberId",
       "month",
@@ -836,6 +890,41 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
       expect(tools.some((t) => t.inputSchema.properties[TOOLS_VERSION_ARG] === undefined)).toBe(true);
     });
 
+    it("the card's save twin takes the chat's save schema, without the version, and is destructive (ADR-0066 addendum)", async () => {
+      const token = await accessToken(await liveGrant());
+      const result = await rpcResult(await POST(mcpRequest(rpc("tools/list"), { token })));
+      const tools = result.tools as { name: string; inputSchema: { properties: Record<string, unknown>; required?: string[] }; annotations?: unknown; _meta?: unknown }[];
+      const chat = tools.find((t) => t.name === "save_service_edits")!;
+      const card = tools.find((t) => t.name === "save_service_edits_app")!;
+      const { [TOOLS_VERSION_ARG]: version, ...chatProperties } = chat.inputSchema.properties;
+      expect(version).toBeDefined();
+      expect(card.inputSchema.properties).toEqual(chatProperties);
+      expect(card.inputSchema.required).toEqual(chat.inputSchema.required);
+      expect(card.annotations).toEqual(chat.annotations);
+      expect(card._meta).toEqual({ ui: { resourceUri: PROPOSAL_CARD_URI, visibility: ["app"] } });
+    });
+
+    it("the card's delete twin takes the chat's delete schema, without the version, and is destructive (phase 2, D8)", async () => {
+      const token = await accessToken(await liveGrant());
+      const result = await rpcResult(await POST(mcpRequest(rpc("tools/list"), { token })));
+      const tools = result.tools as { name: string; inputSchema: { properties: Record<string, unknown>; required?: string[] }; annotations?: unknown; _meta?: unknown }[];
+      const chat = tools.find((t) => t.name === "delete_services")!;
+      const card = tools.find((t) => t.name === "delete_services_app")!;
+      const { [TOOLS_VERSION_ARG]: version, ...chatProperties } = chat.inputSchema.properties;
+      expect(version).toBeDefined();
+      expect(card.inputSchema.properties).toEqual(chatProperties);
+      expect(Object.keys(chatProperties).sort()).toEqual(["deletes", "month", "token"]);
+      expect(card.inputSchema.required).toEqual(chat.inputSchema.required);
+      expect(card.annotations).toEqual(chat.annotations);
+      expect(chat.annotations).toEqual({ readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false });
+      expect(chat._meta).toBeUndefined();
+      expect(card._meta).toEqual({ ui: { resourceUri: PROPOSAL_CARD_URI, visibility: ["app"] } });
+      // The check is model-visible and read-only, and opens no card (its answer is text).
+      const check = tools.find((t) => t.name === "check_service_deletes")!;
+      expect(check.annotations).toEqual({ readOnlyHint: true, openWorldHint: false });
+      expect(check._meta).toBeUndefined();
+    });
+
     it("a current caller gets the tool's answer alone", async () => {
       const result = await callPing({ toolsVersion: TOOL_LIST_VERSION });
       expect(result.isError).toBeFalsy();
@@ -871,18 +960,18 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
       const token = await accessToken(await liveGrant());
       const result = await rpcResult(await POST(mcpRequest(rpc("tools/list"), { token })));
       const served = (result.tools as { name: string }[]).map((t) => t.name);
-      expect(recordToolList((server) => registerAllTools(server, { version: "" })).map((t) => t.name)).toEqual(served);
+      expect(recordToolList((server) => registerAllTools(server, { version: "", scope: "full" })).map((t) => t.name)).toEqual(served);
     });
 
     it("the digest covers what a client caches, and ignores the deployment's commit", async () => {
       const { toolListDigest } = await import("@/app/mcp/toolListVersion");
       const { registerAllTools } = await import("@/app/mcp/toolList");
-      expect(toolListDigest((server) => registerAllTools(server, { version: "abc1234" }))).toBe(TOOL_LIST_VERSION);
+      expect(toolListDigest((server) => registerAllTools(server, { version: "abc1234", scope: "full" }))).toBe(TOOL_LIST_VERSION);
       const renamed = toolListDigest((server) => {
         const register = server.registerTool.bind(server) as (name: string, config: { description?: string }, cb: unknown) => unknown;
         (server as unknown as { registerTool: typeof register }).registerTool = (name, config, cb) =>
           register(name, name === "ping" ? { ...config, description: `${config.description} ` } : config, cb);
-        registerAllTools(server, { version: "" });
+        registerAllTools(server, { version: "", scope: "full" });
       });
       expect(renamed).not.toBe(TOOL_LIST_VERSION);
     });
@@ -963,7 +1052,7 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     expect(auth).toBeDefined();
     expect(auth!.clientId).toBe(clientHashOf(CLIENT_ID));
     expect(auth!.scopes).toEqual([]);
-    expect(auth!.extra).toEqual({ sub: MEMBER, grantId });
+    expect(auth!.extra).toEqual({ sub: MEMBER, grantId, tier: "full" });
     expect(auth!.resource?.href).toBe(resourceFor(PREVIEW_ORIGIN));
     expect(auth!.resourceMetadataUrl).toBe(METADATA_URL);
     expect(typeof auth!.expiresAt).toBe("number");
@@ -1603,6 +1692,360 @@ describe("/api/mcp — no stream outlives the request that was checked (O2/O9)",
 
 // ── failures ───────────────────────────────────────────────────────────────
 
+describe("/api/mcp — five tool lists: who you are (live), which agent holds the grant, and what it consented to (ADR-0083 and its addendum)", () => {
+  type ListedTool = { name: string; description?: string; annotations?: Record<string, unknown>; _meta?: Record<string, unknown>; inputSchema?: { properties?: Record<string, { description?: string }> } };
+  async function listedTools(token: string, host?: string): Promise<ListedTool[]> {
+    const result = await rpcResult(await POST(mcpRequest(rpc("tools/list"), { token, ...(host ? { host } : {}) })));
+    return result.tools as ListedTool[];
+  }
+  async function rpcError(body: unknown, token: string): Promise<{ code: number; message: string } | undefined> {
+    const message = await rpcResponse(await POST(mcpRequest(body, { token })));
+    return message.error as { code: number; message: string } | undefined;
+  }
+  const NON_READ_TOOLS = EXPECTED_TOOLS.filter((name: string) => !READ_TIER_TOOL_NAMES.includes(name));
+  /** A grant whose `createdAt` sits relative to `ADMIN_WRITES_CUTOFF` — never the clock, so the suite holds with the placeholder and the real value. */
+  function grantAt(createdAt: string, client: "claude" | "chatgpt" | "loopback" = "claude"): string {
+    const id = newGrantId();
+    const doc = buildGrantDocument({ id, sub: MEMBER, clientId: CLIENT_ID, origin: PREVIEW_ORIGIN, client, refreshJti: "j", createdAt });
+    h.docs.set(id, { ...(doc as unknown as Record<string, unknown>), _rev: "r1" } as never);
+    return id;
+  }
+  const BEFORE_CUTOFF = new Date(Date.parse(ADMIN_WRITES_CUTOFF) - 60_000).toISOString();
+  const AT_CUTOFF = ADMIN_WRITES_CUTOFF;
+  const AFTER_CUTOFF = new Date(Date.parse(ADMIN_WRITES_CUTOFF) + 60_000).toISOString();
+
+  it("the smoke's lists and the module's agree: adminRead = READ_TIER_TOOLS, admin = ADMIN_TIER_TOOLS, no-apps = minus the five app-only tools", () => {
+    expect(READ_TIER_TOOL_NAMES).toEqual([...READ_TIER_TOOLS]);
+    expect(ADMIN_TIER_TOOL_NAMES).toEqual([...ADMIN_TIER_TOOLS]);
+    expect([...SUPER_ADMIN_ONLY_TOOL_NAMES].sort()).toEqual([...SUPER_ADMIN_ONLY_TOOLS].sort());
+    expect(TOOL_LIST_SCOPES).toEqual(["full", "fullNoApps", "admin", "adminNoApps", "adminRead"]);
+    // Counts are derived, never literal (phase 4 grows the full list).
+    expect(EXPECTED_TOOLS_NO_APPS).toHaveLength(EXPECTED_TOOLS.length - APP_ONLY_TOOL_NAMES.length);
+    expect(ADMIN_TIER_TOOLS).toHaveLength(EXPECTED_TOOLS.length - SUPER_ADMIN_ONLY_TOOLS.length);
+    // None of the people tools is an admin-tier tool: «Personas sigue siendo solo tuyo».
+    for (const name of MEMBER_TOOL_NAMES) expect(ADMIN_TIER_TOOL_NAMES, name).not.toContain(name);
+    for (const name of KIDS_TOOL_NAMES) expect(ADMIN_TIER_TOOL_NAMES, name).not.toContain(name);
+    // Nor the slice-R rule tools, nor are they read-tier: the save changes what every Auto reads,
+    // and opening them to worship admins is a separate decision.
+    for (const name of RULE_TOOL_NAMES) {
+      expect(ADMIN_TIER_TOOL_NAMES, name).not.toContain(name);
+      expect(READ_TIER_TOOL_NAMES, name).not.toContain(name);
+    }
+  });
+
+  it("the classification is TOTAL: every tool of the full list is in exactly one of ADMIN_TIER_TOOLS and SUPER_ADMIN_ONLY_TOOLS", () => {
+    const full = recordToolList((server) => registerAllTools(server, { version: "", scope: "full" })).map((t) => t.name);
+    expect(full).toEqual(EXPECTED_TOOLS);
+    const admin = new Set<string>(ADMIN_TIER_TOOLS);
+    const superOnly = new Set<string>(SUPER_ADMIN_ONLY_TOOLS);
+    for (const name of full) {
+      // A new tool fails here until someone puts it in one of the two lists on purpose.
+      expect(Number(admin.has(name)) + Number(superOnly.has(name)), name).toBe(1);
+    }
+    for (const name of [...admin, ...superOnly]) expect(full, name).toContain(name);
+  });
+
+  it("each scope registers exactly its list, in tools/list order", () => {
+    const names = (scope: (typeof TOOL_LIST_SCOPES)[number]) =>
+      recordToolList((server) => registerAllTools(server, { version: "", scope })).map((t) => t.name);
+    expect(names("full")).toEqual(EXPECTED_TOOLS);
+    expect(names("fullNoApps")).toEqual(EXPECTED_TOOLS_NO_APPS);
+    expect(names("admin")).toEqual([...ADMIN_TIER_TOOLS]);
+    expect(names("adminNoApps")).toEqual(ADMIN_TIER_TOOLS.filter((n) => !APP_ONLY_TOOL_NAMES.includes(n)));
+    expect(names("adminNoApps")).toEqual(ADMIN_TIER_TOOL_NAMES_NO_APPS);
+    expect(names("adminRead")).toEqual([...READ_TIER_TOOLS]);
+  });
+
+  it("the admin lists carry byte-identical definitions to the full list", () => {
+    const full = new Map(recordToolList((server) => registerAllTools(server, { version: "", scope: "full" })).map((t) => [t.name, t]));
+    for (const scope of ["admin", "adminNoApps", "adminRead"] as const) {
+      for (const tool of recordToolList((server) => registerAllTools(server, { version: "", scope }))) {
+        expect(tool, `${scope} ${tool.name}`).toEqual(full.get(tool.name));
+      }
+    }
+  });
+
+  it("the full digest is pinned; the five digests differ; adminRead is exactly slice A's read digest", () => {
+    // Update this pin ONLY when a release changes the full list on purpose — that release sends every
+    // Claude connector the refresh note. Changed on purpose 2026-11-06 (cf45d5e6, the people tools'
+    // grant rule), by slice R (ADR-0084, the two rule tools), 2026-11-11/12 (per-group leadership:
+    // the people tools' `groups` bound and `leaderOf`), 2026-11-12 (ADR-0087: the leads' pastor's
+    // message), and with slice B (every model-visible write carries PERSON_CONFIRMS_RULE).
+    expect(TOOL_LIST_VERSIONS.full).toBe(FULL_DIGEST_PIN);
+    expect(TOOL_LIST_VERSIONS.fullNoApps).toBe(FULL_NO_APPS_DIGEST_PIN);
+    expect(TOOL_LIST_VERSIONS.admin).toBe(ADMIN_DIGEST_PIN);
+    expect(TOOL_LIST_VERSIONS.adminNoApps).toBe(ADMIN_NO_APPS_DIGEST_PIN);
+    // A worship admin connected under slice A keeps exactly the list (and so the digest) they approved.
+    expect(TOOL_LIST_VERSIONS.adminRead).toBe(SLICE_A_READ_DIGEST);
+    expect(TOOL_LIST_VERSION).toBe(TOOL_LIST_VERSIONS.full);
+    expect(new Set(Object.values(TOOL_LIST_VERSIONS)).size).toBe(5);
+    for (const scope of TOOL_LIST_SCOPES) {
+      expect(toolListDigest((server) => registerAllTools(server, { version: "x", scope })), scope).toBe(TOOL_LIST_VERSIONS[scope]);
+    }
+  });
+
+  it("every model-visible destructive write carries PERSON_CONFIRMS_RULE; nothing says «sin confirmación»; the only unruled writes are solve_month and revise_proposal", () => {
+    const tools = recordToolList((server) => registerAllTools(server, { version: "", scope: "full" }));
+    const modelVisible = (t: (typeof tools)[number]) => {
+      const visibility = (t.meta as { ui?: { visibility?: string[] } } | null)?.ui?.visibility;
+      return !Array.isArray(visibility) || visibility.includes("model");
+    };
+    for (const tool of tools) {
+      const description = String(tool.description ?? "");
+      const annotations = (tool.annotations ?? {}) as { destructiveHint?: boolean; readOnlyHint?: boolean };
+      expect(description, tool.name).not.toMatch(/sin\s+confirmación/);
+      if (annotations.destructiveHint === true && modelVisible(tool)) expect(description, tool.name).toContain(PERSON_CONFIRMS_RULE);
+      if (!modelVisible(tool)) expect(description, tool.name).not.toContain(PERSON_CONFIRMS_RULE);
+    }
+    // The inverse: a model-visible write without readOnlyHint and without the rule is one of exactly two.
+    const unruled = tools
+      .filter((t) => modelVisible(t))
+      .filter((t) => (t.annotations as { readOnlyHint?: boolean } | null)?.readOnlyHint !== true)
+      .filter((t) => !String(t.description ?? "").includes(PERSON_CONFIRMS_RULE))
+      .map((t) => t.name);
+    expect(unruled.sort()).toEqual(["revise_proposal", "solve_month"]);
+  });
+
+  it("allowlistedServer: a name outside the list is not registered; listed ones register unchanged; other members forward", () => {
+    const registered: { name: string; config: unknown }[] = [];
+    const resources: string[] = [];
+    const target = {
+      registerTool(name: string, config: unknown) {
+        registered.push({ name, config });
+        return { name };
+      },
+      registerResource(name: string) {
+        resources.push(name);
+        return this;
+      },
+      label: "target",
+    };
+    const server = allowlistedServer(target as never, ["ping", "get_service"]) as unknown as typeof target;
+    const config = { title: "t" };
+    expect(server.registerTool("ping", config)).toEqual({ name: "ping" });
+    expect(server.registerTool("set_member_access", { title: "x" })).toBeUndefined();
+    expect(registered).toEqual([{ name: "ping", config }]);
+    expect(registered[0]!.config).toBe(config);
+    server.registerResource("card");
+    expect(resources).toEqual(["card"]);
+    expect(server.label).toBe("target");
+  });
+
+  it("scope selection: tier × consent (createdAt vs ADMIN_WRITES_CUTOFF) × client", async () => {
+    expect(Date.parse(ADMIN_WRITES_CUTOFF)).toBeGreaterThan(Date.parse(LEGACY_GRANT_CUTOFF));
+    const cases: [string, ReturnType<typeof liveAccess>, string, "claude" | "chatgpt" | "loopback", readonly string[]][] = [
+      ["super-admin claude", liveAccess("super-admin"), BEFORE_CUTOFF, "claude", EXPECTED_TOOLS],
+      ["super-admin chatgpt", liveAccess("super-admin"), AFTER_CUTOFF, "chatgpt", EXPECTED_TOOLS_NO_APPS],
+      ["admin before cutoff, claude", liveAccess("admin"), BEFORE_CUTOFF, "claude", READ_TIER_TOOL_NAMES],
+      ["admin before cutoff, chatgpt", liveAccess("admin"), BEFORE_CUTOFF, "chatgpt", READ_TIER_TOOL_NAMES],
+      ["admin at cutoff, claude", liveAccess("admin"), AT_CUTOFF, "claude", [...ADMIN_TIER_TOOLS]],
+      ["admin after cutoff, claude", liveAccess("admin"), AFTER_CUTOFF, "claude", [...ADMIN_TIER_TOOLS]],
+      ["admin after cutoff, chatgpt", liveAccess("admin"), AFTER_CUTOFF, "chatgpt", ADMIN_TIER_TOOL_NAMES_NO_APPS],
+      ["admin after cutoff, loopback", liveAccess("admin"), AFTER_CUTOFF, "loopback", ADMIN_TIER_TOOL_NAMES_NO_APPS],
+      ["admin, unparseable createdAt", liveAccess("admin"), "not-a-date", "claude", READ_TIER_TOOL_NAMES],
+    ];
+    for (const [label, access, createdAt, client, expected] of cases) {
+      __clearGrantCache();
+      h.getMemberAccess.mockResolvedValue(access);
+      const tools = await listedTools(await accessToken(grantAt(createdAt, client)));
+      expect(tools.map((t) => t.name), label).toEqual([...expected]);
+    }
+  });
+
+  it("a worship admin's grant made before the cutoff sees exactly the eleven reads on ANY agent: slice A's list and digest", async () => {
+    h.getMemberAccess.mockResolvedValue(liveAccess("admin"));
+    for (const client of ["claude", "chatgpt", "loopback"] as const) {
+      __clearGrantCache();
+      // Seeded relative to the cutoff, never the clock: the suite holds with the placeholder and the real value.
+      const tools = await listedTools(await accessToken(grantAt(BEFORE_CUTOFF, client)));
+      expect(tools.map((t) => t.name), client).toEqual(READ_TIER_TOOL_NAMES);
+      for (const tool of tools) {
+        expect(tool.annotations, tool.name).toEqual(expectedAnnotations(tool.name));
+        expect(tool.annotations?.readOnlyHint, tool.name).toBe(true);
+        expect(tool._meta?.ui, tool.name).toBeUndefined();
+        expect(tool.inputSchema?.properties?.[TOOLS_VERSION_ARG]?.description, tool.name).toContain(`"${TOOL_LIST_VERSIONS.adminRead}"`);
+      }
+    }
+  });
+
+  it("adminRead does not know any other tool: every write and app tool is «not found», before any handler", async () => {
+    h.getMemberAccess.mockResolvedValue(liveAccess("admin"));
+    const token = await accessToken(grantAt(BEFORE_CUTOFF));
+    expect(NON_READ_TOOLS.length).toBeGreaterThan(0);
+    for (const name of NON_READ_TOOLS) {
+      const error = await rpcError(rpc("tools/call", { name, arguments: { toolsVersion: TOOL_LIST_VERSIONS.adminRead } }), token);
+      expect(error, name).toEqual({ code: -32602, message: `Tool ${name} not found` });
+    }
+    // A plausible-looking edit_setlist is refused the same way.
+    const error = await rpcError(
+      rpc("tools/call", { name: "edit_setlist", arguments: { serviceId: "role-1", roleRev: "r", observed: { state: "none" }, rows: [] } }),
+      token,
+    );
+    expect(error?.message).toBe("Tool edit_setlist not found");
+    const ping = await rpcResult(await POST(mcpRequest(rpc("tools/call", { name: "ping", arguments: {} }), { token })));
+    expect(ping.isError).toBeFalsy();
+  });
+
+  it("on every admin list, every people and Kids tool is «not found», before any handler", async () => {
+    h.getMemberAccess.mockResolvedValue(liveAccess("admin"));
+    for (const [createdAt, client] of [[AFTER_CUTOFF, "claude"], [AFTER_CUTOFF, "chatgpt"], [BEFORE_CUTOFF, "claude"]] as const) {
+      __clearGrantCache();
+      const token = await accessToken(grantAt(createdAt, client));
+      for (const name of SUPER_ADMIN_ONLY_TOOLS) {
+        const error = await rpcError(rpc("tools/call", { name, arguments: {} }), token);
+        expect(error, `${client} ${createdAt} ${name}`).toEqual({ code: -32602, message: `Tool ${name} not found` });
+      }
+    }
+  });
+
+  it("an admin on a claude.ai grant after the cutoff gets the card resources and its own toolsVersion; on any other agent, no app tool and no resources", async () => {
+    h.getMemberAccess.mockResolvedValue(liveAccess("admin"));
+    const claude = await accessToken(grantAt(AFTER_CUTOFF, "claude"));
+    const init = await rpcResult(await POST(mcpRequest(INITIALIZE, { token: claude })));
+    expect((init.capabilities as Record<string, unknown>).resources).toBeDefined();
+    expect(await rpcError(rpc("resources/list"), claude)).toBeUndefined();
+    for (const tool of await listedTools(claude)) {
+      const visibility = (tool._meta?.ui as { visibility?: string[] } | undefined)?.visibility;
+      if (visibility && !visibility.includes("model")) continue;
+      expect(tool.inputSchema?.properties?.[TOOLS_VERSION_ARG]?.description, tool.name).toContain(`"${TOOL_LIST_VERSIONS.admin}"`);
+    }
+    __clearGrantCache();
+    const chatgpt = await accessToken(grantAt(AFTER_CUTOFF, "chatgpt"));
+    for (const name of APP_ONLY_TOOL_NAMES) {
+      expect(await rpcError(rpc("tools/call", { name, arguments: {} }), chatgpt), name).toEqual({ code: -32602, message: `Tool ${name} not found` });
+    }
+    const noApps = await rpcResult(await POST(mcpRequest(INITIALIZE, { token: chatgpt })));
+    expect((noApps.capabilities as Record<string, unknown>).resources).toBeUndefined();
+    expect(await rpcError(rpc("resources/list"), chatgpt)).toBeDefined();
+    for (const tool of await listedTools(chatgpt)) {
+      expect(tool.inputSchema?.properties?.[TOOLS_VERSION_ARG]?.description, tool.name).toContain(`"${TOOL_LIST_VERSIONS.adminNoApps}"`);
+    }
+  });
+
+  it("a super-admin on a ChatGPT or loopback grant gets every tool but the app-only five, and no card resources", async () => {
+    for (const client of ["chatgpt", "loopback"] as const) {
+      __clearGrantCache();
+      const token = await accessToken(await liveGrant({ client }));
+      const tools = await listedTools(token);
+      expect(tools.map((t) => t.name), client).toEqual(EXPECTED_TOOLS_NO_APPS);
+      for (const tool of tools) {
+        const visibility = (tool._meta?.ui as { visibility?: string[] } | undefined)?.visibility;
+        expect(visibility, tool.name).toBeUndefined();
+        expect(tool.inputSchema?.properties?.[TOOLS_VERSION_ARG]?.description, tool.name).toContain(`"${TOOL_LIST_VERSIONS.fullNoApps}"`);
+      }
+      for (const name of APP_ONLY_TOOL_NAMES) {
+        const error = await rpcError(rpc("tools/call", { name, arguments: {} }), token);
+        expect(error, `${client} ${name}`).toEqual({ code: -32602, message: `Tool ${name} not found` });
+      }
+      // No resources capability, so no resources/list and no card.
+      const init = await rpcResult(await POST(mcpRequest(INITIALIZE, { token })));
+      expect((init.capabilities as Record<string, unknown>).resources, client).toBeUndefined();
+      expect(await rpcError(rpc("resources/list"), token), client).toBeDefined();
+      expect(await rpcError(rpc("resources/read", { uri: PROPOSAL_CARD_URI }), token), client).toBeDefined();
+    }
+  });
+
+  it("a worship admin's read-only handler advertises no resources", async () => {
+    h.getMemberAccess.mockResolvedValue(liveAccess("admin"));
+    const token = await accessToken(grantAt(BEFORE_CUTOFF));
+    const init = await rpcResult(await POST(mcpRequest(INITIALIZE, { token })));
+    expect((init.capabilities as Record<string, unknown>).resources).toBeUndefined();
+    expect(init.capabilities).toMatchObject({ tools: { listChanged: false } });
+    expect(await rpcError(rpc("resources/list"), token)).toBeDefined();
+  });
+
+  it("the tier is LIVE: the same grant moves between lists as the role changes, and the principal carries it", async () => {
+    const grantId = grantAt(AFTER_CUTOFF);
+    const token = await accessToken(grantId);
+    h.getMemberAccess.mockResolvedValue(liveAccess("admin"));
+    expect((await listedTools(token)).map((t) => t.name)).toEqual([...ADMIN_TIER_TOOLS]);
+    expect(h.forwarded.at(-1)!.auth!.extra).toEqual({ sub: MEMBER, grantId, tier: "admin" });
+    h.getMemberAccess.mockResolvedValue(liveAccess("super-admin"));
+    expect((await listedTools(token)).map((t) => t.name)).toEqual(EXPECTED_TOOLS);
+    expect(h.forwarded.at(-1)!.auth!.extra).toEqual({ sub: MEMBER, grantId, tier: "full" });
+    // A live demotion back to admin switches the list on the next request.
+    h.getMemberAccess.mockResolvedValue(liveAccess("admin"));
+    expect((await listedTools(token)).map((t) => t.name)).toEqual([...ADMIN_TIER_TOOLS]);
+    h.getMemberAccess.mockResolvedValue(liveAccess("content-editor"));
+    await expectRefused({ token }, "invalid_token");
+  });
+
+  it("an admin edits only their own messages: the writer gets the admin's own sub as actor, and its not_author is worded", async () => {
+    h.getMemberAccess.mockResolvedValue(liveAccess("admin"));
+    h.editServiceThreadMessage.mockResolvedValue({ ok: false, status: 403, body: { error: "Forbidden", code: "not_author" } });
+    const token = await accessToken(grantAt(AFTER_CUTOFF, "chatgpt"));
+    const args = { serviceId: "special-1", key: "k1a2b3c4d5e6", body: "Otro texto" };
+    const result = await rpcResult(await POST(mcpRequest(rpc("tools/call", { name: "edit_service_message", arguments: args }), { token })));
+    expect(h.editServiceThreadMessage).toHaveBeenCalledTimes(1);
+    expect(h.editServiceThreadMessage).toHaveBeenCalledWith("special-1", "k1a2b3c4d5e6", { body: "Otro texto" }, { id: MEMBER });
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain("tus propios mensajes");
+  });
+
+  it("subscriptions/listen is refused on every list (no held streams, O2/O9)", async () => {
+    const cases: [string, ReturnType<typeof liveAccess>, "claude" | "chatgpt", string][] = [
+      ["full", liveAccess("super-admin"), "claude", BEFORE_CUTOFF],
+      ["fullNoApps", liveAccess("super-admin"), "chatgpt", BEFORE_CUTOFF],
+      ["admin", liveAccess("admin"), "claude", AFTER_CUTOFF],
+      ["adminNoApps", liveAccess("admin"), "chatgpt", AFTER_CUTOFF],
+      ["adminRead", liveAccess("admin"), "claude", BEFORE_CUTOFF],
+    ];
+    for (const [label, access, client, createdAt] of cases) {
+      __clearGrantCache();
+      h.getMemberAccess.mockResolvedValue(access);
+      const token = await accessToken(grantAt(createdAt, client));
+      const res = await POST(
+        modernRequest("subscriptions/listen", { notifications: { toolsListChanged: true } }, { token, id: 9 }),
+      );
+      expect(res.headers.get("content-type"), label).not.toMatch(/event-stream/);
+      const { done, text } = await readWithin(res, 1000);
+      expect(done, label).toBe(true);
+      const message = JSON.parse(text) as { result?: unknown; error?: { code: number } };
+      expect(message.result, label).toBeUndefined();
+      expect(message.error?.code, label).toBe(-32603);
+    }
+  });
+
+  describe("a grant with no stored client (before ADR-0083)", () => {
+    function legacyGrant(origin: string, createdAt: string): string {
+      const id = newGrantId();
+      const doc = buildGrantDocument({
+        id,
+        sub: MEMBER,
+        clientId: CLIENT_ID,
+        origin,
+        client: "claude",
+        refreshJti: "j",
+        createdAt,
+      }) as unknown as Record<string, unknown>;
+      delete doc.client;
+      h.docs.set(id, { ...doc, _rev: "r1" } as never);
+      return id;
+    }
+    const before = new Date(Date.parse(LEGACY_GRANT_CUTOFF) - 60_000).toISOString();
+    const after = new Date(Date.parse(LEGACY_GRANT_CUTOFF) + 60_000).toISOString();
+
+    it("on production, made before the cutoff, is Claude's: the full list, card included", async () => {
+      stubEnv({ vercelEnv: "production" });
+      const id = legacyGrant(PRODUCTION_ORIGIN, before);
+      const tools = await listedTools(await accessToken(id, { origin: PRODUCTION_ORIGIN }), PRODUCTION_HOST);
+      expect(tools.map((t) => t.name)).toEqual(EXPECTED_TOOLS);
+    });
+
+    it("made after the cutoff, or anywhere but production, fails closed to no app tools", async () => {
+      stubEnv({ vercelEnv: "production" });
+      const late = legacyGrant(PRODUCTION_ORIGIN, after);
+      expect((await listedTools(await accessToken(late, { origin: PRODUCTION_ORIGIN }), PRODUCTION_HOST)).map((t) => t.name)).toEqual(
+        EXPECTED_TOOLS_NO_APPS,
+      );
+      stubEnv();
+      __clearGrantCache();
+      const dev = legacyGrant(PREVIEW_ORIGIN, before);
+      expect((await listedTools(await accessToken(dev))).map((t) => t.name)).toEqual(EXPECTED_TOOLS_NO_APPS);
+    });
+  });
+});
+
 describe("/api/mcp — a server failure is a fixed 500 and never echoes (E1)", () => {
   async function expectServerError(res: Response) {
     expect(res.status).toBe(500);
@@ -1754,13 +2197,14 @@ describe("/api/mcp — the proposal card resource (MCP Apps, S1)", () => {
     const withCard = tools.filter((t) => t._meta && ("ui" in t._meta || "ui/resourceUri" in t._meta));
     expect(withCard.map((t) => t.name)).toEqual([
       "solve_month", "check_proposal_edits", "save_proposal_edits", "revise_proposal", "check_service_edits", "check_service_edits_app",
+      "save_service_edits_app", "delete_services_app",
     ]);
     const meta = new Map(withCard.map((t) => [t.name, t._meta]));
     for (const name of ["solve_month", "revise_proposal", "check_service_edits"]) {
       expect(meta.get(name), name).toEqual({ ui: { resourceUri: PROPOSAL_CARD_URI }, "ui/resourceUri": PROPOSAL_CARD_URI });
     }
     // Q1 (1): the force flag lives only on a tool a host that honours MCP Apps hides from the model.
-    for (const name of ["check_proposal_edits", "save_proposal_edits", "check_service_edits_app"]) {
+    for (const name of ["check_proposal_edits", "save_proposal_edits", "check_service_edits_app", "save_service_edits_app", "delete_services_app"]) {
       expect(meta.get(name), name).toEqual({ ui: { resourceUri: PROPOSAL_CARD_URI, visibility: ["app"] } });
     }
   });

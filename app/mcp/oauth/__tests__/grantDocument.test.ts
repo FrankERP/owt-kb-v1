@@ -6,6 +6,11 @@ import {
   CODE_REDEMPTION_ID_PREFIX,
   GRANT_FIELDS,
   GRANT_ID_PREFIX,
+  GRANT_READ_FIELDS,
+  ADMIN_WRITES_CUTOFF,
+  LEGACY_GRANT_CUTOFF,
+  adminScopeOf,
+  effectiveGrantClient,
   MCP_OAUTH_CODE_REDEMPTION_TYPE,
   MCP_OAUTH_GRANT_TYPE,
   buildCodeRedemptionDocument,
@@ -28,6 +33,7 @@ describe("constants", () => {
       "sub",
       "clientHash",
       "origin",
+      "client",
       "createdAt",
       "lastRefreshAt",
       "currentRefreshJti",
@@ -62,6 +68,7 @@ describe("buildGrantDocument", () => {
     sub: "member-1",
     clientId: CLIENT_ID,
     origin: "https://owt-backstage.vercel.app",
+    client: "chatgpt",
     refreshJti: "rjti-1",
     createdAt: "2026-09-24T12:00:00.000Z",
   });
@@ -82,6 +89,7 @@ describe("buildGrantDocument", () => {
       sub: "member-1",
       clientHash: sha(CLIENT_ID),
       origin: "https://owt-backstage.vercel.app",
+      client: "chatgpt",
       createdAt: "2026-09-24T12:00:00.000Z",
       currentRefreshJti: "rjti-1",
       revoked: false,
@@ -134,6 +142,7 @@ describe("parseGrantDocument", () => {
       sub: "member-1",
       clientHash: stored.clientHash,
       origin: stored.origin,
+      client: null,
       createdAt: stored.createdAt,
       lastRefreshAt: null,
       currentRefreshJti: "rjti-1",
@@ -142,6 +151,32 @@ describe("parseGrantDocument", () => {
     expect(parseGrantDocument({ ...stored, lastRefreshAt: "2026-09-25T00:00:00.000Z" })?.lastRefreshAt).toBe(
       "2026-09-25T00:00:00.000Z",
     );
+  });
+
+  it("reads a stored client kind; absent or null is null; any other value is malformed (revoked)", () => {
+    for (const kind of ["claude", "chatgpt", "loopback"] as const) {
+      expect(parseGrantDocument({ ...stored, client: kind })?.client).toBe(kind);
+    }
+    expect(parseGrantDocument({ ...stored, client: null })?.client).toBeNull();
+    for (const bad of ["Claude", "", "cursor", 1, true, {}]) {
+      expect(parseGrantDocument({ ...stored, client: bad }), JSON.stringify(bad)).toBeNull();
+    }
+  });
+
+  it("GRANT_READ_FIELDS names every field the parser reads (the store projects exactly these)", () => {
+    const full = {
+      ...stored,
+      client: "chatgpt",
+      lastRefreshAt: "2026-09-25T00:00:00.000Z",
+    } as Record<string, unknown>;
+    const projected = Object.fromEntries(GRANT_READ_FIELDS.map((f) => [f, full[f]]));
+    expect(parseGrantDocument(projected)).toEqual(parseGrantDocument(full));
+    for (const f of GRANT_READ_FIELDS) {
+      if (f === "_id" || f === "_rev") continue;
+      const without = { ...projected };
+      delete without[f];
+      expect(parseGrantDocument(without), f).not.toEqual(parseGrantDocument(projected));
+    }
   });
 
   it("anything but revoked === false reads as revoked (fail closed)", () => {
@@ -160,5 +195,53 @@ describe("parseGrantDocument", () => {
       expect(parseGrantDocument(broken), field).toBeNull();
       expect(parseGrantDocument({ ...stored, [field]: "" }), field).toBeNull();
     }
+  });
+});
+
+describe("effectiveGrantClient (ADR-0083)", () => {
+  const PROD = "https://owt-backstage.vercel.app";
+  const DEV = "https://dev-owt-backstage.vercel.app";
+  const before = new Date(Date.parse(LEGACY_GRANT_CUTOFF) - 60_000).toISOString();
+  const after = new Date(Date.parse(LEGACY_GRANT_CUTOFF) + 60_000).toISOString();
+
+  it("a stored kind wins, on any origin and at any date", () => {
+    expect(effectiveGrantClient({ client: "chatgpt", origin: PROD, createdAt: before })).toBe("chatgpt");
+    expect(effectiveGrantClient({ client: "claude", origin: DEV, createdAt: after })).toBe("claude");
+    expect(effectiveGrantClient({ client: "loopback", origin: PROD, createdAt: before })).toBe("loopback");
+  });
+
+  it("absent reads as claude ONLY for a production grant created before the cutoff", () => {
+    expect(effectiveGrantClient({ client: null, origin: PROD, createdAt: before })).toBe("claude");
+  });
+
+  it("every other absent case fails closed to loopback (no app-only tools)", () => {
+    expect(effectiveGrantClient({ client: null, origin: PROD, createdAt: after })).toBe("loopback");
+    expect(effectiveGrantClient({ client: null, origin: PROD, createdAt: LEGACY_GRANT_CUTOFF })).toBe("loopback");
+    expect(effectiveGrantClient({ client: null, origin: PROD, createdAt: null })).toBe("loopback");
+    expect(effectiveGrantClient({ client: null, origin: PROD, createdAt: "not a date" })).toBe("loopback");
+    expect(effectiveGrantClient({ client: null, origin: DEV, createdAt: before })).toBe("loopback");
+  });
+});
+
+describe("adminScopeOf (ADR-0083 addendum)", () => {
+  const at = Date.parse(ADMIN_WRITES_CUTOFF);
+  const iso = (ms: number) => new Date(ms).toISOString();
+
+  it("the cutoff parses and comes after slice A's legacy cutoff", () => {
+    expect(Number.isFinite(at)).toBe(true);
+    expect(at).toBeGreaterThan(Date.parse(LEGACY_GRANT_CUTOFF));
+  });
+
+  it("a grant created at or after the cutoff reaches the admin list", () => {
+    expect(adminScopeOf({ createdAt: ADMIN_WRITES_CUTOFF })).toBe("admin");
+    expect(adminScopeOf({ createdAt: iso(at + 1) })).toBe("admin");
+  });
+
+  it("before the cutoff, absent or unparseable keeps the read-only list its holder approved (fail closed)", () => {
+    expect(adminScopeOf({ createdAt: iso(at - 1) })).toBe("adminRead");
+    expect(adminScopeOf({ createdAt: LEGACY_GRANT_CUTOFF })).toBe("adminRead");
+    expect(adminScopeOf({ createdAt: null })).toBe("adminRead");
+    expect(adminScopeOf({ createdAt: "not a date" })).toBe("adminRead");
+    expect(adminScopeOf({ createdAt: "" })).toBe("adminRead");
   });
 });

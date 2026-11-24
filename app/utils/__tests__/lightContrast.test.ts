@@ -73,7 +73,7 @@ const page = () => LIGHT.get("surface-base")!;
  */
 const FOREGROUND_ON_PAGE = [
   "accent", "ink", "ink-muted", "ink-dim",
-  "warning-fg", "info-fg", "positive-fg", "negative-fg",
+  "warning-fg", "info-fg", "positive-fg", "negative-fg", "key-fg",
   "mono-200", "mono-300", "mono-400", "mono-500", "mono-600", "mono-700",
   "negative-faint", "negative-soft", "negative-muted",
   "warning-faint", "warning-soft", "warning-strong",
@@ -82,6 +82,9 @@ const FOREGROUND_ON_PAGE = [
   "availability-faint", "availability-soft", "availability-strong",
   "badge-violet-fg", "badge-azure-fg",
   "chart-lead", "chart-bgv", "chart-coro", "chart-especial", "chart-instr", "chart-foh",
+  // The Jóvenes group hues (ADR-0086). On the page here; on their own wash, where the chip and
+  // the date leaf actually put them, in the «group hues» block below.
+  "group-otro-nivel", "group-invencibles", "group-emprendedores", "group-adrenalin", "group-guerreras",
 ] as const;
 
 /**
@@ -102,6 +105,11 @@ const FOREGROUND_ON_FILL: ReadonlyArray<readonly [string, string, string]> = [
   ["surface-sunken", "accent", "ChordChart.tsx:183 — selected key"],
   ["surface-base", "warning-fg", "ImpersonationBanner.tsx:160"],
   ["scrim", "recency-fg", "ProposalsPanel.tsx:573 — pending count"],
+  ["surface-base", "group-otro-nivel", "jovenes/AudienceChips.tsx — the monogram on the group's solid"],
+  ["surface-base", "group-invencibles", "jovenes/AudienceChips.tsx — the monogram on the group's solid"],
+  ["surface-base", "group-emprendedores", "jovenes/AudienceChips.tsx — the monogram on the group's solid"],
+  ["surface-base", "group-adrenalin", "jovenes/AudienceChips.tsx — the monogram on the group's solid"],
+  ["surface-base", "group-guerreras", "jovenes/AudienceChips.tsx — the monogram on the group's solid"],
 ];
 
 describe("light theme — WCAG AA contrast", () => {
@@ -145,6 +153,50 @@ describe("light theme — WCAG AA contrast", () => {
       for (const role of ["positive-fg", "ink"]) {
         const ratio = contrast(roles.get(role)!, roles.get(ground!)!);
         expect(ratio, `${role} on surface-card (${ground}) is ${ratio.toFixed(2)}:1 in ${theme}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  it("each Jóvenes group hue clears 4.5:1 on its OWN wash over the card, in both themes (ADR-0086)", () => {
+    // Where the hue is actually read: the audience chip and the date leaf's weekday band are the
+    // hue as TEXT on a tint of the same hue over `--surface-card`. A tint of itself always costs
+    // contrast, so the page row above would pass a colour that fails here (teal did, at 4.49:1).
+    // The alpha is read from the one file that spells those classes, so a deeper wash is measured.
+    const style = readFileSync(path.join(REPO_ROOT, "app/utils/jovenesGroupStyle.ts"), "utf8");
+    const washes = [...style.matchAll(/bg-group-[a-z-]+\/\[(0\.\d+)\]/g)].map((m) => Number(m[1]));
+    expect(washes.length, "no group wash found in jovenesGroupStyle.ts").toBeGreaterThan(0);
+    const alpha = Math.max(...washes);
+    for (const [theme, selector, roles] of [["light", ".light {", LIGHT], ["dark", ":root {", darkRoles()]] as const) {
+      const start = CSS.indexOf(selector);
+      const block = CSS.slice(start, CSS.indexOf("\n}", start));
+      const ground = roles.get(block.match(/--surface-card:\s*rgb\(var\(--([a-z0-9-]+)-rgb\)\)/)![1])!;
+      const groups = [...roles.keys()].filter((r) => r.startsWith("group-"));
+      expect(groups.length, `no group hue in ${selector}`).toBe(5);
+      for (const role of groups) {
+        const hue = roles.get(role)!;
+        const wash = hue.map((v, i) => v * alpha + ground[i] * (1 - alpha));
+        const ratio = contrast(hue, wash);
+        expect(ratio, `${role} on its ${alpha} wash is ${ratio.toFixed(2)}:1 in ${theme}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  it("the Jóvenes state pills clear 4.5:1 on their own wash over the card, in both themes", () => {
+    // `MeetingState`: «Publicada» and «Borrador» are a word on a 10 % tint of the state's colour.
+    // The draft shipped to review as `warning-strong` and measured 4.25:1 in light — a pair no
+    // table above could see, because its ground is neither the page nor a solid fill. The pairs
+    // are read from the component, so a new ink or a deeper wash is measured, not assumed.
+    const src = readFileSync(path.join(REPO_ROOT, "app/components/jovenes/MeetingState.tsx"), "utf8");
+    const pairs = [...src.matchAll(/bg-([a-z-]+)\/(\d+) text-([a-z-]+)/g)].map((m) => ({ wash: m[1], alpha: Number(m[2]) / 100, ink: m[3] }));
+    expect(pairs.map((p) => p.ink), "MeetingState's two pills were not found").toHaveLength(2);
+    for (const [theme, selector, roles] of [["light", ".light {", LIGHT], ["dark", ":root {", darkRoles()]] as const) {
+      const start = CSS.indexOf(selector);
+      const block = CSS.slice(start, CSS.indexOf("\n}", start));
+      const ground = roles.get(block.match(/--surface-card:\s*rgb\(var\(--([a-z0-9-]+)-rgb\)\)/)![1])!;
+      for (const { wash, alpha, ink } of pairs) {
+        const tint = roles.get(wash)!.map((v, i) => v * alpha + ground[i] * (1 - alpha));
+        const ratio = contrast(roles.get(ink)!, tint);
+        expect(ratio, `${ink} on ${wash}/${alpha * 100} is ${ratio.toFixed(2)}:1 in ${theme}`).toBeGreaterThanOrEqual(4.5);
       }
     }
   });
@@ -384,11 +436,8 @@ describe("alpha-modified text roles still clear AA, in both themes", () => {
    */
   const DECORATIVE = new Set<string>([
     // Not text. WCAG 1.4.11 applies at 3:1, not 1.4.3 at 4.5.
-    "accent/65@app/components/LibraryIndex.tsx",
-    //   an <svg> search glyph on /biblioteca's console (R1). Measured against
-    //   surface-sunken, its worst ground in either theme: 3.38, so 1.4.11 at 3:1
-    //   governs it, and the icon guard below already measures accent/65 — this
-    //   site adds no new role/alpha pair to it.
+    //   (/biblioteca's console glyph, `accent/65`, left this list on 2026-10-24: the
+    //   search is a hairline line whose glass inherits `text-ink-dim` — ADR-0070.)
     "mono-600/50@app/(client)/me/propose/[roleId]/ProposalEditor.tsx",
     "accent/50@app/(client)/me/propose/[roleId]/ProposalEditor.tsx",
     //   the proposal editor's medley toggle, linked/unlinked — ProposalEditor's
@@ -402,10 +451,6 @@ describe("alpha-modified text roles still clear AA, in both themes", () => {
     //   `linked`. They colour an ICON, never text. Same category as the glyph
     //   above. (Their non-text 3:1 compliance is unmeasured — nothing in this
     //   repo checks 1.4.11 yet, and that is a real gap, named rather than hidden.)
-
-    // Punctuation.
-    "ink-muted/30@app/(client)/posts/[slug]/page.tsx",
-    //   the "," BETWEEN author names; the names themselves are ink-muted/70.
   ]);
 
   /**

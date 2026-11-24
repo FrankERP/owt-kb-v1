@@ -26,6 +26,13 @@ import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const read = (rel: string) => readFileSync(path.join(REPO_ROOT, rel), "utf8");
+/** Every `.tsx` under `dir` outside the test folders. */
+const tsxFiles = (dir: string): string[] =>
+  readdirSync(path.join(REPO_ROOT, dir), { withFileTypes: true }).flatMap((e) => {
+    const rel = path.join(dir, e.name);
+    if (rel.includes("__tests__")) return [];
+    return e.isDirectory() ? tsxFiles(rel) : rel.endsWith(".tsx") ? [rel] : [];
+  });
 
 describe("brand.css — .brand-lit-card", () => {
   const css = read("app/brand.css");
@@ -94,27 +101,42 @@ describe("brand.css — .brand-lit-card", () => {
   });
 });
 
-// ADR-0070 (2026-10-23): the hero is a run SHEET on the page, with no frame — and
-// a border pass needs a border. The rules above stay in `brand.css` (removing
-// `--lit-beam` would move the pinned composed-token count for nothing) and the
-// CSS half of this guard keeps them honest for the day a framed surface adopts
-// the pass again. Until then NOTHING sets `data-lit`: a count of 1 here would
-// mean someone re-framed the hero without rereading the ADR.
-describe("app/** — data-lit has no site since ADR-0070", () => {
-  it("no component sets data-lit", () => {
-    const walk = (dir: string): string[] =>
-      readdirSync(path.join(REPO_ROOT, dir), { withFileTypes: true }).flatMap((e) => {
-        const rel = path.join(dir, e.name);
-        if (rel.includes("__tests__")) return [];
-        return e.isDirectory() ? walk(rel) : rel.endsWith(".tsx") ? [rel] : [];
-      });
-    const sites = walk("app").filter((rel) => {
+// ADR-0070 (2026-10-23) made the hero a run SHEET on the page, with no frame — and a border
+// pass needs a border, so for three weeks NOTHING set `data-lit`. ADR-0086 (2026-11-12) gave the
+// pass a site back: the NEXT meeting on `/jovenes`, a framed card, lit once so the eye lands on
+// it among a list of cards. ADR-0088 (2026-11-12) framed the worship service again and lit the
+// NEXT service on Inicio for the same reason. Two sites, on two different screens — never two
+// lit cards on one screen, which would be two things claiming to be «next». Adding a site is an
+// ADR, then this list.
+describe("app/** — data-lit has exactly two sites (ADR-0086, ADR-0088)", () => {
+  it("only the Jóvenes meeting card and the worship service card set data-lit", () => {
+    const sites = tsxFiles("app").filter((rel) => {
       const jsx = read(rel)
         .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
         .replace(/\/\*[\s\S]*?\*\//g, "")
         .replace(/^\s*\/\/.*$/gm, "");
       return /\bdata-lit\b/.test(jsx);
     });
-    expect(sites).toEqual([]);
+    expect(sites.sort()).toEqual(["app/components/DayCard.tsx", "app/components/jovenes/MeetingCard.tsx"]);
+  });
+
+  it("the worship card lights only where its host asks (`lit`), and ONE host does: Inicio's next service", () => {
+    // `DayCard` draws every service; an unconditional `data-lit` would light `/me`'s hero and
+    // every card a future list renders. The wrapper lives in `Lit`, on only when `lit` is set.
+    const src = read("app/components/DayCard.tsx");
+    expect(src.match(/data-lit/g)?.length).toBe(1);
+    expect(src).toMatch(/function Lit\(\{ on, children \}[\s\S]*?return on \? \(\s*<div className="brand-lit-card" data-lit="">/);
+    expect(src).toMatch(/<Lit on=\{lit\}>/);
+    expect(src).toMatch(/lit = false/);
+    const hosts = tsxFiles("app").filter((rel) => /<DayCard\b(?:[^>]|=>)*?\blit\b/.test(read(rel)));
+    expect(hosts).toEqual(["app/(client)/page.tsx"]);
+  });
+
+  it("the card lights only when it is the featured one", () => {
+    // Every card is a `JovenesMeetingCard`; an unconditional `data-lit` would light the whole
+    // list at once. The wrapper exists only inside the `featured` branch.
+    const src = read("app/components/jovenes/MeetingCard.tsx");
+    expect(src.match(/data-lit/g)?.length).toBe(1);
+    expect(src).toMatch(/featured\s*\?[\s\S]{0,80}brand-lit-card[^>]*data-lit/);
   });
 });

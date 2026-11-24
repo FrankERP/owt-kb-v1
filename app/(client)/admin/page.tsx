@@ -4,8 +4,9 @@ import Navbar from "@/app/components/Navbar";
 import AdminPanel from "@/app/components/admin/AdminPanel";
 import { resolveAdminTab } from "@/app/components/admin/adminTabs";
 import { resolveSolverEngine } from "@/app/utils/solverDeployment";
+import { SHEET_TITLE } from "@/app/utils/homeHero";
 
-export const metadata = { title: "Admin — Oasis Worship Team" };
+export const metadata = { title: "Admin — Backstage" };
 
 type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
 
@@ -26,6 +27,9 @@ export default async function AdminPage({
   // for certain. `resolveAdminTab` lives in a neutral module for the same
   // reason `paintsDayCard` does (ADR-0028).
   const tabParam = (await searchParams).tab;
+  // Miembros moved to the super-admin page (people span every ministry, ADR-0075);
+  // an old link or bookmark to it follows it there rather than landing on Servicios.
+  if (tabParam === "members" && role === "super-admin") redirect("/super-admin");
   const initialTab = resolveAdminTab(tabParam, role);
   // Whether the URL NAMED this tab or merely fell back to it. The panel follows
   // the URL only in the first case; see the re-sync in AdminPanel.
@@ -48,7 +52,11 @@ export default async function AdminPage({
             off the navbar's centred content. Inside the frame's own 1280px cap
             on every other tab this is a no-op. */}
         <header className="mx-auto max-w-7xl">
-          <h1 className="font-display text-3xl font-semibold text-ink md:text-4xl">Control Room</h1>
+          {/* The TAB is the page title now (phase 5 of the «millones» pass, 2026-10-27):
+              each panel renders its own `PAGE_TITLE` h1 («Servicios», «Propuestas»…), so
+              «Control Room» is a small label on a phone and the rail's title from `lg`
+              (`AdminRail`), never two titles stacked. The navbar keeps the name. */}
+          <p className={`${SHEET_TITLE} lg:hidden`}>Control Room</p>
         </header>
         <AdminPanel role={role} initialTab={initialTab} tabNamedInUrl={tabNamedInUrl} engine={engine} />
       </div>

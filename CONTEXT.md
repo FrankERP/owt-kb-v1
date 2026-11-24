@@ -31,3 +31,28 @@ the one seat its members hold is shared among those of them who were eligible an
 available, and folded into the BGV tab for display. A rule's key is a private
 identifier — never printed outside a manager surface.
 _Avoid_: presence line (in Spanish copy), regla de presencia (the rule, not its line)
+
+**Ministerio** (`MinistryId`, `app/ministries.ts`):
+A team of the church with its own plans, rules, notices and admins: Alabanza (`worship`), Oasis Kids
+(`kids`), and, since ADR-0075 (readable since phase 1's PR 2, assignable since PR 3), Pastores de jóvenes (`jovenes`,
+shown in the app as «Jóvenes»). A person belongs to one or more through `ministries`; absent means
+worship. Isolation is two-way and enforced on the server.
+_Avoid_: área, equipo (in Jóvenes an «equipo» is one of the pastor teams that take turns organizing
+the quarterly pastors' meeting, a different thing, not modelled yet)
+
+**Grupo** (de Jóvenes; planned, ADR-0075):
+A part of a ministry that is closed to the others: «Otro Nivel», «Invencibles», «Emprendedores» (by age),
+«Adrenalin» (men) and «Guerreras» (women), added 2026-11-11. A person may be in several. A
+meeting names the groups it belongs to; only their members, the ministry's admins and a super-admin
+see it. A meeting of several groups is one meeting, seen by each of them with its whole team.
+Being IN a group (`groups`) and LEADING it (`leaderOf`, a subset) are different: a leader plans only
+the groups they lead and is a member of the rest (ADR-0085). An admin's groups are membership only.
+_Avoid_: sub-ministerio, filtro
+
+**Nivel** (`ministryRoles[].level`):
+What a person may do inside one ministry: `member` (sees their groups' meetings and the joint ones),
+`leader` (also plans the groups named in `leaderOf` — per group, not every group they are in;
+ADR-0085), `admin` (plans every group, whatever their own `groups`). Worship's level is still `role`,
+and Kids' admin is still `managesMinistries` (ADR-0075).
+_Avoid_: rol for the level in new copy (a «rol» is a service's roster, Spanish `*_role` documents;
+worship's legacy `role` field keeps its form label «Rol en Alabanza»)

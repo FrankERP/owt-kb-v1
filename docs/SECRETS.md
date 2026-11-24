@@ -157,7 +157,7 @@ The set is `SMTP_HOST` (`smtp.gmail.com`), `SMTP_PORT` (465), `SMTP_USER` (`dev.
 
 **How to rotate.** Create a NEW app password in that Google account first, update `SMTP_PASS` in Vercel for Production *and* Preview, redeploy, confirm a send works, and only then revoke the old one. Creating before revoking is what keeps the blast radius near zero — in the other order every outbound email is down in between: assignment notifications, the debounced notification sweep, proposal emails, and the outbox liveness alarm.
 
-**Gmail's own limits apply now and did not before.** A free Gmail account is bounded at roughly 500 recipients/day and a Workspace account at 2000; the outbox's batches are far under that today, but a large fan-out is a limit that `mail.oasis.mx` did not impose. Gmail may also refuse a `From` that is not the authenticated account or a verified "Send mail as" alias — which is why `EMAIL_FROM` cannot be an arbitrary `noreply@` address on this sender. **Only the ADDRESS is constrained, not the label:** `EMAIL_FROM` currently carries a display name, `OWT Backstage <dev.raccoon.labs@gmail.com>`, which Gmail accepts because the address is still the authenticated account. A `noreply@` needs a domain this project can publish DNS for — and `oasis.mx` is not one: its zone is served by `ns1/ns2.softlayer.com`, not by the cPanel whose Zone Editor is reachable, which is why the Resend verification for it fails with "all required records are missing" no matter what is entered there.
+**Gmail's own limits apply now and did not before.** A free Gmail account is bounded at roughly 500 recipients/day and a Workspace account at 2000; the outbox's batches are far under that today, but a large fan-out is a limit that `mail.oasis.mx` did not impose. Gmail may also refuse a `From` that is not the authenticated account or a verified "Send mail as" alias — which is why `EMAIL_FROM` cannot be an arbitrary `noreply@` address on this sender. **Only the ADDRESS is constrained, not the label:** `EMAIL_FROM` currently carries a display name, `Backstage <dev.raccoon.labs@gmail.com>` (Production + Preview; it read `OWT Backstage <…>` until 2026-11-10, when the app was renamed for every ministry — the `verify/service-readiness` branch keeps its own placeholder), which Gmail accepts because the address is still the authenticated account. A `noreply@` needs a domain this project can publish DNS for — and `oasis.mx` is not one: its zone is served by `ns1/ns2.softlayer.com`, not by the cPanel whose Zone Editor is reachable, which is why the Resend verification for it fails with "all required records are missing" no matter what is entered there.
 
 ---
 
@@ -277,6 +277,9 @@ cannot be recovered — see [Retrievability](#retrievability-assume-nothing-is-r
 - **Purpose:** every server-side mutation — proposal writes, role and setlist
   writes, the notification outbox sweep, and the `--apply` half of one-off
   scripts in `scripts/`. Without it, all writes fail and the app is read-only.
+  It is also the native apps' grant store's reader (ADR-0091): the app grant documents have dotted
+  ids, so without it every `/api/app/v1/*` route and the app sign-in answer 503 (fail closed, never
+  a sign-out).
 - **Role needed:** Editor.
 - **Platforms:** Vercel **twice** — once for `Preview, Production`, and once
   branch-scoped to `Preview (verify/service-readiness)`. Also local `.env.local`.
@@ -457,12 +460,37 @@ rule needs (`mcp-service-waiver|`, bound to the service and its revision) and th
 every pending change set, waiver and token: `save_service_edits` answers «revisa de nuevo» and
 writes nothing, and the next check mints fresh ones. Nothing stored holds them.
 
+**A fourth use: the delete list** (ADR-0072, admin parity phase 2; no new secret or env var). One
+more HMAC under its own label, `mcp-delete-list|`, over the month and the canonical JSON of the whole
+list `check_service_deletes` answered (`deleteListToken`). Rotating the key invalidates every pending
+preview: `delete_services` refuses the call before any delete and answers «revisa de nuevo»; the next
+check mints a fresh token. Nothing stored holds it.
+
+**A fifth use: the song tools** (ADR-0077, admin parity phase 3; no new secret or env var). Two more
+HMACs under their own labels (`app/mcp/songs/songTokens.ts`): `mcp-song-edits|`, over the song, its
+revision, the edit list `check_song_edits` answered and the before/after it rendered, and `mcp-song-create|`, over its issue time
+and the song `check_new_song` answered (the new song's id is derived from it). Rotating the key voids
+every pending song check: the save or create answers «revisa de nuevo» (or «no es la que se revisó»)
+and writes nothing. A song already created keeps its id; nothing stored holds a token.
+
+**A sixth use: the people tools** (ADR-0082, admin parity phase 4; no new secret or env var).
+`app/mcp/members/peopleTokens.ts` signs `<iat>.<call>.<result>` under `mcp-member-edits-call|`,
+`mcp-member-edits|`, `mcp-member-create-call|` and `mcp-member-create|`, and derives a create's ids
+under `mcp-member-id|`. Rotating the key voids every pending people check (the save or create answers
+«revisa de nuevo» and writes nothing); a person already created keeps their id.
+
+**A seventh use: the solver rule tools** (ADR-0084, admin parity phase 4; no new secret or env var).
+Two more HMACs under their own labels (`app/mcp/rules/ruleTokens.ts`): `mcp-rule-edits|`, over the
+issue time and the rules revision, edit list and lines `check_rule_edits` answered, and `mcp-rule-ids|`,
+the ids of the rule items an edit creates. Rotating the key voids every pending rules check:
+`save_rule_edits` answers «vuelve a revisar» and writes nothing. Stored rules keep their ids.
+
 **Blast radius.** Every access and refresh token that environment's routes ever signed stops
 verifying the instant the new key is live — a rotated secret cannot check a token signed under
 the old one, by construction. That is **that one environment's grants only**: on production, every
 claude.ai connector must be reconnected from Claude; on preview, only dev-smoke runs are affected
 and must re-run the handshake — no claude.ai connector exists there (it cannot pass Deployment
-Protection; see [docs/MCP.md](MCP.md#adding-the-connector-claudeai)). The other environment, and
+Protection; see [docs/MCP.md](MCP.md#adding-the-connector)). The other environment, and
 the rest of the app, are unaffected — nothing here touches a session cookie or any non-MCP route.
 
 ---
@@ -504,6 +532,62 @@ Subscribed calendars do not error loudly — they simply stop updating — so an
 cache may keep serving an old URL's last body for up to an hour. Nothing else in the app reads
 this variable. To revoke ONE member's link, do not rotate this: the member uses «Generar un enlace
 nuevo» (it bumps their `calendarFeed.<memberId>` generation).
+
+---
+
+## `APP_AUTH_SECRET`
+
+**Needed in: Vercel preview AND production — a DIFFERENT value each (`openssl rand -base64 48`),
+and local `.env.local` to try the native apps against `next dev`. Not needed in: GitHub Actions,
+the iOS or Android build (the apps never hold it), GCF.**
+
+**Status: SET on Preview and Production** (2026-11-20, with Frank's go-ahead; two different values,
+each generated with `openssl rand -base64 48` and piped straight into `vercel env add … --sensitive`,
+so neither value was ever displayed or stored anywhere else). Not set on Development: local work
+puts its own value in `.env.local`. Without it an environment's app routes answer 503 ([ADR-0091](adr/0091-native-apps-sign-in-through-their-own-first-party-oauth-door.md));
+nothing else in the app reads it.
+
+**Purpose.** The HS256 key (`jose`) for every authorization code, access token and refresh token
+the native-app door mints or verifies (`app/appAuth/tokens.ts`, loaded by `loadAppSecret` in
+`app/appAuth/preflight.ts`). A missing or under-length (< 32 bytes) value fails closed:
+`/app/authorize` shows «No disponible», and `/api/app/v1/*` answers 503.
+
+**Its own value, never `MCP_OAUTH_SECRET` or `NEXTAUTH_SECRET`:** a token of one door must be
+unverifiable by the other even if an audience or type check were ever dropped, and rotating one
+must not sign out the web or break the connector. **Different per environment** so a token minted
+on preview (or local) can never verify on production; each environment is also its own issuer.
+
+**Where the value came from.** `openssl rand -base64 48`, generated and entered by Frank
+(`printf '%s' "$SECRET" | npx vercel env add APP_AUTH_SECRET <env> --sensitive`, which keeps it out
+of any log). No dashboard issues it.
+
+**How to rotate.** `npx vercel env rm APP_AUTH_SECRET <env>`, add the new value, **redeploy that
+environment** (env vars bind at build time).
+
+**Blast radius / what breaks mid-rotation.** Every app user on that environment is signed out the
+moment the new deployment is live: their access and refresh tokens stop verifying, and the app asks
+them to sign in again (one tap). The `appAuthGrant` documents stay and simply age out after 90
+days. A code minted in the seconds before the switch fails its exchange; the person taps «Entrar»
+again. Nothing else in the app reads this variable.
+
+---
+
+## `APP_AUTH_DISABLED`
+
+**Needed in: Vercel production and preview, ONLY when switching the native-app sign-in off — leave
+unset otherwise. Not needed in: `.env.local`, GitHub Actions, the app builds, GCF.**
+
+**Not a secret** — a kill switch, plain config (ADR-0091). `appPreflight` checks it FIRST, before
+the host and the secret: **any non-empty value (`"0"` included)** makes `/app/authorize` show «No
+disponible» and every `/api/app/v1/*` route answer 503. The app keeps its tokens and retries later
+(a 503 is never a sign-out).
+
+**Where it comes from.** Set directly by Frank in Vercel → Settings → Environment Variables. No
+issuer.
+
+**Rotate:** n/a — set a value to switch the door off, remove it to switch back on. **Takes effect on
+the next deployment.** **Blast radius:** the native apps on that environment, and nothing else; the
+web, the MCP connector and the Capacitor wrap do not read it.
 
 ---
 
@@ -566,6 +650,26 @@ build time, so flipping it needs a redeploy to actually bite, not just a save in
 
 **Blast radius.** The MCP connector and the whole OAuth flow on that one environment, and nothing
 else — no other route, page or data path reads this variable.
+
+---
+
+## `AVAILABILITY_SWEEP_DISABLED`
+
+**Needed in: Vercel production, ONLY when switching the availability sweeps off — leave unset
+otherwise. Not needed in: Preview (it never acts there anyway), `.env.local`, GitHub Actions, the
+iOS build, GCF.**
+
+**Not a secret** — a kill switch, plain config ([ADR-0079](adr/0079-availability-conflicts-are-proposed-one-seat-at-a-time-and-a-person-applies-them.md)).
+The value `1` stops every AUTOMATIC availability sweep: the member's save trigger and the flush
+cron's tick return before reading anything, and «Revisar ahora» answers dry (it computes, writes no
+record, sends no email). The panel in `/admin › Disponibilidad › Conflictos` still reads, and
+«Aplicar», «Mantener» and «Deshacer» still work — they are a person's own click.
+
+**Where it comes from.** Set directly by Frank, Vercel → project `owt-backstage` → Settings →
+Environment Variables → Production. There is no issuer.
+
+**Rotate:** n/a — set `1` to stop, remove it to resume. **Takes effect on the next deployment**, like
+every Vercel env var. **Blast radius:** only the availability proposals' automatic sweeps.
 
 ---
 
@@ -636,7 +740,7 @@ secret.
 | Platform | Role |
 |---|---|
 | Vercel Preview + Production | `app/api/admin/solve/route.ts` sends it as the `X-Api-Key` header — to v2 itself, and to v3 through `app/utils/solverV3Upstream.ts` (solver v3 C6; the path production takes since the 2026-10-15 cutover, ADR-0056 — v2's only after a flip-back). The MCP's `solve_month` (P4, in production since 2026-10-20) calls the same `solveV3`, so it sends the same header from `/api/mcp` |
-| GitHub Actions `solver-v3-ops.yml` → `verify` | Reads `owt-solver-api-key:latest` with `owt-gha-verify` (Secret Accessor on this secret only), masks it, and sends it as `X-Api-Key` for the ping and smoke solve (ADR-0071). Nothing is stored in GitHub |
+| GitHub Actions `solver-v3-ops.yml` → `verify` | Reads `owt-solver-api-key:latest` with `owt-gha-verify` (Secret Accessor on this secret only), masks it, and sends it as `X-Api-Key` for the ping and smoke solve (ADR-0092). Nothing is stored in GitHub |
 | Secret Manager `owt-solver-api-key` | Cloud Build deploys each function with `--set-secrets=OWT_SOLVER_API_KEY=owt-solver-api-key:latest`: v2 from `cloudbuild.yaml` (manual: `scripts/deploy-solver-gcf.sh`), v3 from `gcf_v3/cloudbuild.yaml` (manual: a dispatched `deploy` of `solver-v3-ops.yml`, which re-runs that trigger; first creation and last resort: `scripts/deploy-solver-v3-gcf.sh`) |
 
 **Purpose.** The only barrier on each publicly invokable function (`allUsers` holds
@@ -870,7 +974,7 @@ does not use it; it authenticates with its own sign-in.
 ## GitHub Actions → Google (Workload Identity Federation — no secret)
 
 **Needed in: nothing stores a credential.** `.github/workflows/solver-v3-ops.yml` gets a
-short-lived Google token per job by exchanging GitHub's OIDC token (ADR-0071).
+short-lived Google token per job by exchanging GitHub's OIDC token (ADR-0092).
 
 **Status (2026-10-22): designed and merged, NOT yet set up or rehearsed.** Nothing below exists
 in Google Cloud or GitHub until Frank runs the setup script and creates the environments; until
@@ -886,7 +990,7 @@ rehearsal. What it sets up:
   Functions Viewer on `owt-solver-v3`, Secret Accessor on `owt-solver-api-key`) and
   `owt-gha-deploy` (Cloud Build Editor on the project, Service Account User on the deploy
   trigger's account — effectively editor-equivalent, which is why deploy runs need Frank's
-  approval; ADR-0071 says what that approval does and does not guard).
+  approval; ADR-0092 says what that approval does and does not guard).
 - **GitHub** — environments `solver-verify` (deployment branches: `main`) and `solver-deploy`
   (`main`; required reviewer FrankERP; admins cannot bypass), each with the plain **variables**
   `GCP_PROJECT`, `GCP_WIF_PROVIDER` and `GCP_SERVICE_ACCOUNT` (that environment's account). Not

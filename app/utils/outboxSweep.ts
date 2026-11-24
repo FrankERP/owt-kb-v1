@@ -54,6 +54,7 @@ import {
   type LeadNoteMessage,
   classifyRole,
   classifySetlist,
+  normalizeSnapshotRows,
   type Line,
 } from "./outboxClassify";
 // A generic "positive number, or the fallback" env parser whose name records its
@@ -67,7 +68,6 @@ import {
   type OutboxSongRow,
 } from "./outboxNotice";
 import { normalizeStoredSeats, storedRoleDate } from "./roleWriteRequest";
-import { sortedLeadIds } from "./songLeads";
 
 const TIMEZONE = "America/Mexico_City";
 
@@ -297,32 +297,6 @@ function logError(event: string, fields: Record<string, unknown>, err?: unknown)
   console.error(JSON.stringify({ event, ...fields }), err ?? "");
 }
 
-/**
- * Stored `beforeSongs` rows carry no `group` at all for a standalone song
- * (the schema field is a plain number), while `songRowsFrom` produces an
- * explicit `null`. Normalising here keeps the two comparable — `undefined`
- * would never equal `null` and every snapshot would read as changed.
- *
- * `leads` is KEPT, or the stored side would always compare leaderless against a
- * live side that has leaders: a no-op save of a worship night would email, and
- * clearing every leader would not.
- */
-function normalizeSnapshotRows(rows: unknown): OutboxSongRow[] {
-  if (!Array.isArray(rows)) return [];
-  return rows.filter(isObj).map((r, i) => {
-    // Sorted and de-duplicated exactly like `songRowsFrom`, through the same
-    // helper, and ABSENT when empty, so a snapshot stored before leaders
-    // existed compares unchanged.
-    const leads = sortedLeadIds(r.leads);
-    return {
-      _key: typeof r._key === "string" ? r._key : `s${i}`,
-      ref: typeof r.ref === "string" ? r.ref : "",
-      key: typeof r.key === "string" ? r.key : "",
-      group: typeof r.group === "number" ? r.group : null,
-      ...(leads.length ? { leads } : {}),
-    };
-  });
-}
 
 function unique(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))];
@@ -399,14 +373,18 @@ let roleReadCache = new Map<string, Record<string, unknown> | null>();
 async function fetchRole(notice: StoredNotice): Promise<Record<string, unknown> | null> {
   if (!notice.roleId || !notice.roleType) return null;
   const key = `${notice.roleType}:${notice.roleId}`;
-  const memo = roleReadCache.get(key);
+  // The memo current when this read STARTED: under Fluid compute another sweep on this
+  // instance may swap in its own while the read is in flight, and an older read must not
+  // land in the newer sweep's memo (ADR-0074).
+  const cache = roleReadCache;
+  const memo = cache.get(key);
   if (memo !== undefined) return memo;
   const row = await operationalClient.fetch<Record<string, unknown> | null>(ROLE_QUERY, {
     roleType: notice.roleType,
     roleId: notice.roleId,
   });
   const value = isObj(row) ? row : null;
-  roleReadCache.set(key, value);
+  cache.set(key, value);
   return value;
 }
 

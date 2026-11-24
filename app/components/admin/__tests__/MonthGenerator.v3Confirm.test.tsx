@@ -123,7 +123,7 @@ describe("after a v3 Auto (CF-1–CF-5)", () => {
     await waitFor(() => expect(screen.queryByText("Calculando...")).toBeNull());     // the run is applied, not just sent
     // Back to the config step (the board has a seat, so the discard banner asks), drop Bruno from
     // «Líderes Domingo», preview again — the board is rebuilt, the frozen record is not.
-    fireEvent.click(screen.getByRole("button", { name: "← Volver" }));
+    fireEvent.click(screen.getByRole("button", { name: "Volver a fechas y reglas" }));
     fireEvent.click(screen.getByRole("button", { name: "Volver de todos modos" }));
     selectSundayLead(container, "Bruno");
     preview();
@@ -357,7 +357,7 @@ describe("CF-8, CF-9, CF-10", () => {
 
   it("the CONFIG step asks too: «← Volver» then «Cancelar», and Escape there, open the dialog — never an unprompted exit", async () => {
     const { onClose } = await partialFailure();
-    fireEvent.click(screen.getByRole("button", { name: "← Volver" }));               // no seat on the board: no discard banner
+    fireEvent.click(screen.getByRole("button", { name: "Volver a fechas y reglas" }));               // no seat on the board: no discard banner
     expect(screen.getByRole("button", { name: /Previsualizar/ })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
     expect(incomplete()).toBeTruthy();

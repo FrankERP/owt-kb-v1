@@ -126,11 +126,11 @@ describe("ImpersonationBanner", () => {
     }
   });
 
-  it("returns to /admin when the session really did stop impersonating", async () => {
+  it("returns to /super-admin (where impersonation starts) when the session really did stop impersonating", async () => {
     h.update.mockResolvedValue({ user: { isImpersonating: false } });
     renderBanner();
     fireEvent.click(salir());
-    await waitFor(() => expect(h.push).toHaveBeenCalledWith("/admin"));
+    await waitFor(() => expect(h.push).toHaveBeenCalledWith("/super-admin"));
   });
 
   it("stays put and says so when the session comes back still impersonating", async () => {

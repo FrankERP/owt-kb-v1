@@ -64,6 +64,7 @@ describe("Miembros — the row menu", () => {
       "Editar",
       "Contraseña",
       "Ver como este miembro",
+      "Cerrar sesiones de la app",
       "Deshabilitar acceso",
       "Eliminar",
     ]);
@@ -92,7 +93,7 @@ describe("Miembros — the row menu", () => {
 
   it("keeps no hover-only action strip and no kill-switch checkbox on the row", async () => {
     const { container } = await mount([ANA]);
-    const row = container.querySelector(".brand-member-row") as HTMLElement;
+    const row = container.querySelector("[data-member-row]") as HTMLElement;
     expect(row.innerHTML).not.toContain("sm:opacity-0");
     expect(screen.queryByLabelText(/kill switch/i)).toBeNull();
     expect(screen.queryByText(/kill switch/i)).toBeNull();

@@ -11,9 +11,9 @@ import MeHeader from "@/app/components/MeHeader";
 import Button from "@/app/components/ui/Button";
 import AccountList, { AccountLinkRow } from "@/app/components/account/AccountList";
 import DownloadCalendarRow from "@/app/components/account/DownloadCalendarRow";
-import {
-  ArrowRightIcon, CalendarAddIcon, CalendarOffIcon, CheckIcon, ClockIcon, MessageIcon, PlusIcon, SlidersIcon,
-} from "@/app/components/ui/icons";
+import { ArrowRightIcon, CalendarIcon, CalendarOffIcon, CheckIcon, ClockIcon, GearIcon, MessageIcon, PlusIcon } from "@/app/components/ui/icons";
+import { SHEET_TITLE } from "@/app/utils/homeHero";
+import { SONG_COVER_GROQ } from "@/app/utils/songCover";
 import { serviceStartTime } from "@/app/utils/calendarFeed";
 import { UNDER_NAVBAR_SCROLL_MT } from "@/app/utils/navbarHeight";
 import { Setlist, SetlistSong, ProposalStatus } from "@/app/utils/interface";
@@ -25,12 +25,13 @@ import { paintsDayCard } from "@/app/utils/paintsDayCard";
 import { seatPhotos } from "@/app/utils/teamSections";
 import { myNameFromSession } from "@/app/utils/agenda";
 import { compareServiceTime } from "@/app/utils/serviceTime";
+import { pastorMessageBodyOf } from "@/app/utils/serviceThread";
 import { revealProps } from "@/app/utils/reveal";
 import { horizon } from "./queries";
 import { KIDS_SEATS, KIDS_SEAT_LABELS, type KidsSeat } from "@/app/utils/kidsTypes";
 
 export const metadata: Metadata = {
-  title: "Mi perfil — Oasis Worship Team",
+  title: "Mi perfil — Backstage",
   description: "Tus próximos servicios y tu disponibilidad.",
 };
 
@@ -90,6 +91,14 @@ export default async function MePage() {
 
   const { sanityId } = session.user;
 
+  // Ministry membership decides which halves of this page exist at all, so it is
+  // resolved BEFORE the reads: a kids-only member must not even query worship.
+  // `getMemberAccess` is the 30s-TTL entry `requireActiveSession` already filled,
+  // so both checks are free.
+  const { ministries } = await getMemberAccess(sanityId);
+  const inWorship = ministries.includes("worship");
+  const inKids = ministries.includes("kids");
+
   // What this page still needs, and nothing else. `unavailableDates` survives the
   // F3 split for ONE reason: the count on the link to `/me/disponibilidad`. The
   // profile fields (`email`, `role`, `notifPrefs`, `hasPassword`) went with the
@@ -98,7 +107,7 @@ export default async function MePage() {
   // Tipo chips. `_rev` is not here either — the save precondition belongs to the
   // page that renders the calendar, and carrying a revision this page never
   // writes with would only invite a future editor to write with it.
-  const member = await serverClient.fetch<{
+  const memberRead = serverClient.fetch<{
     _id: string;
     member_name: string;
     alias?: string;
@@ -124,19 +133,11 @@ export default async function MePage() {
     $id in foh_team[].person._ref
   )`;
 
-  // Ministry membership decides which halves of this page exist at all, so it is
-  // resolved BEFORE the reads: a kids-only member must not even query worship.
-  // `getMemberAccess` is the 30s-TTL entry `requireActiveSession` already filled,
-  // so both checks are free.
-  const { ministries } = await getMemberAccess(sanityId);
-  const inWorship = ministries.includes("worship");
-  const inKids = ministries.includes("kids");
-
-  // Both reads below touch protected service types, so they go through the
-  // canonical (published-perspective) client — a `drafts.*` overlay is never a
-  // member's assignment, proposal, or calendar date. The member's OWN profile
-  // read above stays on `serverClient`: it needs the read token and `teamMembers`
-  // is not a protected service type. Weekend setlists are fetched as arrays and
+  // The two worship reads in the `Promise.all` below touch protected service types,
+  // so they go through the canonical (published-perspective) client — a `drafts.*`
+  // overlay is never a member's assignment, proposal, or calendar date. The member's
+  // OWN profile read above stays on `serverClient`: it needs the read token and
+  // `teamMembers` is not a protected service type. Weekend setlists are fetched as arrays and
   // collapsed with `pickUnique` below, never `[0]`.
   //
   // Both are WORSHIP reads and are skipped entirely for a member who is not in
@@ -144,7 +145,11 @@ export default async function MePage() {
   // §5.1: worship surfaces are "none"), so querying and discarding would be pure
   // cost. The calendar's service-date read left with the calendar (F3); it lives
   // on `/me/disponibilidad`, which is where its ministry-neutrality is recorded.
-  const [data, proposals] = await Promise.all([
+  //
+  // Every read on this page goes out at once — the profile, both worship reads and
+  // the kids read — because each one crosses the Atlantic (ADR-0074).
+  const [member, data, proposals, kidsRows] = await Promise.all([
+    memberRead,
     inWorship ? operationalClient.fetch(
       `{
         "sundays": *[_type == "sunday_role" && week >= $today && week <= $limit && published != false && ${memberFilter}] | order(week asc) {
@@ -159,12 +164,14 @@ export default async function MePage() {
           foh_team[] { role, "person": coalesce(person->alias, person->member_name), "photo": coalesce(person->profilePhoto.asset->url, person->googlePhotoUrl) },
           BGVs[]-> { member_name, alias, "photo": coalesce(profilePhoto.asset->url, googlePhotoUrl) },
           Chorus[]-> { member_name, alias, "photo": coalesce(profilePhoto.asset->url, googlePhotoUrl) },
+          "pastor_message": ${pastorMessageBodyOf("^._id")},
           "setlistCandidates": *[_type == "featuredSongs" && week == ^.week] {
             songs[] {
               play_key,
               medley_tag,
               "title": song->title, "slug": song->slug, "_id": song->_id,
               "author": song->author, "bpm": song->bpm, "key": song->key,
+              "cover": ${SONG_COVER_GROQ},
             },
             week,
             team_notes,
@@ -182,12 +189,14 @@ export default async function MePage() {
           foh_team[] { role, "person": coalesce(person->alias, person->member_name), "photo": coalesce(person->profilePhoto.asset->url, person->googlePhotoUrl) },
           BGVs[]-> { member_name, alias, "photo": coalesce(profilePhoto.asset->url, googlePhotoUrl) },
           Chorus[]-> { member_name, alias, "photo": coalesce(profilePhoto.asset->url, googlePhotoUrl) },
+          "pastor_message": ${pastorMessageBodyOf("^._id")},
           "setlistCandidates": *[_type == "saturdarSongs" && week == ^.week] {
             songs[] {
               play_key,
               medley_tag,
               "title": song->title, "slug": song->slug, "_id": song->_id,
               "author": song->author, "bpm": song->bpm, "key": song->key,
+              "cover": ${SONG_COVER_GROQ},
             },
             week,
             team_notes,
@@ -205,11 +214,13 @@ export default async function MePage() {
           foh_team[] { role, "person": coalesce(person->alias, person->member_name), "photo": coalesce(person->profilePhoto.asset->url, person->googlePhotoUrl) },
           BGVs[]-> { member_name, alias, "photo": coalesce(profilePhoto.asset->url, googlePhotoUrl) },
           Chorus[]-> { member_name, alias, "photo": coalesce(profilePhoto.asset->url, googlePhotoUrl) },
+          "pastor_message": ${pastorMessageBodyOf("^._id")},
           songs[] {
             play_key,
             medley_tag,
             "title": song->title, "slug": song->slug, "_id": song->_id,
             "author": song->author, "bpm": song->bpm, "key": song->key,
+            "cover": ${SONG_COVER_GROQ},
             "leads": leads[]->{ member_name, alias },
           },
           "myLeadSongs": songs[$id in leads[]._ref]{ "title": song->title }
@@ -231,13 +242,12 @@ export default async function MePage() {
       }`,
       { id: sanityId, today }
     ) : [],
+    // Oasis Kids: only for members whose ministries include it, so a worship-only
+    // member pays no query and sees nothing new.
+    inKids
+      ? operationalClient.fetch<KidsMeRow[]>(KIDS_ME_QUERY, { today, id: sanityId })
+      : ([] as KidsMeRow[]),
   ]);
-
-  // Oasis Kids: only for members whose ministries include it, so a worship-only
-  // member pays no query and sees nothing new.
-  const kidsRows = inKids
-    ? await operationalClient.fetch<KidsMeRow[]>(KIDS_ME_QUERY, { today, id: sanityId })
-    : [];
   const kidsAssignments = (Array.isArray(kidsRows) ? kidsRows : [])
     .map((row) => {
       const day = serviceDayKey(row?.date);
@@ -295,6 +305,7 @@ export default async function MePage() {
     songs?: SetlistSong[];
     myLeadSongs?: { title?: string }[] | null;
     team_notes?: string;
+    pastor_message?: string | null;
   };
 
   // Fail closed on an ambiguous weekend setlist target: a duplicate canonical
@@ -352,6 +363,7 @@ export default async function MePage() {
     roleId: day !== "Domingo" && day !== "Sábado" ? doc._id : undefined,
     serviceId: doc._id,
     setlist: doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: dateKey, team_notes: doc.team_notes } : undefined),
+    pastorMessage: doc.pastor_message,
     leads: doc.Lead?.map((m) => m.alias || m.member_name),
     instruments: doc.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
     fohTeam: doc.foh_team?.map((s) => ({ label: s.role, person: s.person })),
@@ -430,7 +442,7 @@ export default async function MePage() {
 
     if (!proposal) {
       return (
-        <Button href={`/me/propose/${doc._id}`} variant="secondary" size="sm" className="mt-3 w-full">
+        <Button href={`/me/propose/${doc._id}`} variant="secondary" size="sm" className="mt-4 w-full md:max-w-md">
           <PlusIcon size={12} />
           Proponer setlist
         </Button>
@@ -452,7 +464,7 @@ export default async function MePage() {
 
     return (
       <>
-        <Button href={`/me/propose/${doc._id}`} variant="secondary" size="sm" className="mt-3 w-full">
+        <Button href={`/me/propose/${doc._id}`} variant="secondary" size="sm" className="mt-4 w-full md:max-w-md">
           {STATUS_LABEL[proposal.status]}
           {STATUS_ICON[proposal.status]}
         </Button>
@@ -465,7 +477,7 @@ export default async function MePage() {
     <div>
       {/* `cue={false}`: `MeHeader` already carries the next-service countdown. */}
       <Navbar title={navbarTitle} cue={false} />
-      <div className="mx-auto max-w-4xl px-6 pt-10 pb-16 space-y-12">
+      <div className="mx-auto max-w-4xl space-y-14 px-6 pb-16 pt-8">
         {/* The theme-rollout announcement used to sit here. It was retired on
             2026-09-13 — see ADR-0033. Do not reintroduce it with a client-side
             dismissal. */}
@@ -499,7 +511,7 @@ export default async function MePage() {
         {/* Upcoming WORSHIP services — hidden outright for a member who is not in
             that ministry, and absent entirely when there are none: the header says
             so, so an empty column here would say it twice. The next service is the
-            full hero; every other one is a collapsed `DayCardDisclosure` row (R1),
+            full hero; every other one is a folded `DayCardDisclosure` card (R1),
             each still followed by its own proposal CTA.
 
             The hero renders as `<DayCard {...} hero />` directly, WITHOUT `isNext`
@@ -509,24 +521,29 @@ export default async function MePage() {
             same date on one page; the header owns it, the hero card just shows the
             "Ensayar" action. */}
         {inWorship && heroAssignment && (
-          <div className="space-y-4" {...revealProps(1)}>
-            <div key={heroAssignment.doc._id}>
+          <div className="space-y-14" {...revealProps(1)}>
+            {/* «Próximo»: the page's sections carry the small-caps titles of the
+                «millones» pass (2026-10-24); under this one the next service is the
+                framed service card (ADR-0088), the same one Inicio opens on. */}
+            <section key={heroAssignment.doc._id} aria-labelledby="me-proximo">
+              <h2 id="me-proximo" className={`${SHEET_TITLE} mb-5`}>Próximo</h2>
               <DayCard {...cardProps(heroAssignment)} hero />
               {renderProposalCta(heroAssignment.doc)}
-            </div>
+            </section>
             {restAssignments.length > 0 && (
-              <>
-                {/* Visually silent — the collapsed rows read fine without a printed
-                    heading, but a screen reader landing mid-page needs to know it
-                    left the hero and entered the rest of the run sheet. */}
-                <h2 className="sr-only">Después</h2>
-                {restAssignments.map((assignment) => (
-                  <div key={assignment.doc._id}>
-                    <DayCardDisclosure {...cardProps(assignment)} />
-                    {renderProposalCta(assignment.doc)}
-                  </div>
-                ))}
-              </>
+              // «Después»: the other services as folded cards (`DayCardDisclosure`,
+              // home's own stack, ADR-0088), each still followed by its proposal CTA.
+              <section aria-labelledby="me-despues">
+                <h2 id="me-despues" className={SHEET_TITLE}>Después</h2>
+                <div className="mt-4 space-y-4">
+                  {restAssignments.map((assignment) => (
+                    <div key={assignment.doc._id}>
+                      <DayCardDisclosure {...cardProps(assignment)} />
+                      {renderProposalCta(assignment.doc)}
+                    </div>
+                  ))}
+                </div>
+              </section>
             )}
           </div>
         )}
@@ -534,39 +551,31 @@ export default async function MePage() {
         {/* Oasis Kids — only for members of that ministry */}
         {inKids && (
           <section aria-labelledby="mis-roles-kids" {...revealProps(2)}>
-            <h2
-              id="mis-roles-kids"
-              className="font-display text-center text-xl md:text-2xl font-bold mb-6"
-            >
-              Mis roles en Oasis Kids
-            </h2>
-            <div className="rounded-2xl border border-edge-accent-subtle bg-surface-raised p-5">
-              {kidsAssignments.length === 0 ? (
-                <p className="text-center font-body text-sm text-mono-500">
-                  No tienes domingos asignados en Oasis Kids por ahora.
-                </p>
-              ) : (
-                <ul className="space-y-2">
-                  {kidsAssignments.map(({ day, seats }) => (
-                    <li
-                      key={day}
-                      className="flex flex-wrap items-baseline justify-between gap-2 rounded-lg bg-surface-sunken px-3 py-2"
-                    >
-                      <span className="font-body text-sm capitalize text-ink-muted">
-                        {kidsDayLabel(day)}
-                      </span>
-                      <span className="font-label text-[11px] uppercase tracking-widest text-accent">
-                        {seats.map((seat) => KIDS_SEAT_LABELS[seat]).join(" · ")}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <Button href="/kids" variant="secondary" size="sm" className="mt-4 w-full">
-                Ver Oasis Kids
-                <ArrowRightIcon size={12} />
-              </Button>
-            </div>
+            {/* A section of the same run sheet (the «millones» pass): small-caps
+                title, hairline rows — the day at 17 px, the seats under it. */}
+            <h2 id="mis-roles-kids" className={SHEET_TITLE}>Oasis Kids</h2>
+            {kidsAssignments.length === 0 ? (
+              <p className="mt-3 font-body text-[17px] text-ink-dim">
+                No tienes domingos asignados en Oasis Kids por ahora.
+              </p>
+            ) : (
+              <ul className="mt-2 divide-y divide-ink/[0.10] border-y border-ink/[0.10]">
+                {kidsAssignments.map(({ day, seats }) => (
+                  <li key={day} className="py-4">
+                    <span className="block font-body text-[17px] font-semibold capitalize text-ink">
+                      {kidsDayLabel(day)}
+                    </span>
+                    <span className="block font-body text-sm text-ink-muted">
+                      {seats.map((seat) => KIDS_SEAT_LABELS[seat]).join(" · ")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <Button href="/kids" variant="secondary" size="sm" className="mt-4">
+              Ver Oasis Kids
+              <ArrowRightIcon size={12} />
+            </Button>
           </section>
         )}
 
@@ -586,7 +595,7 @@ export default async function MePage() {
         {/* `#tu-cuenta` is a link target (Ajustes › Calendario's «Descargar una sola
             vez»), so it clears the navbar like every anchored section does. */}
         <section id="tu-cuenta" aria-labelledby="tu-cuenta-title" className={`${UNDER_NAVBAR_SCROLL_MT} space-y-2`} {...revealProps(3)}>
-          <h2 id="tu-cuenta-title" className="ml-1 font-label text-[11px] uppercase tracking-widest text-mono-500">
+          <h2 id="tu-cuenta-title" className={SHEET_TITLE}>
             Tu cuenta
           </h2>
           {!member && (
@@ -606,7 +615,7 @@ export default async function MePage() {
             {member && (
               <AccountLinkRow
                 href="/me/disponibilidad"
-                icon={<CalendarOffIcon size={18} strokeWidth={1.8} />}
+                icon={<CalendarOffIcon size={17} />}
                 title="Disponibilidad"
                 status={
                   upcomingUnavailable === 0
@@ -623,14 +632,14 @@ export default async function MePage() {
             {inWorship && (
               <AccountLinkRow
                 href="/me/ajustes#calendario"
-                icon={<CalendarAddIcon size={18} strokeWidth={1.8} />}
+                icon={<CalendarIcon size={17} />}
                 title="Calendario"
                 status="Suscribirte a tus servicios"
               />
             )}
             <AccountLinkRow
               href="/me/ajustes"
-              icon={<SlidersIcon size={18} strokeWidth={1.8} />}
+              icon={<GearIcon size={17} />}
               title="Ajustes"
               status="Tema, tamaño de texto, perfil"
             />

@@ -323,7 +323,6 @@ export const HANDOFF_NOTICE: Record<"load_failed" | "not_found" | "changed", str
 // ── The transient target reducer (tab + target in one place) ──────────────────
 
 export type AdminTabId =
-  | "members"
   | "services"
   | "proposals"
   | "availability"

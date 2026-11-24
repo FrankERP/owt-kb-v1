@@ -29,7 +29,6 @@ const COMPOSITING_CLASSES = [
   "brand-navbar",
   "brand-search-console",
   "brand-section-heading",
-  "brand-song-hero",
   "brand-stage-hero",
   "brand-surface",
   "brand-surface-interactive",

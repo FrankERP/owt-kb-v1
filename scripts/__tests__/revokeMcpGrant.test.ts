@@ -18,7 +18,12 @@ import {
   GRANT_TYPE as SCRIPT_GRANT_TYPE,
   parseArgs,
   selectGrantsToRevoke,
+  effectiveGrantClient as scriptEffectiveGrantClient,
+  LEGACY_GRANT_CUTOFF as SCRIPT_LEGACY_GRANT_CUTOFF,
+  PRODUCTION_ORIGIN as SCRIPT_PRODUCTION_ORIGIN,
 } from "../revoke-mcp-grant.mjs";
+import { effectiveGrantClient, LEGACY_GRANT_CUTOFF } from "@/app/mcp/oauth/grantDocument";
+import { PREVIEW_ORIGIN, PRODUCTION_ORIGIN } from "@/app/mcp/oauth/origin";
 
 describe("revoke-mcp-grant.mjs stays in sync with app/mcp/oauth/documentTypes.ts", () => {
   it("mirrors the type name, id prefix and field list exactly, order included", () => {
@@ -33,6 +38,26 @@ describe("revoke-mcp-grant.mjs stays in sync with app/mcp/oauth/documentTypes.ts
   it("the three fields the patch builder sets are all declared grant fields", () => {
     for (const f of [GRANT_FIELD.revoked, GRANT_FIELD.revokedAt, GRANT_FIELD.revokedReason]) {
       expect(GRANT_FIELDS).toContain(f);
+    }
+  });
+});
+
+describe("the dry run's effective client mirrors grantDocument.ts (ADR-0083 rollback step 0)", () => {
+  it("uses the same cutoff and production origin", () => {
+    expect(SCRIPT_LEGACY_GRANT_CUTOFF).toBe(LEGACY_GRANT_CUTOFF);
+    expect(SCRIPT_PRODUCTION_ORIGIN).toBe(PRODUCTION_ORIGIN);
+  });
+
+  it("agrees with effectiveGrantClient on every case", () => {
+    const before = new Date(Date.parse(LEGACY_GRANT_CUTOFF) - 60_000).toISOString();
+    const after = new Date(Date.parse(LEGACY_GRANT_CUTOFF) + 60_000).toISOString();
+    for (const client of ["claude", "chatgpt", "loopback", null] as const) {
+      for (const origin of [PRODUCTION_ORIGIN, PREVIEW_ORIGIN]) {
+        for (const createdAt of [before, after, LEGACY_GRANT_CUTOFF, null, "not a date"]) {
+          const g = { client, origin, createdAt };
+          expect(scriptEffectiveGrantClient(g), JSON.stringify(g)).toBe(effectiveGrantClient(g));
+        }
+      }
     }
   });
 });

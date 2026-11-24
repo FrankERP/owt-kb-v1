@@ -56,6 +56,49 @@ describe("NavLinks", () => {
     expect(links).toEqual(["Calendario", "Biblioteca"]);
   });
 
+  // One ministry at a time (Frank, 2026-10-29: «no me gusta estar en lo de
+  // Worship y ver lo de Kids»).
+  it("in worship, a super-admin sees only worship's links behind an «Alabanza» switcher", () => {
+    session = { user: { ...adminUser, role: "super-admin" } };
+    mount();
+    const nav = screen.getByLabelText("Secciones");
+    expect(Array.from(nav.querySelectorAll("a")).map((n) => n.textContent?.trim())).toEqual(["Calendario", "Biblioteca", "Admin"]);
+    expect(screen.getByRole("button", { name: /Alabanza/ })).toBeTruthy();
+  });
+
+  it("in Kids, the same super-admin sees only Kids' links", () => {
+    pathname = "/kids/admin";
+    session = { user: { ...adminUser, role: "super-admin" } };
+    mount();
+    const nav = screen.getByLabelText("Secciones");
+    expect(Array.from(nav.querySelectorAll("a")).map((n) => n.textContent?.trim())).toEqual(["Kids", "Planear Kids"]);
+    expect(screen.getByRole("button", { name: /Oasis Kids/ })).toBeTruthy();
+  });
+
+  it("a member of ONE ministry gets no switcher", () => {
+    session = { user: adminUser };
+    mount();
+    expect(screen.queryByRole("button", { name: /Alabanza/ })).toBeNull();
+  });
+
+  it("in Jóvenes, the links are its two pages: Inicio and Calendario, one lit at a time", () => {
+    // 2026-11-17: `/jovenes` became Inicio and the whole horizon moved to `/jovenes/calendario`.
+    session = { user: { name: "Noe", email: "noe@x", role: "member", ministries: ["jovenes"] } };
+    pathname = "/jovenes";
+    const first = mount();
+    const row = () => Array.from(screen.getByLabelText("Secciones").querySelectorAll("a")).map((n) => [n.textContent?.trim(), n.getAttribute("href"), n.getAttribute("aria-current")]);
+    expect(row()).toEqual([["Inicio", "/jovenes", "page"], ["Calendario", "/jovenes/calendario", null]]);
+    first.unmount();
+    pathname = "/jovenes/calendario";
+    const second = mount();
+    expect(row()).toEqual([["Inicio", "/jovenes", null], ["Calendario", "/jovenes/calendario", "page"]]);
+    second.unmount();
+    // The planner belongs to neither: nothing is lit, as on worship's /admin for a non-link page.
+    pathname = "/jovenes/admin";
+    mount();
+    expect(row().map((r) => r[2])).toEqual([null, null]);
+  });
+
   it("renders nothing signed out", () => {
     session = null;
     mount();

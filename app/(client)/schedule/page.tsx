@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import Navbar from "@/app/components/Navbar";
 import CalendarView, { ActiveDay } from "@/app/components/CalendarView";
@@ -7,14 +8,33 @@ import { parseMonthParam, windowBounds, WINDOW_MONTHS } from "@/app/utils/schedu
 import { indexUniqueByKey, serviceDayKey } from "@/app/utils/serviceReadSelect";
 import { requireWorshipPage } from "@/app/utils/worshipPageGate";
 import { seatPhotos } from "@/app/utils/teamSections";
+import { SONG_COVER_GROQ } from "@/app/utils/songCover";
 import { myNameFromSession } from "@/app/utils/agenda";
+import { pastorMessageBodyOf } from "@/app/utils/serviceThread";
+import { getMemberAccess } from "@/app/utils/memberAccess";
+import { isMinistryMember } from "@/app/utils/ministryAccess";
+import { KIDS_SEATS } from "@/app/utils/kidsTypes";
+import {
+  CALENDAR_VIEW_COOKIE,
+  jovenesActiveDay,
+  kidsActiveDay,
+  parseCalendarView,
+  type ExtraCalendarMinistry,
+  type KidsCalendarRow,
+} from "@/app/utils/calendarMinistry";
+import { MinistryEventReadUnavailable, readMinistryEvents, type MinistryEventView } from "@/app/utils/ministryEventReads";
+import { rolloutAllows } from "@/app/utils/rollout";
+import { readSaturdaySets } from "@/app/utils/jovenesWorshipSet";
+import { meetingPageOpens } from "@/app/utils/jovenesPartView";
 
 export const metadata: Metadata = {
-  title: "Calendario — Oasis Worship Team",
-  description: "Próximos servicios y asignaciones del equipo de alabanza Oasis.",
+  title: "Calendario — Backstage",
+  description: "Próximos servicios, eventos y asignaciones de tus ministerios.",
 };
 
-export const revalidate = 60;
+// No `revalidate` export: the page reads the session (it was already dynamic, so the old
+// `revalidate = 60` was inert), and since PR D it reads Jóvenes meetings, one person's view
+// that must never be cached (ADR-0081 R6, `ministryEventCoverage.test.ts`).
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -30,7 +50,8 @@ const SETLIST_FRAGMENT = `songs[]{
   play_key,
   medley_tag,
   "title": song->title, "slug": song->slug, "_id": song->_id,
-  "author": song->author, "timeSig": song->timeSig, "bpm": song->bpm, "key": song->key
+  "author": song->author, "timeSig": song->timeSig, "bpm": song->bpm, "key": song->key,
+  "cover": ${SONG_COVER_GROQ}
 }, week, team_notes`;
 
 // `photo` per seat: the faces in the day sheet's team sections, the same
@@ -42,7 +63,18 @@ const ROLE_FIELDS = `_id, week,
   instruments[]{ instrument, "person": coalesce(person->alias, person->member_name), "photo": ${PERSON_PHOTO} },
   foh_team[]{ role, "person": coalesce(person->alias, person->member_name), "photo": ${PERSON_PHOTO} },
   BGVs[]->{ member_name, alias, "photo": ${PHOTO} },
-  Chorus[]->{ member_name, alias, "photo": ${PHOTO} }`;
+  Chorus[]->{ member_name, alias, "photo": ${PHOTO} },
+  "pastor_message": ${pastorMessageBodyOf("^._id")}`;
+
+// Oasis Kids Sundays, for a member of Kids too (`$withKids` false reads nothing, so a
+// worship-only reader never receives another ministry's days). Published only, and the
+// FILTER is `published == true` like every member-facing `kidsSchedule` read
+// (ADR-0022). Whether the reader is in a seat's pair is decided by member id here;
+// `coalesce` because an empty seat dereferences to null and `$me in null` is null.
+const KIDS_SEAT = (seat: string) => `"${seat}": ${seat}->{ name, "mine": coalesce($me in members[]._ref, false) }`;
+const KIDS_FRAGMENT = `"kids": *[_type == "kidsSchedule" && $withKids && published == true && date >= $weekStart && date <= $limit] | order(date asc) {
+    date, ${KIDS_SEATS.map(KIDS_SEAT).join(", ")}
+  }`;
 
 const SCHEDULE_QUERY = `{
   "sundays":     *[_type == "sunday_role"   && week >= $today && week <= $limit && published != false] | order(week asc)  { ${ROLE_FIELDS} },
@@ -51,13 +83,17 @@ const SCHEDULE_QUERY = `{
   "satSetlists": *[_type == "saturdarSongs" && week >= $today && week <= $limit] | order(week asc)  { ${SETLIST_FRAGMENT} },
   "specials":    *[_type == "special_role"  && date >= $weekStart && date <= $limit && published != false] | order(date asc, time asc) {
     _id, date, time, service_name, team_notes,
-    songs[]{ play_key, medley_tag, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "bpm": song->bpm, "key": song->key, "leads": leads[]->{ member_name, alias } },
+    songs[]{ play_key, medley_tag, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "bpm": song->bpm, "key": song->key, "cover": ${SONG_COVER_GROQ}, "leads": leads[]->{ member_name, alias } },
     ${ROLE_FIELDS}
   },
-  "viewer": *[_type == "teamMembers" && _id == $me][0]{ memberType }
+  "viewer": *[_type == "teamMembers" && _id == $me][0]{ memberType },
+  ${KIDS_FRAGMENT}
 }`;
 
-async function getScheduleData(viewMonth: string | null, today: string, me: string) {
+type ScheduleWindow = { fetchFrom: string; limit: string; weekStart: string };
+
+/** The page's date window, computed once so the worship read and the Jóvenes read share it. */
+function scheduleWindow(viewMonth: string | null, today: string): ScheduleWindow {
   let fetchFrom: string;
   let limit: string;
   let weekStart: string;
@@ -81,7 +117,10 @@ async function getScheduleData(viewMonth: string | null, today: string, me: stri
     const daysToMon = dow === 0 ? -6 : 1 - dow;
     weekStart = new Date(Date.UTC(y, m - 1, d + daysToMon)).toISOString().slice(0, 10);
   }
+  return { fetchFrom, limit, weekStart };
+}
 
+async function getScheduleData({ fetchFrom, limit, weekStart }: ScheduleWindow, me: string, withKids: boolean) {
   // Canonical (published-perspective) client: a `drafts.*` overlay is never a
   // live calendar entry. Application draft gating (`published != false`) stays in
   // the role filters above — it is a separate, member-visibility concern.
@@ -92,7 +131,8 @@ async function getScheduleData(viewMonth: string | null, today: string, me: stri
     satSetlists: Setlist[];
     specials: SpecialRole[];
     viewer: { memberType?: string[] } | null;
-  }>(SCHEDULE_QUERY, { today: fetchFrom, limit, weekStart, me });
+    kids: KidsCalendarRow[];
+  }>(SCHEDULE_QUERY, { today: fetchFrom, limit, weekStart, me, withKids });
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -110,7 +150,35 @@ export default async function SchedulePage({
   // strip's marker and the agenda's countdowns can never read a different
   // "now" than the data they describe.
   const today = localToday();
-  const { sundays, saturdays, sunSetlists, satSetlists, specials, viewer } = await getScheduleData(viewMonth, today, session.user.sanityId);
+  // The page is worship-gated, so a Kids member here is in both ministries: they get
+  // the Kids Sundays and the filter. The access read is the 30s-TTL entry the gate
+  // just filled.
+  const access = await getMemberAccess(session.user.sanityId);
+  const withKids = isMinistryMember(access, "kids");
+  // Jóvenes joins once its meetings' rollout reaches this person, on the same snapshot as the
+  // gate (ADR-0081). A Jóvenes-only pastor never gets here: the worship gate sends them to
+  // /jovenes, which is their calendar.
+  const withJovenes = rolloutAllows("jovenesEvents", access) && isMinistryMember(access, "jovenes");
+  const extras: ExtraCalendarMinistry[] = [...(withKids ? ["kids" as const] : []), ...(withJovenes ? ["jovenes" as const] : [])];
+  const ministryView = extras.length ? parseCalendarView((await cookies()).get(CALENDAR_VIEW_COOKIE)?.value, extras) : undefined;
+  const span = scheduleWindow(viewMonth, today);
+
+  // The ONE reader, in member mode: published meetings for the whole ministry or one of the
+  // reader's groups, over the same window as the specials (R1, R8). It runs beside the worship
+  // read, not after it: each is a round trip to Sanity in Europe.
+  const readJovenes = async (): Promise<{ events: MinistryEventView[]; unavailable: boolean }> => {
+    if (!withJovenes) return { events: [], unavailable: false };
+    try {
+      const events = await readMinistryEvents(access, { me: session.user.sanityId, ministry: "jovenes", from: span.weekStart, to: span.limit, mode: "member" });
+      return { events, unavailable: false };
+    } catch (e) {
+      // No read token: say so under the calendar, never show «no meetings» (R4).
+      if (!(e instanceof MinistryEventReadUnavailable)) throw e;
+      return { events: [], unavailable: true };
+    }
+  };
+  const [{ sundays, saturdays, sunSetlists, satSetlists, specials, viewer, kids }, { events: jovenes, unavailable: jovenesUnavailable }] =
+    await Promise.all([getScheduleData(span, session.user.sanityId, withKids), readJovenes()]);
 
   // Fail closed on an ambiguous weekend target. A duplicate canonical role or
   // setlist for the same week yields NO entry for that week rather than a
@@ -134,6 +202,7 @@ export default async function SchedulePage({
       serviceId: sun._id,
       leads: sun.Lead?.map((m) => m.alias || m.member_name) ?? [],
       setlist: sunSetlistMap.get(dateStr),
+      pastorMessage: sun.pastor_message,
       instruments: sun.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
       fohTeam: sun.foh_team?.map((s) => ({ label: s.role, person: s.person })),
       bgvs: sun.BGVs,
@@ -148,6 +217,7 @@ export default async function SchedulePage({
       serviceId: sat._id,
       leads: sat.Lead?.map((m) => m.alias || m.member_name) ?? [],
       setlist: satSetlistMap.get(dateStr),
+      pastorMessage: sat.pastor_message,
       instruments: sat.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
       fohTeam: sat.foh_team?.map((s) => ({ label: s.role, person: s.person })),
       bgvs: sat.BGVs,
@@ -171,6 +241,7 @@ export default async function SchedulePage({
       serviceId: sp._id,
       leads: sp.Lead?.map((m) => m.alias || m.member_name) ?? [],
       setlist,
+      pastorMessage: sp.pastor_message,
       instruments: sp.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
       fohTeam: sp.foh_team?.map((s) => ({ label: s.role, person: s.person })),
       bgvs: sp.BGVs,
@@ -178,10 +249,28 @@ export default async function SchedulePage({
     });
   });
 
+  // One Kids entry per Sunday: a duplicate date fails closed, like the weekend reads.
+  if (withKids) {
+    const kidsDays = indexUniqueByKey(
+      (Array.isArray(kids) ? kids : []).map(kidsActiveDay).filter((d): d is ActiveDay => d !== null),
+      (d) => d.date,
+    );
+    kidsDays.forEach((entry, dateStr) => push(dateStr, entry));
+  }
+
+  // Each meeting is its own entry (keyed by id), so two on one day both show.
+  // Alabanza's songs on a Saturday meeting (ADR-0089): the same published setlist, titles and keys.
+  const jovenesSets = await readSaturdaySets(jovenes.filter((e) => e.kind === "saturday").map((e) => e.date));
+  for (const e of jovenes) {
+    // This page browses past months; the meeting's page opens only so far back.
+    const entry = jovenesActiveDay(e, e.kind === "saturday" ? (jovenesSets.get(e.date) ?? null) : undefined, meetingPageOpens(e.date, today));
+    if (entry) push(entry.date, entry);
+  }
+
   return (
     <div>
       <Navbar title="Calendario" />
-      <div className="mx-auto max-w-4xl px-6 pt-10 pb-16">
+      <div className="mx-auto max-w-4xl px-6 pb-16 pt-6">
         {/* No page heading: `ScheduleHeader`'s month IS the route's heading (R2
             Task 4). `todayStr` is the same `today` the fetch above computed —
             in browse mode the fetch's own boundary is the WINDOW, not `today`,
@@ -195,7 +284,14 @@ export default async function SchedulePage({
           viewerTypes={viewer?.memberType ?? null}
           viewerName={myNameFromSession(session.user)}
           viewerIsAdmin={["super-admin", "admin"].includes(session.user.role)}
+          ministryView={ministryView}
+          ministryExtras={extras}
         />
+        {jovenesUnavailable && (
+          <p role="alert" className="mt-6 text-center font-body text-sm text-ink-muted">
+            No pudimos leer las reuniones de Jóvenes en este momento.
+          </p>
+        )}
       </div>
     </div>
   );

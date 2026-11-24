@@ -47,6 +47,7 @@ import type { AdminTabId } from "./proposalHandoff";
 import Button from "../ui/Button";
 import SlidingIndicator, { useActiveIntoView } from "../ui/SlidingIndicator";
 import { haptic } from "@/app/utils/haptics";
+import { SHEET_TITLE } from "@/app/utils/homeHero";
 
 /** The three states the integrity queue can be in. `unknown` never reads clean. */
 export type IntegrityTone = "clean" | "unknown" | "issues";
@@ -57,8 +58,11 @@ export interface AdminRailTab {
   icon: React.ReactNode;
 }
 
+// Sentence case, 15 px body — since phase 5 of the «millones» pass (2026-10-27)
+// the tabs read like the nav items they are, not like labels; the uppercase in
+// the Control Room is the section title above the rail (`SHEET_TITLE`).
 const ITEM =
-  "relative flex select-none items-center gap-3 rounded-lg px-4 min-h-[44px] font-label text-xs uppercase tracking-widest " +
+  "relative flex select-none items-center gap-3 rounded-lg px-4 min-h-[44px] font-body text-[15px] font-medium " +
   "transition-[color,background-color,transform] duration-fast ease-out-brand " +
   "active:translate-y-px active:scale-[0.985] " +
   "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base";
@@ -115,6 +119,11 @@ export default function AdminRail({
         data-collapsed={collapsed ? "" : undefined}
         className="brand-admin-rail sticky top-[calc(6rem+env(safe-area-inset-top)+var(--impersonation-offset))] hidden flex-col gap-1 self-start lg:flex"
       >
+        {/* The rail's title. `data-rail-label`: it leaves with the item labels when
+            the rail collapses to icons (brand.css hides every `[data-rail-label]`). */}
+        <p data-rail-label className={`${SHEET_TITLE} px-4 pb-3`}>
+          Control Room
+        </p>
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -307,14 +316,6 @@ const CHEVRONS_RIGHT = (
  * outlines the admin table's own icons use, at 20px.
  */
 export const ADMIN_TAB_ICON: Record<AdminTabId, React.ReactNode> = {
-  members: (
-    <svg {...ICON_PROPS}>
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-    </svg>
-  ),
   // The same calendar the Servicios toolbar's «Generar mes» leads with.
   services: <CalendarIcon size={20} strokeWidth={1.75} />,
   proposals: (

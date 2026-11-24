@@ -55,8 +55,9 @@ describe("ActivityPanel — a failed load", () => {
   });
 
   it("gives every member's status a text label, not only a coloured dot", async () => {
-    // The visible label is `hidden sm:inline`, so on a phone the dot was the
-    // only carrier — and a screen reader got nothing at any width.
+    // The dot and the WORD travel together at every width since the Admin pass
+    // (the Servicios pattern), so no `sr-only` stand-in is needed: the word is
+    // simply there.
     vi.stubGlobal("fetch", vi.fn(async () => ({
       ok: true,
       json: async () => [
@@ -65,8 +66,8 @@ describe("ActivityPanel — a failed load", () => {
     })));
     const { container } = render(<ActivityPanel />);
     await waitFor(() => expect(screen.getByText("Ana")).not.toBeNull());
-    // The summary tiles carry their own `sr-only` «Activos» (bloque 5), so look
-    // for the member row's label among them rather than at the first one.
-    expect(Array.from(container.querySelectorAll(".sr-only")).map((el) => el.textContent)).toContain("Sin actividad");
+    const row = container.querySelector("[data-activity-row]") as HTMLElement;
+    expect(row.textContent).toContain("Sin actividad");
+    expect(row.querySelector(".sr-only")).toBeNull();
   });
 });

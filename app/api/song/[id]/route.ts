@@ -3,6 +3,7 @@ import { requireMinistryMember } from "@/app/utils/authGuards";
 import { serverClient } from "@/sanity/lib/serverClient";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import { canonicalizePlayHistory, playHistoryTargetKey } from "@/app/utils/serviceReadSelect";
+import { POST_COVER_GROQ } from "@/app/utils/songCover";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   // Worship membership, not just an active session: the song catalog is a
@@ -18,6 +19,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       `*[_type == "post" && _id == $id][0] {
         _id, _createdAt, title, author, key, bpm, timeSig,
         "slug": slug.current,
+        "cover": ${POST_COVER_GROQ},
         body,
         chords[]{ key, content },
         "lyricsURL": lyrics.asset->url,

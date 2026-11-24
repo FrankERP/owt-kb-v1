@@ -61,6 +61,9 @@ export interface Post {
   lyricsVideoUrl?: string;
   tags: Array<Tag>;
   authors?: Array<Author>;
+  /** The song's album cover as a Sanity image URL (`POST_COVER_GROQ`), on the reads that show
+   *  it (`songCoverUrl`). Absent or null: a neutral tile. */
+  cover?: string | null;
   _id: string;
 }
 
@@ -96,6 +99,9 @@ export interface SetlistSong {
   medley_tag?: string;
   /** A worship night's leaders for this song (Lead members). */
   leads?: Array<{ member_name: string; alias?: string }> | null;
+  /** The song's album cover as a Sanity image URL (`SONG_COVER_GROQ`), on the reads whose
+   *  rows show it (`songCoverUrl`). Absent or null: the row draws its neutral tile. */
+  cover?: string | null;
 }
 
 export interface Setlist {
@@ -124,6 +130,8 @@ export interface SundayRole {
   foh_team: Array<{ role: string; person: string }>;
   BGVs: Array<TeamMember>;
   Chorus: Array<TeamMember>;
+  /** The service's «Mensaje del pastor» (`pastorMessageBodyOf`), on the reads that show it. */
+  pastor_message?: string | null;
 }
 
 export interface SpecialRole {
@@ -136,6 +144,8 @@ export interface SpecialRole {
   format?: string | null;
   songs?: Array<SetlistSong>;
   team_notes?: string;
+  /** The service's «Mensaje del pastor» (`pastorMessageBodyOf`), on the reads that show it. */
+  pastor_message?: string | null;
   Lead?: Array<TeamMember>;
   instruments?: Array<{ instrument: string; person: string }>;
   foh_team?: Array<{ role: string; person: string }>;
@@ -152,6 +162,8 @@ export interface SaturdayRole {
   foh_team: Array<{ role: string; person: string }>;
   BGVs: Array<TeamMember>;
   Chorus: Array<TeamMember>;
+  /** The service's «Mensaje del pastor» (`pastorMessageBodyOf`), on the reads that show it. */
+  pastor_message?: string | null;
 }
 
 export type ProposalStatus = "draft" | "pending" | "approved" | "changes_requested";

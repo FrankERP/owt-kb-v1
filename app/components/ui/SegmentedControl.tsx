@@ -21,6 +21,13 @@ export type SegmentedOption<V extends string> = {
   ariaLabel?: string;
   /** A count badge drawn at the option's corner (Propuestas → Pendientes). */
   badge?: number;
+  /**
+   * A dot at the pill's bottom edge («there is a rehearsal mix in this key»).
+   * Drawn by the control, not inside `label`: the label sits in a `relative`
+   * span the height of its text, so an absolute dot placed from inside it lands
+   * ON the glyph (2026-10-24).
+   */
+  mark?: boolean;
   /** aria-busy on that option while a write is in flight (ThemeControl). */
   busy?: boolean;
 };
@@ -40,9 +47,13 @@ export type SegmentedControlProps<V extends string> = {
   className?: string;
 };
 
+// Sentence case in the body face since 2026-10-27, with `Button` (its header
+// comment has the why); the sizes grew with the case to `Button`'s own steps
+// (11/13 px uppercase → xs 13 / sm 15, so a control beside a Button of the same
+// size matches it) and `leading-tight` keeps the option the height it was.
 const SIZE = {
-  sm: "px-3 py-1.5 text-[11px]",
-  md: "px-4 py-2 text-xs",
+  sm: "px-3 py-1.5 text-xs",
+  md: "px-4 py-2 text-sm",
 } as const;
 
 // `filled` is a joined bar, so its options cannot wrap the way `outline`'s
@@ -138,7 +149,7 @@ export default function SegmentedControl<V extends string>({
             tabIndex={tabStop ? 0 : -1}
             onClick={() => select(i)}
             onKeyDown={(e) => onKeyDown(e, i)}
-            className={`relative select-none font-label uppercase tracking-widest transition-colors duration-fast ease-out-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base ${SIZE[size]} ${OPTION[tone]} ${o.busy ? "opacity-60" : ""}`}
+            className={`relative select-none font-body font-semibold leading-tight transition-colors duration-fast ease-out-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base ${SIZE[size]} ${OPTION[tone]} ${o.busy ? "opacity-60" : ""}`}
           >
             {checked && (
               <m.span
@@ -151,6 +162,9 @@ export default function SegmentedControl<V extends string>({
               />
             )}
             <span className="relative">{o.label}</span>
+            {o.mark && (
+              <span aria-hidden className="absolute bottom-[3px] left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-accent" />
+            )}
             {o.busy && <span className="sr-only"> — guardando</span>}
             {typeof o.badge === "number" && o.badge > 0 && (
               <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-recency-fg text-[10px] font-bold text-scrim">

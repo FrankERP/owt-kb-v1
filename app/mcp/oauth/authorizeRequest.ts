@@ -16,10 +16,12 @@
 //
 // Rules, in this order:
 //   1. `client_id` present once and verifies for THIS origin (its `iss`), else error-page;
-//   2. `redirect_uri` present once, EXACTLY one of the client's registered URIs,
-//      AND on this origin's allowlist — re-checked here, never trusted from the
-//      client token alone (spec O1) — else error-page. A refused claude-host URI
-//      is logged, as registration does;
+//   2. `redirect_uri` present once, one of the client's registered URIs (a
+//      loopback one may differ in its port only, RFC 8252 §7.3 —
+//      `matchRegisteredRedirect`), AND on this origin's allowlist — re-checked
+//      here, never trusted from the client token alone (spec O1) — else
+//      error-page. A refused URI on a known agent host is logged, as
+//      registration does;
 //   3. no other authorize parameter repeated, else invalid_request (RFC 6749
 //      §3.1). `resource` is the exception: RFC 8707 §2 allows it more than
 //      once, and `resolveResource` requires every copy to equal ours;
@@ -35,7 +37,7 @@
 
 import { resolveResource } from "./origin";
 import { isSupportedChallengeMethod, isValidCodeChallenge } from "./pkce";
-import { isRedirectUriAllowed, shouldLogRefusedRedirect } from "./redirects";
+import { matchRegisteredRedirect, shouldLogRefusedRedirect } from "./redirects";
 import { verifyClientId } from "./tokens";
 
 /** The authorize parameters that may appear at most once (RFC 6749 §3.1). */
@@ -176,7 +178,7 @@ export function searchParamsFromRecord(record: Record<string, string | string[] 
 function logRefusedRedirect(uri: string): void {
   if (shouldLogRefusedRedirect(uri)) {
     // Never the client_id, never the state — just the refused URI.
-    console.warn("[mcp-oauth] refused redirect_uri from a claude host:", JSON.stringify(uri));
+    console.warn("[mcp-oauth] refused redirect_uri from a known agent host:", JSON.stringify(uri));
   }
 }
 
@@ -200,7 +202,7 @@ export async function validateAuthorizeRequest(
   const redirectUris = params.getAll("redirect_uri");
   if (redirectUris.length !== 1) return { kind: "error-page", reason: "invalid_redirect_uri" };
   const redirectUri = redirectUris[0]!;
-  if (!client.claims.redirectUris.includes(redirectUri) || !isRedirectUriAllowed(redirectUri, origin)) {
+  if (!matchRegisteredRedirect(redirectUri, client.claims.redirectUris, origin)) {
     logRefusedRedirect(redirectUri);
     return { kind: "error-page", reason: "invalid_redirect_uri" };
   }

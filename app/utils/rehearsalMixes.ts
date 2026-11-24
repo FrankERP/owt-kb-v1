@@ -35,8 +35,20 @@ export const SEAT_TO_FAMILY: Record<string, string> = {
 /** The fields grouping and labelling read — the queue route's slim mixes satisfy it too. */
 type MixShape = Pick<RehearsalMix, "kind" | "family" | "track" | "tone">;
 
+/**
+ * Ableton numbers its tracks and the manifest keeps the name verbatim
+ * («12-Keys 1», «7-Drums»). The number is the session's track order — it still
+ * sorts a group (`groupMixes` compares the raw `track`) — but it is noise on a
+ * row (Frank, 2026-10-24), so the label drops a leading number and its
+ * separator. The stored `track` is never rewritten.
+ */
+export function trackDisplayName(track: string): string {
+  const stripped = track.replace(/^\d{1,3}\s*[-–_.]?\s*/, "").trim();
+  return stripped.length > 0 ? stripped : track;
+}
+
 export function mixLabel(mix: Pick<RehearsalMix, "kind" | "track">): string {
-  return mix.kind === "full" ? FAMILY_LABEL.full : (mix.track ?? "Pista");
+  return mix.kind === "full" ? FAMILY_LABEL.full : mix.track ? trackDisplayName(mix.track) : "Pista";
 }
 
 const collator = new Intl.Collator("es", { numeric: true, sensitivity: "base" });
@@ -139,4 +151,30 @@ export function waveformBars(peaks: number[], bars: number): number[] {
 export function isActiveAt(active: { s: number; e: number }[] | undefined, seconds: number): boolean {
   if (!active) return false;
   return active.some(({ s, e }) => seconds >= s && seconds < e);
+}
+
+/** The seek controls' keyboard step: ←/→ move the playhead 5 % of the track. */
+export const SEEK_STEP = 5 / 100;
+
+/**
+ * Where a click on a seek control lands, as a fraction of the track — or null
+ * when it should not seek at all. A synthetic click from Enter/Space carries
+ * `detail` 0 (and clientX 0): seeking on it would jump to the start. The rect is
+ * the control's OWN box, so the control must carry no padding (`Waveform`,
+ * `SeekBar` — the row indents a wrapper instead).
+ */
+export function seekFractionAt(
+  clientX: number,
+  detail: number,
+  rect: { left: number; width: number },
+): number | null {
+  if (detail === 0 || rect.width <= 0) return null;
+  return Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+}
+
+/** ←/→ on a seek control: the new fraction, clamped, or null for any other key. */
+export function seekStep(progress: number, key: string): number | null {
+  if (key === "ArrowRight") return Math.min(1, +(progress + SEEK_STEP).toFixed(2));
+  if (key === "ArrowLeft") return Math.max(0, +(progress - SEEK_STEP).toFixed(2));
+  return null;
 }

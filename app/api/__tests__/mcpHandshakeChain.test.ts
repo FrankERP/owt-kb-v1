@@ -56,7 +56,7 @@ import { GRANT_CACHE_TTL_MS, __clearGrantCache } from "@/app/mcp/oauth/grantStor
 import { mcpRoutePreflight } from "@/app/mcp/oauth/guard";
 import { PREVIEW_ORIGIN } from "@/app/mcp/oauth/origin";
 import { verifyAccessToken } from "@/app/mcp/oauth/tokens";
-import { EXPECTED_TOOLS } from "@/scripts/mcp-dev-smoke.mjs";
+import { EXPECTED_TOOLS_NO_APPS } from "@/scripts/mcp-dev-smoke.mjs";
 
 const SECRET = "s".repeat(32);
 const MEMBER = "frank";
@@ -308,9 +308,11 @@ describe("the connector handshake, end to end on preview (discovery → ping →
     expect(negotiated).toBe(PROTOCOL);
 
     const list = await rpcResult(await mcp(tokens.access_token, "tools/list", undefined, negotiated));
-    // The dev smoke's own pinned registration (fourteen tools since P4), imported
-    // rather than re-typed, as `mcpRoute.test.ts` does.
-    expect((list.tools as { name: string }[]).map((t) => t.name)).toEqual(EXPECTED_TOOLS);
+    // The dev smoke's own pinned registration, imported rather than re-typed, as
+    // `mcpRoute.test.ts` does. A loopback grant of a super-admin: the full list
+    // WITHOUT the claude.ai-only app tools (ADR-0083).
+    expect((list.tools as { name: string }[]).map((t) => t.name)).toEqual(EXPECTED_TOOLS_NO_APPS);
+    expect(stored.find((d) => d._type === MCP_OAUTH_GRANT_TYPE)?.client).toBe("loopback");
 
     const ping = (token: string) => mcp(token, "tools/call", { name: "ping", arguments: {} }, negotiated);
     const first = await rpcResult(await ping(tokens.access_token));

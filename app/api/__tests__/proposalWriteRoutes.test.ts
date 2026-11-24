@@ -43,9 +43,17 @@ vi.mock("@/app/utils/proposalNotify", () => ({
 vi.mock("@/app/utils/revalidate", () => ({
   revalidateServiceViews: (...a: unknown[]) => revalidateServiceViewsMock(...a),
 }));
+// ADR-0087: the approval's post-commit copy into `serviceThread` has its own
+// suite (`serviceMessageEditRoutes.test.ts`); here only WHEN it is called, with
+// WHAT, and what the approval answers.
+const adoptMock = vi.fn();
+vi.mock("@/app/utils/serviceThreadCommit", () => ({
+  adoptProposalPastorMessage: (...a: unknown[]) => adoptMock(...a),
+}));
 
 import { POST } from "@/app/api/me/proposals/route";
 import { PATCH } from "@/app/api/admin/proposals/[id]/route";
+import { planProposalReview, reviewProposal } from "@/app/utils/proposalReviewCommit";
 import {
   approvalInputFingerprint,
   buildApprovalReceipt,
@@ -264,6 +272,12 @@ function canonicalRead(query: string, params: Record<string, unknown>): unknown 
       (p) => p.service_ref === params.roleId || (params.dates as string[]).includes(p.service_date as string),
     );
   }
+  if (query.includes("team_notes") && query.includes("_rev == $rev")) {
+    // The check's pinned `team_notes` read (`peekLiveTeamNotes`): projected HERE, because the loaders'
+    // shared projections do not carry the field and this fake would otherwise hand it out whole.
+    const doc = [...store.roles, ...store.setlists].find((d) => d._id === params.id && d._rev === params.rev);
+    return doc ? { notes: doc.team_notes ?? null } : null;
+  }
   if (query.includes("$setlistType") && query.includes("week == $week")) {
     return store.setlists.filter((s) => s._type === params.setlistType && s.week === params.week);
   }
@@ -437,6 +451,7 @@ function fingerprintOf(doc: Record<string, unknown>, setlistTargetKey = `feature
 
 beforeEach(() => {
   vi.clearAllMocks();
+  adoptMock.mockResolvedValue("none");
   transactions.length = 0;
   commitOutcomes.length = 0;
   store = emptyStore();
@@ -687,6 +702,38 @@ describe("POST /api/me/proposals — first create", () => {
         unset: [],
       },
     ]);
+  });
+});
+
+describe("POST /api/me/proposals — the lead's pastor's message (ADR-0087)", () => {
+  it("a create carries it when sent, and omits it when empty or absent", async () => {
+    store.roles.push(sundayRole());
+    store.locks.push(lock());
+    await POST(req(saveBody({ pastorMessage: "Efesios 2" })));
+    expect(creates(committedTransactions()[0])[0]).toMatchObject({ pastor_message: "Efesios 2" });
+
+    store = emptyStore();
+    transactions.length = 0;
+    store.roles.push(sundayRole());
+    store.locks.push(lock());
+    await POST(req(saveBody()));
+    expect(creates(committedTransactions()[0])[0]).not.toHaveProperty("pastor_message");
+  });
+
+  it("a save sets it when sent (\"\" clears) and leaves it alone when the key is absent", async () => {
+    const observed = { state: "single", id: PROPOSAL_ID, rev: "prop-rev-1" };
+    const run = async (over: Record<string, unknown>) => {
+      store = emptyStore();
+      transactions.length = 0;
+      store.roles.push(sundayRole());
+      store.locks.push(lock());
+      store.proposals.push(proposal({ status: "draft", pastor_message: "Guardado" }));
+      expect((await POST(req(saveBody({ observed, ...over })))).status).toBe(200);
+      return patches(committedTransactions()[0])[0].set;
+    };
+    expect(await run({ pastorMessage: "Nuevo" })).toMatchObject({ pastor_message: "Nuevo" });
+    expect(await run({ pastorMessage: "" })).toMatchObject({ pastor_message: "" });
+    expect(await run({})).not.toHaveProperty("pastor_message");
   });
 });
 
@@ -951,6 +998,31 @@ describe("PATCH /api/admin/proposals/[id] — approval", () => {
     expect(sendPushMock).toHaveBeenCalledWith(["mem-1"], "proposals", expect.anything());
   });
 
+  it("copies the REVIEWED proposal's pastor's message after the commit and answers the outcome (ADR-0087)", async () => {
+    seed({ pastor_message: "  Efesios 2  " });
+    adoptMock.mockImplementation(async () => {
+      // After the commit, never inside it.
+      expect(committedTransactions()).toHaveLength(1);
+      return "kept_existing";
+    });
+    const res = await patchAdmin(PROPOSAL_ID, { action: "approve", rev: "prop-rev-1" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ok: true, status: "approved", pastorMessage: "kept_existing" });
+    expect(adoptMock).toHaveBeenCalledTimes(1);
+    expect(adoptMock).toHaveBeenCalledWith("role-1", "  Efesios 2  ", "admin-1");
+    // The approval transaction itself never touches a service thread.
+    expect(JSON.stringify(committedTransactions()[0])).not.toContain("serviceThread");
+  });
+
+  it("a failed copy still answers 200: the approval stands", async () => {
+    seed({ pastor_message: "Efesios 2" });
+    adoptMock.mockResolvedValue("failed");
+    const res = await patchAdmin(PROPOSAL_ID, { action: "approve", rev: "prop-rev-1" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ status: "approved", pastorMessage: "failed" });
+    expect(committedTransactions()).toHaveLength(1);
+  });
+
   it("swallows a thrown review push without failing the committed approval (§7)", async () => {
     seed();
     sendPushMock.mockImplementation(() => {
@@ -1033,6 +1105,8 @@ describe("PATCH /api/admin/proposals/[id] — approval", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, status: "approved", idempotent: true });
     expect(transactions).toHaveLength(0);
+    // A replay never copies the pastor's message (ADR-0087).
+    expect(adoptMock).not.toHaveBeenCalled();
     expect(revalidateServiceViewsMock).not.toHaveBeenCalled();
     expect(sendPushMock).not.toHaveBeenCalled();
   });
@@ -1211,6 +1285,14 @@ describe("PATCH /api/admin/proposals/[id] — request_changes and reopen", () =>
     store.locks.push(lock());
     store.proposals.push(proposal(over));
   }
+
+  it("a transition never copies the pastor's message (ADR-0087)", async () => {
+    seed({ pastor_message: "Efesios 2" });
+    expect(
+      (await patchAdmin(PROPOSAL_ID, { action: "request_changes", rev: "prop-rev-1", adminNotes: "Cambia" })).status,
+    ).toBe(200);
+    expect(adoptMock).not.toHaveBeenCalled();
+  });
 
   it("records the transition fingerprint and heartbeats the token", async () => {
     seed();
@@ -1483,5 +1565,208 @@ describe("PATCH /api/admin/proposals/[id] — reconcile_target", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ idempotent: true });
     expect(transactions).toHaveLength(0);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// proposalReviewCommit — the route's writer outside the route (admin parity S1)
+// ════════════════════════════════════════════════════════════════════════════
+
+describe("proposalReviewCommit — the same writer the route calls, and its read-only peek", () => {
+  /** What a call committed, without the random keys and clock values the two runs cannot share. */
+  function committedShape() {
+    return committedTransactions().map((tx) =>
+      tx.ops.map((op) =>
+        op.kind === "patch"
+          ? { kind: op.kind, id: op.id, rev: op.rev, fields: Object.keys(op.set).sort(), appended: Object.keys(op.appended) }
+          : op.kind === "create"
+            ? { kind: op.kind, id: op.doc._id }
+            : op,
+      ),
+    );
+  }
+
+  function reset() {
+    transactions.length = 0;
+    commitOutcomes.length = 0;
+    store = emptyStore();
+  }
+
+  const scenarios: [string, () => void, Record<string, unknown>, string][] = [
+    [
+      "a weekend approval (create)",
+      () => {
+        store.roles.push(sundayRole());
+        store.locks.push(lock());
+        store.proposals.push(proposal());
+      },
+      { action: "approve", rev: "prop-rev-1" },
+      PROPOSAL_ID,
+    ],
+    [
+      "a special approval",
+      () => {
+        store.roles.push(specialRole());
+        store.proposals.push(
+          proposal({ _id: "setlistProposal.role-sp", service_type: "special", service_ref: "role-sp", service_date: "2026-08-20" }),
+        );
+      },
+      { action: "approve", rev: "prop-rev-1" },
+      "setlistProposal.role-sp",
+    ],
+    [
+      "a change request with a note",
+      () => {
+        store.roles.push(sundayRole());
+        store.locks.push(lock());
+        store.proposals.push(proposal());
+      },
+      { action: "request_changes", rev: "prop-rev-1", adminNotes: "Cambia la última" },
+      PROPOSAL_ID,
+    ],
+    [
+      "a stale revision",
+      () => {
+        store.roles.push(sundayRole());
+        store.locks.push(lock());
+        store.proposals.push(proposal());
+      },
+      { action: "approve", rev: "prop-rev-STALE" },
+      PROPOSAL_ID,
+    ],
+    [
+      "a reopen of a pending proposal (wrong source status)",
+      () => {
+        store.roles.push(sundayRole());
+        store.locks.push(lock());
+        store.proposals.push(proposal());
+      },
+      { action: "reopen", rev: "prop-rev-1" },
+      PROPOSAL_ID,
+    ],
+  ];
+
+  it.each(scenarios)("answers %s byte for byte as the route does, and commits the same operations", async (_label, seed, body, id) => {
+    seed();
+    const res = await patchAdmin(id, body);
+    const routeAnswer = { status: res.status, body: await res.json() };
+    const routeOps = committedShape();
+
+    reset();
+    seed();
+    const outcome = await reviewProposal(id, body, { reviewerId: "admin-1" });
+    expect({ status: outcome.status, body: JSON.parse(JSON.stringify(outcome.body)) }).toEqual(routeAnswer);
+    expect(committedShape()).toEqual(routeOps);
+  });
+
+  it("reports what an approval held, with no re-read: the songs written, the replaced list, the push audience", async () => {
+    store.roles.push(sundayRole());
+    store.locks.push(lock());
+    store.proposals.push(proposal());
+    const outcome = await reviewProposal(PROPOSAL_ID, { action: "approve", rev: "prop-rev-1" }, { reviewerId: "admin-1" });
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.effects).toMatchObject({
+      action: "approve",
+      status: "approved",
+      idempotent: false,
+      roleId: "role-1",
+      roleType: "sunday_role",
+      serviceDate: WEEK,
+      setlistId: `featuredSongs.${WEEK}`,
+      replacedSongs: [],
+      published: true,
+      pushRecipients: ["mem-1"],
+    });
+    expect(outcome.effects.songs).toHaveLength(2);
+  });
+
+  it("peek judges by the same rules but never writes, and reports the revision instead of asserting it", async () => {
+    store.roles.push(sundayRole());
+    store.locks.push(lock());
+    store.proposals.push(proposal());
+    const peek = await planProposalReview(PROPOSAL_ID, { action: "approve", rev: null, adminNotes: "" }, "peek");
+    expect(peek).toMatchObject({ ok: true, plan: { kind: "approve", docRev: "prop-rev-1", needsBootstrap: false, liveTeamNotes: "" } });
+    // The write with a stale rev is refused; the peek never asserted one.
+    const write = await planProposalReview(PROPOSAL_ID, { action: "approve", rev: "prop-rev-STALE", adminNotes: "" }, "write");
+    expect(write).toMatchObject({ ok: false, status: 409, body: { error: "stale_revision" } });
+    expect(transactions).toHaveLength(0);
+  });
+
+  it("peek reads the live team note pinned to the loaded revision, which the shared projections do not carry", async () => {
+    // A special role IS its setlist; a weekend has its own document. Neither loader projects
+    // `team_notes` (`ROLE_PROJECTION`, `SETLIST_PROJECTION`), so a value read off the loaded document
+    // is always "" in production: the check must ask for it by id and revision.
+    store.roles.push(specialRole({ team_notes: "Lean Salmo 23" }));
+    store.proposals.push(
+      proposal({ _id: "setlistProposal.role-sp", service_type: "special", service_ref: "role-sp", service_date: "2026-08-20", team_notes: "" }),
+    );
+    const special = await planProposalReview("setlistProposal.role-sp", { action: "approve", rev: null, adminNotes: "" }, "peek");
+    expect(special).toMatchObject({ ok: true, plan: { kind: "approve", teamNotes: "", liveTeamNotes: "Lean Salmo 23" } });
+    expect(operationalFetch).toHaveBeenCalledWith(expect.stringContaining("team_notes"), { id: "role-sp", rev: "role-rev-sp" });
+
+    reset();
+    store.roles.push(sundayRole());
+    store.locks.push(lock());
+    store.proposals.push(proposal({ team_notes: "" }));
+    store.setlists.push({ _id: "legacy-setlist", _rev: "set-rev-1", _type: "featuredSongs", week: WEEK, songs: [], team_notes: "Traigan agua" });
+    const weekend = await planProposalReview(PROPOSAL_ID, { action: "approve", rev: null, adminNotes: "" }, "peek");
+    expect(weekend).toMatchObject({ ok: true, plan: { kind: "approve", liveTeamNotes: "Traigan agua" } });
+    // The fake's setlist branch hands out whole documents, so the value alone would pass on a read off the
+    // loaded record: pin the query itself, on the revision the transaction asserts.
+    expect(operationalFetch).toHaveBeenCalledWith(expect.stringContaining("team_notes"), { id: "legacy-setlist", rev: "set-rev-1" });
+
+    // The write path adds no read: it overwrites the note whatever it holds.
+    operationalFetch.mockClear();
+    const write = await planProposalReview(PROPOSAL_ID, { action: "approve", rev: "prop-rev-1", adminNotes: "" }, "write");
+    expect(write).toMatchObject({ ok: true, plan: { kind: "approve", liveTeamNotes: null } });
+    expect(operationalFetch.mock.calls.some(([q]) => String(q).includes("team_notes") && String(q).includes("_rev == $rev"))).toBe(false);
+    expect(transactions).toHaveLength(0);
+  });
+
+  it("peek says it could not read the live team note when the setlist moved after the load", async () => {
+    store.roles.push(sundayRole());
+    store.locks.push(lock());
+    store.proposals.push(proposal({ team_notes: "" }));
+    store.setlists.push({ _id: "legacy-setlist", _rev: "set-rev-1", _type: "featuredSongs", week: WEEK, songs: [], team_notes: "x" });
+    const real = operationalFetch.getMockImplementation()!;
+    operationalFetch.mockImplementation(async (q: string, p: Record<string, unknown> = {}) =>
+      String(q).includes("team_notes") && String(q).includes("_rev == $rev") ? null : real(q, p),
+    );
+    const peek = await planProposalReview(PROPOSAL_ID, { action: "approve", rev: null, adminNotes: "" }, "peek");
+    expect(peek).toMatchObject({ ok: true, plan: { kind: "approve", liveTeamNotes: null } });
+  });
+
+  it("peek on a legacy weekend with no lock reports the bootstrap instead of committing it", async () => {
+    store.roles.push(sundayRole());
+    store.proposals.push(proposal());
+    const peek = await planProposalReview(PROPOSAL_ID, { action: "approve", rev: null, adminNotes: "" }, "peek");
+    expect(peek).toMatchObject({ ok: true, plan: { kind: "approve", needsBootstrap: true, lock: null } });
+    const transition = await planProposalReview(
+      PROPOSAL_ID,
+      { action: "request_changes", rev: null, adminNotes: "Cambia" },
+      "peek",
+    );
+    expect(transition).toMatchObject({ ok: true, plan: { kind: "transition", needsBootstrap: true } });
+    expect(transactions).toHaveLength(0);
+  });
+
+  it("peek predicts a replay exactly, the note included", async () => {
+    store.roles.push(sundayRole());
+    store.locks.push(lock());
+    store.proposals.push(proposal());
+    const done = await reviewProposal(
+      PROPOSAL_ID,
+      { action: "request_changes", rev: "prop-rev-1", adminNotes: "Cambia la última" },
+      { reviewerId: "admin-1" },
+    );
+    expect(done.ok).toBe(true);
+    const before = transactions.length;
+    const same = await planProposalReview(PROPOSAL_ID, { action: "request_changes", rev: null, adminNotes: "Cambia la última" }, "peek");
+    expect(same).toMatchObject({ ok: true, plan: { kind: "replay" } });
+    // Another note is a new request (changes_requested is a valid source), not a replay.
+    const other = await planProposalReview(PROPOSAL_ID, { action: "request_changes", rev: null, adminNotes: "Otra nota" }, "peek");
+    expect(other).toMatchObject({ ok: true, plan: { kind: "transition" } });
+    expect(transactions).toHaveLength(before);
   });
 });

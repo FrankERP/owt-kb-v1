@@ -34,6 +34,9 @@ import { validateAuthorizeRequest } from "@/app/mcp/oauth/authorizeRequest";
 
 import {
   ADMIN_READ_TOOL_NAMES,
+  ADMIN_TIER_TOOL_NAMES,
+  ADMIN_TIER_TOOL_NAMES_NO_APPS,
+  SUPER_ADMIN_ONLY_TOOL_NAMES,
   BYPASS_HEADER,
   buildAuthorizeUrl,
   CALLABLE_TOOLS,
@@ -76,7 +79,27 @@ import {
   MONTH_TOOL_NAMES,
   EDITOR_TOOL_NAMES,
   SERVICE_EDITOR_TOOL_NAMES,
+  SERVICE_DELETE_TOOL_NAMES,
+  SERVICE_MESSAGE_TOOL_NAMES,
+  KIDS_TOOL_NAMES,
+  KIDS_WRITE_NAMES,
+  PROPOSAL_REVIEW_TOOL_NAMES,
+  PROPOSAL_REVIEW_WRITE_NAMES,
+  SONG_TOOL_NAMES,
+  MEMBER_TOOL_NAMES,
+  MEMBER_WRITE_NAMES,
+  RULE_TOOL_NAMES,
+  RULE_WRITE_NAMES,
+  SONG_WRITE_NAMES,
   SOLVE_MONTH_ANNOTATIONS,
+  APP_ONLY_TOOL_NAMES,
+  BOUNDARY_PROBE_TOOL,
+  checkBoundaryProbe,
+  EXPECT_TIERS,
+  EXPECTED_TOOLS_NO_APPS,
+  expectedToolsForTier,
+  isBoundaryProbe,
+  READ_TIER_TOOL_NAMES,
 } from "../mcp-dev-smoke.mjs";
 
 const KEY = new TextEncoder().encode("a".repeat(MIN_SECRET_BYTES));
@@ -123,7 +146,14 @@ describe("resolveBase", () => {
 
 describe("parseArgs", () => {
   it("defaults: no base override, open/refresh on, await-revocation and reads off", () => {
-    expect(parseArgs([])).toEqual({ base: null, open: true, refresh: true, awaitRevocation: false, reads: false });
+    expect(parseArgs([])).toEqual({
+      base: null,
+      open: true,
+      refresh: true,
+      awaitRevocation: false,
+      reads: false,
+      expectTier: "full",
+    });
   });
 
   it("parses --base, --no-open, --no-refresh, --await-revocation, --reads together", () => {
@@ -135,7 +165,18 @@ describe("parseArgs", () => {
       refresh: false,
       awaitRevocation: true,
       reads: true,
+      expectTier: "full",
     });
+  });
+
+  it("parses --expect-tier full|admin (ADR-0083 addendum) and refuses anything else; read points to admin", () => {
+    expect(EXPECT_TIERS).toEqual(["full", "admin"]);
+    expect(parseArgs(["--expect-tier", "admin"]).expectTier).toBe("admin");
+    expect(parseArgs(["--expect-tier", "full", "--reads"]).expectTier).toBe("full");
+    expect(() => parseArgs(["--expect-tier", "read"])).toThrow(/--expect-tier read is now --expect-tier admin/);
+    for (const bad of [[], ["ADMIN"], ["adminRead"], ["--reads"]]) {
+      expect(() => parseArgs(["--expect-tier", ...bad]), JSON.stringify(bad)).toThrow(/--expect-tier/);
+    }
   });
 
   it("rejects --base with no value", () => {
@@ -407,10 +448,10 @@ describe("checkToolList", () => {
   /** A tools/list result exactly as the P3 route registers it. */
   const solve = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
   const annotationsOf = (name: string) =>
-    name === "solve_month" || name === "save_proposal_edits" || name === "revise_proposal" ? solve : WRITE_TOOL_NAMES.includes(name) || name === "apply_schedule" || ["save_service_edits", "copy_instruments", "create_service"].includes(name) ? destructive : readOnly;
+    name === "solve_month" || name === "save_proposal_edits" || name === "revise_proposal" ? solve : WRITE_TOOL_NAMES.includes(name) || name === "apply_schedule" || ["save_service_edits", "save_service_edits_app", "copy_instruments", "create_service", "delete_services", "delete_services_app", "send_service_message", "edit_service_message", "set_pastor_message", "set_team_message", "save_kids_sundays", "save_kids_pair", "set_kids_absences", "review_setlist_proposal", "save_song_edits", "create_song", "save_member_changes", "create_members", "set_member_access", "save_rule_edits"].includes(name) ? destructive : readOnly;
   const registered = () => EXPECTED_TOOLS.map((name) => ({ name, annotations: annotationsOf(name) }));
 
-  it("pins twenty-five tools: ping, the seven reads, the three admin reads, the four writes, the two month tools, the three proposal-editor tools, then the five saved-month editor tools, in registration order", () => {
+  it("pins fifty-four tools: ping, the seven reads, the three admin reads, the four writes, the two month tools, the three proposal-editor tools, the six saved-month editor tools, the three delete tools, the five conversation tools, the five Kids tools, the two proposal-decision tools, the four song tools, the seven people tools, then the two rule tools, in registration order", () => {
     expect(EXPECTED_TOOLS).toEqual([
       "ping",
       "get_service",
@@ -435,14 +476,55 @@ describe("checkToolList", () => {
       "check_service_edits",
       "check_service_edits_app",
       "save_service_edits",
+      "save_service_edits_app",
       "copy_instruments",
       "create_service",
+      "check_service_deletes",
+      "delete_services",
+      "delete_services_app",
+      "get_service_messages",
+      "send_service_message",
+      "edit_service_message",
+      "set_pastor_message",
+      "set_team_message",
+      "get_kids_month",
+      "generate_kids_month",
+      "save_kids_sundays",
+      "save_kids_pair",
+      "set_kids_absences",
+      "check_setlist_proposal_review",
+      "review_setlist_proposal",
+      "check_song_edits",
+      "save_song_edits",
+      "check_new_song",
+      "create_song",
+      "list_members",
+      "get_member",
+      "check_member_changes",
+      "save_member_changes",
+      "check_new_members",
+      "create_members",
+      "set_member_access",
+      "check_rule_edits",
+      "save_rule_edits",
     ]);
     expect(ADMIN_READ_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(8, 11));
     expect(WRITE_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(11, 15));
     expect(MONTH_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(15, 17));
     expect(EDITOR_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(17, 20));
-    expect(SERVICE_EDITOR_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(20, 25));
+    expect(SERVICE_EDITOR_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(20, 26));
+    expect(SERVICE_DELETE_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(26, 29));
+    expect(SERVICE_MESSAGE_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(29, 34));
+    expect(KIDS_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(34, 39));
+    expect(KIDS_WRITE_NAMES).toEqual(KIDS_TOOL_NAMES.slice(2));
+    expect(PROPOSAL_REVIEW_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(39, 41));
+    expect(PROPOSAL_REVIEW_WRITE_NAMES).toEqual(PROPOSAL_REVIEW_TOOL_NAMES.slice(1));
+    expect(SONG_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(41, 45));
+    expect(SONG_WRITE_NAMES).toEqual([SONG_TOOL_NAMES[1], SONG_TOOL_NAMES[3]]);
+    expect(MEMBER_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(45, 52));
+    expect(MEMBER_WRITE_NAMES).toEqual([MEMBER_TOOL_NAMES[3], MEMBER_TOOL_NAMES[5], MEMBER_TOOL_NAMES[6]]);
+    expect(RULE_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(52, 54));
+    expect(RULE_WRITE_NAMES).toEqual([RULE_TOOL_NAMES[1]]);
   });
 
   it("per-tool annotations: every read read-only, every write destructive (I14), solve_month and the two editor saves writing only their record", () => {
@@ -454,7 +536,7 @@ describe("checkToolList", () => {
     }
   });
 
-  it("accepts the exact twenty-five names, in order, each with its own annotations", () => {
+  it("accepts the exact fifty-four names, in order, each with its own annotations", () => {
     expect(checkToolList(registered())).toEqual({ ok: true });
   });
 
@@ -529,12 +611,19 @@ describe("toolCallRequest — DV1: the dev smoke never calls a write tool", () =
   const SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../mcp-dev-smoke.mjs");
   const code = stripComments(readFileSync(SCRIPT, "utf8"));
 
-  it("refuses each of the four write tools, the two month tools and the three editor tools by name, in any argument shape", () => {
+  it("refuses each of the four write tools, the two month tools, the editor tools, the delete tools, the conversation tools, the Kids tools, the proposal-decision tools, the song tools, the people tools and the rule tools by name, in any argument shape", () => {
     expect(WRITE_TOOL_NAMES).toHaveLength(4);
     expect(MONTH_TOOL_NAMES).toHaveLength(2);
     expect(EDITOR_TOOL_NAMES).toHaveLength(3);
-    expect(SERVICE_EDITOR_TOOL_NAMES).toHaveLength(5);
-    for (const name of [...WRITE_TOOL_NAMES, ...MONTH_TOOL_NAMES, ...EDITOR_TOOL_NAMES, ...SERVICE_EDITOR_TOOL_NAMES]) {
+    expect(SERVICE_EDITOR_TOOL_NAMES).toHaveLength(6);
+    expect(SERVICE_DELETE_TOOL_NAMES).toHaveLength(3);
+    expect(SERVICE_MESSAGE_TOOL_NAMES).toHaveLength(5);
+    expect(KIDS_TOOL_NAMES).toHaveLength(5);
+    expect(PROPOSAL_REVIEW_TOOL_NAMES).toHaveLength(2);
+    expect(SONG_TOOL_NAMES).toHaveLength(4);
+    expect(MEMBER_TOOL_NAMES).toHaveLength(7);
+    expect(RULE_TOOL_NAMES).toHaveLength(2);
+    for (const name of [...WRITE_TOOL_NAMES, ...MONTH_TOOL_NAMES, ...EDITOR_TOOL_NAMES, ...SERVICE_EDITOR_TOOL_NAMES, ...SERVICE_DELETE_TOOL_NAMES, ...SERVICE_MESSAGE_TOOL_NAMES, ...KIDS_TOOL_NAMES, ...PROPOSAL_REVIEW_TOOL_NAMES, ...SONG_TOOL_NAMES, ...MEMBER_TOOL_NAMES, ...RULE_TOOL_NAMES]) {
       expect(() => toolCallRequest(name, {}), name).toThrow(/DV1/);
       expect(() => toolCallRequest(name, { serviceId: "role-1", rev: "rev-1" }, 9), name).toThrow(/DV1/);
     }
@@ -559,13 +648,13 @@ describe("toolCallRequest — DV1: the dev smoke never calls a write tool", () =
   });
 
   it("classifies every registered tool: callable or a write (month and editor tools included), never both, nothing left over", () => {
-    const writes = [...WRITE_TOOL_NAMES, ...MONTH_TOOL_NAMES, ...EDITOR_TOOL_NAMES, ...SERVICE_EDITOR_TOOL_NAMES];
+    const writes = [...WRITE_TOOL_NAMES, ...MONTH_TOOL_NAMES, ...EDITOR_TOOL_NAMES, ...SERVICE_EDITOR_TOOL_NAMES, ...SERVICE_DELETE_TOOL_NAMES, ...SERVICE_MESSAGE_TOOL_NAMES, ...KIDS_TOOL_NAMES, ...PROPOSAL_REVIEW_TOOL_NAMES, ...SONG_TOOL_NAMES, ...MEMBER_TOOL_NAMES, ...RULE_TOOL_NAMES];
     expect(CALLABLE_TOOLS.filter((name) => writes.includes(name))).toEqual([]);
     expect([...CALLABLE_TOOLS, ...writes].sort()).toEqual([...EXPECTED_TOOLS].sort());
   });
 
   it("the --reads pass has no arguments for a write tool or a month tool either", () => {
-    for (const name of [...WRITE_TOOL_NAMES, ...MONTH_TOOL_NAMES, ...EDITOR_TOOL_NAMES, ...SERVICE_EDITOR_TOOL_NAMES]) expect(() => readCheckArguments(name, {}), name).toThrow();
+    for (const name of [...WRITE_TOOL_NAMES, ...MONTH_TOOL_NAMES, ...EDITOR_TOOL_NAMES, ...SERVICE_EDITOR_TOOL_NAMES, ...SERVICE_DELETE_TOOL_NAMES, ...SERVICE_MESSAGE_TOOL_NAMES, ...KIDS_TOOL_NAMES, ...PROPOSAL_REVIEW_TOOL_NAMES, ...SONG_TOOL_NAMES, ...MEMBER_TOOL_NAMES, ...RULE_TOOL_NAMES]) expect(() => readCheckArguments(name, {}), name).toThrow();
   });
 
   it("is the ONLY place the script builds a tools/call: one \"tools/call\" quoted literal, shared via TOOLS_CALL_METHOD", () => {
@@ -583,10 +672,14 @@ describe("toolCallRequest — DV1: the dev smoke never calls a write tool", () =
     expect([...code.matchAll(/toolCallRequest\(/g)].length).toBeGreaterThanOrEqual(4);
   });
 
-  it("names each write tool exactly once in code — in WRITE_TOOL_NAMES — so nothing else can reach one", () => {
+  it("names each write tool exactly once in code — in WRITE_TOOL_NAMES — so nothing else can reach one (the boundary probe's constant is the one named exception)", () => {
     for (const name of WRITE_TOOL_NAMES) {
       expect([...code.matchAll(new RegExp(`["'\`]${name}["'\`]`, "g"))], name).toHaveLength(1);
     }
+    // The probe is a people write: named in MEMBER_TOOL_NAMES, MEMBER_WRITE_NAMES and the probe's own constant.
+    expect(BOUNDARY_PROBE_TOOL).toBe("set_member_access");
+    expect(code).toMatch(/export const BOUNDARY_PROBE_TOOL = "set_member_access";/);
+    expect([...code.matchAll(/["'`]set_member_access["'`]/g)]).toHaveLength(3);
     expect(code).toMatch(/export const WRITE_TOOL_NAMES = \["unpublish_service", "publish_service", "swap_assignment", "edit_setlist"\];/);
   });
 
@@ -594,6 +687,140 @@ describe("toolCallRequest — DV1: the dev smoke never calls a write tool", () =
     const planted = `${code}\nconst x = rpc("tools/call", { name: "edit_setlist", arguments: {} });\n`;
     expect([...planted.matchAll(/["'`]tools\/call["'`]/g)]).toHaveLength(2);
     expect([...planted.matchAll(/["'`]edit_setlist["'`]/g)]).toHaveLength(2);
+  });
+});
+
+describe("the admin-tier boundary probe (ADR-0083 addendum) — the ONE exception to DV1", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("isBoundaryProbe: only set_member_access, only {} or { toolsVersion: string }, only under --expect-tier admin", () => {
+    expect(isBoundaryProbe("set_member_access", {}, "admin")).toBe(true);
+    expect(isBoundaryProbe("set_member_access", { toolsVersion: "abc" }, "admin")).toBe(true);
+    // Any other tier.
+    expect(isBoundaryProbe("set_member_access", {}, "full")).toBe(false);
+    expect(isBoundaryProbe("set_member_access", {}, undefined)).toBe(false);
+    // Any other argument shape: a field set_member_access's schema knows, a stray one, a non-string version, a non-object.
+    for (const args of [
+      { memberId: "m-1" },
+      { enabled: false },
+      { toolsVersion: "abc", memberId: "m-1" },
+      { toolsVersion: 1 },
+      { extra: true },
+      [],
+      null,
+      undefined,
+      "{}",
+      Object.create({ memberId: "m-1" }),
+    ]) {
+      expect(isBoundaryProbe("set_member_access", args, "admin"), JSON.stringify(args)).toBe(false);
+    }
+    // Any other write, or any other name.
+    for (const name of [...WRITE_TOOL_NAMES, ...SERVICE_MESSAGE_TOOL_NAMES, ...MEMBER_TOOL_NAMES, "SET_MEMBER_ACCESS", "probe"]) {
+      if (name === "set_member_access") continue;
+      expect(isBoundaryProbe(name, {}, "admin"), name).toBe(false);
+    }
+  });
+
+  it("toolCallRequest builds the probe only under the admin tier, and refuses every other write there too", () => {
+    expect(toolCallRequest("set_member_access", {}, 4, { expectTier: "admin" })).toEqual({
+      jsonrpc: "2.0",
+      id: 4,
+      method: "tools/call",
+      params: { name: "set_member_access", arguments: {} },
+    });
+    expect(() => toolCallRequest("set_member_access", {})).toThrow(/DV1/);
+    expect(() => toolCallRequest("set_member_access", {}, 1, { expectTier: "full" })).toThrow(/DV1/);
+    expect(() => toolCallRequest("set_member_access", { memberId: "m-1", enabled: false }, 1, { expectTier: "admin" })).toThrow(/DV1/);
+    for (const name of [...WRITE_TOOL_NAMES, ...MEMBER_TOOL_NAMES].filter((n: string) => n !== "set_member_access")) {
+      expect(() => toolCallRequest(name, {}, 1, { expectTier: "admin" }), name).toThrow(/DV1/);
+    }
+  });
+
+  it("createMcpRequest sends the probe only when bound to the admin tier, and refuses any other argument shape before fetch", async () => {
+    const fetchMock = vi.fn(async () => ({ status: 200, headers: new Headers(), text: async () => "{}" }));
+    vi.stubGlobal("fetch", fetchMock);
+    const probe = rpc(TOOLS_CALL_METHOD, { name: "set_member_access", arguments: {} });
+    const loaded = rpc(TOOLS_CALL_METHOD, { name: "set_member_access", arguments: { memberId: "m-1", enabled: false } });
+
+    await expect(createMcpRequest({ origin: "https://example.test", bypass: {} })("t", probe)).rejects.toThrow(/DV1/);
+    await expect(
+      createMcpRequest({ origin: "https://example.test", bypass: {}, expectTier: "full" })("t", probe),
+    ).rejects.toThrow(/DV1/);
+    const adminSend = createMcpRequest({ origin: "https://example.test", bypass: {}, expectTier: "admin" });
+    await expect(adminSend("t", loaded)).rejects.toThrow(/DV1/);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await adminSend("t", probe);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("checkBoundaryProbe passes ONLY the SDK's unknown-tool error — a validation error on a registered tool fails", () => {
+    expect(checkBoundaryProbe({ jsonrpc: "2.0", id: 1, error: { code: -32602, message: "Tool set_member_access not found" } }).ok).toBe(true);
+    // What a REGISTERED set_member_access answers to {}: the boundary is broken, even though nothing was written.
+    expect(
+      checkBoundaryProbe({
+        jsonrpc: "2.0",
+        id: 1,
+        result: { isError: true, content: [{ type: "text", text: "Input validation error: Invalid arguments for tool set_member_access" }] },
+      }).ok,
+    ).toBe(false);
+    expect(checkBoundaryProbe({ jsonrpc: "2.0", id: 1, error: { code: -32602, message: "Input validation error" } }).ok).toBe(false);
+    expect(checkBoundaryProbe({ jsonrpc: "2.0", id: 1, result: { content: [] } }).ok).toBe(false);
+    expect(checkBoundaryProbe(null).ok).toBe(false);
+  });
+});
+
+describe("expectedToolsForTier (ADR-0083)", () => {
+  it("full = EXPECTED_TOOLS without the five claude.ai-only app tools (the smoke's grant is a loopback one)", () => {
+    expect(APP_ONLY_TOOL_NAMES).toEqual([
+      "check_proposal_edits",
+      "save_proposal_edits",
+      "check_service_edits_app",
+      "save_service_edits_app",
+      "delete_services_app",
+    ]);
+    for (const name of APP_ONLY_TOOL_NAMES) expect(EXPECTED_TOOLS).toContain(name);
+    expect(expectedToolsForTier("full")).toEqual(EXPECTED_TOOLS_NO_APPS);
+    expect(EXPECTED_TOOLS_NO_APPS).toEqual(EXPECTED_TOOLS.filter((n: string) => !APP_ONLY_TOOL_NAMES.includes(n)));
+    expect(EXPECTED_TOOLS_NO_APPS).toHaveLength(EXPECTED_TOOLS.length - APP_ONLY_TOOL_NAMES.length);
+  });
+
+  it("admin = EXPECTED_TOOLS without Kids, people, the rule tools and the app-only tools; none of those of any kind", () => {
+    expect(expectedToolsForTier("admin")).toEqual(ADMIN_TIER_TOOL_NAMES_NO_APPS);
+    expect(SUPER_ADMIN_ONLY_TOOL_NAMES).toEqual([...KIDS_TOOL_NAMES, ...MEMBER_TOOL_NAMES, ...RULE_TOOL_NAMES]);
+    expect(ADMIN_TIER_TOOL_NAMES).toEqual(EXPECTED_TOOLS.filter((n: string) => !SUPER_ADMIN_ONLY_TOOL_NAMES.includes(n)));
+    expect(ADMIN_TIER_TOOL_NAMES_NO_APPS).toEqual(ADMIN_TIER_TOOL_NAMES.filter((n: string) => !APP_ONLY_TOOL_NAMES.includes(n)));
+    expect(ADMIN_TIER_TOOL_NAMES).toHaveLength(EXPECTED_TOOLS.length - SUPER_ADMIN_ONLY_TOOL_NAMES.length);
+    for (const name of SUPER_ADMIN_ONLY_TOOL_NAMES) expect(ADMIN_TIER_TOOL_NAMES, name).not.toContain(name);
+    expect(ADMIN_TIER_TOOL_NAMES).not.toContain(BOUNDARY_PROBE_TOOL);
+  });
+
+  it("the read list (adminRead) = ping and the ten reads, no write of any kind, in EXPECTED_TOOLS' own order", () => {
+    expect(READ_TIER_TOOL_NAMES).toEqual([
+      "ping",
+      "get_service",
+      "list_services",
+      "search_songs",
+      "get_song",
+      "get_member_availability",
+      "get_participation",
+      "list_proposals",
+      ...ADMIN_READ_TOOL_NAMES,
+    ]);
+    expect([...READ_TIER_TOOL_NAMES].sort()).toEqual(["ping", ...READ_TOOL_NAMES, ...ADMIN_READ_TOOL_NAMES].sort());
+    expect(READ_TIER_TOOL_NAMES).toEqual(EXPECTED_TOOLS.filter((n: string) => READ_TIER_TOOL_NAMES.includes(n)));
+    for (const name of READ_TIER_TOOL_NAMES) expect(expectedAnnotations(name), name).toEqual(READ_ONLY_ANNOTATIONS);
+    expect(() => expectedToolsForTier("read")).toThrow();
+  });
+
+  it("checkToolList checks against the list it is given", () => {
+    const listed = (names: string[]) => names.map((name) => ({ name, annotations: expectedAnnotations(name) }));
+    expect(checkToolList(listed(READ_TIER_TOOL_NAMES), READ_TIER_TOOL_NAMES).ok).toBe(true);
+    expect(checkToolList(listed([...READ_TIER_TOOL_NAMES, "edit_setlist"]), READ_TIER_TOOL_NAMES).ok).toBe(false);
+    expect(checkToolList(listed(EXPECTED_TOOLS_NO_APPS), EXPECTED_TOOLS_NO_APPS).ok).toBe(true);
+    expect(checkToolList(listed(EXPECTED_TOOLS), EXPECTED_TOOLS_NO_APPS).ok).toBe(false);
+    // The default is still the claude.ai list.
+    expect(checkToolList(listed(EXPECTED_TOOLS)).ok).toBe(true);
   });
 });
 

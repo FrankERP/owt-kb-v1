@@ -10,6 +10,7 @@ import { WORSHIP_AUDIENCE_GROQ_FILTER, WORSHIP_MEMBER_GROQ_FILTER } from "@/app/
 import { COUNTS_FOR_FAIRNESS_GROQ } from "@/app/utils/countsForFairness";
 import { SOLVER_CONFIG_DOC_ID } from "@/app/utils/solverConfigWriteRequest";
 import { THREAD_MESSAGES } from "@/app/utils/proposalMessageRead";
+import { PASTOR_MESSAGE } from "@/app/utils/serviceThread";
 
 export interface BoundQuery {
   query: string;
@@ -54,12 +55,12 @@ export const PROPOSAL_PROJECTION = `{
   ${SONGS_FRAGMENT},
   contributors[]{ _key, "person": person._ref },
   "lead": lead._ref,
-  lead_notes, team_notes, admin_notes,
+  lead_notes, team_notes, admin_notes, pastor_message,
   messages[]{ _key, _type, "author": author._ref, author_role, kind, body, at },
   approval_receipt, last_transition
 }`;
 
-export const CANONICAL_MEMBER_PROJECTION = `{ _id, _rev, member_name, alias, unavailableDates, unavailabilityNotes }`;
+export const CANONICAL_MEMBER_PROJECTION = `{ _id, _rev, member_name, alias, unavailableDates, unavailabilityNotes, singsAndPlays }`;
 
 const DRAFTS_ONLY = `_id in path("drafts.**")`;
 
@@ -610,14 +611,22 @@ export function serviceConversationQuery(roleId: string, threadId: string): Boun
   return {
     query: `{
       "service": *[_type in ["sunday_role", "saturday_role", "special_role"] && _id == $roleId][0]{
-        _id, _type, service_name,
+        _id, _rev, _type, service_name, time, team_notes,
         "service_date": coalesce(week, date),
         "published": coalesce(published, true),
+        "hasSongs": defined(songs),
         "leads": Lead[defined(@->)]{ "id": @->_id, "name": coalesce(@->alias, @->member_name) }
       },
       "messages": *[_type == "serviceThread" && _id == $threadId][0].${THREAD_MESSAGES},
+      "pastor_message": *[_type == "serviceThread" && _id == $threadId][0].${PASTOR_MESSAGE},
+      "weekendSetlists": *[
+        _type in ["featuredSongs", "saturdarSongs"] &&
+        week == *[_type in ["sunday_role", "saturday_role"] && _id == $roleId][0].week
+      ]{ _id, _rev, _type, team_notes },
       "proposal": *[_type == "setlistProposal" && service_ref._ref == $roleId] | order(_createdAt asc)[0]{
         _id, status,
+        // ADR-0087: the lead's copy, for the dialog's «Usar como mensaje del pastor».
+        pastor_message,
         ${THREAD_MESSAGES}
       }
     }`,
@@ -628,13 +637,23 @@ export function serviceConversationQuery(roleId: string, threadId: string): Boun
 /**
  * The member list the admin panels read. Worship admins see worship members only;
  * a super-admin (`all: true`) sees everyone, because they are the only role that
- * can edit `ministries` at all. The caller binds `all`.
+ * can edit `ministries` at all. The caller binds `all` from the LIVE caller: the
+ * members GET from the session's role, the MCP from the live tier
+ * (`readsAllMembers`, through `loadV3PlanSources({ allMembers })` and
+ * `get_solver_rules`). Nothing under `app/**` passes a literal `true`
+ * (`memberReadScope.test.ts`); the availability sweep's `{ allMembers: true }` is
+ * the one pinned caller.
+ *
+ * `ministryRoles` (a Jóvenes level and groups, ADR-0075) rides only the
+ * super-admin arm: the Miembros form is its one editor, and a worship admin's
+ * list has no reason to carry another ministry's levels.
  */
 export function adminMembersQuery(all: boolean): BoundQuery {
   return {
     query: `*[_type == "teamMembers" && ${WORSHIP_MEMBER_GROQ_FILTER}] | order(member_name asc) {
-      _id, member_name, alias, email, role, memberType, instruments, notifPrefs, ministries, managesMinistries,
+      _id, member_name, alias, email, role, memberType, instruments, singsAndPlays, notifPrefs, ministries, managesMinistries,
       disabled,
+      $all => { ministryRoles },
       unavailableDates, unavailabilityNotes,
       "hasPassword": defined(passwordHash) && passwordHash != "",
       "photoUrl": coalesce(profilePhoto.asset->url, googlePhotoUrl)

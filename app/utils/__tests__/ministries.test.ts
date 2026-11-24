@@ -1,11 +1,33 @@
 import { describe, it, expect } from "vitest";
-import { MINISTRIES, ALL_MINISTRY_IDS, isMinistryId, normalizeMinistries, validateMinistryWrite } from "@/app/ministries";
+import {
+  MINISTRIES,
+  ALL_MINISTRY_IDS,
+  ASSIGNABLE_MINISTRY_IDS,
+  isMinistryId,
+  normalizeMinistries,
+  validateMinistryWrite,
+} from "@/app/ministries";
 
 describe("ministry registry", () => {
-  it("registers worship and kids with Spanish display names", () => {
-    expect(MINISTRIES.worship).toEqual({ id: "worship", name: "Alabanza" });
-    expect(MINISTRIES.kids).toEqual({ id: "kids", name: "Oasis Kids" });
-    expect(ALL_MINISTRY_IDS).toEqual(["worship", "kids"]);
+  it("registers worship, kids and jovenes with Spanish display names", () => {
+    expect(MINISTRIES.worship).toEqual({ id: "worship", name: "Alabanza", groups: [] });
+    expect(MINISTRIES.kids).toEqual({ id: "kids", name: "Oasis Kids", groups: [] });
+    expect(MINISTRIES.jovenes.name).toBe("Jóvenes");
+    expect(MINISTRIES.jovenes.groups.map((g) => g.id)).toEqual(["otro-nivel", "invencibles", "emprendedores", "adrenalin", "guerreras"]);
+    expect(ALL_MINISTRY_IDS).toEqual(["worship", "kids", "jovenes"]);
+  });
+  it("jovenes is assignable — its read side reached production first (ADR-0075)", () => {
+    // Code older than the jovenes entry reads a stored ["jovenes"] as WORSHIP, and
+    // preview writes the production dataset — so jovenes became assignable only
+    // after the release that reads it (PR #212) was in production.
+    expect(ASSIGNABLE_MINISTRY_IDS).toEqual(["worship", "kids", "jovenes"]);
+    expect(validateMinistryWrite("ministries", ["jovenes"])).toBeNull();
+    expect(validateMinistryWrite("ministries", ["worship", "jovenes"])).toBeNull();
+    expect(normalizeMinistries(["jovenes"])).toEqual(["jovenes"]);
+  });
+  it("refuses a repeated id in either field", () => {
+    expect(validateMinistryWrite("ministries", ["kids", "kids"])).toBe("Ministerio repetido.");
+    expect(validateMinistryWrite("managesMinistries", ["kids", "kids"])).toBe("Ministerio repetido.");
   });
   it("narrows ids", () => {
     expect(isMinistryId("kids")).toBe(true);

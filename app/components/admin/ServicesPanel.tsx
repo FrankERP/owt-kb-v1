@@ -21,6 +21,7 @@ import ServicesOverview from "./ServicesOverview";
 const MonthGenerator = dynamic(() => import("./MonthGenerator"), { ssr: false, loading: PanelSkeleton });
 import type { ClearMonthSummary } from "./clearMonthModel";
 import { mutationErrorMessage, mutationSignal } from "./serviceMutationErrors";
+import { seatClashSentencesOf } from "@/app/utils/seatClashGuard";
 import { useSolverConfig } from "./useSolverConfig";
 import {
   SERVICE_SOURCE_KEYS,
@@ -96,7 +97,9 @@ import Button from "../ui/Button";
 import Menu, { MenuItem } from "../ui/Menu";
 import Skeleton, { SkeletonGroup } from "../ui/Skeleton";
 import { revealProps } from "@/app/utils/reveal";
-import { upcomingMonthPills } from "./monthPills";
+import { plural } from "@/app/utils/plural";
+import { formatMonthTab, upcomingMonthPills } from "./monthPills";
+import { PAGE_LEDE, PAGE_TITLE } from "@/app/utils/homeHero";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 //
@@ -140,14 +143,16 @@ const CHART_FOLD = "space-y-2 lg:space-y-0";
 async function describeMutationError(res: Response, fallback: string): Promise<string> {
   let code: string | undefined;
   let dependencyCount: number | undefined;
+  let seatClashSentences: string[] = [];
   try {
     const body = await res.json();
     code = typeof body?.error === "string" ? body.error : undefined;
     dependencyCount = Array.isArray(body?.details?.dependencies) ? body.details.dependencies.length : undefined;
+    seatClashSentences = seatClashSentencesOf(body);
   } catch {
     code = undefined;
   }
-  return mutationErrorMessage({ code, status: res.status, dependencyCount, fallback });
+  return mutationErrorMessage({ code, status: res.status, dependencyCount, seatClashSentences, fallback });
 }
 
 // ─── Modal wrapper ────────────────────────────────────────────────────────────
@@ -906,11 +911,14 @@ export default function ServicesPanel({
 
   const monthLabel =
     selectedMonths.size === 0 ? "Próximos"
-    : selectedMonths.size === 1 ? fmtYM([...selectedMonths][0])
+    : selectedMonths.size === 1 ? formatMonthTab([...selectedMonths][0], currentYM)
     : `${selectedMonths.size} meses`;
 
   const counters = commandSummaryCounters({ all: cards, visible: visibleCards });
-  const summaryLine = commandSummarySegments(counters).join(" · ");
+  /** What the toolbar's publish button submits: the visible cards whose date has not gone. */
+  const toolbarPublishCards = useMemo(() => visibleCards.filter((c) => !c.isPast), [visibleCards]);
+  const toolbarPlan = useMemo(() => buildPublishConfirmation(toolbarPublishCards), [toolbarPublishCards]);
+  const summarySegments = commandSummarySegments(counters);
   /** The toolbar's «Editar mes»: the one selected month, else the current one. */
   const openMonthEditor1 = (opener: "toolbar" | "menu" = "toolbar") =>
     openMonthEditor(selectedMonths.size === 1 ? [...selectedMonths][0] : currentYM, undefined, false, { kind: opener });
@@ -997,14 +1005,45 @@ export default function ServicesPanel({
   // The one reason the toolbar shows, in the buttons' own order. A `title` on a
   // `disabled` house Button is unreachable (`disabled:pointer-events-none`), so
   // the closed gate has to say why in the layout rather than on hover.
+  //
+  // The toolbar's publish button opens the plan whenever EITHER of its two
+  // commits could publish something: «Publicar N» (ready drafts) or «Publicar
+  // todos (M)» (drafts blocked only by a missing setlist or an active proposal).
+  // Between 2026-10-22 and 10-27 it rendered only while a draft was READY, which
+  // cut off «Publicar todos» exactly in the month-start state it exists for —
+  // teams assigned, no setlist yet — and Frank reported the feature as gone.
+  // With nothing ready the button is NAMED after the commit it will offer, and
+  // when neither could publish it stays, disabled, with its reason LAST in the
+  // reason order: a closed «Generar mes» is the sentence an admin needs first.
+  //
+  // The button's state and label are read from the PLAN it opens
+  // (`buildPublishConfirmation`, the modal's one selection), never from a
+  // second predicate that could disagree with it; and that plan is built over
+  // the UPCOMING visible cards only — a past month's drafts are never announced
+  // in bulk (the card's own actions remain for a past draft).
+  const readyCount = toolbarPlan.selected.length;
+  const overrideOnlyCount = readyCount === 0 ? toolbarPlan.overrideAll.length : 0;
+  const canOpenPublishPlan = readyCount > 0 || overrideOnlyCount > 0;
+  const publishButtonLabel = overrideOnlyCount > 0 ? `Publicar todos (${overrideOnlyCount})` : `Publicar listos (${readyCount})`;
+  const blockedUpcomingDrafts = toolbarPublishCards.filter(
+    (c) => c.readiness.publishState === "draft" && !c.readiness.isReadyToPublish,
+  ).length;
+  // The line only when there ARE drafts and none can go: an all-published board
+  // has nothing to explain beyond the disabled «(0)».
+  const nothingToPublish: CardGate | null =
+    canOpenPublishPlan || blockedUpcomingDrafts === 0
+      ? null
+      : {
+          enabled: false,
+          reason: `Publicar: ningún borrador se puede publicar todavía — ${plural(blockedUpcomingDrafts, "necesita", "necesitan")} revisión (sin equipo, conflicto o datos).`,
+        };
   const toolbarGateReason =
     [
-      // The same condition that renders «Publicar listos»: a reason for a
-      // button that is not on the toolbar would pre-empt the reason of one that is.
-      counters.readyToPublish > 0 ? publishGate : null,
+      canOpenPublishPlan ? publishGate : null,
       generateGate,
       editTeamGate,
       copyMode ? null : createGate,
+      nothingToPublish,
     ].find((g): g is NonNullable<typeof g> => !!g && !g.enabled && !!g.reason)?.reason ?? null;
   const changeDateGate    = gate("changeServiceDate");
   const participationGate = gate("participationSidebar");
@@ -1041,11 +1080,7 @@ export default function ServicesPanel({
   if (monthEditor) {
     return (
       <div className="space-y-5">
-        <div className="flex items-center justify-between">
-          <h1 className="font-display text-2xl uppercase tracking-wide">
-            {monthEditor.scope === "service" ? "Editar servicio" : "Editar mes"}
-          </h1>
-        </div>
+        {/* The title («Editar servicio» / «Editar mes») is the editor's own page head now (ADR-0070, phase 7). */}
         <PanelBoundary>
           <MonthGenerator
             key={`stored:${monthEditor.month}:${monthEditor.focusRoleId ?? "month"}`}
@@ -1102,9 +1137,6 @@ export default function ServicesPanel({
   if (showGenerator) {
     return (
       <div className="space-y-5">
-        <div className="flex items-center justify-between">
-          <h1 className="font-display text-2xl uppercase tracking-wide">Generar mes</h1>
-        </div>
         <PanelBoundary>
           <MonthGenerator
             engine={engine}
@@ -1153,11 +1185,17 @@ export default function ServicesPanel({
       {/* Command summary — replaces the plain count header */}
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="font-display text-2xl uppercase tracking-wide">Servicios</h1>
+          {/* The tab IS the page title (phase 5 of the «millones» pass): the display
+              face at 46/76 px, and under it the counts as a 17 px lede with the
+              first one — what is coming — in ink. */}
+          <h1 className={PAGE_TITLE}>Servicios</h1>
           {view !== "loading" && (
             <>
-              <p className={`mt-0.5 font-label text-xs uppercase tracking-widest text-mono-500 ${CARD_STYLE.longText}`}>
-                {summaryLine}
+              <p className={`mt-2 ${PAGE_LEDE} ${CARD_STYLE.longText}`}>
+                <span className="text-ink">{summarySegments[0]}</span>
+                {summarySegments.slice(1).map((segment) => (
+                  <span key={segment}> · {segment}</span>
+                ))}
               </p>
               {/*
                 The global integrity state is NOT written here. `IntegrityQueuePanel`
@@ -1188,20 +1226,20 @@ export default function ServicesPanel({
             which is the accepted trade for one toolbar rather than two.
           */}
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            {/* Only when there is something to publish: «Publicar listos (0)» was a
-                button whose press opened an empty plan. Every ready draft still
-                has the card's own rule-13 «Publicar». */}
-            {counters.readyToPublish > 0 && (
-              <Button
-                variant="secondary"
-                size="lg"
-                disabled={!publishGate.enabled}
-                onClick={() => openPublishPlan(visibleCards)}
-                className="hidden sm:inline-flex"
-              >
-                Publicar listos ({counters.readyToPublish})
-              </Button>
-            )}
+            {/* Always on the toolbar (see `canOpenPublishPlan` above): «Publicar
+                listos (N)» with ready drafts, «Publicar todos (M)» when only the
+                bulk override has something to publish, disabled with its reason
+                when neither does. Every ready draft still has the card's own
+                rule-13 «Publicar». */}
+            <Button
+              variant="secondary"
+              size="lg"
+              disabled={!publishGate.enabled || !canOpenPublishPlan}
+              onClick={() => openPublishPlan(toolbarPublishCards)}
+              className="hidden sm:inline-flex"
+            >
+              {publishButtonLabel}
+            </Button>
             <Button
               ref={generatorTriggerRef}
               variant="secondary"
@@ -1243,11 +1281,9 @@ export default function ServicesPanel({
                 </Button>
               }
             >
-              {counters.readyToPublish > 0 && (
-                <MenuItem disabled={!publishGate.enabled} onSelect={() => openPublishPlan(visibleCards)}>
-                  Publicar listos ({counters.readyToPublish})
-                </MenuItem>
-              )}
+              <MenuItem disabled={!publishGate.enabled || !canOpenPublishPlan} onSelect={() => openPublishPlan(toolbarPublishCards)}>
+                {publishButtonLabel}
+              </MenuItem>
               <MenuItem disabled={!generateGate.enabled} onSelect={() => openGenerator("menu")}>
                 Generar mes
               </MenuItem>
@@ -1308,23 +1344,22 @@ export default function ServicesPanel({
         // Not `space-y-2`: a closed Collapse is still a child, so the gap would
         // be reserved. The Collapse's own content carries it (`mt-2`).
         <div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-label text-[11px] uppercase tracking-widest text-mono-600 shrink-0">Mes:</span>
-            <MonthPill label="Próximos" selected={selectedMonths.size === 0} onClick={() => setSelectedMonths(new Set())} />
+          <div className="flex flex-wrap items-end gap-x-5 border-b border-ink/[0.10]">
+            <MonthTab label="Próximos" selected={selectedMonths.size === 0} onClick={() => setSelectedMonths(new Set())} />
             {futureMonths.map(ym => (
-              <MonthPill key={ym} label={fmtYM(ym)} selected={selectedMonths.has(ym)} onClick={() => toggleMonth(ym)} />
+              <MonthTab key={ym} label={formatMonthTab(ym, currentYM)} selected={selectedMonths.has(ym)} onClick={() => toggleMonth(ym)} />
             ))}
             {pastMonths.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
+              <button
+                type="button"
                 onClick={() => setShowPastMonths(v => !v)}
                 aria-expanded={showPastMonths}
                 aria-controls="services-past-months"
+                className={`${MONTH_TAB} border-transparent text-ink-muted hover:text-ink`}
               >
                 Roles previos
-                <span className={`transition-transform duration-base ${showPastMonths ? "rotate-180" : ""}`}>▾</span>
-              </Button>
+                <span aria-hidden="true" className={`transition-transform duration-base ${showPastMonths ? "rotate-180" : ""}`}>▾</span>
+              </button>
             )}
             {/*
               The filter decides what full screen shows — «Próximos», one month,
@@ -1333,9 +1368,9 @@ export default function ServicesPanel({
               reaches `ServicesOverview`.
             */}
             <Button
-              variant="secondary"
+              variant="ghost"
               size="sm"
-              className="ml-auto hidden sm:inline-flex"
+              className="ml-auto mb-2 hidden sm:inline-flex"
               data-services-overview-opener=""
               onClick={() => setOverviewOpen(true)}
               // Not disabled by an EMPTY filter: a reload that empties it while
@@ -1347,9 +1382,9 @@ export default function ServicesPanel({
             </Button>
           </div>
           {pastMonths.length > 0 && (
-            <Collapse id="services-past-months" open={showPastMonths} className="mt-2 flex items-center gap-2 flex-wrap pl-12">
+            <Collapse id="services-past-months" open={showPastMonths} className="mt-1 flex flex-wrap items-end gap-x-5">
               {pastMonths.map(ym => (
-                <MonthPill key={ym} label={fmtYM(ym)} selected={selectedMonths.has(ym)} onClick={() => toggleMonth(ym)} past />
+                <MonthTab key={ym} label={formatMonthTab(ym, currentYM)} selected={selectedMonths.has(ym)} onClick={() => toggleMonth(ym)} past />
               ))}
             </Collapse>
           )}
@@ -1840,7 +1875,7 @@ function PublicationFooter({
         type="button"
         onClick={onClose}
         disabled={loading}
-        className="min-h-[44px] flex-1 rounded-lg border border-surface-accent-30 px-3 font-label text-xs uppercase tracking-widest transition-colors hover:border-accent dark:hover:border-surface-accent-30 disabled:opacity-50"
+        className="min-h-[44px] flex-1 rounded-lg border border-surface-accent-30 px-3 font-body font-semibold leading-tight text-sm transition-colors hover:border-accent dark:hover:border-surface-accent-30 disabled:opacity-50"
       >
         Cancelar
       </button>
@@ -1849,7 +1884,7 @@ function PublicationFooter({
           type="button"
           onClick={onVerify}
           disabled={loading}
-          className="min-h-[44px] flex-1 rounded-lg border border-warning-fg/50 bg-warning-fg/10 px-3 font-label text-xs uppercase tracking-widest text-warning-faint transition-colors hover:bg-warning-fg/20 disabled:opacity-50"
+          className="min-h-[44px] flex-1 rounded-lg border border-warning-fg/50 bg-warning-fg/10 px-3 font-body font-semibold leading-tight text-sm text-warning-faint transition-colors hover:bg-warning-fg/20 disabled:opacity-50"
         >
           {loading ? "Verificando..." : "Verificar resultado"}
         </button>
@@ -1858,7 +1893,7 @@ function PublicationFooter({
           type="button"
           onClick={onConfirm}
           disabled={loading || disabled}
-          className={`min-h-[44px] flex-1 rounded-lg px-3 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50 ${
+          className={`min-h-[44px] flex-1 rounded-lg px-3 font-body font-semibold leading-tight text-sm transition-colors disabled:opacity-50 ${
             danger
               ? "bg-availability-deep/70 hover:bg-availability-deep"
               : "bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30"
@@ -1872,7 +1907,7 @@ function PublicationFooter({
           type="button"
           onClick={secondary.onClick}
           disabled={loading || secondary.disabled}
-          className="min-h-[44px] flex-1 rounded-lg border border-warning-fg/50 bg-warning-fg/10 px-3 font-label text-xs uppercase tracking-widest text-warning-faint transition-colors hover:bg-warning-fg/20 disabled:opacity-50"
+          className="min-h-[44px] flex-1 rounded-lg border border-warning-fg/50 bg-warning-fg/10 px-3 font-body font-semibold leading-tight text-sm text-warning-faint transition-colors hover:bg-warning-fg/20 disabled:opacity-50"
         >
           {loading ? "Guardando..." : secondary.label}
         </button>
@@ -1883,31 +1918,41 @@ function PublicationFooter({
 
 // ─── Tiny helpers ─────────────────────────────────────────────────────────────
 
-function fmtYM(ym: string) {
-  return new Date(ym + "-01T12:00:00").toLocaleDateString("es-MX", { month: "short", year: "2-digit" });
-}
+/**
+ * One month tab's shared box: a 44 px text tab with a 2 px underline that sits ON
+ * the strip's hairline (`-mb-px`), 15 px sentence case like the Control Room's
+ * own tabs. A RAW `<button>` for the same reason `AdminRail`'s items are (the
+ * documented exception): these filter the board rather than act, each carries
+ * `aria-pressed` and a selected look that reads as a chosen section, and the house
+ * `Button` is a padded, centred pill or box by construction — a text tab with an
+ * underline and no padding is not one of its variants, and `className` may not
+ * take padding or radius away (its header). It carries the same face.
+ */
+const MONTH_TAB =
+  "-mb-px inline-flex min-h-[44px] select-none items-center gap-1 border-b-2 px-0.5 font-body text-[15px] " +
+  "transition-[color,border-color] duration-fast ease-out-brand " +
+  "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base";
 
 /**
- * One month filter. The selection is MULTI-select: `aria-pressed` per pill (the
- * `pill` variant styles the pressed state), never a one-of-N `SegmentedControl`.
- * `past` only dims an unpressed pill, and it dims it with OPACITY rather than a
- * second `border-…`/`text-…`: `Button` documents `className` as additive
- * utilities only, and a colour override beside the variant's own left the winner
- * to Tailwind's emission order — the pill variant's `border-surface-accent-30`
- * outranked `border-accent/10` and the "past" treatment was invisible. Opacity
- * touches nothing the variant sets, so it always lands.
+ * One month filter (phase 5 of the «millones» pass: text tabs, no pills). The
+ * selection is MULTI-select — `aria-pressed` per tab, never a one-of-N
+ * `SegmentedControl`. A selected tab is ink with an ink underline; `past` only
+ * dims an unselected one.
  */
-function MonthPill({ label, selected, onClick, past }: { label: string; selected: boolean; onClick: () => void; past?: boolean }) {
+function MonthTab({ label, selected, onClick, past }: { label: string; selected: boolean; onClick: () => void; past?: boolean }) {
   return (
-    <Button
-      variant="pill"
-      size="sm"
-      active={selected}
+    <button
+      type="button"
+      aria-pressed={selected}
       onClick={onClick}
-      className={!selected && past ? "opacity-60" : ""}
+      className={`${MONTH_TAB} ${
+        selected
+          ? "border-ink font-semibold text-ink"
+          : `border-transparent hover:text-ink ${past ? "text-ink-dim" : "text-ink-muted"}`
+      }`}
     >
       {label}
-    </Button>
+    </button>
   );
 }
 

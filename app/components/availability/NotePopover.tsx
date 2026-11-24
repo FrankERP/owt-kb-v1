@@ -25,6 +25,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import Button from "@/app/components/ui/Button";
+import { HAIRLINE_INPUT_CLASS } from "@/app/components/ui/hairlineField";
 import { fmtDayLabel, rangeLabel } from "./dragSelect";
 
 // `fmtDayLabel` lives in `dragSelect.ts` — that module needs it for `rangeLabel`
@@ -33,8 +35,8 @@ import { fmtDayLabel, rangeLabel } from "./dragSelect";
 // import from `dragSelect.ts` directly.
 
 /** Height the popover is laid out against; it has no measured height until it exists. */
-const POPOVER_H = 160;
-const POPOVER_W = 272;
+const POPOVER_H = 176;
+const POPOVER_W = 300;
 
 /** The open popover: which date, and where it sits in viewport coordinates. */
 export interface NoteAnchor {
@@ -168,56 +170,53 @@ export default function NotePopover({
   // popover (no `isos`, or a one-day range) keeps the original behaviour.
   const days = popover.isos?.length ? popover.isos : [popover.iso];
   const isRange = days.length > 1;
-  const title = isRange ? rangeLabel(days[0], days[days.length - 1]) : fmtDayLabel(popover.iso);
+  const rawTitle = isRange ? rangeLabel(days[0], days[days.length - 1]) : fmtDayLabel(popover.iso);
+  // `toLocaleDateString` gives a lowercase weekday; a sentence starts upper.
+  const title = rawTitle.charAt(0).toUpperCase() + rawTitle.slice(1);
 
+  // A small anchored sheet (the «millones» pass, 2026-10-26): the date as a
+  // 17 px sentence, the reason as a hairline field, «Quitar» and «Listo» on one
+  // row — the tracked uppercase title, the boxed input and the full-width
+  // outlined remove button it replaced were three kinds of chrome for one note.
   return createPortal(
     <>
       {/* Backdrop — click outside to close */}
       <div className="fixed inset-0 z-40" onClick={close} />
       <div
-        className="fixed z-50 w-64 rounded-xl border border-accent/20 bg-surface-base shadow-2xl shadow-elevation/60 p-4 space-y-3"
+        role="dialog"
+        aria-label={title}
+        className="fixed z-50 w-[300px] max-w-[calc(100vw-16px)] space-y-3 rounded-2xl border border-ink/[0.18] bg-surface-raised p-4 shadow-2xl shadow-elevation/60"
         style={{ top: popover.y, left: popover.x }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Date label + close */}
-        <div className="flex items-start justify-between gap-2">
-          <p className="font-label text-[11px] uppercase tracking-widest text-availability-strong leading-tight capitalize">
-            {title}
-          </p>
-          <button
-            type="button"
-            onClick={close}
-            aria-label="Cerrar"
-            className="text-mono-400 hover:text-mono-300 transition-colors shrink-0 -mt-0.5"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
+        <p className="font-body text-[17px] font-semibold leading-snug text-ink">
+          {title}
+        </p>
 
-        {/* Note input */}
+        {/* Note input: a hairline field, 17 px (never under 16 on a phone —
+            `inputFontSize.test.ts`). */}
         <input
           ref={inputRef}
           type="text"
-          placeholder="Razón (opcional)..."
+          aria-label="Razón"
+          placeholder="Razón (opcional)…"
           value={notes.get(days[0]) ?? ""}
           onChange={e => days.forEach(d => setNote(d, e.target.value))}
           onKeyDown={e => { if (e.key === "Enter") close(); }}
-          className="w-full rounded-lg border border-surface-accent-l50-d15 bg-surface-lift/5 px-3 py-2 font-body text-[16px] sm:text-sm text-mono-200 placeholder:text-placeholder focus:outline-none focus:border-accent/40 dark:focus:border-surface-accent-l50-d15"
+          className={HAIRLINE_INPUT_CLASS}
         />
 
-        {/* Remove date(s) */}
-        <button
-          type="button"
-          onClick={() => { days.forEach(d => remove(d)); close(); }}
-          className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-negative-strong/20 font-label text-[11px] uppercase tracking-widest text-negative-fg/80 hover:border-negative-strong/40 hover:text-negative-fg transition-colors"
-        >
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-          {isRange ? "Quitar estas fechas" : "Quitar esta fecha"}
-        </button>
+        <div className="flex items-center justify-between gap-2 pt-1">
+          <Button variant="danger" size="sm" onClick={() => { days.forEach(d => remove(d)); close(); }}>
+            {isRange ? "Quitar estas fechas" : "Quitar esta fecha"}
+          </Button>
+          {/* «Cerrar», not «Listo»: the mode button above already reads «Listo»
+              while the sheet is open, and two «Listo» on one screen would be
+              two different exits with one name. */}
+          <Button variant="secondary" size="sm" onClick={close}>
+            Cerrar
+          </Button>
+        </div>
       </div>
     </>,
     body,

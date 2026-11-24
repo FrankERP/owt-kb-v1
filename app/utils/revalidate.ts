@@ -12,11 +12,25 @@ export function revalidateServiceViews() {
 }
 
 // Kids pair / schedule / availability changes → the member view, the planner,
-// and `/me` (which carries the member's own upcoming kids assignments).
+// `/me` (which carries the member's own upcoming kids assignments) and the
+// Calendario (which shows Kids Sundays to a member of both ministries).
 export function revalidateKidsViews() {
   revalidatePath("/kids");
   revalidatePath("/kids/admin");
   revalidatePath("/me");
+  revalidatePath("/schedule");
+}
+
+// A ministry's meetings changed (ADR-0081 W7) → its pages and the Calendario. Those pages read
+// the session and are dynamic today; the call keeps a later static page from going stale silently.
+// Only Jóvenes has meetings; another leveled ministry's pages follow the same `/<id>` shape.
+export function revalidateMinistryViews(ministry: string) {
+  revalidatePath(`/${ministry}`);
+  revalidatePath(`/${ministry}/admin`);
+  // Jóvenes' second member page (2026-11-17). Named even where a ministry has none: a path
+  // nobody renders costs nothing to invalidate.
+  revalidatePath(`/${ministry}/calendario`);
+  revalidatePath("/schedule");
 }
 
 // Song content changes → home song list, song pages, the library index.

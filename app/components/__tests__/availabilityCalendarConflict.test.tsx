@@ -34,8 +34,8 @@ installMotionTestEnv();
 // Warm the LazyMotion feature chunk (ADR-0031), precedent Menu.test.tsx.
 beforeAll(async () => { await import("../ui/motionFeatures"); });
 
-// A marked cell carries an availability fill — `/30` normally, `/50` while its
-// note popover is open (clicking a date opens it).
+// A marked cell carries an availability fill — `/15` normally, `/40` while its
+// note popover is open (marking a date opens it); the prefix is the contract.
 const MARKED = "bg-availability-fg/";
 
 function reply(status: number, body: unknown) {

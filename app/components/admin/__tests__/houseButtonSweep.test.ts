@@ -4,11 +4,13 @@
 // behaviour, same labels; the existing tests cover them). What is still a bare
 // <button> is deliberate, and this ratchet keeps the count from growing back:
 //
-// MonthGenerator (26): the rules builder — its forms' footers are coloured per
-//   rule type (restricción / conflicto / presencia), its pattern pills, «+ Semana»
-//   / «+ Tope», the ✎ / × of a saved rule, «Quitar del pool», the history ×,
-//   «Recargar reglas» / «Guardar reglas» / «Reintentar» (accent-outlined, with
-//   the save's four-way title) — a later block, one rule panel at a time.
+// MonthGenerator (19 since phase 7 of the Admin pass, 2026-10-29; 26 before): the
+//   rules builder — its forms' footers are coloured per rule type (restricción /
+//   conflicto / presencia), its pattern pills, «+ Semana» / «+ Tope», the ✎ / × of
+//   a saved rule (44 px targets now, still bare: `title="Editar"` and the «×»
+//   glyph are what the suites and the admin's eye know them by), the history ×,
+//   «Reintentar». Phase 7 paid down «Recargar reglas» / «Guardar reglas» (house
+//   secondary), the pools' Todos / Ninguno and the unavailable-list fold.
 // PlannerGrid (8): the warning-toned confirmations («Mover / Copiar / Asignar de
 //   todos modos», the stranded «Quitar») — the house Button has no warning tone;
 //   a cell's invisible activation overlay; the candidate rows' «Marcar para
@@ -23,9 +25,17 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const BASELINE: Record<string, number> = {
-  "MonthGenerator.tsx": 26,
+  "MonthGenerator.tsx": 19,
   "PlannerGrid.tsx": 8,
   "MonthCalendar.tsx": 1,
+  // The Admin pass (2026-10-27): `MonthTab` and «Roles previos» (text tabs under
+  // the page title: an underline and no padding, which no `Button` variant is,
+  // and `className` may not strip the base's padding or radius — the same
+  // face though, now that the base is sentence case) plus the four the panel
+  // already had, and `ServiceReviewFlag` (an amber blocker that must never
+  // hover to the cyan «go»).
+  "ServicesPanel.tsx": 6,
+  "ServicePrimaryAction.tsx": 1,
 };
 
 function handRolledButtons(file: string): number {
@@ -41,7 +51,7 @@ function handRolledButtons(file: string): number {
   return (code.match(/^\s*<button(?=[\s>]|$)/gm) ?? []).length;
 }
 
-describe("Generar / Editar mes use the house Button (bloque 7)", () => {
+describe("Generar / Editar mes and the Servicios board use the house Button (bloque 7)", () => {
   for (const [file, expected] of Object.entries(BASELINE)) {
     it(`${file} keeps exactly ${expected} deliberate hand-rolled <button>s`, () => {
       expect(handRolledButtons(file)).toBe(expected);

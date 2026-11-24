@@ -1,7 +1,9 @@
 import { getServerSession, type Session } from "next-auth";
 import { authOptions } from "@/auth";
 import { getMemberAccess, isMemberActive } from "./memberAccess";
+import { isMinistryManager, isMinistryMember } from "./ministryAccess";
 import type { MinistryId } from "@/app/ministries";
+import { MANAGER_ROLES } from "./managerRoles";
 
 export type ActiveSession = Session | null;
 
@@ -22,7 +24,7 @@ export async function requireActiveSession(): Promise<ActiveSession> {
 export async function requireActiveManager(): Promise<ActiveSession> {
   const session = await requireActiveSession();
   const role = session?.user?.role;
-  if (!session || !role || !["super-admin", "admin", "content-editor"].includes(role)) return null;
+  if (!session || !role || !MANAGER_ROLES.includes(role)) return null;
   return session;
 }
 
@@ -35,21 +37,19 @@ export async function requireMinistryMember(ministry: MinistryId): Promise<Activ
   const session = await requireActiveSession();
   const sanityId = session?.user?.sanityId;
   if (!session || !sanityId) return null;
-  const access = await getMemberAccess(sanityId);
-  if (access.role === "super-admin") return session;
-  return access.ministries.includes(ministry) ? session : null;
+  return isMinistryMember(await getMemberAccess(sanityId), ministry) ? session : null;
 }
 
 /**
  * Active session AND ministry MANAGEMENT (or super-admin). Plain `admin` does
  * NOT pass for a ministry it does not manage (Frank, 2026-08-19): a worship
- * admin has no kids access. Management does not imply membership.
+ * admin has no kids access. Management does not imply membership — except in a
+ * leveled ministry (Jóvenes), where management IS the `admin` level of a member
+ * (`isMinistryManager`, ADR-0075).
  */
 export async function requireMinistryManager(ministry: MinistryId): Promise<ActiveSession> {
   const session = await requireActiveSession();
   const sanityId = session?.user?.sanityId;
   if (!session || !sanityId) return null;
-  const access = await getMemberAccess(sanityId);
-  if (access.role === "super-admin") return session;
-  return access.managesMinistries.includes(ministry) ? session : null;
+  return isMinistryManager(await getMemberAccess(sanityId), ministry) ? session : null;
 }

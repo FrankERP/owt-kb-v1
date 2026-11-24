@@ -54,6 +54,59 @@ afterEach(() => {
 });
 
 describe("LibraryRow", () => {
+  it("splits «Nombre (Original)» like the song page and sets the key in the second brand colour (ADR-0071)", () => {
+    const { container } = render(
+      <MotionProvider>
+        <LibraryRow post={{ ...post, title: "Alaba (Praise)", tags: [{ _id: "t1", name: "Adoración", slug: { current: "adoracion" } }] } as unknown as Post} />
+      </MotionProvider>,
+    );
+    const row = screen.getByRole("button", { name: "Alaba (Praise), Oasis, tonalidad G" });
+    // The Spanish name is the title; the original joins the artist on the line under it.
+    expect(row.textContent).toContain("Alaba");
+    expect(row.textContent).toContain("Praise · Oasis");
+    expect(row.textContent).toContain("72 BPM");
+    expect(row.textContent).toContain("#Adoración");
+    const key = container.querySelector(".font-display");
+    expect(key?.textContent).toBe("G");
+    expect(key?.className).toContain("text-key-fg");
+  });
+
+  it("a song without a key shows a muted dash, never the rose", () => {
+    const { container } = render(
+      <MotionProvider>
+        <LibraryRow post={{ ...post, key: "" } as unknown as Post} />
+      </MotionProvider>,
+    );
+    const key = container.querySelector(".font-display");
+    expect(key?.textContent).toBe("—");
+    expect(key?.className).not.toContain("text-key-fg");
+  });
+
+  it("leads with the album's cover, sized as a tile and always a JPEG (ADR-0088)", () => {
+    const { container } = render(
+      <MotionProvider>
+        <LibraryRow post={{ ...post, cover: "https://cdn.sanity.io/images/p/d/abc-600x600.png" } as unknown as Post} />
+      </MotionProvider>,
+    );
+    const img = container.querySelector("img");
+    expect(img?.getAttribute("src")).toBe("https://cdn.sanity.io/images/p/d/abc-600x600.png?w=160&h=160&fit=crop&fm=jpg");
+    // Decoration: the row's own label names the song.
+    expect(img?.getAttribute("alt")).toBe("");
+  });
+
+  it("a song with no cover, or a picture this app did not store, draws the neutral tile — never an image", () => {
+    for (const cover of [undefined, null, "https://img.youtube.com/vi/x/hqdefault.jpg"]) {
+      const { container, unmount } = render(
+        <MotionProvider>
+          <LibraryRow post={{ ...post, cover } as unknown as Post} />
+        </MotionProvider>,
+      );
+      expect(container.querySelector("img")).toBeNull();
+      expect(container.querySelector("button svg")).not.toBeNull();
+      unmount();
+    }
+  });
+
   it("a tap still opens the song sheet and reports no long press", () => {
     mount();
     fireEvent.click(screen.getByRole("button", { name: /Canción s1/ }));

@@ -51,6 +51,11 @@ vi.mock("@/app/components/CalendarFeedPanel", () => ({
   default: ({ initial }: { initial: { kind: string } }) => <p>CALENDARIO:{initial.kind}</p>,
 }));
 
+// «Apps conectadas» (ADR-0091) reads the native-app grants on the server; it has its own tests
+// (app/appAuth). Here it lists nothing, so the panel renders nothing unless impersonating.
+vi.mock("@/app/appAuth/connectedApps", () => ({ loadConnectedApps: async () => [] }));
+vi.mock("@/app/components/ConnectedAppsPanel", () => ({ default: () => null }));
+
 import AjustesPage from "../page";
 import { MEMBER_PROFILE_QUERY } from "../../queries";
 
@@ -94,7 +99,6 @@ describe("/me/ajustes", () => {
     expect(html).toContain('id="ajustes"');
     expect(html).toContain('id="tema"');
     expect(html).toContain("Tamaño de texto");
-    expect(html).toContain("Perfil");
     expect(html).toContain("PERFIL");
     // No worship copy anywhere: this page answers "my settings", not "my week".
     expect(html).not.toContain("Sin servicios asignados próximamente");

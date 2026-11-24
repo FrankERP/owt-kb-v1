@@ -12,6 +12,8 @@ export interface MutationErrorInput {
   status: number;
   /** `body.details.dependencies.length`, when present. */
   dependencyCount?: number;
+  /** The server's sentences when it refused a seat clash (`seatClashSentencesOf`, ADR-0078). */
+  seatClashSentences?: readonly string[];
   fallback: string;
 }
 
@@ -22,6 +24,10 @@ export interface MutationErrorInput {
  * translation, not two.
  */
 export function mutationErrorMessage(input: MutationErrorInput): string {
+  // A seat clash says who and which seats, instead of the generic «rechazada» line.
+  if (input.code === "invalid_request" && input.seatClashSentences?.length) {
+    return `${input.seatClashSentences.join(" ")} No se modificó nada.`;
+  }
   switch (input.code) {
     case "idempotency_mismatch":
       return "Este intento ya se envió con otros datos. Cierra y crea el servicio de nuevo.";

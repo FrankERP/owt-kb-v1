@@ -76,6 +76,7 @@ describe("grantDocument.ts re-exports the same constants unchanged", () => {
       "sub",
       "clientHash",
       "origin",
+      "client",
       "createdAt",
       "lastRefreshAt",
       "currentRefreshJti",
@@ -148,6 +149,7 @@ describe("mcpOauthGrant schema", () => {
       sub: "member-1",
       clientId: "eyJhbGciOiJIUzI1NiJ9.client-token-body.sig",
       origin: "https://owt-backstage.vercel.app",
+      client: "chatgpt",
       refreshJti: "rjti-1",
       createdAt: "2026-09-24T12:00:00.000Z",
     });

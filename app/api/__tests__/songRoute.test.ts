@@ -49,6 +49,19 @@ describe("/api/song/[id]", () => {
     expect(historyParams).toEqual({ id: "song-1", today: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) });
   });
 
+  it("reads the song's own album cover for the sheet (ADR-0088) — never a video still", async () => {
+    requireMinistryMemberMock.mockResolvedValue({ user: { sanityId: "member-1" } });
+    fetchMock.mockResolvedValueOnce({ _id: "song-1", title: "Sólo en Jesús", cover: "https://cdn.sanity.io/images/p/d/a-1x1.jpg" });
+    opFetchMock.mockResolvedValueOnce([]);
+
+    const response = await GET({} as NextRequest, { params: Promise.resolve({ id: "song-1" }) });
+    const body = await response.json();
+
+    expect(body.cover).toBe("https://cdn.sanity.io/images/p/d/a-1x1.jpg");
+    const [songQuery] = fetchMock.mock.calls[0];
+    expect(songQuery).toContain('"cover": albumArt.asset->url');
+  });
+
   it("drops an ambiguous (duplicate-week) setlist from history — no double count", async () => {
     requireMinistryMemberMock.mockResolvedValue({ user: { sanityId: "member-1" } });
     fetchMock.mockResolvedValueOnce({ _id: "song-1", title: "Sólo en Jesús" });

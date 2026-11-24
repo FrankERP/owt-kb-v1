@@ -34,7 +34,7 @@ describe("fallback pages", () => {
     expect(block!.style.getPropertyValue("--reveal-i")).toBe("0");
 
     const action = container.querySelector("button");
-    expect(action?.textContent).toContain("Cerrar sesión e intentar con otra cuenta");
+    expect(action?.textContent).toContain("Salir y entrar con otra cuenta");
     expect(action?.className).toMatch(/rounded-lg/);
   });
 

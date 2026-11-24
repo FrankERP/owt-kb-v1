@@ -184,13 +184,16 @@ describe("ServiceReadinessCard — the compact card", () => {
   });
 
   it("keeps the ONE primary action, inside the header row, as a ≥44px house Button", () => {
-    const card = buildCard();
+    // A valid setlist and an empty team → rule 12 «Editar equipo»: an ACTION, so
+    // it is the button.
+    const card = cardWith({});
     const { container } = renderCard(buildGates(), card);
     const header = container.querySelector("[data-card-header]") as HTMLElement;
     const button = header.querySelector("[data-action-kind]") as HTMLButtonElement;
 
     expect(button).toBeTruthy();
     expect(button.getAttribute("data-action-kind")).toBe(card.readiness.primaryAction.kind);
+    expect(button.getAttribute("data-tone")).toBe("primary");
     expect(button.className).toContain("min-h-[44px]");
     // Full-width on a phone, its own width from `sm`.
     expect(button.className).toContain("w-full");
@@ -199,6 +202,30 @@ describe("ServiceReadinessCard — the compact card", () => {
     expect(wrap.className).toContain("basis-full");
     expect(wrap.className).toContain("order-last");
     expect(wrap.className).toContain("sm:basis-auto");
+    expect(container.querySelectorAll("[data-action-kind]").length).toBe(1);
+  });
+
+  it("shows a BLOCKER as a small flag beside the icons, never a button across the card", () => {
+    // The bare fixture (no setlist record, no team) resolves to a review kind.
+    // Since phase 5 of the «millones» pass that is `ServiceReviewFlag`: a 44 px
+    // icon control in the header's cluster, named by the ladder's label, still
+    // carrying the ladder's trace — and no full-width line under the date.
+    const card = buildCard();
+    const kind = card.readiness.primaryAction.kind;
+    expect(["review_data", "review_duplicate_roles", "review_setlist_data", "resolve_conflict"]).toContain(kind);
+    const { container } = renderCard(buildGates(), card);
+    const header = container.querySelector("[data-card-header]") as HTMLElement;
+    const flag = header.querySelector("[data-action-kind]") as HTMLButtonElement;
+
+    expect(flag).toBeTruthy();
+    expect(flag.getAttribute("aria-label")).toBe(card.readiness.primaryAction.label);
+    expect(flag.getAttribute("data-action-kind")).toBe(kind);
+    expect(flag.getAttribute("data-tone")).toBe("danger");
+    expect(flag.className).toContain("min-h-[44px]");
+    expect(flag.className).not.toContain("w-full");
+    expect(flag.closest("[data-card-primary-action]")).toBe(flag);
+    // It sits in the icon cluster, right before «Editar equipo».
+    expect(flag.nextElementSibling?.getAttribute("aria-label")).toBe("Editar equipo");
     expect(container.querySelectorAll("[data-action-kind]").length).toBe(1);
   });
 

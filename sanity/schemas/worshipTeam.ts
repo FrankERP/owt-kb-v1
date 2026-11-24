@@ -1,5 +1,19 @@
-import { defineType } from "sanity";
+import { defineType, type Rule } from "sanity";
 import { INSTRUMENT_SEAT_OPTIONS } from "./instrumentSeats";
+import {
+  ASSIGNABLE_MINISTRY_IDS,
+  LEVELED_MINISTRY_IDS,
+  MINISTRIES,
+  MINISTRY_LEVELS,
+  WORSHIP_ROLE_NEEDS_WORSHIP,
+  worshipRoleWithoutWorship,
+} from "../../app/ministries";
+
+const MINISTRY_LEVEL_TITLE = { member: "Miembro", leader: "Líder", admin: "Admin" } as const;
+/** Every leveled ministry's groups, for both «Grupos» and «Grupos que lidera». */
+const LEVELED_GROUP_OPTIONS = LEVELED_MINISTRY_IDS.flatMap((id) =>
+  MINISTRIES[id].groups.map((g) => ({ title: g.name, value: g.id })),
+);
 
 export const teamMembers = defineType({
   name: "teamMembers",
@@ -46,6 +60,14 @@ export const teamMembers = defineType({
         layout: "radio",
       },
       initialValue: "member",
+      // The Studio is the second writer of `role` and `ministries`, so it enforces
+      // the members API's rule too (ADR-0075): `requireActiveManager` reads `role`
+      // alone, and an admin or editor outside Alabanza would still be a worship
+      // admin. An error blocks publishing.
+      validation: (rule: Rule) =>
+        rule.custom((role, context) =>
+          worshipRoleWithoutWorship(role, context.document?.ministries) ? WORSHIP_ROLE_NEEDS_WORSHIP : true,
+        ),
     },
     {
       name: "disabled",
@@ -59,14 +81,62 @@ export const teamMembers = defineType({
       title: "Ministerios (membresía)",
       type: "array",
       of: [{ type: "string" }],
+      // From the registry's ASSIGNABLE list, never ALL: a ministry the app can read
+      // but not yet store is not offered here either (ADR-0075).
       options: {
-        list: [
-          { title: "Alabanza", value: "worship" },
-          { title: "Oasis Kids", value: "kids" },
-        ],
+        list: ASSIGNABLE_MINISTRY_IDS.map((id) => ({ title: MINISTRIES[id].name, value: id })),
       },
       description:
         "Ministerios a los que pertenece este miembro. VACÍO o ausente = solo Alabanza (comportamiento legado; NO rellenar en masa).",
+    },
+    {
+      // Level, groups and led groups in a LEVELED ministry (Jóvenes), ADR-0075/0085. Read-only here:
+      // its one writer is the members API, which also requires the ministry in
+      // `ministries` (a level without membership grants nothing). `_key` is the
+      // ministry id, so one person has at most one item per ministry.
+      name: "ministryRoles",
+      title: "Nivel por ministerio",
+      type: "array",
+      readOnly: true,
+      of: [
+        {
+          type: "object",
+          name: "ministryRole",
+          fields: [
+            {
+              name: "ministry",
+              title: "Ministerio",
+              type: "string",
+              options: { list: LEVELED_MINISTRY_IDS.map((id) => ({ title: MINISTRIES[id].name, value: id })) },
+            },
+            {
+              name: "level",
+              title: "Nivel",
+              type: "string",
+              options: { list: MINISTRY_LEVELS.map((l) => ({ title: MINISTRY_LEVEL_TITLE[l], value: l })) },
+            },
+            {
+              name: "groups",
+              title: "Grupos",
+              type: "array",
+              of: [{ type: "string" }],
+              options: { list: LEVELED_GROUP_OPTIONS },
+            },
+            {
+              // The groups this person LEADS, a subset of «Grupos»; only on a leader
+              // (plan 2026-11-11-jovenes-per-group-leadership, ADR-0085). Read through
+              // `ledGroupsIn`, never on its own: the read also needs level = leader.
+              name: "leaderOf",
+              title: "Grupos que lidera",
+              type: "array",
+              of: [{ type: "string" }],
+              options: { list: LEVELED_GROUP_OPTIONS },
+            },
+          ],
+          preview: { select: { title: "ministry", subtitle: "level" } },
+        },
+      ],
+      description: "Solo lectura: se edita desde Personas (super-admin).",
     },
     {
       // `worship` is deliberately NOT offered here — worship management stays with the
@@ -190,6 +260,18 @@ export const teamMembers = defineType({
         !((document?.memberType as string[] | undefined) ?? []).includes("instrumento"),
       description:
         "Qué instrumentos toca. Solo se lee para plazas de instrumento; vacío = no se asigna en automático.",
+    },
+    {
+      // ADR-0078: without it, nobody holds a voice and an instrument on one service.
+      name: "singsAndPlays",
+      title: "Canta y toca a la vez",
+      type: "boolean",
+      hidden: ({ document }) => {
+        const types = (document?.memberType as string[] | undefined) ?? [];
+        return !(types.includes("voz") && types.includes("instrumento"));
+      },
+      description:
+        "Puede tener una voz y un instrumento en el mismo servicio (por ejemplo, dirigir y tocar guitarra). Sin marcar, el planner nunca lo permite.",
     },
     {
       name: "profilePhoto",

@@ -192,6 +192,24 @@ describe("save_service_edits", () => {
     expect(w.deps.editRole).toHaveBeenCalledTimes(2);
   });
 
+  it("the card's twin is the same save: same checks, same writes, its own log label (ADR-0066 addendum)", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      const w = serviceWorld();
+      const changes = await checked(w, MOVE_ANA);
+      const forged = changes.map((c, i) => (i === 0 ? { ...c, lines: ["domingo 8 nov · BGV: sale Bruno"] } : c));
+      expect(sc(await saveServiceEditsResult({ month: MONTH, changes: forged }, PRINCIPAL, w.deps, "save_service_edits_app"))).toMatchObject({ detail: "not_the_checked" });
+      expect(w.deps.editRole).not.toHaveBeenCalled();
+      const out = await saveServiceEditsResult({ month: MONTH, changes }, PRINCIPAL, w.deps, "save_service_edits_app");
+      expect(statuses(out)).toEqual({ sun8: "saved", sun15: "saved" });
+      expect(statuses(await save(w, changes))).toEqual({ sun8: "already", sun15: "already" });
+      const logged = info.mock.calls.map((c) => String(c[0]));
+      expect(logged.some((l) => l.includes("save_service_edits_app"))).toBe(true);
+    } finally {
+      info.mockRestore();
+    }
+  });
+
   it("a stale service refuses the whole call before any write", async () => {
     const w = serviceWorld();
     const changes = await checked(w, MOVE_ANA);
@@ -329,6 +347,17 @@ describe("save_service_edits", () => {
     expect(statuses(out)).toEqual({ sun15: "notSavedRepeat" });
     expect(sc(out).next).toBe("repeat_same_call");
     expect(statuses(await save(w, changes))).toEqual({ sun15: "saved" });
+  });
+
+  it("a seat-clash refusal (ADR-0078) shows the server's sentence as the reason, never the member id", async () => {
+    const SENTENCE = "Carla quedaría en BGV y Keys en el mismo servicio; para cantar y tocar en un servicio, marca «Canta y toca a la vez» en Personas (super admin).";
+    const w = serviceWorld();
+    const changes = await checked(w, [{ op: "place", service: "sun15", seat: "BGV", member: "Carla" }]);
+    w.deps.editRole.mockResolvedValueOnce({ ok: false, status: 400, body: { error: "invalid_request", details: { issues: ["seat_clash"], seatClashes: [{ memberId: "m-carla", name: "Carla", seats: ["BGV", "Keys"], sentence: SENTENCE }] } } });
+    const out = await save(w, changes);
+    expect(statuses(out)).toEqual({ sun15: "notSavedRecheck" });
+    expect(textOf(out)).toContain("no se guardó: Carla quedaría en BGV y Keys en el mismo servicio; para cantar y tocar en un servicio, marca «Canta y toca a la vez» en Personas (super admin); revisa el mes de nuevo");
+    expect(`${textOf(out)}${JSON.stringify(sc(out))}`).not.toContain("m-carla");
   });
 
   it("an ambiguous_target refusal is never told to repeat", async () => {

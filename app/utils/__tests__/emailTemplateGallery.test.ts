@@ -165,9 +165,93 @@ add("13-proposal.html", "Nueva propuesta (tabla + notas, sin Mov.)", buildPropos
   notes: "Bajé la tonalidad de Santo a D.\nEnsayo el jueves 7pm.",
 }));
 
+// Jóvenes (ADR-0089): the same shell and palette, its own eyebrow and footer reason.
+const { buildAssignedEmail, buildMusicEmail, buildPartReminderEmail } = await import("../ministryEventEmail");
+const JOVENES_MEETING = { id: "x.0f8e6a52-1c1b-4d7e-9a43-6a2b1c0d9e11", date: SATURDAY, time: "18:10", arrival: "17:30", place: "Oasis Tlalpan", title: null, kind: "saturday" };
+const JOVENES_LINKS = { link: "https://owt.test/jovenes/reunion/0f8e6a52-1c1b-4d7e-9a43-6a2b1c0d9e11", settingsLink: "https://owt.test/me/ajustes" };
+
+add("14-jovenes-te-toca.html", "Jóvenes: te toca (dos partes, con compañero)", buildAssignedEmail({
+  name: "Beto",
+  meeting: JOVENES_MEETING,
+  roles: [
+    { kind: "part", id: "dinamica1", label: "Dinámica 1", partnerNames: ["Carla"] },
+    { kind: "seat", id: "comparte", label: "comparte", partnerNames: [] },
+    { kind: "line", id: "k1", label: "Anuncios", partnerNames: [] },
+  ],
+  moved: false,
+  ...JOVENES_LINKS,
+}));
+
+add("15-jovenes-musica.html", "Jóvenes: piden música de alabanza (con nota)", buildMusicEmail({
+  meeting: JOVENES_MEETING,
+  part: "oracion",
+  asks: true,
+  note: "Algo suave, sin letra.",
+  who: ["Beto"],
+  ...JOVENES_LINKS,
+}));
+
+add("16-jovenes-musica-retirada.html", "Jóvenes: ya no piden música", buildMusicEmail({
+  meeting: JOVENES_MEETING,
+  part: "platica",
+  asks: false,
+  note: null,
+  who: [],
+  ...JOVENES_LINKS,
+}));
+
+add("17-jovenes-recordatorio.html", "Jóvenes: recordatorio a dos semanas (dos partes, con compañero)", buildPartReminderEmail({
+  name: "Beto",
+  meeting: JOVENES_MEETING,
+  days: 14,
+  fill: [
+    { part: "dinamica1", gaps: ["note"], partnerNames: ["Carla"] },
+    { part: "platica", gaps: ["note", "music"], partnerNames: [] },
+  ],
+  assign: [],
+  ...JOVENES_LINKS,
+}));
+
+add("18-jovenes-recordatorio-encargado.html", "Jóvenes: recordatorio a una semana (partes sin responsable)", buildPartReminderEmail({
+  name: "Noemí",
+  meeting: JOVENES_MEETING,
+  days: 7,
+  fill: [],
+  assign: ["oracion", "dinamica2"],
+  ...JOVENES_LINKS,
+}));
+
+// «Sirves mañana» (ADR-0080, addendum of 2026-11-19): the day-before reminder by email.
+const { buildServiceEveEmail } = await import("../serviceEveReminder");
+const EVE_LINKS = { link: "https://owt.test/", settingsLink: "https://owt.test/me/ajustes" };
+
+add("19-sirves-manana.html", "Sirves mañana (un servicio, con setlist)", buildServiceEveEmail({
+  name: "Ana López",
+  items: [{
+    label: "Domingo 16 ago",
+    time: "11:00",
+    roles: ["Líder", "Guitarra"],
+    songs: [
+      { title: "Grande y fuerte", key: "Bb" },
+      { title: "Santo", key: "D" },
+      { title: "Way Maker", key: null },
+    ],
+  }],
+  ...EVE_LINKS,
+}));
+
+add("20-sirves-manana-dos.html", "Sirves mañana (dos servicios, uno sin setlist)", buildServiceEveEmail({
+  name: "Beto",
+  items: [
+    { label: "Domingo 16 ago · Bautizos · 09:00", time: null, roles: ["BGV"], songs: [] },
+    { label: "Domingo 16 ago", time: "11:00", roles: ["Coro"], songs: [{ title: "Santo", key: "D" }] },
+  ],
+  ...EVE_LINKS,
+}));
+
 describe("email template gallery", () => {
   it("renders every template without throwing", () => {
-    expect(gallery).toHaveLength(13);
+    expect(gallery).toHaveLength(20);
     for (const g of gallery) expect(g.html.length).toBeGreaterThan(200);
   });
 

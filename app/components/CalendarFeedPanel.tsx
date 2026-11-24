@@ -6,7 +6,8 @@ import Collapse from "./ui/Collapse";
 import CueDialog from "./ui/CueDialog";
 import SegmentedControl from "./ui/SegmentedControl";
 import { useToast } from "./ui/Toast";
-import { ArrowRightIcon, ChevronDownIcon, CopyIcon } from "./ui/icons";
+import { ArrowRightIcon, ChevronDownIcon, CopyIcon, ExternalLinkIcon } from "./ui/icons";
+import { ACCOUNT_ROW_CLASS, AccountRowBody } from "./account/AccountList";
 import { feedLinks, type CalendarFeedState, type FeedScope, type FeedUrls } from "@/app/utils/calendarFeed";
 
 /**
@@ -24,6 +25,13 @@ import { feedLinks, type CalendarFeedState, type FeedScope, type FeedUrls } from
  * one-shot `.ics` download is a row on `/me` («Tu cuenta»): this page reads no assignments
  * (it is ministry-neutral), so the link SENDS the member there — drawn as a way on (the
  * trailing arrow «Ver Oasis Kids» uses), never with a download glyph that promises a file.
+ *
+ * The «millones» pass (2026-10-26): the row of three coloured buttons became three hairline
+ * rows in the page's list vocabulary (`AccountList`'s row: a 17 px title, a one-line status,
+ * the glyph for what the row does — an external-link arrow for the two subscriptions, the copy
+ * glyph for the link). Three buttons of three weights said one of them mattered more; a member
+ * picks the calendar they have. «iPhone / Mac» reads «Apple Calendar» now, with the devices in
+ * its status line.
  */
 
 const SCOPE_OPTIONS = [
@@ -42,7 +50,7 @@ export default function CalendarFeedPanel({ initial }: { initial: CalendarFeedSt
   const { toast } = useToast();
 
   if (state.kind === "unavailable") {
-    return <p className="font-body text-sm text-mono-500">{state.message}</p>;
+    return <p className="font-body text-[15px] leading-snug text-ink-muted">{state.message}</p>;
   }
   const links = feedLinks(state.urls, scope);
 
@@ -75,9 +83,9 @@ export default function CalendarFeedPanel({ initial }: { initial: CalendarFeedSt
 
   return (
     <div className="space-y-4">
-      <p className="font-body text-sm text-mono-500">
-        Agrega tus servicios a tu calendario. Se actualiza solo cuando cambian el equipo o el setlist.
-        Los servicios donde te toca servir llevan una ⭐.
+      <p className="font-body text-[15px] leading-snug text-ink-muted">
+        Suscríbete y tus servicios aparecen en el calendario de tu teléfono, con canciones, tonos y
+        equipo. Se actualiza solo; los servicios donde te toca servir llevan una ⭐.
       </p>
 
       {/* The joined bar, the card's full width: `filled` options are `shrink-0`
@@ -93,21 +101,35 @@ export default function CalendarFeedPanel({ initial }: { initial: CalendarFeedSt
         className="w-full [&>button]:flex-1"
       />
 
-      <div className="flex flex-wrap gap-2">
-        <Button variant="primary" size="sm" href={links.google} target="_blank" rel="noopener noreferrer">
-          Google Calendar
-        </Button>
-        <Button variant="secondary" size="sm" href={links.webcal}>
-          iPhone / Mac
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => copy(links.https)}>
-          <CopyIcon size={13} />
-          Copiar enlace
-        </Button>
+      {/* Three rows, one per calendar: a plain anchor for Google (a new tab), a
+          `webcal:` anchor for Apple, a button for the clipboard — the row body is
+          `AccountList`'s, so a link row and a button row cannot drift apart. */}
+      <div className="divide-y divide-ink/[0.10] border-y border-ink/[0.10]">
+        <a href={links.google} target="_blank" rel="noopener noreferrer" className={ACCOUNT_ROW_CLASS}>
+          <AccountRowBody
+            title="Google Calendar"
+            status="Abre la suscripción en Google"
+            trailing={<ExternalLinkIcon size={16} className="shrink-0 text-ink-dim" />}
+          />
+        </a>
+        <a href={links.webcal} className={ACCOUNT_ROW_CLASS}>
+          <AccountRowBody
+            title="Apple Calendar"
+            status="Abre la suscripción en el iPhone o la Mac"
+            trailing={<ExternalLinkIcon size={16} className="shrink-0 text-ink-dim" />}
+          />
+        </a>
+        <button type="button" onClick={() => copy(links.https)} className={ACCOUNT_ROW_CLASS}>
+          <AccountRowBody
+            title="Copiar enlace"
+            status="Para cualquier otro calendario"
+            trailing={<CopyIcon size={16} className="shrink-0 text-ink-dim" />}
+          />
+        </button>
       </div>
 
       {state.preview && (
-        <p className="font-body text-xs text-warning-fg">
+        <p className="font-body text-sm leading-snug text-warning-fg">
           Estás en dev: Google y Apple no pueden suscribirse a este enlace (dev está protegido). Solo
           sirve «Copiar enlace» para probarlo. Ojo: dev y producción comparten datos, así que
           «Generar un enlace nuevo» aquí también cambia tu enlace de producción.
@@ -127,7 +149,7 @@ export default function CalendarFeedPanel({ initial }: { initial: CalendarFeedSt
           <ChevronDownIcon size={13} className={`transition-transform duration-fast ease-out-brand${howOpen ? " rotate-180" : ""}`} />
         </Button>
         <Collapse open={howOpen} id={howId}>
-          <p className="pt-2 font-body text-xs text-mono-500">
+          <p className="pt-2 font-body text-sm leading-snug text-ink-muted">
             Google Calendar se agrega desde una computadora (calendar.google.com); después aparece
             también en tu celular. Google revisa los cambios cada varias horas; el iPhone, más seguido.
             «Solo los míos» trae únicamente los servicios donde te toca servir. El enlace es personal:
@@ -160,7 +182,7 @@ export default function CalendarFeedPanel({ initial }: { initial: CalendarFeedSt
         }}
       >
         <div className="px-6 py-6 space-y-4">
-          <p className="font-body text-sm">
+          <p className="font-body text-[15px] leading-snug text-ink">
             El enlace actual dejará de funcionar y tu calendario dejará de actualizarse hasta que te
             suscribas con el nuevo. Úsalo si compartiste el enlace por error.
           </p>

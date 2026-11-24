@@ -50,12 +50,16 @@ const BASE_ROLES = [
   "warning-fg", "warning-surface", "warning-border",
   "info-fg", "info-surface", "info-border",
   "positive-fg", "negative-fg",
+  // The second brand colour (ADR-0071): rose, for the musical key only.
+  "key-fg",
   // B3 additions — see brand.css for why each exists.
   "warning-surface-deep", "info-surface-deep",
   "surface-overlay", "surface-overlay-deep", "surface-overlay-deepest",
   // B4 additions — the vocabulary's "no role here" table, decided.
   "elevation", "surface-lift", "scrim", "on-fill",
   "chart-lead", "chart-bgv", "chart-coro", "chart-especial", "chart-instr", "chart-foh",
+  // The five Jóvenes groups (ADR-0086): a categorical hue each, never a state.
+  "group-otro-nivel", "group-invencibles", "group-emprendedores", "group-adrenalin", "group-guerreras",
   // Child C — the palette families. The stray-key assertion below fails without these.
   "mono-200", "mono-300", "mono-400", "mono-500",
   "mono-600", "mono-700", "mono-800", "negative-faint",
@@ -338,7 +342,7 @@ describe("brand.css rule bodies — B2's invariant, which later slices must not 
     // --skeleton-sweep) referenced with a bare `var(--name)` in the rule body,
     // not `rgb(var(--role-rgb) / a)` — the same shape as --warning-glow. The
     // OCCURRENCE regex only matches the latter, so the pin stays put.
-    const all = occurrences(bodies).filter((o) => /^--(accent|ink|surface|warning|info|positive|negative)/.test(o.name));
+    const all = occurrences(bodies).filter((o) => /^--(accent|ink|surface|warning|info|positive|negative|key)/.test(o.name));
     // 69 → 70 (R4 Task 3: .brand-tempo-pill's beat ring borrows --accent-rgb).
     // 70 → 62 (R5 Task 1, ADR-0035: `.brand-admin-shell` spent five of these
     // — border, two backgrounds, an inset highlight, and the `::before` wash —
@@ -348,7 +352,15 @@ describe("brand.css rule bodies — B2's invariant, which later slices must not 
     // `.brand-library-module` and `.brand-search-console` became opaque through
     // the composed `--surface-card` — their translucent gradients and inset
     // highlights spent the other twenty).
-    expect(all.length).toBe(42);
+    // 42 → 37 (2026-10-23, ADR-0070's Canción pass: the song page's hero is a
+    // title on the plain page, so `.brand-song-hero` — border, two gradient
+    // stops, the radial glow and the `::before` sheen — is deleted.)
+    // 37 → 37 (2026-10-24, ADR-0071: `.brand-key-dial`'s border, colour and two
+    // shadows moved from `--accent-rgb` to the new `--key-fg-rgb`, which the regex
+    // above counts too — the second brand colour is pinned like the first, so a
+    // repaint of the dial back to the accent, or a fifth key occurrence, moves it.)
+    expect(all.length).toBe(37);
+    // One of the four alpha-free occurrences is `.brand-key-dial`'s `color`.
     expect(all.filter((o) => o.alpha === "none").length).toBe(4);
   });
 
@@ -449,19 +461,26 @@ describe("colour KEYS are colour names, not utility names", () => {
     ).toEqual([]);
   });
 
-  it("`border-edge-control` resolves, and the sign-in inputs still use it", () => {
+  it("`border-edge-control` resolves, and the sign-in inputs carry a drawn rule", () => {
     // The border was the OTHER measured failure — 1.46 dark / 1.42 light — and
     // those fields carry no affordance besides it. A rename or typo emits no CSS
     // and the outline silently disappears; the key-prefix check above catches the
-    // historical mistake, not this direction.
+    // historical mistake, not this direction. The token still boxes the song and
+    // setlist editors' fields; the sign-in inputs moved to Mi perfil's hairline
+    // field (ADR-0070, phase 8), whose one rule is the affordance now — so the
+    // page must import that class, and the class must still draw a bottom rule.
     expect(colourKeys().has("edge-control")).toBe(true);
     const signin = readFileSync(
       path.join(REPO_ROOT, "app/(client)/auth/signin/page.tsx"), "utf8",
     );
     expect(
-      (signin.match(/border-edge-control/g) ?? []).length,
-      "both sign-in inputs must carry the token border",
-    ).toBeGreaterThanOrEqual(1);
+      (signin.match(/HAIRLINE_INPUT_CLASS/g) ?? []).length,
+      "both sign-in inputs must carry the hairline field",
+    ).toBeGreaterThanOrEqual(3);
+    const hairline = readFileSync(
+      path.join(REPO_ROOT, "app/components/ui/hairlineField.ts"), "utf8",
+    );
+    expect(hairline).toMatch(/HAIRLINE_INPUT_CLASS =\s*"[^"]*\bborder-b border-ink\/\[0\.18\]/);
   });
 
   it("every `placeholder:text-*` class in app/ resolves to a declared colour", () => {

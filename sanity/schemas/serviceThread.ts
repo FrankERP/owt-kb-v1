@@ -1,12 +1,14 @@
 import { defineType } from "sanity";
 
 /**
- * The conversation about a service before its setlist proposal exists (ADR-0065).
+ * What admins write about a service from its card (ADR-0065).
  *
  * `_id` is `serviceThread.<roleId>` (dotted: an untokened read never serves it).
- * Admins append here while the service has no `setlistProposal`; once the leads
- * create one, new messages go to the proposal's own `messages[]` and both lists
- * are shown together. Written only by `POST /api/admin/service-threads/[roleId]/messages`.
+ * `messages[]` is the admins' side of the conversation with the leads, read
+ * together with the proposal's own thread; `pastor_message` is the service's one
+ * «Mensaje del pastor», shown to the whole team. Written only by the routes under
+ * `/api/admin/service-threads/[roleId]/` (`messages`, `messages/[key]`,
+ * `pastor-message`).
  *
  * `role_id` is a plain STRING on purpose, never a reference (not even a weak one):
  * GROQ's `references()` matches weak references, and `roleDependencies` turns every
@@ -19,7 +21,7 @@ import { defineType } from "sanity";
  */
 export const serviceThread = defineType({
   name: "serviceThread",
-  title: "Conversación previa a la propuesta",
+  title: "Mensajes del servicio",
   type: "document",
   readOnly: true,
   fields: [
@@ -29,9 +31,20 @@ export const serviceThread = defineType({
       type: "string",
     },
     {
+      name: "pastor_message",
+      title: "Mensaje del pastor",
+      type: "object",
+      fields: [
+        { name: "body", title: "Mensaje", type: "text", rows: 6 },
+        { name: "author", title: "Lo puso", type: "reference", to: [{ type: "teamMembers" }] },
+        { name: "at", title: "Puesto", type: "datetime" },
+        { name: "edited_at", title: "Editado", type: "datetime" },
+      ],
+    },
+    {
       name: "messages",
       title: "Mensajes",
-      description: "Se agrega, nunca se sobrescribe.",
+      description: "Su autor puede editarlos o borrarlos desde la página.",
       type: "array",
       of: [
         {
@@ -67,6 +80,7 @@ export const serviceThread = defineType({
             },
             { name: "body", title: "Mensaje", type: "text", rows: 3 },
             { name: "at", title: "Enviado", type: "datetime" },
+            { name: "edited_at", title: "Editado", type: "datetime" },
           ],
           preview: { select: { title: "body", subtitle: "at" } },
         },
@@ -76,7 +90,7 @@ export const serviceThread = defineType({
   preview: {
     select: { id: "_id" },
     prepare(sel: { id?: string }) {
-      return { title: sel.id ?? "—", subtitle: "Conversación previa a la propuesta" };
+      return { title: sel.id ?? "—", subtitle: "Mensajes del servicio" };
     },
   },
 });

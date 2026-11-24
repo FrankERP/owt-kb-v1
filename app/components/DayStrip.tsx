@@ -10,12 +10,13 @@
 //
 // Every day of the visible week renders, so the strip reads as a calendar rather than
 // a filtered list; only the days that carry a service are pressable (`disabled`
-// otherwise). A lit day is a NEUTRAL raised cell with one tone dot per service under
-// the number (`DayDots`, ADR-0067) — the same cell the month grid draws, so the two
-// views can never disagree about what a colour means. Lit days come from
-// `activeDays` whatever month they fall in — a paged week that crosses into the next
-// month still lights up. Today is an inset accent ring; a day the signed-in member
-// is seated in paints its number positive («tú», the one green in the app).
+// otherwise). Since the «millones» pass (2026-10-24) a day is TEXT, not a card: the
+// weekday in the label face, the number in the display face inside a round target,
+// and one tone dot per service under it (`DayDots`, ADR-0067) — the same circle the
+// month grid draws, so the two views can never disagree about what a colour means.
+// Lit days come from `activeDays` whatever month they fall in — a paged week that
+// crosses into the next month still lights up. Today is an inset ink ring; a day the
+// signed-in member is seated in adds a green dot («tú», the one green in the app).
 //
 // The caption above the cells is what makes a paged week legible: «7 – 13 sep», and
 // it is the only label that moves, since the header's month heading does not.
@@ -29,7 +30,7 @@ import SwipeStrip from "./ui/SwipeStrip";
 import type { ActiveDay } from "./CalendarView";
 import { addDays, dayCellLabel, mondayOf, weekStripDays } from "../utils/agenda";
 import { haptic } from "../utils/haptics";
-import DayDots, { DAY_CELL_BASE, DAY_CELL_EMPTY, DAY_CELL_LIT, DAY_CELL_TODAY } from "./DayDots";
+import DayDots, { DAY_CELL_BASE, DAY_CELL_EMPTY, DAY_CELL_LIT, DAY_CELL_LIT_PAST, DAY_CELL_TODAY } from "./DayDots";
 
 /** Local-noon render, never a bare `new Date(iso)` — the UTC day-flip rule. */
 const fmt = (iso: string, options: Intl.DateTimeFormatOptions) =>
@@ -80,30 +81,36 @@ export default function DayStrip({
 
   return (
     <SwipeStrip onSwipe={handleSwipe} className="mb-6">
-      <p className="mb-1 text-center font-label text-[10px] uppercase tracking-widest text-mono-400">
+      <p className="mb-2 text-center font-body text-sm text-ink-muted">
         {weekRangeLabel(days[0].date, days[6].date)}
       </p>
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-7">
         {days.map((d) => {
           const entries = activeDays[d.date] ?? [];
           return (
-            <button
-              key={d.date}
-              type="button"
-              disabled={!d.lit}
-              aria-current={d.today ? "date" : undefined}
-              aria-label={dayCellLabel(d, entries)}
-              onClick={() => {
-                // Native only, fire-and-forget (see haptics.ts) — never gates the pick.
-                void haptic("selection");
-                onPick(d.date);
-              }}
-              className={`${DAY_CELL_BASE} gap-0.5 py-2 ${d.lit ? DAY_CELL_LIT : DAY_CELL_EMPTY} ${d.today ? DAY_CELL_TODAY : ""}`}
-            >
-              <span className="font-label text-[10px] uppercase tracking-widest opacity-70">{d.dow}</span>
-              <span className={`font-display text-sm font-bold ${d.mine ? "text-positive-fg" : ""}`}>{d.num}</span>
-              <DayDots tones={d.tones} />
-            </button>
+            // The weekday and the dots sit OUTSIDE the button: the round target is the
+            // number alone, so a fill or a ring never recolours the day's other facts.
+            // The button's `aria-label` (`dayCellLabel`) names the weekday anyway.
+            <div key={d.date} className="flex flex-col items-center gap-1.5 py-1">
+              <span aria-hidden className="font-label text-[11px] uppercase tracking-[0.12em] text-ink-muted">{d.dow}</span>
+              <button
+                type="button"
+                disabled={!d.lit}
+                aria-current={d.today ? "date" : undefined}
+                aria-label={dayCellLabel(d, entries)}
+                onClick={() => {
+                  // Native only, fire-and-forget (see haptics.ts) — never gates the pick.
+                  void haptic("selection");
+                  onPick(d.date);
+                }}
+                // A lit day the fetch already passed (a browsed month's, or a week paged
+                // back) reads quieter, the same class the month grid gives it.
+                className={`${DAY_CELL_BASE} h-10 w-10 text-[22px] ${d.lit ? (d.date < todayStr ? DAY_CELL_LIT_PAST : DAY_CELL_LIT) : DAY_CELL_EMPTY} ${d.today ? DAY_CELL_TODAY : ""}`}
+              >
+                {d.num}
+              </button>
+              <DayDots tones={d.tones} mine={d.mine} />
+            </div>
           );
         })}
       </div>

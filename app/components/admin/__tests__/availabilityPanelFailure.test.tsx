@@ -20,11 +20,17 @@ import AvailabilityPanel from "../AvailabilityPanel";
 
 const ok = (body: unknown) => ({ ok: true, json: async () => body });
 
+/** The proposals' read (ADR-0079) with nothing open: the honest empty answer. */
+const NO_PROPOSALS = { ok: true, blocked: null, open: [], applied: [], kept: [] };
+/** Members and roles answer `[]`; the proposals endpoint answers its own empty read. */
+const emptyLoad = async (url: string) =>
+  ok(String(url).startsWith("/api/admin/availability-conflicts") ? NO_PROPOSALS : []);
+
 beforeEach(() => vi.unstubAllGlobals());
 afterEach(cleanup);
 
 /** The reassuring copy that must never appear on a failed load. */
-const ALL_CLEAR = /Todo bien/i;
+const ALL_CLEAR = /Nadie asignado tiene marcada una fecha/i;
 
 describe("AvailabilityPanel — a failed load never reads as 'no conflicts'", () => {
   it("reports the failure instead of an all-clear when a response is not ok", async () => {
@@ -59,7 +65,7 @@ describe("AvailabilityPanel — a failed load never reads as 'no conflicts'", ()
       .fn()
       .mockImplementationOnce(async () => { throw new Error("offline"); })
       .mockImplementationOnce(async () => { throw new Error("offline"); })
-      .mockImplementation(async () => ok([]));
+      .mockImplementation(emptyLoad);
     vi.stubGlobal("fetch", fetchMock);
     render(<AvailabilityPanel />);
 
@@ -67,12 +73,13 @@ describe("AvailabilityPanel — a failed load never reads as 'no conflicts'", ()
     fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
 
     await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
-    expect(screen.getByText(ALL_CLEAR)).not.toBeNull();
+    // The proposals' own read settles a tick later.
+    await waitFor(() => expect(screen.getByText(ALL_CLEAR)).not.toBeNull());
   });
 
   it("still shows the all-clear when the load genuinely succeeds and finds nothing", async () => {
     // The guard must not have turned the honest empty case into an error.
-    vi.stubGlobal("fetch", vi.fn(async () => ok([])));
+    vi.stubGlobal("fetch", vi.fn(emptyLoad));
     render(<AvailabilityPanel />);
 
     await waitFor(() => expect(screen.getByText(ALL_CLEAR)).not.toBeNull());

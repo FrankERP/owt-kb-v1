@@ -81,7 +81,7 @@ Every rejection (other than the auth denials, which stay `{error:"Forbidden"}` /
 
 | Code | Status | Meaning |
 |------|--------|---------|
-| `invalid_request` | 400 | Rejected before any write (bad JSON, parse issue, non-canonical id, wrong stored `_type`). |
+| `invalid_request` | 400 | Rejected before any write (bad JSON, parse issue, non-canonical id, wrong stored `_type`). The four seat writers (roles POST and PATCH, swap, copy-instruments) also answer it for a seat clash the write would ADD (ADR-0078): `details: { issues: ["seat_clash"], seatClashes: [{ memberId, name, seats: [a, b], sentence }] }` — `sentence` is the Spanish line every client prints. |
 | `forbidden` | 403 | Registered but unused — routes emit the raw `{error:"Forbidden"}` body. |
 | `not_found` | 404 | The id resolves to **zero** canonical documents. |
 | `stale_revision` | 409 | A client-observed document/lock revision no longer matches stored state (or the commit lost the race). |
@@ -222,7 +222,7 @@ super-admin-only impersonation and live role/revocation refresh. Full detail in
 
 ---
 
-## MCP / OAuth — the Claude connector (super-admin only; no session cookie outside consent)
+## MCP / OAuth — the AI-agent connector (super-admins: every tool; worship admins: read-only, ADR-0083; no session cookie outside consent)
 
 Full detail — the endpoints, the [tools](MCP.md#tools), adding/revoking the connector, the kill
 switch, the dev smoke procedure — is [`docs/MCP.md`](MCP.md); why client registration is stateless
@@ -249,10 +249,34 @@ endpoint needs a **signed code plus its PKCE verifier** (or a signed refresh tok
 | `/.well-known/oauth-authorization-server` | GET | none — public by design | RFC 8414 AS metadata; `beforeFiles` rewrite to `app/api/oauth/discovery/authorization-server/route.ts` |
 | `/.well-known/oauth-protected-resource`, `/.well-known/oauth-protected-resource/api/mcp` | GET | none — public by design | RFC 9728 protected-resource metadata; rewrites to `app/api/oauth/discovery/protected-resource/route.ts` |
 | `/api/oauth/register` | POST | public — the redirect-URI allowlist; returns a signed client id (stateless, ADR-0039) | RFC 7591 DCR. The `client_id` returned IS a signed token; nothing is written to Sanity. A `client_name` that is empty after trimming (spaces, U+3000, …) is treated as absent. |
-| `/oauth/authorize` | GET | **gated** — `requireActiveSession` + live `super-admin` | The consent screen. Streams (`app/(client)/loading.tsx`); a foreign host or refused request never redirects the caller anywhere it didn't come from. |
+| `/oauth/authorize` | GET | **gated** — `requireActiveSession` + a live `super-admin` or worship `admin` (`mcpTierOf`) | The consent screen. Streams (`app/(client)/loading.tsx`); a foreign host or refused request never redirects the caller anywhere it didn't come from. |
 | `/api/oauth/authorize` | POST, GET | **gated**, same as above, plus same-origin check | The ONLY thing that mints an authorization code (303 to the verified `redirect_uri`). GET is 405 — a code is never minted by a link, prefetch or redirect. |
 | `/api/oauth/token` | POST | public — the signed code plus its PKCE verifier (or a signed refresh token and its live grant), and the signed client id | `authorization_code` and `refresh_token` grants. Public clients only (`token_endpoint_auth_method: "none"`), so client authentication is `invalid_client`: a `client_secret` in the body is a **400**; an `Authorization: Basic` header is a **401** with `WWW-Authenticate: Basic realm="owt-backstage"` (RFC 6749 §5.2). Creates the `mcpOauthGrant` and rotates its refresh `jti` on every use; a reused refresh token revokes the whole grant. |
-| `/api/mcp` | GET, POST, DELETE | public — its own bearer-token check | The MCP endpoint (Streamable HTTP via `mcp-handler`). Six ordered checks — the preflight (kill switch, host, secret), the bearer token, its signature/`aud`/`iss`, its grant (30 s cache), the grant's subject/origin match, and a live super-admin lookup — gate every request before it reaches the MCP server; see `app/api/mcp/route.ts`'s header comment. The MCP server then gets a copy carrying only an allowlist of headers — no `Authorization`, cookie or Vercel bypass header reaches a tool. Released to production: twelve tools, `ping` (P0, 2026-09-24), seven read tools (P1, 2026-09-25 — see [`docs/MCP.md`](MCP.md#tools)), each declaring `readOnlyHint: true, openWorldHint: false`, and four write tools after them (P3, 2026-09-28), each declaring `readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false` and calling the admin route's own `*Commit` module (ADR-0043). P4 (in production since 2026-10-20, PR #156) registers two more after the writes: `solve_month` (`destructiveHint: false`; stores only its private `mcpProposal` record) and `apply_schedule` (the write annotations; the v3 confirm through `commitFairnessMonths` and `createRole`, ADR-0061). The proposal editor (in production since 2026-10-21, PR #160; ADR-0062) registers three after `apply_schedule`: `check_proposal_edits` (app-only, `readOnlyHint: true`), `save_proposal_edits` (app-only) and `revise_proposal` (both annotated as `solve_month`: they store only a new private proposal version). Every tool has a strict input schema, which the SDK validates before the tool runs. Every SSE response is read to its end before the route returns, so a tool's revalidation and `after()` work finish inside the handler. |
+| `/api/mcp` | GET, POST, DELETE | public — its own bearer-token check | The MCP endpoint (Streamable HTTP via `mcp-handler`). Six ordered checks — the preflight (kill switch, host, secret), the bearer token, its signature/`aud`/`iss`, its grant (30 s cache), the grant's subject/origin match, and a live tier lookup (`mcpTierOf`: super-admin or worship admin) — gate every request before it reaches the MCP server, which is one of five (`full` for a super-admin on a claude.ai grant, `fullNoApps` for a super-admin on another agent; for a worship admin `admin` = `ADMIN_TIER_TOOLS` on a claude.ai grant made at or after `ADMIN_WRITES_CUTOFF`, `adminNoApps` = the same minus the five app-only tools on another agent, `adminRead` = `READ_TIER_TOOLS` on an older grant; people and Oasis Kids tools are `SUPER_ADMIN_ONLY_TOOLS`; ADR-0083 and its addendum); see `app/api/mcp/route.ts`'s header comment. The MCP server then gets a copy carrying only an allowlist of headers — no `Authorization`, cookie or Vercel bypass header reaches a tool. Released to production: twelve tools, `ping` (P0, 2026-09-24), seven read tools (P1, 2026-09-25 — see [`docs/MCP.md`](MCP.md#tools)), each declaring `readOnlyHint: true, openWorldHint: false`, and four write tools after them (P3, 2026-09-28), each declaring `readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false` and calling the admin route's own `*Commit` module (ADR-0043). P4 (in production since 2026-10-20, PR #156) registers two more after the writes: `solve_month` (`destructiveHint: false`; stores only its private `mcpProposal` record) and `apply_schedule` (the write annotations; the v3 confirm through `commitFairnessMonths` and `createRole`, ADR-0061). The proposal editor (in production since 2026-10-21, PR #160; ADR-0062) registers three after `apply_schedule`: `check_proposal_edits` (app-only, `readOnlyHint: true`), `save_proposal_edits` (app-only) and `revise_proposal` (both annotated as `solve_month`: they store only a new private proposal version). Every tool has a strict input schema, which the SDK validates before the tool runs. Every SSE response is read to its end before the route returns, so a tool's revalidation and `after()` work finish inside the handler. |
+
+---
+
+## Native apps — sign-in and the app API (ADR-0091)
+
+The native iPhone/iPad/Mac and Android apps' own door: its own secret (`APP_AUTH_SECRET`), tokens and
+documents, nothing shared with the MCP routes above but the primitives. Every route answers 404 on
+a foreign host and 503 with the kill switch `APP_AUTH_DISABLED` set, without the secret, or on a
+Sanity failure (never a sign-out). `/api/app/v1*` and the two callback pages are excluded from
+`proxy.ts`; `/app/authorize` and its POST are **gated**. Runbook: [MOBILE.md](MOBILE.md).
+
+| Route | Methods | Auth | Purpose |
+|-------|---------|------|---------|
+| `/app/authorize` | GET | **gated** — `requireActiveSession`, live-active, not impersonating, not Android ≤ 11 | The confirmation screen «Entrar a la app» / «Cancelar». Validates `client_id` (`backstage-ios`/`backstage-android`), the client's ONE exact redirect (an error page otherwise), `response_type=code`, S256 PKCE, `state` (16–256 visible ASCII); `scope`/`resource` → `invalid_scope`. Mints nothing; never submits itself. |
+| `/app/authorize/submit` | POST, GET | **gated**, same as above, plus same-origin (`Sec-Fetch-Site`, else exact `Origin`) | The ONLY thing that mints an app code (60 s), on `decision=allow`; `deny` → `access_denied`. 303 to the redirect with `code`, `state`, `iss`. GET is 405 with a page. |
+| `/app/callback/ios`, `/app/callback/android` | GET | none — renders a fixed sentence, nothing from the query | Where a verified redirect lands outside the app. `no-referrer`, `no-store`, `noindex`. |
+| `/api/app/v1/auth/token` | POST | public — the signed code plus its PKCE verifier and exact redirect, or a signed refresh token and its live grant | `authorization_code` and `refresh_token` (form body). Public clients: a `client_secret` or `Authorization: Basic` is `invalid_client`. Creates the `appAuthGrant` and rotates its refresh `jti` on every use; a reused refresh token revokes the grant; a lost race is `503 temporarily_unavailable`, not revoked. An inactive member: `invalid_grant` with `error_description: account_disabled`. |
+| `/api/app/v1/auth/revoke` | POST | public — the refresh token | RFC 7009 shape (`token`, `client_id`): revokes that token's grant (`app_sign_out`). 200 whatever the token; 503 only when a valid token's revocation write failed. |
+| `/api/app/v1/me` | GET | bearer — `requireAppSession({ needs: "self" })` | `{id, name, alias, photoUrl, role, ministries, platform}`. The proof endpoint. |
+
+Every later `/api/app/v1/*` route calls `requireAppSession(request, { needs })` as its first
+statement with a literal level (`appAuthStatic.test.ts`): 401 `invalid_token` (no, bad or revoked
+token, a grant of another person or deployment), 401 `account_disabled` (inactive), 403 (level not
+met), 503 (a read failed).
 
 ---
 
@@ -261,9 +285,10 @@ endpoint needs a **signed code plus its PKCE verifier** (or a signed refresh tok
 | Route | Methods | Purpose & side effects |
 |-------|---------|------------------------|
 | `/api/me` | GET, PATCH | GET own member doc (incl. `hasPassword`). PATCH `{alias?, email?}` (email regex-validated) → `revalidateServiceViews()` + `revalidatePath("/me")`. |
-| `/api/me/availability` | GET, PATCH | GET returns `{_rev, unavailableDates[], unavailabilityNotes[]}`. PATCH **requires `_rev`** (400 if missing — never a fallback to an unconditional write) and commits under `ifRevisionId`; **409 `{error:"stale_revision", _rev, …}` means the write did NOT land** and carries the winner's state, 200 returns the new `_rev`. Validates ISO dates, unique per date (`_key`=date). No revalidation. **`unavailableDates` has exactly two writers — this route and `/api/kids/members/[id]/availability` — and both are now revision-guarded;** before that, whichever saved second silently deleted the other's dates. The client rebases **once** when the conflicting state's base is byte-identical (a sibling `/api/me*` write from the same page, where re-issuing cannot delete anything) and discards on any further conflict. |
+| `/api/me/availability` | GET, PATCH | GET returns `{_rev, unavailableDates[], unavailabilityNotes[]}`. PATCH **requires `_rev`** (400 if missing — never a fallback to an unconditional write) and commits under `ifRevisionId`; **409 `{error:"stale_revision", _rev, …}` means the write did NOT land** and carries the winner's state, 200 returns the new `_rev`. Validates ISO dates, unique per date (`_key`=date). No revalidation. **`unavailableDates` has exactly two writers — this route and `setKidsAvailability` (`/api/kids/members/[id]/availability` and the MCP `set_kids_absences`, which edits by parts on the fresh `_rev`) — and both are now revision-guarded;** before that, whichever saved second silently deleted the other's dates. The client rebases **once** when the conflicting state's base is byte-identical (a sibling `/api/me*` write from the same page, where re-issuing cannot delete anything) and discards on any further conflict. |
 | `/api/me/notif-prefs` | PATCH | `{email?, assignments?, proposals?, reminders?, setlist?}` (booleans; `setlist` bool → `"all"`/`"off"`). Writes `notifPrefs.*`. |
 | `/api/me/theme` | PATCH | `{theme: "dark" \| "light" \| "system"}` → writes `themePref`. **403 while impersonating — deliberately stricter than `PATCH /api/me`, do not "harmonise" it:** impersonation rewrites `session.user.sanityId` to the target, so without the guard a super-admin would persist their theme onto someone else's record from a UI action that looks local. A name correction is plausibly made on a member's behalf; a theme is not. `"system"` became legal at Child F, together with the `enableSystem` flip that makes it resolvable — the two are one change, and the 400 body is derived from the accepted set so it cannot drift. No `revalidate*` — per-member chrome, no ISR page renders it. |
+| `/api/me/app-sessions/[grantId]/revoke` | POST | «Cerrar sesión en ese dispositivo» in «Apps conectadas» (ADR-0091): revokes ONE of the caller's own native-app grants on THIS deployment (`member_revoked`), read fresh. The same 404 «Sesión no encontrada.» for an id that is not an app grant id, someone else's grant, another deployment's or an already revoked one. **403 while impersonating.** 503 on a failed read or write. |
 | `/api/me/calendar-feed` | POST | «Generar un enlace nuevo» (ADR-0057): increments the member's `calendarFeed.<id>` generation (`createIfNotExists` + `inc`, one transaction, `returnDocuments`) and returns `{urls}` signed with the generation the transaction returned. **403 while impersonating** (a super-admin never resets or receives a member's private link) and for a kids-only member; 503 without `CALENDAR_FEED_SECRET`, the read token or a canonical origin. No `revalidate*` (credential state, no ISR page renders it). |
 | `/api/me/password` | POST | `{currentPassword?, newPassword}` (≥8 chars). Verifies current via bcrypt if a hash exists; sets `passwordHash` (cost 12). |
 | `/api/me/photo` | POST | multipart `photo`. 5 MB max, MIME whitelist + **magic-byte** check (413/415). Uploads Sanity asset, sets own `profilePhoto` → `revalidateServiceViews()` + `revalidatePath("/me")`. |
@@ -305,7 +330,12 @@ Every route below is gated by `requireMinistryManager("kids")` → **403** when 
 returns null. That guard passes for `super-admin` or a member whose
 `managesMinistries` includes `"kids"` — **plain `admin` does NOT pass**, which is the
 two-way isolation rule (see `CLAUDE.md` § Auth). All mutating routes call
-`revalidateKidsViews()`.
+`revalidateKidsViews()`. Since admin parity phase 3 (2026-10-27) the writes delegate everything after
+authorization to `app/utils/kidsCommit.ts`, the generator to `proposeKidsMonth`
+(`kidsMonthPlan.ts`) and the schedules GET to `readKidsMonthSchedules` (`kidsScheduleReads.ts`); the
+MCP Kids tools call the same functions ([MCP.md](MCP.md#oasis-kids-admin-parity-phase-3)). Every
+planner read passes `perspective: "published"`, so a Studio draft never shows up as a second pair,
+volunteer or Sunday. The write routes are wrapped in `withVerificationRunContext`.
 
 | Route | Methods | Purpose & side effects |
 |-------|---------|------------------------|
@@ -314,7 +344,7 @@ two-way isolation rule (see `CLAUDE.md` § Auth). All mutating routes call
 | `/api/kids/schedules` | GET, PUT | GET `?month=YYYY-MM` (string bounds, no `Date` math; `published` projected through `coalesce(…, false)` because GROQ has no boolean default). PUT `{date, seats, published?}` upserts at the deterministic `_id` `kidsSchedule-<YYYY-MM-DD>` via `createIfNotExists` + `patch`, so a re-generate updates in place and two concurrent saves cannot fork a Sunday. Re-validates room-vs-seat, retired pairs and one-seat-per-pair server-side rather than trusting the dropdown. `.unset()` is skipped when nothing is being cleared. |
 | `/api/kids/generate` | POST | `{month, seed?, exclude?}` → `RotationResult & {seed, fingerprint, exhausted}`. **Read-only, writes nothing** — under a seed too. Reads the month's worship assignments through `operationalClient` with `published != false` (a Kids planner must never be the surface that reveals a draft worship roster) purely to emit overlap **warnings** — never a block. Its own **history read filters `published == true`** — an unpublished Sunday is a proposal, not a served turn, so it never feeds the fairness clock (ADR-0022). The two spellings on this one route are deliberate and not a typo: `!= false` for the worship types that predate the field, `== true` for `kidsSchedule`, which is minted with it. **`seed: 0` (or absent) is always the strictly fairest month** and is returned even when `exclude` already contains it, because that is what «Generar mes» means. A **non-zero seed is «Otra opción»**: the route walks forward from that seed, up to `MAX_SEED_ATTEMPTS`, for the first plan whose `fingerprint` is not in `exclude` — the search runs on the already-fetched data (`planKidsMonth` is pure), so it costs no extra Sanity reads and no extra round trips. When every reachable arrangement is already in `exclude` it answers `{exhausted:true, proposal:[], fingerprint:null}` and the planner **leaves the board untouched** rather than redrawing a month the admin just rejected. See ADR-0021 for why alternatives spend a bounded amount of fairness instead of only breaking ties. |
 | `/api/kids/members` | GET | Members whose `ministries` include `kids`, with `_rev`, `unavailableDates` and `unavailabilityNotes`. `_rev` is **contract, not debug clutter** — the availability PATCH requires it. |
-| `/api/kids/members/[id]/availability` | PATCH | `{_rev, unavailableDates[], unavailabilityNotes[]}` — the admin-side override for volunteers who never sign in, writing the **same fields the member's own `/me` calendar writes**. 404 unless the target's normalized ministries include `kids` (checked before anything else, so a Kids manager learns nothing about a worship member). **`_rev` is mandatory — a missing one is 400, never an unconditional write**, because the fallback would preserve the lost-update bug for any stale client bundle. The commit runs under `ifRevisionId`; a **409 `{error:"stale_revision", …}` means the write did NOT land** and carries the winner's current arrays. The client adopts that state and holds (not flashes) a Spanish message telling the manager to re-mark and save. |
+| `/api/kids/members/[id]/availability` | PATCH | `{_rev, unavailableDates[], unavailabilityNotes[]}` — the admin-side override for volunteers who never sign in, writing the **same fields the member's own `/me` calendar writes**. 404 unless the target's normalized ministries include `kids` (checked before any validation or write, so a Kids manager learns nothing about a worship member; a body that is not JSON fails before that, revealing nothing either). **`_rev` is mandatory — a missing one is 400, never an unconditional write**, because the fallback would preserve the lost-update bug for any stale client bundle. The commit runs under `ifRevisionId`; a **409 `{error:"stale_revision", …}` means the write did NOT land** and carries the winner's current arrays. The client adopts that state and holds (not flashes) a Spanish message telling the manager to re-mark and save. |
 
 ---
 
@@ -345,12 +375,49 @@ protection (spec 2026-09-20 decision D2).
 
 ---
 
+## Jóvenes meetings (ADR-0081)
+
+Every route below answers **401** without an active session, then **404** unless the path's
+ministry is `jovenes` AND the `jovenesEvents` rollout reaches the caller (`eventRouteGate`,
+`app/api/ministries/[ministry]/eventRoute.ts`), then hands the body to
+[`ministryEventCommit.ts`](../app/utils/ministryEventCommit.ts), the type's ONE writer, which decides
+everything else on a FRESH read of the caller's access and of the stored event. A body that is not
+JSON reaches it as `null` (400). Refusal order, for every write: the body's shape (400; a missing
+`_rev` is `rev_required`) → inactive (403) → an event the caller may not read in either mode (404
+«Ese evento no existe.», the same as a missing id, so a refusal never confirms one exists) → not
+allowed (403) → stale `_rev` (409 «Alguien más cambió este evento; recarga.»). Success is
+`{ok, id, rev}` and calls `revalidateMinistryViews`. Wrapped in `withVerificationRunContext`. The
+writer sends nothing itself: create, PATCH, the program PATCH and the part PATCH answer (inside
+`effects`, never in the body) the emails the write owes, computed from the row read BEFORE the
+commit, and the route sends them in `after()` (`ministryEventNotify.ts`, `maxDuration = 60`;
+ADR-0089, `docs/NOTIFICATIONS.md` «Jóvenes meetings»). MCP and the admin assistant never import it
+(`ministryEventCoverage.test.ts`).
+
+**A program line** is `{_key?, label, member?, note?}` (a free line) or, since ADR-0089, a PART
+line `{_key?, part, member?, member2?, note?, music?, helpers?}`: `part` is `oracion` (one person),
+`dinamica1` / `dinamica2` (up to two) or `platica` (none on the line: its people are the
+`comparte` seats); the stored label is the table's (`ministryParts.ts`), `music` is `track` |
+`alabanza` on Oración and Plática only, `helpers` is one line ≤120 on a dinámica only, `note` ≤300
+is the description. One line per part; anything else is 400 `invalid_program`. On a line whose
+`_key` names a stored part line the body must carry that same `part` (else 400) and the STORED
+`note`, `music` and `helpers` are written back whatever the body says: once a part line exists,
+only the part route below changes them.
+
+| Route | Methods | Purpose & rules |
+|-------|---------|-----------------|
+| `/api/ministries/[ministry]/events` | POST | Create. `{token, audience, kind?, date, time?, arrival?, title?, place?, notes?, published?, seats?, program?}` (`place`: one line ≤120, else `invalid_place`; a seat is `{_key?, role, member}`, `{_key?, role, name}` — a typed name, one line ≤60, never with a member, else `invalid_seats` — or `{_key?, role}`, an empty seat). `token` is a v4 UUID the client mints when the editor opens (lowercased; the id becomes `ministryEvent.<token>`), so a retry names the same meeting: a second create answers 409 `already_created` only to someone who may read it, else 404. A Jóvenes admin creates anything; a leader only a `groups` audience that includes a group they lead (a joint meeting of up to three groups). `createdBy` is the caller, never the body. Every seat and program person must be an active member of the ministry (and, for groups, of one of them) — `invalid_member`; a seat's typed `name` is text and is not checked. |
+| `/api/ministries/[ministry]/events/[token]` | PATCH, DELETE | PATCH `{_rev, …any editable field}` edits or publishes; arrays are written whole, a stored item keeps its `_key`, an unchanged kept item is not re-validated. DELETE `{_rev}`: a guarded delete (one transaction, an `ifRevisionId` no-op patch then the delete). Who: a Jóvenes admin any meeting; a leader a one-group meeting of a group they lead; a joint meeting only its creator (while leading one of its groups) and the admins. |
+| `/api/ministries/[ministry]/events/[token]/program` | PATCH | `{_rev, program}` — writes ONLY `program`, whatever else the body says. Who: anyone who may edit the meeting, plus the encargado or apoyo of a whole-ministry meeting who may still read it. |
+| `/api/ministries/[ministry]/events/[token]/parts/[part]` | PATCH | «Mi parte» (ADR-0089, W10). `{_rev, note?, music?, helpers?}` — a key that is present is a change (`null` clears it), at least one is required (`nothing_to_update`), a bad value is 400 `invalid_part`, an unknown `part` is 404. Who: anyone who may edit the meeting or its program, plus the part's RESPONSABLE while they can read the meeting as a member (a person on that part's line; for `platica`, a member in a `comparte` seat; never a typed name, never on a draft), else 403 «No puedes editar esta parte.». Writes ONLY `program`: the stored array with that one line's three fields changed, or — when the part has no line yet and there is something to store — a new part line appended (400 `invalid_program` on a full program; nothing to store ⇒ `ok` with the current revision and no write). Never a person, a label, a seat or `published`. |
+
+---
+
 ## Content editing — `requireActiveManager` (content-editor **allowed**)
 
 | Route | Methods | Notes |
 |-------|---------|-------|
 | `/api/content/posts` | GET, POST | GET all songs. POST create song (title required; all URLs must be http(s); resolves `authorIds`→names; `textToBody(lyrics)`; builds slug) → `revalidateSongViews()`, 201. **Link rows (`referenceLinks`) go through `normalizeLinkRows`**: a row with neither label nor URL is DROPPED, the way `normalizeChordCharts` drops a blank chart — it used to 400 the whole request and lose every other edit in the form. A row WITH a label and no usable URL still 400s, and the error names the label. |
-| `/api/content/posts/[id]` | PATCH, DELETE | PATCH partial song update (URL validation; **type-guards target is a `post`**). Same `normalizeLinkRows` contract as POST, for `referenceLinks` **and** `tutorials`. **DELETE requires admin/super-admin** (content-editor excluded). Both → `revalidateSongViews()`. |
+| `/api/content/posts/[id]` | PATCH, DELETE | PATCH partial song update (URL validation; **type-guards target is a `post`**). Same `normalizeLinkRows` contract as POST, for `referenceLinks` **and** `tutorials`. **DELETE requires admin/super-admin** (content-editor excluded), and deletes a `post` ONLY: it reads the stored type first (404 «Canción no encontrada.» for any other id, and for a song already deleted — before ADR-0081 W9 it deleted any document and a repeat answered 200) and deletes under the revision it read, its guard setting `title` to the stored value in the same transaction (409 if the revision moved; a song still referenced fails as before). Both → `revalidateSongViews()`. |
 | `/api/content/tags` | GET, POST | POST is **idempotent by slug** — returns the existing doc (200) or creates (201). |
 | `/api/content/authors` | GET, POST | POST idempotent by slug (via `slugifyAuthor`) — existing (200) or created (201). |
 
@@ -468,10 +535,11 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
 ### Members — mostly **super-admin only**
 | Route | Methods | Auth | Notes |
 |-------|---------|------|-------|
-| `/api/admin/members` | GET, POST | GET admin/super-admin; **POST super-admin** | GET is **ministry-scoped**: `admin`/`content-editor` receive worship members only (`WORSHIP_MEMBER_GROQ_FILTER`), while `super-admin` binds `$all` and receives everyone — they are the only role that can edit `ministries`, so filtering them would make a Kids-only member uneditable through the UI. The Miembros list then offers an Alabanza/Oasis Kids/Todos control, defaulting to Alabanza, filtering client-side. Absent `ministries` counts as worship, so no legacy member is ever hidden. POST create (name+email required), 201. POST and PATCH accept `instruments` (array of strings closed to `DEFAULT_INSTRUMENT_SEATS` after `normalizeSeatName`; duplicates collapse; `[]` stored; absent = untouched) and answer **400** `Instrumento no reconocido: <name>` on any other value. |
-| `/api/admin/members/[id]` | PATCH, DELETE | **super-admin** | PATCH validates role/`memberType`/`instruments`/`ministries`/`managesMinistries` (each applied only when present, so an unrelated edit cannot wipe a privilege), sets `notifPrefs.email` → `revalidateServiceViews()` + `revalidatePath("/me")`. DELETE removes. |
-| `/api/admin/members/[id]/photo` | POST | **super-admin** | Same photo validation as `/api/me/photo`; sets target's `profilePhoto`. (No revalidation.) |
-| `/api/admin/set-password` | POST | **super-admin** | `{sanityMemberId, password}` (≥8) → sets `passwordHash` (cost 12). |
+| `/api/admin/members` | GET, POST | GET admin/super-admin; **POST super-admin** | GET is **ministry-scoped**: `admin`/`content-editor` receive worship members only (`WORSHIP_MEMBER_GROQ_FILTER`), while `super-admin` binds `$all` and receives everyone — they are the only role that can edit `ministries`, so filtering them would make a Kids-only member uneditable through the UI. The «Personas» list (`/super-admin`; the `/admin` Miembros tab until 2026-10-29) then offers an Alabanza/Oasis Kids/Todos control, defaulting to Alabanza, filtering client-side. Absent `ministries` counts as worship, so no legacy member is ever hidden. POST create (name+email required), 201; a `ministryRoles` item is stored as sent and follows the PATCH's rules (exactly `{ministry, level, groups, leaderOf}`; without `leaderOf` it is 400; ADR-0085). POST and PATCH accept `instruments` (array of strings closed to `DEFAULT_INSTRUMENT_SEATS` after `normalizeSeatName`; duplicates collapse; `[]` stored; absent = untouched) and answer **400** `Instrumento no reconocido: <name>` on any other value. |
+| `/api/admin/members/[id]` | PATCH, DELETE | **super-admin** | PATCH validates role/`memberType`/`instruments`/`ministries`/`managesMinistries` (each applied only when present, so an unrelated edit cannot wipe a privilege); `ministryRoles` items carry exactly `{ministry, level, groups, leaderOf}` (ADR-0085; a body without `leaderOf` is 400): `leaderOf` ⊆ `groups`, no repeats («Solo puede liderar un grupo al que pertenece.»), at least one for a `leader` («Un líder necesita liderar al menos un grupo.»), none for a member or admin («Solo un líder lidera grupos; un admin ya administra todos.»); stored as sent (`leaderOf` on a leader only, as on POST), the write pinned to the person's read, sets `notifPrefs.email` → `revalidateServiceViews()` + `revalidatePath("/me")`. DELETE removes. **Both answer 404 «Miembro no encontrado.» for an id held by another type** (ADR-0081 W9: before it, a PATCH without `role`/`ministries` and the DELETE wrote any id). The PATCH also 404s a missing id (it reads the stored member on every request); the DELETE does not — an id no document holds skips the delete and still runs the solver-pool cleanup, so «Reintenta la eliminación» after a failed cleanup finishes it. |
+| `/api/admin/members/[id]/app-sessions/revoke` | POST | **super-admin** on the LIVE role (a fresh read, not the JWT), refused while impersonating | «Cerrar sesiones de la app» (ADR-0091): revokes every live `appAuthGrant` of that member on THIS deployment (`admin_revoked`) in ONE transaction, all or none; answers `{ok, revoked}`, 503 «No se pudo cerrar; intenta de nuevo.» on a failure. Writes only grant documents whose `sub` is the id, so an id that is not a member's matches none. |
+| `/api/admin/members/[id]/photo` | POST | **super-admin** | Same photo validation as `/api/me/photo`; sets target's `profilePhoto`. (No revalidation.) 404 for an id that is not a `teamMembers`, before any upload (W9). |
+| `/api/admin/set-password` | POST | **super-admin** | `{sanityMemberId, password}` (≥8) → sets `passwordHash` (cost 12). 404 for an id that is not a `teamMembers` (W9). |
 | `/api/admin/login-events` | GET | admin/super-admin | Per-member last login/active, count, providers, recent 20 events. 500 `activity_unavailable` without `SANITY_API_READ_TOKEN`. |
 
 ### Solver
@@ -488,7 +556,7 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   effective engine (`resolveSolverEngine`); a body of the other contract (`contract: 3` under v2, or
   anything else under v3) answers `409 { ok: false, error: "solver_version_mismatch", engine }`
   before any other check. Under v3 a `contract: 3` body goes to `OWT_SOLVER_V3_URL` with `X-Api-Key`
-  (or, off Vercel, `gcf_v3/owt_solver_v3.py --json-mode`), aborted at 55 s: a success is forwarded
+  (or, off Vercel and only under `next dev`, `gcf_v3/owt_solver_v3.py --json-mode`; a production build answers `not_configured` instead of spawning), aborted at 55 s: a success is forwarded
   verbatim (200); the solver's coded failure (`ok: false, contract: 3, engine: "v3", code`) at any
   status is forwarded as 422; everything else is `{ ok: false, transport_error: true, transport }`
   (422) with `transport` ∈ `timeout`, `unreachable`, `http_status`, `not_json`, `not_configured`,
@@ -601,7 +669,14 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
 - **`GET /api/cron/service-reminders`** — **secret-based auth** (`Authorization: Bearer
   <CRON_SECRET>` header or `?secret=`, compared to `process.env.CRON_SECRET`; 403 otherwise —
   **not** session-based). Finds members assigned to **tomorrow's** published services
-  (America/Mexico_City) and pushes a `reminders` notification ("Sirves mañana"). Scheduled by
+  (America/Mexico_City), pushes them a `reminders` notification ("Sirves mañana") and, since
+  2026-11-19, emails it too: one email per person with their seat(s), the hour and the setlist
+  (`eveReminders` in the JSON; ADR-0080's addendum, `docs/NOTIFICATIONS.md` §«Sirves mañana»). **On a CDMX
+  Sunday** it also emails «Te toca dirigir» to the leads of next week's published services that
+  still need songs (`leadReminders` in the JSON; ADR-0080, `docs/NOTIFICATIONS.md`). **Every
+  day** it also emails the reminders of the Jóvenes meetings dated exactly 14 and 7 days ahead, to
+  whoever still owes something on a part of theirs (`meetingReminders` in the JSON; ADR-0089's
+  addendum). Scheduled by
   `vercel.json` at `0 1 * * *` (01:00 UTC daily). The only endpoint scheduled by `vercel.json` —
   Vercel Hobby allows one cron per day, so the other two are driven from outside Vercel — the flush by a Google Cloud Scheduler job plus GitHub Actions (ADR-0032), the probe by hand.
 

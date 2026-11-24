@@ -4,6 +4,7 @@
 
 import type { NotifyKind } from "./notifyPrefs";
 import type { OutboxSongRow } from "./outboxNotice";
+import { sortedLeadIds } from "./songLeads";
 
 export type LineKind =
   | "assigned" | "removed" | "roleChanged"
@@ -38,8 +39,14 @@ export interface Line {
   serviceTime?: string;
 }
 
-/** Calendar-day comparison; both sides are already America/Mexico_City dates. */
-const isPast = (serviceDate: string, today: string) => serviceDate < today;
+/**
+ * Calendar-day comparison; both sides are already America/Mexico_City dates.
+ * Exported for the MCP proposal check's email forecast (admin parity S1), which
+ * must drop a past service by this same rule. Not `isPastServiceDate`
+ * (`serviceReadiness.ts`), which parses unknown input on day offsets.
+ */
+export const isPastNoticeDate = (serviceDate: string, today: string) => serviceDate < today;
+const isPast = isPastNoticeDate;
 
 /**
  * Two label lists name the same SET (duplicates and order ignored). The flush's
@@ -84,7 +91,12 @@ export function classifyRole(i: {
 // equal to a leaderless live setlist.
 const leadsKey = (r: OutboxSongRow) => (r.leads ?? []).join(",");
 
-const sameSongs = (a: OutboxSongRow[], b: OutboxSongRow[]) =>
+/**
+ * The flush's «nothing changed» rule for a setlist. Exported for the MCP proposal
+ * check's forecast (admin parity S1), so «sin correo si las canciones no cambian»
+ * is this rule and not a second copy.
+ */
+export const sameSetlistSongs = (a: OutboxSongRow[], b: OutboxSongRow[]) =>
   a.length === b.length &&
   a.every((r, n) =>
     r.ref === b[n].ref && r.key === b[n].key && r.group === b[n].group && leadsKey(r) === leadsKey(b[n]));
@@ -101,7 +113,7 @@ export function classifySetlist(i: {
   // week's setlist, so there is nothing truthful to say.
   if (!i.dateMatches) return null;
   if (!i.after.length) return null;
-  if (sameSongs(i.before, i.after)) return null;
+  if (sameSetlistSongs(i.before, i.after)) return null;
 
   return {
     kind: i.before.length ? "setlistChanged" : "setlistReady",
@@ -200,4 +212,34 @@ export function classifyProposalMessages(i: {
     after: [],
     notes: bodies.join("\n\n"),
   };
+}
+
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object";
+
+/**
+ * Stored `beforeSongs` rows carry no `group` at all for a standalone song
+ * (the schema field is a plain number), while `songRowsFrom` produces an
+ * explicit `null`. Normalising here keeps the two comparable — `undefined`
+ * would never equal `null` and every snapshot would read as changed.
+ *
+ * `leads` is KEPT, or the stored side would always compare leaderless against a
+ * live side that has leaders: a no-op save of a worship night would email, and
+ * clearing every leader would not. Exported for the MCP proposal check, which forecasts the flush
+ * from a pending notice's stored `before` (`app/mcp/reads/pendingSetlistNotice.ts`).
+ */
+export function normalizeSnapshotRows(rows: unknown): OutboxSongRow[] {
+  if (!Array.isArray(rows)) return [];
+  return rows.filter(isObj).map((r, i) => {
+    // Sorted and de-duplicated exactly like `songRowsFrom`, through the same
+    // helper, and ABSENT when empty, so a snapshot stored before leaders
+    // existed compares unchanged.
+    const leads = sortedLeadIds(r.leads);
+    return {
+      _key: typeof r._key === "string" ? r._key : `s${i}`,
+      ref: typeof r.ref === "string" ? r.ref : "",
+      key: typeof r.key === "string" ? r.key : "",
+      group: typeof r.group === "number" ? r.group : null,
+      ...(leads.length ? { leads } : {}),
+    };
+  });
 }

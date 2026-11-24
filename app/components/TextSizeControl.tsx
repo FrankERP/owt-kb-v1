@@ -3,12 +3,18 @@
 import { useEffect, useState } from "react";
 import { PRESETS, TextScaleMode, applyScale, getStoredMode, setStoredMode } from "@/app/utils/textZoom";
 import SegmentedControl from "@/app/components/ui/SegmentedControl";
+import { SHEET_TITLE } from "@/app/utils/homeHero";
 
 /**
  * Segmented text-size control. Persists the choice device-locally and applies it
  * immediately. "Automático" follows the device accessibility setting on native.
+ *
+ * A section in the page's own type (the «millones» pass, 2026-10-26): small-caps
+ * title, a 15 px hint, the house bar filled and full width, and a 17 px sample
+ * line in the body face — the bordered card it used to draw (and the `bare` prop
+ * that removed it for `SettingsCard`) are gone with the card they matched.
  */
-export default function TextSizeControl({ bare = false }: { bare?: boolean } = {}) {
+export default function TextSizeControl() {
   const [mode, setMode] = useState<TextScaleMode>("auto");
 
   // Initialise from storage after mount (localStorage is client-only).
@@ -21,19 +27,21 @@ export default function TextSizeControl({ bare = false }: { bare?: boolean } = {
   }
 
   return (
-    <section className={bare ? "" : "rounded-2xl border border-surface-accent-20 p-5"}>
-      <h3 className={`font-display text-lg font-bold ${bare ? "" : "mb-1"}`}>Tamaño de texto</h3>
-      <p className="font-body text-sm text-mono-500 dark:text-mono-400 mb-4">
-        &quot;Automático&quot; sigue el ajuste de tu dispositivo. Elige un tamaño fijo para anularlo.
+    <section className="space-y-4">
+      <h2 className={SHEET_TITLE}>Tamaño de texto</h2>
+      <p className="font-body text-[15px] leading-snug text-ink-muted">
+        «Automático» sigue el ajuste de tu teléfono. Solo en este dispositivo.
       </p>
       <SegmentedControl
         label="Tamaño de texto"
         value={mode}
         onChange={choose}
         options={PRESETS.map((p) => ({ value: p.mode, label: p.label }))}
+        tone="filled"
+        className="w-full [&>button]:flex-1"
       />
-      <p className="font-body text-base mt-4 text-mono-600 dark:text-ink-muted/70">
-        Texto de ejemplo — así se verá el contenido de la app.
+      <p className="font-body text-[17px] leading-snug text-ink-dim">
+        Así se lee el setlist del domingo.
       </p>
     </section>
   );

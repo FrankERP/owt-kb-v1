@@ -86,6 +86,8 @@ async function renderPage(): Promise<string> {
   const { renderToStaticMarkup } = await import("react-dom/server");
   return renderToStaticMarkup(await MePage());
 }
+/** The page's words only — the header's line spans several elements. */
+const textOf = (html: string) => html.replace(/<[^>]+>/g, "");
 
 beforeEach(() => {
   requireActiveSession.mockReset();
@@ -121,11 +123,10 @@ describe("/me same-day order (design pass D)", () => {
           }
         : [],
     );
-    const html = await renderPage();
-    expect(html).toMatch(/Te toca el domingo 13 · Lead/);
-    expect(html).not.toContain("Concierto · Lead");
-    expect(html).toContain("En 3 días");
-    expect(html).toContain("· 11:00");
+    const text = textOf(await renderPage());
+    expect(text).toMatch(/Te toca el domingo 13 · Lead/);
+    expect(text).not.toContain("Concierto · Lead");
+    expect(text).toContain("· 11:00 · en 3 días");
   });
 });
 
@@ -148,7 +149,7 @@ describe("/me worship gating", () => {
     expect(html).not.toContain("Líder Domingo");
     expect(html).not.toContain("Voz");
     // The kids half is exactly what they DO get.
-    expect(html).toContain("Mis roles en Oasis Kids");
+    expect(html).toContain("Oasis Kids");
   });
 
   it("skips the worship READS for a kids-only member instead of discarding them", async () => {
@@ -174,7 +175,7 @@ describe("/me worship gating", () => {
     // column at all — the header already said it, once.
     expect(html).not.toContain("Mis próximos servicios");
     expect(html).toContain("Sin servicios asignados próximamente");
-    expect(html).not.toContain("Mis roles en Oasis Kids");
+    expect(html).not.toContain("Oasis Kids");
     expect(queries().some((q) => q.includes("setlistCandidates"))).toBe(true);
     expect(queries().some((q) => q.includes("setlistProposal"))).toBe(true);
   });
@@ -184,7 +185,7 @@ describe("/me worship gating", () => {
     const html = await renderPage();
     // R3: the worship half is now the header's line (the `h2` is gone).
     expect(html).toContain("Sin servicios asignados próximamente");
-    expect(html).toContain("Mis roles en Oasis Kids");
+    expect(html).toContain("Oasis Kids");
   });
 
   // DUAL-MINISTRY PRECEDENCE (fix round 1, ruling 6): the header's ONE line
@@ -200,7 +201,7 @@ describe("/me worship gating", () => {
       return [];
     });
     const html = await renderPage();
-    expect(html).toContain("En Oasis Kids te toca el");
+    expect(textOf(html)).toContain("En Oasis Kids te toca el");
     expect(html).not.toContain("Sin servicios asignados próximamente");
   });
 

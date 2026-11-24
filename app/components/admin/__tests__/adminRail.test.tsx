@@ -87,7 +87,7 @@ describe("AdminRail renders both layouts of one control", () => {
     const { rail, strip } = mount({ onChange });
     fireEvent.click(within(rail).getByRole("button", { name: "Actividad" }));
     expect(onChange).toHaveBeenCalledWith("activity");
-    fireEvent.click(within(strip).getByRole("button", { name: "Contenido" }));
+    fireEvent.click(within(strip).getByRole("button", { name: "Canciones" }));
     expect(onChange).toHaveBeenLastCalledWith("content");
   });
 
@@ -437,7 +437,7 @@ describe("the phone strip scrolls its active tab into view", () => {
   // `/admin?tab=x` seeds the panel's tab from the URL, so the active item is
   // already active at the strip's FIRST render and never flips. Before F1 the
   // shared `useActiveIntoView` refused to scroll on mount (SectionNav's rule),
-  // and a 390px phone opened `?tab=content` with «Contenido» — and its
+  // and a 390px phone opened `?tab=content` with «Canciones» — and its
   // underline — off-screen to the right.
   let original: typeof HTMLElement.prototype.scrollIntoView;
   let spy: ReturnType<typeof vi.fn>;
@@ -468,6 +468,6 @@ describe("the phone strip scrolls its active tab into view", () => {
       <AdminRail tabs={TABS} active="content" onChange={vi.fn()} integrityTone="clean" integrityCount={0} />,
     );
     expect(spy).toHaveBeenCalledTimes(1);
-    expect(spy.mock.instances[0]).toBe(within(strip).getByRole("button", { name: "Contenido" }));
+    expect(spy.mock.instances[0]).toBe(within(strip).getByRole("button", { name: "Canciones" }));
   });
 });

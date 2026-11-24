@@ -11,14 +11,16 @@ exact strings used in GROQ `_type` filters.
 
 ---
 
-## Registered document types (24)
+## Registered document types (28)
 
 `post`, `tag`, `author`, `featuredSongs`, `saturdarSongs`, `saturday_role`, `sunday_role`,
-`teamMembers`, `special_role`, `loginEvent`, `setlistProposal`, the two Oasis Kids types
-`kidsPair` and `kidsSchedule`, and eleven **internal** types never authored by hand:
+`teamMembers`, `special_role`, `loginEvent`, `setlistProposal`, `serviceThread` (ADR-0065),
+`homeSettings` (ADR-0070), the two Oasis Kids types `kidsPair` and `kidsSchedule`, and fifteen
+**internal** types never authored by hand:
 `roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`, `specialIdentityCoordinator`,
 `solverConfig`, `fairnessMonth`, `mcpOauthGrant`, `mcpOauthCodeRedemption`, `calendarFeed`,
-`adminChatUsage`, `mcpProposal`.
+`adminChatUsage`, `mcpProposal`, `availabilityConflict` (ADR-0079), `ministryEvent` (ADR-0081),
+`appAuthGrant`, `appAuthCodeRedemption` (ADR-0091).
 
 **Not registered** (present but intentionally unused — do not wire in):
 - `sanity/schemas/youtubeType/youtubeType.ts` — object type `youtube`.
@@ -45,6 +47,7 @@ this is a **song**.
 | `key` | string | Native/original key. |
 | `musicalReferenceUrl` | url | YouTube reference mix musicians rehearse with. |
 | `lyricsVideoUrl` | url | YouTube video with the Spanish lyrics the team sings. |
+| `albumArt` | image | Optional. The cover of the album the song comes from, square — the song's picture on a setlist row ([ADR-0088](adr/0088-a-worship-service-is-a-card-with-faces-and-album-covers.md); read through `SONG_COVER_GROQ`, sized by `songCoverUrl`, never the YouTube still). Absent = a neutral tile. First load: `scripts/set-album-art.mjs`; afterwards an editor replaces it in the Studio. |
 | `body` | array (Portable Text) | `block` + `image` (image has an `alt` text field). Lyrics live here. |
 | `tutorials2` | array of `tutorial` | `{ title, url }`. |
 | `audioTracks` | array of `audioTrack` | `{ title, tone, audioFile (.mp3 file) }`. |
@@ -89,12 +92,14 @@ referenced by every seat, proposal, and login event. **A member's identity in au
 | `notifPrefs` | object | `assignments` (bool, def true), `email` (bool, def true — assignment emails), `setlist` (string: `all`/`assigned`/`off`, def `all`), `proposals` (bool, def true), `reminders` (bool, def true). |
 | `memberType` | array of string | Multi-select: `voz`, `instrumento`, `foh`, `sunday_lead`, `saturday_lead`, `support`. Governs sections + solver pools. |
 | `instruments` | array of string | Declared instrument seats, closed to `DEFAULT_INSTRUMENT_SEATS` (`Bass`, `Keys`, `Drums`, `EG`, `AG`). **Absent or `[]` = declares nothing**: the instrument filler never seats them; the planner still lists them «sin declarar». A refinement of the `instrumento` Tipo, not a second axis (ADR-0029). Hidden in Studio unless Tipo has `instrumento`. Seeded once from seat history by `scripts/backfill-member-instruments.mjs`. |
+| `singsAndPlays` | boolean | «Canta y toca a la vez». **Absent or `false` = never a voice and an instrument on the same service** (`seatsClash`, ADR-0078): the picker, the drag, both fillers and the MCP judges refuse it and the planner grid flags it. Set for those who lead while they play (Frank, Mkz). Edited in Personas (`/super-admin`; PATCH absent = untouched) and in Studio, hidden there unless Tipo has both `voz` and `instrumento`. |
 | `profilePhoto` | image | `hotspot: true`. |
 | `googlePhotoUrl` | string (hidden) | Synced from Google OAuth each sign-in; fallback photo. |
 | `lastSeen` | datetime (hidden) | Auto-updated by the activity ping. |
 | `passwordHash` | string (hidden) | bcrypt. Set via admin API / CLI. Never edit manually. |
 | `unavailableDates` | array of string | ISO `YYYY-MM-DD` the member can't serve. Set from `/me`. |
 | `unavailabilityNotes` | array (hidden) | `{ date, note }` optional reasons per unavailable date. |
+| `ministryRoles` | array of `ministryRole` (read-only in the Studio) | Level per LEVELED ministry (today Jóvenes, ADR-0075): `{ _key = ministry, _type: "ministryRole", ministry, level: member\|leader\|admin, groups: string[], leaderOf?: string[] }`. `groups` = the groups the person BELONGS to; `leaderOf` = the groups they LEAD, a subset of `groups`, stored on a `leader` only ([ADR-0085](adr/0085-a-jovenes-leader-leads-named-groups.md)). Read only through `normalizeMinistryRoles` and `ledGroupsIn`; an absent or unusable `leaderOf` on a leader leads nothing (L2). Written only by `memberCommit.ts`, as the request sends it: every request item carries exactly `{ ministry, level, groups, leaderOf }` (`leaderOf` `[]` unless a leader; a leader leads at least one group). |
 
 **Auth note:** `role` and `disabled` are read live (bypassing CDN) through the 30s-TTL cache in
 `memberAccess.ts`, so role changes and the kill switch take effect within ~30 seconds instead
@@ -199,6 +204,7 @@ songs/notes are written to the real setlist. See the design spec
 | `status` | string (radio) | `draft` (init) / `pending` / `approved` / `changes_requested`. |
 | `messages` | array of `proposal_message` | **The private lead ↔ admin thread.** `{_key, _type, author → teamMembers (OPTIONAL), author_role, kind, body, at}`. Append-only — this delivery ships no edit or delete path. `author_role` is a snapshot taken at post time, never joined at read time, so an admin who later becomes a member does not have their history re-render as a lead note; `author` is optional because two migrated `admin_notes` had nobody to attribute them to. `kind` and `author_role` reserve `pastor_note` / `system`, unminted, so routing pastor notes here later needs no migration. |
 | `lead_notes` | text | **FROZEN LEGACY ARCHIVE — nothing writes it.** It holds whatever the newest lead message was at the moment Child B removed the mirror, and it is never updated or blanked again. One reader uses the STORED field's value: production's OLD sweep compares the notice's `beforeNotes` snapshot against it during a release window or after a revert. The snapshot itself has a second consumer in this tree — the sweep's legacy-tolerance branch, which reads `before.beforeNotes` for any notice minted before the cutover. Four projections still SELECT it and hand it to callers who ignore it — `PROPOSAL_PROJECTION`, the member and admin proposal GETs, and the propose page — and the editor seeds state from it behind a `!proposalId` gate that can only ever see an empty value. Nothing renders it. Do not "clean it up" — the rollback leans on it. |
+| `pastor_message` | text | The lead's copy of the pastor's message (ADR-0087). Written by the lead's POST (absent = unchanged). On approval it is copied into `serviceThread.pastor_message` **only when that field is empty**, after the commit, with no notification; never shown to the team from here. |
 | `team_notes` | text | Published to the team on approval. **Not** part of the thread — it is the message to the whole team, and it stayed a field deliberately. |
 | `admin_notes` | text | **FROZEN LEGACY ARCHIVE — nothing writes it.** The transition was its last writer and Child B stopped that too, so a `reopen` with an empty note can no longer BLANK it, which is what writing the request verbatim used to do. No notification consumer and nothing that renders it; the same four projections still select it and every caller ignores it. A rollback restores the transition's write, and the e2e fixtures move back with it. |
 | `submitted_at`, `reviewed_at` | datetime (readOnly) | |
@@ -319,6 +325,7 @@ unlike the redemption receipt below, nothing about the id is derived from its co
 | `sub` | string | The authorizing member's `teamMembers` `_id`. |
 | `clientHash` | string | `sha256(client_id)` — the RAW client id (a signed DCR token) is never stored. |
 | `origin` | string | The canonical origin that issued the grant (`app/mcp/oauth/origin.ts`) — checked against the token's `iss` on every request (R13). |
+| `client` | string | Which agent holds the grant: `"claude"`, `"chatgpt"` or `"loopback"`, from the code's redirect URI (`redirectTargetKind`), set once at the code exchange and never changed by a refresh (ADR-0083). Decides whether the five app-only tools are listed (only `"claude"`). Absent on grants made before ADR-0083: read as `"claude"` only on production before `LEGACY_GRANT_CUTOFF`, otherwise `"loopback"` (`effectiveGrantClient`); any other value reads as revoked. The member's TIER is never stored here. |
 | `createdAt` | datetime | |
 | `lastRefreshAt` | datetime | Absent until the first refresh. |
 | `currentRefreshJti` | string | The refresh token's single valid `jti`. A refresh presenting any other `jti` is a reuse and revokes the WHOLE grant (spec O4). |
@@ -342,6 +349,36 @@ hash nor a refresh `jti` is usable without `MCP_OAUTH_SECRET`. See
 [AUTH_AND_SECURITY → MCP / OAuth](AUTH_AND_SECURITY.md#mcp--oauth) and
 [ADR-0039](adr/0039-mcp-client-registration-is-stateless-dcr.md) for why registration itself
 writes nothing at all.
+
+---
+
+## `appAuthGrant` / `appAuthCodeRedemption` — native-app sign-in state (ADR-0091)
+
+Files: [`documentTypes.ts`](../app/appAuth/documentTypes.ts) (import-free names, prefixes and field
+lists, imported by both schema files) and [`grantDocument.ts`](../app/appAuth/grantDocument.ts) (the
+pure builders). Hidden and read-only in the Studio; written **only** by
+[`app/appAuth/grantStore.ts`](../app/appAuth/grantStore.ts), an instance of the protocol shared with
+the MCP store ([`app/oauthCore/grantStoreProtocol.ts`](../app/oauthCore/grantStoreProtocol.ts)),
+called by the app token and revoke routes and the two «Apps conectadas» revocations.
+
+**`appAuthGrant.<uuid>`** — one per signed-in phone, tablet or computer: `sub` (the member's `_id`),
+`clientId` (`backstage-ios` / `backstage-android`), `platform` (`ios` / `android`, derived from the
+client; a mismatch reads as revoked), `origin` (the issuing deployment; one deployment never
+rotates or lists another's grant), `createdAt`, `lastRefreshAt` (absent until the first refresh),
+`currentRefreshJti` (a refresh with any other `jti` revokes the whole grant), `revoked` (`true`
+unless exactly `false`), `revokedAt`, `revokedReason` (`app_sign_out`, `member_revoked`,
+`admin_revoked`, `refresh_token_reuse`). No token, code, device name or IP. A grant is **live**
+while not revoked and `coalesce(lastRefreshAt, createdAt)` is within 90 days; the `/me` list and
+the admin revoke-all act on live grants only.
+
+**`appAuthCode.<sha256 of the code's jti>`** (`appAuthCodeRedemption`) — the replay guard,
+`redeemedAt` only: `create()` on the deterministic id refuses a second redemption.
+
+**Dotted ids**: every read carries the write token, and the store refuses to run without it (503) —
+an untokened read would answer «no record», which reads as revoked and would sign every phone out.
+Everything in them is safe to be world-readable: a member id is already public, and a refresh `jti`
+is useless without `APP_AUTH_SECRET`. They live in the dataset preview shares with production;
+`origin` keeps the deployments apart.
 
 ---
 
@@ -526,6 +563,49 @@ It never stores seats, shares, balances, the cadence state, rule strings or name
 [`fairnessMonthWriteRequest.ts`](../app/utils/fairnessMonthWriteRequest.ts) — through
 `PUT /api/admin/fairness/months` (engine v3 only) or C4's consented reconstruction script — which
 mints every `_key`, the hash and the stamps; Studio governs it read-only like `solverConfig`.
+
+---
+
+## `ministryEvent` — a Jóvenes meeting (ADR-0081)
+
+One document per meeting of a leveled ministry (today Jóvenes): the Saturday roster, a group's own
+meeting, or a joint meeting of two or three groups
+([`ministryEvent.ts`](../sanity/schemas/ministryEvent.ts); plan
+`docs/superpowers/plans/2026-10-30-jovenes-events-access.md`). The id is
+**`ministryEvent.<uuid>`, dotted on purpose**: the dataset answers anyone without a token, and the
+groups must stay closed to each other («No me gustaría que los pastores de Emprendedores vean el
+calendario de los de Otro Nivel», Frank). Read **only** through
+[`ministryEventReads.ts`](../app/utils/ministryEventReads.ts), which throws without
+`SANITY_API_READ_TOKEN`, carries the id prefix in every query and passes the reader's groups as a
+PARAMETER; `ministryEventCoverage.test.ts` fails on any other file that names the type, and
+`ministryEventReads.test.ts` runs the real GROQ on `groq-js` over a people × events matrix. Written
+only by [`ministryEventCommit.ts`](../app/utils/ministryEventCommit.ts), called by the
+`/api/ministries/[ministry]/events*` routes (API_REFERENCE «Jóvenes meetings»): a fresh access read,
+the stored revision authorized and written under `ifRevisionId`, weak references, a client create
+token for the id. The routes that write a client-supplied id of another type (the song DELETE, the
+member PATCH/DELETE, photo and set-password) answer 404 for it (W9, `typePin.ts`), so nothing else
+writes an event.
+
+| Field | Meaning |
+|---|---|
+| `ministry` | `"jovenes"` — an id in `LEVELED_MINISTRY_IDS` |
+| `audience` | **Decides who reads it, read CLOSED.** `{ kind: "ministry" }` = every member of the ministry; `{ kind: "groups", groups: [id…] }` = members of at least one of those groups. Absent, malformed, an unknown `kind` or no valid group = no member's (admins still see it, to repair it). |
+| `kind` | `saturday` / `ministry` / `group` / `joint` — display only, never read for access |
+| `date` | `YYYY-MM-DD`, rendered at local noon |
+| `time`, `arrival` | `HH:mm`, display only |
+| `title`, `notes` | free text |
+| `place` | one line, ≤120 — where it happens («Oasis Tlalpan»), display only (2026-11-10) |
+| `seats[]` | `ministryEventSeat`: `role` (`encargado` / `apoyo` / `comparte`), and EITHER `member` (**weak** reference) OR `name` (one line, ≤60: someone without an account, or the hosting group — text, never validated, never «Tú», no program right; 2026-11-10), never both |
+| `program[]` | `ministryEventProgramLine`: `label`, `member?` (weak), `note?` (≤300). A **part line** (ADR-0089) also carries `part` (`oracion` / `dinamica1` / `dinamica2` / `platica` — `app/utils/ministryParts.ts` is the one table), and may carry `member2` (weak; a dinámica's second responsable), `music` (`track` / `alabanza`; Oración and Plática) and `helpers` (one line ≤120, «Jóvenes que apoyan»; a dinámica). Its `label` is the table's, its `note` is the description its responsable writes, and there is at most one line per part. Plática's line never holds a person: its people are the `comparte` seats. «Alabanza» is not stored: it is that date's published Saturday setlist (`jovenesWorshipSet.ts`). |
+| `published` | boolean, written on every create; members read `published == true` only |
+| `createdBy` | weak reference to the creator, written once at create (a joint meeting is edited only by its creator and the admins) |
+
+Who reads what (`readMinistryEvents`, `mayRead` — the same rule twice, held equal by the test):
+a pastor reads published meetings whose audience is the ministry or includes one of their groups;
+in editor mode a leader also reads the drafts that include a group they lead, and a Jóvenes admin
+or the super-admin reads every meeting of the ministry. Inactive people and non-members read
+nothing, with no query at all. Every member reference is stored **weak** so removing a pastor never
+fails on an old meeting; a dangling seat reads as «Sin asignar». Studio shows the type read-only.
 
 ---
 
@@ -779,14 +859,17 @@ require a Studio deploy to appear in the Studio UI (the app reads/writes via GRO
 
 The Studio is a *second* writer into the same dataset, so it would otherwise bypass every guard in
 [API_REFERENCE → the protected mutation contract](API_REFERENCE.md#the-protected-mutation-contract).
-**Nineteen** types are closed to it — the six protected service types, the eleven internal types
-(`notificationOutbox` keeps `delete` alone, so an operator can prune a stray entry) **plus** the two
-Oasis Kids types, whose writer is the app (`/api/kids/pairs`, `/api/kids/schedules`):
+**Twenty-two** types are closed to it — the six protected service types, the thirteen internal
+types (`notificationOutbox` keeps `delete` alone, so an operator can prune a stray entry), the two
+Oasis Kids types, whose writer is the app (`/api/kids/pairs`, `/api/kids/schedules`), **plus**
+`serviceThread`, written by its four routes (ADR-0073) and the proposal approval's post-commit
+copy of the leads' pastor's message (ADR-0087):
 
 `sunday_role`, `saturday_role`, `special_role`, `featuredSongs`, `saturdarSongs`, `setlistProposal`,
 `roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`, `specialIdentityCoordinator`,
 `solverConfig`, `fairnessMonth`, `kidsPair`, `kidsSchedule`, `mcpOauthGrant`, `mcpOauthCodeRedemption`,
-`calendarFeed`, `adminChatUsage`, `mcpProposal`.
+`calendarFeed`, `adminChatUsage`, `mcpProposal`, `serviceThread`, `availabilityConflict`,
+`ministryEvent`, `appAuthGrant`, `appAuthCodeRedemption`.
 
 `calendarFeed` and `adminChatUsage` are per-member counters, and `mcpProposal` a stored month plan (see their sections above). `mcpOauthGrant` and
 `mcpOauthCodeRedemption` hold OAuth state for the MCP connector (P0 auth): `mcpOauthGrant` is one document per

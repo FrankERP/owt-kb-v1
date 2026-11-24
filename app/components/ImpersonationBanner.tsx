@@ -129,7 +129,9 @@ export default function ImpersonationBanner() {
         setError("No se pudo salir. Intenta de nuevo.");
         return;
       }
-      router.push("/admin");
+      // Back where impersonation starts: «Personas» on the super-admin page
+      // (only a super-admin can impersonate).
+      router.push("/super-admin");
       router.refresh();
     } catch {
       setError("No se pudo salir. Intenta de nuevo.");
@@ -172,7 +174,7 @@ export default function ImpersonationBanner() {
           type="button"
           onClick={stopImpersonating}
           disabled={leaving}
-          className="ml-2 px-3 py-0.5 rounded-md border border-scrim/30 font-label text-xs uppercase tracking-widest hover:bg-scrim/10 transition-colors disabled:opacity-60"
+          className="ml-2 px-3 py-0.5 rounded-md border border-scrim/30 font-body font-semibold leading-tight text-xs hover:bg-scrim/10 transition-colors disabled:opacity-60"
         >
           {leaving ? "Saliendo…" : "Salir"}
         </button>

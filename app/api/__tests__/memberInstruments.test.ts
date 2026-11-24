@@ -18,6 +18,8 @@ const h = vi.hoisted(() => ({
   revalidatePath: vi.fn(),
 }));
 
+vi.mock("server-only", () => ({}));
+import { routeMemberCommitRead } from "./memberCommitReads";
 vi.mock("@/app/utils/authGuards", () => ({
   requireActiveManager: () => h.requireActiveManager(),
 }));
@@ -26,9 +28,15 @@ vi.mock("@/sanity/lib/serverClient", () => {
   const chain: Record<string, unknown> = {};
   chain.setIfMissing = () => chain;
   chain.set = (v: Record<string, unknown>) => { h.sets.push(v); return chain; };
+  chain.unset = () => chain;
+  chain.ifRevisionId = () => chain;
   chain.commit = () => h.commit();
   return {
-    serverClient: { fetch: vi.fn() },
+    // The person read (slice M: an alias PATCH now reads and pins the person) answers a stored member.
+    serverClient: {
+      fetch: (q: string, p?: Record<string, unknown>) =>
+        routeMemberCommitRead(q, p, async () => ({ _id: "member-1", _rev: "rev-1", role: "member", member_name: "M" })),
+    },
     writeClient: {
       patch: () => chain,
       create: (doc: Record<string, unknown>) => h.create(doc),
@@ -134,5 +142,42 @@ describe("GET /api/admin/members — projection", () => {
     await GET();
     const query = h.operationalFetch.mock.calls[0][0] as string;
     expect(query).toMatch(/memberType,[\s\S]*instruments/);
+  });
+});
+
+// «Canta y toca a la vez» (ADR-0078): absent ⇒ untouched, only a boolean is stored.
+describe("singsAndPlays on the member routes", () => {
+  it("PATCH leaves it alone when the body never mentions it", async () => {
+    await PATCH(req({ alias: "A" }), { params });
+    expect("singsAndPlays" in patchSet()).toBe(false);
+  });
+
+  it("PATCH stores true and false", async () => {
+    expect((await PATCH(req({ singsAndPlays: true }), { params })).status).toBe(200);
+    expect(patchSet().singsAndPlays).toBe(true);
+    h.sets.length = 0;
+    expect((await PATCH(req({ singsAndPlays: false }), { params })).status).toBe(200);
+    expect(patchSet().singsAndPlays).toBe(false);
+  });
+
+  it("PATCH rejects a non-boolean without writing", async () => {
+    const res = await PATCH(req({ singsAndPlays: "sí" }), { params });
+    expect(res.status).toBe(400);
+    expect(h.sets).toHaveLength(0);
+  });
+
+  it("POST stores it only when true", async () => {
+    const base = { member_name: "Nuevo Músico", email: "n@example.com" };
+    await POST(req({ ...base, singsAndPlays: true }));
+    expect((h.create.mock.calls[0][0] as Record<string, unknown>).singsAndPlays).toBe(true);
+    await POST(req({ ...base, singsAndPlays: false }));
+    expect("singsAndPlays" in (h.create.mock.calls[1][0] as Record<string, unknown>)).toBe(false);
+    expect((await POST(req({ ...base, singsAndPlays: 1 }))).status).toBe(400);
+  });
+
+  it("GET projects it, so the planner and the chat judge with it", async () => {
+    await GET();
+    const query = h.operationalFetch.mock.calls[0][0] as string;
+    expect(query).toMatch(/instruments, singsAndPlays/);
   });
 });

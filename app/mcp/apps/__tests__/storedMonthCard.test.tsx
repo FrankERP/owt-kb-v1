@@ -1,6 +1,7 @@
 // The card over a SAVED month (admin parity phase 1, S4; ADR-0066): its model read against the REAL
-// saved-month tools' answers — the chat's check opened in the card, a forced rule, «Guardar»'s chat
-// message passed verbatim to `save_service_edits` — plus the splitting rule and the screen.
+// saved-month tools' answers — the chat's check opened in the card, a forced rule, «Mandar al chat»'s
+// message passed verbatim to `save_service_edits` — plus the splitting rule and the screen. The card's
+// own save («Guardar» → `save_service_edits_app`) is `storedCardSave.test.tsx`.
 // Fictitious people only (the repository is public).
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -61,7 +62,7 @@ describe("the saved-month model against the real tools", () => {
     expect(again.changes.map((c) => c.service)).toEqual(["sun15"]);
   });
 
-  it("the whole screen: a forced rule asks, forcing it mints the waiver, «Guardar»'s message saves as is", async () => {
+  it("the whole screen: a forced rule asks, forcing it mints the waiver, «Mandar al chat»'s message saves as is", async () => {
     const w = serviceWorld();
     // Ana into sun1's BGV, where Dani sings: their pair rule, forcible.
     const edits: StoredEdit[] = [{ op: "place", service: "sun1", row: "bgv", member: w.tok("m-ana") }];
@@ -91,7 +92,7 @@ describe("the saved-month model against the real tools", () => {
     expect(seat.candidates?.length).toBeGreaterThan(0);
   });
 
-  it("«Guardar» on a host with model context: the chat shows only words; the context line saves as is", async () => {
+  it("«Mandar al chat» on a host with model context: the chat shows only words; the context line saves as is", async () => {
     const w = serviceWorld();
     const view = await appCheck(w, [{ op: "place", service: "sun15", row: "bgv", member: w.tok("m-carla") }]);
     const [part] = saveParts(view.changes, view.maxGroup);

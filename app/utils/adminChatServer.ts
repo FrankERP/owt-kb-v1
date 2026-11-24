@@ -4,8 +4,8 @@ import "server-only";
 // each admin's monthly spend counter.
 //
 // The tools are the MCP connector's own read handlers (`app/mcp/tools/*Result`), called in
-// process — never `/api/mcp` over the network. That connector is super-admin-only, OAuth-gated
-// and carries write tools; calling the handlers directly keeps the same search, the same
+// process — never `/api/mcp` over the network. That connector is OAuth-gated, reaches write tools
+// for a super-admin (ADR-0083); calling the handlers directly keeps the same search, the same
 // payloads and the same Spanish errors without minting an MCP token or exposing a writer. The
 // list below IS the assistant's whole reach: `app/api/__tests__/adminChatRoute.test.ts` pins it to these five.
 // The one tool the MCP does not have is `get_song_lyrics` — the MCP reports lyrics presence only

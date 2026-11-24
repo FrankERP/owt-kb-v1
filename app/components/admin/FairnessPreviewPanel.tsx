@@ -264,19 +264,19 @@ export default function FairnessPreviewPanel(props: FairnessPreviewPanelProps) {
   };
 
   return (
-    <section className="rounded-lg border border-accent/15 bg-surface-raised-alt/40 p-1.5" data-fairness-preview="">
+    <section className="border-y border-ink/[0.10]" data-fairness-preview="">
       {/*
         The whole row is the toggle, with a chevron, so a closed panel reads as something that
-        opens — it used to be a bare label in an empty box. No `space-y` on the section: the
-        closed Collapse is still a child, and its margin left a blank strip under the label.
+        opens — a hairline fold row since ADR-0070's Admin pass, not a box. No `space-y` on the
+        section: the closed Collapse is still a child, and its margin left a blank strip under the label.
       */}
-      <Button variant="ghost" size="sm" onClick={toggle} aria-expanded={open} aria-controls={bodyId} className="w-full justify-between">
+      <Button variant="ghost" size="md" onClick={toggle} aria-expanded={open} aria-controls={bodyId} className="w-full justify-between px-0 font-body text-[15px] font-semibold text-ink">
         {COPY.disclosure}
-        <svg aria-hidden="true" viewBox="0 0 20 20" className={`h-4 w-4 shrink-0 transition-transform duration-fast ${open ? "rotate-180" : ""}`}>
+        <svg aria-hidden="true" viewBox="0 0 20 20" className={`h-4 w-4 shrink-0 text-ink-dim transition-transform duration-fast ${open ? "rotate-180" : ""}`}>
           <path d="M6 8l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </Button>
-      <Collapse id={bodyId} open={open} className="space-y-3 px-1.5 pb-1.5 pt-2">
+      <Collapse id={bodyId} open={open} className="space-y-3 pb-4 pt-1">
         {engine === "v2" && (
           <p className="font-label text-[10px] uppercase tracking-widest text-warning-strong">{COPY.banner}</p>
         )}

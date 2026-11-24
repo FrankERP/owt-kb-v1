@@ -118,11 +118,12 @@ describe("rows of unbreakable Spanish words wrap instead of running off the phon
     // The words «Anterior»/«Siguiente» used to sit beside «SEPTIEMBRE» — three
     // unbreakable words that floored at ~450px at «Máximo» text size, measured
     // on a 375pt phone — and the row needed `flex-wrap` to survive. Since
-    // 2026-10-22 the arrows are 44px icon buttons (labels on `aria-label`), so
-    // the only word left is the heading's, and `min-w-0` lets it wrap.
+    // 2026-10-22 the arrows are 44px icon buttons (labels on `aria-label`) —
+    // the round `Button` ring since the «millones» pass, 2026-10-26 — so the
+    // only word left is the heading's, and `min-w-0` lets it wrap.
     const src = read("app/components/availability/AvailabilityGrid.tsx");
     expect(src).toMatch(/min-w-0 flex-1 text-center/);
-    expect(src.match(/variant="icon" size="lg"/g) ?? [], "BOTH arrows").toHaveLength(2);
+    expect(src.match(/variant="round"/g) ?? [], "BOTH arrows").toHaveLength(2);
     expect(src).toMatch(/aria-label="Anterior"/);
     expect(src).toMatch(/aria-label="Siguiente"/);
     expect(src, "the words are gone from the row").not.toMatch(/>\s*Anterior\s*</);
@@ -143,8 +144,10 @@ describe("rows of unbreakable Spanish words wrap instead of running off the phon
     // grows with the text and shoved «Filtros» off the screen. `min-w-0` is the
     // half that does the work; `size={1}` lowers the floor it shrinks against and
     // is belt-and-braces beside the input's `w-full`.
+    // The field is a hairline <label> since ADR-0070's Biblioteca pass, no longer
+    // the boxed console; the shrink contract is the same.
     const src = read("app/components/LibraryIndex.tsx");
-    expect(src).toMatch(/brand-search-console relative min-w-0 flex-1/);
+    expect(src).toMatch(/<label className="relative flex min-w-0 flex-1 items-center/);
     expect(src).toMatch(/\n\s+size=\{1\}\n/);
   });
 });
@@ -167,11 +170,12 @@ describe("boxes sized for text at one scale are minimums, not caps", () => {
   });
 
   it("the schedule's month title truncates instead of pushing the arrows off a 390px phone", () => {
-    // The title is the jump-to-month control now (ADR-0067); at «Máximo» text size
-    // «Septiembre 2026» must clip inside its `min-w-0 flex-1` cell, never widen it.
+    // The title is the jump-to-month control now (ADR-0067) and the page title in the
+    // display face (the «millones» pass); at «Máximo» text size «Septiembre» must clip
+    // inside its `min-w-0` heading, never push the two round arrows off the row.
     const src = read("app/components/ScheduleHeader.tsx");
-    expect(src).toMatch(/min-w-0 flex-1/);
-    expect(src).toMatch(/<span className="truncate">\{monthLabel\(anchorMonth\)\}/);
+    expect(src).toMatch(/<h2 className="min-w-0 font-display/);
+    expect(src).toMatch(/<span className="truncate">\{monthName\}/);
     expect(src).not.toMatch(/<h2 className="truncate/); // overflow-hidden there would clip the button's focus ring
     expect(src).not.toMatch(/DateField/);
   });

@@ -20,6 +20,19 @@
 // `className` is for additive utilities only — never to override padding, radius, or
 // colour. Pick a variant or size instead.
 //
+// Sentence case in the BODY face since 2026-10-27 (Frank: «cambialos», the Admin pass of
+// ADR-0070). Until then the button was a label-styled control — Jura, uppercase,
+// `tracking-widest` — and every screen of the «millones» pass had to override it
+// (`normal-case tracking-normal font-body` on a dozen pills). The mocks set every
+// action in the body face at 600, so that is the base now; Jura stays for LABELS
+// (`SHEET_TITLE`, field labels, menu rows, toasts), which is where small caps belong.
+// Sizes went up with the case — 11/13/13 px uppercase read as 13/15/15 px sentence
+// case, the theme's own `xs`/`sm` steps so a scale change moves them too — and
+// `leading-tight` keeps the box the height it was, so no adopter's row grew.
+// `normal-case`/`tracking-normal` in a caller's `className` is now a no-op.
+// Bare `<button>`s that mirror this face (the ones `houseButtonSweep.test.ts`
+// keeps, dialog footers and rule-form links) carry the same three utilities.
+//
 // A disabled button normally takes no pointer events (no hover paint, no press).
 // With a `title` it keeps them: the title is the REASON it is disabled («Faltan
 // propuestas», «Coro no está disponible en servicios de sábado»), and
@@ -30,7 +43,7 @@
 import Link from "next/link";
 import type { ComponentPropsWithoutRef, ReactNode, Ref } from "react";
 
-export type ButtonVariant = "primary" | "cta" | "secondary" | "ghost" | "danger" | "icon" | "pill";
+export type ButtonVariant = "primary" | "cta" | "secondary" | "ghost" | "danger" | "icon" | "pill" | "round" | "roundCta" | "disclosure";
 export type ButtonSize = "sm" | "md" | "lg";
 /** The pill's pressed colour — `accent` (the default) or the availability tone. */
 export type PillTone = "accent" | "availability";
@@ -38,7 +51,7 @@ export type PillTone = "accent" | "availability";
 export type IconTone = "danger";
 
 const BASE =
-  "inline-flex items-center justify-center gap-2 select-none font-label uppercase tracking-widest " +
+  "inline-flex items-center justify-center gap-2 select-none font-body font-semibold leading-tight " +
   "transition-[color,background-color,border-color,transform,box-shadow] duration-fast ease-out-brand " +
   "active:translate-y-px active:scale-[0.985] " +
   "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base " +
@@ -56,6 +69,19 @@ const VARIANT: Record<ButtonVariant, string> = {
   danger: "rounded-lg bg-negative-surface/60 text-ink hover:bg-negative-border/60",
   icon: "rounded-lg w-9 h-9 p-0 text-mono-500 hover:text-accent hover:bg-surface-lift/5",
   pill: "rounded-full border border-surface-accent-30 text-mono-500 hover:text-accent",
+  // The 44 px round playback control of a hairline track row (ADR-0070, Canción):
+  // `round` is an idle row's ring, `roundCta` the LOADED row's fill — the one row
+  // that differs. Fixed size and no padding, so they take no `size` classes.
+  round: "rounded-full h-11 w-11 shrink-0 p-0 border border-ink/[0.28] text-ink hover:border-accent hover:text-accent",
+  roundCta: "rounded-full h-11 w-11 shrink-0 p-0 bg-accent text-surface-base shadow-lg shadow-accent/20 hover:bg-accent/85",
+  // A round ink pill that OPENS something (Biblioteca's «Filtros · 2» sheet) and
+  // can look ARMED. Not `pill`: that one is a toggle and carries `aria-pressed`,
+  // which on a control with `aria-haspopup`/`aria-expanded` reads «pressed,
+  // collapsed». The armed look keys on `data-active` instead, and its colour
+  // pair lives here, never in a caller's `className` (the PILL_TONE reason).
+  disclosure:
+    "rounded-full border border-ink/[0.18] text-ink hover:border-accent hover:text-accent " +
+    "data-[active=true]:border-accent data-[active=true]:text-accent data-[active=true]:bg-accent/10",
 };
 
 // The pressed triplet lives entirely in PILL_TONE, never in VARIANT.pill —
@@ -80,9 +106,9 @@ const ICON_TONE: Record<IconTone, string> = {
 };
 
 const SIZE: Record<ButtonSize, string> = {
-  sm: "text-[11px] px-3 py-1",
-  md: "text-xs px-4 py-2",
-  lg: "text-xs px-4 min-h-[44px]",
+  sm: "text-xs px-3 py-1",
+  md: "text-sm px-4 py-2",
+  lg: "text-sm px-4 min-h-[44px]",
 };
 
 export function buttonClass(
@@ -93,7 +119,12 @@ export function buttonClass(
   /** `true` when the control carries a `title`: disabled, it still answers the pointer so the title shows. */
   titled = false,
 ): string {
-  const s = variant === "icon" ? (size === "lg" ? "min-h-[44px] min-w-[44px]" : "") : SIZE[size];
+  const s =
+    variant === "icon"
+      ? size === "lg" ? "min-h-[44px] min-w-[44px]" : ""
+      : variant === "round" || variant === "roundCta"
+        ? ""
+        : SIZE[size];
   const t =
     variant === "pill" && tone !== "danger"
       ? PILL_TONE[tone]
@@ -166,6 +197,7 @@ export default function Button(props: ButtonProps) {
       className={cls}
       aria-busy={busy || undefined}
       aria-pressed={variant === "pill" ? active : undefined}
+      data-active={variant === "disclosure" && active ? "true" : undefined}
       disabled={disabled || busy}
       {...rest}
     >

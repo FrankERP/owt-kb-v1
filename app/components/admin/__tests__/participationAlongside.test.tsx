@@ -270,7 +270,9 @@ function stubWideViewport(wide = true, queries: string[] = []) {
     (query: string) => {
       queries.push(query);
       return {
-        matches: wide,
+        // A `max-width` query is the OTHER side of a width: a wide viewport answers it
+        // `false` (the candidates sheet below `xl`, ADR-0070's Admin pass, asks one).
+        matches: query.includes("max-width") ? !wide : wide,
         media: query,
         onchange: null,
         addEventListener: () => {},
@@ -561,6 +563,11 @@ describe("the grid's chart placement — an in-flow column, at every width", () 
     const queries = stubWideViewport();
     goToGrid([]);
     expect(queries.filter((q) => q.includes("min-width"))).toEqual([]);
+    // The one `max-width` query belongs to the candidates PICKER (a sheet below `xl`,
+    // `useMediaQuery`), not to the chart — which still consults nothing.
+    expect(queries.filter((q) => q.includes("max-width"))).toEqual(
+      queries.filter((q) => q === "(max-width: 1279.98px)"),
+    );
   });
 
   it("gives the candidate picker its own column, only while a cell is active", () => {
@@ -1189,7 +1196,11 @@ describe("the planner's chart column is at least the chart's content floor", () 
     // The aside's box lives in `ASIDE_BASE` since the Servicios board gave it a
     // second placement (ADR-0044); the aside must still be built from it, or the
     // padding read here would describe a string nothing renders.
-    expect(sidebarSrc, "the aside is built from ASIDE_BASE").toMatch(/<aside className=\{`\$\{ASIDE_BASE\} /);
+    // The Servicios board unboxed its copy (phase 5 of the «millones» pass):
+    // the planner's placement is the one still built from ASIDE_BASE.
+    expect(sidebarSrc, "the planner's aside is built from ASIDE_BASE").toMatch(
+      /<aside className=\{`\$\{placement === "board" \? BOARD_BASE : ASIDE_BASE\} /,
+    );
     const pad = px(/const ASIDE_BASE = "[^"]*\bp-(\d+)\b/, "the aside padding", 4);
     // The rows do not sit directly in the aside: they sit in the
     // `max-h-[60vh] overflow-y-auto pr-0.5` scroller, whose right padding is 2px

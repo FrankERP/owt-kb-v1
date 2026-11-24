@@ -24,7 +24,8 @@ const GATED = [
   { name: "ContentPanel", gatedBy: "app/components/admin/AdminPanel.tsx" },
   { name: "AvailabilityPanel", gatedBy: "app/components/admin/AdminPanel.tsx" },
   { name: "ProposalsPanel", gatedBy: "app/components/admin/AdminPanel.tsx" },
-  { name: "MembersPanel", gatedBy: "app/components/admin/AdminPanel.tsx" },
+  // Moved with Miembros to the super-admin page (ADR-0075, 2026-10-29).
+  { name: "MembersPanel", gatedBy: "app/components/admin/SuperAdminPanel.tsx" },
   { name: "MonthGenerator", gatedBy: "app/components/admin/ServicesPanel.tsx" },
 ] as const;
 

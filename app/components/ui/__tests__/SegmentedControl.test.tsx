@@ -55,6 +55,17 @@ function StatefulControl({
 }
 
 describe("SegmentedControl", () => {
+  it("sets its options in sentence case, body face, like Button (2026-10-27)", () => {
+    mount("calendar");
+    for (const radio of screen.getAllByRole("radio")) {
+      expect(radio.className).toContain("font-body");
+      expect(radio.className).toContain("font-semibold");
+      expect(radio.className).not.toMatch(/\buppercase\b/);
+      expect(radio.className).not.toContain("tracking-widest");
+      expect(radio.className).not.toContain("font-label");
+    }
+  });
+
   it("is a radiogroup whose checked option is the only tab stop", () => {
     mount("list");
     const group = screen.getByRole("radiogroup", { name: "Vista" });
@@ -155,6 +166,30 @@ describe("SegmentedControl", () => {
     const pending = screen.getByRole("radio", { name: /Pendientes/ });
     expect(pending.getAttribute("aria-busy")).toBe("true");
     expect(pending.textContent).toContain("3");
+  });
+
+  it("draws `mark` at the pill's bottom edge, outside the label span", () => {
+    // Placed from inside the label the dot sat ON the glyph: the label is a
+    // `relative` span the height of its text (the hero's key drawer, 2026-10-24).
+    render(
+      <MotionProvider>
+        <SegmentedControl
+          label="Transponer a"
+          value="G"
+          onChange={() => {}}
+          options={[
+            { value: "G", label: "G", mark: true },
+            { value: "A", label: "A" },
+          ]}
+        />
+      </MotionProvider>,
+    );
+    const g = screen.getByRole("radio", { name: "G" });
+    const dot = g.querySelector(".rounded-full.bg-accent") as HTMLElement;
+    expect(dot).not.toBeNull();
+    expect(dot.className).toContain("bottom-[3px]");
+    expect(dot.parentElement).toBe(g);
+    expect(screen.getByRole("radio", { name: "A" }).querySelector(".bg-accent")).toBeNull();
   });
 
   // Five Propuestas filters at 390px measured 563px, and the PAGE scrolled

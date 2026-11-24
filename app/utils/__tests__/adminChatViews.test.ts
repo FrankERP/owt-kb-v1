@@ -1,7 +1,11 @@
 // What the admin assistant's tools hand the model (ADR-0060): the MCP payloads minus everything
 // only a write tool needs, and the lyrics as the song page shows them (ADR-0018).
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+
+vi.mock("server-only", () => ({}));
+vi.mock("@/sanity/lib/operationalClient", () => ({ operationalClient: { fetch: vi.fn() }, rawIntegrityClient: { fetch: vi.fn() } }));
 
 import type { GetServicePayload, ListServicesPayload } from "@/app/mcp/reads/servicePresenter";
 import type { GetSongPayload } from "@/app/mcp/reads/songPresenter";
@@ -77,6 +81,24 @@ describe("chatSongView", () => {
     expect(view).not.toHaveProperty("rehearsalMixes");
     expect((view.playHistory as unknown[]).length).toBe(CHAT_PLAY_HISTORY_LIMIT);
     expect(view.playHistoryTotal).toBe(20);
+  });
+});
+
+describe("the assistant never reaches the MCP's full song read (admin parity phase 3, S3, D8)", () => {
+  it("its get_song schema has no `full`, and its view drops the full fields by name", async () => {
+    const { GET_SONG_INPUT, GET_SONG_FULL_INPUT } = await import("@/app/mcp/tools/getSong");
+    expect(GET_SONG_INPUT.safeParse({ songId: "post-1", full: true }).success).toBe(false);
+    expect(GET_SONG_FULL_INPUT.safeParse({ songId: "post-1", full: true }).success).toBe(true);
+    const src = readFileSync("app/utils/adminChatServer.ts", "utf8");
+    expect(src).toContain("inputSchema(GET_SONG_INPUT)");
+    expect(src).not.toContain("GET_SONG_FULL_INPUT");
+    const view = chatSongView({
+      title: "Gracia", authors: [], artist: null, keys: [], bpm: null, timeSig: null, tags: [],
+      referenceLinks: { links: [], musicalReferenceUrl: null, lyricsVideoUrl: null, lyricsURL: null, tutorials: [] },
+      lyrics: "visible", hasChordChart: false, rehearsalMixes: [], playHistory: [],
+      rev: "r1", lyricsText: "letra", lyricsEditable: true, charts: [{ chartKey: "k", key: "G", content: "x" }], songId: "post-1",
+    } as unknown as GetSongPayload);
+    for (const field of ["rev", "lyricsText", "lyricsEditable", "charts", "songId"]) expect(view).not.toHaveProperty(field);
   });
 });
 

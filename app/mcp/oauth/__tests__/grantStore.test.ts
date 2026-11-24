@@ -50,7 +50,7 @@ import {
   type FreshGrant,
   type StoredGrant,
 } from "../grantStore";
-import { GRANT_FIELDS } from "../grantDocument";
+import { GRANT_FIELDS, GRANT_READ_FIELDS } from "../grantDocument";
 
 const sha = (s: string) => createHash("sha256").update(s, "utf8").digest("hex");
 const NOW = new Date("2026-09-24T12:00:00.000Z");
@@ -102,7 +102,7 @@ afterEach(() => vi.useRealTimers());
 describe("createGrant", () => {
   it("creates one grant document inside the declared field list", async () => {
     createMock.mockResolvedValue({});
-    const res = await createGrant({ sub: "member-1", clientId: "client", origin: PROD });
+    const res = await createGrant({ sub: "member-1", clientId: "client", origin: PROD, client: "chatgpt" });
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(createMock).toHaveBeenCalledTimes(1);
@@ -115,6 +115,7 @@ describe("createGrant", () => {
       sub: "member-1",
       clientHash: sha("client"),
       origin: PROD,
+      client: "chatgpt",
       createdAt: NOW.toISOString(),
       revoked: false,
     });
@@ -126,7 +127,7 @@ describe("createGrant", () => {
   it("a Sanity failure is a typed server failure", async () => {
     const boom = new Error("network");
     createMock.mockRejectedValue(boom);
-    expect(await createGrant({ sub: "m", clientId: "c", origin: PROD })).toEqual({
+    expect(await createGrant({ sub: "m", clientId: "c", origin: PROD, client: "claude" })).toEqual({
       ok: false,
       reason: "server_error",
       cause: boom,
@@ -141,6 +142,17 @@ describe("loadGrant", () => {
     expect(res.ok).toBe(true);
     if (res.ok) expect(res.grant).toMatchObject({ _id: GRANT_ID, _rev: "rev-1", sub: "member-1", revoked: false });
     expect(fetchMock.mock.calls[0][1]).toEqual({ id: GRANT_ID, type: "mcpOauthGrant" });
+  });
+
+  it("projects every field the parser reads, `client` included (ADR-0083: a dropped field must not read as absent)", async () => {
+    fetchMock.mockResolvedValue(storedDoc({ client: "chatgpt" }));
+    const res = await loadGrant(GRANT_ID, { fresh: true });
+    expect(res.ok && res.grant.client).toBe("chatgpt");
+    const query = String(fetchMock.mock.calls[0][0]);
+    const projection = query.slice(query.indexOf("{") + 1, query.lastIndexOf("}"));
+    const projected = projection.split(",").map((f) => f.trim());
+    for (const field of GRANT_READ_FIELDS) expect(projected, field).toContain(field);
+    expect(projected).toContain("client");
   });
 
   it("a revoked grant is refused", async () => {

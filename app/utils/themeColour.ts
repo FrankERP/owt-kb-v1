@@ -37,3 +37,34 @@ export function themeColour(rgbVar: string, alpha?: number): string {
     ? `rgb(var(${rgbVar}))`
     : `rgb(var(${rgbVar}) / ${alpha})`;
 }
+
+/**
+ * The same colour, RESOLVED for a `<canvas>`.
+ *
+ * A canvas `fillStyle` is parsed by the canvas, not the cascade: `var()` is never
+ * substituted there, the assignment is invalid and the context silently keeps
+ * its previous colour — black on a fresh context. That is how the rehearsal
+ * waveform shipped black (2026-10-23). So for a canvas the triplet is read from
+ * the computed style of an element inside the themed tree (the canvas itself)
+ * and the colour is built from the literal numbers.
+ *
+ * Returns null when the property is missing or malformed, so a caller can skip
+ * the draw rather than paint the wrong colour.
+ */
+export function resolvedThemeColour(el: Element, rgbVar: string, alpha?: number): string | null {
+  const raw = typeof getComputedStyle === "function" ? getComputedStyle(el).getPropertyValue(rgbVar) : "";
+  return colourFromTriplet(raw, alpha);
+}
+
+/** `"0 191 255"` (as `brand.css` writes the triplets) → `rgb(0 191 255 / a)`; null otherwise. */
+export function colourFromTriplet(triplet: string, alpha?: number): string | null {
+  const m = triplet.trim().match(/^(\d{1,3})\s+(\d{1,3})\s+(\d{1,3})$/);
+  if (!m) return null;
+  const [r, g, b] = [m[1], m[2], m[3]].map(Number);
+  if ([r, g, b].some((n) => n > 255)) return null;
+  // The one literal `rgb(` this module writes: the numbers ARE the token, read at
+  // run time, and a canvas can take nothing else (`scripts/colour-inventory.mjs`
+  // exempts this row with the same reason).
+  // eslint-disable-next-line no-restricted-syntax -- a canvas fillStyle never substitutes var()
+  return alpha === undefined ? `rgb(${r} ${g} ${b})` : `rgb(${r} ${g} ${b} / ${alpha})`;
+}

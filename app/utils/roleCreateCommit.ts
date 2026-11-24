@@ -58,7 +58,7 @@ import {
   type ParsedCreateRequest,
 } from "@/app/utils/roleWriteRequest";
 import {
-  loadCanonicalMemberIds,
+  loadCanonicalMembers,
   loadCanonicalRole,
   loadDependencies,
   loadLock,
@@ -68,6 +68,7 @@ import {
   nowIso,
   type StoredReceipt,
 } from "@/app/utils/roleWriteOps";
+import { addedSeatClashes, clashInputsOf, seatClashErrorDetails } from "@/app/utils/seatClashGuard";
 import type { CommitOutcome } from "@/app/utils/commitOutcome";
 
 /**
@@ -114,10 +115,19 @@ export async function createRole(body: unknown): Promise<CommitOutcome<RoleCreat
   // Exact receipt replay stays above this lookup so idempotency does not depend
   // on whether a previously committed assignee still exists today.
   const wanted = seatAssignees(request.seats);
-  const resolvedMembers = await loadCanonicalMemberIds(wanted);
+  const members = await loadCanonicalMembers(wanted);
+  const resolvedMembers = new Set(members.keys());
   const danglingRefs = wanted.filter((id) => !resolvedMembers.has(id)).sort();
   if (danglingRefs.length) {
     return refuse(serviceError("integrity_conflict", { details: { danglingRefs } }));
+  }
+  // No pair of seats one person may not hold on one service (ADR-0078). Below
+  // the receipt replay on purpose: an already-committed create is never refused
+  // by a rule that did not exist when it committed.
+  const { singsAndPlays, names } = clashInputsOf(members);
+  const clashes = addedSeatClashes(null, request.seats, singsAndPlays);
+  if (clashes.length) {
+    return refuse(serviceError("invalid_request", { details: seatClashErrorDetails(clashes, names) }));
   }
 
   // ── First attempt: inventory the target before writing anything ───────────

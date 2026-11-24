@@ -33,7 +33,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import ServicePrimaryAction from "../ServicePrimaryAction";
+import ServicePrimaryAction, { ServiceReviewFlag } from "../ServicePrimaryAction";
+import { formatMonthTab } from "../monthPills";
 import { BOARD_STICKY, ParticipationSidebar } from "../ParticipationSidebar";
 import ServicesPanel from "../ServicesPanel";
 import { ToastProvider } from "../../ui/Toast";
@@ -49,6 +50,8 @@ afterEach(() => {
 // Two months ahead of any plausible "today", so the default «Próximos» filter
 // shows both and the month pills have something to multi-select.
 const YEAR = new Date().getFullYear() + 1;
+/** The board's own «today», for the month tabs' labels (the year shows only when it differs). */
+const currentYM = () => new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" }).slice(0, 7);
 const MONTH_A = `${YEAR}-03`;
 const MONTH_B = `${YEAR}-04`;
 
@@ -254,8 +257,7 @@ describe("the Servicios board", () => {
     const { container } = mount();
     await waitFor(() => expect(container.querySelectorAll("[data-card-id]").length).toBe(2));
 
-    const monthLabel = (ym: string) =>
-      new Date(ym + "-01T12:00:00").toLocaleDateString("es-MX", { month: "short", year: "2-digit" });
+    const monthLabel = (ym: string) => formatMonthTab(ym, currentYM());
 
     const first = screen.getByRole("button", { name: monthLabel(MONTH_A) });
     const second = screen.getByRole("button", { name: monthLabel(MONTH_B) });
@@ -274,6 +276,115 @@ describe("the Servicios board", () => {
   // `Button` carries `disabled:pointer-events-none`, so a `title` on a disabled
   // control can never be summoned: the tooltip the admin needs most was the one
   // the markup guaranteed they would never see. The reason is a LINE now.
+  it("keeps the publish button on the toolbar when nothing can be published: disabled, with its reason", async () => {
+    // 2026-10-22 hid it at zero; on 10-27 Frank read the missing button as a
+    // bug. Both fixture drafts have NO team, which not even «Publicar todos»
+    // may acknowledge, so the button stays and the line says why.
+    const { container } = mount();
+    await waitFor(() => expect(container.querySelectorAll("[data-card-id]").length).toBe(2));
+
+    const publish = screen.getByRole("button", { name: "Publicar listos (0)" }) as HTMLButtonElement;
+    expect(publish.disabled).toBe(true);
+    expect(publish.className.split(/\s+/)).toEqual(expect.arrayContaining(["hidden", "sm:inline-flex"]));
+    const reasons = [...container.querySelectorAll("p.text-right.text-ink-dim")].map((p) => p.textContent ?? "");
+    expect(reasons).toEqual([expect.stringMatching(/^Publicar: ningún borrador .*2 necesitan revisión/)]);
+    // The phone menu carries the same item, disabled the same way.
+    fireEvent.click(screen.getByRole("button", { name: "Más acciones de servicios" }));
+    const item = screen.getByRole("menuitem", { name: "Publicar listos (0)" });
+    expect(item.getAttribute("aria-disabled") ?? String((item as HTMLButtonElement).disabled)).toBe("true");
+  });
+
+  it("offers «Publicar todos (M)» when teams are assigned and only the setlists are missing", async () => {
+    // The month-start state the override exists for (Frank, 2026-10-27: «no
+    // puedo esperar a tener las canciones para publicar los equipos»). Nothing
+    // is READY, so the button is named after the commit the plan will offer.
+    vi.unstubAllGlobals();
+    const ana = { _id: "m1", member_name: "Ana", _key: "k1" };
+    const staffed = ROLES.map((r) => ({ ...r, leads: [ana] }));
+    // A proven single canonical target per role: without its integrity record a
+    // draft is «Revisar datos», a HARD blocker no override may acknowledge.
+    const targets = staffed.map((r) => ({
+      targetKey: `${r._type}:${r.date}`,
+      type: r._type,
+      canonicalCount: 1,
+      canonicalIds: [r._id],
+      canonicalState: "single",
+      publicState: "single",
+      memberVisibleCount: 0,
+      draftIds: [],
+      records: [{
+        id: r._id, rev: r._rev, type: r._type, serviceDate: r.date, published: false,
+        assignedRefs: ["m1"], members: [], danglingRefs: [],
+      }],
+      expectsLock: true,
+      lock: { id: `roleTarget.${r._type}.${r.date}`, rev: `lock-${r._id}`, state: "claimed", roleId: r._id, generation: 1 },
+      lockIssues: [],
+    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => ({
+        ok: true,
+        json: async () =>
+          url === SOURCE_ENDPOINTS.roles ? staffed
+          : url === SOURCE_ENDPOINTS.members ? [ana]
+          : url === SOURCE_ENDPOINTS.roleTargets ? { targets, recordIssues: [], lockIssues: [] }
+          : (PAYLOAD[url] ?? {}),
+      })),
+    );
+    const { container } = mount();
+    await waitFor(() => expect(container.querySelectorAll("[data-card-id]").length).toBe(2));
+
+    const publish = screen.getByRole("button", { name: "Publicar todos (2)" }) as HTMLButtonElement;
+    expect(publish.disabled).toBe(false);
+    expect(container.querySelector("p.text-right.text-ink-dim")).toBeNull();
+    fireEvent.click(publish);
+    // The plan: nothing ready, both drafts only through the override.
+    expect(await screen.findByText("Solo con «Publicar todos» (2)")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Publicar todos (2)", hidden: false })).toBeTruthy();
+  });
+
+  it("never offers a bulk publish for a past month, however publishable its drafts look", async () => {
+    // Review finding on the 2026-10-27 fix: a staffed, setlist-less draft of a
+    // month that has gone would otherwise count for «Publicar todos» and email
+    // people about a date that is over.
+    vi.unstubAllGlobals();
+    const ana = { _id: "m1", member_name: "Ana", _key: "k1" };
+    const pastDate = `${new Date().getFullYear() - 1}-03-01`;
+    const past = { ...role("role-past", pastDate), leads: [ana] };
+    const target = {
+      targetKey: `${past._type}:${past.date}`, type: past._type, canonicalCount: 1, canonicalIds: [past._id],
+      canonicalState: "single", publicState: "single", memberVisibleCount: 0, draftIds: [],
+      records: [{ id: past._id, rev: past._rev, type: past._type, serviceDate: past.date, published: false, assignedRefs: ["m1"], members: [], danglingRefs: [] }],
+      expectsLock: true,
+      lock: { id: `roleTarget.${past._type}.${past.date}`, rev: "lock-past", state: "claimed", roleId: past._id, generation: 1 },
+      lockIssues: [],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => ({
+        ok: true,
+        json: async () =>
+          url === SOURCE_ENDPOINTS.roles ? [past]
+          : url === SOURCE_ENDPOINTS.members ? [ana]
+          : url === SOURCE_ENDPOINTS.roleTargets ? { targets: [target], recordIssues: [], lockIssues: [] }
+          : (PAYLOAD[url] ?? {}),
+      })),
+    );
+    mount();
+    // Only a past role: «Próximos» is empty, so open the past months and pick it.
+    fireEvent.click(await screen.findByRole("button", { name: /Roles previos/ }));
+    // The pill wears the panel's own label («mar 25»), beside the upcoming months'.
+    const pastLabel = formatMonthTab(pastDate.slice(0, 7), currentYM());
+    fireEvent.click(screen.getByRole("button", { name: pastLabel, pressed: false }));
+    await waitFor(() => expect(document.querySelectorAll("[data-card-id]").length).toBe(1));
+
+    const publish = screen.getByRole("button", { name: "Publicar listos (0)" }) as HTMLButtonElement;
+    expect(publish.disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: /Publicar todos/ })).toBeNull();
+    // And no «needs review» line either: a past draft is not waiting on anything.
+    expect(document.querySelector("p.text-right.text-ink-dim")).toBeNull();
+  });
+
   it("says why the toolbar is closed, in the layout rather than in a title", async () => {
     vi.unstubAllGlobals();
     vi.stubGlobal(
@@ -291,7 +402,7 @@ describe("the Servicios board", () => {
     expect(closed.disabled).toBe(true);
     expect(closed.getAttribute("title")).toBeNull();
     // Exactly one line, the first closed gate's reason.
-    const reasons = [...container.querySelectorAll("p.text-ink-dim")].map((p) => p.textContent ?? "");
+    const reasons = [...container.querySelectorAll("p.text-right.text-ink-dim")].map((p) => p.textContent ?? "");
     expect(reasons).toHaveLength(1);
     expect(reasons[0].length).toBeGreaterThan(0);
     // No chart from partial membership — and the fallback sits where the chart
@@ -383,7 +494,9 @@ describe("the «Integridad de datos» slot (bloque 4)", () => {
     expect(open.disabled).toBe(false);
     fireEvent.click(open);
     await waitFor(() => expect(screen.queryByTestId("integrity-slot")).toBeNull());
-    expect(screen.getByRole("heading", { level: 1, name: "Generar mes" })).toBeTruthy();
+    // The editor owns its page head (ADR-0070's Admin pass), so the h1 arrives with the
+    // dynamically imported `MonthGenerator` — awaited, not read synchronously.
+    expect(await screen.findByRole("heading", { level: 1, name: "Generar mes" })).toBeTruthy();
   });
 });
 
@@ -464,22 +577,35 @@ describe("the card's one primary action", () => {
   // blocker must not look like the cyan "go" control beside it. `data-tone`
   // exists so this is readable in the DOM rather than by matching a class string
   // against `Button`'s private VARIANT table.
-  it("wears the danger tone for a review/conflict kind", () => {
+  it("wears the danger tone for a review/conflict kind, as the corner flag", () => {
+    // Since phase 5 of the «millones» pass a blocker is `ServiceReviewFlag`: an
+    // icon control named by the label, with the danger tone in the DOM and the
+    // reason (or the label) on its title — never the cyan «go» beside it.
+    const onAction = vi.fn();
     const { rerender } = render(
-      <ServicePrimaryAction
+      <ServiceReviewFlag
         action={{ ...ACTION, kind: "review_data", label: "Revisar datos" }}
-        onAction={vi.fn()}
+        onAction={onAction}
       />,
     );
-    expect(screen.getByRole("button", { name: "Revisar datos" }).getAttribute("data-tone")).toBe("danger");
+    const flag = screen.getByRole("button", { name: "Revisar datos" });
+    expect(flag.getAttribute("data-tone")).toBe("danger");
+    expect(flag.getAttribute("data-action-rule")).toBe("9");
+    expect(flag.getAttribute("title")).toBe("Revisar datos");
+    fireEvent.click(flag);
+    expect(onAction).toHaveBeenCalledTimes(1);
 
+    const reason = "Faltan los miembros. Usa «Reintentar carga».";
     rerender(
-      <ServicePrimaryAction
-        action={{ ...ACTION, kind: "resolve_conflict", label: "Resolver conflicto" }}
-        onAction={vi.fn()}
+      <ServiceReviewFlag
+        action={{ ...ACTION, kind: "resolve_conflict", label: "Resolver conflicto", disabled: true, reason }}
+        onAction={onAction}
       />,
     );
-    expect(screen.getByRole("button", { name: "Resolver conflicto" }).getAttribute("data-tone")).toBe("danger");
+    const disabled = screen.getByRole("button", { name: "Resolver conflicto" }) as HTMLButtonElement;
+    expect(disabled.getAttribute("data-tone")).toBe("danger");
+    expect(disabled.disabled).toBe(true);
+    expect(disabled.getAttribute("title")).toBe(reason);
   });
 
   it("wears the primary tone for a publish kind", () => {

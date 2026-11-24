@@ -23,6 +23,7 @@ import { evaluate, parse } from "groq-js";
 
 const h = vi.hoisted(() => ({ requireActiveManager: vi.fn(), serverFetch: vi.fn() }));
 
+vi.mock("server-only", () => ({}));
 vi.mock("@/app/utils/authGuards", () => ({
   requireActiveManager: () => h.requireActiveManager(),
 }));

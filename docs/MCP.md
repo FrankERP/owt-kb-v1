@@ -1,5 +1,21 @@
 # MCP connector — operator runbook
 
+> **Worship admins write as in the page ([ADR-0083's addendum](adr/0083-the-connector-opens-to-worship-admins-read-only-through-a-closed-redirect-list.md#addendum--worship-admins-write-as-in-the-page-2026-11-09)):
+> built 2026-11-09 on `claude/project-thread-5fah0x`, released to production 2026-11-20 with
+> `ADMIN_WRITES_CUTOFF` = `2026-11-20T18:30:00Z`.** A worship admin's grant made at or after the
+> cutoff reaches every worship write of `/admin` (`ADMIN_TIER_TOOLS`); people, Oasis Kids and the
+> solver rules' two tools stay super-admin only; older admin grants keep the read list (the admin
+> connects again to get the new one). See
+> [Tiers](#tiers-who-reaches-what).
+>
+> **Any agent, admins read-only ([ADR-0083](adr/0083-the-connector-opens-to-worship-admins-read-only-through-a-closed-redirect-list.md)):
+> released to production 2026-11-05** (PR [#229](https://github.com/FrankERP/owt-kb-v1/pull/229),
+> `main` `38ee629a`; dev since the same day). ChatGPT and local agents can connect as well as
+> Claude, and a worship admin gets a read-only list. **ChatGPT proven in production 2026-11-05**
+> with Frank's super-admin account (grant `client: "chatgpt"`, `ping` and a read answered); the
+> worship-admin read list is still to be proven with a real admin; see
+> [Adding the connector](#adding-the-connector).
+>
 > **P0 status: released to production 2026-09-24** (PR
 > [#95](https://github.com/FrankERP/owt-kb-v1/pull/95), `main` `c2ca5f7c`). Every P0 route, test and
 > script this document describes is deployed; the core flow (discovery, registration, consent,
@@ -58,8 +74,10 @@ ADR-0062, live proof pending.**
 
 This app exposes itself to Claude as an [MCP](https://modelcontextprotocol.io) server, so Frank
 can ask Claude questions against a live OWT Backstage deployment from his phone or desktop. The
-connector is OAuth-gated end to end: only a super-admin can authorize it, and only super-admin
-tools are exposed — P0 shipped one health check (`ping`); P1 adds seven read-only tools over the
+connector is OAuth-gated end to end: only a super-admin or a worship admin can authorize it
+([tiers](#tiers-who-reaches-what), ADR-0083); a super-admin reaches every tool, a worship admin
+every worship tool of the page (people and Oasis Kids excluded; read-only on a grant made before
+`ADMIN_WRITES_CUTOFF`) — P0 shipped one health check (`ping`); P1 adds seven read-only tools over the
 same service/song/member/proposal data `/admin` shows (released to production 2026-09-25); P3 adds
 four write tools that make the same changes `/admin` makes, through the same domain writers
 ([ADR-0043](adr/0043-admin-writes-delegate-to-commit-modules.md); released to production
@@ -81,10 +99,10 @@ registration is stateless, and [AUTH_AND_SECURITY.md](AUTH_AND_SECURITY.md#mcp--
 | `GET /.well-known/oauth-authorization-server` | No | nothing — **public by design**: fixed metadata, no input | `beforeFiles` rewrite to `app/api/oauth/discovery/authorization-server/route.ts`, which stays gated at its own path |
 | `GET /.well-known/oauth-protected-resource` | No | nothing — **public by design** | rewrite to `app/api/oauth/discovery/protected-resource/route.ts` |
 | `GET /.well-known/oauth-protected-resource/api/mcp` | No | nothing — **public by design** | same rewrite target, path-suffixed RFC 9728 form (what `resourceMetadataUrl` points at) |
-| `POST /api/oauth/register` | No | the **redirect-URI allowlist**; what it returns is a **signed client id** that every later step verifies | stateless DCR — writes nothing (ADR-0039) |
+| `POST /api/oauth/register` | No | the **redirect-URI allowlist** (claude.ai, ChatGPT's stable callback, loopback; ADR-0083); what it returns is a **signed client id** carrying only the allowed subset of the requested URIs, which every later step verifies | stateless DCR — writes nothing (ADR-0039); every refusal logs one fixed reason line |
 | `POST /api/oauth/token` | No | the **signed authorization code plus its PKCE verifier** (or a signed refresh token and its live grant), and the signed client id | the only place grants are created and refresh tokens rotate |
 | `GET \| POST \| DELETE /api/mcp` | No | its own **bearer-token** check, on every request | the MCP endpoint itself |
-| `GET /oauth/authorize` | **Yes** | the session, plus a live, non-impersonating super-admin | the consent screen (a page, not an API route) |
+| `GET /oauth/authorize` | **Yes** | the session, plus a live, non-impersonating super-admin or worship admin (`mcpTierOf`) | the consent screen (a page, not an API route) |
 | `POST /api/oauth/authorize` | **Yes** | the same, plus the same-origin check and the re-validated signed client id | the only thing that mints an authorization code; GET is 405 |
 
 Every route in the table runs the same preflight before anything else (`mcpRoutePreflight`: the
@@ -93,7 +111,7 @@ disponible» or a not-found page on the consent screen). The six routes marked "
 from `proxy.ts` / `MIDDLEWARE_MATCHER` (`app/utils/routeMatcher.ts`) by design — none of them
 reads a session cookie, and each is enforced by what its row names instead. `/oauth/authorize`
 and `/api/oauth/authorize` deliberately stay **gated**: the consent screen needs a real
-super-admin session, and it can afford to sit behind the middleware because NextAuth's
+super-admin or worship-admin session, and it can afford to sit behind the middleware because NextAuth's
 **default** `redirect` callback carries a relative `callbackUrl` (query included) through sign-in
 unchanged — see the invariant in `CLAUDE.md` and the guard test
 `app/utils/__tests__/authRedirectCallback.test.ts`.
@@ -138,8 +156,26 @@ editor adds three more, seventeen in all, registered after `apply_schedule`
 (see [Editing a proposal](#editing-a-proposal); in production since 2026-10-21, PR #160). Admin
 parity phase 1 adds eight, twenty-five in all: three reads registered after the P1 reads
 (`get_fairness_ledger`, `get_solver_rules`, `get_integrity_queue`) and the saved-month editor's
-five registered last (see [Editing saved services](#editing-saved-services-admin-parity-phase-1);
-in production since 2026-10-22, PR #167). Every tool is
+five registered last; the card's save twin `save_service_edits_app` (2026-10-23) makes it six, twenty-six in all (see [Editing saved services](#editing-saved-services-admin-parity-phase-1);
+in production since 2026-10-22, PR #167). Admin parity phase 2 adds three, twenty-nine in all,
+registered after `create_service`: `check_service_deletes`, `delete_services` and the card's
+`delete_services_app` (see [Deleting saved services](#deleting-saved-services-admin-parity-phase-2)). Admin parity
+phase 3 adds five, thirty-four in all, registered after the deletes: `get_service_messages`,
+`send_service_message`, `edit_service_message`, `set_pastor_message` and `set_team_message` (see
+[A service's messages](#a-services-messages-admin-parity-phase-3)). Oasis Kids (phase 3, S4) adds
+five more, thirty-nine in all, registered last: `get_kids_month`, `generate_kids_month`,
+`save_kids_sundays`, `save_kids_pair` and `set_kids_absences` (see [Oasis Kids](#oasis-kids-admin-parity-phase-3)). Deciding
+setlist proposals (phase 3, S1) adds two more, forty-one in all, registered last:
+`check_setlist_proposal_review` and `review_setlist_proposal` (see
+[Deciding a setlist proposal](#deciding-a-setlist-proposal-admin-parity-phase-3)). Creating and
+editing songs (phase 3, S3) adds four more, forty-five in all, registered last: `check_song_edits`,
+`save_song_edits`, `check_new_song` and `create_song` (see
+[Creating and editing songs](#creating-and-editing-songs-admin-parity-phase-3)). People (phase 4,
+slice M) adds seven more, fifty-two in all, registered last: `list_members`, `get_member`,
+`check_member_changes`, `save_member_changes`, `check_new_members`, `create_members` and
+`set_member_access` (see [People](#people-admin-parity-phase-4)). The solver rules (phase 4, slice R)
+add two more, fifty-four in all, registered last: `check_rule_edits` and `save_rule_edits` (see
+[Solver rules](#solver-rules-admin-parity-phase-4)). Every tool is
 registered the same way — one file per tool in `app/mcp/tools/`, exporting a
 `register<Tool>(server, deps?)` function that `registerAllTools` (`app/mcp/toolList.ts`) calls,
 the writes after the reads; `app/api/mcp/route.ts` runs it inside its handler init. Every
@@ -307,7 +343,7 @@ because neither is canonical. Selects by `songId` (canonical id; a `drafts.*` id
 `slug` (never both); a slug shared by two posts — a Studio data problem, not something Sanity
 enforces — is refused rather than picking one, and the refusal lists each candidate's `songId` and
 title. **The payload carries neither the song's id nor its slug** (the caller already has whichever
-one it selected by). `search_songs` is where both come from: each of its results has `id` and
+one it selected by; `full: true`, for the song tools, adds `songId`). `search_songs` is where both come from: each of its results has `id` and
 `slug`. This is known and kept.
 
 - `title`, `authors` (names), `artist` (the legacy `author` string, kept separate from `authors`),
@@ -384,8 +420,10 @@ a service (`serviceId: null` when it cannot be resolved — never a guess — an
 `list_services` would list), `serviceDate`, `kind`, `status`, `lead`/`contributors` (with
 `missing`/`unresolved`, same meaning as `get_service`'s seats; `name` is `member_name`, with no
 alias), `songs` (title and key; a dangling song reference is `missing: true`), `threadOpen`, and
-the **live** `messages[]` conversation — never the frozen `lead_notes`/`admin_notes`/`team_notes`
-archive fields (ledger A7). **D6:** with `{ serviceId }` the full thread comes back; with
+the **live** `messages[]` conversation — never the frozen `lead_notes`/`admin_notes` archive fields,
+nor `team_notes` (ledger A7). `team_notes` is not frozen: it is the proposal's live «Mensaje para el
+equipo», which the lead's save writes and approving copies to the setlist;
+`check_setlist_proposal_review` shows it. **D6:** with `{ serviceId }` the full thread comes back; with
 `{ month }` each proposal is capped to its last 10 messages (chronological), `messagesTotal`
 always the true full count, `truncated: true` when anything was cut. `threadOpen` is
 `isThreadOpen`'s own rule: open while the service's day has not yet passed in
@@ -762,7 +800,7 @@ Three tools, in production since 2026-10-21 (PR #160, `main` `2e075190`; live pr
 
 ### Editing saved services (admin parity, phase 1)
 
-Five tools over the services already in `/admin`, plus three reads, in production since 2026-10-22 (PR #167). Plan:
+Five tools over the services already in `/admin`, plus three reads, in production since 2026-10-22 (PR #167); a sixth, the card's save twin, since 2026-10-23. Plan:
 [2026-10-21-owt-mcp-admin-parity-f1.md](superpowers/plans/2026-10-21-owt-mcp-admin-parity-f1.md);
 decisions and the rejected alternatives:
 [ADR-0066](adr/0066-saved-services-are-edited-from-the-chat-as-checked-change-sets.md).
@@ -775,6 +813,7 @@ decisions and the rejected alternatives:
 | `check_service_edits` | the model (and it opens the card) | Edits by name and date («pon a Ana en el BGV del 8»): place, clear, move, exchange, and a special's name and time or «Cuenta para equidad» (`header`); or `copy {from, to}` alone. Answers per changed service the change set `save_service_edits` takes, its lines in words, the groups and the month check. The save's (or copy's) arguments are also the text's last line («Argumentos para …»; one line per save call when a group is over six services, none when it needs the card): the Claude app gives the model only a tool answer's text, never `structuredContent`; the card hides that line. Never forces: a per-seat rule refuses. Read-only |
 | `check_service_edits_app` | the card only (`_meta.ui.visibility: ["app"]`) | The same with members as month tokens, `force` per edit (mints a waiver token for each finding the forced edit creates) and a seat's candidates. Read-only |
 | `save_service_edits` | the model | Writes the change sets as the check answered them, one service at a time through `/admin`'s PATCH writer (`roleEditCommit.ts`), notices queued inline. Destructive |
+| `save_service_edits_app` | the card only (`_meta.ui.visibility: ["app"]`) | The same save (one function), called by the card after its own confirmation (ADR-0066 addendum, 2026-10-23); it logs under its own name. Destructive |
 | `copy_instruments` | the model | One service's instruments onto another through `/admin`'s copy writer, after `check_service_edits` with `copy`. Destructive |
 | `create_service` | the model | One empty, unpublished service (Sunday, Saturday, special or «Noche de alabanza»), as «+ Nuevo servicio» does, through the roles POST's writer. Destructive |
 
@@ -796,11 +835,27 @@ decisions and the rejected alternatives:
 - **Forcing needs the card**, as with proposals: only `check_service_edits_app` mints waiver tokens,
   bound to the service and its revision. A rule the service already broke before the edit is a
   warning; forced again, it is named in the prompt «ya estaba rota antes de este cambio». The
-  guarantee rests on the host hiding app-only tools.
+  guarantee rests on the host hiding app-only tools, which is why they are registered only for a
+  claude.ai grant (ADR-0083).
 - **Time.** Every write races a 45 s hard stop; no group starts after 30 s («pendiente»).
 - **The card** (`mcp-app/proposal-card/useStoredEditor.tsx`) opens on a `check_service_edits`
-  answer with its edits, edits seats like the proposal editor, and «Guardar» sends the change sets
-  to the chat (in parts when a group is too large); it never writes. On a host that takes model
+  answer with its edits and edits seats like the proposal editor. **«Guardar» saves from the card**
+  (2026-10-23, Frank: «¿por qué para guardar a fuerzas tiene que ser un prompt explícito mío?»; plan
+  `docs/superpowers/plans/2026-10-23-owt-mcp-card-saves.md`, ADR-0066 addendum): it opens a
+  confirmation with the part's lines (the changes and every rule forced, exactly what the save
+  compares), and «Sí, guardar» calls `save_service_edits_app` with the part untouched (70 s client
+  timeout). A saved part reads «Guardado»; when every part is saved the card reads the month again from
+  an empty list and keeps the save's report on screen. **After a save starts, the edit list is never
+  replayed:** an unknown outcome (`repeat_same_call`, an answer without structure, a throw) keeps it
+  frozen with «Guardar de nuevo» (safe: «ya estaba») and «Mandar al chat»; a refusal or a save that
+  stopped part way reads the month from the empty list and says what was not saved. Reopening the month
+  after a save opens what is stored. The save's lines written for Claude («Repite exactamente la misma
+  llamada…», «Revisa … con check_service_edits») are not shown on the card. Afterwards the card sets
+  the model's context to what it saved, so Claude does not save it again. Whether the Claude app asks
+  before an app-initiated destructive call is not documented; if it refuses, «Mandar al chat» is the
+  old way, below.
+- **«Mandar al chat»** (the fallback) sends the change sets to the chat (in parts when a group is too
+  large). On a host that takes model
   context (`updateModelContext` with text), the chat message is what a person would write («Guarda mis
   cambios de la tarjeta (2tgeu4):» and the changes in words; Frank, 2026-10-23: the instructions in
   the chat read «raro»). The context holds one rule (save only the key the last message names, never
@@ -818,10 +873,170 @@ decisions and the rejected alternatives:
   cuadra» from them. With `focus`, `edits` may be empty: the call only opens the card. What is
   checked and saved is always the whole month.
 - **Not in phase 1:** moving a service to another date, legacy services `/admin` bootstraps on save,
-  adding a new instrument or FOH row, header edits from the card, deleting services.
+  adding a new instrument or FOH row, header edits from the card. Deleting services is phase 2
+  ([below](#deleting-saved-services-admin-parity-phase-2)).
 - **Proof.** `serviceEditor.test.ts`, `serviceCopy.test.ts` and `createService.test.ts` run the tools
   over an in-memory store with the writers' contracts; `storedMonthCard.test.tsx` runs the card's own
-  sequence into `save_service_edits`.
+  sequence into `save_service_edits`; `storedCardSave.test.tsx` renders the card over the same store
+  and saves through `save_service_edits_app` (confirmation, frozen list, re-read from the empty list).
+  **Live proof passed 2026-10-24 00:16Z** (production, `bf7516bf`): Frank put himself back in EG on
+  Sun 29 Nov 2026 from the card, «Guardar» → «Sí, guardar», and the Claude app let the card call the
+  app-only save.
+
+### Deleting saved services (admin parity, phase 2)
+
+Three tools that delete services from `/admin` the way its card delete and «Limpiar mes» do, through
+the same writer (`app/utils/roleDeleteCommit.ts`, which the DELETE route now calls too). Plan:
+[2026-10-24-owt-mcp-admin-parity-f2-deletes.md](superpowers/plans/2026-10-24-owt-mcp-admin-parity-f2-deletes.md);
+decisions and the rejected alternatives:
+[ADR-0072](adr/0072-saved-services-are-deleted-from-the-chat-by-an-echoed-list.md).
+
+| Tool | Who calls it | What it does |
+|---|---|---|
+| `check_service_deletes` | the model, and the card | `{month, include?: "drafts" \| "all", services?}`: the list of what a delete would remove, one line per service («sábado 7 nov · borrador», «domingo 8 nov · publicado: se avisa a hasta 9 personas», a special «… · especial»), what it keeps and why (already past, has a setlist / proposal / songs / another document pointing at it, a Studio draft, unreadable, a name too long for the list), and a token over the whole list. Drafts only unless `include: "all"`; an id in `services` selects that service, published or not. At most 31 lines; more answers «quedan N». The `delete_services` arguments are the text's last line («Argumentos para delete_services (pásalos tal cual): …»). Read-only; no card `resourceUri` (a check from the chat never opens the card) |
+| `delete_services` | the model | `{month, deletes: [{service, baseRev, line}], token}`, exactly as the check answered. Deletes one service at a time through `deleteRole`, «Ya no participas» queued inline for a published one. Destructive |
+| `delete_services_app` | the card only (`_meta.ui.visibility: ["app"]`) | The same function, after the card's own confirmation; it logs under its own name. Destructive |
+
+- **The permission prompt shows the list.** The lines are plain sentences so the Claude app's prompt
+  for `delete_services` shows exactly what goes. **Never choose «Siempre permitir» for
+  `delete_services`**: it removes that prompt for every later call, and the server cannot tell
+  whether anyone read the list. The tool description and the check's answer say the same.
+  **Observed live (2026-10-27, production): the prompt did not appear.** The first chat delete
+  (four throwaway specials in March 2027, the model-visible «Borrar servicios», not the card twin)
+  ran with NO prompt, although claude.ai's per-tool setting for `delete_services` (Ajustes ›
+  Conectores › OWT Backstage) was already «Necesita aprobación». Whether the app took Frank's own
+  «bórralas» as the approval is not known from here. So the app's prompt is NOT a gate this
+  connector can count on. What held was the chat: it showed the check's list and waited for Frank
+  to say «bórralas». Frank accepted that as the confirmation (over making chat deletes card-only).
+- **The call must repeat the list.** The token is an HMAC over the month and the whole list
+  (`changeSetTokens.ts` `deleteListToken`, label `mcp-delete-list|`): a subset, an added service or an
+  edited line is refused before any delete. The save re-reads every service and re-renders its line;
+  a changed `_rev`, a changed line, a past service or an id outside the month refuses the WHOLE call.
+  A service already gone answers «ya no existe», so a repeat after «sin confirmar» or «pendiente»
+  finishes the rest.
+- **What is never deleted from the chat:** a service before today in CDMX (Frank: «Solo de hoy en
+  adelante»; `/admin` keeps it, ADR-0055 balances), and anything `/admin`'s writer refuses — a
+  service with a setlist, a proposal, a special's songs, or any document referencing it. There is no
+  cascade.
+- **Outcomes.** «Borrado» (published: «avisos en cola»; a failed inline notice answers «borrado, pero
+  no se pudo avisar a: …» with the names, because a repeat can no longer tell them); a proven
+  refusal → «no se borró» and the rest go on; contention with the service unchanged → «repite la misma
+  llamada UNA vez»; a moved service → «revisa de nuevo»; anything unknown → «sin confirmar» and the
+  run stops. Phase 1's 45 s hard stop and 30 s start cut-off apply.
+- **A legacy weekend service** (no lock yet) takes two rounds: the first delete bootstraps its lock,
+  deletes nothing and answers «revisa de nuevo»; the next check and delete remove it.
+- **The card** (saved-month mode): «Borrar servicios…» in the footer (the whole month, even when the
+  card was opened on a few days; «Solo borradores» or «También publicados») and «Borrar este
+  servicio» on each service. Both show the check's lines in the card's own confirmation («Esto no se
+  puede deshacer.»), and «Sí, borrar» calls `delete_services_app` with the list and token untouched.
+  Disabled while there are unsaved edits («Guarda o descarta tus cambios primero»). An unknown outcome
+  keeps the same list for «Borrar de nuevo» or «Mandar al chat»; a contention allows one «Borrar de
+  nuevo»; anything else re-reads the month («Volver a leer el mes» if that fails). The rules are the
+  ADR-0066 addendum's.
+- **Undo.** None from the chat. Plan the service again (Auto, or `create_service` and the seats) or
+  restore it from its history in Studio, which the Sanity Free plan keeps **3 days**
+  (sanity.io/docs/history-experience). A restored role comes back without the weekend lock and
+  creation receipt its delete retired (`/admin` bootstraps the lock on its next save), and its people
+  still get «Ya no participas» (the answer says so only when a published delete queued notices).
+- **Proof.** `serviceDeletes.test.ts` runs the three tools over an in-memory store with the writer's
+  contract; `deleteLines.test.ts` pins N to the notice builder's audience; `roleWriteRoutes.test.ts`
+  pins the route and the commit to identical transactions; `storedCardDelete.test.tsx` renders the
+  card's delete.
+
+### A service's messages (admin parity, phase 3)
+
+What `/admin`'s «Mensajes del servicio» dialog does (ADR-0065), from the chat, through the same
+writers: the four `/api/admin/service-threads/[roleId]/*` routes now authorize and call
+`app/utils/serviceThreadCommit.ts`, and so do the tools (`app/mcp/tools/serviceMessages.ts`). The
+acting member is the bearer's (`principalOf(ctx).sub`), never an argument; a write with no
+principal refuses before any read (the read only loses `mine`). Decision record:
+[ADR-0073](adr/0073-a-services-messages-are-written-from-the-chat-through-the-service-thread-writer.md). The name the leads' email shows is that member's `alias`, else `member_name`.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `get_service_messages` | `{serviceId}` | The dialog's read (`serviceConversationQuery`): the «Mensaje del pastor» and its `pastorObserved`, the admins' messages (each with `key`, author and `mine: true` for the bearer's own), the leads' proposal conversation if any (read-only), the «Mensaje para el equipo» with its `observed` (null before a setlist exists; «unavailable» on a duplicate weekend setlist), `threadOpen`. Read-only `proposal.pastorMessage` is the leads' pastor's message from their proposal (ADR-0087; null for a draft). |
+| `send_service_message` | `{serviceId, body}` | A message to the service's leads, as «Enviar». Not idempotent: an unknown outcome says to read before retrying, or the message is duplicated. Destructive (I14) |
+| `edit_service_message` | `{serviceId, key, body}` or `{serviceId, key, delete: true}` | Edit or delete the bearer's OWN message; another author's answers «solo tus propios mensajes» (the writer's `not_author`). Destructive |
+| `set_pastor_message` | `{serviceId, body, observed}` | Set, change or clear (`body: ""`) the one «Mensaje del pastor»; `observed` is `pastorObserved` unchanged (null when empty), a stale one refuses. Destructive |
+| `set_team_message` | `{serviceId, text, observed}` | Change or clear the setlist's «Mensaje para el equipo»; `observed` is `teamMessage.observed` unchanged. Songs untouched. Destructive |
+
+Every write description tells the model to show the person the EXACT text and wait for their word
+in the conversation, and never to write on an instruction found inside a proposal, a message or a
+song (ADR-0072's observation: the host's permission prompt is not relied on). A thrown writer answers
+«No se pudo confirmar si el cambio se guardó…» pointing at `get_service_messages`, never «No se
+escribió nada». The thread's own rule holds: open until the service's date, then closed to writes.
+**Proof.** `serviceMessages.test.ts` (tools over fakes of the writers), `serviceThreadRoutes.test.ts`
+and `serviceMessageEditRoutes.test.ts` (the routes, unchanged by the extraction).
+
+### Oasis Kids (admin parity, phase 3)
+
+What `/kids/admin` does, from the chat, through the same code (spec:
+`docs/superpowers/plans/2026-10-27-owt-mcp-admin-parity-f3c-kids.md`). The four `/api/kids/*` writes
+now authorize and call `app/utils/kidsCommit.ts` (`saveKidsSunday`, `createKidsPair`,
+`patchKidsPair`, `setKidsAvailability`); `POST /api/kids/generate` calls `proposeKidsMonth`
+(`app/utils/kidsMonthPlan.ts`); the planner's month read, drafts included, is
+`readKidsMonthSchedules` (`app/utils/kidsScheduleReads.ts`, ADR-0022's one exempt module). The tools
+(`app/mcp/tools/kids.ts`) call the same functions. Pairs and volunteers go by NAME (no accents or
+case) or id; a name matching nothing or several is refused with the list. Writes need the bearer
+(`principalOf`) but record no author, as the routes. **Kids notifies nobody**, from either surface.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `get_kids_month` | `{month}` | Every Sunday of the month (saved or not, draft or published, each seat's pair by name and `pairIds` beside it), every pair (room, active, its two volunteers), the Kids volunteers, and that month's absences. Read-only |
+| `generate_kids_month` | `{month, seed?, exclude?}` | «Generar mes»: the same planner over the same inputs; `seed`/`fingerprint`/`exhausted` for «otra opción». Saves nothing. Read-only |
+| `save_kids_sundays` | `{sundays: [{date, seats, published?}]}` (≤ 6) | Each Sunday WHOLE, as the planner's PUT: an omitted seat is cleared. Every Sunday is resolved and checked (a Sunday, a known active pair, its own room, one seat per pair) before the first write; a writer refusal after that answers which Sundays were saved (not «No se escribió nada»). `published` only when the person asked; the answer marks each Sunday «PUBLICADO» or «borrador», so a change to a Sunday the volunteers already see is never silent. Destructive (I14) |
+| `save_kids_pair` | `{pair?, name?, room?, members?, active?}` | No `pair` creates (name, room, two volunteers; a name already used is refused so names stay unambiguous); with `pair` changes only the given fields; `active: false` retires. Destructive |
+| `set_kids_absences` | `{member, add?: [{date, note?}], remove?: [date]}` | By PARTS on the volunteer's fresh `_rev`: the dates nobody mentioned are carried over. The same list `/me` (and worship availability) writes; a lost race answers «cambiaron mientras tanto». Destructive |
+
+**Proof.** `kids.test.ts` (tools over fakes of the writers, the read and the planner),
+`kidsRoutes.test.ts` and `kidsAvailabilityConflict.test.ts` (the routes, unchanged by the extraction
+but for the `server-only` stub their new run-context wrapper needs).
+
+### Deciding a setlist proposal (admin parity, phase 3)
+
+What `/admin`'s Propuestas does with a lead's setlist proposal, from the chat, through the same
+writer: `PATCH /api/admin/proposals/[id]` now authorizes and calls `reviewProposal`
+(`app/utils/proposalReviewCommit.ts`), and so does the write tool
+(`app/mcp/tools/setlistProposalReview.ts`). Decision record:
+[ADR-0076](adr/0076-setlist-proposals-are-decided-from-the-chat-through-one-planner-in-two-modes.md);
+plan: `docs/superpowers/plans/2026-10-27-owt-mcp-admin-parity-f3a-proposal-review.md`. «Rechazar» is
+«Solicitar cambios»: `/admin` has no reject action. The acting member is the bearer's
+(`principalOf(ctx).sub`, recorded as `approvedBy`), never an argument; the write refuses before any
+read without a principal (the check, which writes nothing, needs none).
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `check_setlist_proposal_review` | `{proposalId, action, note?}` | Runs the writer's own planner in **peek** (`planProposalReview(…, "peek")`; the arguments are parsed by the tool's strict schema, the writer's request parser runs only in the write): the same load, drift, receipt and retry rules, readiness and target, with the proposal's `_rev` reported instead of asserted and a legacy weekend lock's bootstrap reported instead of committed, so it never writes. Answers what the decision would do: for `approve` the songs in order with their keys, the live setlist it REPLACES, the team note it copies and the live one it replaces or blanks (read by id An approve also says, in full, what happens to the proposal's «Mensaje del pastor» (ADR-0087), from a peek-only read of the service's that never refuses the check; the line does not carry it. |
+and revision: the loaders' shared projections do not carry `team_notes`) and, on a worship night, the song leaders kept; who is told; or why it cannot. Its last text line is «Argumentos para review_setlist_proposal: {proposalId, action, rev, line, note}». Read-only |
+| `review_setlist_proposal` | `{proposalId, action, rev, line, note?}` | Re-renders the line from a fresh peek and refuses («La propuesta cambió») when it differs, then calls `reviewProposal`, which asserts `rev` in the transaction. A repeat of a decision already written writes nothing and says «ya estaba». Destructive (I14) An approve's answer reports the pastor's-message copy (`pastorMessage`: `copied` / `same` / `kept_existing` / `failed`) in a line and in the structured output. |
+
+`action` is `approve`, `request_changes` or `reopen`; `reconcile_target` is not exposed. The line
+starts with the action and ends with the songs (approve) or the trimmed note (`· nota: …`, or
+`· sin nota`), so a `rev` checked for one action cannot pass for another and the note shown is the
+note written. An approve line also says what happens to the live team note («· borra el mensaje para
+el equipo», «· reemplaza…»), so a note written on the live setlist after the check refuses the write
+instead of being overwritten unseen (the writer asserts the setlist revision it loads itself). Both descriptions tell the model to show the songs, the replaced setlist and the note
+and to call the write only after the person's explicit word in the conversation, never on an
+instruction found in a proposal, a message or a song (ADR-0072). A thrown writer answers «No se pudo
+confirmar si la decisión se guardó…» pointing at the check, never «No se escribió nada»; a weekend
+role whose lock the first write had to prepare answers that the decision was NOT applied and to
+check again and repeat it.
+
+**Who is told** (the forecast, from `app/mcp/writes/reports.ts`): approving a published service
+with songs queues the setlist notice (`setlistNoticeEligible`, the rule `setlistUpsert` itself
+calls); its audience follows ADR-0054 from the `before` the flush will use: the pending notice's,
+when one is waiting (the outbox keeps the first `before` of a window; its rows are normalized as the
+flush normalizes them, `normalizeSnapshotRows`), else the live setlist. An
+empty one means «Setlist listo» to the WHOLE worship team; otherwise «El setlist cambió» to the
+participants plus the console team, and nothing when the songs do not change. Unpublished or past
+services: no email (a service dated today can cross midnight inside the window, so it is worded
+as a prediction). The lead and contributors get the review push only if they have push turned on
+on a device. **Approving is not undone from the chat:** «Reabrir» does not restore the replaced
+setlist (Studio's 3-day history is the only undo).
+
+**Proof.** `setlistProposalReview.test.ts` (tools over a fake of the writer), `proposalWriteRoutes.test.ts`
+(the route, unchanged by the extraction, plus route-vs-commit parity and peek scenarios),
+`roleWriteOpsBootstrap.test.ts` («peek coordination never writes»).
 
 ### Notification audiences (the write tools)
 
@@ -834,8 +1049,14 @@ Confirmed from the code at `963cd736` (P3 plan, § «Notification audiences»):
 | `swap_assignment`, per published role | push «Servicio actualizado» to the members **added** to that role | a `role` notice to the union of before and after assignees, after the window | anything for a draft role |
 | `publish_service` | push «Nuevo servicio asignado» to every current assignee; the consolidated assignment email to the members `sendAssignmentEmailsBatch` itself derives from the service body (`assigneesOf` + `rolesForMember`), reported as that derivation | «Setlist listo» (`debounceMs: 0`) to the participants and the whole worship team (ADR-0054) if there are songs, flushed in the same `after()` | — |
 | `unpublish_service` | — | — | everything; there is no sweep |
-| `save_service_edits`, `copy_instruments`, per published role | push «Servicio actualizado» to the members **added** to that role (in `after()`, as `/admin`) | a `role` notice to the union of before and after assignees, after the window — upserted INLINE and awaited before the next service is written (`queueRoleNoticesNow`), with no layer-2 sweep | anything for a draft role |
+| `save_service_edits` (and its card twin), `copy_instruments`, per published role | push «Servicio actualizado» to the members **added** to that role (in `after()`, as `/admin`) | a `role` notice to the union of before and after assignees, after the window — upserted INLINE and awaited before the next service is written (`queueRoleNoticesNow`), with no layer-2 sweep | anything for a draft role |
 | `create_service` | — | — | everything: it creates an empty draft (`published: false`) |
+| `delete_services` (and its card twin), per published role | — | a `role` notice («Ya no participas») to every assignee of the deleted service, upserted INLINE and awaited before the next delete (`queueRoleNoticesNow`), with no layer-2 sweep | anything for a draft role |
+| `send_service_message`, published service | push AND email to the service's Leads except the writer (`after()`, as `/admin`; email gated on the proposals preference + allowlist) | — | anything while the service is unpublished |
+| `set_pastor_message` | the same push AND email to the Leads, only when the message appears on an empty field of a published service | — | an edit or a clear |
+| `edit_service_message`, `set_team_message` | — | — | everything |
+| `save_kids_sundays`, `save_kids_pair`, `set_kids_absences` | — | — | everything (Kids sends nothing, as `/kids/admin`) |
+| `review_setlist_proposal` | push «Propuesta aprobada» / «Cambios solicitados» / «Propuesta reabierta» to the proposal's lead and contributors (`notifyProposalReview`, awaited after the commit, delivery fire-and-forget, as `/admin`) | on `approve` of a published service with songs, dated today or later: the `setlist` notice, audience per ADR-0054 from the stored `before` (the whole worship team when it is empty) | any email from `request_changes` / `reopen` The approval's copy of the leads' pastor's message sends nothing (ADR-0087). |
 
 All of these pass the downstream filters: device tokens and push preferences, `EMAIL_ALLOWLIST`,
 and `wantsNotification`. Any outbox upsert through the deferred path also triggers the derated
@@ -843,6 +1064,152 @@ layer-2 sweep, which can deliver **other** notices that were already due to thei
 exactly as the same `/admin` write does; the saved-service save's inline upserts run no sweep and
 are delivered by layers 1 and 3 ([NOTIFICATIONS.md](NOTIFICATIONS.md#the-shape-of-it)). The tools
 report all of it as queued (I9).
+
+### Creating and editing songs (admin parity, phase 3)
+
+What «Nueva canción» and «Editar canción» do, from the chat, through the same writer:
+`POST /api/content/posts`, `PATCH /api/content/posts/[id]` and `POST /api/content/authors` now
+authorize and call `app/utils/songSaveCommit.ts`, and so do the write tools
+(`app/mcp/tools/songEdits.ts`). Decision record:
+[ADR-0077](adr/0077-songs-are-edited-from-the-chat-by-parts-through-admins-writer.md); plan:
+`docs/superpowers/plans/2026-10-27-owt-mcp-admin-parity-f3b-song-save.md`. Song writes notify nobody,
+from either surface. The writes refuse before any read without a principal; nothing is recorded as
+the author of a song edit, as in `/admin`.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `get_song {full: true}` | the read's own selector plus `full` | Adds the song's `rev`, `lyricsText` (the lyrics in the editor's text form: «# » heading, `**bold**`, `*italic*`), `lyricsEditable` and `charts [{chartKey, key, content}]`, which the chat copies passages from. Without `full` the payload is unchanged. `full` is MCP-only (the in-app assistant's schema refuses it, ADR-0060 amended). Read-only |
+| `check_song_edits` | `{songId, edits[≤30]}` | Applies the edits by parts to the FRESH song (`applySongEdits`): `set` (title, key, bpm, timeSig, the two URLs; `""` clears all but the title), `lyrics {replace, with, all?, nth?}`, `lyricsAll`, `chart {chartKey, …}`, `chartAll`, `addChart {key, content}`, `removeChart`, `addTag`/`removeTag` (existing tags only), `authors {names}` (the whole list; an unknown name creates the artist), `addLink`/`removeLink`, `addTutorial`/`removeTutorial`. Answers the before/after of ONLY what changes, rendered from the writer's own normalized patch (`songChangeLines`), plus `rev` and a token. Warns about ADR-0018 (a chart hides the lyrics) and a pending Studio draft. Read-only |
+| `save_song_edits` | `{songId, rev, edits, token}` | Re-reads, refuses a different `_rev`, re-applies the edits, re-renders the before/after and verifies the token (`mcp-song-edits|`, over the song, `rev`, the edits and that rendering, so a tag or artist that resolves differently than at the check refuses), then calls `patchSong` under `ifRevisionId`; a 409 is «La canción cambió». Destructive (I14) |
+| `check_new_song` | `{title, artists?, key?, bpm?, timeSig?, lyrics?, charts?, tags?, links?, musicalReferenceUrl?, lyricsVideoUrl?}` | The song as it would be created (the writer's own `buildSongCreate`), songs with the same title (reported, not refused) and a token valid 30 minutes. A slug another song has is refused. Read-only |
+| `create_song` | the same arguments plus `token` | Verifies the token (`mcp-song-create|`, with its issue time); the id is `post-mcp-` + 24 hex of it. An existing id answers «Ya estaba creada»; otherwise the slug is re-checked and `createSong` writes the new artists and the song in ONE transaction (`createIfNotExists` each). Destructive (I14) |
+
+**Passages.** A passage must occur exactly once at its turn (edits apply in order), unless the edit
+says `all: true` or `nth: k` (1-based, counted left to right without overlap). A lyrics edit needs
+`lyricsEditable` (`lyricsGate`: the stored body equals `textToBody(bodyToLyrics(body))` ignoring
+keys, and is NFC). A structural difference refuses every lyrics edit, `lyricsAll` included; a body
+that is only not NFC refuses passages (`lyricsAll` still works). The rest of the edits always work. Keys are English notation («Sol» is refused with the hint «Sol = G»). Chat text is
+NFC-normalized and stripped of `\r`; URLs and labels are trimmed.
+
+**Unknown outcomes.** A thrown save answers «No se pudo confirmar si el cambio se guardó» and says to
+read the song with `get_song {full: true}` before checking again (a passage already applied would
+otherwise be applied twice). A thrown create says to repeat `create_song` with the same token, which
+answers «Ya estaba creada» if it landed, even after the token's 30 minutes (the expired token is
+still verified, and the id it names is read first).
+
+**Proof.** `songEdits.test.ts` (the pure edits and the gate), `songSaveCommit.test.ts` (the chat's
+transaction), `contentPostsWriteRoute.test.ts` (the routes, unchanged, plus the URL clear through the
+real patch serializer), `songChange.test.ts`, `songTokens.test.ts`, the tools' `songEdits.test.ts`,
+`songTools.test.ts` (`full`), `adminChatViews.test.ts` (the assistant never sees it).
+
+### People (admin parity, phase 4)
+
+What `/super-admin` → Personas does («Agregar», «Editar», «Deshabilitar»), from the chat, through the
+same writer: `POST /api/admin/members`, `PATCH /api/admin/members/[id]`,
+`PATCH /api/admin/members/[id]/disable` and `/me`'s `PATCH /api/me` now authorize and call
+`app/utils/memberCommit.ts`, and so do the tools (`app/mcp/tools/members.ts`). Decision record:
+[ADR-0082](adr/0082-people-are-edited-from-the-chat-by-parts-and-the-chat-never-revokes-management.md);
+plan: `docs/superpowers/plans/2026-11-05-owt-mcp-admin-parity-f4m-members.md`. People writes notify
+nobody (no welcome email), from any surface. **In production since 2026-11-05** (PR #228, `main`
+`44f6a86b`). **Live proof passed 2026-11-06 00:46Z** with Frank, from his Claude: created a throwaway
+«Prueba MCP» (`@example.invalid`, Alabanza, no Tipo), set its alias and the Editor role, lowered it
+back to Miembro, disabled it; an expired check (over 30 minutes) was refused and wrote nothing.
+The throwaway stays in production, disabled; deleting it is Personas' (the connector has no delete).
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `list_members` | `{ministry?, includeDisabled?}` | Everyone (or one ministry) as Personas shows them: `memberId`, name, alias, role, Tipo, instruments, «Canta y toca a la vez», ministries, Jóvenes standing in the chat's words («líder de Otro Nivel y Adrenalin; miembro de Invencibles», «admin (Emprendedores, Guerreras)»), what they manage, disabled. Never an email. Read-only |
+| `get_member` | `{memberId}` | One person, with their email. Read-only |
+| `check_member_changes` | `{memberId, edits[≤30]}` | Applies the edits by parts to the FRESH person (`applyMemberEdits`): `set {field: name/alias/email/role}` (`alias: ""` clears), `singsAndPlays`, `add`/`remove {field: tipo/instruments/ministries/managesMinistries}`, `jovenes {level|null, groups?, leaderOf?}` (names or ids; `leaderOf` ⊆ `groups`, required for a `leader` — never defaulted — and refused on a member or admin; the body always sends it, `[]` unless a leader; ADR-0085). Runs the writer's own plan (`checkMemberEdits`) and answers the before/after of only what changes, the solver rules a rename would rename, warnings, and a token. Read-only |
+| `save_member_changes` | `{memberId, edits, token}` | Verifies the token's call half (person + edits) FIRST, so a repeat after a landed save answers «ya estaba guardado»; then `saveMemberEdits` re-reads, re-plans and re-renders the lines, which must match the token's result half, and writes the person and any renamed rules in ONE transaction, each under `ifRevisionId`. Destructive (I14) |
+| `check_new_members` | `{members[≤20]}` | Each new person as they would be created (`jovenes {level, groups?, leaderOf?}` under the edit op's rules) (`planNewMembers`, the route's own body), refusals per person («Persona N:»), orphan-rule warnings, and a token valid 30 minutes. Read-only |
+| `create_members` | the same `members` plus `token` | Verifies the token; the ids are HMACs of it in UUID form. All present → «Ya estaban» (even after the 30 minutes); some → refused; otherwise ONE transaction of `createIfNotExists`. Destructive (I14) |
+| `set_member_access` | `{memberId, enabled}` | `setMemberDisabled`, the button's own logic. No token (Frank, 2026-11-05): Claude names the person and waits for the word. Destructive (I14) |
+
+**The chat grants, never revokes, management** (Frank, 2026-11-05). `chatAccessRefusal` /
+`chatAccessToggleRefusal` (`app/utils/memberEdits.ts`), judged on the writer's fresh read: never grant
+or change a super-admin, never lower an admin, never remove a management (Kids or a Jóvenes admin
+level), never change the email of anyone who manages or edits content, never disable a manager,
+never enable a super-admin. A content-editor may be set, lowered or disabled. The routes never apply
+it; the refusal says «hazlo en la página (Super admin → Personas)».
+
+**Three refusals on every surface, judged only on change:** an email any other `teamMembers` document
+has (drafts and disabled people included); a name or alias equal to another member's; and a rename
+that would orphan a solver rule, which is instead renamed in the same transaction by a targeted
+`set` of exactly the person paths (`app/utils/memberRuleRename.ts`). A rule text that also names
+someone else is left and reported. `/me` never names anyone else. A fourth, on `/admin` too since
+this change: an email `/me`'s format check (`MEMBER_EMAIL_RE`) refuses, such as `x@localhost`.
+
+**Admin-surface gates (I15).** Personas' form requires a name of at least two characters and an
+email: **mirror** (`check_member_changes` and `check_new_members` refuse a one-letter name; the
+email is required by the schema and its format refused by the writer). Its `type=email` is
+**inherited** and narrower in the writer (`MEMBER_EMAIL_RE`). Every other Personas gate is the
+route's, so **inherited** by construction: the worship-role rule, `validateMinistryWrite`,
+`validateMinistryRolesWrite`, the self-disable and last-super-admin refusals.
+
+**Unknown outcomes.** A thrown save or access change says to read the person with `get_member` before
+retrying; a thrown create says to repeat `create_members` with the same token.
+
+**Proof.** `memberEdits.test.ts`, `memberRuleRename.test.ts`, `memberCommit.test.ts` (an in-memory
+Content Lake with revision checks), `peopleTokens.test.ts`, the tools' `members.test.ts`, and the
+route tests (`membersMinistries`, `memberInstruments`, `adminMemberVisibility`), unchanged except one
+on purpose: an alias PATCH now reads and pins the person.
+
+### Solver rules (admin parity, phase 4)
+
+What `/admin` → «Generar mes» → Reglas does (the three pools and every person, pair and group rule),
+from the chat, through the same writer: `POST /api/admin/solver-config` now authorizes and calls
+`app/utils/solverConfigCommit.ts`, and so do the tools (`app/mcp/tools/rules.ts`). Decision record:
+[ADR-0084](adr/0084-the-solver-rules-are-edited-from-the-chat-by-parts-through-the-panels-writer.md);
+plan: `docs/superpowers/plans/2026-11-06-owt-mcp-admin-parity-f4r-rules.md`. A rules save notifies
+nobody and changes no saved month; it applies to the next month Auto generates. Not on the worship-admin
+read tier (ADR-0083). In production since 2026-11-10 CDMX (PR #238, `31f3e18c`). Live proof passed
+2026-11-11 CDMX with Frank's consent (a «como máximo» Sunday count added, changed and removed for one person,
+a stale token refused, a pool no-op and an off-Tipo pool refusal; the rules read back unchanged). Every
+answer carries its lines in the text AND in `structuredContent.lines`: the Claude app gives the model only
+the text, Claude Code only the structured half (found in that proof; the member and song tools do the same).
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `check_rule_edits` | `{edits[≤30]}` | Reads the rules and the planner's roster fresh, refuses a stored document the panel would re-save differently (`losslessRules`), applies the edits by parts (`applyRuleEdits`), judges the result (`judgeRuleEdits`), and answers the lines before → after, the no-ops, the notes and a token valid 30 minutes. Read-only |
+| `save_rule_edits` | `{edits, token}` | Repeats the check on its own fresh read and writes the six rule fields under `ifRevisionId` only when the token matches the fresh revision, the edits and the lines. Nothing would change → «Ya estaba así», no write. Destructive (I14) |
+
+**The edits** (`op`): `pool {pool: líder domingo | líder sábado | soporte, add?, remove?}`; `never` /
+`allowAgain {person, pattern}`; `weekOff` / `weekOn {person, week 1–5, pattern}`; `count {person, pattern,
+limit: exactamente | al menos | como máximo, value 0–31 | relative {minus 0–5}}` (adds, or replaces the
+ONE cap with that pattern and limit); `removeCount`; `cadence {person, alternate}` («Mes por medio»);
+`balance {person, exempt}` («Fuera del balance total»); `removePerson`; `notTogether` /
+`removeNotTogether {a, b, pattern?}`; `together` / `removeTogether {persons 2–12, pattern?}`. A pattern
+is `{day: domingo | sábado | ambos, seat: líder | BGV | coro | líder o BGV | todo}`, and only the eleven
+the panel offers (`RULE_PATTERNS`) are accepted; any other is refused with what to send instead. A
+removal may name any stored pattern.
+
+**People are matched the way the solver matches them.** A name added to a rule goes through
+`resolveRulePersonId` (worship members, by name or alias), must have Tipo Voz, and its stored text
+(the display name) must resolve back to that same person; otherwise refused with up to five close
+names. A removal may name an orphaned rule's exact text. Pools take only someone whose Tipo fits
+(`memberFitsPool`); a remove takes anyone in the pool, a stale off-Tipo tick included (someone who has left
+Alabanza is not in the roster, so is refused; the solver ignores their stale id). A person repeated in a group, or added and removed in one pool edit, is refused.
+
+**What the check refuses, and what it only notes.** It runs the v3 eligibility resolver on the stored
+and the edited rules for the next CDMX month: a problem only the edited rules have (an unresolved
+name, «Mes por medio» with an exact Sunday-lead count, two exact counts on one role, a 21st presence
+group…) refuses the whole edit set in the planner's own words; one already stored is a note. Likewise
+two absolute counts no month can satisfy (a minimum above a maximum whose roles contain it), new ones
+only; relative counts are not compared (a known limit, ADR-0084). Notes: «Mes por medio» for someone
+outside Líder Domingo (saves, does nothing yet), and the bound-month note when a balance or cadence
+flag changes.
+
+**Pool lines say what the person can do after** (R13): «Líder Sábado: − Mkz (no cambia nada: sigue en
+Líder Domingo, que también dirige sábados…)», or «(deja de poder: …)» / «(empieza a poder: …)».
+
+**Unknown outcome.** A thrown save says «No sé si se guardó. Lee las reglas con get_solver_rules antes
+de reintentar.» A refused token (other edits, the rules or the team changed, over 30 minutes) writes
+nothing and says to check again.
+
+**Proof.** `ruleEdits.test.ts`, `solverConfigCommit.test.ts`, the tools' `rules.test.ts`,
+`patternRolesV3Sync.test.ts` (the shared pattern list), and `solverConfigRoute.test.ts`, unchanged
+since the move.
 
 ### Admin-surface gates (I15)
 
@@ -919,6 +1286,32 @@ mode.
 | U4 | The resubmit lock | **declared narrowing** (harmless), as P2 |
 | U5 | The confirmation dialog | **declared narrowing** (no data effect), as P4 |
 
+**`review_setlist_proposal`**: Propuestas (`ProposalsPanel`), against `PATCH /api/admin/proposals/[id]`.
+
+| # | Gate | Disposition |
+|---|---|---|
+| R1 | The conflict lock after a concurrent change | **inherited**: the write asserts the check's `rev` (`stale_revision`), and the re-rendered line refuses a changed proposal first |
+| R2 | «Aprobar» disabled without songs | **inherited**: the writer's readiness refusal, shown by the check |
+| R3 | «Solicitar cambios» needs a note; «Reabrir» trims its note | **mirror**: non-empty (trimmed) for `request_changes`, optional (trimmed) for `reopen`, refused for `approve` (the writer ignores it). The panel sends the request-changes note untrimmed, so the two surfaces' retry fingerprints differ by surrounding whitespace: a declared narrowing, harmless (a repeat from the other surface writes the same status again) |
+| R4 | The retarget panel (`reconcile_target`) | **structural**: the schema's `action` enum leaves it out |
+| R5 | The confirmation the panel's button implies | **declared narrowing** (no data effect): the descriptions' rule, show and wait for the person's word (ADR-0072) |
+| R-server | The route's own refusals (not found, wrong source status, a drifted target, not a shared proposal, a stale rev) | **inherited**, worded by the tool |
+
+**`save_song_edits` / `create_song`**: «Editar canción» and «Nueva canción», against
+`PATCH /api/content/posts/[id]` and `POST /api/content/posts`.
+
+| # | Gate | Disposition |
+|---|---|---|
+| G1 | Title required | **mirror** (`set` refuses clearing it; `check_new_song` requires it) and **inherited** |
+| G2 | Only `http(s)` URLs (references, links, tutorials) | **mirror**, then **inherited** (`isSafeHttpUrl`) |
+| G3 | A blank link or tutorial row is dropped; a row with a label and no URL is refused | **mirror (behaviour)**: the writer's own `normalizeLinkRows`; a stored row it refuses blocks a link edit unless the same call removes it |
+| G4 | A chart with no content is dropped by the writer; chart `_key`s must not collide | **mirror (behaviour)** for content: `chartAll` with `""` removes the chart and the check shows «se elimina el acorde»; `addChart` with no content is refused; **structural** for keys (the chat never sends a key for a new chart, and existing charts keep theirs) |
+| G5 | Tags are picked from the existing list | **mirror**: an unknown tag is refused with the list |
+| G6 | Artists are created on the fly by name | **mirror (behaviour)**, inside the song's own transaction instead of a separate call first |
+| G7 | The key field takes any text | **declared narrowing, stricter**: the chat refuses a key the app cannot transpose |
+| G8 | The editors send whole fields | **declared narrowing** (harmless): the chat sends only the fields its edits touch; the writer is the same |
+| G9 | Last writer wins | **declared narrowing, stricter**: the chat writes under `ifRevisionId` (D10, below) |
+
 ### Stored state
 
 Three Sanity document types, all hidden and read-only in `/studio`
@@ -948,15 +1341,66 @@ records they become do), and it is never returned to the model.
 
 ---
 
-## Adding the connector (claude.ai)
+## Adding the connector
 
 **The connector is production-only** (the spec's «Connector origin» decision, D-2026-09-23).
-Dev (`dev-owt-backstage.vercel.app`) sits behind Vercel Deployment Protection, and claude.ai's
-servers carry neither the bypass header nor the bypass cookie, so they cannot reach discovery,
-the token endpoint or `/api/mcp` there — a claude.ai connector pointed at dev fails at its first
+Dev (`dev-owt-backstage.vercel.app`) sits behind Vercel Deployment Protection, and no hosted
+agent's servers (claude.ai's, ChatGPT's) carry the bypass header or cookie, so they cannot reach discovery,
+the token endpoint or `/api/mcp` there — a connector pointed at dev fails at its first
 request. Dev is exercised **only** by the local dev smoke client, `scripts/mcp-dev-smoke.mjs`
 ([below](#dev-smoke-procedure)), which sends the bypass header itself. Lifting the protection
 instead was considered and declined: dev writes the production dataset.
+
+The URL is the same for every agent:
+
+```
+https://owt-backstage.vercel.app/api/mcp
+```
+
+### Tiers: who reaches what
+
+Who you are is read LIVE on every request (`mcpTierOf`, `app/mcp/oauth/tier.ts`, 30 s member
+cache), never stored in the grant or token. Which agent holds the grant is stored once, at the code
+exchange (the grant's `client`, from the redirect URI):
+
+| Who (live) | Agent (grant `client`) | List (`app/mcp/toolList.ts`) |
+|---|---|---|
+| super-admin | claude.ai | `full`: every tool, plus the card and its five app-only tools |
+| super-admin | ChatGPT or a local program | `fullNoApps`: every tool EXCEPT the five app-only tools; no card resources |
+| `admin` with Alabanza | claude.ai, grant made at or after `ADMIN_WRITES_CUTOFF` | `admin`: `ADMIN_TIER_TOOLS` (40: every tool except `SUPER_ADMIN_ONLY_TOOLS`), plus the card |
+| `admin` with Alabanza | ChatGPT or a local program, same | `adminNoApps`: the same minus the five app-only tools (35); no card resources |
+| `admin` with Alabanza | any, grant made BEFORE `ADMIN_WRITES_CUTOFF` (or unreadable `createdAt`) | `adminRead`: `READ_TIER_TOOLS` only (ping plus ten reads), what that grant's consent said |
+| anyone else, or disabled | — | refused (consent, code, token, `/api/mcp`) |
+
+- **Why the app-only tools follow the agent.** They mint waivers and save after the card's own
+  confirmation. Their «the model cannot force» guarantee rests on the host hiding them from the
+  model, which claude.ai does and another agent may not.
+- **A grant made before this release** has no `client`. On production, created before
+  `LEGACY_GRANT_CUTOFF`, it reads as Claude's. Any other grant without `client` reads as a loopback
+  one (no app tools). If a Claude connector ever loses the card this way, reconnect it.
+- **A worship admin's tool missing from their list** is an unknown tool to the server
+  (`Tool <name> not found`): it is never registered there, so nothing runs.
+- **Every tool is classified on purpose** (ADR-0083 addendum). `SUPER_ADMIN_ONLY_TOOLS` is the five
+  Oasis Kids tools, the seven people tools and the two solver-rule tools (`check_rule_edits`,
+  `save_rule_edits`: added after slice B was approved; opening them to admins is a separate decision); `ADMIN_TIER_TOOLS` is every other tool, written out by
+  name. A new tool fails `mcpRoute.test.ts` until it is put in one of the two, and reaches no admin
+  until its name is in `ADMIN_TIER_TOOLS` (registration goes through `allowlistedServer`).
+- **An admin's write is the page's write**: the same `*Commit.ts` writer, rules, refusals and
+  notifications as `/admin`. The member read is bound from the live tier as the members GET binds
+  it from the role (`readsAllMembers`: super-admin = every ministry, admin = worship only).
+- **A grant approved under the read-only wording keeps it.** `adminScopeOf` gives the admin list
+  only to a grant whose `createdAt` is at or after `ADMIN_WRITES_CUTOFF`; anything older reads as
+  `adminRead`. The admin reconnects to get the writes. **Any re-release after a revert, a rollback
+  or a fix-forward resets the cutoff**; a rolled-back slice-B deployment is never re-promoted.
+- **Every model-visible write asks first.** `PERSON_CONFIRMS_RULE` (`app/mcp/writes/confirmRule.ts`)
+  closes the description of every model-visible tool annotated `destructiveHint: true`.
+- **What leaves the app.** Whatever a connected admin's agent reads goes to that agent's provider
+  (OpenAI for ChatGPT): names, seats, free-text unavailability notes.
+- **Human gates depend on the host.** Claude asks before a destructive tool unless the user chose
+  «Always allow». Another host's gate is whatever that host does. Never «always allow» or
+  auto-approve destructive tools in a local agent.
+
+### Claude (claude.ai, Desktop, mobile)
 
 1. In claude.ai (web, Desktop or mobile), add a **custom connector** with URL:
    ```
@@ -969,17 +1413,50 @@ instead was considered and declined: dev writes the production dataset.
 3. **Sign in to Backstage** if you are not already — the consent page is a real app page behind
    the session middleware, so it goes through the ordinary `/auth/signin` flow first if needed.
 4. The consent screen (`/oauth/authorize`) shows the client's self-declared, **unverified** name,
+   «Se conecta a» (the agent, from the verified redirect URI), «Podrá» (what your tier allows),
    the exact redirect URI, and how long ago it was registered. Read it — this screen is what
-   stands between a super-admin and the confused-deputy attack that stateless, open registration
-   makes possible (ADR-0039). Approve only a connection you just started in Claude.
+   stands between an admin and the confused-deputy attack that stateless, open registration
+   makes possible (ADR-0039). Approve only a connection you just started in your agent.
 5. Press **«Permitir»**. This is the only action that mints an authorization code
    (`POST /api/oauth/authorize`) — a GET never does, so no link, prefetch or redirect can trigger
    it.
 6. Claude exchanges the code for tokens and the connector is live. A `ping` call in Claude is the
    quickest proof it worked.
 
-Only a live, non-impersonating **super-admin** can reach step 4 successfully — everyone else sees
-a refusal screen (no session, wrong role, or impersonation active) and no code is issued.
+Only a live, non-impersonating **super-admin or worship admin** can reach step 4 successfully —
+everyone else sees a refusal screen (no session, wrong role, or impersonation active) and no code
+is issued.
+
+### ChatGPT (developer mode) — proven in production 2026-11-05
+
+1. In ChatGPT, turn on developer mode and add a connector (app) with the URL above and OAuth
+   authentication. Leave the client id and secret EMPTY: it registers itself (DCR).
+2. ChatGPT registers `https://chatgpt.com/connector_platform_oauth_redirect`, its stable callback
+   for a server with RFC 9207 issuer identification (which this one advertises). The
+   per-connection form `https://chatgpt.com/connector/oauth/{id}` is refused, and logged.
+3. Steps 3–6 above, in the browser ChatGPT opens. The consent screen shows «ChatGPT (chatgpt.com)».
+
+**Proven 2026-11-05 (production):** Frank connected ChatGPT's web app in developer mode with his
+super-admin account. Registration, consent and token exchange went through with no refusal line in
+the logs, the grant was stored as `client: "chatgpt"` (19:24Z), and a `ping` and a services read
+answered in the chat. Still unobserved: whether its model sends `toolsVersion` (if it does not,
+every answer carries the refresh note), and a worship admin's read list from ChatGPT.
+
+### Local agents (loopback)
+
+A program on your own computer that registers at least one RFC 8252 loopback URI
+(`http://127.0.0.1[:port]/…` or `http://localhost[:port]/…`) and then authorizes through it.
+Registration keeps only the allowed URIs of a mixed list, and the port at authorize may differ from
+the registered one (RFC 8252 §7.3). The consent screen shows «Un programa en esta computadora».
+
+- VS Code registers loopback URIs (its DCR body, read 2026-11-05), so it registers; whether it then
+  authorizes through loopback is **expected, not proven**.
+- Claude Code, Codex CLI, Gemini CLI: documented by their vendors as loopback clients, exact DCR
+  bodies not verified — **expected, not proven**.
+- Cursor (`cursor://` callback) and anything that only offers a web forwarder
+  (`https://vscode.dev/redirect`) cannot connect: the list is closed on purpose (ADR-0083).
+
+
 
 ### Keeping Claude's tool list current
 
@@ -992,6 +1469,10 @@ list, Claude goes on using its old copy until the connector is refreshed. That h
 - **How the server notices.** `TOOL_LIST_VERSION` (`app/mcp/toolList.ts`) is an 8-character
   digest of what a client caches about each tool: name, title, description, schemas, annotations
   and `_meta`. It does not include the commit, so a release that only changes code keeps it.
+  Since ADR-0083 each list has its own (`TOOL_LIST_VERSIONS`: `full`, `fullNoApps`, `admin`,
+  `adminNoApps`, `adminRead`); `TOOL_LIST_VERSION` is `full`'s. ADR-0083's addendum moved `full`
+  and `fullNoApps` once (`PERSON_CONFIRMS_RULE` in the write descriptions: one refresh note per
+  connected agent); `adminRead` equals slice A's `read` digest, so a slice A admin sees no change.
 - **What a tool carries.** Every model-visible tool takes the optional `toolsVersion`, and its
   description asks Claude to always send that value. App-only tools (the card's twins) don't
   carry it. The handler never sees it.
@@ -1019,7 +1500,7 @@ Grant documents are hidden and read-only in Studio, so the script is the only wa
 without a deployment:
 
 ```bash
-# Dry run — lists every grant (id, sub, origin, timestamps, revoked state). Writes nothing.
+# Dry run — lists every grant (id, sub, origin, agent, timestamps, revoked state). Writes nothing.
 node --env-file=.env.local scripts/revoke-mcp-grant.mjs
 
 # Revoke one grant.
@@ -1032,9 +1513,15 @@ node --env-file=.env.local scripts/revoke-mcp-grant.mjs --all --apply
 node --env-file=.env.local scripts/revoke-mcp-grant.mjs --id mcpOauthGrant.<uuid> --apply --reason "lost device"
 ```
 
+The dry run prints each grant's EFFECTIVE agent (`client=`, with «(sin registrar)» for a grant made
+before ADR-0083, read by the same rule as `effectiveGrantClient`). **Rolling ADR-0083 back** starts
+by revoking every grant whose effective agent is not `claude` — production writes, so a dry run
+first and Frank's explicit consent — then reverting the PR.
+
 Every non-`--apply` invocation is a dry run that shows exactly what would be revoked. Revocation
-takes effect **within 30 s** (the MCP route's grant cache TTL, `GRANT_CACHE_TTL_MS` in
-`app/mcp/oauth/grantStore.ts`) and needs **no deployment** — the next request bearing that
+takes effect **within 30 s** (the MCP route's grant cache TTL, `GRANT_CACHE_TTL_MS`, re-exported
+by `app/mcp/oauth/grantStore.ts` from the grant-store protocol it shares with the native apps'
+store since ADR-0091, `app/oauthCore/grantStoreProtocol.ts`) and needs **no deployment** — the next request bearing that
 grant's access token gets a 401 once the cache entry expires.
 
 ---
@@ -1094,6 +1581,17 @@ THAT refuses on a tie the pass logs it as an EXPECTED pass, "ambiguous (expected
 `get_member_availability`, `get_participation` and `list_proposals`, printing a PASS/FAIL line per
 tool and a counts-only summary — never a name or any other personal data.
 
+**`--expect-tier full|admin`** (ADR-0083 and its addendum, default `full`; `read` is refused with a
+pointer to `admin`). The smoke's grant is a loopback one, so `full` (Frank) expects every tool
+except the five claude.ai-only app tools. `admin`, run signed in as a worship admin on a grant made
+after `ADMIN_WRITES_CUTOFF`, checks the list is exactly `ADMIN_TIER_TOOLS` minus the app-only tools
+(always, with or without `--reads`), then sends ONE boundary probe: `set_member_access` with `{}`,
+a super-admin-only people tool whose strict schema refuses `{}` before any handler code, so even a
+broken boundary writes nothing and reads no people data; the run passes only on the answer «Tool
+set_member_access not found». It is the only exception to the rule below, allowed by both guards and
+only under `--expect-tier admin`. Before release no admin grant can reach the admin list on dev (the
+cutoff is in the future), so this mode is for a post-release run.
+
 **The smoke never calls a write tool, in any mode (DV1)**: dev writes the production dataset, and
 its mail redirect covers email only. This is enforced twice. STRUCTURALLY: `createMcpRequest`
 returns the one function the script uses to send anything to `/api/mcp`, and before that function
@@ -1126,6 +1624,10 @@ node --env-file=.env.local scripts/mcp-dev-smoke.mjs --no-open
 
 # Skip the refresh-token round trip (step 8).
 node --env-file=.env.local scripts/mcp-dev-smoke.mjs --no-refresh
+
+# Signed in as a worship admin (grant after ADMIN_WRITES_CUTOFF): the admin list, then the
+# set_member_access boundary probe (ADR-0083 addendum).
+node --env-file=.env.local scripts/mcp-dev-smoke.mjs --expect-tier admin
 ```
 
 Two safe proof-of-refusal runs — no network call, may be run by anyone, any time:
@@ -1171,6 +1673,10 @@ Measured at implementation time (steps 1 and 9):
 - Adding any new route rehashes Turbopack's shared chunks, so **every existing function's trace
   shifted by ≈+90 KB** too — this is Turbopack build behavior, not something the new dependencies
   themselves cause.
+- **`get_song {full: true}`** (S3), measured on the production dataset 2026-10-28 (147 songs): the
+  longest lyrics are ≈1.9 K characters of text (92 blocks), and no song has a chord chart yet, so
+  `full` adds ≈2 KB at most today. A chart or a lyric the chat writes is capped by the tools' schema
+  at 20 000 characters.
 - **The per-deployment total on Vercel (Function Storage impact) was not measured.** Vercel's API
   does not expose a per-deployment total, and step 13 (the production release) did not surface
   one either — the three build-measured numbers above are the only size evidence this project
@@ -1187,7 +1693,15 @@ A few things that look like bugs at first glance and are not:
   calls `searchSongsResult`, `getSongResult`, `listServicesResult` and `getServiceResult` in
   process, through `app/utils/adminChatServer.ts`, instead of going through this connector — so a
   change to a read tool's payload reaches the assistant too (its views in `adminChatViews.ts` trim
-  what it does not need). The assistant never calls a write tool.
+  what it does not need). The assistant never calls a write tool, and its `get_song` schema has no
+  `full` (ADR-0077).
+
+- **`/admin` can overwrite a song edit made from the chat.** «Editar canción» is last-writer-wins:
+  it fills its form from the song page as loaded, so a page opened before a chat save and saved after
+  it writes its whole form back over the chat's edit (a URL the chat set can be cleared again).
+  Publishing a pending Studio draft of the song does the same; `check_song_edits` warns when a draft
+  exists. The chat itself never writes blind (`ifRevisionId`). Adding a revision check to the route
+  needs a conflict screen in the editors (ADR-0077).
 
 - **The consent page streams.** `/oauth/authorize` lives under `app/(client)/`, which has its own
   `loading.tsx` — so Next streams the route rather than blocking on it. A concrete consequence:
@@ -1251,7 +1765,8 @@ A few things that look like bugs at first glance and are not:
   is route → the tool modules → the `*Commit` domain modules → the side-effect helpers (push,
   email, the outbox). An exception entry for it would never be exercised and would read as
   coverage that does not exist, so there is none. The route stays unwrapped because an MCP call
-  is bearer-authenticated for one super-admin and is never an SR-verification run. Consequence:
+  is never an SR-verification run: `/api/mcp` answers 404 on `verify/service-readiness`
+  (`app/mcp/oauth/origin.ts`), whoever holds the token. Consequence:
   **an MCP write's delivery evidence carries no run markers** — an evidence gap, not a safety
   hole (blocking never depends on a context; `app/utils/srVerificationRunContext.ts`). What is
   pinned is the property the scan can see: `app/api/__tests__/mcpRoute.test.ts` fails if the

@@ -67,7 +67,7 @@ describe("the lyric eyebrow is a div, never a p", () => {
 
   it("the gallery fixture reproduces the page's wrapper, character for character", () => {
     const wrapper =
-      "prose prose-sm sm:prose dark:prose-invert prose-p:leading-relaxed prose-p:!mt-0 prose-p:!mb-0 max-w-[62ch] mx-auto [&>div:first-child>div:first-child]:!mt-0";
+      "max-w-[62ch] font-body text-[17px] leading-relaxed text-ink [&>div:first-child>div:first-child]:!mt-0";
     const fixture = readFileSync(
       path.join(
         REPO_ROOT,

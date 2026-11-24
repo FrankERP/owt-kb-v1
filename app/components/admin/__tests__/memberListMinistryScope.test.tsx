@@ -15,18 +15,11 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next-auth/react", () => ({ useSession: () => ({ update: vi.fn() }) }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }), usePathname: () => "/admin" }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }), usePathname: () => "/super-admin" }));
 
-// Sibling tabs are never rendered here (Miembros is the super-admin landing
-// tab), but AdminPanel imports them at module scope.
-vi.mock("../ServicesPanel", () => ({ default: () => null }));
-vi.mock("../ActivityPanel", () => ({ default: () => null }));
-vi.mock("../ContentPanel", () => ({ default: () => null }));
-vi.mock("../AvailabilityPanel", () => ({ default: () => null }));
-vi.mock("../ProposalsPanel", () => ({ default: () => null }));
-vi.mock("../IntegrityQueuePanel", () => ({ default: () => null }));
-
-import AdminPanel from "../AdminPanel";
+// Mounted through the super-admin page's body, where «Personas» lives since
+// 2026-10-29 (ADR-0075).
+import SuperAdminPanel from "../SuperAdminPanel";
 import { ToastProvider } from "../../ui/Toast";
 // `MembersPanel`'s four dialogs are mounted always and opened by `open={…}`, and
 // a CueDialog throws outside the provider even while closed.
@@ -40,7 +33,7 @@ const BOTH    = { _id: "4", member_name: "Dani Ambos",  email: "dani@x.mx", role
 async function mount(members: unknown[]) {
   vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => members })));
   const view = render(
-    <ToastProvider><CueDialogProvider><AdminPanel role="super-admin" /></CueDialogProvider></ToastProvider>,
+    <ToastProvider><CueDialogProvider><SuperAdminPanel /></CueDialogProvider></ToastProvider>,
   );
   // The count line renders only once the fetch has settled — waiting on the
   // heading would pass while the list is still empty.

@@ -2,8 +2,14 @@
 // duplicate detection lives here so the agenda's conflict flag and the card's
 // ⚠ marks can never disagree.
 import type { ActiveDay } from "../components/CalendarView";
+import { plural } from "./plural";
+import type { TeamSectionId } from "./teamSections";
+import { serviceStartTime, WEEKEND_SERVICE_TIME } from "./calendarFeed";
+import { SEAT_ROLE_LABEL } from "./jovenesEventView";
 
-export type Tone = "sun" | "sat" | "special";
+/** `kids` is an Oasis Kids Sunday and `jovenes` a Jóvenes meeting, each shown only to that
+ *  ministry's members (`calendarMinistry.ts`). */
+export type Tone = "sun" | "sat" | "special" | "kids" | "jovenes";
 
 export function findDuplicates(names: string[]): Set<string> {
   const counts = new Map<string, number>();
@@ -17,14 +23,27 @@ export const TONE_RAIL: Record<Tone, string> = {
   sun: "bg-accent",
   sat: "bg-warning-fg",
   special: "bg-info-fg",
+  // Neutral on purpose: the three worship colours already have jobs, rose is the
+  // musical key only (ADR-0071) and green is «tú». A Kids Sunday is another
+  // ministry's day, not a fourth kind of worship service.
+  kids: "bg-ink-dim",
+  // The same reasoning for Jóvenes: another neutral from the ink family, a clear step
+  // stronger than Kids' in both themes (lighter on dark, darker on light), so a day that
+  // holds both (someone in all three ministries) still shows two dots that differ.
+  jovenes: "bg-ink-muted",
 };
 
-export function serviceTone(e: Pick<ActiveDay, "day" | "roleId">): Tone {
+export function serviceTone(e: Pick<ActiveDay, "day" | "roleId" | "kids" | "jovenes">): Tone {
+  if (e.kids) return "kids";
+  if (e.jovenes) return "jovenes";
   if (e.roleId) return "special";
   if (e.day === "Sábado") return "sat";
   if (e.day === "Domingo") return "sun";
   return "special";
 }
+
+/** The one Jóvenes seat an agenda row names: who is in charge of the meeting. */
+const JOVENES_LEAD_SEAT = SEAT_ROLE_LABEL.encargado;
 
 const voices = (e: ActiveDay) => [
   ...(e.leads ?? []),
@@ -42,7 +61,11 @@ export function myNameFromSession(user?: { alias?: string | null; name?: string 
 /** The seat labels where `myName` (already lowercased/trimmed) is seated, in DayCard's
  *  own order and casing: Lead, BGVs, Coro, then each instrument, then each FOH seat. An
  *  empty `myName` (signed out, or no alias/name) seats nobody. */
-export function mySeats(e: Pick<ActiveDay, "leads" | "bgvs" | "chorus" | "instruments" | "fohTeam">, myName: string): string[] {
+export function mySeats(e: Pick<ActiveDay, "leads" | "bgvs" | "chorus" | "instruments" | "fohTeam" | "kids" | "jovenes">, myName: string): string[] {
+  // A Kids Sunday and a Jóvenes meeting decided «mine» by member id on the server; names
+  // play no part, so a member with no name or alias is still «tú» there.
+  if (e.kids) return e.kids.seats.filter((s) => s.mine).map((s) => s.label);
+  if (e.jovenes) return [...new Set([...e.jovenes.seats, ...e.jovenes.program].filter((s) => s.mine).map((s) => s.label))];
   if (!myName) return [];
   const seated = (name?: string) => !!name && name.toLowerCase().trim() === myName;
   const seats: string[] = [];
@@ -52,6 +75,16 @@ export function mySeats(e: Pick<ActiveDay, "leads" | "bgvs" | "chorus" | "instru
   for (const s of e.instruments ?? []) if (seated(s.person)) seats.push(s.label);
   for (const s of e.fohTeam ?? []) if (seated(s.person)) seats.push(s.label);
   return [...new Set(seats)];
+}
+
+/** The team section one of `mySeats`' worship labels belongs to, so «Tú · Stream» takes
+ *  the booth's glyph beside it (`SeatIcon`) — the same one that seat's face wears on the
+ *  card — instead of the unknown-seat note. Undefined for a Kids or Jóvenes label. */
+export function seatSectionOf(e: Pick<ActiveDay, "instruments" | "fohTeam">, seat: string): TeamSectionId | undefined {
+  if (seat === "Lead" || seat === "BGVs" || seat === "Coro") return "voces";
+  if ((e.instruments ?? []).some((s) => s.label === seat)) return "banda";
+  if ((e.fohTeam ?? []).some((s) => s.label === seat)) return "cabina";
+  return undefined;
 }
 
 /** Conflicts = people seated twice within ONE section (voces / instrumentos / foh). */
@@ -68,17 +101,41 @@ export function conflictLabel(n: number): string {
 }
 
 export function summarizeService(e: ActiveDay): string {
+  if (e.kids) {
+    const filled = e.kids.seats.filter((s) => s.pair).map((s) => `${s.label}: ${s.pair}`);
+    return filled.length ? filled.join(" · ") : "Sin asignaciones";
+  }
+  if (e.jovenes) {
+    // Who it is for and who runs it, no more: the row is a glance, and with every seat spelled
+    // out it ran to four lines on a phone (2026-11-10). The sheet behind the row has the rest.
+    const lead = e.jovenes.seats.filter((s) => s.name && s.label === JOVENES_LEAD_SEAT).map((s) => `${s.label} ${s.name}`);
+    return [e.jovenes.audience, ...lead].join(" · ");
+  }
   const parts: string[] = [];
   if (e.leads?.length) parts.push(`Lead ${e.leads.join(", ")}`);
   for (const s of (e.instruments ?? []).filter((s) => s.person)) parts.push(`${s.label} ${s.person}`);
   const n = e.setlist?.songs?.length ?? 0;
-  if (n) parts.push(`${n} ${n === 1 ? "canción" : "canciones"}`);
+  if (n) parts.push(plural(n, "canción", "canciones"));
   return parts.length ? parts.join(" · ") : "Sin asignaciones";
+}
+
+/** The clock a row or a day sheet shows beside the service: a weekend at the team's
+ *  standing hour, a special at its own valid `time`, else nothing — the feed's ONE rule
+ *  (`serviceStartTime`), so the agenda, `/me` and the `.ics` never disagree on it. */
+export function serviceClock(e: Pick<ActiveDay, "day" | "roleId" | "time" | "kids" | "jovenes">): string | undefined {
+  // Oasis Kids runs during the Sunday service (an assumption, 2026-10-29).
+  if (e.kids) return WEEKEND_SERVICE_TIME.sunday;
+  // A Jóvenes meeting keeps its own stored time (validated HH:mm by its writer), or none.
+  if (e.jovenes) return e.time ?? undefined;
+  return serviceStartTime(e.roleId ? "special" : "weekend", e.day, e.time);
 }
 
 export type AgendaRow = { key: string; date: string; entry: ActiveDay; tone: Tone; conflicts: number; summary: string; monthStart: string | null };
 
-const ORDER: Record<Tone, number> = { sat: 0, sun: 1, special: 2 };
+// Kids runs during the Sunday service, so it lists right after it, before a special.
+// Jóvenes lists last: its meetings are another ministry's. A Saturday often holds both the
+// worship service and the Jóvenes meeting, and the service leads.
+const ORDER: Record<Tone, number> = { sat: 0, sun: 1, kids: 2, special: 3, jovenes: 4 };
 
 export function agendaRows(activeDays: Record<string, ActiveDay[]>): AgendaRow[] {
   const rows = Object.entries(activeDays)
@@ -90,7 +147,7 @@ export function agendaRows(activeDays: Record<string, ActiveDay[]>): AgendaRow[]
     const month = date.slice(0, 7);
     const monthStart = month !== lastMonth ? month : null;
     lastMonth = month;
-    return { key: `${date}:${entry.roleId ?? entry.day}`, date, entry, tone, conflicts: serviceConflicts(entry), summary: summarizeService(entry), monthStart };
+    return { key: `${date}:${entry.roleId ?? entry.jovenes?.id ?? (entry.kids ? "kids" : entry.day)}`, date, entry, tone, conflicts: serviceConflicts(entry), summary: summarizeService(entry), monthStart };
   });
 }
 
@@ -122,7 +179,7 @@ function stripDay(date: string, activeDays: Record<string, ActiveDay[]>, todaySt
   const [y, m, d] = date.split("-").map(Number);
   const entries = activeDays[date] ?? [];
   const tones = entries.map(serviceTone);
-  const mine = !!myName && entries.some((e) => mySeats(e, myName).length > 0);
+  const mine = entries.some((e) => mySeats(e, myName).length > 0);
   return { date, num: d, dow: DOW_SHORT[new Date(Date.UTC(y, m - 1, d)).getUTCDay()], lit: tones.length > 0, tones, today: date === todayStr, mine };
 }
 
@@ -149,4 +206,49 @@ export function monthStripDays(ym: string, activeDays: Record<string, ActiveDay[
 export function weekStripDays(mondayIso: string, activeDays: Record<string, ActiveDay[]>, todayStr: string, myName = ""): StripDay[] {
   const start = mondayOf(mondayIso);
   return Array.from({ length: 7 }, (_, i) => stripDay(addDays(start, i), activeDays, todayStr, myName));
+}
+
+/** The visible form of a date — «Domingo 25 de octubre»: the day sheet's title. es-MX
+ *  puts a comma after the weekday («domingo, 25 de octubre») and starts it lowercase;
+ *  the parts are reassembled so the title reads like the rest of the app's dates («el
+ *  domingo 13», «Domingo · 25 oct»). The accessible names (`dayCellLabel`, the agenda
+ *  row) keep the locale's comma — it is a pause a screen reader uses. Local-noon render. */
+export function dayTitle(iso: string): string {
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    new Intl.DateTimeFormat("es-MX", { weekday: "long", day: "numeric", month: "long" })
+      .formatToParts(new Date(`${iso}T12:00:00`))
+      .find((p) => p.type === type)?.value ?? "";
+  const weekday = part("weekday");
+  return `${weekday.charAt(0).toUpperCase()}${weekday.slice(1)} ${part("day")} de ${part("month")}`;
+}
+
+/** What the calendar header counts (the «millones» pass, 2026-10-24), read under the
+ *  month the title names. The rolling view (`viewMonth` null) counts the services from
+ *  `todayStr` on across the whole fetch — «8 servicios por venir» is what the agenda
+ *  below lists. A browsed month counts THAT month only, past days included: the title
+ *  says «Diciembre», so the number under it must be December's, not the three-month
+ *  window's (review, 2026-10-24). `mine` is how many of those seat `myName`. */
+export type CalendarCounts = { services: number; mine: number };
+export function calendarCounts(activeDays: Record<string, ActiveDay[]>, todayStr: string, myName: string, viewMonth: string | null): CalendarCounts {
+  let services = 0;
+  let mine = 0;
+  for (const [date, entries] of Object.entries(activeDays)) {
+    // The same key guard `agendaRows` applies, so the count and the rows below agree.
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+    if (viewMonth ? !date.startsWith(`${viewMonth}-`) : date < todayStr) continue;
+    for (const entry of entries) {
+      services += 1;
+      if (mySeats(entry, myName).length > 0) mine += 1;
+    }
+  }
+  return { services, mine };
+}
+
+/** The header's one line under the month, in two parts so the host can colour the second:
+ *  «8 servicios por venir» (rolling) or «8 servicios» (a browsed window), and «te toca en 3»
+ *  — null when the reader serves in none, so the line never says «te toca en 0». */
+export function calendarCountLine(c: CalendarCounts, browsing: boolean): { services: string; mine: string | null } {
+  const services =
+    c.services === 0 ? (browsing ? "Sin servicios" : "Sin servicios por venir") : `${plural(c.services, "servicio", "servicios")}${browsing ? "" : " por venir"}`;
+  return { services, mine: c.mine > 0 ? `te toca en ${c.mine}` : null };
 }

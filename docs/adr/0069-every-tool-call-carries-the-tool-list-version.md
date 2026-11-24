@@ -99,3 +99,9 @@ rebuild now also triggers the refresh note.
   contains the version itself).
 - A new tool file goes in `registerAllTools`, never directly in the route, or it stays out of the
   digest (`mcpRoute.test.ts` asserts the recorded names equal `tools/list`).
+
+## Addendum — ADR-0083, 2026-11-05
+
+There is one digest per tool list (`TOOL_LIST_VERSIONS`: `full`, `fullNoApps`, `read`). Each
+handler asks for its own. `full` is byte-identical to the single digest before ADR-0083, and a test
+pins it.

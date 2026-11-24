@@ -43,7 +43,7 @@ const TYPE_ORDER: Record<ClearableRole["_type"], number> = {
   special_role: 2,
 };
 
-function byDateThenType(a: ClearableRole, b: ClearableRole): number {
+export function byDateThenType(a: Pick<ClearableRole, "date" | "_type" | "service_name">, b: Pick<ClearableRole, "date" | "_type" | "service_name">): number {
   if (a.date !== b.date) return a.date < b.date ? -1 : 1;
   const order = (TYPE_ORDER[a._type] ?? 9) - (TYPE_ORDER[b._type] ?? 9);
   if (order !== 0) return order;

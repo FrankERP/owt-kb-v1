@@ -10,7 +10,7 @@
 // `ministries` counts as worship, no exceptions. Never `WORSHIP_MEMBER_GROQ_FILTER`
 // and never a bound `$all`: that filter's `$all` arm is a super-admin
 // see-everyone bypass built for the admin member list, and I5 forbids it here
-// even though the caller is always a super-admin — a kids-only member's
+// even though the caller is a super-admin or a worship admin (ADR-0083) — a kids-only member's
 // availability is never this tool's business, no matter who is asking.
 //
 // A failed read is `ok: false`, never an empty roster: the caller must refuse,

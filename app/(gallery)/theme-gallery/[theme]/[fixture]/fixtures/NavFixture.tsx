@@ -36,7 +36,7 @@ function Nav() {
         ]}
         activeHref="/schedule"
         moreRows={[
-          { href: "/kids", label: "Kids", icon: <KidsIcon /> },
+          { href: "/kids", label: "Oasis Kids", icon: <KidsIcon /> },
           { href: "/admin", label: "Admin", icon: <AdminIcon /> },
         ]}
         moreOpen={moreOpen}

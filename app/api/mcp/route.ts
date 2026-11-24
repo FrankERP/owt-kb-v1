@@ -4,7 +4,7 @@
 // `mcp-handler`, stateless, tools registered in `app/mcp/toolList.ts`: `ping`, the seven P1 reads, the three
 // admin-parity reads (fairness ledger, solver rules, integrity queue),
 // the four P3 writes, the two P4 month tools, the proposal editor and the saved-month editor
-// (`check_service_edits`, its card twin, `save_service_edits`, `copy_instruments`), `create_service`,
+// (`check_service_edits` and `save_service_edits`, each with its card twin, `copy_instruments`), `create_service`,
 // plus one resource (the MCP Apps
 // card `solve_month` links to, `app/mcp/apps/proposalCard.ts`). Ungated by the session
 // middleware (`api/mcp(?:/|$)` in `app/utils/routeMatcher.ts`, P0 step 5), so
@@ -21,8 +21,19 @@
 //   4. its grant exists and is not revoked (30 s cache — a revocation bites
 //      within 30 s, spec O9);
 //   5. the grant belongs to the token's subject and to this origin (R13);
-//   6. the subject is an existing, non-disabled member whose LIVE role is
-//      `super-admin` (`getMemberAccess`, 30 s).
+//   6. the subject is an existing, non-disabled member whose LIVE access has a
+//      connection tier (`mcpTierOf`, `getMemberAccess`, 30 s): a super-admin
+//      ("full") or a worship admin ("admin", ADR-0083 and its addendum).
+//
+// Then the request goes to ONE of five handlers, each with its own tool list
+// and digest (`toolList.ts`): "full" on a claude.ai grant → every tool and the
+// card; "full" on any other agent (`effectiveGrantClient`) → every tool except
+// the app-only card tools, whose safety rests on the host hiding them; "admin"
+// → `ADMIN_TIER_TOOLS` (with the card and its app-only tools only on a
+// claude.ai grant), or `READ_TIER_TOOLS` only on a grant approved under the
+// read-only consent (`adminScopeOf`, before `ADMIN_WRITES_CUTOFF`). Neither the
+// tier nor the list is stored: a demotion or a promotion bites within the 30 s
+// member cache.
 //
 // A refusal from step 2 on is a 401 with the RFC 9728 challenge (R7): no
 // `error` when no bearer token was presented at all (RFC 6750 §3.1 — that
@@ -37,13 +48,15 @@ import type { AuthInfo } from "@modelcontextprotocol/server";
 import { createMcpHandler } from "mcp-handler";
 import { getMemberAccess } from "@/app/utils/memberAccess";
 import { loadGrant } from "@/app/mcp/oauth/grantStore";
+import { adminScopeOf, effectiveGrantClient } from "@/app/mcp/oauth/grantDocument";
+import { type McpTier, mcpTierOf } from "@/app/mcp/oauth/tier";
 import { type McpPreflight, mcpRoutePreflight } from "@/app/mcp/oauth/guard";
 import { resourceMetadataUrl } from "@/app/mcp/oauth/origin";
 import { jsonNoStore, mcpUnauthorizedResponse } from "@/app/mcp/oauth/responses";
 import { verifyAccessToken } from "@/app/mcp/oauth/tokens";
 import { MCP_SERVER_NAME, mcpServerVersion } from "@/app/mcp/serverInfo";
 import { completeResponse } from "@/app/mcp/transport/completeResponse";
-import { TOOL_LIST_VERSION, registerAllTools } from "@/app/mcp/toolList";
+import { TOOL_LIST_VERSIONS, type ToolListScope, registerAllTools } from "@/app/mcp/toolList";
 import { versionToolList } from "@/app/mcp/toolListVersion";
 
 export const dynamic = "force-dynamic";
@@ -76,17 +89,32 @@ const SERVER_INFO = { name: MCP_SERVER_NAME, version: mcpServerVersion() };
  * pushed after the handler returned. `handle()` therefore reads every SSE
  * response to its end before returning it (`completeResponse`, finding F2).
  */
-const mcpHandler = createMcpHandler(
-  (server) => {
-    versionToolList(server, TOOL_LIST_VERSION);
-    registerAllTools(server, { version: SERVER_INFO.version });
-  },
-  {
-    serverInfo: SERVER_INFO,
-    capabilities: { tools: { listChanged: false }, resources: { listChanged: false } },
-    maxSubscriptions: 0,
-  },
-);
+function buildHandler(scope: ToolListScope) {
+  return createMcpHandler(
+    (server) => {
+      versionToolList(server, TOOL_LIST_VERSIONS[scope]);
+      registerAllTools(server, { version: SERVER_INFO.version, scope });
+    },
+    {
+      serverInfo: SERVER_INFO,
+      // Only the "full" and "admin" lists register resources (the card), so only they advertise them.
+      capabilities:
+        scope === "full" || scope === "admin"
+          ? { tools: { listChanged: false }, resources: { listChanged: false } }
+          : { tools: { listChanged: false } },
+      maxSubscriptions: 0,
+    },
+  );
+}
+
+/** One handler per tool list (ADR-0083), each built once per module, each stateless per request. */
+const mcpHandlers: Readonly<Record<ToolListScope, ReturnType<typeof buildHandler>>> = {
+  full: buildHandler("full"),
+  fullNoApps: buildHandler("fullNoApps"),
+  admin: buildHandler("admin"),
+  adminNoApps: buildHandler("adminNoApps"),
+  adminRead: buildHandler("adminRead"),
+};
 
 /**
  * `AuthInfo.token` is a required string in the SDK's type, but neither the SDK
@@ -193,7 +221,7 @@ function serverError(stage: "grant read" | "member lookup" | "unexpected", cause
   return jsonNoStore({ error: "server_error" }, 500);
 }
 
-type Authentication = { ok: true; authInfo: AuthInfo } | { ok: false; response: Response };
+type Authentication = { ok: true; authInfo: AuthInfo; scope: ToolListScope } | { ok: false; response: Response };
 
 /** Steps 2–6 of the header comment. Only `ok: true` lets a request reach the MCP server. */
 async function authenticate(
@@ -228,14 +256,16 @@ async function authenticate(
   // 5. R13: the grant is the token's subject's, and was issued on this origin.
   if (grant.sub !== claims.sub || grant.origin !== origin) return unauthorized("invalid_token");
 
-  // 6. O2: the subject is still an existing, non-disabled super-admin.
+  // 6. O2: the subject still has a connection tier (ADR-0083).
   let access: Awaited<ReturnType<typeof getMemberAccess>>;
   try {
     access = await getMemberAccess(claims.sub);
   } catch {
     return { ok: false, response: serverError("member lookup") };
   }
-  if (!access.active || access.role !== "super-admin") return unauthorized("invalid_token");
+  const tier = mcpTierOf(access);
+  if (tier === null) return unauthorized("invalid_token");
+  const scope = toolListScopeOf(tier, grant);
 
   return {
     ok: true,
@@ -246,9 +276,25 @@ async function authenticate(
       expiresAt: claims.expiresAt,
       resource: new URL(resource),
       resourceMetadataUrl: resourceMetadataUrl(origin),
-      extra: { sub: claims.sub, grantId: grant._id },
+      extra: { sub: claims.sub, grantId: grant._id, tier },
     },
+    scope,
   };
+}
+
+/**
+ * The tool list of a request (ADR-0083 and its addendum): the live tier, then the grant. A worship
+ * admin's grant approved under the read-only consent keeps the read-only list; after it, the client
+ * decides whether the app-only card tools are served, exactly as for a super-admin.
+ */
+function toolListScopeOf(
+  tier: McpTier,
+  grant: Parameters<typeof effectiveGrantClient>[0] & Parameters<typeof adminScopeOf>[0],
+): ToolListScope {
+  const claude = effectiveGrantClient(grant) === "claude";
+  if (tier === "full") return claude ? "full" : "fullNoApps";
+  if (adminScopeOf(grant) === "adminRead") return "adminRead";
+  return claude ? "admin" : "adminNoApps";
 }
 
 async function handle(request: Request): Promise<Response> {
@@ -265,7 +311,7 @@ async function handle(request: Request): Promise<Response> {
     // as `ctx.http.authInfo` — what its own `withMcpAuth` does, on the
     // original request. Here it rides on the allowlisted copy, built only
     // after every check has passed.
-    const response = await mcpHandler(forwardedRequest(request, auth.authInfo));
+    const response = await mcpHandlers[auth.scope](forwardedRequest(request, auth.authInfo));
     // F2: an SSE response is read to its end before it is returned, so the
     // tool behind it — its `revalidatePath`, its `after()` — finishes while
     // this handler is still running. `await`ed inside the `try`, so a stream

@@ -26,21 +26,78 @@ import Button from "@/app/components/ui/Button";
 import type { ButtonVariant } from "@/app/components/ui/Button";
 import { CARD_STYLE } from "./serviceCardModel";
 import type { PrimaryActionProps } from "./serviceCardModel";
+import type { PrimaryActionKind } from "./serviceReadiness";
 
-/** Accent = the actionable default; danger for an integrity/conflict blocker. */
+/**
+ * The ladder's four BLOCKER kinds — an integrity or availability problem the admin
+ * has to look at before the card can move. Since phase 5 of the «millones» pass
+ * (Frank, 2026-10-27: «no me gusta ese aviso enorme que solo estorba») these are
+ * not a button at all but `ServiceReviewFlag`, a small amber mark in the card's
+ * corner that opens the same flow. Every other kind is still the button.
+ */
+const REVIEW_KINDS: ReadonlySet<PrimaryActionKind> = new Set<PrimaryActionKind>([
+  "review_data",
+  "review_duplicate_roles",
+  "review_setlist_data",
+  "resolve_conflict",
+]);
+
+export function isReviewKind(kind: PrimaryActionKind): boolean {
+  return REVIEW_KINDS.has(kind);
+}
+
+/**
+ * The blocker as a 44 px icon control in the header's icon cluster: an amber
+ * triangle on a faint amber disc, named by the ladder's label («Revisar datos»,
+ * «Resolver conflicto») and, when a source is missing, disabled with that reason
+ * on its `title`. It keeps the ladder's trace (`data-action-kind`/`-rule`/`-route`
+ * and `data-tone="danger"`) so the DOM still says which rule fired. A raw
+ * `<button>`, like the cluster's other two icons: the house `Button`'s icon
+ * variant hovers to the accent, and a blocker must never read as the cyan «go».
+ */
+export function ServiceReviewFlag({
+  action,
+  onAction,
+}: {
+  action: PrimaryActionProps;
+  onAction: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onAction}
+      disabled={action.disabled}
+      aria-label={action.label}
+      title={action.reason ?? action.label}
+      data-card-primary-action=""
+      data-tone="danger"
+      data-action-kind={action.kind}
+      data-action-rule={action.rule}
+      data-action-route={action.route}
+      className={`${CARD_STYLE.menuTrigger} flex items-center justify-center rounded-lg transition-colors hover:bg-surface-lift/15 disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent`}
+    >
+      <span
+        aria-hidden="true"
+        className="flex h-6 w-6 items-center justify-center rounded-full bg-warning-fg/15 text-warning-strong"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 3l10 18H2z" />
+          <path d="M12 10v4M12 17.5v.5" />
+        </svg>
+      </span>
+    </button>
+  );
+}
+
+/**
+ * Accent = the actionable default. A review kind never reaches this button any
+ * more (the card renders `ServiceReviewFlag` for it), but the mapping stays
+ * total so a card that did would still wear the blocker's tone, never the «go».
+ */
 function toneVariant(props: PrimaryActionProps): ButtonVariant {
-  switch (props.kind) {
-    case "review_data":
-    case "review_duplicate_roles":
-    case "review_setlist_data":
-    case "resolve_conflict":
-      return "danger";
-    // A retry is not a commit: it stays the quiet outlined control it was.
-    case "retry_load":
-      return "secondary";
-    default:
-      return "primary";
-  }
+  if (isReviewKind(props.kind)) return "danger";
+  // A retry is not a commit: it stays the quiet outlined control it was.
+  return props.kind === "retry_load" ? "secondary" : "primary";
 }
 
 export default function ServicePrimaryAction({

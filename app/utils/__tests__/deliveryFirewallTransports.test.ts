@@ -115,6 +115,8 @@ import { getMessaging } from "@/app/utils/firebaseAdmin";
 import { sendPush } from "@/app/utils/push";
 import { sendAssignmentEmails, sendAssignmentEmailsBatch } from "@/app/utils/assignmentEmail";
 import { notifyProposalSubmitted } from "@/app/utils/proposalNotify";
+import { sendMinistryEventNotices, type EventNoticeEffects } from "@/app/utils/ministryEventNotify";
+import { sendMinistryEventReminders } from "@/app/utils/ministryEventReminder";
 import {
   notifyProposalPending,
   notifyProposalReview,
@@ -134,6 +136,36 @@ import {
 const RUN_ID = "srvrun-0123456789abcdef";
 const SERVICE = { type: "sunday_role" as const, date: "2026-08-02" };
 const BODY = { leads: ["m1"], bgvs: [], chorus: [], instruments: [], foh: [] };
+
+/** A Jóvenes meeting's «Te toca» (ADR-0089): one member newly holding one seat. */
+const JOVENES_NOTICES: EventNoticeEffects = {
+  ministry: "jovenes",
+  actorId: "actor",
+  meeting: { id: "x.0123", date: "2026-08-08", time: "18:10", arrival: null, place: null, title: null, kind: "saturday" },
+  assigned: [{ memberId: "j1", roles: [{ kind: "seat", id: "encargado", label: "Encargado", partners: [] }] }],
+  moved: false,
+  music: [],
+};
+const JOVENES_MEMBER_ROW = { _id: "j1", role: "member", ministries: ["jovenes"], email: "joven@oasis.mx", name: "Pau" };
+/** A Jóvenes meeting 14 days after `REMINDER_NOW` whose Oración (j1) has no music chosen: one reminder. */
+const REMINDER_NOW = new Date("2026-07-26T01:10:00Z"); // 19:10 CDMX, Saturday 2026-07-25
+const JOVENES_REMINDER_MEETING = {
+  _id: "x.0123",
+  ministry: "jovenes",
+  audience: { kind: "ministry" },
+  kind: "saturday",
+  date: "2026-08-08",
+  published: true,
+  seats: [],
+  program: [{ _key: "l1", part: "oracion", label: "Oración", memberId: "j1" }],
+};
+/** The reminder step's two reads, by query: the day's meetings, then the people they name. */
+function serveReminderReads() {
+  opFetch.mockReset();
+  opFetch.mockImplementation(async (query: string) =>
+    query.includes("date in $dates") ? [JOVENES_REMINDER_MEETING] : [JOVENES_MEMBER_ROW],
+  );
+}
 
 /** One member: mailable AND pushable, so nothing is skipped for lack of a target. */
 const MEMBER_EMAIL_ROW = {
@@ -175,6 +207,8 @@ const PROVIDER_ENV: Record<string, string> = {
   RESEND_API_KEY: "re_live_key",
   // The whole team is deliverable — the real production default.
   EMAIL_ALLOWLIST: "*",
+  // The Jóvenes meeting read fails closed without it (trigger 11).
+  SANITY_API_READ_TOKEN: "sk-read-token",
   FIREBASE_SERVICE_ACCOUNT: '{"project_id":"p","client_email":"x@y.z","private_key":"k"}',
   CRON_SECRET: "cron-secret",
   SANITY_WRITE_TOKEN: "sk-token",
@@ -333,6 +367,15 @@ async function invokeEveryTrigger(): Promise<void> {
   };
   await remindersGET(req as unknown as Parameters<typeof remindersGET>[0]);
 
+  // 10. a Jóvenes meeting's notices (the four meeting routes await this inside `after()`)
+  opFetch.mockReset();
+  opFetch.mockResolvedValue([JOVENES_MEMBER_ROW]);
+  await sendMinistryEventNotices(JOVENES_NOTICES);
+
+  // 11. a Jóvenes meeting's reminders, 14 and 7 days ahead (the daily cron awaits this)
+  serveReminderReads();
+  await sendMinistryEventReminders(REMINDER_NOW);
+
   await drainAfter();
 }
 
@@ -461,6 +504,8 @@ describe("delivery mode `disabled` refuses at the transport boundary", () => {
       "re_live_key",
       "private_key",
       "sk-token",
+      "sk-read-token",
+      "joven@oasis.mx",
       "cron-secret",
     ]) {
       expect(text).not.toContain(forbidden);
@@ -694,6 +739,20 @@ describe("an absent delivery mode delivers unchanged", () => {
     serverFetch.mockResolvedValue([{ ...MEMBER_EMAIL_ROW, notifPrefs: { email: false } }]);
     await sendAssignmentEmails(["m1"], { ...SERVICE, body: BODY });
     expect(sendMail).not.toHaveBeenCalled();
+  });
+
+  it("mails a Jóvenes «Te toca» to exactly the person the write named", async () => {
+    opFetch.mockResolvedValue([JOVENES_MEMBER_ROW]);
+    await sendMinistryEventNotices(JOVENES_NOTICES);
+    expect(sendMail).toHaveBeenCalledTimes(1);
+    expect(sendMail.mock.calls[0][0]).toMatchObject({ to: "joven@oasis.mx" });
+  });
+
+  it("mails a Jóvenes reminder to exactly the person whose part lacks something", async () => {
+    serveReminderReads();
+    expect(await sendMinistryEventReminders(REMINDER_NOW)).toMatchObject({ planned: 1, emailed: 1 });
+    expect(sendMail).toHaveBeenCalledTimes(1);
+    expect(sendMail.mock.calls[0][0]).toMatchObject({ to: "joven@oasis.mx" });
   });
 
   it("sends one batched email covering both services", async () => {

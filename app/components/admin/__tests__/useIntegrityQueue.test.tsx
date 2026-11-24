@@ -353,7 +353,7 @@ describe("IntegrityQueuePanel renders the queue it is handed", () => {
     const { container } = panel("clean");
     expect(container.querySelector('[data-integrity-compact="clean"]')).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Integridad de datos/ })).toBeNull();
-    expect(screen.getByRole("status").textContent).toContain("sin problemas de integridad");
+    expect(screen.getByRole("status").textContent).toContain("Sin problemas de integridad");
   });
 
   it("starts open when there is something to say, and stays togglable", () => {
@@ -373,9 +373,10 @@ describe("IntegrityQueuePanel renders the queue it is handed", () => {
   });
 
   it("keeps the header as PROSE inside the Button's chrome", () => {
-    // `Button`'s BASE is `justify-center` + `uppercase tracking-widest`: without
-    // the `!` and the two spans' own case/tracking, adopting the house control
-    // centred the title and shouted the summary sentence.
+    // `Button`'s BASE is `justify-center` (and, until 2026-10-27, `uppercase
+    // tracking-widest`): without the `!` and the two spans' own case/tracking,
+    // adopting the house control centred the title and shouted the summary
+    // sentence. The spans keep their own case so a base change never re-shouts it.
     const { container } = panel("issues", ISSUES);
     const summary = container.querySelector("[data-integrity-summary]");
     expect(summary?.className).toContain("normal-case");

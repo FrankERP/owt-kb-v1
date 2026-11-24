@@ -1,0 +1,516 @@
+// The read contract of `ministryEvent` (ADR-0081; plan
+// `docs/superpowers/plans/2026-10-30-jovenes-events-access.md` §4, guards G2 and G3).
+//
+// G3 is the one that matters: the query `readMinistryEvents` builds is PARSED AND EVALUATED with
+// groq-js (the engine Sanity's own tooling uses; precedent `adminMemberVisibility.test.ts`) over one
+// fixture matrix of people × events, the expected visibility is written out by hand, and `mayRead`
+// (the same rule in TypeScript) must agree with the GROQ on every pair. No hand-written evaluator:
+// a twin of the query would test the twin.
+//
+// groq-js diverges from Content Lake on `path()` (1.30.2 does not escape the `.`), so the matrix
+// holds no id that starts with `ministryEvent` and then a non-dot; `mayRead`'s prefix rule is pinned
+// separately on such ids, and the live engine is probed on dev (G6).
+
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { evaluate, parse } from "groq-js";
+
+vi.mock("server-only", () => ({}));
+
+const h = vi.hoisted(() => ({ fetch: vi.fn() }));
+vi.mock("@/sanity/lib/operationalClient", () => ({
+  operationalClient: { fetch: (q: string, p?: Record<string, unknown>) => h.fetch(q, p) },
+}));
+// `accessFromDoc` lives beside the cached reader; nothing here reads through it.
+vi.mock("@/sanity/lib/serverClient", () => ({ serverClient: { fetch: vi.fn() } }));
+
+import {
+  buildAnnouncedMeetingsQuery,
+  buildMinistryEventQuery,
+  mayRead,
+  MinistryEventReadUnavailable,
+  readAnnouncedMeetings,
+  readMinistryEvents,
+  type MinistryEventMode,
+  type StoredMinistryEvent,
+} from "../ministryEventReads";
+import { accessFromDoc, type MemberAccessDoc } from "../memberAccess";
+
+// ── People ──────────────────────────────────────────────────────────────────
+
+const J = (level: string, groups: string[], leaderOf?: unknown) => [
+  { ministry: "jovenes", level, groups, ...(leaderOf === undefined ? {} : { leaderOf }) },
+];
+
+/** Stored member documents, run through the real normalization the guards read. */
+const PEOPLE_DOCS: Record<string, MemberAccessDoc> = {
+  pastorON: { _id: "p1", ministries: ["jovenes"], ministryRoles: J("member", ["otro-nivel"]) },
+  pastorEM: { _id: "p2", ministries: ["jovenes"], ministryRoles: J("member", ["emprendedores"]) },
+  pastorTwo: { _id: "p3", ministries: ["jovenes"], ministryRoles: J("member", ["otro-nivel", "invencibles"]) },
+  pastorNoGroups: { _id: "p4", ministries: ["jovenes"] },
+  pastorUnknownGroup: { _id: "p5", ministries: ["jovenes"], ministryRoles: J("member", ["foo"]) },
+  // Leaders who lead every group they are in (§11 N10: stored `leaderOf`, as every stored leader has).
+  leaderON: { _id: "l1", ministries: ["jovenes"], ministryRoles: J("leader", ["otro-nivel"], ["otro-nivel"]) },
+  leaderTwo: { _id: "l2", ministries: ["jovenes"], ministryRoles: J("leader", ["otro-nivel", "emprendedores"], ["otro-nivel", "emprendedores"]) },
+  // Per-group leadership (plan 2026-11-11 §5.2): leads Otro Nivel, is only IN Emprendedores.
+  leadsONinEM: { _id: "l3", ministries: ["jovenes"], ministryRoles: J("leader", ["otro-nivel", "emprendedores"], ["otro-nivel"]) },
+  // A `leader` whose leaderOf is empty (or unusable) is, for every read, a member.
+  leaderLeadsNone: { _id: "l4", ministries: ["jovenes"], ministryRoles: J("leader", ["otro-nivel"], []) },
+  leaderJunkLeaderOf: { _id: "l5", ministries: ["jovenes"], ministryRoles: J("leader", ["otro-nivel"], "otro-nivel") },
+  // A legacy leader (no `leaderOf` key) leads nothing under L2 (ADR-0085): for every read, a member.
+  leaderLegacy: { _id: "l6", ministries: ["jovenes"], ministryRoles: J("leader", ["otro-nivel"]) },
+  admin: { _id: "a1", ministries: ["jovenes"], ministryRoles: J("admin", []) },
+  // The super-admin who is also a leader: member mode reads as their groups, editor mode reads all.
+  superLeader: { _id: "s2", role: "super-admin", ministries: ["worship", "jovenes"], ministryRoles: J("leader", ["emprendedores"], ["emprendedores"]) },
+  superAdmin: { _id: "s1", role: "super-admin", ministries: ["worship"] },
+  inactiveAdmin: { _id: "x1", disabled: true, ministries: ["jovenes"], ministryRoles: J("admin", ["otro-nivel"]) },
+  worshipOnly: { _id: "w1", ministries: ["worship"] },
+  worshipAdmin: { _id: "w2", role: "admin", ministries: ["worship"] },
+  // A level in Jóvenes without being in Jóvenes grants nothing (ADR-0075).
+  levelWithoutMinistry: { _id: "w3", ministries: ["kids"], ministryRoles: J("admin", ["otro-nivel"]) },
+};
+const PEOPLE = Object.fromEntries(Object.entries(PEOPLE_DOCS).map(([k, d]) => [k, accessFromDoc(d)]));
+
+// ── Events ──────────────────────────────────────────────────────────────────
+
+const ev = (key: string, fields: Record<string, unknown>) => ({
+  _id: `ministryEvent.${key}`,
+  _type: "ministryEvent",
+  ministry: "jovenes",
+  date: "2026-11-14",
+  ...fields,
+});
+const groups = (...g: unknown[]) => ({ kind: "groups", groups: g });
+const PUB = { published: true };
+const DRAFT = { published: false };
+
+/** Keyed by a short name; the expected table below names events by these keys. */
+const EVENTS: Record<string, Record<string, unknown>> = {
+  ministry: ev("ministry", { ...PUB, audience: { kind: "ministry" } }),
+  on: ev("on", { ...PUB, audience: groups("otro-nivel") }),
+  inv: ev("inv", { ...PUB, audience: groups("invencibles") }),
+  em: ev("em", { ...PUB, audience: groups("emprendedores") }),
+  onEm: ev("onEm", { ...PUB, audience: groups("otro-nivel", "emprendedores") }),
+  onInv: ev("onInv", { ...PUB, audience: groups("otro-nivel", "invencibles") }),
+  invEm: ev("invEm", { ...PUB, audience: groups("invencibles", "emprendedores") }),
+  // `kind` decides; stray `groups` on a whole-ministry audience change nothing.
+  ministryWithGroups: ev("ministryWithGroups", { ...PUB, audience: { kind: "ministry", groups: ["emprendedores"] } }),
+  draftON: ev("draftON", { ...DRAFT, audience: groups("otro-nivel") }),
+  draftEM: ev("draftEM", { ...DRAFT, audience: groups("emprendedores") }),
+  draftOnEm: ev("draftOnEm", { ...DRAFT, audience: groups("otro-nivel", "emprendedores") }),
+  draftMinistry: ev("draftMinistry", { ...DRAFT, audience: { kind: "ministry" } }),
+  // `published` absent reads as a draft, never as published.
+  publishedAbsentON: ev("publishedAbsentON", { audience: groups("otro-nivel") }),
+  // Only the boolean `true` publishes.
+  publishedStringON: ev("publishedStringON", { published: "true", audience: groups("otro-nivel") }),
+  // Read CLOSED: every malformed audience is no member's.
+  noAudience: ev("noAudience", { ...PUB }),
+  groupsAbsent: ev("groupsAbsent", { ...PUB, audience: { kind: "groups" } }),
+  groupsEmpty: ev("groupsEmpty", { ...PUB, audience: groups() }),
+  groupsString: ev("groupsString", { ...PUB, audience: { kind: "groups", groups: "otro-nivel" } }),
+  unknownGroup: ev("unknownGroup", { ...PUB, audience: groups("foo") }),
+  unknownKind: ev("unknownKind", { ...PUB, audience: { kind: "everyone", groups: ["otro-nivel"] } }),
+  audienceString: ev("audienceString", { ...PUB, audience: "ministry" }),
+  audienceArray: ev("audienceArray", { ...PUB, audience: [{ kind: "ministry" }] }),
+  // A valid group among junk still counts; the junk never does.
+  mixedGroups: ev("mixedGroups", { ...PUB, audience: groups("otro-nivel", 3, "otro-nivel", null) }),
+  // Never served by the app, to anyone: wrong id shape, wrong type, other ministry.
+  undottedId: { ...ev("x", { ...PUB, audience: { kind: "ministry" } }), _id: "jovenes-event-1" },
+  draftsId: { ...ev("x", { ...PUB, audience: { kind: "ministry" } }), _id: "drafts.ministryEvent.d1" },
+  wrongType: { ...ev("wrongType", { ...PUB, audience: { kind: "ministry" } }), _type: "kidsSchedule" },
+  otherMinistry: ev("otherMinistry", { ...PUB, ministry: "kids", audience: { kind: "ministry" } }),
+  ministryAbsent: { ...ev("ministryAbsent", { ...PUB, audience: { kind: "ministry" } }), ministry: undefined },
+};
+
+const KEY_OF_ID = new Map(Object.entries(EVENTS).map(([k, e]) => [e._id as string, k]));
+
+/** Every well-formed published event of the ministry, as each audience sees it. */
+const SEEN_BY_ALL_MEMBERS = ["ministry", "ministryWithGroups"];
+const PUBLISHED_FOR = {
+  on: [...SEEN_BY_ALL_MEMBERS, "on", "onEm", "onInv", "mixedGroups"],
+  em: [...SEEN_BY_ALL_MEMBERS, "em", "onEm", "invEm"],
+  onInv: [...SEEN_BY_ALL_MEMBERS, "on", "inv", "onEm", "onInv", "invEm", "mixedGroups"],
+  onEm: [...SEEN_BY_ALL_MEMBERS, "on", "em", "onEm", "onInv", "invEm", "mixedGroups"],
+};
+/** Every event of the ministry with a valid id, published or not, well-formed or not. */
+const EVERY_JOVENES_EVENT = Object.keys(EVENTS).filter(
+  (k) => !["undottedId", "draftsId", "wrongType", "otherMinistry", "ministryAbsent"].includes(k),
+);
+
+/** THE visibility table, written by hand. A person/mode missing here sees nothing. */
+const EXPECTED: Record<string, Partial<Record<MinistryEventMode, string[]>>> = {
+  pastorON: { member: PUBLISHED_FOR.on },
+  pastorEM: { member: PUBLISHED_FOR.em },
+  pastorTwo: { member: PUBLISHED_FOR.onInv },
+  pastorNoGroups: { member: SEEN_BY_ALL_MEMBERS },
+  pastorUnknownGroup: { member: SEEN_BY_ALL_MEMBERS },
+  leaderON: {
+    member: PUBLISHED_FOR.on,
+    // Every draft that includes their group — a joint one included, though W3 may refuse its write —
+    // and never the Emprendedores-only draft or a whole-ministry draft.
+    editor: [...PUBLISHED_FOR.on, "draftON", "draftOnEm", "publishedAbsentON", "publishedStringON"],
+  },
+  leaderTwo: {
+    member: PUBLISHED_FOR.onEm,
+    editor: [...PUBLISHED_FOR.onEm, "draftON", "draftEM", "draftOnEm", "publishedAbsentON", "publishedStringON"],
+  },
+  // Leads Otro Nivel, in Emprendedores: every published meeting of both, drafts of Otro Nivel only
+  // (the joint ON+EM draft includes a group they lead); never the Emprendedores-only draft.
+  leadsONinEM: {
+    member: PUBLISHED_FOR.onEm,
+    editor: [...PUBLISHED_FOR.onEm, "draftON", "draftOnEm", "publishedAbsentON", "publishedStringON"],
+  },
+  leaderLeadsNone: { member: PUBLISHED_FOR.on },
+  leaderJunkLeaderOf: { member: PUBLISHED_FOR.on },
+  leaderLegacy: { member: PUBLISHED_FOR.on },
+  admin: { member: SEEN_BY_ALL_MEMBERS, editor: EVERY_JOVENES_EVENT },
+  superAdmin: { member: SEEN_BY_ALL_MEMBERS, editor: EVERY_JOVENES_EVENT },
+  superLeader: { member: PUBLISHED_FOR.em, editor: EVERY_JOVENES_EVENT },
+};
+
+// ── Engine ──────────────────────────────────────────────────────────────────
+
+// p1 has only the Google photo; l1 uploaded one, which wins over their Google photo (as `/me`).
+const MEMBER_DOCS = [
+  { _id: "p1", _type: "teamMembers", member_name: "Pastor Uno", googlePhotoUrl: "https://lh3.googleusercontent.com/p1" },
+  {
+    _id: "l1",
+    _type: "teamMembers",
+    member_name: "Líder Uno",
+    alias: "Lu",
+    googlePhotoUrl: "https://lh3.googleusercontent.com/l1",
+    profilePhoto: { _type: "image", asset: { _type: "reference", _ref: "image-l1" } },
+  },
+  { _id: "image-l1", _type: "sanity.imageAsset", url: "https://cdn.sanity.io/images/x/y/l1.jpg" },
+];
+const DATASET = [...Object.values(EVENTS), ...MEMBER_DOCS];
+
+async function groq(query: string, params: Record<string, unknown> = {}, dataset: unknown[] = DATASET) {
+  const value = await evaluate(parse(query), { dataset, params });
+  return (await value.get()) as unknown;
+}
+
+const WINDOW = { from: "2026-11-01", to: "2026-11-30" };
+const MODES: MinistryEventMode[] = ["member", "editor"];
+
+async function visibleKeys(person: string, mode: MinistryEventMode): Promise<string[]> {
+  const rows = await readMinistryEvents(PEOPLE[person], { me: "nobody", ministry: "jovenes", mode, ...WINDOW });
+  return rows.map((r) => KEY_OF_ID.get(r._id) ?? `?${r._id}`).sort();
+}
+
+beforeEach(() => {
+  h.fetch.mockReset();
+  h.fetch.mockImplementation((q: string, p?: Record<string, unknown>) => groq(q, p));
+  vi.stubEnv("SANITY_API_READ_TOKEN", "test-read-token");
+});
+afterEach(() => vi.unstubAllEnvs());
+
+// ── G3 ──────────────────────────────────────────────────────────────────────
+
+describe("G3: isolation matrix on the real engine", () => {
+  for (const person of Object.keys(PEOPLE)) {
+    for (const mode of MODES) {
+      const expected = [...(EXPECTED[person]?.[mode] ?? [])].sort();
+
+      it(`${person} in ${mode} mode reads exactly ${expected.length ? expected.join(", ") : "nothing"}`, async () => {
+        expect(await visibleKeys(person, mode)).toEqual(expected);
+      });
+
+      it(`${person} in ${mode} mode: mayRead agrees with the GROQ on every event`, () => {
+        for (const [key, event] of Object.entries(EVENTS)) {
+          expect([key, mayRead(PEOPLE[person], event as StoredMinistryEvent, mode)]).toEqual([
+            key,
+            expected.includes(key),
+          ]);
+        }
+      });
+    }
+  }
+
+  it("leads A, in B: B's draft is not read, B's published meeting is (per-group leadership)", async () => {
+    const editor = await visibleKeys("leadsONinEM", "editor");
+    expect(editor).toContain("em");
+    expect(editor).not.toContain("draftEM");
+    expect(editor).toContain("draftON");
+    expect(await visibleKeys("leadsONinEM", "member")).toContain("em");
+  });
+
+  it("a leader of no group reads nothing in editor mode — no query at all", () => {
+    expect(buildMinistryEventQuery(PEOPLE.leaderLeadsNone, { me: "l4", ministry: "jovenes", mode: "editor", ...WINDOW })).toBeNull();
+    expect(buildMinistryEventQuery(PEOPLE.leaderLegacy, { me: "l6", ministry: "jovenes", mode: "editor", ...WINDOW })).toBeNull();
+    expect(buildMinistryEventQuery(PEOPLE.leaderJunkLeaderOf, { me: "l5", ministry: "jovenes", mode: "editor", ...WINDOW })).toBeNull();
+  });
+
+  it("the Otro Nivel leader sees the joint draft but not the Emprendedores-only one, and no pastor sees either", async () => {
+    expect(await visibleKeys("leaderON", "editor")).toContain("draftOnEm");
+    expect(await visibleKeys("leaderON", "editor")).not.toContain("draftEM");
+    for (const p of ["pastorON", "pastorEM", "pastorTwo"]) {
+      expect(await visibleKeys(p, "member")).not.toContain("draftOnEm");
+    }
+  });
+
+  it("the date window is a page range: an event outside it is not returned, but mayRead ignores it", async () => {
+    const late = ev("late", { ...PUB, audience: { kind: "ministry" }, date: "2026-12-05" });
+    h.fetch.mockImplementation((q: string, p?: Record<string, unknown>) => groq(q, p, [late]));
+    expect(await readMinistryEvents(PEOPLE.admin, { me: "a1", ministry: "jovenes", mode: "editor", ...WINDOW })).toEqual([]);
+    expect(mayRead(PEOPLE.pastorON, late, "member")).toBe(true);
+  });
+
+  it("orders by date then time", async () => {
+    const rows = [
+      ev("b", { ...PUB, audience: { kind: "ministry" }, date: "2026-11-14", time: "19:00" }),
+      ev("c", { ...PUB, audience: { kind: "ministry" }, date: "2026-11-07" }),
+      ev("a", { ...PUB, audience: { kind: "ministry" }, date: "2026-11-14", time: "17:00" }),
+    ];
+    h.fetch.mockImplementation((q: string, p?: Record<string, unknown>) => groq(q, p, rows));
+    const got = await readMinistryEvents(PEOPLE.pastorON, { me: "p1", ministry: "jovenes", mode: "member", ...WINDOW });
+    expect(got.map((r) => r._id)).toEqual(["ministryEvent.c", "ministryEvent.a", "ministryEvent.b"]);
+  });
+
+  it("R7: «mine» is decided by member id in the projection; names and profile photos come from the reference", async () => {
+    const meeting = ev("seated", {
+      ...PUB,
+      audience: { kind: "ministry" },
+      seats: [
+        { _key: "s1", role: "encargado", member: { _ref: "p1", _weak: true } },
+        { _key: "s2", role: "apoyo", member: { _ref: "l1", _weak: true } },
+        { _key: "s3", role: "apoyo", member: { _ref: "gone", _weak: true } },
+      ],
+      program: [{ _key: "g1", label: "Oración", member: { _ref: "l1", _weak: true }, note: "5 min" }],
+      createdBy: { _ref: "l1", _weak: true },
+    });
+    h.fetch.mockImplementation((q: string, p?: Record<string, unknown>) => groq(q, p, [meeting, ...MEMBER_DOCS]));
+    const [row] = await readMinistryEvents(PEOPLE.pastorON, { me: "p1", ministry: "jovenes", mode: "member", ...WINDOW });
+    expect(row.seats).toEqual([
+      { _key: "s1", role: "encargado", memberId: "p1", name: "Pastor Uno", photo: "https://lh3.googleusercontent.com/p1", mine: true },
+      { _key: "s2", role: "apoyo", memberId: "l1", name: "Lu", photo: "https://cdn.sanity.io/images/x/y/l1.jpg", mine: false },
+      { _key: "s3", role: "apoyo", memberId: "gone", name: null, photo: null, mine: false },
+    ]);
+    expect(row.program).toEqual([
+      { _key: "g1", label: "Oración", note: "5 min", memberId: "l1", name: "Lu", photo: "https://cdn.sanity.io/images/x/y/l1.jpg", mine: false, part: null, music: null, helpers: null, second: null },
+    ]);
+    expect([row.createdById, row.createdByName, row.published]).toEqual(["l1", "Lu", true]);
+  });
+  it("ADR-0089: a part line reads its part, its music, who helps and its SECOND person, «mine» decided per person by id", async () => {
+    const meeting = ev("parts", {
+      ...PUB,
+      audience: { kind: "ministry" },
+      program: [
+        { _key: "o1", label: "Oración", part: "oracion", member: { _ref: "l1", _weak: true }, music: "alabanza" },
+        { _key: "d1", label: "Dinámica 1", part: "dinamica1", member: { _ref: "l1", _weak: true }, member2: { _ref: "p1", _weak: true }, note: "Sillas", helpers: "Dani y Sofi" },
+        // A second person who is gone keeps the slot's id and no name; an unknown part or music reads as none.
+        { _key: "d2", label: "Dinámica 2", part: "dinamica2", member2: { _ref: "gone", _weak: true }, music: "banda" },
+        { _key: "x1", label: "Rifa", part: "rifa" },
+      ],
+    });
+    h.fetch.mockImplementation((q: string, p?: Record<string, unknown>) => groq(q, p, [meeting, ...MEMBER_DOCS]));
+    const [row] = await readMinistryEvents(PEOPLE.pastorON, { me: "p1", ministry: "jovenes", mode: "member", ...WINDOW });
+    expect(row.program.map((l) => [l.part, l.music, l.helpers, l.mine, l.second && [l.second.memberId, l.second.name, l.second.mine]])).toEqual([
+      ["oracion", "alabanza", null, false, null],
+      ["dinamica1", null, "Dani y Sofi", false, ["p1", "Pastor Uno", true]],
+      ["dinamica2", null, null, false, ["gone", null, false]],
+      [null, null, null, false, null],
+    ]);
+  });
+  it("a typed seat name reads as its text, never «mine» and never a photo; a member's live name wins; the place reads back", async () => {
+    const meeting = ev("typed", {
+      ...PUB,
+      audience: { kind: "ministry" },
+      place: "Oasis Tlalpan",
+      seats: [
+        { _key: "s1", role: "encargado", name: "Emprendedores" },
+        { _key: "s2", role: "comparte", name: "Ana" },
+        { _key: "s3", role: "apoyo", member: { _ref: "p1", _weak: true } },
+        { _key: "s4", role: "apoyo" },
+      ],
+    });
+    h.fetch.mockImplementation((q: string, p?: Record<string, unknown>) => groq(q, p, [meeting, ...MEMBER_DOCS]));
+    const [row] = await readMinistryEvents(PEOPLE.pastorON, { me: "p1", ministry: "jovenes", mode: "member", ...WINDOW });
+    expect(row.place).toBe("Oasis Tlalpan");
+    expect(row.seats).toEqual([
+      { _key: "s1", role: "encargado", memberId: null, name: "Emprendedores", photo: null, mine: false },
+      { _key: "s2", role: "comparte", memberId: null, name: "Ana", photo: null, mine: false },
+      { _key: "s3", role: "apoyo", memberId: "p1", name: "Pastor Uno", photo: "https://lh3.googleusercontent.com/p1", mine: true },
+      { _key: "s4", role: "apoyo", memberId: null, name: null, photo: null, mine: false },
+    ]);
+  });
+});
+
+// ── mayRead's id rule, where groq-js and Content Lake disagree ──────────────
+
+describe("mayRead: the id prefix is Content Lake's path(\"ministryEvent.*\")", () => {
+  const base = { _type: "ministryEvent", ministry: "jovenes", published: true, audience: { kind: "ministry" } };
+  it.each([
+    ["ministryEvent.abc", true],
+    ["ministryEvent-f", false],
+    ["ministryEventX.abc", false],
+    ["ministryEvent.a.b", false],
+    ["ministryEvent.", false],
+    ["drafts.ministryEvent.abc", false],
+    ["versions.r1.ministryEvent.abc", false],
+  ])("%s → %s", (id, expected) => {
+    expect(mayRead(PEOPLE.admin, { ...base, _id: id }, "editor")).toBe(expected);
+    expect(mayRead(PEOPLE.pastorON, { ...base, _id: id }, "member")).toBe(expected);
+  });
+
+  it("an id that is not a string is never readable", () => {
+    expect(mayRead(PEOPLE.admin, { ...base, _id: 42 }, "editor")).toBe(false);
+    expect(mayRead(PEOPLE.admin, { ...base }, "editor")).toBe(false);
+  });
+});
+
+// ── G2 ──────────────────────────────────────────────────────────────────────
+
+describe("G2: query shape", () => {
+  const opts = { me: "p1", ministry: "jovenes" as const, ...WINDOW };
+
+  it("the member query carries the id prefix, the ministry, published == true and the audience arm", () => {
+    const built = buildMinistryEventQuery(PEOPLE.pastorON, { ...opts, mode: "member" });
+    expect(built).not.toBeNull();
+    const { query, params } = built!;
+    expect(query).toContain('_type == "ministryEvent"');
+    expect(query).toContain('_id in path("ministryEvent.*")');
+    expect(query).toContain("ministry == $ministry");
+    expect(query).toContain("date >= $from && date <= $to");
+    expect(query).toContain("published == true");
+    expect(query).toContain('audience.kind == "ministry"');
+    expect(query).toContain("audience.groups[@ in $groups]");
+    expect(params).toEqual({ ministry: "jovenes", from: WINDOW.from, to: WINDOW.to, me: "p1", groups: ["otro-nivel"] });
+  });
+
+  it("the reader's groups are a parameter, never interpolated", () => {
+    for (const person of ["pastorON", "pastorTwo", "leaderTwo"]) {
+      for (const mode of MODES) {
+        const built = buildMinistryEventQuery(PEOPLE[person], { ...opts, mode });
+        if (!built) continue;
+        for (const g of ["otro-nivel", "invencibles", "emprendedores"]) expect(built.query).not.toContain(g);
+      }
+    }
+  });
+
+  it("the leader's editor query adds only the drafts of their groups; the admin's has no audience arm", () => {
+    const leader = buildMinistryEventQuery(PEOPLE.leaderON, { ...opts, mode: "editor" })!;
+    expect(leader.query).toContain("published != true");
+    expect(leader.query).toContain("audience.groups[@ in $led]");
+    expect(leader.params.led).toEqual(["otro-nivel"]);
+    // `$groups` is every group they are in; `$led` only the ones they lead.
+    const partial = buildMinistryEventQuery(PEOPLE.leadsONinEM, { ...opts, mode: "editor" })!;
+    expect(partial.params.groups).toEqual(["otro-nivel", "emprendedores"]);
+    expect(partial.params.led).toEqual(["otro-nivel"]);
+    const admin = buildMinistryEventQuery(PEOPLE.admin, { ...opts, mode: "editor" })!;
+    expect(admin.query).toContain('_id in path("ministryEvent.*")');
+    expect(admin.query).not.toContain("$groups");
+    expect(admin.params).not.toHaveProperty("groups");
+  });
+
+  it("a group the registry does not know never reaches the parameter", () => {
+    const built = buildMinistryEventQuery(PEOPLE.pastorUnknownGroup, { ...opts, mode: "member" })!;
+    expect(built.params.groups).toEqual([]);
+  });
+
+  it.each([
+    ["inactiveAdmin", "member"],
+    ["inactiveAdmin", "editor"],
+    ["worshipOnly", "member"],
+    ["worshipAdmin", "editor"],
+    ["levelWithoutMinistry", "editor"],
+    ["pastorON", "editor"],
+  ] as const)("%s in %s mode: no query and no fetch", async (person, mode) => {
+    expect(buildMinistryEventQuery(PEOPLE[person], { ...opts, mode })).toBeNull();
+    vi.stubEnv("SANITY_API_READ_TOKEN", "");
+    expect(await readMinistryEvents(PEOPLE[person], { ...opts, mode })).toEqual([]);
+    expect(h.fetch).not.toHaveBeenCalled();
+  });
+
+  it("a ministry that is not leveled is never read", () => {
+    expect(buildMinistryEventQuery(PEOPLE.superAdmin, { ...opts, ministry: "kids", mode: "editor" })).toBeNull();
+    expect(buildMinistryEventQuery(PEOPLE.superAdmin, { ...opts, ministry: "worship", mode: "member" })).toBeNull();
+  });
+
+  it("R4: without the read token, a reader with access throws instead of answering «no events»", async () => {
+    vi.stubEnv("SANITY_API_READ_TOKEN", "");
+    await expect(
+      readMinistryEvents(PEOPLE.pastorON, { ...opts, mode: "member" }),
+    ).rejects.toBeInstanceOf(MinistryEventReadUnavailable);
+    expect(h.fetch).not.toHaveBeenCalled();
+  });
+
+  it("a malformed row (no date, bad date, no id) is dropped, not rendered", async () => {
+    h.fetch.mockResolvedValue([
+      { _id: "ministryEvent.ok", ministry: "jovenes", date: "2026-11-14" },
+      { _id: "ministryEvent.nodate", ministry: "jovenes" },
+      { _id: "ministryEvent.baddate", ministry: "jovenes", date: "14/11/2026" },
+      { ministry: "jovenes", date: "2026-11-14" },
+      null,
+      "x",
+    ]);
+    const rows = await readMinistryEvents(PEOPLE.pastorON, { ...opts, mode: "member" });
+    expect(rows.map((r) => r._id)).toEqual(["ministryEvent.ok"]);
+    expect(rows[0]).toMatchObject({ published: false, seats: [], program: [], audience: null, title: null });
+  });
+});
+
+// ── The reminder cron's read (ADR-0089, addendum) ───────────────────────────
+
+describe("the cron's read has no person, so it reads only what every member reads", () => {
+  const DAY = "2026-11-14"; // the matrix's date
+  const announced = async (dates: string[] = [DAY]) =>
+    (await readAnnouncedMeetings("jovenes", dates)).map((r) => KEY_OF_ID.get(r._id) ?? `?${r._id}`).sort();
+
+  it("over the whole matrix: exactly the published whole-ministry meetings — no group's, no draft, nothing malformed", async () => {
+    expect(await announced()).toEqual([...SEEN_BY_ALL_MEMBERS].sort());
+  });
+
+  it("stays inside EVERY member's own read: it can never hand an email a meeting its reader could not open", async () => {
+    const got = await announced();
+    for (const person of Object.keys(EXPECTED)) {
+      const mine = await visibleKeys(person, "member");
+      expect([person, got.filter((k) => !mine.includes(k))]).toEqual([person, []]);
+    }
+  });
+
+  it("the dates are exact days: a meeting of another day is not read, and a second day adds only its own", async () => {
+    const other = ev("other", { ...PUB, audience: { kind: "ministry" }, date: "2026-11-21" });
+    const groupOther = ev("groupOther", { ...PUB, audience: groups("otro-nivel"), date: "2026-11-21" });
+    h.fetch.mockImplementation((q: string, p?: Record<string, unknown>) => groq(q, p, [...DATASET, other, groupOther]));
+    expect(await announced(["2026-11-15"])).toEqual([]);
+    expect((await readAnnouncedMeetings("jovenes", ["2026-11-21"])).map((r) => r._id)).toEqual(["ministryEvent.other"]);
+    expect((await readAnnouncedMeetings("jovenes", [DAY, "2026-11-21"])).map((r) => r._id)).toContain("ministryEvent.other");
+  });
+
+  it("nobody is «mine»: the read has no reader", async () => {
+    const row = ev("mine", { ...PUB, audience: { kind: "ministry" }, seats: [{ _key: "s1", role: "comparte", member: { _ref: "p1" } }] });
+    h.fetch.mockImplementation((q: string, p?: Record<string, unknown>) => groq(q, p, [row, ...MEMBER_DOCS]));
+    const [got] = await readAnnouncedMeetings("jovenes", [DAY]);
+    expect(got.seats).toMatchObject([{ memberId: "p1", name: "Pastor Uno", mine: false }]);
+  });
+
+  it("query shape: the id prefix, the ministry, published == true, the whole-ministry audience, and no group parameter", () => {
+    const built = buildAnnouncedMeetingsQuery("jovenes", [DAY, DAY, "not-a-date"]);
+    expect(built).not.toBeNull();
+    const { query, params } = built!;
+    expect(query).toContain('_type == "ministryEvent"');
+    expect(query).toContain('_id in path("ministryEvent.*")');
+    expect(query).toContain("ministry == $ministry");
+    expect(query).toContain("date in $dates");
+    expect(query).toContain("published == true");
+    expect(query).toContain('audience.kind == "ministry"');
+    expect(query).not.toContain("$groups");
+    expect(query).not.toContain("$led");
+    expect(query).not.toContain('"groups"');
+    expect(params).toEqual({ ministry: "jovenes", dates: [DAY], me: "" });
+  });
+
+  it("no usable date, or a ministry that is not leveled: no query at all", async () => {
+    expect(buildAnnouncedMeetingsQuery("jovenes", [])).toBeNull();
+    expect(buildAnnouncedMeetingsQuery("jovenes", ["14/11/2026"])).toBeNull();
+    expect(buildAnnouncedMeetingsQuery("kids", [DAY])).toBeNull();
+    expect(await readAnnouncedMeetings("worship", [DAY])).toEqual([]);
+    expect(h.fetch).not.toHaveBeenCalled();
+  });
+
+  it("without the read token it throws instead of answering «no meetings»", async () => {
+    vi.stubEnv("SANITY_API_READ_TOKEN", "");
+    await expect(readAnnouncedMeetings("jovenes", [DAY])).rejects.toBeInstanceOf(MinistryEventReadUnavailable);
+    expect(h.fetch).not.toHaveBeenCalled();
+  });
+});

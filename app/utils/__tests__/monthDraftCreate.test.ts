@@ -80,6 +80,14 @@ describe("runDraftCreateBatch", () => {
     expect(post).toHaveBeenCalledTimes(3);
   });
 
+  it("carries a seat-clash refusal's sentences onto the failed draft", async () => {
+    const post = vi.fn(async () => ({ ok: false, status: 400, error: "invalid_request", seatClashes: ["Tony aparece dos veces en Lead en el mismo servicio."] }) as DraftPostOutcome);
+    const result = await runDraftCreateBatch({ drafts: [drafts[0]], published: false, post });
+    expect(result.failed).toEqual([
+      { localId: "l1", status: 400, error: "invalid_request", seatClashes: ["Tony aparece dos veces en Lead en el mismo servicio."] },
+    ]);
+  });
+
   it("treats a thrown request (lost response) as failed, never as created", async () => {
     const post = vi.fn(async () => {
       throw new Error("network");

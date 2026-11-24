@@ -12,15 +12,22 @@ import { sanityConflictKind } from "@/app/utils/roleWriteRequest";
 import { SOLVER_CONFIG_DOC_ID } from "@/app/utils/solverConfigWriteRequest";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import { writeClient } from "@/sanity/lib/serverClient";
+import { storedTypeOf } from "@/app/utils/typePin";
 import { revalidatePath } from "next/cache";
-import { NOTIFY_PREF_FIELD, wantsNotification, type NotifyKind } from "@/app/utils/notifyPrefs";
-import { validateMinistryWrite } from "@/app/ministries";
-import { parseMemberInstruments } from "@/app/components/admin/seatModel";
-import { MEMBER_TYPES } from "@/app/utils/memberTypes";
+import { patchMember } from "@/app/utils/memberCommit";
+import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
 
-const EMAIL_KINDS = Object.keys(NOTIFY_PREF_FIELD) as NotifyKind[];
+// Wrapped because the module it calls is a `*Commit` (`srVerificationRunContext.test.ts` scans by
+// import); a people write sends nothing, and an unmarked request behaves as before.
+export const PATCH = withVerificationRunContext(patchHandler);
+export const DELETE = withVerificationRunContext(deleteHandler);
 
-export async function PATCH(
+/**
+ * Edit a person. Everything after authorization is `patchMember` (`app/utils/memberCommit.ts`), which
+ * the MCP `save_member_changes` shares: the same validation, plus D5 (a repeated email), D12 (a
+ * repeated name or alias) and D6 (a renamed person's solver rules move with them, in one transaction).
+ */
+async function patchHandler(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -32,104 +39,12 @@ export async function PATCH(
   if (session.user.role !== "super-admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-
   const { id } = await params;
-  const body = await req.json() as {
-    member_name?: string;
-    alias?: string;
-    email?: string;
-    role?: string;
-    memberType?: string[];
-    instruments?: string[];
-    ministries?: string[];
-    managesMinistries?: string[];
-    // Legacy fallback field. No UI writes it any more (§5 of the notification
-    // design takes it out of both panels); it stays accepted because it is what
-    // an unset per-type field falls back to.
-    notifEmail?: boolean;
-    emailAssigned?: boolean;
-    emailRemoved?: boolean;
-    emailRoleChanged?: boolean;
-    emailSetlist?: boolean;
-    emailProposals?: boolean;
-  };
-
-  const VALID_ROLES = ["super-admin", "admin", "content-editor", "member"];
-
-  if (body.role !== undefined && !VALID_ROLES.includes(body.role)) {
-    return NextResponse.json({ error: "Invalid role" }, { status: 400 });
-  }
-
-  const patch: Record<string, unknown> = {};
-  if (body.member_name?.trim()) patch.member_name = body.member_name.trim();
-  if (typeof body.alias === "string") patch.alias = body.alias.trim();
-  if (body.email?.trim()) patch.email = body.email.trim().toLowerCase();
-  if (body.role) patch.role = body.role;
-  // Keep only recognised member types (drops unknown values rather than storing them).
-  // `MEMBER_TYPES` is the canonical six values, shared with `MeHeader`'s chips and
-  // `/admin`'s `TYPE_ABBR` — see `app/utils/memberTypes.ts`.
-  if (Array.isArray(body.memberType)) {
-    const valid: readonly string[] = MEMBER_TYPES;
-    patch.memberType = body.memberType.filter(t => valid.includes(t));
-  }
-
-  // Declared instruments (spec 2026-09-09 §4.2). `!== undefined` guard like
-  // `ministries`: an absent field is untouched, so the form's touched-field
-  // discipline holds and the backfill's "no stored field" predicate stays true.
-  // `[]` IS stored — "declares nothing" is a legitimate value (D6).
-  if (body.instruments !== undefined) {
-    const parsed = parseMemberInstruments(body.instruments);
-    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
-    patch.instruments = parsed.value;
-  }
-
-  // Ministry membership/management. The guard is `!== undefined`, so a body that
-  // never mentions a field leaves the stored value ALONE — the form sends only
-  // what the admin touched, and an unconditional write here would let an
-  // unrelated typo fix hand a kids-only volunteer the whole worship catalog
-  // (`ministries: []` reads back as `["worship"]`) and wipe a Kids leader's
-  // management. Must stay ABOVE the "Nothing to update" check, or a
-  // ministries-only PATCH 400s as an empty update.
-  for (const field of ["ministries", "managesMinistries"] as const) {
-    if (body[field] === undefined) continue;
-    const error = validateMinistryWrite(field, body[field]);
-    if (error) return NextResponse.json({ error }, { status: 400 });
-    patch[field] = body[field];
-  }
-
-  // The five per-type email toggles, keyed off the same map every sender uses.
-  const notifPatch: Record<string, unknown> = {};
-  if (typeof body.notifEmail === "boolean") notifPatch["notifPrefs.email"] = body.notifEmail;
-  for (const kind of EMAIL_KINDS) {
-    const field = NOTIFY_PREF_FIELD[kind];
-    const value = (body as Record<string, unknown>)[field];
-    if (typeof value === "boolean") notifPatch[`notifPrefs.${field}`] = value;
-  }
-
-  if (Object.keys(patch).length === 0 && Object.keys(notifPatch).length === 0) {
-    return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
-  }
-
-  let mutation = writeClient.patch(id).set(patch);
-  if (Object.keys(notifPatch).length > 0) {
-    mutation = mutation.setIfMissing({ notifPrefs: {} }).set(notifPatch);
-  }
-  const doc = await mutation.commit();
-  // A renamed member's name/alias surfaces on ISR schedule/home/me views.
-  revalidateServiceViews();
-  revalidatePath("/me");
-  // `emailPrefs` is RESOLVED through the shared resolver, never the raw fields:
-  // with no data migration the five are unset for anyone who opted out of the
-  // legacy `email`, and an unset boolean would render as its `true` default —
-  // five switches ON for a member receiving nothing.
-  const p = (doc as { notifPrefs?: Record<string, unknown> }).notifPrefs ?? {};
-  const emailPrefs = Object.fromEntries(
-    EMAIL_KINDS.map((kind) => [NOTIFY_PREF_FIELD[kind], wantsNotification(p, kind)]),
-  );
-  return NextResponse.json({ ...doc, emailPrefs });
+  const outcome = await patchMember(id, await req.json(), session.user.sanityId ?? "");
+  return NextResponse.json(outcome.body, { status: outcome.status });
 }
 
-export async function DELETE(
+async function deleteHandler(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -143,9 +58,16 @@ export async function DELETE(
   }
 
   const { id } = await params;
+  // W9 (ADR-0081): this route deletes members only; an id held by ANOTHER type answers 404. An id
+  // no document holds is not refused: «Reintenta la eliminación» after a failed pool cleanup
+  // (below) re-sends a member already deleted, and the retry must still reach the cleanup.
+  const storedType = await storedTypeOf(id);
+  if (storedType !== null && storedType !== "teamMembers") {
+    return NextResponse.json({ error: "Miembro no encontrado." }, { status: 404 });
+  }
 
   try {
-    await writeClient.delete(id);
+    if (storedType !== null) await writeClient.delete(id);
   } catch (err) {
     if (isSanityReferentialIntegrityError(err)) {
       return NextResponse.json(

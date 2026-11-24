@@ -93,6 +93,15 @@
   --positive-fg-rgb: 55 245 138;
   --negative-fg-rgb: 248 113 113;
 
+  /* ---- The second brand colour (2026-10-24, ADR-0071) --------------------
+     Rose, with ONE job: the musical KEY wherever the song is the protagonist —
+     the library row's glyph, the song page's and the sheet's key pill, the
+     history pills, `.brand-key-dial`. Never a state, an alert or «tú» (those
+     stay cyan/amber/violet/green/red), and the key stays ink inside a day card,
+     where the day already owns the colour. Frank, 2026-10-24: «no quisiera
+     desperdiciar el cyan, pero tampoco monocromático». */
+  --key-fg-rgb: 227 155 198;
+
   /* ---- Five roles the vocabulary did not name, added in B3 ---------------
      Found by sweeping ALL 1,628 B rows for hex values with no role, rather than
      discovering them one batch at a time — the same closure-by-construction rule
@@ -228,6 +237,19 @@
   --chart-especial-rgb: 217 83 79;   /* #D9534F */
   --chart-instr-rgb: 186 117 23;     /* #BA7517 */
   --chart-foh-rgb: 136 135 128;      /* #888780 */
+
+  /* Five more CATEGORICAL hues: the Jóvenes groups (ADR-0086). A group's colour is
+     its identity on a meeting — the chip with its monogram, the card's rail, the
+     date tile's band — never a state: «publicada», «borrador» and «tú» keep the
+     semantic roles. Named after the group id (`app/ministries.ts`), like the chart
+     hues after their seat, so adding a group cannot repaint another; the map that
+     reads them is `app/utils/jovenesGroupStyle.ts`. Fuchsia is not the key's rose
+     (ADR-0071): a different role, and no Jóvenes screen shows a musical key. */
+  --group-otro-nivel-rgb: 106 168 255;     /* #6aa8ff */
+  --group-invencibles-rgb: 177 140 255;    /* #b18cff */
+  --group-emprendedores-rgb: 45 212 191;   /* #2dd4bf */
+  --group-adrenalin-rgb: 255 138 76;       /* #ff8a4c */
+  --group-guerreras-rgb: 244 114 182;      /* #f472b6 */
 
   /* ---- Child C, Layer 1 continued: the palette families ------------------
      34 roles carrying Tailwind's EXACT palette values. Child C ships zero
@@ -532,6 +554,7 @@
   --info-border-rgb: 124 58 237;          /* #7c3aed  <- dark 91 33 182 */
   --positive-fg-rgb: 15 107 52;           /* #0f6b34  <- dark 55 245 138 */
   --negative-fg-rgb: 161 27 27;           /* #a11b1b  <- dark 248 113 113 */
+  --key-fg-rgb: 163 63 117;               /* #a33f75  <- dark 227 155 198 (5.6:1 on the light page) */
   --warning-surface-deep-rgb: 252 231 191;/* #fce7bf  <- dark 28 8 0 */
   --info-surface-deep-rgb: 225 213 250;   /* #e1d5fa  <- dark 30 10 60 */
   --surface-overlay-rgb: 255 255 255;     /* #ffffff  <- dark 0 22 46 */
@@ -547,6 +570,11 @@
   --chart-especial-rgb: 168 56 51;        /* #a83833  <- dark 217 83 79 */
   --chart-instr-rgb: 138 86 15;           /* #8a560f  <- dark 186 117 23 */
   --chart-foh-rgb: 94 93 88;              /* #5e5d58  <- dark 136 135 128 */
+  --group-otro-nivel-rgb: 29 95 191;      /* #1d5fbf  <- dark 106 168 255 */
+  --group-invencibles-rgb: 109 63 209;    /* #6d3fd1  <- dark 177 140 255 */
+  --group-emprendedores-rgb: 8 105 96;    /* #086960  <- dark 45 212 191 */
+  --group-adrenalin-rgb: 168 62 10;       /* #a83e0a  <- dark 255 138 76 */
+  --group-guerreras-rgb: 185 28 105;      /* #b91c69  <- dark 244 114 182 */
   --mono-200-rgb: 36 46 60;               /* #242e3c  <- dark 229 231 235 */
   --mono-300-rgb: 48 59 74;               /* #303b4a  <- dark 209 213 219 */
   --mono-400-rgb: 60 72 87;              /* #3c4857  <- dark 156 163 175 */
@@ -881,13 +909,14 @@ html.has-bottom-nav .audio-player { padding-bottom: 0; }
   height: 2.4rem;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgb(var(--accent-rgb) / 0.32);
+  /* The key's colour is the second brand colour (ADR-0071), not the accent. */
+  border: 1px solid rgb(var(--key-fg-rgb) / 0.32);
   border-radius: 9px;
-  color: rgb(var(--accent-rgb));
+  color: rgb(var(--key-fg-rgb));
   background: rgb(var(--surface-base-rgb) / 0.62);
   box-shadow:
-    inset 0 0 12px rgb(var(--accent-rgb) / 0.07),
-    0 0 18px rgb(var(--accent-rgb) / 0.055);
+    inset 0 0 12px rgb(var(--key-fg-rgb) / 0.07),
+    0 0 18px rgb(var(--key-fg-rgb) / 0.055);
 }
 
 /* The tempo pill's beat ring (R4, spec §12.7). A pseudo-element that scales and
@@ -928,28 +957,6 @@ html.has-bottom-nav .audio-player { padding-bottom: 0; }
 @keyframes brand-eq {
   from { transform: scaleY(0.25); }
   to   { transform: scaleY(1); }
-}
-
-.brand-song-hero {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  border-bottom: 1px solid rgb(var(--accent-rgb) / 0.18);
-  background:
-    radial-gradient(circle at 50% 110%, rgb(var(--accent-rgb) / 0.13), transparent 42%),
-    linear-gradient(150deg, rgb(var(--surface-raised-rgb) / 0.88), rgb(var(--surface-base-rgb) / 0.94) 60%);
-}
-
-.brand-song-hero::before {
-  position: absolute;
-  inset: -35% 12% auto auto;
-  width: 38%;
-  height: 190%;
-  content: "";
-  pointer-events: none;
-  opacity: 0.55;
-  background: linear-gradient(110deg, transparent, rgb(var(--accent-rgb) / 0.11), transparent 70%);
-  transform: rotate(12deg);
 }
 
 /*
@@ -1272,22 +1279,25 @@ html[data-motion="off"] .brand-stage-hero::before {
 }
 
 /* ── Lit card (spec §23, decision Q) — the FIFTH beam site. After the route
-   reveal, the next service's card gets ONE light pass around its border,
-   900 ms, then rests on its own accent border. Transform only, no @property
+   reveal, the NEXT card gets ONE light pass around its border, 900 ms, then
+   rests on its own border (the next Jóvenes meeting since ADR-0086, and the
+   next worship service on Inicio again since ADR-0088 gave it its frame back;
+   ADR-0070 had taken it). Transform only, no @property
    (Safari 16.4). Never loops; the global reduced-motion rule above
    (`*, *::before, *::after`) already zeroes its animation-duration/-delay,
    because this is a plain `animation:` shorthand — no per-effect override
    needed here, unlike `.brand-stage-hero::before`, which needs one because its
-   rest frame is opacity 1, not 0. `data-lit` is set by the page
-   (`app/(client)/page.tsx`).
+   rest frame is opacity 1, not 0. `data-lit` is set by its two
+   sites, `app/components/jovenes/MeetingCard.tsx` and `DayCard`'s `Lit`
+   (only where a host passes `lit`: Inicio's next service) — `litCard.test.ts`.
 
    NOT a mask on the rotating layer: a mask lives in the element's own box, so
    it rotates WITH it and the "ring" becomes a line slashing across the card.
    House precedent instead (`.brand-btn-sheen`, `.brand-skeleton`): the wrapper
    CLIPS, an UNMASKED conic layer spins underneath, and the card sits on top —
    the only light that escapes is what the 1 px `padding` gap leaves showing.
-   The wrapper's clip also eats the card's own `.brand-surface` shadow, so the
-   hero wrapper carries the shadow in `app/(client)/page.tsx`.
+   The wrapper's clip also eats the card's own `.brand-surface` shadow; a
+   lit card goes without one (the pass and its size already set it apart).
 
    The card is fully opaque since 2026-10-20 (`--surface-card`), so the wedge
    reaches the 1 px gap and nothing else. (Before, `.brand-surface` was a
@@ -1295,10 +1305,18 @@ html[data-motion="off"] .brand-stage-hero::before {
 .brand-lit-card { position: relative; isolation: isolate; border-radius: 16px; } /* --brand-radius-panel's value — DayCard.tsx's own rounded-[var(--brand-radius-panel)], not referenced here: tokenLayer.test.ts pins brand.css's own rule bodies as --brand-radius-free, consumed only from components */
 /* The spinner: the wrapper's box grown by 800 px on every side. A rotating box
    covers the wrapper at EVERY angle once its shorter side reaches the wrapper's
-   diagonal, and a fixed inset reaches that for any card up to 1600 px wide at
-   any height — the hero is capped at 1232 px (`max-w-7xl` minus `px-6` in
-   `app/(client)/page.tsx`) and measured 1232 × 257, a 4.8 : 1 box with a
-   1259 px diagonal.
+   diagonal, so the rule a card must meet is
+
+       diagonal  ≤  shorter side + 1600 px
+
+   — NOT «any card up to 1600 px wide at any height», which this comment said
+   until ADR-0088: a narrow, very tall card fails it. The two shapes that are lit
+   both pass with room: the wide hero this was sized on (capped at 1232 px,
+   `max-w-7xl` minus `px-6` in `app/(client)/page.tsx`; measured 1232 × 257, a
+   4.8 : 1 box with a 1259 px diagonal against 257 + 1600), and the worship card
+   on a phone, 342 px wide, which is covered up to about 1 900 px tall
+   (√(1942² − 342²) ≈ 1911) — a full setlist and team run well under that. A card
+   that could outgrow the rule needs a larger inset, not a percentage:
    PERCENTAGES CANNOT DO THIS: they scale BOTH axes, so a wide, flat card keeps
    its aspect ratio however large the layer grows. Measured over the pass at that
    hero, `inset: -100%` (3× → 771 px short side) leaves 81 of 2834 ring pixels

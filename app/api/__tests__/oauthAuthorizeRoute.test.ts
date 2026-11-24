@@ -46,8 +46,8 @@ const PRODUCTION_HOST = "owt-backstage.vercel.app";
 
 const SUPER_ADMIN_SESSION = { user: { sanityId: "frank", role: "super-admin", isImpersonating: false } };
 
-function liveAccess(role: string | null, active = true) {
-  return { active, role, ministries: ["worship"], managesMinistries: [] };
+function liveAccess(role: string | null, active = true, ministries: string[] = ["worship"]) {
+  return { active, role, ministries, managesMinistries: [] };
 }
 
 function stubEnv(env: { vercelEnv?: string; disabled?: string } = {}) {
@@ -205,8 +205,21 @@ describe("POST /api/oauth/authorize — «Permitir» mints a code", () => {
 
     // …and a stale session copy saying "super-admin" does not let a demoted member through.
     h.requireActiveSession.mockResolvedValue(SUPER_ADMIN_SESSION);
-    h.getMemberAccess.mockResolvedValue(liveAccess("admin"));
+    h.getMemberAccess.mockResolvedValue(liveAccess("content-editor"));
     await expectNoRedirect(await POST(post(await pageForm())), 403);
+  });
+
+  it("a live worship admin may approve too (ADR-0083): the code carries no tier, every later gate re-derives it", async () => {
+    h.requireActiveSession.mockResolvedValue({ user: { sanityId: "mkz", role: "admin", isImpersonating: false } });
+    h.getMemberAccess.mockResolvedValue(liveAccess("admin"));
+    const url = expectSeeOther(await POST(post(await pageForm())));
+    const code = url.searchParams.get("code");
+    expect(code).toBeTruthy();
+    const verified = await verifyAuthorizationCode(code, { key: KEY, origin: PREVIEW_ORIGIN });
+    if (!verified.ok) throw new Error("code did not verify");
+    expect(verified.claims.sub).toBe("mkz");
+    const payload = JSON.parse(Buffer.from(code!.split(".")[1]!, "base64url").toString("utf8"));
+    expect(Object.keys(payload).filter((k) => /tier|role|scope/i.test(k))).toEqual([]);
   });
 });
 
@@ -236,8 +249,14 @@ describe("POST /api/oauth/authorize — the decision field", () => {
 });
 
 describe("POST /api/oauth/authorize — the session (never redirected to the client)", () => {
-  it.each(["member", "admin", "content-editor", null])("a live %s → 403", async (role) => {
+  it.each(["member", "content-editor", null])("a live %s → 403", async (role) => {
     h.getMemberAccess.mockResolvedValue(liveAccess(role));
+    const body = await expectNoRedirect(await POST(post(await pageForm())), 403);
+    expect(body).toEqual({ error: "forbidden" });
+  });
+
+  it("a live admin outside worship → 403 (ADR-0083)", async () => {
+    h.getMemberAccess.mockResolvedValue(liveAccess("admin", true, ["kids"]));
     const body = await expectNoRedirect(await POST(post(await pageForm())), 403);
     expect(body).toEqual({ error: "forbidden" });
   });
@@ -279,13 +298,17 @@ describe("POST /api/oauth/authorize — never trusts the page", () => {
     await expectNoRedirect(res, 400);
   });
 
-  it("a redirect_uri the client registered but this origin does not allow → 400 (production, loopback)", async () => {
+  it("a redirect_uri the client id names but the allowlist does not → 400 (a directly signed off-list URI)", async () => {
+    // Registration never signs an off-list URI; this id is signed by hand to
+    // prove the authorize POST re-checks the allowlist rather than trusting the
+    // client id's claims.
     stubEnv({ vercelEnv: "production" });
-    const id = await signClientId({ key: KEY, origin: PRODUCTION_ORIGIN, redirectUris: [LOOPBACK_URI] });
+    const offList = "https://evil.example/cb";
+    const id = await signClientId({ key: KEY, origin: PRODUCTION_ORIGIN, redirectUris: [offList] });
     const form = new URLSearchParams({
       response_type: "code",
       client_id: id,
-      redirect_uri: LOOPBACK_URI,
+      redirect_uri: offList,
       code_challenge: CHALLENGE,
       code_challenge_method: "S256",
       decision: "allow",

@@ -31,6 +31,12 @@ export const PROTECTED_TYPES = [
   // read off a non-canonical client is the A2 failure; its one writer is the executor
   // (`PROTECTED_WRITE_EXECUTORS`).
   "fairnessMonth",
+  // The availability proposals' records (ADR-0079): dotted (private) ids, read only through
+  // `operationalClient`, written only by `availabilityFixCommit.ts`.
+  "availabilityConflict",
+  // Jóvenes' meetings (ADR-0081): dotted (private) ids, read only through `operationalClient` in
+  // `ministryEventReads.ts`, written only by `ministryEventCommit.ts`.
+  "ministryEvent",
 ] as const;
 
 export type ProtectedType = (typeof PROTECTED_TYPES)[number];
@@ -54,6 +60,13 @@ const PROTECTED_FIELDS = [
   "play_key",
   "medley_tag",
   "team_notes",
+  // `ministryEvent` (ADR-0081). Its `seats` is left out on purpose: Kids and the availability
+  // records use that name too.
+  "audience",
+  "program",
+  "place",
+  // A group's class (plan 2026-11-12 L0): one distinctive name for its roster, track and «hecho».
+  "lesson",
 ] as const;
 
 const MUTATION_METHODS = [
@@ -239,10 +252,10 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
     removalOwner: "permanent runtime writer (never removed — the shared write-op surface)",
   },
   {
-    file: "app/api/admin/roles/[id]/route.ts",
-    operation: "DELETE",
+    file: "app/utils/roleDeleteCommit.ts",
+    operation: "module",
     reason:
-      "guarded role delete: refuses dependent setlist/proposal history, then one transaction vacates the owned weekend lock, retires the creation receipt and deletes the role under its observed revision (A2 §2). It names no protected type literal — the type comes from the stored document — so it is detected by the loader it resolves through",
+      "guarded role delete: refuses dependent setlist/proposal history, then one transaction vacates the owned weekend lock, retires the creation receipt and deletes the role under its observed revision (A2 §2). It names no protected type literal — the type comes from the stored document — so it is detected by the loader it resolves through. The domain body of `DELETE /api/admin/roles/[id]`, moved here so the MCP deletes call the same writer (admin parity phase 2); the route keeps only authorization and its parse, and `serviceCommitCallers.test.ts` pins who may import this module",
     removalOwner: "permanent runtime writer (never removed — the delete surface itself)",
   },
   {
@@ -309,17 +322,17 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
     removalOwner: "permanent runtime writer (never removed — the admin side of the thread)",
   },
   {
-    file: "app/api/admin/service-threads/[roleId]/messages/route.ts",
-    operation: "POST",
+    file: "app/utils/serviceThreadCommit.ts",
+    operation: "module",
     reason:
-      "guarded pre-proposal thread writer (ADR-0065): resolves the role through `loadCanonicalRole` only to read its date and Lead seat, then appends one message to `serviceThread.<roleId>` — never to the role itself, and never to a proposal. `createIfNotExists` + `setIfMissing` + `append` carry no `ifRevisionId` ON PURPOSE — two admins posting at once must both land — and the entry exists to say so out loud",
-    removalOwner: "permanent runtime writer (never removed — the conversation before a proposal exists)",
+      "the service conversation's guarded writers (ADR-0065, amended 2026-10-24), moved here from the four `/api/admin/service-threads/[roleId]/…` routes so the MCP message tools call the same code (admin parity phase 3); the routes keep only authorization and their JSON parse, and `serviceCommitCallers.test.ts` pins who may import this module. (1) message append: resolves the role through `loadCanonicalRole` only to read its date and Lead seat, then appends one message to `serviceThread.<roleId>` — never to the role, never to a proposal; `createIfNotExists` + `setIfMissing` + `append` carry no `ifRevisionId` ON PURPOSE (two admins posting at once must both land). (2) own-message edit/delete: ONE `messages[_key==…]` item after checking the caller is its author; no `ifRevisionId` ON PURPOSE (a message's author never changes). (3) pastor's message: compares the admin's observed stamp, then sets or unsets `pastor_message` asserting the thread `_rev` it read (`create` when there is none, so a concurrent thread is told). (4) team note: resolves the live setlist target exactly as the setlist PUT does (fail closed on duplicates and raw drafts), compares the observed target, and writes ONLY `team_notes` under that `_rev`, heartbeating the weekend lock in the same transaction; replaces no songs and notifies nobody. (5) the approval's copy of the leads' pastor's message (`adoptProposalPastorMessage`, ADR-0087; caller: `proposalReviewCommit.ts`, after its commit): reads the thread, writes `pastor_message` ONLY when empty, under the `_rev` it read (`create` when none), one re-read on conflict, never notifies, never throws",
+    removalOwner: "permanent runtime writer (never removed — the service conversation)",
   },
   {
-    file: "app/api/admin/proposals/[id]/route.ts",
-    operation: "PATCH",
+    file: "app/utils/proposalReviewCommit.ts",
+    operation: "module",
     reason:
-      "guarded proposal transitions and atomic approval: one transaction asserts the reviewed proposal revision, writes the live featuredSongs/saturdarSongs/special_role target, and records the approval receipt (A2 §6)",
+      "guarded proposal transitions and atomic approval: one transaction asserts the reviewed proposal revision, writes the live featuredSongs/saturdarSongs/special_role target, and records the approval receipt (A2 §6). The domain body of `PATCH /api/admin/proposals/[id]`, moved here so the MCP proposal-decision tools call the same writer (admin parity S1); the route keeps only authorization, and `serviceCommitCallers.test.ts` pins who may import this module; in peek only (the MCP check), the live target's `team_notes` read by `_id` and `_rev` (the shared projections do not carry it) and the service thread's `pastor_message.body` (ADR-0087; a failed read never refuses the check); after an approval commits, `adoptProposalPastorMessage` (`serviceThreadCommit.ts`) copies the reviewed proposal's `pastor_message` into an EMPTY service field",
     removalOwner: "permanent runtime writer (never removed — the review/approval surface itself)",
   },
   {
@@ -350,6 +363,13 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
       "post-commit outbox upsert: writes notificationOutbox documents through writeClient in a module that names sunday_role for the setlist audience query; queues only, never mutates protected content",
     removalOwner:
       "permanent runtime writer (never removed — the post-commit notice-queueing surface itself)",
+  },
+  {
+    file: "app/utils/availabilityFixCommit.ts",
+    operation: "module",
+    reason:
+      "the availability proposals' writer (ADR-0079): writes only its own `availabilityConflict` records through writeClient (guarded `create`, `ifRevisionId` patches) in a module whose seat pre-check names the role types; its one role write is «Aplicar», which DELEGATES to `editRole` (`roleEditCommit.ts`) unchanged. Its reads go through `operationalClient`; `serviceCommitCallers.test.ts` pins its callers",
+    removalOwner: "permanent runtime writer (never removed while the availability proposals exist)",
   },
 ];
 
@@ -525,17 +545,17 @@ export const OPERATOR_TOOLING_ALLOWLIST: readonly AuditExemption[] = [
  */
 export const DEFENSIVE_TYPE_REJECTION_GUARDS: readonly AuditExemption[] = [
   {
-    file: "app/api/content/posts/[id]/route.ts",
-    operation: "PATCH",
+    file: "app/utils/songSaveCommit.ts",
+    operation: "module",
     reason:
-      "`*[_id == $id][0]{ _type }` ownership guard on the song-content editor, so a manager cannot overwrite a role/proposal/teamMembers document by id; projects only _type",
+      "`*[_id == $id][0]{ _type }` ownership guard on the song-content editor (`patchSong`, called by the posts/[id] PATCH route and the MCP `save_song_edits`), so a manager cannot overwrite a role/proposal/teamMembers document by id; projects only _type",
     removalOwner: "song-content editor refactor (never A2)",
   },
   {
-    file: "app/api/kids/pairs/[id]/route.ts",
-    operation: "PATCH",
+    file: "app/utils/kidsCommit.ts",
+    operation: "module",
     reason:
-      "`*[_id == $id][0]{ _type }` ownership guard on the kids pair editor: the id comes from the path, so without it a Kids manager — a role that must reach no worship data at all — could rename any document with a `name` field (author, tag, role) by id; projects only _type and 404s anything that is not a kidsPair",
+      "`*[_id == $id][0]{ _type }` ownership guard on the kids pair editor (`patchKidsPair`, called by the pair PATCH route and the MCP `save_kids_pair`): the id comes from the caller, so without it a Kids manager — a role that must reach no worship data at all — could rename any document with a `name` field (author, tag, role) by id; projects only _type and 404s anything that is not a kidsPair",
     removalOwner: "kids ministry routes (never A2)",
   },
 ];

@@ -82,7 +82,7 @@ disponible)» on those marked unavailable on every service date counted.
   called. Known limitation: on an OLD special whose instrument row uses a
   non-standard label (e.g. `Piano`), the fill can still seat the standard row
   of the same instrument (`Keys`) — review before «Guardar».
-- The Servicios panel's month pills always offer the current month plus the
+- The Servicios panel's month tabs always offer the current month plus the
   next two, even when a month has no service yet, so an empty upcoming month
   (a camp weekend, say) can be opened and given its first service without
   generating the whole month with the solver first (`monthPills.ts`).

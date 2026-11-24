@@ -39,7 +39,6 @@ const ActivityPanel = dynamic(() => import("./ActivityPanel"), { ssr: false, loa
 const ContentPanel = dynamic(() => import("./ContentPanel"), { ssr: false, loading: PanelSkeleton });
 const AvailabilityPanel = dynamic(() => import("./AvailabilityPanel"), { ssr: false, loading: PanelSkeleton });
 const ProposalsPanel = dynamic(() => import("./ProposalsPanel"), { ssr: false, loading: PanelSkeleton });
-const MembersPanel = dynamic(() => import("./MembersPanel"), { ssr: false, loading: PanelSkeleton });
 
 type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
 
@@ -91,7 +90,7 @@ export default function AdminPanel({
   // Gated on `tabNamedInUrl`, which is the difference between "the URL asked
   // for a tab" and "the server fell back to one". Without that gate the same
   // gesture had two outcomes: tapping "Admin" in the nav sent the admin back to
-  // Miembros or left them where they were, depending only on how they had
+  // the first tab or left them where they were, depending only on how they had
   // arrived at /admin minutes earlier — invisible to them, and it also cleared
   // any pending handoff target. Now a link that NAMES a tab moves the panel,
   // and a link to plain /admin is the no-op it looks like; the effect below
@@ -102,7 +101,7 @@ export default function AdminPanel({
   //
   // Seeded from `initialTab` only when the URL NAMED it. Seeding from a
   // fallback would record a tab no URL ever asked for: open bare /admin, click
-  // Actividad, then follow a colleague's link to `?tab=members` — the value
+  // Actividad, then follow a colleague's link to that first tab — the value
   // matches the fallback recorded on arrival, so the link would visibly do
   // nothing. Remaining edge, accepted: following the same named tab twice after
   // moving away by hand cannot be told apart by value, and telling it apart
@@ -117,7 +116,7 @@ export default function AdminPanel({
    * Keep `?tab=` in step with the visible tab, so a reload or a Back into
    * /admin lands where the admin was instead of on the first tab. Before this
    * the tab lived only in the reducer, and an admin deep in Servicios who
-   * refreshed was dropped to Miembros mid-task.
+   * refreshed was dropped to the first tab mid-task.
    *
    * `history.replaceState`, deliberately, not the router:
    *   - `router.push` would make Back walk the tabs one by one, so leaving
@@ -268,19 +267,11 @@ export default function AdminPanel({
             <ActivityPanel />
           </PanelBoundary>
         );
-      case "content":
+      default:
+        // «Contenido». Miembros moved to /super-admin (ADR-0075, 2026-10-29).
         return (
           <PanelBoundary>
             <ContentPanel canDelete={role === "super-admin" || role === "admin"} />
-          </PanelBoundary>
-        );
-      default:
-        // The Miembros body is its OWN component since R5 Task 3 — it holds the
-        // member list, every member write and four dialogs, and it renders only
-        // on this tab (Task 6 mounts it behind `next/dynamic`).
-        return (
-          <PanelBoundary>
-            <MembersPanel role={role} />
           </PanelBoundary>
         );
     }

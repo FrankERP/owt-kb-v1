@@ -11,9 +11,11 @@ import { publishedSetlist } from "../utils/draftGating";
 import { pickUnique } from "../utils/serviceReadSelect";
 import { requireWorshipPage } from "../utils/worshipPageGate";
 import { myNameFromSession } from "../utils/agenda";
-import { homeGreeting } from "../utils/homeGreeting";
+import { greetingService, homeGreeting } from "../utils/homeGreeting";
 import { seatPhotos } from "../utils/teamSections";
 import { heroPhotoPosition, heroPhotoSrc, SHEET_TITLE, type HomeHero } from "../utils/homeHero";
+import { pastorMessageBodyOf } from "../utils/serviceThread";
+import { SONG_COVER_GROQ } from "../utils/songCover";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -42,7 +44,8 @@ const SETLIST_FIELDS = `songs[]{
   play_key,
   medley_tag,
   "title": song->title, "slug": song->slug, "_id": song->_id,
-  "author": song->author, "timeSig": song->timeSig, "bpm": song->bpm, "key": song->key
+  "author": song->author, "timeSig": song->timeSig, "bpm": song->bpm, "key": song->key,
+  "cover": ${SONG_COVER_GROQ}
 }, week, team_notes`;
 
 // `photo` per seat feeds the team's faces: an uploaded photo first, else the
@@ -56,7 +59,8 @@ const ROLE_FIELDS = `_id, week,
   instruments[]{ instrument, "person": coalesce(person->alias, person->member_name), "photo": ${PERSON_PHOTO} },
   foh_team[]{ role, "person": coalesce(person->alias, person->member_name), "photo": ${PERSON_PHOTO} },
   BGVs[]->{ member_name, alias, "photo": ${PHOTO} },
-  Chorus[]->{ member_name, alias, "photo": ${PHOTO} }`;
+  Chorus[]->{ member_name, alias, "photo": ${PHOTO} },
+  "pastor_message": ${pastorMessageBodyOf("^._id")}`;
 
 // One combined GROQ fetch for all weekend data — GROQ params prevent query cache
 // misses. Weekend single-target keys return arrays (no `[0]`); the page picks a
@@ -70,7 +74,7 @@ const WEEKEND_QUERY = `{
   "satRole":  *[_type == "saturday_role"  && week == $sat && published != false] { ${ROLE_FIELDS} },
   "specials": *[_type == "special_role"   && date >= $today && date <= $sun && published != false] | order(date asc, time asc) {
     _id, date, time, service_name, team_notes,
-    songs[]{ play_key, medley_tag, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "bpm": song->bpm, "key": song->key, "leads": leads[]->{ member_name, alias } },
+    songs[]{ play_key, medley_tag, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "bpm": song->bpm, "key": song->key, "cover": ${SONG_COVER_GROQ}, "leads": leads[]->{ member_name, alias } },
     ${ROLE_FIELDS}
   },
   "viewer": *[_type == "teamMembers" && _id == $me][0]{ memberType },
@@ -94,6 +98,7 @@ export default async function Home() {
     foh_team: { role: string; person: string }[];
     BGVs: { member_name: string; alias?: string }[];
     Chorus: { member_name: string; alias?: string }[];
+    pastor_message?: string | null;
   };
 
   const weekend = await operationalClient.fetch<{
@@ -182,6 +187,7 @@ export default async function Home() {
           roleId: sp._id,
           serviceId: sp._id,
           setlist: sp.songs?.length ? { songs: sp.songs as SetlistSong[], week: sp.date, team_notes: sp.team_notes } : undefined,
+          pastorMessage: sp.pastor_message,
           leads: sp.Lead?.map((m) => m.alias || m.member_name) ?? [],
           instruments: sp.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
           fohTeam: sp.foh_team?.map((s) => ({ label: s.role, person: s.person })),
@@ -198,6 +204,7 @@ export default async function Home() {
             date: satSongs?.week ?? satRole?.week,
             serviceId: satRole?._id,
             setlist: satSetlist,
+            pastorMessage: satRole?.pastor_message,
             leads: satRole?.Lead?.map((m) => m.alias || m.member_name) ?? [],
             instruments: satRole?.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
             fohTeam: satRole?.foh_team?.map((s) => ({ label: s.role, person: s.person })),
@@ -215,6 +222,7 @@ export default async function Home() {
             date: sunSongs?.week ?? sunRole?.week,
             serviceId: sunRole?._id,
             setlist: sunSetlist,
+            pastorMessage: sunRole?.pastor_message,
             leads: sunRole?.Lead?.map((m) => m.alias || m.member_name) ?? [],
             instruments: sunRole?.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
             fohTeam: sunRole?.foh_team?.map((s) => ({ label: s.role, person: s.person })),
@@ -246,6 +254,11 @@ export default async function Home() {
     viewerIsAdmin: ["super-admin", "admin"].includes(session.user.role),
   };
   const greeting = homeGreeting(services.map((s) => s.props), session.user, myName);
+  // When the member's own next service IS the card drawn right under the greeting, the
+  // card says the seat, the hour and the countdown as chips — the line would repeat them
+  // (ADR-0088). It stays when the two differ (a Sunday Lead on a week that opens on
+  // Saturday) and when the member does not serve («Esta vez no te toca servir.»).
+  const greetingOnHero = !!hero && greetingService(services.map((s) => s.props), myName) === hero.props;
   // The team photo behind the greeting (ADR-0070): the ONE Studio document
   // (`_id` "homeSettings", a singleton pane in `sanity/structure.ts`), published
   // — this client reads the published perspective. Without it the band is just
@@ -261,7 +274,7 @@ export default async function Home() {
   return (
     <div>
       {/* `cue={false}`: the greeting band below carries the countdown. */}
-      <Navbar title="OWT" cue={false} />
+      <Navbar title="Backstage" cue={false} />
 
       {/* The band (ADR-0070, the «Inicio de millones» mock, variant B): the page
           opens on the member's own answer — «Te toca el domingo / Eléctrica ·
@@ -271,7 +284,7 @@ export default async function Home() {
           text, not an eyebrow: the sheet keeps its small caps for section
           titles only. */}
       <section
-        aria-label="Tu próximo servicio"
+        aria-label="Saludo"
         className={`relative flex flex-col justify-end ${photo ? "min-h-[24rem] md:min-h-[32rem]" : "pt-12"}`}
         {...revealProps(0)}
       >
@@ -299,7 +312,7 @@ export default async function Home() {
             {greeting.lead}
             {greeting.day && <span className="text-positive-fg">{greeting.day}</span>}
           </h2>
-          {hero && <p className="mt-3 font-body text-[17px] leading-snug text-ink md:text-xl">{greeting.sub}</p>}
+          {hero && !greetingOnHero && <p className="mt-3 font-body text-[17px] leading-snug text-ink md:text-xl">{greeting.sub}</p>}
         </div>
       </section>
 
@@ -321,22 +334,34 @@ export default async function Home() {
           </div>
         ) : (
           <>
-            {/* The hero is the run SHEET, straight on the page (ADR-0070): the
-                lit card it sat in until 2026-10-23 was one more frame around the
-                most-seen content, and the type pass is about fewer frames, not
-                more. `DayCard hero` draws no panel, rail or header of its own. */}
-            <div {...revealProps(1)}>
-              <DayCard {...hero.props} {...viewer} layout="wide" hero />
-            </div>
-            {/* «Después»: the week's other services as hairline rows, under the
-                sheet's third small-caps title. */}
+            {/* The next service is a CARD, open, and takes the one light pass around its
+                border (ADR-0088, which gives back the frame ADR-0070 took): the date as a
+                calendar leaf, the songs with their pictures, the team as faces. The label
+                over it is the Jóvenes list's own («Próxima reunión»): small caps and a
+                hairline that runs to the edge. */}
+            <section aria-labelledby="home-proximo">
+              <h3 id="home-proximo" className={`${SHEET_TITLE} flex items-center gap-3 pb-3`} {...revealProps(1)}>
+                Próximo servicio
+                <span aria-hidden="true" className="h-px flex-1 bg-ink/[0.10]" />
+              </h3>
+              <div {...revealProps(1)}>
+                <DayCard {...hero.props} {...viewer} layout="wide" hero lit />
+              </div>
+            </section>
+            {/* «Después»: the week's other services as folded cards, each an object with
+                an edge — its date, who leads as faces, its songs as pictures. */}
             {rest.length > 0 && (
-              <section aria-labelledby="home-despues" className="mt-12">
-                <h3 id="home-despues" className={SHEET_TITLE}>Después</h3>
-                <div className="mt-2 divide-y divide-ink/[0.10] border-y border-ink/[0.10]">
+              <section aria-labelledby="home-despues" className="mt-10">
+                <h3 id="home-despues" className={`${SHEET_TITLE} flex items-center gap-3 pb-3`}>
+                  Después
+                  <span aria-hidden="true" className="h-px flex-1 bg-ink/[0.10]" />
+                  {/* Decorative: read after the title it would be heard as «Después 2». */}
+                  <span aria-hidden="true" className="tabular-nums">{rest.length}</span>
+                </h3>
+                <div className="space-y-3">
                   {rest.map((s, i) => (
                     <div key={s.key} {...revealProps(2 + i)}>
-                      <DayCardDisclosure {...s.props} {...viewer} sheet />
+                      <DayCardDisclosure {...s.props} {...viewer} />
                     </div>
                   ))}
                 </div>

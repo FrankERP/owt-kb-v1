@@ -1,4 +1,5 @@
 import { normalizeLabel, normalizeServiceName } from "@/app/utils/normalizeLabel";
+import { seatClashSentencesOf } from "@/app/utils/seatClashGuard";
 import { isServiceTime } from "@/app/utils/serviceTime";
 import type { GridCell } from "./plannerModel";
 import { effectiveStoredCounts } from "./fairnessToggleModel";
@@ -200,7 +201,8 @@ export function freezeSaveAttempt(
 
 export type PatchTransportOutcome =
   | { kind: "knownCommitted" }
-  | { kind: "knownFailure"; code: string }
+  /** `seatClashSentences`: the server's sentences when it refused a seat clash (ADR-0078). */
+  | { kind: "knownFailure"; code: string; seatClashSentences?: string[] }
   | { kind: "maintenanceReload" }
   | { kind: "unknown"; code?: string };
 
@@ -231,7 +233,10 @@ export function classifyPatchOutcome(input: {
   if (code === "bootstrap_completed_reload") return { kind: "maintenanceReload" };
   if (code === "bootstrap_outcome_unknown") return { kind: "unknown", code };
   if (input.status >= 500 || !code) return { kind: "unknown", ...(code ? { code } : {}) };
-  if (PROVEN_PREWRITE_FAILURES.has(code)) return { kind: "knownFailure", code };
+  if (PROVEN_PREWRITE_FAILURES.has(code)) {
+    const seatClashSentences = seatClashSentencesOf(input.body);
+    return { kind: "knownFailure", code, ...(seatClashSentences.length ? { seatClashSentences } : {}) };
+  }
   return { kind: "unknown", code };
 }
 
@@ -262,4 +267,51 @@ export function reconcileSaveAttempt(input: {
     intended: input.attempt.intendedSnapshot,
     observed: input.observed.snapshot,
   };
+}
+
+/** How a stored save (or its reconciliation after the reload) ended, for its one notice. */
+export type StoredSaveEnd =
+  /** One column refused before any write; the loop goes on with the others. */
+  | { kind: "columnRefused"; date: string; code: string; seatClashSentences?: readonly string[] }
+  /** Every column sent was refused before writing (nothing to reload). */
+  | { kind: "allRefused"; knownFailures: number }
+  /** The reload after the save could not be verified. */
+  | { kind: "reloadFailed" }
+  /** Reconciled: every sent column applied (or is ready to save again after maintenance). */
+  | { kind: "verified"; applied: number; maintenance: number; knownFailures: number }
+  | { kind: "superseded" }
+  | { kind: "unconfirmed" };
+
+const plural = (n: number) => (n !== 1 ? "s" : "");
+
+/**
+ * Every notice a stored save can end on, built in ONE place so none of them drops the reason a
+ * column was refused. `clashLines` are the «{día}: {frase}» lines of the columns the server refused
+ * for a seat clash (ADR-0078) — the usual end after «Copiar a todo el mes» copies a drummer onto
+ * Sundays where they sing: some columns save, those are refused, and before this the reconciliation
+ * notice said only how many. Appended to whichever notice ends the save.
+ */
+export function storedSaveNotice(end: StoredSaveEnd, clashLines: readonly string[] = []): string {
+  const base = (() => {
+    switch (end.kind) {
+      case "columnRefused":
+        return end.seatClashSentences?.length
+          ? `El servidor rechazó ${end.date}: ${end.seatClashSentences.join(" ")} Los demás cambios seguros continuaron.`
+          : `El servidor rechazó ${end.date} (${end.code}); los demás cambios seguros continuaron.`;
+      case "allRefused":
+        return `${end.knownFailures} servicio${plural(end.knownFailures)} fue rechazado antes de escribir; tus cambios siguen pendientes.`;
+      case "reloadFailed":
+        return "No se pudo verificar la recarga. Conservamos tus cambios y no se reintentó el guardado.";
+      case "verified":
+        return end.maintenance > 0
+          ? `Se verificaron ${end.applied} cambios; ${end.maintenance} servicio${plural(end.maintenance)} quedó listo para volver a guardar.${end.knownFailures ? ` ${end.knownFailures} fue rechazado y conserva sus cambios.` : ""}`
+          : `Cambios guardados y verificados.${end.knownFailures ? ` ${end.knownFailures} servicio${plural(end.knownFailures)} fue rechazado y conserva sus cambios.` : ""}`;
+      case "superseded":
+        return "El cambio se guardó, pero otra edición lo reemplazó. Conservamos tu intención sin adoptar la versión remota.";
+      case "unconfirmed":
+        return "No se pudo confirmar el resultado. Conservamos tus cambios; recarga antes de intentar de nuevo.";
+    }
+  })();
+  // A refused column's own line already carries its sentence.
+  return end.kind === "columnRefused" || clashLines.length === 0 ? base : `${base} ${clashLines.join(" ")}`;
 }

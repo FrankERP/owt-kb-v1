@@ -36,8 +36,10 @@ import { storedRoleDate } from "./roleWriteRequest";
 import {
   loadCanonicalRole,
   loadCanonicalRolesByIds,
+  peekOwnedCoordination,
   resolveOwnedCoordination,
   type RoleWriteFailure,
+  type RoleWriteTarget,
   type StoredLock,
   type StoredRole,
 } from "./roleWriteOps";
@@ -206,6 +208,67 @@ export async function loadWeekendCoordination(input: {
   roleType: Exclude<RoleType, "special_role">;
   week: string;
 }): Promise<WeekendCoordinationLoad> {
+  const owner = await loadWeekendOwner(input);
+  if (!owner.ok) return owner;
+  if (!owner.target) {
+    return { ok: true, coordination: { role: null, lock: null, bootstrapped: false } };
+  }
+  const coordination = await resolveOwnedCoordination([owner.target]);
+  if (!coordination.ok) {
+    return { ok: false, failure: coordination.failure };
+  }
+  const resolved = coordination.roles[0];
+  return {
+    ok: true,
+    coordination: {
+      role: resolved.role,
+      lock: resolved.lock,
+      bootstrapped: false,
+    },
+  };
+}
+
+/** `peekWeekendCoordination`'s answer: the writer's coordination, with a needed bootstrap reported. */
+export type WeekendCoordinationPeek =
+  | { ok: true; coordination: WeekendCoordination & { needsBootstrap: boolean } }
+  | { ok: false; failure: RoleWriteFailure };
+
+/**
+ * The read-only twin of `loadWeekendCoordination` (admin parity S1, D4): the same
+ * reads and refusals, through `peekOwnedCoordination`, so a legacy weekend role
+ * with no token answers `needsBootstrap: true` (its role carried, `lock: null`)
+ * where the writer would commit the bootstrap. Never writes.
+ */
+export async function peekWeekendCoordination(input: {
+  roleType: Exclude<RoleType, "special_role">;
+  week: string;
+}): Promise<WeekendCoordinationPeek> {
+  const owner = await loadWeekendOwner(input);
+  if (!owner.ok) return owner;
+  if (!owner.target) {
+    return { ok: true, coordination: { role: null, lock: null, bootstrapped: false, needsBootstrap: false } };
+  }
+  const coordination = await peekOwnedCoordination([owner.target]);
+  if (!coordination.ok) {
+    return { ok: false, failure: coordination.failure };
+  }
+  const resolved = coordination.roles[0];
+  return {
+    ok: true,
+    coordination: {
+      role: resolved.role,
+      lock: resolved.lock,
+      bootstrapped: false,
+      needsBootstrap: coordination.needsBootstrap,
+    },
+  };
+}
+
+/** The weekend target's owning role as a coordination target, or null when no role owns it. */
+async function loadWeekendOwner(input: {
+  roleType: Exclude<RoleType, "special_role">;
+  week: string;
+}): Promise<{ ok: true; target: RoleWriteTarget | null } | { ok: false; failure: RoleWriteFailure }> {
   const [roles, drafts] = await Promise.all([
     run<StoredRole>(canonicalWeekendRolesForTargetQuery(input.roleType, input.week)),
     runRaw<{ _id: string }>(rawRoleDraftsForTargetQuery(input.roleType, input.week)),
@@ -230,9 +293,7 @@ export async function loadWeekendCoordination(input: {
     };
   }
   const role = pickUnique(roles);
-  if (!role) {
-    return { ok: true, coordination: { role: null, lock: null, bootstrapped: false } };
-  }
+  if (!role) return { ok: true, target: null };
   const validation = validateRole(role);
   if (!validation.groupable || !validation.targetKey) {
     return {
@@ -245,20 +306,9 @@ export async function loadWeekendCoordination(input: {
       ...failure("integrity_conflict", { roleId: role._id, issues: ["date"] }),
     };
   }
-  const coordination = await resolveOwnedCoordination([
-    { role, date, targetKey: validation.targetKey, lockId: roleTargetLockId(validation.targetKey) },
-  ]);
-  if (!coordination.ok) {
-    return { ok: false, failure: coordination.failure };
-  }
-  const resolved = coordination.roles[0];
   return {
     ok: true,
-    coordination: {
-      role: resolved.role,
-      lock: resolved.lock,
-      bootstrapped: false,
-    },
+    target: { role, date, targetKey: validation.targetKey, lockId: roleTargetLockId(validation.targetKey) },
   };
 }
 

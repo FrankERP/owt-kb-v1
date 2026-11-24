@@ -77,6 +77,39 @@ function parsePattern(pattern: string): { day: Day; role: Role } | null {
 const cap1 = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /**
+ * THE patterns a rule may be saved with — the eleven the rules forms offer, in the Select's order. The
+ * panel's pickers and the chat's rule edits (`ruleEdits.ts`, ADR-0084) both read this list, so they cannot
+ * drift; every entry expands to at least one solver role (`patternRolesV3Sync.test.ts`). `Sun.LeadBGV` and
+ * `Sat.LeadBGV` are deliberately absent: both solver expansions turn them into no role, so a rule on them
+ * would be saved, worded as a real sentence, and ignored.
+ */
+// A literal, one value per line: `patternRolesV3Sync.test.ts` imports it.
+export const RULE_PATTERNS = [
+  "Sun.*",
+  "Sat.*",
+  "*.*",
+  "Sun.Lead",
+  "Sat.Lead",
+  "Sun.BGV",
+  "Sat.BGV",
+  "Sun.Choir",
+  "*.Lead",
+  "*.BGV",
+  "*.LeadBGV",
+] as const;
+export type RulePattern = (typeof RULE_PATTERNS)[number];
+
+/** The same set in the exclusion pill grid's order (days first, then the seats). */
+export const EXCLUSION_PATTERN_ORDER: readonly RulePattern[] = [
+  "Sat.*", "Sun.*", "*.*",
+  "Sun.Lead", "Sun.BGV", "Sun.Choir",
+  "Sat.Lead", "Sat.BGV",
+  "*.Lead", "*.BGV", "*.LeadBGV",
+];
+
+export const isRulePattern = (p: string): p is RulePattern => (RULE_PATTERNS as readonly string[]).includes(p);
+
+/**
  * The short label of a pattern for a picker («Líder en domingo», «Sábado (todo)»,
  * «Líder o BGV (ambos)») — the rule forms' `Select`s and pills.
  */
@@ -211,6 +244,15 @@ export function presenceSentence(r: PresenceRule): RuleSentence {
 }
 
 export const sentenceText = (s: RuleSentence) => s.map((part) => part.text).join(" ");
+
+/**
+ * A person restriction as one line, «Persona: cláusula · cláusula» — the chat's wording of a rules card
+ * (`get_solver_rules`, and the rules a person edit renames). A struck-through «Holgura» carries its note.
+ */
+export function restrictionText(r: PersonRestriction): string {
+  const clauses = restrictionChips(r).map((chip) => (chip.note ? `${chip.text} (${chip.note})` : chip.text));
+  return `${r.person}: ${clauses.length ? clauses.join(" · ") : "sin cláusulas"}`;
+}
 
 /** The notation each card shows behind «Mostrar notación del solver» — `conflictCardLabel`/`presenceCardLabel`'s shape. */
 export const conflictNotation = (c: ConflictRule) => `${c.personA} ≠ ${c.personB} en ${c.pattern}`;

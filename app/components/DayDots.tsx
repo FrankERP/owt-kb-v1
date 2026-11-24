@@ -6,36 +6,42 @@
 // means, and a Sunday that also hosts a special shows two dots instead of a
 // "several services" corner mark the legend had to explain.
 //
-// `onFill` is the selected cell (the grid's accent fill): every dot turns the
-// base colour, since a tone dot on the accent would read as a fourth colour.
+// `mine` adds a fourth dot in the app's one green (the «millones» pass, 2026-10-24):
+// the day the signed-in member serves used to paint its NUMBER positive, which made
+// «tú» look like a second kind of day; as a dot it sits in the same row as the day's
+// other facts, and the legend can name it («Te toca»).
 // NEUTRAL module — no hooks — so a Server Component could render it.
 import { TONE_RAIL, type Tone } from "../utils/agenda";
 
 /** Past this many services the row stops growing — three same-day sets is the realistic ceiling. */
 const MAX_DOTS = 3;
 
-export default function DayDots({ tones, onFill = false }: { tones: Tone[]; onFill?: boolean }) {
-  if (tones.length === 0) return null;
+export default function DayDots({ tones, mine = false }: { tones: Tone[]; mine?: boolean }) {
+  if (tones.length === 0 && !mine) return null;
   return (
-    <span aria-hidden className="flex items-center justify-center gap-[3px]" data-testid="day-dots">
+    <span aria-hidden className="flex h-[5px] items-center justify-center gap-[3px]" data-testid="day-dots">
       {tones.slice(0, MAX_DOTS).map((tone, i) => (
-        <span key={i} className={`h-[5px] w-[5px] rounded-full ${onFill ? "bg-surface-base" : TONE_RAIL[tone]}`} />
+        <span key={i} className={`h-[5px] w-[5px] rounded-full ${TONE_RAIL[tone]}`} />
       ))}
+      {mine && <span className="h-[5px] w-[5px] rounded-full bg-positive-fg" data-mine="" />}
     </span>
   );
 }
 
-/** The cell classes the strip and the grid share, so a lit day looks the same in both. */
+/** The day-number circle the strip and the grid share, so a day looks the same in both
+ *  (the «millones» pass): the number in the display face, no card around it; the dots
+ *  sit UNDER the circle, outside it, so a fill never recolours them. */
 export const DAY_CELL_BASE =
-  "relative flex flex-col items-center justify-center rounded-lg transition-[color,background-color,border-color,box-shadow,transform] duration-fast ease-out-brand";
-/** A day with a service: a raised, neutral surface that can be pressed. */
-export const DAY_CELL_LIT =
-  "bg-surface-card border border-ink/10 text-ink cursor-pointer active:scale-[0.94] hover:border-accent/60";
+  "relative flex items-center justify-center rounded-full font-display font-semibold leading-none tabular-nums transition-[color,background-color,box-shadow,transform] duration-fast ease-out-brand";
+/** A day with a service: ink, pressable. */
+export const DAY_CELL_LIT = "text-ink cursor-pointer hover:text-accent active:scale-[0.94]";
+/** A day with a service the fetch already passed (a browsed month): still pressable, quieter. */
+export const DAY_CELL_LIT_PAST = "text-ink-muted cursor-pointer hover:text-accent active:scale-[0.94]";
 /** A day with nothing on it: just the number, not an affordance. */
 export const DAY_CELL_EMPTY = "text-mono-400 cursor-default";
-/** Today: a thin inset accent ring, whatever the day carries. */
-export const DAY_CELL_TODAY = "ring-1 ring-inset ring-accent/50";
-/** Today while SELECTED: an accent ring would vanish on the accent fill, so it turns base. */
+/** Today: a thin inset ink ring, whatever the day carries. */
+export const DAY_CELL_TODAY = "ring-1 ring-inset ring-ink/70";
+/** Today while SELECTED: an ink ring reads as a border on the accent fill, so it turns base. */
 export const DAY_CELL_TODAY_ON_FILL = "ring-1 ring-inset ring-surface-base/70";
-/** The grid's selected day: the accent fill, with the dots turned base (`onFill`). */
-export const DAY_CELL_SELECTED = "bg-accent text-surface-base font-bold cursor-pointer active:scale-[0.94]";
+/** The grid's selected day: the accent fill. */
+export const DAY_CELL_SELECTED = "bg-accent text-surface-base cursor-pointer active:scale-[0.94]";

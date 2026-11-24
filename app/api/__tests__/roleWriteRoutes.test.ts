@@ -65,6 +65,8 @@ import { GET as rolesGET, POST as createPOST } from "@/app/api/admin/roles/route
 import { PATCH as rolePATCH, DELETE as roleDELETE } from "@/app/api/admin/roles/[id]/route";
 import { POST as publishPOST } from "@/app/api/admin/roles/publish/route";
 import { createRole } from "@/app/utils/roleCreateCommit";
+import { deleteRole } from "@/app/utils/roleDeleteCommit";
+import { parseDeleteRequest } from "@/app/utils/roleWriteRequest";
 import type { RoleDomainSummary, RoleTarget } from "@/app/utils/serviceReadSummary";
 import {
   buildStoredGridRows,
@@ -444,7 +446,7 @@ describe("GET /api/admin/members — canonical candidates", () => {
     const query = operationalFetch.mock.calls[0][0] as string;
     expect(query).toContain('*[_type == "teamMembers"');
     expect(query).toContain("| order(member_name asc)");
-    expect(query).toContain("_id, member_name, alias, email, role, memberType, instruments, notifPrefs");
+    expect(query).toContain("_id, member_name, alias, email, role, memberType, instruments, singsAndPlays, notifPrefs");
     expect(query).toContain('"hasPassword": defined(passwordHash) && passwordHash != ""');
     // Ministry-scoped since P1: worship admins see worship members only.
     // Behaviour is covered in `adminMemberVisibility.test.ts`.
@@ -2353,6 +2355,85 @@ describe("DELETE /api/admin/roles/[id]", () => {
   });
 });
 
+describe("DELETE /api/admin/roles/[id] and deleteRole — one writer (admin parity phase 2, D1)", () => {
+  const normalise = (value: unknown) =>
+    JSON.parse(
+      JSON.stringify(value)
+        .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, "<uuid>")
+        .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z/g, "<now>")
+        .replace(/outbox\.role\.[0-9a-f]{32}/g, "outbox.role.<hash>"),
+    );
+
+  function reset() {
+    vi.clearAllMocks();
+    transactions.length = 0;
+    commitOutcomes.length = 0;
+    afterCallbacks.length = 0;
+    store = emptyStore();
+    operationalFetch.mockImplementation(async (q: string, p: Record<string, unknown> = {}) => canonicalRead(q, p));
+    rawFetch.mockImplementation(async (q: string, p: Record<string, unknown> = {}) => rawRead(q, p));
+    requireActiveManagerMock.mockResolvedValue(ADMIN);
+  }
+
+  async function run(setup: () => void, rev: string, via: "route" | "deferred" | "inline") {
+    reset();
+    setup();
+    let status: number;
+    let json: unknown;
+    let noticesQueued: boolean | null = null;
+    if (via === "route") {
+      const res = await roleDELETE(req({ rev }), ctx("role-1"));
+      status = res.status;
+      json = await res.json();
+    } else {
+      const parsed = parseDeleteRequest({ rev });
+      if (!parsed.ok) throw new Error("parse");
+      const outcome = await deleteRole("role-1", parsed.value, { notices: via === "inline" ? "inline" : "deferred" });
+      status = outcome.status;
+      json = outcome.body;
+      if (outcome.ok) noticesQueued = outcome.effects.noticesQueued;
+    }
+    const afterQueued = afterCallbacks.length;
+    await drainAfter();
+    return {
+      afterQueued,
+      noticesQueued,
+      result: normalise({
+        status,
+        body: json,
+        transactions: transactions.map((t) => ({ ops: t.ops, committed: t.committed })),
+        revalidated: revalidateServiceViewsMock.mock.calls.length,
+        pushed: sendPushMock.mock.calls.length,
+      }),
+    };
+  }
+
+  it.each<[string, () => void, string]>([
+    ["a published delete with its lock and receipt", () => { store.roles.push(role({ published: true, creationReceiptId: RECEIPT_ID })); store.locks.push(lock()); store.receipts.push(receipt()); }, "rev-1"],
+    ["a draft delete", () => { store.roles.push(role({ published: false })); store.locks.push(lock()); }, "rev-1"],
+    ["a dependency refusal", () => { store.roles.push(role()); store.proposals.push(proposal()); }, "rev-1"],
+    ["a stale revision", () => { store.roles.push(role()); store.locks.push(lock()); }, "rev-old"],
+    ["a legacy bootstrap", () => { store.roles.push(role({ _rev: "rev-legacy" })); }, "rev-legacy"],
+  ])("%s: the route and the commit write the same transactions, inline notices included", async (_name, setup, rev) => {
+    const route = await run(setup, rev, "route");
+    const deferred = await run(setup, rev, "deferred");
+    const inline = await run(setup, rev, "inline");
+    expect(deferred.result).toEqual(route.result);
+    expect(inline.result).toEqual(route.result);
+    // Inline: the notice upsert is awaited before deleteRole returns — nothing is left to after().
+    expect(inline.afterQueued).toBe(0);
+  });
+
+  it("inline mode reports whether the notices landed; a published delete queues one per assignee, a draft none", async () => {
+    const published = await run(() => { store.roles.push(role({ published: true })); store.locks.push(lock()); }, "rev-1", "inline");
+    expect(published.noticesQueued).toBe(true);
+    expect(queuedMemberIds()).toEqual(["mem-1"]);
+    const draft = await run(() => { store.roles.push(role({ published: false })); store.locks.push(lock()); }, "rev-1", "inline");
+    expect(draft.noticesQueued).toBe(true);
+    expect(outboxUpserts()).toHaveLength(0);
+  });
+});
+
 // ── Publish ─────────────────────────────────────────────────────────────────
 
 describe("POST /api/admin/roles/publish", () => {
@@ -2538,5 +2619,104 @@ describe("POST /api/admin/roles/publish", () => {
     expect((await res.json()).error).toBe("stale_revision");
     expect(committedTransactions()).toHaveLength(0);
     expect(afterCallbacks).toHaveLength(0);
+  });
+});
+
+describe("seat-clash guard on create and PATCH (ADR-0078)", () => {
+  // Tony sings in Coro and is unmarked; Frank is marked «Canta y toca a la vez».
+  beforeEach(() => {
+    store.members.push(
+      { _id: "mem-tony", member_name: "Antonio", alias: "Tony" },
+      { _id: "mem-frank", member_name: "Frank", singsAndPlays: true },
+    );
+  });
+
+  const patchBody = (over: Record<string, unknown> = {}) => ({
+    rev: "rev-1",
+    _type: "sunday_role",
+    date: "2026-08-09",
+    leads: ["mem-1"],
+    bgvs: [],
+    chorus: [],
+    instruments: [],
+    foh: [],
+    ...over,
+  });
+
+  it("refuses a create that seats an unmarked member in Coro and on Drums, before any read past members", async () => {
+    const res = await createPOST(
+      req(createBody({ chorus: ["mem-tony"], instruments: [{ instrument: "Drums", personId: "mem-tony" }] })),
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body).toMatchObject({
+      error: "invalid_request",
+      details: {
+        issues: ["seat_clash"],
+        seatClashes: [{ memberId: "mem-tony", name: "Tony", seats: ["Coro", "Drums"] }],
+      },
+    });
+    expect(body.details.seatClashes[0].sentence).toContain("Tony quedaría en Coro y Drums");
+    expect(transactions).toHaveLength(0);
+    const queries = operationalFetch.mock.calls.map(([query]) => query as string);
+    expect(queries.some((query) => query.includes("week == $week"))).toBe(false);
+  });
+
+  it("allows the same create for a marked member", async () => {
+    const res = await createPOST(
+      req(
+        createBody({
+          creationRequestId: "req-marked-0000001",
+          leads: ["mem-frank"],
+          instruments: [{ instrument: "EG", personId: "mem-frank" }],
+        }),
+      ),
+    );
+    expect(res.status).toBe(201);
+    expect(committedTransactions()).toHaveLength(1);
+  });
+
+  it("never re-judges an exact receipt replay, even of a roster the rule would now refuse", async () => {
+    const clashing = createBody({ chorus: ["mem-tony"], instruments: [{ instrument: "Drums", personId: "mem-tony" }] });
+    store.receipts.push(receipt({ fingerprint: payloadFingerprint(clashing) }));
+    store.roles.push(role());
+    const res = await createPOST(req(clashing));
+    expect(res.status).toBe(200);
+    expect((await res.json()).replay).toBe(true);
+    expect(transactions).toHaveLength(0);
+  });
+
+  it("refuses a PATCH that adds a clash, before the legacy bootstrap or any transaction", async () => {
+    store.roles.push(role({ Chorus: [{ _key: "c1", _type: "reference", _ref: "mem-tony" }] }));
+    const res = await rolePATCH(
+      req(patchBody({ chorus: ["mem-tony"], instruments: [{ instrument: "Drums", personId: "mem-tony" }] })),
+      ctx("role-1"),
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).details.issues).toEqual(["seat_clash"]);
+    expect(transactions).toHaveLength(0);
+    expect(afterCallbacks).toHaveLength(0);
+  });
+
+  it("allows an unrelated PATCH to a roster that already holds a clash", async () => {
+    store.roles.push(
+      role({
+        Chorus: [{ _key: "c1", _type: "reference", _ref: "mem-tony" }],
+        instruments: [{ _key: "i1", _type: "instrument_slot", instrument: "Drums", person: { _type: "reference", _ref: "mem-tony" } }],
+      }),
+    );
+    store.locks.push(lock());
+    const res = await rolePATCH(
+      req(
+        patchBody({
+          chorus: ["mem-tony"],
+          instruments: [{ instrument: "Drums", personId: "mem-tony" }],
+          foh: [{ role: "Console", personId: "mem-5" }],
+        }),
+      ),
+      ctx("role-1"),
+    );
+    expect(res.status).toBe(200);
+    expect(committedTransactions()).toHaveLength(1);
   });
 });

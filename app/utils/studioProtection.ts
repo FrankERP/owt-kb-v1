@@ -1,4 +1,4 @@
-// Studio protection policy for the twenty protected stored types
+// Studio protection policy for the twenty-one protected stored types
 // (Service Readiness A2 §8 / A3 §4) — pure, exported, and unit-testable.
 //
 // WHY a code-owned policy instead of UI configuration alone: the Studio is an
@@ -24,7 +24,7 @@
 // look at a lock, a receipt, or a malformed role while diagnosing.
 
 /**
- * The twenty protected stored types. `saturdarSongs` is a deliberate stored typo —
+ * The twenty-one protected stored types. `saturdarSongs` is a deliberate stored typo —
  * never rename.
  *
  * Membership here is what earns a type a pane in `sanity/structure.ts`'s
@@ -79,6 +79,10 @@ export const PROTECTED_STUDIO_TYPES = [
   // machine coordination state above, not like `kidsPair`/`kidsSchedule`.
   "mcpOauthGrant",
   "mcpOauthCodeRedemption",
+  // Native-app sign-in state (ADR-0091): the same shape and the same treatment as the MCP
+  // OAuth state above — written only by `app/appAuth/grantStore.ts`.
+  "appAuthGrant",
+  "appAuthCodeRedemption",
   // The member calendar feed's generation counter (ADR-0057): machine state written only by
   // `POST /api/me/calendar-feed`. Internal, like the MCP OAuth state above.
   "calendarFeed",
@@ -92,6 +96,12 @@ export const PROTECTED_STUDIO_TYPES = [
   // `POST /api/admin/service-threads/[roleId]/messages`. Human-meaningful like
   // `setlistProposal`, so protected but deliberately NOT internal — it keeps a read-only pane.
   "serviceThread",
+  // Availability conflicts and their proposals (ADR-0079): machine state written only by
+  // `app/utils/availabilityFixCommit.ts`. Internal, like `mcpProposal`.
+  "availabilityConflict",
+  // Jóvenes' meetings (ADR-0081): dotted ids, read only through `ministryEventReads.ts` and
+  // written only by `ministryEventCommit.ts`, whose audience rules a Studio edit would bypass.
+  "ministryEvent",
 ] as const;
 
 export type ProtectedStudioType = (typeof PROTECTED_STUDIO_TYPES)[number];
@@ -187,9 +197,13 @@ export const INTERNAL_STUDIO_TYPES = [
   "fairnessMonth",
   "mcpOauthGrant",
   "mcpOauthCodeRedemption",
+  "appAuthGrant",
+  "appAuthCodeRedemption",
   "calendarFeed",
   "adminChatUsage",
   "mcpProposal",
+  "availabilityConflict",
+  "ministryEvent",
 ] as const;
 
 /**
@@ -272,6 +286,7 @@ export const INTERNAL_STUDIO_FIELDS: Readonly<Record<string, readonly string[]>>
     "sub",
     "clientHash",
     "origin",
+    "client",
     "createdAt",
     "lastRefreshAt",
     "currentRefreshJti",
@@ -280,6 +295,21 @@ export const INTERNAL_STUDIO_FIELDS: Readonly<Record<string, readonly string[]>>
     "revokedReason",
   ],
   mcpOauthCodeRedemption: ["redeemedAt"],
+  // Every field an app sign-in type may carry — written only by `app/appAuth/grantStore.ts`,
+  // mirroring `APP_GRANT_FIELDS` in `app/appAuth/documentTypes.ts` (pinned by its test).
+  appAuthGrant: [
+    "sub",
+    "clientId",
+    "platform",
+    "origin",
+    "createdAt",
+    "lastRefreshAt",
+    "currentRefreshJti",
+    "revoked",
+    "revokedAt",
+    "revokedReason",
+  ],
+  appAuthCodeRedemption: ["redeemedAt"],
   calendarFeed: ["member", "generation", "rotatedAt"],
   adminChatUsage: ["member", "month", "spentMicroUsd", "questions", "updatedAt"],
   // Every field an `mcpProposal` may carry — written only by
@@ -300,6 +330,41 @@ export const INTERNAL_STUDIO_FIELDS: Readonly<Record<string, readonly string[]>>
     "payload",
     "digest",
     "state",
+  ],
+  // Written only by `app/utils/availabilityFixCommit.ts` (ADR-0079).
+  availabilityConflict: [
+    "roleId",
+    "memberId",
+    "date",
+    "serviceKind",
+    "published",
+    "status",
+    "seats",
+    "reason",
+    "eventSeq",
+    "notifiedSeq",
+    "firstSeenAt",
+    "updatedAt",
+    "checkedAt",
+    "appliedBy",
+    "waived",
+    "trigger",
+  ],
+  // Written only by `app/utils/ministryEventCommit.ts` (ADR-0081).
+  ministryEvent: [
+    "ministry",
+    "audience",
+    "kind",
+    "date",
+    "time",
+    "arrival",
+    "title",
+    "place",
+    "seats",
+    "program",
+    "notes",
+    "published",
+    "createdBy",
   ],
 });
 
@@ -559,8 +624,12 @@ export const PROTECTED_STUDIO_TITLES: Readonly<Record<ProtectedStudioType, strin
   kidsSchedule: "Kids — Roles del domingo (solo lectura)",
   mcpOauthGrant: "MCP OAuth — Concesiones (solo lectura)",
   mcpOauthCodeRedemption: "MCP OAuth — Códigos canjeados (solo lectura)",
+  appAuthGrant: "App — Sesiones (solo lectura)",
+  appAuthCodeRedemption: "App — Códigos canjeados (solo lectura)",
   calendarFeed: "Enlaces de calendario (solo lectura)",
   adminChatUsage: "Asistente — Gasto por admin (solo lectura)",
   mcpProposal: "MCP — Propuestas de mes (solo lectura)",
   serviceThread: "Mensajes del servicio (solo lectura)",
+  availabilityConflict: "Conflictos de disponibilidad (solo lectura)",
+  ministryEvent: "Reuniones de Jóvenes (solo lectura)",
 });

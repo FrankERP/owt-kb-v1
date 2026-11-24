@@ -30,6 +30,10 @@ import {
   type RoleCreatePayload,
 } from "./roleCreationReceipt";
 import { ROLE_TARGET_LOCK_TYPE, roleTargetLockId } from "./roleTargetLock";
+import { normalizeSeats, type NormalizedSeats } from "./roleSeats";
+
+export { normalizeSeats };
+export type { NormalizedFohSlot, NormalizedInstrumentSlot, NormalizedSeats } from "./roleSeats";
 
 function isObj(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === "object";
@@ -77,64 +81,9 @@ export function isRevisionString(value: unknown): value is string {
 }
 
 // ── Normalized seats (stored order preserved) ───────────────────────────────
-
-export interface NormalizedInstrumentSlot {
-  instrument: string;
-  personId: string;
-}
-export interface NormalizedFohSlot {
-  role: string;
-  personId: string;
-}
-
-export interface NormalizedSeats {
-  leads: string[];
-  bgvs: string[];
-  chorus: string[];
-  instruments: NormalizedInstrumentSlot[];
-  foh: NormalizedFohSlot[];
-}
-
-function normalizeRefs(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter(nonEmptyString);
-}
-
-// `normalizeLabel` is imported from `@/app/utils/normalizeLabel` — one
-// definition shared with `roleCreationReceipt` (which fingerprints against it),
-// `roleWriteOps` (which filters special occupancy by it) and the client planner
-// grid (which keys a special's collision check by it). It used to be
-// hand-copied here.
-
-/**
- * Seats in the ORDER the request supplied them, with blanks and malformed slots
- * dropped. This is what is stored; `canonicalizeCreatePayload` independently
- * sorts for the fingerprint.
- */
-export function normalizeSeats(payload: unknown): NormalizedSeats {
-  const doc = isObj(payload) ? payload : {};
-  const instruments: NormalizedInstrumentSlot[] = [];
-  for (const item of Array.isArray(doc.instruments) ? doc.instruments : []) {
-    if (!isObj(item)) continue;
-    const instrument = normalizeLabel(item.instrument);
-    if (!instrument || !nonEmptyString(item.personId)) continue;
-    instruments.push({ instrument, personId: item.personId });
-  }
-  const foh: NormalizedFohSlot[] = [];
-  for (const item of Array.isArray(doc.foh) ? doc.foh : []) {
-    if (!isObj(item)) continue;
-    const role = normalizeLabel(item.role);
-    if (!role || !nonEmptyString(item.personId)) continue;
-    foh.push({ role, personId: item.personId });
-  }
-  return {
-    leads: normalizeRefs(doc.leads),
-    bgvs: normalizeRefs(doc.bgvs),
-    chorus: normalizeRefs(doc.chorus),
-    instruments,
-    foh,
-  };
-}
+// `NormalizedSeats` and `normalizeSeats` live in `roleSeats.ts` (client-safe, no
+// `node:crypto`) so the month confirm's pre-check can read seats the server's way;
+// re-exported here for the writers.
 
 /** Every assignee across all five seat paths, in stored order, de-duplicated. */
 export function seatAssignees(seats: NormalizedSeats): string[] {
