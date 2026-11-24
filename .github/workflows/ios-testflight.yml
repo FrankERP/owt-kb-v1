@@ -2,14 +2,19 @@
 # Run by hand only: Actions -> «iOS TestFlight» -> Run workflow, from main. Nothing triggers it
 # on a push, because every upload is a build testers receive.
 #
-# Signing is Xcode's automatic signing driven by an App Store Connect API key (three repository
-# secrets, docs/SECRETS.md): `-allowProvisioningUpdates` lets Xcode create the certificate and the
-# provisioning profile it needs, and the export signs in the cloud and uploads. That is why the key
-# must have the Admin role: an App Manager key cannot create a distribution certificate.
+# Signing is Xcode's automatic signing driven by an App Store Connect API key (docs/SECRETS.md):
+# `-allowProvisioningUpdates` lets Xcode create the certificate and the provisioning profile it
+# needs, and the export signs in the cloud and uploads. That is why the key must have the Admin
+# role: an App Manager key cannot create a distribution certificate.
 #
-# The build number is this workflow's run number, so every upload is higher than the last one
-# (App Store Connect refuses a repeated number). The version shown to testers is project.yml's
-# MARKETING_VERSION. Not part of ci.yml's `gates`, like ios.yml (docs/CI.md).
+# The key's three secrets live in the `testflight` ENVIRONMENT, not the repository: the environment
+# admits only `main`, so a workflow pushed on any other branch cannot read an Admin key. The
+# `if:` below only skips a run started elsewhere; the environment is the boundary.
+#
+# Build number = "<run number>.<attempt>" (project.yml maps CFBundleVersion to it), so every upload,
+# a re-run included, is higher than the last: App Store Connect refuses a repeated number. The
+# version shown to testers is project.yml's MARKETING_VERSION. Built with Xcode 26 because App
+# Store Connect refuses an older SDK. Not part of ci.yml's `gates`, like ios.yml (docs/CI.md).
 name: iOS TestFlight
 
 on:
@@ -25,6 +30,7 @@ permissions:
 jobs:
   upload:
     if: github.ref == 'refs/heads/main'
+    environment: testflight
     runs-on: macos-15
     timeout-minutes: 45
     env:
@@ -32,6 +38,16 @@ jobs:
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
     steps:
       - uses: actions/checkout@v4
+      - name: Use the newest Xcode 26
+        run: |
+          xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -vi beta | sort -V | tail -n 1)
+          if [ -z "$xcode" ]; then
+            echo "::error::No Xcode 26 on this runner; App Store Connect refuses builds from an older SDK."
+            ls -d /Applications/Xcode*.app
+            exit 1
+          fi
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate the Xcode project
@@ -42,7 +58,7 @@ jobs:
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
         run: |
           if [ -z "$ASC_KEY_P8" ] || [ -z "$ASC_KEY_ID" ] || [ -z "$ASC_ISSUER_ID" ]; then
-            echo "::error::ASC_KEY_ID, ASC_ISSUER_ID and ASC_KEY_P8 must be repository secrets (docs/SECRETS.md)."
+            echo "::error::ASC_KEY_ID, ASC_ISSUER_ID and ASC_KEY_P8 must be secrets of the testflight environment (docs/SECRETS.md)."
             exit 1
           fi
           key="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
@@ -57,7 +73,7 @@ jobs:
             -destination "generic/platform=iOS" -archivePath "$RUNNER_TEMP/Backstage.xcarchive" \
             -allowProvisioningUpdates -authenticationKeyPath "$ASC_KEY_PATH" \
             -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" > archive.log 2>&1
+            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER.$GITHUB_RUN_ATTEMPT" > archive.log 2>&1
           status=$?
           grep -E "error:|warning: .*(sign|provision)|\*\* " archive.log
           if [ "$status" -ne 0 ]; then tail -n 80 archive.log; fi

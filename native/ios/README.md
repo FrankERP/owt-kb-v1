@@ -24,13 +24,24 @@ Simulator, on every change under `native/ios/`.
 - **Debug** talks to `http://localhost:3000` (`next dev` with `APP_AUTH_SECRET` in `.env.local`) and
   signs in through the private scheme `app.vercel.owt-backstage:` — the only origin where the
   server accepts it.
-- **TestFlight**: Actions → «iOS TestFlight» → Run workflow on `main`
-  (`.github/workflows/ios-testflight.yml`, `ExportOptions.plist`). It needs the App Store Connect key
-  as the `ASC_*` repository secrets ([`docs/SECRETS.md`](../../docs/SECRETS.md)); the build number is
-  the run number, the version is `MARKETING_VERSION` in `project.yml`.
 - **Release** (TestFlight, App Store) talks to production and signs in through the verified
   `https` callback `/app/callback/ios`, which needs the Team ID in the site's
   `apple-app-site-association` and the Associated Domains capability on the App ID.
+
+## TestFlight
+
+Actions → «iOS TestFlight» → Run workflow on `main` (`.github/workflows/ios-testflight.yml`,
+`ExportOptions.plist`). Built with Xcode 26; the version is `MARKETING_VERSION` in `project.yml`, the
+build number is `<run number>.<attempt>`. Before the first run:
+
+1. The App ID `com.owtBackstage.app` is registered (Certificates, IDs & Profiles) with Associated Domains.
+2. App Store Connect has the app record for that bundle id (Apps → + → New App, iOS).
+3. The App Store Connect key (Admin) is in the `testflight` environment
+   ([`docs/SECRETS.md`](../../docs/SECRETS.md)).
+
+Automatic signing archives with a development profile first; if the run says the team has no
+devices, register one iPhone under Devices and run it again. Each fresh runner may create a new
+development certificate: look at Certificates after the first runs and revoke the extras.
 
 ## Rules the code keeps (MOBILE.md)
 
