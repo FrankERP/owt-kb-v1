@@ -137,7 +137,9 @@ In Xcode: select the project target → Signing & Capabilities → check "Automa
 signing" → select your Apple Developer team.
 
 ### Ship to testers
-- **iOS:** Xcode → Product → Archive → Distribute → TestFlight.
+- **iOS:** the Capacitor wrap is NOT shipped: the native app (`native/ios`) took over its bundle id.
+  TestFlight builds come from Actions → «iOS TestFlight» (`.github/workflows/ios-testflight.yml`,
+  `ASC_*` secrets in `docs/SECRETS.md`).
 - **Android:** Android Studio → Build → Generate Signed Bundle (`.aab`) → upload to Play Console →
   Internal testing track.
 

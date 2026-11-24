@@ -4,8 +4,9 @@
 #
 # Path-scoped on purpose: it runs only when the app or this file changes. It is NOT part of
 # ci.yml's `gates` (main's one required check), because a web change must never wait on a
-# macOS runner, and a red iOS build must never block a web hotfix. TestFlight uploads are a
-# separate, later job that needs the App Store Connect key (docs/SECRETS.md).
+# macOS runner, and a red iOS build must never block a web hotfix. TestFlight uploads are
+# ios-testflight.yml, run by hand. Both use the newest Xcode 26 on the runner, so the tests compile
+# with the same SDK the upload does.
 name: iOS
 
 on:
@@ -32,6 +33,16 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+      - name: Use the newest Xcode 26
+        run: |
+          xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -vi beta | sort -V | tail -n 1)
+          if [ -z "$xcode" ]; then
+            echo "::error::No Xcode 26 on this runner; App Store Connect refuses builds from an older SDK."
+            ls -d /Applications/Xcode*.app
+            exit 1
+          fi
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate the Xcode project

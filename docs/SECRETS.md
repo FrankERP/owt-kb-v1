@@ -572,6 +572,44 @@ again. Nothing else in the app reads this variable.
 
 ---
 
+## `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` (GitHub `testflight` environment — the App Store Connect API key)
+
+**Needed in: GitHub Actions only, as secrets of the `testflight` ENVIRONMENT** (Settings →
+Environments → `testflight`, «Deployment branches and tags» → **Selected branches and tags** →
+`main` only; not «Protected branches», which would also admit `preview` if it is ever protected), read by
+`.github/workflows/ios-testflight.yml`. **Never as repository secrets:** anyone (or any session)
+that can push a branch could add a workflow there that reads a repository secret; an environment
+limited to `main` refuses a job from any other ref. **Not needed in:** Vercel, GCF, the app itself, a
+cloud session, `.env.local`.
+
+**Status: NOT SET yet** (2026-11-24). Frank creates the key and enters the three secrets himself; the
+`.p8` never passes through a chat or a session. A required reviewer on the environment is optional;
+if one is set, only that person approves a run (a session never approves, rejects or bypasses it).
+
+**Purpose.** Lets the TestFlight workflow sign and upload the iPhone app with Xcode's automatic
+(cloud) signing: `-allowProvisioningUpdates` creates the certificates and provisioning profiles, and
+`xcodebuild -exportArchive` uploads the build. The workflow writes the key to `$RUNNER_TEMP` and
+deletes it at the end, even on failure.
+
+**Where the values come from.** App Store Connect → ••• → Users and Access → Integrations → App Store
+Connect API → Team Keys → Generate API Key, role **Admin** (an App Manager key cannot create a
+distribution certificate, so signing fails). The first key needs the Account Holder to request API
+access once. `ASC_KEY_ID` is the key's row, `ASC_ISSUER_ID` is shown above the table, `ASC_KEY_P8` is
+the whole downloaded `AuthKey_<id>.p8` including the `BEGIN`/`END` lines. Apple lets the `.p8` be
+downloaded ONCE.
+
+**How to rotate.** Generate a new key, replace **all three** secrets before the next run (a run
+between them pairs one key's id with the other's `.p8` and fails), then **revoke** the old key on the
+same page. Revoke at once if the `.p8` was ever shown or sent anywhere; after a leak also revoke the
+certificates it created (Certificates, IDs & Profiles → Certificates), which revoking the key does not.
+
+**Blast radius / what breaks mid-rotation.** Only TestFlight uploads: a run between revoking the old
+key and saving the new secrets fails to sign. The app on testers' phones, the web and the server are
+untouched. A leaked Admin key can upload and submit builds, manage the account's apps, users,
+certificates and profiles; that is why it lives only in an environment limited to `main`.
+
+---
+
 ## `APP_AUTH_DISABLED`
 
 **Needed in: Vercel production and preview, ONLY when switching the native-app sign-in off — leave

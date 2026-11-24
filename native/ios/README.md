@@ -28,6 +28,21 @@ Simulator, on every change under `native/ios/`.
   `https` callback `/app/callback/ios`, which needs the Team ID in the site's
   `apple-app-site-association` and the Associated Domains capability on the App ID.
 
+## TestFlight
+
+Actions → «iOS TestFlight» → Run workflow on `main` (`.github/workflows/ios-testflight.yml`,
+`ExportOptions.plist`). Built with Xcode 26; the version is `MARKETING_VERSION` in `project.yml`, the
+build number is `<run number>.<attempt>`. Before the first run:
+
+1. The App ID `com.owtBackstage.app` is registered (Certificates, IDs & Profiles) with Associated Domains.
+2. App Store Connect has the app record for that bundle id (Apps → + → New App, iOS).
+3. The App Store Connect key (Admin) is in the `testflight` environment
+   ([`docs/SECRETS.md`](../../docs/SECRETS.md)).
+
+Automatic signing archives with a development profile first; if the run says the team has no
+devices, register one iPhone under Devices and run it again. Each fresh runner may create a new
+development certificate: look at Certificates after the first runs and revoke the extras.
+
 ## Rules the code keeps (MOBILE.md)
 
 - A callback is redeemed only with the pending `state` AND the server's `iss`.

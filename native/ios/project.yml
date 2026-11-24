@@ -33,6 +33,10 @@ targets:
       path: Support/Info.plist
       properties:
         CFBundleDisplayName: Backstage
+        # XcodeGen writes literal "1.0" and "1" unless told otherwise: map them to the build
+        # settings so MARKETING_VERSION and the TestFlight run's build number reach the bundle.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDevelopmentRegion: es
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
