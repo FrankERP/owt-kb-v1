@@ -1,7 +1,9 @@
 // The emails a Jóvenes meeting sends (ADR-0089; plan
 // `docs/superpowers/plans/2026-11-17-jovenes-meeting-parts.md` U5): «Te toca» to a person a write
 // assigns, the music request (or its withdrawal) to whoever arranges the worship team, and the
-// reminder two weeks and one week ahead to whoever still owes something (the ADR's addendum).
+// reminder two weeks and one week ahead to whoever still owes something (the ADR's addendum); and
+// for a group's classes, the change of someone's classes and the reminder before one (the
+// addendum of 2026-11-25).
 //
 // Builders with no I/O of their own: names arrive resolved, everything is escaped here, and the palette is the shared
 // LIGHT email shell (never `brand.css` — CLAUDE.md, «Email templates are LIGHT on purpose»).
@@ -14,6 +16,8 @@ import { dayWords } from "./jovenesEventView";
 import { joinNames, meetingPath, type PartGap } from "./jovenesPartView";
 import { MUSIC_WORDS, PART_ASK, PLATICA_SEAT, partSpec, type PartId } from "./ministryParts";
 import type { AssignedRole, MusicPart, NoticeMeeting } from "./ministryEventNotices";
+import type { ClassChange, ClassLine } from "./ministryLessonNotices";
+import { MINISTRIES } from "@/app/ministries";
 
 /** The meeting's display fields, as the writer hands them over with a notice. */
 export type EmailMeeting = NoticeMeeting;
@@ -240,4 +244,109 @@ export function buildPartReminderEmail(o: {
     subject,
     html: shell(header + intro + fill + assign + cta(o.link, o.fill.length ? "Llenar mi parte →" : "Ver la reunión →"), o.settingsLink, SHELL),
   };
+}
+
+// ── A group's classes (ADR-0089, addendum of 2026-11-25) ────────────────────
+
+/** A group's name as the emails say it: the registry's constant, never typed text. */
+export function groupWords(group: string): string {
+  return MINISTRIES.jovenes.groups.find((g) => g.id === group)?.name ?? "tu grupo";
+}
+
+/** «domingo 29 de noviembre · 11:40 · Oasis Tepepan». */
+function classWhen(c: ClassLine): string {
+  return [dayWords(c.date), c.time, c.place].filter(Boolean).join(" · ");
+}
+
+const CHANGE_TAG: Record<ClassChange["kind"], string> = { added: "TE TOCA", changed: "CAMBIÓ", removed: "YA NO TE TOCA" };
+
+function changeRow(c: ClassChange): string {
+  const line = c.kind === "removed" ? c.was : c.now;
+  const head =
+    `<p style="margin:0 0 4px;font:700 12px system-ui,sans-serif;letter-spacing:.08em;color:${c.kind === "removed" ? C.muted : C.accent}">${CHANGE_TAG[c.kind]}</p>` +
+    `<p style="${P}"><strong style="color:${C.ink}">${esc(line.label)}</strong> <span style="color:${C.muted}">· ${esc(line.series)}</span></p>`;
+  let detail = `<p style="${P}${c.kind === "removed" ? `;color:${C.muted};text-decoration:line-through` : ""}">${esc(classWhen(line))}</p>`;
+  if (c.kind === "changed") {
+    const before: string[] = [];
+    if (c.was.group !== c.now.group) before.push(groupWords(c.was.group));
+    if (c.was.series !== c.now.series) before.push(c.was.series);
+    if (c.was.label !== c.now.label) before.push(c.was.label);
+    if (c.was.date !== c.now.date || c.was.time !== c.now.time || c.was.place !== c.now.place) before.push(classWhen(c.was));
+    if (before.length) detail += `<p style="margin:4px 0 0;font:13px system-ui,sans-serif;color:${C.muted}">Antes: ${esc(before.join(" · "))}</p>`;
+  }
+  return tr(td(head + detail, { bg: C.surface, style: `padding:12px 24px;border-top:1px solid ${C.panel}` }));
+}
+
+/**
+ * A change to someone's classes: one email per person per write, listing every class of theirs
+ * the write gave them, moved or took away. `link`: the page of their first class still on, else
+ * the calendar (absolute). The subject is constants plus a date or a group name
+ * (`docs/NOTIFICATIONS.md`): a class's title is typed text, so only the body names it.
+ */
+export function buildClassChangeEmail(o: {
+  name: string;
+  group: string;
+  changes: readonly ClassChange[];
+  link: string;
+  settingsLink: string;
+}): { subject: string; html: string } {
+  const group = groupWords(o.group);
+  const only = o.changes.length === 1 ? o.changes[0] : null;
+  const subject =
+    only?.kind === "added"
+      ? `Te toca dar la clase — ${dayWords(only.now.date)}`
+      : only?.kind === "removed"
+        ? `Ya no te toca dar la clase — ${dayWords(only.was.date)}`
+        : `Cambió tu rol de clases — ${group}`;
+  const first = (o.name || "").trim().split(/\s+/)[0] ?? "";
+  const greeting = first ? `Hola, ${esc(first)}.` : "Hola.";
+  const header = tr(td(
+    `<span style="font:700 15px system-ui,sans-serif;color:${C.ink}">${only?.kind === "added" ? "Te toca dar la clase" : "Cambió tu rol de clases"}</span>`,
+    { style: "padding:18px 24px 8px" },
+  ));
+  const intro = tr(td(
+    `<p style="${P}">${greeting} ${only?.kind === "added" ? "Te asignaron una clase" : "Hubo cambios en tus clases"} de <strong style="color:${C.ink}">${esc(group)}</strong>:</p>`,
+    { style: "padding:0 24px 14px" },
+  ));
+  const on = o.changes.some((c) => c.kind !== "removed");
+  return {
+    subject,
+    html: shell(header + intro + o.changes.map(changeRow).join("") + cta(o.link, on ? "Ver mi clase →" : "Ver el calendario →"), o.settingsLink, SHELL),
+  };
+}
+
+const CLASS_AHEAD: Record<7 | 2, string> = { 7: "Falta una semana para tu clase", 2: "Faltan dos días para tu clase" };
+
+/**
+ * The reminder before a class, to whoever gives it: a week and two days ahead (the addendum).
+ * `notes`: the class's own notes («Cierre libro»), typed by whoever planned it, shown as text.
+ */
+export function buildClassReminderEmail(o: {
+  name: string;
+  line: ClassLine;
+  notes: string | null;
+  days: 7 | 2;
+  partnerNames: string[];
+  link: string;
+  settingsLink: string;
+}): { subject: string; html: string } {
+  const when = dayWords(o.line.date);
+  const subject = `${CLASS_AHEAD[o.days]} — ${when}`;
+  const first = (o.name || "").trim().split(/\s+/)[0] ?? "";
+  const greeting = first ? `Hola, ${esc(first)}.` : "Hola.";
+  const header = tr(td(`<span style="font:700 15px system-ui,sans-serif;color:${C.ink}">${CLASS_AHEAD[o.days]}</span>`, { style: "padding:18px 24px 8px" }));
+  const partners = o.partnerNames.length ? ` junto con ${esc(joinNames(o.partnerNames))}` : "";
+  const intro = tr(td(
+    `<p style="${P};margin:0 0 6px">${greeting} Te toca dar <strong style="color:${C.accent}">${esc(o.line.label)}</strong> de «${esc(o.line.series)}» en <strong style="color:${C.ink}">${esc(groupWords(o.line.group))}</strong>${partners}.</p>` +
+    `<p style="margin:0;font:13px system-ui,sans-serif;color:${C.muted}">${esc(classWhen(o.line))}</p>`,
+    { style: "padding:0 24px 14px" },
+  ));
+  const notes = o.notes?.trim()
+    ? tr(td(
+      `<p style="margin:0 0 6px;font:700 12px system-ui,sans-serif;letter-spacing:.08em;color:${C.muted}">NOTAS</p>` +
+      `<p style="${P};white-space:pre-wrap">${esc(o.notes.trim())}</p>`,
+      { bg: C.surface, style: "padding:14px 24px" },
+    ))
+    : "";
+  return { subject, html: shell(header + intro + notes + cta(o.link, "Ver mi clase →"), o.settingsLink, SHELL) };
 }

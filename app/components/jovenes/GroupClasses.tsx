@@ -211,7 +211,8 @@ export default function GroupClasses({
     setError(null);
     try {
       for (let i = created; i < rows.length; i++) {
-        const r = await sendEventWrite("POST", eventsUrl(MINISTRY), { ...classBody(rows[i]), token: tokens[i] });
+        // `announce: false`: a whole book announces nothing class by class; the reminders tell each holder.
+        const r = await sendEventWrite("POST", eventsUrl(MINISTRY), { ...classBody(rows[i]), token: tokens[i], announce: false });
         if (!r.ok && !(r.stale && r.message === "Esta reunión ya estaba creada.")) {
           setDialog((d) => (d?.kind === "book" ? { ...d, created } : d));
           return setError(`Se crearon ${created} de ${rows.length}. ${r.message}`);

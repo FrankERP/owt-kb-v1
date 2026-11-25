@@ -7,21 +7,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { evaluate, parse } from "groq-js";
 
 vi.mock("server-only", () => ({}));
-const h = vi.hoisted(() => ({ fetch: vi.fn(), sendEmail: vi.fn(), readAnnounced: vi.fn() }));
+const h = vi.hoisted(() => ({ fetch: vi.fn(), sendEmail: vi.fn(), readAnnounced: vi.fn(), readEvents: vi.fn() }));
 vi.mock("@/sanity/lib/operationalClient", () => ({ operationalClient: { fetch: h.fetch } }));
 vi.mock("@/sanity/lib/serverClient", () => ({ serverClient: { fetch: vi.fn() }, writeClient: {} }));
 vi.mock("../email", () => ({ sendEmail: h.sendEmail, SEND_CONCURRENCY: 8, SEND_TIMEOUT_MS: 20_000 }));
 vi.mock("../ministryEventReads", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../ministryEventReads")>()),
   readAnnouncedMeetings: h.readAnnounced,
+  readMinistryEvents: h.readEvents,
 }));
 
 import { partPending, partViews } from "../jovenesPartView";
 import type { MinistryEventLine, MinistryEventSeat, MinistryEventView } from "../ministryEventReads";
 import { NOTICE_PEOPLE_QUERY } from "../ministryEventNotify";
 import {
+  JOVENES_PEOPLE_QUERY,
   REMINDER_STEP_DEADLINE_MS,
+  classReminderDates,
+  classesToRemind,
   meetingReminders,
+  planClassReminderEmails,
   planReminderEmails,
   reminderDates,
   sendMinistryEventReminders,
@@ -338,8 +343,11 @@ describe("sendMinistryEventReminders", () => {
     h.fetch.mockReset();
     h.sendEmail.mockReset();
     h.readAnnounced.mockReset();
+    h.readEvents.mockReset();
+    h.readEvents.mockResolvedValue([]);
     h.sendEmail.mockResolvedValue({ ok: true });
-    h.fetch.mockImplementation(async (_q: string, p: { ids: string[] }) => readPeople(PEOPLE, p.ids));
+    // The class step reads Jóvenes' people first; by default nobody, so the meeting tests stay as they were.
+    h.fetch.mockImplementation(async (q: string, p: { ids: string[] }) => (q === JOVENES_PEOPLE_QUERY ? [] : readPeople(PEOPLE, p.ids)));
     vi.stubEnv("EMAIL_ALLOWLIST", "*");
     vi.stubEnv("EMAIL_REDIRECT_TO", "");
     log = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -372,14 +380,15 @@ describe("sendMinistryEventReminders", () => {
   it("reads only the people the reminders name", async () => {
     h.readAnnounced.mockResolvedValue([FULL]);
     await sendMinistryEventReminders(NOW);
-    expect(h.fetch).toHaveBeenCalledTimes(1);
-    expect((h.fetch.mock.calls[0][1] as { ids: string[] }).ids.sort()).toEqual(["andy", "gaby", "jacob", "leo", "sofi"]);
+    const notice = h.fetch.mock.calls.filter((c) => c[0] === NOTICE_PEOPLE_QUERY);
+    expect(notice).toHaveLength(1);
+    expect((notice[0][1] as { ids: string[] }).ids.sort()).toEqual(["andy", "gaby", "jacob", "leo", "sofi"]);
   });
 
   it("no meeting on those days, or nothing owed: no people read, no email", async () => {
     h.readAnnounced.mockResolvedValue([]);
     expect(await sendMinistryEventReminders(NOW)).toMatchObject({ ran: true, meetings: 0, planned: 0, emailed: 0 });
-    expect(h.fetch).not.toHaveBeenCalled();
+    expect(h.fetch.mock.calls.some((c) => c[0] === NOTICE_PEOPLE_QUERY)).toBe(false);
     expect(h.sendEmail).not.toHaveBeenCalled();
   });
 
@@ -465,5 +474,165 @@ describe("sendMinistryEventReminders", () => {
     });
     expect(await sendMinistryEventReminders(NOW)).toMatchObject({ planned: 10, emailed: 10 });
     expect(widest).toBe(8);
+  });
+});
+
+// ── A group's classes (addendum of 2026-11-25) ──────────────────────────────
+
+describe("class reminders", () => {
+  const ON = { kind: "groups" as const, groups: ["otro-nivel"] };
+  const cls = (over: Partial<MinistryEventView> = {}): MinistryEventView =>
+    meeting({
+      _id: "ministryEvent.00000000-0000-4000-8000-0000000000c7",
+      audience: ON,
+      kind: "group",
+      date: "2026-11-29",
+      time: "11:40",
+      place: "Oasis Tepepan",
+      title: "Cap 7",
+      lesson: { series: "El Caos Dentro de Mi", track: "libro", done: false },
+      seats: [seat("encargado", "jacob")],
+      ...over,
+    });
+  const DAYS = new Map([["2026-11-29", 7 as const], ["2026-11-24", 2 as const]]);
+
+  it("asks for the days a week and two days ahead, in CDMX calendar days", () => {
+    expect(classReminderDates("2026-11-22")).toEqual([{ date: "2026-11-29", days: 7 }, { date: "2026-11-24", days: 2 }]);
+    expect(classReminderDates("2026-12-30")).toEqual([{ date: "2027-01-06", days: 7 }, { date: "2027-01-01", days: 2 }]);
+    expect(classReminderDates("nope")).toEqual([]);
+  });
+
+  it("reminds only a published real class of one's own, on an exact reminded day", () => {
+    const mine = classesToRemind([cls()], "jacob", DAYS);
+    expect(mine).toEqual([
+      {
+        line: { id: cls()._id, group: "otro-nivel", series: "El Caos Dentro de Mi", label: "Cap 7", date: "2026-11-29", time: "11:40", place: "Oasis Tepepan" },
+        notes: null,
+        days: 7,
+        partnerNames: [],
+      },
+    ]);
+    expect(classesToRemind([cls()], "andy", DAYS)).toEqual([]);
+    expect(classesToRemind([cls({ date: "2026-11-28" })], "jacob", DAYS)).toEqual([]);
+    expect(classesToRemind([cls({ published: false })], "jacob", DAYS)).toEqual([]);
+    expect(classesToRemind([cls({ lesson: { series: "X", track: "sin_clase", done: false } })], "jacob", DAYS)).toEqual([]);
+    // A group's meeting that is not a class, and a whole-ministry meeting, are not classes.
+    expect(classesToRemind([cls({ lesson: null })], "jacob", DAYS)).toEqual([]);
+    expect(classesToRemind([cls({ audience: { kind: "ministry" } })], "jacob", DAYS)).toEqual([]);
+    // A «Corazón» class with no title says its track; a co-holder is named.
+    const heart = classesToRemind(
+      [cls({ title: null, lesson: { series: "S", track: "corazon", done: false }, seats: [seat("encargado", "jacob"), seat("encargado", null, "Todos")] })],
+      "jacob",
+      DAYS,
+    );
+    expect(heart.map((c) => [c.line.label, c.partnerNames])).toEqual([["Corazón", ["Todos"]]]);
+  });
+
+  it("writes one email per class to a holder who may be written to, with the class's notes", async () => {
+    const rows = await readPeople(PEOPLE);
+    const jacob = rows.find((p) => p._id === "jacob")!;
+    const out = planClassReminderEmails([{ person: jacob, events: [cls({ notes: "Cierre libro" }), cls({ _id: "ministryEvent.x2", date: "2026-11-24", title: "Cap 6" })] }], DAYS, env);
+    expect(out.map((p) => [p.memberId, p.email, p.subject])).toEqual([
+      ["jacob", "jacob@example.com", "Falta una semana para tu clase — domingo 29 de noviembre"],
+      ["jacob", "jacob@example.com", "Faltan dos días para tu clase — martes 24 de noviembre"],
+    ]);
+    expect(out[0].html).toContain("Cap 7");
+    expect(out[0].html).toContain("El Caos Dentro de Mi");
+    expect(out[0].html).toContain("Otro Nivel");
+    expect(out[0].html).toContain("Cierre libro");
+    expect(out[0].html).toContain("11:40 · Oasis Tepepan");
+    // «Asignaciones» off: nothing.
+    const off = { ...jacob, notifPrefs: { emailAssigned: false } };
+    expect(planClassReminderEmails([{ person: off, events: [cls()] }], DAYS, env)).toEqual([]);
+  });
+
+  it("the people query: active members of Jóvenes only, never a draft", async () => {
+    const docs = [
+      { _id: "a", _type: "teamMembers", ministries: ["jovenes"] },
+      { _id: "b", _type: "teamMembers", ministries: ["jovenes"], disabled: true },
+      { _id: "c", _type: "teamMembers", ministries: ["worship"] },
+      { _id: "drafts.d", _type: "teamMembers", ministries: ["jovenes"] },
+    ];
+    const value = await evaluate(parse(JOVENES_PEOPLE_QUERY), { dataset: docs });
+    expect(((await value.get()) as Array<{ _id: string }>).map((p) => p._id)).toEqual(["a"]);
+  });
+
+  describe("in the cron step", () => {
+    const NOW = new Date("2026-11-23T01:10:00Z"); // 19:10 CDMX, Sunday 2026-11-22
+    let log: ReturnType<typeof vi.spyOn>;
+    let error: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => {
+      h.fetch.mockReset();
+      h.sendEmail.mockReset();
+      h.readAnnounced.mockReset();
+      h.readEvents.mockReset();
+      h.readAnnounced.mockResolvedValue([]);
+      h.sendEmail.mockResolvedValue({ ok: true });
+      h.fetch.mockImplementation(async (q: string, p: { ids: string[] }) => readPeople(PEOPLE, q === JOVENES_PEOPLE_QUERY ? undefined : p.ids));
+      vi.stubEnv("EMAIL_ALLOWLIST", "*");
+      vi.stubEnv("EMAIL_REDIRECT_TO", "");
+      log = vi.spyOn(console, "log").mockImplementation(() => {});
+      error = vi.spyOn(console, "error").mockImplementation(() => {});
+    });
+    afterEach(() => {
+      vi.unstubAllEnvs();
+      log.mockRestore();
+      error.mockRestore();
+    });
+
+    it("reads each person's classes through THEIR OWN member read, and mails only their own", async () => {
+      h.readEvents.mockImplementation(async (_access: unknown, o: { me: string }) => (o.me === "jacob" ? [cls()] : []));
+      const report = await sendMinistryEventReminders(NOW);
+      expect(report).toMatchObject({ ran: true, planned: 1, classes: 1, emailed: 1 });
+      // Everyone who may be written to is read once, as themselves, over the two reminded days.
+      const calls = h.readEvents.mock.calls.map((c) => c[1] as { me: string; from: string; to: string; mode: string; ministry: string });
+      expect(calls.map((c) => c.me).sort()).toEqual(PEOPLE.map((p) => p._id).sort());
+      expect(calls.every((c) => c.from === "2026-11-24" && c.to === "2026-11-29" && c.mode === "member" && c.ministry === "jovenes")).toBe(true);
+      const access = h.readEvents.mock.calls.find((c) => (c[1] as { me: string }).me === "jacob")![0] as { groups?: unknown; ministries: string[] };
+      expect(access.ministries).toContain("jovenes");
+      expect(h.sendEmail.mock.calls.map((c) => (c[0] as { to: string; subject: string }).subject)).toEqual([
+        "Falta una semana para tu clase — domingo 29 de noviembre",
+      ]);
+    });
+
+    it("meeting reminders go out BEFORE any class is read; a slow class read stops between rounds", async () => {
+      h.readAnnounced.mockResolvedValue([meeting({ date: "2026-12-06", program: [line("oracion", "jacob")] })]);
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(NOW);
+      const order: string[] = [];
+      h.sendEmail.mockImplementation(async (m: { subject: string }) => {
+        order.push(`send:${m.subject.slice(0, 12)}`);
+        return { ok: true };
+      });
+      let reads = 0;
+      h.readEvents.mockImplementation(async (_a: unknown, o: { me: string }) => {
+        order.push("read");
+        // The first round of six reads takes 20 s: no second round may start.
+        if (++reads === 6) vi.setSystemTime(new Date(NOW.getTime() + 20_000));
+        return o.me === "jacob" ? [cls()] : [];
+      });
+      const report = await sendMinistryEventReminders(NOW);
+      expect(order[0]).toMatch(/^send:Recordatorio/);
+      expect(reads).toBe(6);
+      // Jacob was read in the first round, but no send fits any more: planned, skipped, logged.
+      expect(report).toMatchObject({ meetings: 1, emailed: 1 });
+      expect(error.mock.calls.some((c: unknown[]) => String(c[0]).includes("ministry_class_reminder_cut"))).toBe(true);
+      vi.useRealTimers();
+    });
+
+    it("no class is read at all when the meeting waves already used the step", async () => {
+      h.readAnnounced.mockResolvedValue([]);
+      const report = await sendMinistryEventReminders(NOW, { spentMs: REMINDER_STEP_DEADLINE_MS - 19_000 });
+      expect(h.readEvents).not.toHaveBeenCalled();
+      expect(report).toMatchObject({ planned: 0, classes: 0 });
+    });
+
+    it("a failed class read costs the meetings nothing", async () => {
+      h.readAnnounced.mockResolvedValue([meeting({ date: "2026-12-06", program: [line("oracion", "jacob")] })]);
+      h.readEvents.mockRejectedValue(new Error("no token"));
+      const report = await sendMinistryEventReminders(NOW);
+      expect(report).toMatchObject({ ran: true, meetings: 1, planned: 1, classes: 0, emailed: 1 });
+      expect(error.mock.calls.some((c: unknown[]) => String(c[0]).includes("ministry_class_reminder_failed"))).toBe(true);
+    });
   });
 });

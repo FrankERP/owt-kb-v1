@@ -21,12 +21,13 @@ import { operationalClient } from "@/sanity/lib/operationalClient";
 import { appBaseUrl, getAllowlist, isEmailAllowed } from "./assignmentEmail";
 import { SEND_CONCURRENCY, sendEmail } from "./email";
 import { accessFromDoc, type MemberAccessDoc } from "./memberAccess";
-import { isMinistryMember } from "./ministryAccess";
-import { buildAssignedEmail, buildMusicEmail, meetingPath } from "./ministryEventEmail";
+import { groupsIn, isMinistryMember } from "./ministryAccess";
+import { buildAssignedEmail, buildClassChangeEmail, buildMusicEmail, meetingPath } from "./ministryEventEmail";
 import { hasNotices, type EventNoticeEffects } from "./ministryEventNotices";
+import type { ClassChange, ClassNoticeEffects } from "./ministryLessonNotices";
 import { wantsNotification } from "./notifyPrefs";
 
-export type { EventNoticeEffects };
+export type { ClassNoticeEffects, EventNoticeEffects };
 
 export type PersonRow = MemberAccessDoc & { email?: unknown; notifPrefs?: unknown; name?: unknown };
 
@@ -115,6 +116,82 @@ export function planEventEmails(
 }
 
 /**
+ * Pure half of a CLASS write's emails (ADR-0089, addendum of 2026-11-25): one per person the
+ * notices name, given the people read. On top of `assignedAddress`, a class is a group's: each
+ * change reaches its holder only while they are, read NOW, in that class's group — whoever left
+ * the group hears nothing about its roster, not even «ya no te toca».
+ */
+export function planClassEmails(effects: ClassNoticeEffects, people: readonly PersonRow[], env: { baseUrl: string; allow: string[] }): PlannedEmail[] {
+  const byId = new Map(people.filter((p) => p && typeof p._id === "string").map((p) => [p._id, p]));
+  const settingsLink = `${env.baseUrl}/me/ajustes`;
+  const out: PlannedEmail[] = [];
+  for (const n of effects.notices) {
+    // The writer already left the actor out; said again here because this is the audience.
+    if (n.memberId === effects.actorId) continue;
+    const person = byId.get(n.memberId);
+    const email = assignedAddress(person, effects.ministry, env.allow);
+    if (!person || !email) continue;
+    const groups = groupsIn(accessFromDoc(person), effects.ministry);
+    const lineOf = (c: ClassChange) => (c.kind === "removed" ? c.was : c.now);
+    const changes = n.changes.filter((c) => groups.includes(lineOf(c).group));
+    if (changes.length === 0) continue;
+    const open = changes.find((c) => c.kind !== "removed");
+    const link = open ? `${env.baseUrl}${meetingPath(lineOf(open).id)}` : `${env.baseUrl}/jovenes/calendario`;
+    const { subject, html } = buildClassChangeEmail({ name: nameOf(person) ?? "", group: lineOf(changes[0]).group, changes, link, settingsLink });
+    out.push({ memberId: n.memberId, email, subject, html });
+  }
+  return out;
+}
+
+/**
+ * Send planned emails in waves as wide as the transport's pool (as the outbox sweeps): every email
+ * of a wave goes out at once, and none starts its 20 s timeout while still queued behind another.
+ * A failed send is logged under `failedEvent`, never retried. Answers how many went out.
+ */
+async function sendPlanned(planned: readonly PlannedEmail[], failedEvent: string): Promise<number> {
+  // Preview mail goes to one address (docs/SECRETS.md), like every other app email.
+  const redirectTo = process.env.EMAIL_REDIRECT_TO?.trim();
+  const results: PromiseSettledResult<{ ok: boolean; error?: string }>[] = [];
+  for (let i = 0; i < planned.length; i += SEND_CONCURRENCY) {
+    const wave = planned.slice(i, i + SEND_CONCURRENCY).map((p) =>
+      sendEmail({
+        to: redirectTo || p.email,
+        subject: redirectTo ? `[→ ${p.email}] ${p.subject}` : p.subject,
+        html: p.html,
+      }),
+    );
+    results.push(...(await Promise.allSettled(wave)));
+  }
+  let emailed = 0;
+  results.forEach((r, i) => {
+    if (r.status === "fulfilled" && r.value.ok) emailed++;
+    else {
+      const reason = r.status === "fulfilled" ? r.value.error : String(r.reason);
+      console.error(JSON.stringify({ event: failedEvent, member: planned[i].memberId, reason }));
+    }
+  });
+  return emailed;
+}
+
+/**
+ * A class write's emails: read the people it names, plan, send. Awaited inside `after()` by the
+ * routes that write classes; never throws. A «Recorrer» names one person per responsable, so this
+ * is one wave, sometimes two.
+ */
+export async function sendClassNotices(effects: ClassNoticeEffects | null | undefined): Promise<void> {
+  if (!effects || effects.notices.length === 0) return;
+  try {
+    const ids = [...new Set(effects.notices.map((n) => n.memberId))];
+    const people = await operationalClient.fetch<PersonRow[] | null>(NOTICE_PEOPLE_QUERY, { ids });
+    const planned = planClassEmails(effects, people ?? [], { baseUrl: appBaseUrl(), allow: getAllowlist() });
+    const emailed = await sendPlanned(planned, "ministry_class_notice_failed");
+    console.log(JSON.stringify({ event: "ministry_class_notices", planned: planned.length, emailed }));
+  } catch (err) {
+    console.error(JSON.stringify({ event: "ministry_class_notices_failed" }), err);
+  }
+}
+
+/**
  * Read the people, plan, send. Awaited inside `after()` so the function stays alive until the
  * sends settle; never throws.
  */
@@ -132,30 +209,8 @@ export async function sendMinistryEventNotices(effects: EventNoticeEffects | nul
       effects.music.length ? operationalClient.fetch<PersonRow[] | null>(MUSIC_AUDIENCE_QUERY) : Promise.resolve([]),
     ]);
     const planned = planEventEmails(effects, people ?? [], musicAudience ?? [], { baseUrl: appBaseUrl(), allow: getAllowlist() });
-    // Preview mail goes to one address (docs/SECRETS.md), like every other app email.
-    const redirectTo = process.env.EMAIL_REDIRECT_TO?.trim();
-    // In waves as wide as the transport's pool (as the outbox sweeps): every email of a wave goes
-    // out at once, and none starts its 20 s timeout while still queued behind another. A meeting
-    // names nine people at most in practice, so this is one wave, sometimes two.
-    const results: PromiseSettledResult<{ ok: boolean; error?: string }>[] = [];
-    for (let i = 0; i < planned.length; i += SEND_CONCURRENCY) {
-      const wave = planned.slice(i, i + SEND_CONCURRENCY).map((p) =>
-        sendEmail({
-          to: redirectTo || p.email,
-          subject: redirectTo ? `[→ ${p.email}] ${p.subject}` : p.subject,
-          html: p.html,
-        }),
-      );
-      results.push(...(await Promise.allSettled(wave)));
-    }
-    let emailed = 0;
-    results.forEach((r, i) => {
-      if (r.status === "fulfilled" && r.value.ok) emailed++;
-      else {
-        const reason = r.status === "fulfilled" ? r.value.error : String(r.reason);
-        console.error(JSON.stringify({ event: "ministry_event_notice_failed", member: planned[i].memberId, reason }));
-      }
-    });
+    // A meeting names nine people at most in practice, so this is one wave, sometimes two.
+    const emailed = await sendPlanned(planned, "ministry_event_notice_failed");
     console.log(JSON.stringify({ event: "ministry_event_notices", planned: planned.length, emailed }));
   } catch (err) {
     console.error(JSON.stringify({ event: "ministry_event_notices_failed" }), err);
