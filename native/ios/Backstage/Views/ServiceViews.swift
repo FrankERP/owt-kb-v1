@@ -44,34 +44,50 @@ struct DateLeaf: View {
     }
 }
 
-/// A seat's glyph (`SeatIcon`): the microphone of a voice, the keys, the guitar of the string
+/// A seat's glyph (`SeatIcon`): the web's own line icons (app/components/ui/icons.tsx), bundled
+/// as template SVGs — the microphone of a voice, the keys, the drum, the guitar of the string
 /// seats, the sliders of the booth; an unknown seat takes its section's glyph, else the note.
 enum SeatGlyph {
-    static func symbol(for seat: String, section: String? = nil) -> String {
+    static func asset(for seat: String, section: String? = nil) -> String {
         let key = seat.lowercased().trimmingCharacters(in: .whitespaces)
-        if key.hasPrefix("foh") { return "slider.horizontal.3" }
+        if key.hasPrefix("foh") { return "SeatSliders" }
         switch key {
-        case "lead", "bgv", "bgvs", "coro": return "mic"
-        case "keys": return "pianokeys"
-        case "drums": return "music.quarternote.3"
-        case "eg", "ag", "bass": return "guitars"
-        case "console": return "slider.horizontal.3"
+        case "lead", "bgv", "bgvs", "coro": return "SeatMic"
+        case "keys": return "SeatKeys"
+        case "drums": return "SeatDrum"
+        case "eg", "ag", "bass": return "SeatGuitar"
+        case "console": return "SeatSliders"
         default:
             switch section {
-            case "voces": return "mic"
-            case "banda": return "guitars"
-            case "cabina": return "slider.horizontal.3"
-            default: return "music.note"
+            case "voces": return "SeatMic"
+            case "banda": return "SeatGuitar"
+            case "cabina": return "SeatSliders"
+            default: return "SeatNote"
             }
         }
     }
 
     static func section(_ id: String) -> String {
         switch id {
-        case "voces": return "mic"
-        case "banda": return "guitars"
-        default: return "slider.horizontal.3"
+        case "voces": return "SeatMic"
+        case "banda": return "SeatGuitar"
+        default: return "SeatSliders"
         }
+    }
+}
+
+/// One of the web's line icons, tinted by the foreground style.
+struct LineIcon: View {
+    let name: String
+    var size: CGFloat = 14
+
+    var body: some View {
+        Image(name)
+            .renderingMode(.template)
+            .resizable()
+            .scaledToFit()
+            .frame(width: size, height: size)
+            .accessibilityHidden(true)
     }
 }
 
@@ -97,8 +113,7 @@ struct MineChip: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: SeatGlyph.symbol(for: seats.first ?? ""))
-                .font(.system(size: 10, weight: .semibold))
+            LineIcon(name: SeatGlyph.asset(for: seats.first ?? ""), size: 11)
             Text((seats.isEmpty ? "Te toca" : "Tú · \(seats.joined(separator: ", "))").uppercased())
                 .font(.bsLabel(10))
                 .tracking(1)
@@ -153,8 +168,7 @@ struct FaceView: View {
             .clipShape(Circle())
             .overlay(Circle().strokeBorder(mine ? BS.positive : BS.ink.opacity(0.10), lineWidth: mine ? 2 : 1))
             if let badge {
-                Image(systemName: badge)
-                    .font(.system(size: 9, weight: .semibold))
+                LineIcon(name: badge, size: 10)
                     .foregroundStyle(mine ? BS.positive : BS.inkMuted)
                     .frame(width: 18, height: 18)
                     .background(Circle().fill(BS.base))
@@ -626,8 +640,7 @@ private struct TeamSectionView: View {
                 withAnimation(.easeOut(duration: 0.25)) { isOpen.toggle() }
             } label: {
                 HStack(spacing: 12) {
-                    Image(systemName: SeatGlyph.section(section.id))
-                        .font(.system(size: 15))
+                    LineIcon(name: SeatGlyph.section(section.id), size: 16)
                         .foregroundStyle(BS.inkMuted)
                         .frame(width: 36, height: 36)
                         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(BS.ink.opacity(0.07)))
@@ -659,22 +672,16 @@ private struct TeamSectionView: View {
 
             if isOpen {
                 VStack(alignment: .leading, spacing: 8) {
-                    ForEach(groups, id: \.seat) { group in
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text(group.people.count > 1 ? "\(group.seat) · \(group.people.count)" : group.seat)
-                                .font(.bsBody(14))
-                                .foregroundStyle(BS.inkMuted)
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 12, alignment: .leading)], alignment: .leading, spacing: 12) {
-                                ForEach(Array(group.people.enumerated()), id: \.offset) { _, person in
-                                    PersonCell(person: person, section: section.id)
-                                }
+                    if section.id == "voces" {
+                        ForEach(groups, id: \.seat) { group in
+                            TeamBox(title: group.people.count > 1 ? "\(group.seat) · \(group.people.count)" : group.seat) {
+                                PeopleGrid(people: group.people, section: section.id, showSeat: false)
                             }
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.top, 8)
-                        .padding(.bottom, 12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(BS.ink.opacity(0.04)))
+                    } else {
+                        TeamBox(title: nil) {
+                            PeopleGrid(people: section.people, section: section.id, showSeat: true)
+                        }
                     }
                 }
                 .padding(.bottom, 8)
@@ -684,9 +691,46 @@ private struct TeamSectionView: View {
     }
 }
 
+/// A rounded group inside a section, with an optional caption («Lead · 2»).
+private struct TeamBox<Content: View>: View {
+    let title: String?
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let title {
+                Text(title)
+                    .font(.bsBody(14))
+                    .foregroundStyle(BS.inkMuted)
+            }
+            content
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, title == nil ? 12 : 8)
+        .padding(.bottom, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(BS.ink.opacity(0.04)))
+    }
+}
+
+private struct PeopleGrid: View {
+    let people: [AppPerson]
+    let section: String
+    let showSeat: Bool
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 12, alignment: .leading)], alignment: .leading, spacing: 14) {
+            ForEach(Array(people.enumerated()), id: \.offset) { _, person in
+                PersonCell(person: person, section: section, showSeat: showSeat)
+            }
+        }
+    }
+}
+
 private struct PersonCell: View {
     let person: AppPerson
     let section: String
+    let showSeat: Bool
 
     var body: some View {
         HStack(spacing: 10) {
@@ -702,10 +746,11 @@ private struct PersonCell: View {
                     .font(.bsBody(15, .semibold))
                     .foregroundStyle(person.mine ? BS.positive : BS.ink)
                     .lineLimit(2)
-                if person.mine {
-                    Text("Tú")
+                let seat = showSeat && !person.seat.isEmpty ? person.seat : nil
+                if person.mine || seat != nil {
+                    Text([person.mine ? "Tú" : nil, seat].compactMap { $0 }.joined(separator: " · "))
                         .font(.bsBody(12))
-                        .foregroundStyle(BS.positive)
+                        .foregroundStyle(person.mine ? BS.positive : BS.inkDim)
                 }
             }
         }
