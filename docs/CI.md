@@ -298,7 +298,7 @@ commit it with the runner image it came from.
   never waits on a macOS runner, and a red iOS build never blocks a web hotfix. Read its result on
   the PR or the Actions tab before merging a change to the app.
   **TestFlight uploads** are a second, hand-run workflow, `.github/workflows/ios-testflight.yml`
-  (Actions → «iOS TestFlight» → Run workflow, `main` only). It archives the Release build with Xcode 26, signs
+  (Actions → «iOS TestFlight» → Run workflow, `main` only). It archives the Release build with Xcode 27 (the `xcode-27` runner image), signs
   it with an Apple Distribution certificate and the App Store Connect key (`IOS_DIST_P12*` and
   `ASC_*` secrets of the `testflight` environment, which admits only `main`; docs/SECRETS.md) and uploads it; the build number is `<run number>.<attempt>`.
   Nothing runs it on a push: every upload reaches testers.
