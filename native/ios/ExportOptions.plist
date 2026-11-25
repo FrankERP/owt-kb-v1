@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyLists-1.0.dtd">
 <!-- How .github/workflows/ios-testflight.yml exports and uploads the archive: signed for App Store
-     Connect with Xcode's automatic (cloud) signing, then uploaded straight to TestFlight. -->
+     Connect with the Apple Distribution certificate the workflow imports (automatic style: Xcode picks
+     that local identity instead of its cloud-managed one), then uploaded straight to TestFlight. -->
 <plist version="1.0">
 <dict>
 	<key>method</key>

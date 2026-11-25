@@ -36,8 +36,10 @@ build number is `<run number>.<attempt>`. Before the first run:
 
 1. The App ID `com.owtBackstage.app` is registered (Certificates, IDs & Profiles) with Associated Domains.
 2. App Store Connect has the app record for that bundle id (Apps → + → New App, iOS).
-3. The App Store Connect key (Admin) is in the `testflight` environment
-   ([`docs/SECRETS.md`](../../docs/SECRETS.md)).
+3. The App Store Connect key (Admin) and an Apple Distribution certificate (`.p12`) are in the
+   `testflight` environment ([`docs/SECRETS.md`](../../docs/SECRETS.md)). Without the certificate
+   the run stops at «Install the Apple Distribution certificate» (Xcode's cloud signing, its
+   fallback, was refused by App Store Connect).
 
 Automatic signing archives with a development profile first; if the run says the team has no
 devices, register one iPhone under Devices and run it again. Each fresh runner may create a new
