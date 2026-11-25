@@ -5,8 +5,9 @@
 # Path-scoped on purpose: it runs only when the app or this file changes. It is NOT part of
 # ci.yml's `gates` (main's one required check), because a web change must never wait on a
 # macOS runner, and a red iOS build must never block a web hotfix. TestFlight uploads are
-# ios-testflight.yml, run by hand. Both use the newest Xcode 26 on the runner, so the tests compile
-# with the same SDK the upload does.
+# ios-testflight.yml, run by hand. Both run on GitHub's `xcode-27` image (macOS 27) with its newest
+# Xcode 27, so the tests compile with the same SDK the upload does: from April 2027 App Store Connect
+# refuses an upload built without the iOS 27 SDK (ITMS-90725). `macos-26` carries only Xcode 26.
 name: iOS
 
 on:
@@ -29,15 +30,15 @@ permissions:
 
 jobs:
   build-and-test:
-    runs-on: macos-15
+    runs-on: xcode-27
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
-      - name: Use the newest Xcode 26
+      - name: Use the newest Xcode 27
         run: |
-          xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -vi beta | sort -V | tail -n 1)
+          xcode=$(ls -d /Applications/Xcode_27*.app 2>/dev/null | grep -vi beta | sort -V | tail -n 1)
           if [ -z "$xcode" ]; then
-            echo "::error::No Xcode 26 on this runner; App Store Connect refuses builds from an older SDK."
+            echo "::error::No Xcode 27 on this runner; from April 2027 App Store Connect refuses builds without the iOS 27 SDK (ITMS-90725)."
             ls -d /Applications/Xcode*.app
             exit 1
           fi

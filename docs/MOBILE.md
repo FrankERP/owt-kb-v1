@@ -26,6 +26,7 @@ clients, `backstage-ios` (iPhone, iPad, Mac) and `backstage-android`:
 | Exchange / refresh | `POST /api/app/v1/auth/token` | Form body. `authorization_code` (code, redirect_uri, client_id, code_verifier) or `refresh_token` (refresh_token, client_id). Answers `access_token` (1 h), `refresh_token` (90 d, rotates on every use), `expires_in`. |
 | Sign out | `POST /api/app/v1/auth/revoke` | Form `token` (the refresh token) + `client_id`. 200 always, 503 only if the revocation write failed. |
 | Who am I | `GET /api/app/v1/me` | `Authorization: Bearer <access_token>`. |
+| Upcoming services | `GET /api/app/v1/services` | Bearer; worship members only (403 otherwise). The home screen's «Próximos servicios»: today (CDMX) through +95 days, team, setlist, your own seats by member id. |
 
 **Redirects.** Production and preview: only `<origin>/app/callback/ios` and
 `<origin>/app/callback/android` (verified `https`; when the app is not installed, or before the OS has the association file, they
@@ -78,6 +79,9 @@ design). Physical phones sign in only against production through the verified re
 /api/app/v1/me` with the access token, refresh once, present the FIRST refresh token again (must
 answer `invalid_grant` and revoke the grant: the second refresh token must now fail too), and call
 the revoke endpoint. Check «Apps conectadas» in `/me/ajustes` along the way.
+First real-phone run: 2026-11-25, TestFlight build 0.1.0 (5.1) on Frank's iPhone, against production: sign-in
+through the verified redirect, `/me`, a cold relaunch that kept the session, and sign-out all worked. The
+refresh-token reuse check above has not been done by hand yet (the server's unit tests cover it).
 
 **Closing sessions.** The person: `/me/ajustes` → «Apps conectadas» → «Cerrar sesión en ese
 dispositivo». A super-admin, for a lost phone: «Personas» → ⋯ → «Cerrar sesiones de la app».

@@ -35,7 +35,7 @@ struct SignInView: View {
             VStack(spacing: 8) {
                 Text("Backstage")
                     .font(.largeTitle.weight(.bold))
-                Text("Oasis Worship Team")
+                Text("Oasis")
                     .font(.headline)
                     .foregroundStyle(.secondary)
             }
@@ -70,6 +70,8 @@ struct SignInView: View {
 struct HomeView: View {
     @Environment(AppModel.self) private var model
     let me: Me
+    @State private var onlyMine = false
+    @State private var showingProfile = false
 
     var body: some View {
         NavigationStack {
@@ -81,11 +83,119 @@ struct HomeView: View {
                     }
                 }
                 Section {
+                    Text("Hola, \(me.displayName)")
+                        .font(.title2.weight(.semibold))
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
+                }
+                servicesContent
+            }
+            .navigationTitle("Backstage")
+            .navigationDestination(for: AppService.self) { service in
+                ServiceDetailView(service: service, today: today)
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingProfile = true
+                    } label: {
+                        Avatar(url: me.photoUrl.flatMap(URL.init(string:)), name: me.displayName, size: 32)
+                    }
+                    .accessibilityLabel("Tu perfil")
+                }
+            }
+            .sheet(isPresented: $showingProfile) {
+                ProfileSheet(me: me)
+            }
+            .refreshable { await model.reload() }
+        }
+    }
+
+    /// The server's CDMX today, once the list has loaded.
+    private var today: String {
+        if case .loaded(let today, _) = model.services { return today }
+        return ""
+    }
+
+    @ViewBuilder
+    private var servicesContent: some View {
+        switch model.services {
+        case .loading:
+            Section {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                    Spacer()
+                }
+            }
+        case .notInWorship:
+            Section {
+                Text("Los servicios de Alabanza aparecen aquí cuando formas parte del equipo.")
+                    .foregroundStyle(.secondary)
+            }
+        case .failed(let message):
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(message)
+                        .foregroundStyle(.secondary)
+                    Button("Intentar de nuevo") {
+                        Task { await model.retryServices() }
+                    }
+                }
+            }
+        case .loaded(let today, let services):
+            if let next = services.first(where: { $0.isMine }) {
+                Section {
+                    NavigationLink(value: next) {
+                        NextServiceCard(service: next, today: today)
+                    }
+                }
+            }
+            Section {
+                Picker("Mostrar", selection: $onlyMine) {
+                    Text("Todos").tag(false)
+                    Text("Los míos").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+            }
+            let shown = onlyMine ? services.filter { $0.isMine } : services
+            if shown.isEmpty {
+                Section {
+                    Text(onlyMine
+                        ? "No tienes servicios asignados en los próximos tres meses."
+                        : "Todavía no hay servicios publicados para los próximos tres meses.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            ForEach(ServiceMonth.group(shown)) { month in
+                Section(month.title) {
+                    ForEach(month.services) { service in
+                        NavigationLink(value: service) {
+                            ServiceRow(service: service, today: today)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct ProfileSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let me: Me
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
                     HStack(spacing: 16) {
-                        Avatar(url: me.photoUrl.flatMap(URL.init(string:)), name: me.displayName)
+                        Avatar(url: me.photoUrl.flatMap(URL.init(string:)), name: me.displayName, size: 56)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Hola, \(me.displayName)")
-                                .font(.title2.weight(.semibold))
+                            Text(me.displayName)
+                                .font(.title3.weight(.semibold))
                             Text(me.roleLabel)
                                 .foregroundStyle(.secondary)
                         }
@@ -96,17 +206,19 @@ struct HomeView: View {
                     ForEach(me.ministryLabels, id: \.self) { Text($0) }
                 }
                 Section {
-                    Text("Muy pronto verás aquí tus próximos servicios.")
-                        .foregroundStyle(.secondary)
-                }
-                Section {
                     Button("Cerrar sesión", role: .destructive) {
+                        dismiss()
                         Task { await model.signOut() }
                     }
                 }
             }
-            .navigationTitle("Backstage")
-            .refreshable { await model.reload() }
+            .navigationTitle("Tu perfil")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Listo") { dismiss() }
+                }
+            }
         }
     }
 }
@@ -114,17 +226,18 @@ struct HomeView: View {
 private struct Avatar: View {
     let url: URL?
     let name: String
+    var size: CGFloat = 56
 
     var body: some View {
         AsyncImage(url: url) { image in
             image.resizable().scaledToFill()
         } placeholder: {
             Text(String(name.prefix(1)))
-                .font(.title2.weight(.semibold))
+                .font(.system(size: size * 0.42, weight: .semibold))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color.accentColor.opacity(0.2))
         }
-        .frame(width: 56, height: 56)
+        .frame(width: size, height: size)
         .clipShape(Circle())
         .accessibilityHidden(true)
     }
