@@ -711,10 +711,19 @@ struct ChordProView: View {
                     FlowLayout(lineSpacing: 4) {
                         ForEach(Array(units.enumerated()), id: \.offset) { _, unit in
                             VStack(alignment: .leading, spacing: 1) {
-                                Text(unit.chord.map { Transpose.chord($0, by: semitones) } ?? " ")
-                                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                                    .foregroundStyle(BS.accent)
-                                    .padding(.trailing, 6)
+                                // A word with no chord keeps the row's height and takes no
+                                // width of its own, or a short word («a», «y») would be pushed
+                                // away from the next one.
+                                if let chord = unit.chord {
+                                    Text(Transpose.chord(chord, by: semitones))
+                                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                                        .foregroundStyle(BS.accent)
+                                        .padding(.trailing, 6)
+                                } else {
+                                    Text(" ")
+                                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                                        .frame(width: 0)
+                                }
                                 if !wordless {
                                     // A plain space at a segment's edge would be trimmed away and
                                     // close the gap between two words.
