@@ -1013,8 +1013,19 @@ pass.
   revision; «Recorrer» moves only CLASSES (a «No hubo clase» row is date-bound and is hopped) and
   refuses unless the ids the screen sends equal the stored roster — so the planner reads the roster
   with NO upper date bound. Its roster read is the writer's one other query shape: never widen it,
-  never return its rows. The «No hubo clase» marker is a DRAFT so no member view shows a cancelled
-  Sunday as a meeting.
+  never return its rows (since 2026-11-25 it also projects `seats`, `title`, `time` and `place`,
+  used only to compute the holders' notices). The «No hubo clase» marker is a DRAFT so no member
+  view shows a cancelled Sunday as a meeting. **Class emails** (ADR-0089, addendum of 2026-11-25;
+  Frank asked for Otro Nivel): create, PATCH, DELETE, «Recorrer» and «Cambiar con…» compute
+  `effects.classNotices` (`ministryLessonNotices.ts`, pure, from the PRE-COMMIT rows) and their
+  routes send it in `after()` (`sendClassNotices`): only the seat holders whose class a write gave,
+  took away or moved, on a published, real (not «No hubo clase»), not-past class; ONE email per
+  person per write; never the actor or a typed name; narrowed at send time by `assignedAddress`
+  AND the class's group read now. «Nuevo libro» sends `announce: false` (it can only quiet a
+  create). The daily cron's Jóvenes step also reminds a class's holders 7 and 2 days ahead,
+  reading each person's classes through `readMinistryEvents` WITH THAT PERSON'S OWN ACCESS — never
+  give `readAnnouncedMeetings` a group arm or add a no-person group read for it (ADR-0081). Widening
+  any of this is a notification-audience change (HIGH).
 - **Rollout registry (`app/utils/rollout.ts`).** A feature built but not for everyone yet has
   one entry (`hidden → superAdmin → admins → all`), keyed by a feature name. `rolloutAllows`
   is the SERVER gate each page and route of the feature calls (a page answers 404); the nav's

@@ -1,7 +1,7 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { requireActiveSession } from "@/app/utils/authGuards";
 import { createMinistryEvent } from "@/app/utils/ministryEventCommit";
-import { sendMinistryEventNotices } from "@/app/utils/ministryEventNotify";
+import { sendClassNotices, sendMinistryEventNotices } from "@/app/utils/ministryEventNotify";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
 import { eventRouteGate, readJson } from "../eventRoute";
 
@@ -27,6 +27,8 @@ async function postHandler(req: NextRequest, { params }: { params: Promise<{ min
   const outcome = await createMinistryEvent(session.user.sanityId, ministry, await readJson(req));
   // Captured before the response; the callback never reads the meeting again.
   const notices = outcome.ok ? outcome.effects.notices : null;
+  const classes = outcome.ok ? outcome.effects.classNotices : null;
   if (notices) after(() => sendMinistryEventNotices(notices));
+  if (classes) after(() => sendClassNotices(classes));
   return NextResponse.json(outcome.body, { status: outcome.status });
 }

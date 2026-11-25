@@ -1,7 +1,7 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { requireActiveSession } from "@/app/utils/authGuards";
 import { deleteMinistryEvent, updateMinistryEvent } from "@/app/utils/ministryEventCommit";
-import { sendMinistryEventNotices } from "@/app/utils/ministryEventNotify";
+import { sendClassNotices, sendMinistryEventNotices } from "@/app/utils/ministryEventNotify";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
 import { eventRouteGate, readJson } from "../../eventRoute";
 
@@ -26,7 +26,9 @@ async function patchHandler(req: NextRequest, { params }: Ctx) {
   const outcome = await updateMinistryEvent(session.user.sanityId, ministry, token, await readJson(req));
   // Captured before the response; the callback never reads the meeting again.
   const notices = outcome.ok ? outcome.effects.notices : null;
+  const classes = outcome.ok ? outcome.effects.classNotices : null;
   if (notices) after(() => sendMinistryEventNotices(notices));
+  if (classes) after(() => sendClassNotices(classes));
   return NextResponse.json(outcome.body, { status: outcome.status });
 }
 
@@ -38,5 +40,8 @@ async function deleteHandler(req: NextRequest, { params }: Ctx) {
   const closed = await eventRouteGate(session.user.sanityId, ministry);
   if (closed) return closed;
   const outcome = await deleteMinistryEvent(session.user.sanityId, ministry, token, await readJson(req));
+  // A deleted class tells its holders (ADR-0089, addendum of 2026-11-25); a meeting owes nothing.
+  const classes = outcome.ok ? outcome.effects.classNotices : null;
+  if (classes) after(() => sendClassNotices(classes));
   return NextResponse.json(outcome.body, { status: outcome.status });
 }

@@ -10,10 +10,14 @@ vi.mock("../email", () => ({ sendEmail: h.sendEmail, SEND_CONCURRENCY: 8 }));
 import {
   MUSIC_AUDIENCE_QUERY,
   NOTICE_PEOPLE_QUERY,
+  planClassEmails,
   planEventEmails,
+  sendClassNotices,
   sendMinistryEventNotices,
+  type ClassNoticeEffects,
   type EventNoticeEffects,
 } from "../ministryEventNotify";
+import type { ClassLine } from "../ministryLessonNotices";
 
 type Doc = Record<string, unknown> & { _id: string };
 const J = (level = "member", groups: string[] = ["otro-nivel"]) => ({
@@ -211,5 +215,96 @@ describe("sendMinistryEventNotices", () => {
       throw new Error("boom");
     });
     await expect(sendMinistryEventNotices(effects())).resolves.toBeUndefined();
+  });
+});
+
+// ── A group's classes (ADR-0089, addendum of 2026-11-25) ────────────────────
+
+describe("planClassEmails — a class change goes only to its holder, while in that group", () => {
+  const line = (over: Partial<ClassLine> = {}): ClassLine => ({
+    id: "ministryEvent.00000000-0000-4000-8000-0000000000c6",
+    group: "otro-nivel",
+    series: "El Caos Dentro de Mi",
+    label: "Cap 6",
+    date: "2026-11-29",
+    time: "11:40",
+    place: "Oasis Tepepan",
+    ...over,
+  });
+  const classEffects = (notices: ClassNoticeEffects["notices"], actorId = "frank"): ClassNoticeEffects => ({ ministry: "jovenes", actorId, notices });
+  const planC = async (e: ClassNoticeEffects, people: Doc[] = PEOPLE) => planClassEmails(e, await read(people), env);
+
+  it("one email per person, a single new class saying its day, linking to it", async () => {
+    const out = await planC(classEffects([{ memberId: "jacob", changes: [{ kind: "added", now: line() }] }]));
+    expect(out.map((p) => [p.email, p.subject])).toEqual([["jacob@example.com", "Te toca dar la clase — domingo 29 de noviembre"]]);
+    expect(out[0].html).toContain("Cap 6");
+    expect(out[0].html).toContain("Otro Nivel");
+    expect(out[0].html).toContain("domingo 29 de noviembre · 11:40 · Oasis Tepepan");
+    expect(out[0].html).toContain("https://app.example/jovenes/reunion/00000000-0000-4000-8000-0000000000c6");
+  });
+
+  it("several changes in one email, with what it was before; the subject is constants and the group", async () => {
+    const out = await planC(
+      classEffects([
+        {
+          memberId: "jacob",
+          changes: [
+            { kind: "changed", was: line({ label: "Cap 7", date: "2026-11-29" }), now: line({ label: "Cap 7", date: "2026-12-06" }) },
+            { kind: "changed", was: line({ label: "Cap 9", date: "2026-12-13" }), now: line({ label: "Cap 9", date: "2026-12-20" }) },
+          ],
+        },
+      ]),
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].subject).toBe("Cambió tu rol de clases — Otro Nivel");
+    expect(out[0].html).toContain("Antes: domingo 29 de noviembre · 11:40 · Oasis Tepepan");
+    expect(out[0].html).toContain("domingo 6 de diciembre");
+    expect(out[0].html).toContain("Cap 9");
+  });
+
+  it("only a class taken away: «ya no te toca», linking to the calendar", async () => {
+    const out = await planC(classEffects([{ memberId: "jacob", changes: [{ kind: "removed", was: line() }] }]));
+    expect(out[0].subject).toBe("Ya no te toca dar la clase — domingo 29 de noviembre");
+    expect(out[0].html).toContain("YA NO TE TOCA");
+    expect(out[0].html).toContain("https://app.example/jovenes/calendario");
+  });
+
+  it("a typed title is escaped in the body and never reaches the subject", async () => {
+    const out = await planC(classEffects([{ memberId: "jacob", changes: [{ kind: "added", now: line({ label: "<b>Cap</b>" }) }] }]));
+    expect(out[0].html).toContain("&lt;b&gt;Cap&lt;/b&gt;");
+    expect(out[0].subject).not.toContain("Cap");
+  });
+
+  it("nothing to the actor, to someone outside the class's group, or to someone who may not be written to", async () => {
+    const one = (memberId: string) => classEffects([{ memberId, changes: [{ kind: "added", now: line() }] }], "andy");
+    expect(await planC(one("andy"))).toEqual([]);
+    const moved = PEOPLE.map((p) => (p._id === "jacob" ? { ...p, ...J("member", ["invencibles"]) } : p));
+    expect(await planC(one("jacob"), moved)).toEqual([]);
+    expect(await planC(one("jacob"), PEOPLE.map((p) => (p._id === "jacob" ? { ...p, notifPrefs: { emailAssigned: false } } : p)))).toEqual([]);
+    expect(await planC(one("jacob"), PEOPLE.map((p) => (p._id === "jacob" ? { ...p, disabled: true } : p)))).toEqual([]);
+  });
+
+  it("sendClassNotices reads only the people named, sends, and never throws", async () => {
+    h.fetch.mockReset();
+    h.sendEmail.mockReset();
+    h.fetch.mockImplementation(async (q: string, p: Record<string, unknown>) => groq(PEOPLE, q, p));
+    h.sendEmail.mockResolvedValue({ ok: true });
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubEnv("EMAIL_ALLOWLIST", "*");
+    vi.stubEnv("EMAIL_REDIRECT_TO", "");
+    try {
+      await sendClassNotices(classEffects([{ memberId: "jacob", changes: [{ kind: "added", now: line() }] }]));
+      expect(h.fetch).toHaveBeenCalledTimes(1);
+      expect(h.fetch.mock.calls[0][1]).toEqual({ ids: ["jacob"] });
+      expect(h.sendEmail.mock.calls.map((c) => (c[0] as { to: string }).to)).toEqual(["jacob@example.com"]);
+      h.fetch.mockRejectedValue(new Error("down"));
+      await expect(sendClassNotices(classEffects([{ memberId: "jacob", changes: [{ kind: "added", now: line() }] }]))).resolves.toBeUndefined();
+      await expect(sendClassNotices(null)).resolves.toBeUndefined();
+    } finally {
+      vi.unstubAllEnvs();
+      log.mockRestore();
+      error.mockRestore();
+    }
   });
 });
