@@ -90,12 +90,17 @@ struct MainTabs: View {
     @State private var showingProfile = false
 
     var body: some View {
-        TabView {
-            HomeView(me: me) { showingProfile = true }
-                .tabItem { Label("Inicio", systemImage: "house") }
+        Group {
             if me.ministries.contains("worship") || me.role == "super-admin" {
-                LibraryView(me: me) { showingProfile = true }
-                    .tabItem { Label("Biblioteca", systemImage: "music.note.list") }
+                TabView {
+                    HomeView(me: me) { showingProfile = true }
+                        .tabItem { Label("Inicio", systemImage: "house") }
+                    LibraryView(me: me) { showingProfile = true }
+                        .tabItem { Label("Biblioteca", systemImage: "music.note.list") }
+                }
+            } else {
+                // One destination needs no tab bar.
+                HomeView(me: me) { showingProfile = true }
             }
         }
         .sheet(isPresented: $showingProfile) {

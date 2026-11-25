@@ -628,7 +628,9 @@ struct ChartSection: View {
                 .sensoryFeedback(.selection, trigger: selected)
             }
             if chart.chordPro {
-                if let written {
+                // Only a key the transposer can read gets the dial: «Do» would move the chords
+                // and leave the pill still.
+                if let written, Transpose.rootIndex(written) != nil {
                     transposer(written: written)
                 }
                 ChordProView(content: chart.content, semitones: semitones)

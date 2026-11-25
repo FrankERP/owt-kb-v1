@@ -49,6 +49,7 @@ final class AppModel {
     private(set) var services: Services = .loading
     /// When the list last loaded, so coming back to the app refreshes a list left from another day.
     private var servicesLoadedAt: Date?
+    private var catalogueLoadedAt: Date?
     /// The last `today` the server sent, so a service page left open keeps its countdown while
     /// the list reloads or fails.
     private(set) var lastToday = ""
@@ -131,11 +132,15 @@ final class AppModel {
     /// A failed refresh keeps the list on screen.
     func loadCatalogue(force: Bool = false) async {
         if case .loading = catalogue { return }
-        if case .loaded = catalogue, !force { return }
+        // A list read a while ago is read again behind what is on screen, so a song added
+        // today shows without a relaunch.
+        let fresh = catalogueLoadedAt.map { Date().timeIntervalSince($0) < 600 } ?? false
+        if case .loaded = catalogue, !force, fresh { return }
         let had = catalogue
         if case .loaded = had {} else { catalogue = .loading }
         do {
             catalogue = .loaded(try await api.songs().songs)
+            catalogueLoadedAt = Date()
         } catch APIError.forbidden {
             catalogue = .notInWorship
         } catch {
