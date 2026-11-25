@@ -162,6 +162,7 @@ final class AppModel {
 
     func signOut() async {
         await authority.signOut()
+        ImageStore.shared.clear()
         banner = nil
         services = .loading
         servicesLoadedAt = nil

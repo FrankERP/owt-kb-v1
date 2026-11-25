@@ -5,9 +5,11 @@ import UIKit
 /// for the next, so a face is there the moment its card is — and with no signal. `AsyncImage`
 /// keeps nothing and fetched every picture again on every launch.
 ///
-/// The URLs are Sanity's CDN's, which name an asset by its content hash and its size: the same
-/// URL is the same picture for ever, so a kept copy is never stale and is read before the
-/// network (`returnCacheDataElseLoad`). A changed photo arrives under a new URL.
+/// Sanity's CDN names an asset by its content hash and its size: the same URL is the same
+/// picture for ever, so a kept copy is never stale and is read before the network
+/// (`returnCacheDataElseLoad`); a changed photo arrives under a new URL. Any other host — a
+/// member with no uploaded photo shows their Google picture, which can change under one URL —
+/// keeps the protocol's own expiry.
 final class ImageStore: @unchecked Sendable {
     static let shared = ImageStore()
 
@@ -17,7 +19,6 @@ final class ImageStore: @unchecked Sendable {
     private init() {
         let config = URLSessionConfiguration.default
         config.urlCache = URLCache(memoryCapacity: 8 << 20, diskCapacity: 256 << 20)
-        config.requestCachePolicy = .returnCacheDataElseLoad
         session = URLSession(configuration: config)
         memory.countLimit = 400
     }
@@ -29,13 +30,21 @@ final class ImageStore: @unchecked Sendable {
 
     func image(for url: URL) async -> UIImage? {
         if let hit = cached(url) { return hit }
-        guard let (data, response) = try? await session.data(from: url),
+        var request = URLRequest(url: url)
+        if url.host == "cdn.sanity.io" { request.cachePolicy = .returnCacheDataElseLoad }
+        guard let (data, response) = try? await session.data(for: request),
               (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? true,
               let decoded = UIImage(data: data) else { return nil }
         // Decode off the main thread, so a list of covers scrolls without a hitch.
         let ready = await decoded.byPreparingForDisplay() ?? decoded
         memory.setObject(ready, forKey: url as NSURL)
         return ready
+    }
+
+    /// Signing out leaves nobody's face on the phone.
+    func clear() {
+        memory.removeAllObjects()
+        session.configuration.urlCache?.removeAllCachedResponses()
     }
 }
 
@@ -67,10 +76,9 @@ struct RemoteImage<Placeholder: View>: View {
                 image = nil
                 return
             }
-            if let hit = ImageStore.shared.cached(url) {
-                image = hit
-                return
-            }
+            // A reused cell drops the last person's picture before it fetches this one's.
+            image = ImageStore.shared.cached(url)
+            if image != nil { return }
             let loaded = await ImageStore.shared.image(for: url)
             if Task.isCancelled { return }
             withAnimation(.easeOut(duration: 0.2)) { image = loaded }
