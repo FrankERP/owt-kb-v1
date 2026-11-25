@@ -88,6 +88,8 @@ struct HomeView: View {
     @State private var onlyMine = false
     @State private var showingProfile = false
     @State private var path: [AppService] = []
+    @State private var refreshes = 0
+    @Namespace private var zoom
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -97,6 +99,7 @@ struct HomeView: View {
                     banner: model.banner,
                     services: model.services,
                     onlyMine: $onlyMine,
+                    zoom: zoom,
                     open: { path.append($0) },
                     retry: { Task { await model.retryServices() } }
                 )
@@ -105,10 +108,18 @@ struct HomeView: View {
             .safeAreaInset(edge: .top, spacing: 0) {
                 TopBar(me: me) { showingProfile = true }
             }
-            .refreshable { await model.reload() }
+            .refreshable {
+                await model.reload()
+                refreshes += 1
+            }
+            .sensoryFeedback(.impact(weight: .light), trigger: refreshes)
+            .sensoryFeedback(trigger: path) { old, new in
+                new.count > old.count ? .impact(weight: .light) : nil
+            }
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: AppService.self) { service in
                 ServiceDetailView(service: service, today: today)
+                    .zoomDestination(id: service.id, in: zoom)
             }
             .sheet(isPresented: $showingProfile) {
                 ProfileSheet(me: me)
@@ -153,7 +164,9 @@ struct TopBar: View {
             .padding(.vertical, 10)
             Rectangle().fill(BS.ink.opacity(0.08)).frame(height: 1)
         }
-        .background(BS.base.opacity(0.96).ignoresSafeArea(edges: .top))
+        // The page shows through, blurred, as it slides under the bar; the navy veil keeps the
+        // material from turning the system's grey.
+        .background(BS.base.opacity(0.72).background(.ultraThinMaterial).ignoresSafeArea(edges: .top))
     }
 }
 
@@ -164,6 +177,8 @@ struct HomeScreen: View {
     let banner: String?
     let services: AppModel.Services
     @Binding var onlyMine: Bool
+    /// The namespace a card grows out of into its page; none where nothing navigates (a test).
+    var zoom: Namespace.ID?
     let open: (AppService) -> Void
     let retry: () -> Void
 
@@ -184,10 +199,7 @@ struct HomeScreen: View {
             switch services {
             case .loading:
                 greetingBlock(HomeGreeting(hello: helloLine, lead: "Hola", day: "", sub: nil, serviceID: nil), hideLead: true)
-                ProgressView()
-                    .tint(BS.accent)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 48)
+                ServicesSkeleton()
             case .notInWorship:
                 greetingBlock(HomeGreeting(hello: helloLine, lead: "Bienvenido", day: "", sub: nil, serviceID: nil), hideLead: false)
                 quiet("Los servicios de Alabanza aparecen aquí cuando formas parte del equipo.")
@@ -242,6 +254,7 @@ struct HomeScreen: View {
                             ServiceFoldedCard(service: service, today: today)
                         }
                         .buttonStyle(CardPressStyle())
+                        .zoomSource(id: service.id, in: zoom)
                     }
                 }
             }
@@ -293,6 +306,7 @@ private struct MineFilter: View {
             pill("Los míos", selected: onlyMine) { onlyMine = true }
         }
         .fixedSize()
+        .sensoryFeedback(.selection, trigger: onlyMine)
     }
 
     private func pill(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
@@ -319,6 +333,85 @@ struct CardPressStyle: ButtonStyle {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.985 : 1)
             .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+/// A card grows into its page and shrinks back into its place (iOS 18's zoom); on iOS 17 the
+/// page slides in as before.
+extension View {
+    @ViewBuilder
+    func zoomSource(id: String, in namespace: Namespace.ID?) -> some View {
+        if #available(iOS 18.0, *), let namespace {
+            matchedTransitionSource(id: id, in: namespace)
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder
+    func zoomDestination(id: String, in namespace: Namespace.ID) -> some View {
+        if #available(iOS 18.0, *) {
+            navigationTransition(.zoom(sourceID: id, in: namespace))
+        } else {
+            self
+        }
+    }
+}
+
+// MARK: Loading
+
+/// The list's shape while it loads: the next service's card and two folded ones as quiet
+/// blocks that breathe (the web's `Skeleton`), so the page doesn't jump when the data lands.
+struct ServicesSkeleton: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SheetTitle(text: "Próximo servicio", hairline: true)
+                .padding(.top, 28)
+                .padding(.bottom, 12)
+            card(lines: 5)
+            SkeletonBlock(width: 120, height: 12)
+                .padding(.top, 40)
+                .padding(.bottom, 14)
+            VStack(spacing: 12) {
+                card(lines: 2)
+                card(lines: 2)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Cargando servicios")
+    }
+
+    private func card(lines: Int) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            SkeletonBlock(width: 58, height: 76, radius: 12)
+            VStack(alignment: .leading, spacing: 10) {
+                SkeletonBlock(width: 140, height: 20)
+                SkeletonBlock(width: 70, height: 12)
+                ForEach(0..<lines, id: \.self) { line in
+                    SkeletonBlock(width: line.isMultiple(of: 2) ? 200 : 150, height: 12)
+                }
+            }
+        }
+        .padding(16)
+        .cardSurface()
+    }
+}
+
+struct SkeletonBlock: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var width: CGFloat?
+    var height: CGFloat
+    var radius: CGFloat = 6
+    @State private var lit = false
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .fill(BS.ink.opacity(lit ? 0.12 : 0.06))
+            .frame(width: width, height: height)
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { lit = true }
+            }
     }
 }
 
