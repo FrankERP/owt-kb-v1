@@ -9,6 +9,8 @@ struct RootView: View {
             switch model.phase {
             case .starting:
                 ProgressView()
+                    .tint(BS.accent)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .signedOut(let notice):
                 SignInView(notice: notice, busy: false)
             case .signingIn:
@@ -19,9 +21,13 @@ struct RootView: View {
                 OfflineView()
             }
         }
+        .background(BS.base.ignoresSafeArea())
+        .tint(BS.accent)
         .animation(.default, value: model.phase)
     }
 }
+
+// MARK: Sign-in
 
 struct SignInView: View {
     @Environment(AppModel.self) private var model
@@ -32,155 +38,291 @@ struct SignInView: View {
     var body: some View {
         VStack(spacing: 24) {
             Spacer()
-            VStack(spacing: 8) {
-                Text("Backstage")
-                    .font(.largeTitle.weight(.bold))
-                Text("Oasis")
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
+            VStack(spacing: 14) {
+                Image("BackstageMark")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 88, height: 88)
+                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .accessibilityHidden(true)
+                Text("BACKSTAGE")
+                    .font(.bsDisplay(44))
+                    .tracking(2)
+                    .foregroundStyle(BS.ink)
+                Text("OASIS")
+                    .font(.bsLabel(13))
+                    .tracking(13 * 0.22)
+                    .foregroundStyle(BS.sheetTitle)
             }
             Spacer()
             if let notice {
                 Text(notice)
-                    .font(.callout)
+                    .font(.bsBody(15))
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(BS.warning)
             }
             Button {
                 Task { await model.signIn(using: webAuthenticationSession) }
             } label: {
-                Group {
-                    if busy { ProgressView() } else { Text("Entrar") }
-                }
-                .frame(maxWidth: .infinity, minHeight: 28)
+                if busy { ProgressView().tint(BS.base) } else { Text("Entrar") }
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
+            .buttonStyle(BrandButtonStyle())
             .disabled(busy)
             Text("Se abrirá la página de Backstage para que entres con tu cuenta y confirmes.")
-                .font(.footnote)
+                .font(.bsBody(14))
                 .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(BS.inkDim)
         }
         .padding(24)
         .frame(maxWidth: 480)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(BS.base.ignoresSafeArea())
     }
 }
+
+// MARK: Inicio
 
 struct HomeView: View {
     @Environment(AppModel.self) private var model
     let me: Me
     @State private var onlyMine = false
     @State private var showingProfile = false
+    @State private var path: [AppService] = []
 
     var body: some View {
-        NavigationStack {
-            List {
-                if let banner = model.banner {
-                    Section {
-                        Label(banner, systemImage: "wifi.exclamationmark")
-                            .foregroundStyle(.orange)
-                    }
-                }
-                Section {
-                    Text("Hola, \(me.displayName)")
-                        .font(.title2.weight(.semibold))
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
-                }
-                servicesContent
+        NavigationStack(path: $path) {
+            ScrollView {
+                HomeScreen(
+                    me: me,
+                    banner: model.banner,
+                    services: model.services,
+                    onlyMine: $onlyMine,
+                    open: { path.append($0) },
+                    retry: { Task { await model.retryServices() } }
+                )
             }
-            .navigationTitle("Backstage")
+            .background(BS.base.ignoresSafeArea())
+            .safeAreaInset(edge: .top, spacing: 0) {
+                TopBar(me: me) { showingProfile = true }
+            }
+            .refreshable { await model.reload() }
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: AppService.self) { service in
                 ServiceDetailView(service: service, today: today)
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showingProfile = true
-                    } label: {
-                        Avatar(url: me.photoUrl.flatMap(URL.init(string:)), name: me.displayName, size: 32)
-                    }
-                    .accessibilityLabel("Tu perfil")
-                }
             }
             .sheet(isPresented: $showingProfile) {
                 ProfileSheet(me: me)
             }
-            .refreshable { await model.reload() }
         }
     }
 
     /// The server's CDMX today, once the list has loaded.
     private var today: String {
         if case .loaded(let today, _) = model.services { return today }
-        return ""
+        return model.lastToday
+    }
+}
+
+/// The web's navbar: the mark, «BACKSTAGE» in small caps, the avatar that opens the profile.
+struct TopBar: View {
+    let me: Me
+    let profile: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Image("BackstageMark")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 36, height: 36)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .accessibilityHidden(true)
+                Spacer()
+                Text("BACKSTAGE")
+                    .font(.bsLabel(15))
+                    .tracking(3)
+                    .foregroundStyle(BS.ink)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer()
+                Button(action: profile) {
+                    FaceView(name: me.displayName, photo: me.photoUrl, size: 36)
+                }
+                .accessibilityLabel("Tu perfil")
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
+            Rectangle().fill(BS.ink.opacity(0.08)).frame(height: 1)
+        }
+        .background(BS.base.opacity(0.96).ignoresSafeArea(edges: .top))
+    }
+}
+
+/// Inicio's content, apart from the model so a test can draw it: the greeting, «Próximo
+/// servicio» as the full card, then the services after it as folded cards by month.
+struct HomeScreen: View {
+    let me: Me
+    let banner: String?
+    let services: AppModel.Services
+    @Binding var onlyMine: Bool
+    let open: (AppService) -> Void
+    let retry: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let banner {
+                HStack(spacing: 10) {
+                    Image(systemName: "wifi.exclamationmark")
+                    Text(banner).font(.bsBody(14))
+                }
+                .foregroundStyle(BS.warning)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .overlay(alignment: .leading) { Rectangle().fill(BS.warning).frame(width: 2) }
+                .padding(.top, 16)
+            }
+            switch services {
+            case .loading:
+                greetingBlock(HomeGreeting(hello: helloLine, lead: "Hola", day: "", sub: nil, serviceID: nil), hideLead: true)
+                ProgressView()
+                    .tint(BS.accent)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 48)
+            case .notInWorship:
+                greetingBlock(HomeGreeting(hello: helloLine, lead: "Bienvenido", day: "", sub: nil, serviceID: nil), hideLead: false)
+                quiet("Los servicios de Alabanza aparecen aquí cuando formas parte del equipo.")
+            case .failed(let message):
+                greetingBlock(HomeGreeting(hello: helloLine, lead: "Hola", day: "", sub: nil, serviceID: nil), hideLead: true)
+                VStack(alignment: .leading, spacing: 16) {
+                    quiet(message)
+                    Button("Intentar de nuevo", action: retry)
+                        .buttonStyle(BrandButtonStyle())
+                }
+            case .loaded(let today, let list):
+                loaded(today: today, list: list)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 48)
+    }
+
+    private var helloLine: String? {
+        me.displayName.split(whereSeparator: \.isWhitespace).first.map { "Hola, \($0)" }
     }
 
     @ViewBuilder
-    private var servicesContent: some View {
-        switch model.services {
-        case .loading:
-            Section {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                    Spacer()
-                }
+    private func loaded(today: String, list: [AppService]) -> some View {
+        let greeting = HomeGreeting.make(name: me.displayName, today: today, services: list)
+        greetingBlock(greeting, hideLead: false, showSub: greeting.serviceID != list.first?.id)
+        if let next = list.first {
+            SheetTitle(text: "Próximo servicio", hairline: true)
+                .padding(.top, 28)
+                .padding(.bottom, 12)
+            ServiceFullCard(service: next, today: today)
+            let rest = Array(list.dropFirst()).filter { !onlyMine || $0.isMine }
+            HStack(spacing: 12) {
+                SheetTitle(text: "Después")
+                Rectangle().fill(BS.ink.opacity(0.10)).frame(height: 1)
+                MineFilter(onlyMine: $onlyMine)
             }
-        case .notInWorship:
-            Section {
-                Text("Los servicios de Alabanza aparecen aquí cuando formas parte del equipo.")
-                    .foregroundStyle(.secondary)
+            .padding(.top, 40)
+            .padding(.bottom, 4)
+            if rest.isEmpty {
+                quiet(onlyMine
+                    ? "No tienes más servicios asignados en los próximos tres meses."
+                    : "No hay más servicios publicados en los próximos tres meses.")
             }
-        case .failed(let message):
-            Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(message)
-                        .foregroundStyle(.secondary)
-                    Button("Intentar de nuevo") {
-                        Task { await model.retryServices() }
-                    }
-                }
-            }
-        case .loaded(let today, let services):
-            if let next = services.first(where: { $0.isMine }) {
-                Section {
-                    NavigationLink(value: next) {
-                        NextServiceCard(service: next, today: today)
-                    }
-                }
-            }
-            Section {
-                Picker("Mostrar", selection: $onlyMine) {
-                    Text("Todos").tag(false)
-                    Text("Los míos").tag(true)
-                }
-                .pickerStyle(.segmented)
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets())
-            }
-            let shown = onlyMine ? services.filter { $0.isMine } : services
-            if shown.isEmpty {
-                Section {
-                    Text(onlyMine
-                        ? "No tienes servicios asignados en los próximos tres meses."
-                        : "Todavía no hay servicios publicados para los próximos tres meses.")
-                        .foregroundStyle(.secondary)
-                }
-            }
-            ForEach(ServiceMonth.group(shown)) { month in
-                Section(month.title) {
+            ForEach(ServiceMonth.group(rest)) { month in
+                SheetTitle(text: month.title, count: month.services.count)
+                    .padding(.top, 20)
+                    .padding(.bottom, 10)
+                VStack(spacing: 12) {
                     ForEach(month.services) { service in
-                        NavigationLink(value: service) {
-                            ServiceRow(service: service, today: today)
+                        Button { open(service) } label: {
+                            ServiceFoldedCard(service: service, today: today)
                         }
+                        .buttonStyle(CardPressStyle())
                     }
                 }
             }
+        } else {
+            quiet("Todavía no hay servicios publicados para los próximos tres meses.")
         }
     }
+
+    private func greetingBlock(_ greeting: HomeGreeting, hideLead: Bool, showSub: Bool = true) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let hello = greeting.hello {
+                Text(hello)
+                    .font(.bsBody(17))
+                    .foregroundStyle(BS.inkMuted)
+            }
+            if !hideLead {
+                (Text(greeting.lead).foregroundColor(BS.ink) + Text(greeting.day).foregroundColor(BS.positive))
+                    .font(.bsDisplay(52, relativeTo: .largeTitle))
+                    .lineSpacing(-6)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if showSub, let sub = greeting.sub, !sub.isEmpty {
+                Text(sub)
+                    .font(.bsBody(17))
+                    .foregroundStyle(BS.ink)
+                    .padding(.top, 4)
+            }
+        }
+        .padding(.top, 28)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func quiet(_ text: String) -> some View {
+        Text(text)
+            .font(.bsBody(15))
+            .foregroundStyle(BS.inkMuted)
+            .padding(.vertical, 20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
 }
+
+/// «Todos / Los míos» as two small-caps pills.
+private struct MineFilter: View {
+    @Binding var onlyMine: Bool
+
+    var body: some View {
+        HStack(spacing: 4) {
+            pill("Todos", selected: !onlyMine) { onlyMine = false }
+            pill("Los míos", selected: onlyMine) { onlyMine = true }
+        }
+        .fixedSize()
+    }
+
+    private func pill(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.2)) { action() }
+        } label: {
+            Text(title.uppercased())
+                .font(.bsLabel(10))
+                .tracking(1)
+                .foregroundStyle(selected ? BS.accent : BS.inkDim)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Capsule().fill(selected ? BS.accent.opacity(0.12) : .clear))
+                .overlay(Capsule().strokeBorder(selected ? BS.accent.opacity(0.35) : BS.ink.opacity(0.12), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// A card that sinks a little under the finger.
+struct CardPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+// MARK: Profile
 
 private struct ProfileSheet: View {
     @Environment(AppModel.self) private var model
@@ -189,31 +331,46 @@ private struct ProfileSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 28) {
                     HStack(spacing: 16) {
-                        Avatar(url: me.photoUrl.flatMap(URL.init(string:)), name: me.displayName, size: 56)
+                        FaceView(name: me.displayName, photo: me.photoUrl, size: 64)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(me.displayName)
-                                .font(.title3.weight(.semibold))
+                                .font(.bsDisplay(30))
+                                .foregroundStyle(BS.ink)
                             Text(me.roleLabel)
-                                .foregroundStyle(.secondary)
+                                .font(.bsBody(15))
+                                .foregroundStyle(BS.inkMuted)
                         }
                     }
-                    .padding(.vertical, 8)
-                }
-                Section("Tus ministerios") {
-                    ForEach(me.ministryLabels, id: \.self) { Text($0) }
-                }
-                Section {
-                    Button("Cerrar sesión", role: .destructive) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        SheetTitle(text: "Tus ministerios", hairline: true)
+                        ForEach(me.ministryLabels, id: \.self) { label in
+                            Text(label)
+                                .font(.bsBody(17))
+                                .foregroundStyle(BS.ink)
+                                .padding(.vertical, 6)
+                        }
+                    }
+                    Button(role: .destructive) {
                         dismiss()
                         Task { await model.signOut() }
+                    } label: {
+                        Text("Cerrar sesión")
+                            .font(.bsBody(17, .semibold))
+                            .foregroundStyle(BS.warning)
+                            .frame(maxWidth: .infinity, minHeight: 50)
+                            .overlay(Capsule().strokeBorder(BS.warning.opacity(0.4), lineWidth: 1))
                     }
+                    .buttonStyle(.plain)
                 }
+                .padding(20)
             }
+            .background(BS.base.ignoresSafeArea())
             .navigationTitle("Tu perfil")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(BS.base, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Listo") { dismiss() }
@@ -223,37 +380,31 @@ private struct ProfileSheet: View {
     }
 }
 
-private struct Avatar: View {
-    let url: URL?
-    let name: String
-    var size: CGFloat = 56
-
-    var body: some View {
-        AsyncImage(url: url) { image in
-            image.resizable().scaledToFill()
-        } placeholder: {
-            Text(String(name.prefix(1)))
-                .font(.system(size: size * 0.42, weight: .semibold))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.accentColor.opacity(0.2))
-        }
-        .frame(width: size, height: size)
-        .clipShape(Circle())
-        .accessibilityHidden(true)
-    }
-}
+// MARK: Offline
 
 struct OfflineView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        ContentUnavailableView {
-            Label("Sin conexión", systemImage: "wifi.slash")
-        } description: {
+        VStack(spacing: 16) {
+            Image(systemName: "wifi.slash")
+                .font(.system(size: 32))
+                .foregroundStyle(BS.inkDim)
+            Text("SIN CONEXIÓN")
+                .font(.bsLabel(13))
+                .tracking(13 * 0.22)
+                .foregroundStyle(BS.sheetTitle)
             Text(model.banner ?? "No pudimos conectar con Backstage.")
-        } actions: {
+                .font(.bsBody(17))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(BS.inkMuted)
             Button("Intentar de nuevo") { Task { await model.reload() } }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(BrandButtonStyle())
+                .padding(.top, 8)
         }
+        .padding(32)
+        .frame(maxWidth: 480)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(BS.base.ignoresSafeArea())
     }
 }
