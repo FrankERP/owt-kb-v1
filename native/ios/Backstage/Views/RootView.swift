@@ -119,7 +119,7 @@ struct HomeView: View {
     /// The server's CDMX today, once the list has loaded.
     private var today: String {
         if case .loaded(let today, _) = model.services { return today }
-        return ""
+        return model.lastToday
     }
 }
 

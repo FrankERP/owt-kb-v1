@@ -40,13 +40,15 @@ struct DateLeaf: View {
         .background(BS.base.opacity(0.6))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(BS.ink.opacity(0.12), lineWidth: 1))
-        .accessibilityHidden(true)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(ServiceDay.longLabel(date))
     }
 }
 
 /// A seat's glyph (`SeatIcon`): the web's own line icons (app/components/ui/icons.tsx), bundled
 /// as template SVGs — the microphone of a voice, the keys, the drum, the guitar of the string
-/// seats, the sliders of the booth; an unknown seat takes its section's glyph, else the note.
+/// seats, the sliders of the booth; an unknown seat in Voces or Cabina takes its section's glyph,
+/// anything else the note (`seatIconKind`).
 enum SeatGlyph {
     static func asset(for seat: String, section: String? = nil) -> String {
         let key = seat.lowercased().trimmingCharacters(in: .whitespaces)
@@ -60,7 +62,6 @@ enum SeatGlyph {
         default:
             switch section {
             case "voces": return "SeatMic"
-            case "banda": return "SeatGuitar"
             case "cabina": return "SeatSliders"
             default: return "SeatNote"
             }
@@ -668,7 +669,10 @@ private struct TeamSectionView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("\(section.label), \(section.people.count) personas")
+            .accessibilityLabel({
+                let n = FaceStack.unique(section.people).count
+                return "\(section.label), \(n) \(n == 1 ? "persona" : "personas")"
+            }())
             .accessibilityHint(isOpen ? "Toca para cerrar" : "Toca para abrir")
 
             if isOpen {
