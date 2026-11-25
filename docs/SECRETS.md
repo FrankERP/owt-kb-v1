@@ -586,14 +586,15 @@ cloud session, `.env.local`.
 `.p8` never passes through a chat or a session. A required reviewer on the environment is optional;
 if one is set, only that person approves a run (a session never approves, rejects or bypasses it).
 
-**Purpose.** Lets the TestFlight workflow sign and upload the iPhone app with Xcode's automatic
-(cloud) signing: `-allowProvisioningUpdates` creates the certificates and provisioning profiles, and
-`xcodebuild -exportArchive` uploads the build. The workflow writes the key to `$RUNNER_TEMP` and
+**Purpose.** Lets the TestFlight workflow manage signing and upload the iPhone app:
+`-allowProvisioningUpdates` creates the development certificate and the provisioning profiles, and
+`xcodebuild -exportArchive` uploads the build. The distribution signature itself comes from
+`IOS_DIST_P12` (below), not from Xcode's cloud signing, which App Store Connect refused. The workflow writes the key to `$RUNNER_TEMP` and
 deletes it at the end, even on failure.
 
 **Where the values come from.** App Store Connect → ••• → Users and Access → Integrations → App Store
-Connect API → Team Keys → Generate API Key, role **Admin** (an App Manager key cannot create a
-distribution certificate, so signing fails). The first key needs the Account Holder to request API
+Connect API → Team Keys → Generate API Key, role **Admin** (Xcode's automatic signing creates certificates and
+profiles through it; an App Manager key cannot create certificates). The first key needs the Account Holder to request API
 access once. `ASC_KEY_ID` is the key's row, `ASC_ISSUER_ID` is shown above the table, `ASC_KEY_P8` is
 the whole downloaded `AuthKey_<id>.p8` including the `BEGIN`/`END` lines. Apple lets the `.p8` be
 downloaded ONCE.
@@ -629,10 +630,11 @@ password and deletes that keychain at the end, even on failure.
 in Xcode → Settings → Accounts → Manage Certificates → + → Apple Distribution, or from a Keychain
 Access CSR uploaded at developer.apple.com → Certificates → + → Apple Distribution. Keychain Access →
 My Certificates → «Apple Distribution: …» → Export as `.p12` with a NEW password.
-`IOS_DIST_P12` = `base64 -i dist.p12` (one line), `IOS_DIST_P12_PASSWORD` = that password. Delete the
+`IOS_DIST_P12` = `base64 -i dist.p12 | pbcopy` (one line, straight to the clipboard), `IOS_DIST_P12_PASSWORD` = that password. Delete the
 `.p12` file afterwards.
 
-**How to rotate.** The certificate lasts a year. Make a new one the same way, replace BOTH secrets
+**How to rotate.** The certificate lasts a year (an expired or revoked one stops the run at the
+identity check, «no VALID Apple Distribution identity»). Make a new one the same way, replace BOTH secrets
 before the next run, then revoke the old certificate (developer.apple.com → Certificates). A team can
 hold only a few distribution certificates, so revoke the ones nothing uses.
 

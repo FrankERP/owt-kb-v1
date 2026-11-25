@@ -3,18 +3,19 @@
 # on a push, because every upload is a build testers receive.
 #
 # Signing is Xcode's automatic signing driven by an App Store Connect API key (docs/SECRETS.md):
-# `-allowProvisioningUpdates` lets Xcode create the certificate and the provisioning profile it
-# needs, and the export signs in the cloud and uploads. That is why the key must have the Admin
-# role: an App Manager key cannot create a distribution certificate.
+# `-allowProvisioningUpdates` lets Xcode create the development certificate and the provisioning
+# profiles it needs, and the export uploads. The key keeps the Admin role so Xcode may manage
+# certificates and profiles without a person in the loop.
 #
 # The distribution signature comes from an Apple Distribution certificate of our own (IOS_DIST_P12,
 # imported into a throwaway keychain), NOT from Xcode's cloud-managed one: the first upload
 # (2026-11-24, run 1) was signed in the cloud and App Store Connect refused it as «Invalid
 # Signature»; with a local Apple Distribution identity the export signs with it instead.
 #
-# The key's three secrets and the certificate's two live in the `testflight` ENVIRONMENT, not the repository: the environment
-# admits only `main`, so a workflow pushed on any other branch cannot read an Admin key. The
-# `if:` below only skips a run started elsewhere; the environment is the boundary.
+# The key's three secrets and the certificate's two live in the `testflight` ENVIRONMENT, not the
+# repository: the environment admits only `main`, so a workflow pushed on any other branch cannot
+# read an Admin key or the certificate. The `if:` below only skips a run started elsewhere; the
+# environment is the boundary.
 #
 # Build number = "<run number>.<attempt>" (project.yml maps CFBundleVersion to it), so every upload,
 # a re-run included, is higher than the last: App Store Connect refuses a repeated number. The run
@@ -82,7 +83,9 @@ jobs:
           fi
           keychain="$RUNNER_TEMP/signing.keychain-db"
           kc_pass=$(openssl rand -hex 24)
+          echo "::add-mask::$kc_pass"
           security create-keychain -p "$kc_pass" "$keychain"
+          echo "SIGNING_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
           security set-keychain-settings -lut 3600 "$keychain"
           security unlock-keychain -p "$kc_pass" "$keychain"
           printf '%s' "$IOS_DIST_P12" | base64 --decode > "$RUNNER_TEMP/dist.p12"
@@ -90,9 +93,8 @@ jobs:
           rm -f "$RUNNER_TEMP/dist.p12"
           security set-key-partition-list -S apple-tool:,apple: -s -k "$kc_pass" "$keychain" > /dev/null
           security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
-          echo "SIGNING_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
           if ! security find-identity -v -p codesigning "$keychain" | grep -q "Apple Distribution"; then
-            echo "::error::IOS_DIST_P12 holds no Apple Distribution identity (certificate plus its private key)."
+            echo "::error::IOS_DIST_P12 holds no VALID Apple Distribution identity (missing private key, expired or revoked)."
             exit 1
           fi
           security find-identity -v -p codesigning "$keychain" | grep -c "Apple Distribution" | sed 's/^/Apple Distribution identities: /'
