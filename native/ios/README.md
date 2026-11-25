@@ -28,6 +28,9 @@ Simulator, on every change under `native/ios/`.
   `https` callback `/app/callback/ios`, which needs the Team ID in the site's
   `apple-app-site-association` and the Associated Domains capability on the App ID.
 
+The app icon (`Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png`, 1024×1024, opaque) is the
+Backstage «B» mark, resized from `public/backstage-mark-v2.png`, the same mark as the web's icons.
+
 ## TestFlight
 
 Actions → «iOS TestFlight» → Run workflow on `main` (`.github/workflows/ios-testflight.yml`,
@@ -40,6 +43,10 @@ build number is `<run number>.<attempt>`. Before the first run:
    `testflight` environment ([`docs/SECRETS.md`](../../docs/SECRETS.md)). Without the certificate
    the run stops at «Install the Apple Distribution certificate» (Xcode's cloud signing, its
    fallback, was refused by App Store Connect).
+
+First successful upload: run 4, 2026-11-25 (build 0.1.0 (4.1)). Runs 1–3 failed on signing: run 1
+because App Store Connect refused Xcode's cloud signing; run 2 stopped at the identity check; run 3's `.p12` held an Apple
+Development identity (the Distribution `.cer` sat in the System keychain, apart from its key).
 
 Automatic signing archives with a development profile first; if the run says the team has no
 devices, register one iPhone under Devices and run it again. Each fresh runner may create a new
