@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import XCTest
 @testable import Backstage
 
@@ -30,14 +31,32 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    /// Hosts the view in a real window and draws its layer tree: what the phone shows, fonts and
+    /// dynamic colours resolved for `scheme`. (`ImageRenderer` timed out on this content.)
     private func render<V: View>(_ view: V, scheme: ColorScheme, to path: String) throws {
-        let content = view
-            .frame(width: 393)
-            .background(BS.base)
-            .environment(\.colorScheme, scheme)
-        let renderer = ImageRenderer(content: content)
-        renderer.scale = 2
-        let data = try XCTUnwrap(renderer.uiImage?.pngData(), "nothing drawn for \(path)")
+        let host = UIHostingController(rootView: view.frame(width: 393).background(BS.base))
+        let style: UIUserInterfaceStyle = scheme == .dark ? .dark : .light
+        host.overrideUserInterfaceStyle = style
+        host.safeAreaRegions = []
+        var size = host.sizeThatFits(in: CGSize(width: 393, height: 20_000))
+        size.width = 393
+        size.height = min(max(size.height, 100), 6_000)
+        let window = UIWindow(frame: CGRect(origin: .zero, size: size))
+        window.overrideUserInterfaceStyle = style
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        host.view.frame = window.bounds
+        host.view.setNeedsLayout()
+        host.view.layoutIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.5))
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 2
+        format.opaque = true
+        let image = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
+        }
+        window.isHidden = true
+        let data = try XCTUnwrap(image.pngData(), "nothing drawn for \(path)")
         try data.write(to: URL(fileURLWithPath: path))
     }
 }
