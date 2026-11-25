@@ -78,6 +78,9 @@ design). Physical phones sign in only against production through the verified re
 /api/app/v1/me` with the access token, refresh once, present the FIRST refresh token again (must
 answer `invalid_grant` and revoke the grant: the second refresh token must now fail too), and call
 the revoke endpoint. Check «Apps conectadas» in `/me/ajustes` along the way.
+First real-phone run: 2026-11-25, TestFlight build 0.1.0 (5.1) on Frank's iPhone, against production: sign-in
+through the verified redirect, `/me`, a cold relaunch that kept the session, and sign-out all worked. The
+refresh-token reuse check above has not been done by hand yet (the server's unit tests cover it).
 
 **Closing sessions.** The person: `/me/ajustes` → «Apps conectadas» → «Cerrar sesión en ese
 dispositivo». A super-admin, for a lost phone: «Personas» → ⋯ → «Cerrar sesiones de la app».
