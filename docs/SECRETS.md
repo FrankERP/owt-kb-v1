@@ -582,9 +582,10 @@ that can push a branch could add a workflow there that reads a repository secret
 limited to `main` refuses a job from any other ref. **Not needed in:** Vercel, GCF, the app itself, a
 cloud session, `.env.local`.
 
-**Status: NOT SET yet** (2026-11-24). Frank creates the key and enters the three secrets himself; the
-`.p8` never passes through a chat or a session. A required reviewer on the environment is optional;
-if one is set, only that person approves a run (a session never approves, rejects or bypasses it).
+**Status: SET** (2026-11-24) by Frank in the `testflight` environment; first successful upload 2026-11-25 (run 4).
+Frank enters the three secrets himself; the `.p8` never passes through a chat or a session. A required
+reviewer on the environment is optional; if one is set, only that person approves a run (a session never
+approves, rejects or bypasses it).
 
 **Purpose.** Lets the TestFlight workflow manage signing and upload the iPhone app:
 `-allowProvisioningUpdates` creates the development certificate and the provisioning profiles, and
@@ -617,8 +618,11 @@ certificates and profiles; that is why it lives only in an environment limited t
 key** (limited to `main`), read by `.github/workflows/ios-testflight.yml`. **Not needed in:** Vercel,
 GCF, the app, a cloud session, `.env.local`, repository secrets.
 
-**Status: NOT SET yet** (2026-11-24). Frank makes the certificate on his Mac and enters both secrets
-himself; the `.p12` never passes through a chat or a session.
+**Status: SET** (2026-11-25) by Frank; first successful upload 2026-11-25 (run 4, build 0.1.0 (4.1)).
+Frank makes the certificate on his Mac and enters both secrets himself; the `.p12` never passes through a
+chat or a session.
+Export from the **login** keychain: a `.cer` double-clicked into «System» sits apart from the CSR's private
+key (login), so the pair never forms an identity and «My Certificates» offers only other certificates.
 
 **Purpose.** The identity the TestFlight export signs with. Xcode's cloud-managed distribution
 signing (what the export uses when no local identity exists) was refused by App Store Connect as
