@@ -47,6 +47,14 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         ITSAppUsesNonExemptEncryption: false
+        # The web's three faces (app/brandFonts.ts), as static instances of the Google Fonts
+        # variable files (OFL; licences beside them in Resources/Fonts).
+        UIAppFonts:
+          - AdventPro-SemiBold.ttf
+          - Urbanist-Regular.ttf
+          - Urbanist-SemiBold.ttf
+          - Urbanist-ExtraBold.ttf
+          - Jura-SemiBold.ttf
         # Debug talks to local `next dev` (the private scheme callback the server accepts only on
         # localhost); Release to production over the verified https callback (AppConfig.swift).
         BackstageOrigin: $(BACKSTAGE_ORIGIN)

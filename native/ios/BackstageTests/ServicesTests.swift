@@ -71,15 +71,19 @@ final class ServiceDayTests: XCTestCase {
         XCTAssertEqual(ServiceDay.countdown(from: "2026-11-28", to: "2026-11-28"), "Hoy")
         XCTAssertEqual(ServiceDay.countdown(from: "2026-11-28", to: "2026-11-29"), "Mañana")
         XCTAssertEqual(ServiceDay.countdown(from: "2026-11-28", to: "2026-12-05"), "En 7 días")
-        XCTAssertEqual(ServiceDay.countdown(from: "2026-11-28", to: "2026-12-26"), "En 4 semanas")
+        XCTAssertEqual(ServiceDay.countdown(from: "2026-11-28", to: "2026-12-26"), "En 28 días")
         XCTAssertNil(ServiceDay.countdown(from: "2026-11-28", to: "2026-11-27"))
     }
 
     func testLabelsAreSpanishAndIgnoreThePhonesTimeZone() {
         XCTAssertEqual(ServiceDay.longLabel("2026-11-29"), "domingo 29 de noviembre")
         XCTAssertEqual(ServiceDay.longLabel("2026-11-29").capitalizedFirst, "Domingo 29 de noviembre")
-        let tile = ServiceDay.tile("2026-11-29")
-        XCTAssertEqual(tile.day, "29")
-        XCTAssertEqual(tile.month, "NOV")
+        let leaf = ServiceDay.leaf("2026-11-29")
+        XCTAssertEqual(leaf.weekday, "Dom")
+        XCTAssertEqual(leaf.day, "29")
+        XCTAssertEqual(leaf.month, "nov")
+        XCTAssertEqual(ServiceDay.weekday("2026-11-28"), "sábado")
+        XCTAssertEqual(joinNames(["Jakey"]), "Jakey")
+        XCTAssertEqual(joinNames(["Ana", "Jakey", "Lali"]), "Ana, Jakey y Lali")
     }
 }

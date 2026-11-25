@@ -32,6 +32,9 @@ struct AppService: Decodable, Hashable, Identifiable, Sendable {
 
     var isMine: Bool { seated }
 
+    /// Who leads, for the folded card's «Lead Jakey y Lali».
+    var leads: [AppPerson] { sections.first { $0.id == "voces" }?.people.filter { $0.seat == "Lead" } ?? [] }
+
     /// Everyone on the service, in section order, for the face stack.
     var people: [AppPerson] { sections.flatMap(\.people) }
 }
@@ -48,7 +51,11 @@ struct AppPerson: Decodable, Hashable, Sendable {
     let photo: String?
     let mine: Bool
 
-    var initial: String { String(name.trimmingCharacters(in: .whitespaces).prefix(1)).uppercased() }
+    /// The web's `initialsOf`: the first two letters of the name.
+    var initials: String {
+        let two = String(name.trimmingCharacters(in: .whitespaces).prefix(2)).uppercased()
+        return two.isEmpty ? "?" : two
+    }
 }
 
 struct AppSong: Decodable, Hashable, Sendable {
@@ -95,15 +102,34 @@ enum ServiceDay {
         return calendar.dateComponents([.day], from: a, to: b).day
     }
 
-    /// «Hoy», «Mañana», «En 5 días», «En 3 semanas».
+    /// «Hoy», «Mañana», «En 5 días»: the web's `formatCountdown`, word for word.
     static func countdown(from today: String, to date: String) -> String? {
         guard let days = daysBetween(today, date), days >= 0 else { return nil }
         switch days {
         case 0: return "Hoy"
         case 1: return "Mañana"
-        case 2..<14: return "En \(days) días"
-        default: return "En \(days / 7) semanas"
+        default: return "En \(days) días"
         }
+    }
+
+    private static let weekdays = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"]
+    private static let weekdaysShort = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"]
+    private static let monthsShort = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
+
+    /// «domingo», for «Te toca el domingo».
+    static func weekday(_ iso: String) -> String {
+        guard let date = parse(iso) else { return "" }
+        return weekdays[calendar.component(.weekday, from: date) - 1]
+    }
+
+    /// The date leaf's three parts, as the web's `DateTile` draws them: («Dom», «29», «nov»).
+    static func leaf(_ iso: String) -> (weekday: String, day: String, month: String) {
+        guard let date = parse(iso) else { return ("", "", "") }
+        return (
+            weekdaysShort[calendar.component(.weekday, from: date) - 1],
+            String(calendar.component(.day, from: date)),
+            monthsShort[calendar.component(.month, from: date) - 1]
+        )
     }
 
     private static let longFormatter: DateFormatter = {
@@ -114,28 +140,10 @@ enum ServiceDay {
         return f
     }()
 
-    private static let monthFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "es_MX")
-        f.timeZone = TimeZone(identifier: "UTC")
-        f.dateFormat = "MMM"
-        return f
-    }()
-
     /// «domingo 29 de noviembre».
     static func longLabel(_ iso: String) -> String {
         guard let date = parse(iso) else { return iso }
         return longFormatter.string(from: date)
-    }
-
-    /// The date tile: («29», «NOV»).
-    static func tile(_ iso: String) -> (day: String, month: String) {
-        guard let date = parse(iso) else { return ("", "") }
-        let day = String(calendar.component(.day, from: date))
-        let month = monthFormatter.string(from: date)
-            .replacingOccurrences(of: ".", with: "")
-            .uppercased()
-        return (day, month)
     }
 
     /// «Noviembre 2026», the list's month headers.
@@ -147,6 +155,12 @@ enum ServiceDay {
         f.dateFormat = "LLLL yyyy"
         return f.string(from: date).capitalized(with: Locale(identifier: "es_MX"))
     }
+}
+
+/// «Jakey», «Jakey y Lali», «Ana, Jakey y Lali»: the web's `joinNames`.
+func joinNames(_ names: [String]) -> String {
+    guard names.count > 1 else { return names.first ?? "" }
+    return names.dropLast().joined(separator: ", ") + " y " + names[names.count - 1]
 }
 
 /// The services grouped by month, in order, for the list's section headers.
@@ -167,4 +181,53 @@ struct ServiceMonth: Identifiable, Hashable {
         }
         return months
     }
+}
+
+/// Inicio's greeting (the web's `homeGreeting`): «Hola, Frank» over «Te toca el domingo», the
+/// day in green; the line under it says the rest when the card below is another service.
+struct HomeGreeting: Equatable {
+    let hello: String?
+    let lead: String
+    let day: String
+    let sub: String?
+    /// The service the greeting speaks of, so the page can tell whether it is the card below.
+    let serviceID: String?
+
+    static func make(name: String?, today: String, services: [AppService]) -> HomeGreeting {
+        let first = name?.split(whereSeparator: \.isWhitespace).first.map(String.init)
+        let hello = first.map { "Hola, \($0)" }
+        guard let mine = services.first(where: { $0.isMine }),
+              let days = ServiceDay.daysBetween(today, mine.date)
+        else {
+            return HomeGreeting(hello: hello, lead: "Esta vez no te toca", day: "", sub: nil, serviceID: nil)
+        }
+        let lead: String
+        let day: String
+        switch days {
+        case 0: (lead, day) = ("Te toca ", "hoy")
+        case 1: (lead, day) = ("Te toca ", "mañana")
+        case 2..<7: (lead, day) = ("Te toca el ", ServiceDay.weekday(mine.date))
+        default: (lead, day) = ("Te toca el ", "\(ServiceDay.weekday(mine.date)) \(ServiceDay.leaf(mine.date).day)")
+        }
+        let weekend = mine.kind != .special
+        var parts: [String] = []
+        if !weekend { parts.append(mine.headline) }
+        if !mine.mySeats.isEmpty { parts.append(mine.mySeats.joined(separator: " · ")) }
+        if weekend, let time = mine.time { parts.append(time) }
+        if days >= 2 { parts.append("en \(days) días") }
+        if !mine.songs.isEmpty { parts.append(mine.songs.count == 1 ? "1 canción" : "\(mine.songs.count) canciones") }
+        return HomeGreeting(hello: hello, lead: lead, day: day, sub: parts.joined(separator: " · "), serviceID: mine.id)
+    }
+}
+
+extension AppService {
+    /// «Domingo · 11:00».
+    var headline: String {
+        [title, time].compactMap { $0 }.joined(separator: " · ")
+    }
+}
+
+extension String {
+    /// «domingo 29 de noviembre» → «Domingo 29 de noviembre».
+    var capitalizedFirst: String { prefix(1).uppercased() + dropFirst() }
 }

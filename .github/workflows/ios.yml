@@ -58,8 +58,19 @@ jobs:
         working-directory: native/ios
         run: |
           set +e
+          # SnapshotTests draws the screens to PNG here (xcodebuild hands TEST_RUNNER_* to the tests
+          # without the prefix); the next step uploads them, so a session can look at the app.
+          export TEST_RUNNER_SNAPSHOT_DIR="$RUNNER_TEMP/snapshots"
           xcodebuild test -project Backstage.xcodeproj -scheme Backstage -destination "id=${{ steps.sim.outputs.udid }}" CODE_SIGNING_ALLOWED=NO > xcodebuild.log 2>&1
           status=$?
           grep -E "error:|Test Case .*(passed|failed)|Executed|\*\* " xcodebuild.log
           if [ "$status" -ne 0 ]; then tail -n 80 xcodebuild.log; fi
           exit "$status"
+      - name: Upload the screen snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-snapshots
+          path: ${{ runner.temp }}/snapshots
+          if-no-files-found: warn
+          retention-days: 7
