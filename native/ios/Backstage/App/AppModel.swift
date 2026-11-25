@@ -30,6 +30,9 @@ final class AppModel {
     private(set) var services: Services = .loading
     /// When the list last loaded, so coming back to the app refreshes a list left from another day.
     private var servicesLoadedAt: Date?
+    /// The last `today` the server sent, so a service page left open keeps its countdown while
+    /// the list reloads or fails.
+    private(set) var lastToday = ""
     /// A passing problem shown over the signed-in screen («No hay conexión»…).
     var banner: String?
 
@@ -84,6 +87,7 @@ final class AppModel {
         do {
             let answer = try await api.services()
             services = .loaded(today: answer.today, services: answer.services)
+            lastToday = answer.today
             servicesLoadedAt = Date()
         } catch APIError.forbidden {
             services = .notInWorship
