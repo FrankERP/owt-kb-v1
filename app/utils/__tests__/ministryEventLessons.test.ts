@@ -527,6 +527,12 @@ describe("class notices: who of the holders a write owes an email", () => {
     expect(effectsOf(await update("admin", gap, { date: "2026-12-06" }))).toBeNull();
   });
 
+  it("a past class moved forward is a change, not a new assignment; one moved into the past is a change too", async () => {
+    const past = await cls("2026-11-08", { title: "Cap 4", seats: seat("pastorON") });
+    expect(summary(await update("admin", past, { date: "2026-11-15" }))).toEqual({ pastorON: [["changed", "Cap 4", "2026-11-08→2026-11-15"]] });
+    expect(summary(await update("admin", past, { date: "2026-11-01" }))).toEqual({ pastorON: [["changed", "Cap 4", "2026-11-15→2026-11-01"]] });
+  });
+
   it("a delete tells the holder; a past class, a typed name and a plain meeting owe nothing", async () => {
     const t = await cls("2026-11-22", { title: "Cap 6", seats: seat("pastorON") });
     const del = await deleteMinistryEvent("admin", "jovenes", t, { _rev: rev(t) });

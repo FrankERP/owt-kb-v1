@@ -595,6 +595,38 @@ describe("class reminders", () => {
       ]);
     });
 
+    it("meeting reminders go out BEFORE any class is read; a slow class read stops between rounds", async () => {
+      h.readAnnounced.mockResolvedValue([meeting({ date: "2026-12-06", program: [line("oracion", "jacob")] })]);
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(NOW);
+      const order: string[] = [];
+      h.sendEmail.mockImplementation(async (m: { subject: string }) => {
+        order.push(`send:${m.subject.slice(0, 12)}`);
+        return { ok: true };
+      });
+      let reads = 0;
+      h.readEvents.mockImplementation(async (_a: unknown, o: { me: string }) => {
+        order.push("read");
+        // The first round of six reads takes 20 s: no second round may start.
+        if (++reads === 6) vi.setSystemTime(new Date(NOW.getTime() + 20_000));
+        return o.me === "jacob" ? [cls()] : [];
+      });
+      const report = await sendMinistryEventReminders(NOW);
+      expect(order[0]).toMatch(/^send:Recordatorio/);
+      expect(reads).toBe(6);
+      // Jacob was read in the first round, but no send fits any more: planned, skipped, logged.
+      expect(report).toMatchObject({ meetings: 1, emailed: 1 });
+      expect(error.mock.calls.some((c: unknown[]) => String(c[0]).includes("ministry_class_reminder_cut"))).toBe(true);
+      vi.useRealTimers();
+    });
+
+    it("no class is read at all when the meeting waves already used the step", async () => {
+      h.readAnnounced.mockResolvedValue([]);
+      const report = await sendMinistryEventReminders(NOW, { spentMs: REMINDER_STEP_DEADLINE_MS - 19_000 });
+      expect(h.readEvents).not.toHaveBeenCalled();
+      expect(report).toMatchObject({ planned: 0, classes: 0 });
+    });
+
     it("a failed class read costs the meetings nothing", async () => {
       h.readAnnounced.mockResolvedValue([meeting({ date: "2026-12-06", program: [line("oracion", "jacob")] })]);
       h.readEvents.mockRejectedValue(new Error("no token"));

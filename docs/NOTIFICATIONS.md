@@ -762,12 +762,16 @@ a roster). Not outbox notices either: no queue, no debounce.
   whoever gives a class dated EXACTLY 7 and 2 days ahead — «Falta una semana para tu clase — <día>»,
   «Faltan dos días para tu clase — <día>», with the class's notes. It reads Jóvenes' people
   (`JOVENES_PEOPLE_QUERY`) and then each one's OWN member read (`readMinistryEvents`, six at a
-  time) — never a no-person read of a group (ADR-0081). Its emails join the meeting reminders'
-  waves, under the same deadline; a failure reading classes is logged
-  (`ministry_class_reminder_failed`) and costs the meeting reminders nothing. The route's
-  `meetingReminders` carries `classes` (how many of `planned` are class reminders).
+  time) — never a no-person read of a group (ADR-0081). The class reads start only AFTER every
+  meeting reminder went out, and stop between rounds once one more send timeout would pass
+  `REMINDER_STEP_DEADLINE_MS` (`ministry_class_reminder_cut`, with how many people were left
+  unread); their emails go in the same kind of waves under the same deadline. So neither a slow
+  nor a failed class read (`ministry_class_reminder_failed`) can cost a meeting reminder. The
+  route's `meetingReminders` carries `classes` (how many of `planned` are class reminders).
+- **A past class moved forward** (a «Recorrer» from last Sunday) is a change for its holder, not
+  a new assignment; one moved into the past is a change too. Past on both sides owes nothing.
 - Logs: `ministry_class_notices` (`planned`, `emailed`), `ministry_class_notice_failed`,
-  `ministry_class_notices_failed`.
+  `ministry_class_notices_failed`, `ministry_class_reminder_cut`.
 
 ## The liveness alarm
 

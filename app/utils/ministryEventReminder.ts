@@ -55,8 +55,10 @@ const COORDINATOR_SEAT = "encargado";
  * No wave of sends may END past this many milliseconds of the route (what the route spent before
  * this step, plus the step's own time, plus one send timeout): the liveness alarm runs next and
  * its email to a person may need a send timeout of its own inside the route's 60 s. What the
- * deadline leaves unsent is logged, never retried. The two Sanity reads have no timeout of their
- * own, like the leads' step's (ADR-0080).
+ * deadline leaves unsent is logged, never retried. No Sanity read here has a timeout of its
+ * own, like the leads' step's (ADR-0080); the class reads (one for the people, then one per
+ * person, six at a time) start only after every meeting reminder went out, and stop between rounds
+ * once a send would no longer fit.
  */
 export const REMINDER_STEP_DEADLINE_MS = 35_000;
 
@@ -156,8 +158,16 @@ export function planClassReminderEmails(
   return out;
 }
 
-/** Today's class reminders: the people, each one's own read of the reminded days, the plan. */
-async function planTodaysClassReminders(todayCdmx: string, env: { baseUrl: string; allow: string[] }): Promise<PlannedEmail[]> {
+/**
+ * Today's class reminders: the people, each one's own read of the reminded days, the plan.
+ * `stillTime` is asked before every round of reads: when it says no, the reads stop and only the
+ * people already read are planned (the rest is logged, `ministry_class_reminder_cut`).
+ */
+async function planTodaysClassReminders(
+  todayCdmx: string,
+  env: { baseUrl: string; allow: string[] },
+  stillTime: () => boolean,
+): Promise<PlannedEmail[]> {
   const dates = classReminderDates(todayCdmx);
   if (dates.length === 0) return [];
   const daysOf = new Map(dates.map((d) => [d.date, d.days]));
@@ -167,6 +177,10 @@ async function planTodaysClassReminders(todayCdmx: string, env: { baseUrl: strin
   const people = (rows ?? []).filter((p) => p && typeof p._id === "string" && assignedAddress(p, "jovenes", env.allow) !== null);
   const reads: Array<{ person: PersonRow; events: MinistryEventView[] }> = [];
   for (let i = 0; i < people.length; i += CLASS_READ_CONCURRENCY) {
+    if (!stillTime()) {
+      console.error(JSON.stringify({ event: "ministry_class_reminder_cut", unread: people.length - i }));
+      break;
+    }
     const batch = people.slice(i, i + CLASS_READ_CONCURRENCY);
     const events = await Promise.all(
       batch.map((p) =>
@@ -323,30 +337,43 @@ export async function sendMinistryEventReminders(now: Date = new Date(), opts: {
     const people = ids.length ? await operationalClient.fetch<PersonRow[] | null>(NOTICE_PEOPLE_QUERY, { ids }) : [];
     const env = { baseUrl: appBaseUrl(), allow: getAllowlist() };
     const meetingEmails = planReminderEmails(meetings, people ?? [], env);
-    // The classes in a try of their own: a failed read there never costs a meeting's reminders.
-    let classEmails: PlannedEmail[] = [];
-    try {
-      classEmails = await planTodaysClassReminders(now.toLocaleDateString("sv", { timeZone: TIMEZONE }), env);
-    } catch (err) {
-      console.error(JSON.stringify({ event: "ministry_class_reminder_failed" }), err);
-    }
-    // Meetings first: they were the step's whole job before classes joined it.
-    const planned = [...meetingEmails, ...classEmails];
     // Preview mail goes to one address (docs/SECRETS.md), like every other app email.
     const redirectTo = process.env.EMAIL_REDIRECT_TO?.trim();
+    // One more send timeout must still fit before the deadline, or nothing new starts.
+    const stillTime = () => spent + (Date.now() - started) + SEND_TIMEOUT_MS <= REMINDER_STEP_DEADLINE_MS;
+    const planned: PlannedEmail[] = [];
+    const results: PromiseSettledResult<{ ok: boolean; error?: string }>[] = [];
     // In waves as wide as the transport's pool, so no send starts its timeout queued behind
     // another; and no wave starts once one more timeout would outlast the route.
-    const results: PromiseSettledResult<{ ok: boolean; error?: string }>[] = [];
-    for (let i = 0; i < planned.length; i += SEND_CONCURRENCY) {
-      if (spent + (Date.now() - started) + SEND_TIMEOUT_MS > REMINDER_STEP_DEADLINE_MS) break;
-      const wave = planned.slice(i, i + SEND_CONCURRENCY).map((p) =>
-        sendEmail({
-          to: redirectTo || p.email,
-          subject: redirectTo ? `[→ ${p.email}] ${p.subject}` : p.subject,
-          html: p.html,
-        }),
-      );
-      results.push(...(await Promise.allSettled(wave)));
+    const sendAll = async (emails: readonly PlannedEmail[]) => {
+      planned.push(...emails);
+      for (let i = 0; i < emails.length; i += SEND_CONCURRENCY) {
+        if (!stillTime()) break;
+        const wave = emails.slice(i, i + SEND_CONCURRENCY).map((p) =>
+          sendEmail({
+            to: redirectTo || p.email,
+            subject: redirectTo ? `[→ ${p.email}] ${p.subject}` : p.subject,
+            html: p.html,
+          }),
+        );
+        results.push(...(await Promise.allSettled(wave)));
+      }
+    };
+    // Meetings first, read and SENT before any class is read: they were the step's whole job before
+    // classes joined it, so slow class reads can never cost them (results stay aligned with
+    // `planned` because nothing of a later group is sent while an earlier one has unsent emails).
+    await sendAll(meetingEmails);
+    // The classes in a try of their own: a failed read there never costs a meeting's reminders.
+    let classEmails: PlannedEmail[] = [];
+    if (results.length === meetingEmails.length && stillTime()) {
+      try {
+        classEmails = await planTodaysClassReminders(now.toLocaleDateString("sv", { timeZone: TIMEZONE }), env, stillTime);
+      } catch (err) {
+        console.error(JSON.stringify({ event: "ministry_class_reminder_failed" }), err);
+      }
+      await sendAll(classEmails);
+    } else {
+      console.error(JSON.stringify({ event: "ministry_class_reminder_cut", unread: "all" }));
     }
     let emailed = 0;
     results.forEach((r, i) => {

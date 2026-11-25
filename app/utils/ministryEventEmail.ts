@@ -268,6 +268,8 @@ function changeRow(c: ClassChange): string {
   let detail = `<p style="${P}${c.kind === "removed" ? `;color:${C.muted};text-decoration:line-through` : ""}">${esc(classWhen(line))}</p>`;
   if (c.kind === "changed") {
     const before: string[] = [];
+    if (c.was.group !== c.now.group) before.push(groupWords(c.was.group));
+    if (c.was.series !== c.now.series) before.push(c.was.series);
     if (c.was.label !== c.now.label) before.push(c.was.label);
     if (c.was.date !== c.now.date || c.was.time !== c.now.time || c.was.place !== c.now.place) before.push(classWhen(c.was));
     if (before.length) detail += `<p style="margin:4px 0 0;font:13px system-ui,sans-serif;color:${C.muted}">Antes: ${esc(before.join(" · "))}</p>`;

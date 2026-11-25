@@ -92,17 +92,23 @@ const changeDate = (c: ClassChange) => (c.kind === "removed" ? c.was.date : c.no
  * The notices one write owes. `before` and `after` are the classes the write touched, as
  * `classSnapOf` read them (`null` for a row that is not an announced class); a create has no
  * `before`, a delete no `after`. `today` is the CDMX calendar day: a class before it is history and
- * owes nothing. In date order per person; people in the order they first appear.
+ * owes nothing when it is before it on both sides. In date order per person; people in the order
+ * they first appear.
  */
 export function classNotices(
   before: ReadonlyArray<ClassSnap | null>,
   after: ReadonlyArray<ClassSnap | null>,
   ctx: { actorId: string; today: string },
 ): ClassNotice[] {
-  const live = (s: ClassSnap | null): s is ClassSnap => s !== null && s.date >= ctx.today;
-  const was = new Map(before.filter(live).map((s) => [s.id, s]));
-  const now = new Map(after.filter(live).map((s) => [s.id, s]));
-  const ids = [...new Set([...was.keys(), ...now.keys()])];
+  const announced = (s: ClassSnap | null): s is ClassSnap => s !== null;
+  const was = new Map(before.filter(announced).map((s) => [s.id, s]));
+  const now = new Map(after.filter(announced).map((s) => [s.id, s]));
+  // A class counts when EITHER side is today or later: a past class moved forward is a change for
+  // whoever held it (not a new assignment), and one moved into the past is a change too (not «ya no
+  // te toca»). A class past on both sides is history.
+  const ids = [...new Set([...was.keys(), ...now.keys()])].filter(
+    (id) => (was.get(id)?.date ?? "") >= ctx.today || (now.get(id)?.date ?? "") >= ctx.today,
+  );
 
   const out = new Map<string, ClassChange[]>();
   const add = (memberId: string, change: ClassChange) => {

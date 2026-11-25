@@ -209,7 +209,9 @@ no-person read by group — would be the first query that returns a group's meet
 particular. Instead the step reads Jóvenes' people and asks `readMinistryEvents` FOR EACH ONE,
 with their own access, in member mode, over the two reminded days: a reminder can only name a
 class its recipient already reads, and no query shape is added. The cost is one small read per
-person who may be written to (~25 a day, six at a time), inside the step's existing deadline.
+person who may be written to (~25 a day, six at a time). Those reads start only after every
+meeting reminder went out and stop between rounds once one more send would not fit the step's
+deadline, so a slow class read can never cost a meeting reminder.
 
 **Rejected.**
 
