@@ -51,6 +51,8 @@ struct APIClient: Sendable {
 
     func me() async throws -> Me { try await get("/api/app/v1/me") }
 
+    func services() async throws -> ServicesResponse { try await get("/api/app/v1/services") }
+
     func get<T: Decodable>(_ path: String) async throws -> T {
         var token = try await sessionCall { try await authority.accessToken() }
         for attempt in 0..<2 {

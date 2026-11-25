@@ -34,7 +34,7 @@ Backstage «B» mark, resized from `public/backstage-mark-v2.png`, the same mark
 ## TestFlight
 
 Actions → «iOS TestFlight» → Run workflow on `main` (`.github/workflows/ios-testflight.yml`,
-`ExportOptions.plist`). Built with Xcode 26; the version is `MARKETING_VERSION` in `project.yml`, the
+`ExportOptions.plist`). Built with Xcode 27 on the `xcode-27` runner image (ITMS-90725: from April 2027 uploads need the iOS 27 SDK); the version is `MARKETING_VERSION` in `project.yml`, the
 build number is `<run number>.<attempt>`. Before the first run:
 
 1. The App ID `com.owtBackstage.app` is registered (Certificates, IDs & Profiles) with Associated Domains.

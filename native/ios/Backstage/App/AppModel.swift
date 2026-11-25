@@ -16,7 +16,18 @@ final class AppModel {
         case offline
     }
 
+    /// The «Próximos servicios» list on the home screen.
+    enum Services: Equatable {
+        case loading
+        case loaded(today: String, services: [AppService])
+        /// `403`: the person is not in Alabanza (a Jóvenes or Kids member): no list, no error.
+        case notInWorship
+        /// The first load failed; a later failure keeps the last list and shows the banner.
+        case failed(String)
+    }
+
     private(set) var phase: Phase = .starting
+    private(set) var services: Services = .loading
     /// A passing problem shown over the signed-in screen («No hay conexión»…).
     var banner: String?
 
@@ -60,6 +71,31 @@ final class AppModel {
             phase = .signedIn(me)
         } catch {
             show(error)
+            return
+        }
+        await loadServices()
+    }
+
+    /// Loads the upcoming services. A session that ended goes to the sign-in screen as anywhere
+    /// else; a passing failure keeps the list already on screen and says so in the banner.
+    func loadServices() async {
+        do {
+            let answer = try await api.services()
+            services = .loaded(today: answer.today, services: answer.services)
+        } catch APIError.forbidden {
+            services = .notInWorship
+        } catch {
+            let cause = Self.sessionError(from: error)
+            switch cause {
+            case .signedOut, .accountDisabled:
+                show(cause)
+            case .network, .unavailable, .server:
+                if case .loaded = services {
+                    banner = Self.message(for: cause)
+                } else {
+                    services = .failed(Self.message(for: cause))
+                }
+            }
         }
     }
 
@@ -104,6 +140,7 @@ final class AppModel {
     func signOut() async {
         await authority.signOut()
         banner = nil
+        services = .loading
         phase = .signedOut(notice: nil)
     }
 
@@ -129,29 +166,35 @@ final class AppModel {
         return components.url!
     }
 
-    private func show(_ error: Error) {
-        let sessionError: SessionError
-        if let e = error as? SessionError {
-            sessionError = e
-        } else if let api = error as? APIError {
+    private static func sessionError(from error: Error) -> SessionError {
+        if let e = error as? SessionError { return e }
+        if let api = error as? APIError {
             switch api {
-            case .session(let e): sessionError = e
-            case .forbidden: sessionError = .server(status: 403)
-            case .decoding: sessionError = .server(status: 0)
+            case .session(let e): return e
+            case .forbidden: return .server(status: 403)
+            case .decoding: return .server(status: 0)
             }
-        } else {
-            sessionError = .server(status: 0)
         }
+        return .server(status: 0)
+    }
 
+    private static func message(for error: SessionError) -> String {
+        error == .network
+            ? "No hay conexión. Revisa tu internet e intenta de nuevo."
+            : "Backstage no responde en este momento. Intenta de nuevo en un rato."
+    }
+
+    private func show(_ error: Error) {
+        let sessionError = Self.sessionError(from: error)
         switch sessionError {
         case .signedOut:
+            services = .loading
             phase = .signedOut(notice: nil)
         case .accountDisabled:
+            services = .loading
             phase = .signedOut(notice: "Tu acceso está desactivado. Habla con un administrador.")
         case .network, .unavailable, .server:
-            let message = sessionError == .network
-                ? "No hay conexión. Revisa tu internet e intenta de nuevo."
-                : "Backstage no responde en este momento. Intenta de nuevo en un rato."
+            let message = Self.message(for: sessionError)
             switch phase {
             case .signedIn:
                 banner = message
