@@ -412,7 +412,10 @@ built on `ministryAccess.ts` over ONE snapshot, `accessFromDoc`); worship pages 
   it when the write publishes it or moves its date), plus the music request to the super-admins
   who are people. Both are deliberate. The daily cron's reminders (`ministryEventReminder.ts`, 14
   and 7 days ahead) go only to whoever still owes something on those same meetings (`partGaps`),
-  and to the encargado of a Saturday whose Oración or a dinámica nobody holds.
+  and to the encargado of a Saturday whose Oración or a dinámica nobody holds. A CLASS's writes
+  mail only the seat holders they change (one email per person per write, never the actor; «Nuevo
+  libro» quiet), and its 7- and 2-day reminders read each holder through `readMinistryEvents` with
+  their OWN access — never a no-person group read (ADR-0089 addendum 2026-11-25).
   Unreleased features gate on `rolloutAllows` (`app/utils/rollout.ts`) on the server, not the nav.
 - **The days a Jóvenes pastor marked reach ONE page** (ADR-0090): only `/jovenes/admin` calls
   `readJovenesPeople({ awayFor: access, today })`; bare, that read projects no availability, so the

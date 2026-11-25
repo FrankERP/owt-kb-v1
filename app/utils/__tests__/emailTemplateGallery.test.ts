@@ -249,9 +249,48 @@ add("20-sirves-manana-dos.html", "Sirves mañana (dos servicios, uno sin setlist
   ...EVE_LINKS,
 }));
 
+// A group's classes (ADR-0089, addendum of 2026-11-25): a change of someone's classes, and the reminder.
+const { buildClassChangeEmail, buildClassReminderEmail } = await import("../ministryEventEmail");
+const CLASS = {
+  id: "x.0f8e6a52-1c1b-4d7e-9a43-6a2b1c0d9e12",
+  group: "otro-nivel",
+  series: "El Caos Dentro de Mi",
+  label: "Cap 7",
+  date: "2026-11-29",
+  time: "11:40",
+  place: "Oasis Tepepan",
+};
+const CLASS_LINKS = { link: "https://owt.test/jovenes/reunion/0f8e6a52-1c1b-4d7e-9a43-6a2b1c0d9e12", settingsLink: "https://owt.test/me/ajustes" };
+
+add("21-clase-te-toca.html", "Clases: te toca dar la clase", buildClassChangeEmail({
+  name: "Marianne",
+  group: "otro-nivel",
+  changes: [{ kind: "added", now: { ...CLASS, label: "Cap 6" } }],
+  ...CLASS_LINKS,
+}));
+
+add("22-clase-cambio-rol.html", "Clases: cambió tu rol (se recorrió, una clase quitada)", buildClassChangeEmail({
+  name: "Jakey",
+  group: "otro-nivel",
+  changes: [
+    { kind: "changed", was: CLASS, now: { ...CLASS, date: "2026-12-06" } },
+    { kind: "removed", was: { ...CLASS, label: "Cap 9", date: "2026-12-13" } },
+  ],
+  ...CLASS_LINKS,
+}));
+
+add("23-clase-recordatorio.html", "Clases: recordatorio a una semana (con notas)", buildClassReminderEmail({
+  name: "Jakey",
+  line: CLASS,
+  notes: "Cierre libro",
+  days: 7,
+  partnerNames: [],
+  ...CLASS_LINKS,
+}));
+
 describe("email template gallery", () => {
   it("renders every template without throwing", () => {
-    expect(gallery).toHaveLength(20);
+    expect(gallery).toHaveLength(23);
     for (const g of gallery) expect(g.html.length).toBeGreaterThan(200);
   });
 

@@ -175,3 +175,57 @@ narrowing as «Te toca» (`assignedAddress`: an active member of Jóvenes, an em
 - Vercel runs crons on Production only: on `preview` the step runs only when someone calls the
   route by hand with the secret, and then mails the one redirect address.
 
+
+## Addendum, 2026-11-25: a group's classes tell their holders
+
+Frank: «Puedes hacer que […] los pastores de Otro Nivel reciban notificaciones por correo sobre
+sus clases y cambios en el rol? Por ejemplo ahorita voy a hacer un cambio de que este domingo
+Marianne vuelve a dar el capítulo 6 del libro y se recorre lo demás».
+
+Until now a class («Clases del grupo», a one-group meeting with a `lesson`) announced nothing, on
+purpose: «Nuevo libro» creates up to 60 in a row, and «Te toca» is about whole-ministry meetings.
+
+**Decision.**
+
+- **A change.** The writer computes, from the rows it read BEFORE its commit and what it stores,
+  which holders (the member ids in a class's seats) a write changed: a class given to them, taken
+  away, or moved (date, hour, place, title, roster) — `classNotices` (`ministryLessonNotices.ts`,
+  pure). Create, edit, delete, «Recorrer» and «Cambiar con…» all compute it and return it as
+  `effects.classNotices`; the five routes send it in `after()` through `sendClassNotices`. Only an
+  ANNOUNCED class counts: published, a real class (not «No hubo clase»), today or later. ONE email
+  per person per write, listing every class of theirs it touched: a «Recorrer» of ten classes is
+  at most one email per responsable. Never the actor, never a typed name («Todos»).
+- **«Nuevo libro» is quiet.** Its creates send `announce: false`; each holder hears from the
+  reminders instead of one email per class. The flag can only make a create quieter.
+- **A reminder.** The daily cron's Jóvenes step also reminds whoever gives a class dated EXACTLY 7
+  and 2 days ahead (a Sunday class: the Sunday before and the Friday), with the class's notes.
+- **The audience narrows at send time** like «Te toca» (`assignedAddress`) and, because a class is
+  ONE group's, also to people who are, read now, in that group: whoever left hears nothing.
+
+**How the reminder reads, and why not like the meeting reminder.** `readAnnouncedMeetings` reads
+only whole-ministry meetings, on purpose: with no person behind it, what every member reads is the
+widest it may be (ADR-0081). A class is one group's, so widening that read — or adding a second
+no-person read by group — would be the first query that returns a group's meetings to nobody in
+particular. Instead the step reads Jóvenes' people and asks `readMinistryEvents` FOR EACH ONE,
+with their own access, in member mode, over the two reminded days: a reminder can only name a
+class its recipient already reads, and no query shape is added. The cost is one small read per
+person who may be written to (~25 a day, six at a time), inside the step's existing deadline.
+
+**Rejected.**
+
+- **One email per class on «Recorrer»** — a ten-class shift would mail the same person five times.
+- **Announcing «Nuevo libro» class by class** (up to 60 emails) or with a summary (a third email
+  type and an end-of-book call from the client, for an event that happens a few times a year).
+- **A per-group switch.** Only Otro Nivel has classes today; a group without a roster sends
+  nothing, and a holder can turn the emails off with «Nuevas asignaciones» like every other
+  assignment email.
+- **Telling the whole group.** The 500-a-day sender, and Frank asked for «sus clases».
+
+**Consequences.**
+
+- A class that moves from one person to another tells both; a swap tells both, once each.
+- A change made in the 7 or 2 days before a class is followed by the reminder too, if one falls
+  after it; a duplicated cron event sends the reminder twice; no catch-up (as above).
+- A class's notes and title are typed text: they appear in the body, escaped, never in a subject.
+- Vercel runs crons on Production only: on `preview` the reminders run only by hand. The change
+  emails do run on `preview`, to the one redirect address.

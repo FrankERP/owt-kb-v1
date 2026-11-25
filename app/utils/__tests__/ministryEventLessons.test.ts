@@ -97,6 +97,7 @@ import {
   EVENT_ERROR,
   SHIFT_MAX_ROWS,
   createMinistryEvent,
+  deleteMinistryEvent,
   shiftMinistryLesson,
   swapMinistryLessons,
   updateMinistryEvent,
@@ -440,5 +441,101 @@ describe("L4: «Cambiar con…»", () => {
     expect((await swap("andy", a, b)).status).toBe(403);
     const stale = await swapMinistryLessons("admin", "jovenes", a, { _rev: rev(a), with: { token: b, _rev: "old" } });
     expect(stale.status).toBe(409);
+  });
+});
+
+// ── The holders' notices (ADR-0089, addendum of 2026-11-25) ─────────────────
+
+describe("class notices: who of the holders a write owes an email", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    // 12:00 CDMX on 2026-11-10: every class below is still ahead.
+    vi.setSystemTime(new Date("2026-11-10T18:00:00Z"));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  type Effects = { classNotices: { actorId: string; notices: Array<{ memberId: string; changes: Array<Record<string, unknown>> }> } | null };
+  const effectsOf = (out: unknown) => (out as { ok: boolean; effects?: Effects }).effects?.classNotices ?? null;
+  /** `member: [kind, label, date (was→now)]` — the shape a reader of the email cares about. */
+  const summary = (out: unknown) =>
+    Object.fromEntries(
+      (effectsOf(out)?.notices ?? []).map((n) => [
+        n.memberId,
+        n.changes.map((c) => {
+          const now = c.now as { label: string; date: string } | undefined;
+          const was = c.was as { label: string; date: string } | undefined;
+          return [c.kind, (now ?? was)!.label, was && now ? `${was.date}→${now.date}` : (now ?? was)!.date];
+        }),
+      ]),
+    );
+
+  it("«Recorrer»: ONE notice per holder, with every class of theirs that moved; the draft gap adds nobody", async () => {
+    const c5 = await cls("2026-11-15", { title: "Cap 5", seats: seat("leaderON2") });
+    const c6 = await cls("2026-11-22", { title: "Cap 6", seats: seat("pastorON") });
+    const c7 = await cls("2026-11-29", { title: "Cap 7", seats: seat("jacob") });
+    const c8 = await cls("2026-12-06", { title: "Cap 8", seats: seat("pastorON") });
+    const out = await shift("leaderON", c6, { ids: [c6, c7, c8].map(idOf) });
+    expect(out.status).toBe(200);
+    expect(effectsOf(out)?.actorId).toBe("leaderON");
+    expect(summary(out)).toEqual({
+      pastorON: [["changed", "Cap 6", "2026-11-22→2026-11-29"], ["changed", "Cap 8", "2026-12-06→2026-12-13"]],
+      jacob: [["changed", "Cap 7", "2026-11-29→2026-12-06"]],
+    });
+    expect(c5).toBeTruthy();
+  });
+
+  it("«Cambiar con…»: each holder hears the class they gave and the one they took", async () => {
+    const a = await cls("2026-11-15", { title: "Cap 5", seats: seat("jacob") });
+    const b = await cls("2026-11-22", { title: "Cap 6", seats: seat("pastorON") });
+    const out = await swap("leaderON", a, b);
+    expect(out.status).toBe(200);
+    expect(summary(out)).toEqual({
+      jacob: [["removed", "Cap 5", "2026-11-15"], ["added", "Cap 6", "2026-11-22"]],
+      pastorON: [["added", "Cap 5", "2026-11-15"], ["removed", "Cap 6", "2026-11-22"]],
+    });
+  });
+
+  it("a create announces its holder; «Nuevo libro» (announce: false), a draft and the actor's own seat do not", async () => {
+    const { out } = await create("admin", { audience: ON, date: "2026-11-29", title: "Cap 6", lesson: lesson(), published: true, seats: seat("pastorON") });
+    expect(summary(out)).toEqual({ pastorON: [["added", "Cap 6", "2026-11-29"]] });
+    const quiet = await create("admin", { audience: ON, date: "2026-12-06", lesson: lesson(), published: true, seats: seat("pastorON"), announce: false });
+    expect(quiet.out.status).toBe(200);
+    expect(effectsOf(quiet.out)).toBeNull();
+    const draft = await create("admin", { audience: ON, date: "2026-12-13", lesson: lesson(), published: false, seats: seat("pastorON") });
+    expect(effectsOf(draft.out)).toBeNull();
+    const own = await create("leaderON", { audience: ON, date: "2026-12-20", lesson: lesson(), published: true, seats: seat("leaderON") });
+    expect(effectsOf(own.out)).toBeNull();
+  });
+
+  it("an edit: a new holder is told, the old one too; a new date is a change; «Hecho» and notes owe nothing", async () => {
+    const t = await cls("2026-11-22", { title: "Cap 6", seats: seat("jacob") });
+    const swapped = await update("admin", t, { seats: seat("pastorON") });
+    expect(summary(swapped)).toEqual({ jacob: [["removed", "Cap 6", "2026-11-22"]], pastorON: [["added", "Cap 6", "2026-11-22"]] });
+    const moved = await update("admin", t, { date: "2026-11-29" });
+    expect(summary(moved)).toEqual({ pastorON: [["changed", "Cap 6", "2026-11-22→2026-11-29"]] });
+    const retitled = await update("admin", t, { title: "Cap 6 (repaso)" });
+    expect(summary(retitled)).toEqual({ pastorON: [["changed", "Cap 6 (repaso)", "2026-11-29→2026-11-29"]] });
+    expect(effectsOf(await update("admin", t, { lesson: lesson({ done: true }) }))).toBeNull();
+    expect(effectsOf(await update("admin", t, { notes: "Cierre libro" }))).toBeNull();
+  });
+
+  it("publishing a class announces it; unpublishing takes it away; a «No hubo clase» row never names anyone", async () => {
+    const t = await cls("2026-11-22", { title: "Cap 6", seats: seat("pastorON"), published: false });
+    expect(summary(await update("admin", t, { published: true }))).toEqual({ pastorON: [["added", "Cap 6", "2026-11-22"]] });
+    expect(summary(await update("admin", t, { published: false }))).toEqual({ pastorON: [["removed", "Cap 6", "2026-11-22"]] });
+    const gap = await cls("2026-11-29", { lesson: lesson({ track: "sin_clase" }), seats: seat("pastorON") });
+    expect(effectsOf(await update("admin", gap, { date: "2026-12-06" }))).toBeNull();
+  });
+
+  it("a delete tells the holder; a past class, a typed name and a plain meeting owe nothing", async () => {
+    const t = await cls("2026-11-22", { title: "Cap 6", seats: seat("pastorON") });
+    const del = await deleteMinistryEvent("admin", "jovenes", t, { _rev: rev(t) });
+    expect(summary(del)).toEqual({ pastorON: [["removed", "Cap 6", "2026-11-22"]] });
+    const past = await cls("2026-11-08", { title: "Cap 4", seats: seat("pastorON") });
+    expect(effectsOf(await update("admin", past, { seats: seat("jacob") }))).toBeNull();
+    const todos = await cls("2026-12-20", { title: "Cap 10", seats: [{ role: "encargado", name: "Todos" }] });
+    expect(effectsOf(await update("admin", todos, { date: "2026-12-27" }))).toBeNull();
+    const meet = await eventBy("admin", { audience: ON, date: "2026-11-22", published: true, seats: seat("pastorON") });
+    expect(effectsOf(await update("admin", meet, { date: "2026-11-29" }))).toBeNull();
   });
 });

@@ -676,8 +676,8 @@ debounce, no claim — a meeting names nine people at most, once.
   rides in `effects.notices`; the four routes (create, PATCH, program PATCH, part PATCH) send it in
   `after()` through `sendMinistryEventNotices` (`ministryEventNotify.ts`), `maxDuration = 60`.
 - **Which meetings:** for all of Jóvenes (`audience.kind == "ministry"`), `published == true`,
-  dated today or later (CDMX). A group's meeting or class announces nothing («Nuevo libro» creates
-  up to 60 classes in a row).
+  dated today or later (CDMX). A group's meeting announces nothing here; a group's CLASS has its
+  own emails (§"A group's classes" below).
 - **«Te toca» — who:** the people the write ADDS to a seat, a part or a program line; everyone on
   the meeting when the write publishes it or moves its date; never the actor. «Cambió de fecha»
   is said only to someone who already held a role when the old date was announced: a person the
@@ -690,8 +690,9 @@ debounce, no claim — a meeting names nine people at most, once.
   (`music == "alabanza"` on a live meeting), or a standing request sits on a meeting whose date
   moved: the super-admins who are people (`service-account-*` and `member-dev-verify` excluded),
   minus the actor, under «Propuestas». Today that is Frank. A withdrawal names who had asked.
-- **Not sent:** a «ya no te toca»; anything on a delete, «Recorrer» or «Cambiar con…»; a note
-  edited under a standing request.
+- **Not sent:** a «ya no te toca» on a meeting; anything about a meeting on a delete; a note
+  edited under a standing request. (A class's delete, «Recorrer» and «Cambiar con…» do mail its
+  holders — below.)
 - **No debounce, accepted (ADR-0089):** track ↔ alabanza mails each time; removing someone and
   adding them back mails them again; unpublish then publish announces everyone again.
 - **Best-effort:** it never throws and never retries (a retry would be a second email to the
@@ -736,6 +737,37 @@ marker.
   `skipped`, `elapsedMs`, or `error: "ministry_reminder_failed"` — it never throws, so the alarms
   always run and the sweep is at worst skipped for layer 1). Logs: `ministry_reminder_run`, `ministry_reminder_send_failed`,
   `ministry_reminder_skipped`, `ministry_reminder_failed`.
+
+## Jóvenes — a group's classes (ADR-0089, addendum of 2026-11-25)
+
+Frank asked for it for Otro Nivel; it applies to every group's classes (today only Otro Nivel has
+a roster). Not outbox notices either: no queue, no debounce.
+
+- **A change — computed by the writer, pre-commit,** like «Te toca»: `classNotices`
+  (`ministryLessonNotices.ts`, pure) over the rows the write read before its commit and the same
+  rows as it stores them, returned as `effects.classNotices` by create, PATCH, DELETE, «Recorrer»
+  (`/shift`) and «Cambiar con…» (`/swap`); each of those five routes sends it in `after()` through
+  `sendClassNotices` (`ministryEventNotify.ts`), `maxDuration = 60`.
+- **Which classes:** a valid lesson on a one-group meeting, not «No hubo clase», `published ==
+  true`, today or later (CDMX). A draft, a gap row, a past class owe nothing.
+- **Who:** the member ids in the class's seats whose class the write gave, took away, or moved
+  (date, hour, place, title, roster). ONE email per person per write, listing every class of
+  theirs it touched (a «Recorrer» of ten classes: one per responsable). Never the actor, never a
+  typed name («Todos»). «Hecho» and notes owe nothing. «Nuevo libro» sends `announce: false` on
+  its creates and announces nothing.
+- **Narrowed at send time** by `assignedAddress` (as «Te toca») AND to people who are, read now,
+  in the class's group. Subjects: «Te toca dar la clase — <día>», «Ya no te toca dar la clase —
+  <día>», «Cambió tu rol de clases — <grupo>»; a class's title is typed text and stays in the body.
+- **The reminder:** the daily cron's Jóvenes step (`sendMinistryEventReminders`) also reminds
+  whoever gives a class dated EXACTLY 7 and 2 days ahead — «Falta una semana para tu clase — <día>»,
+  «Faltan dos días para tu clase — <día>», with the class's notes. It reads Jóvenes' people
+  (`JOVENES_PEOPLE_QUERY`) and then each one's OWN member read (`readMinistryEvents`, six at a
+  time) — never a no-person read of a group (ADR-0081). Its emails join the meeting reminders'
+  waves, under the same deadline; a failure reading classes is logged
+  (`ministry_class_reminder_failed`) and costs the meeting reminders nothing. The route's
+  `meetingReminders` carries `classes` (how many of `planned` are class reminders).
+- Logs: `ministry_class_notices` (`planned`, `emailed`), `ministry_class_notice_failed`,
+  `ministry_class_notices_failed`.
 
 ## The liveness alarm
 
@@ -1172,7 +1204,7 @@ Things that are counter-intuitive and were each a real defect at some point.
 
 ## Verifying the templates
 
-Renders all eighteen templates (the five Jóvenes ones included), asserts the email-client constraints, and writes
+Renders all twenty-three templates (the eight Jóvenes ones, classes included), asserts the email-client constraints, and writes
 previews plus `.eml` files:
 
 ```bash
