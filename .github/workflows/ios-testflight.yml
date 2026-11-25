@@ -93,11 +93,30 @@ jobs:
           rm -f "$RUNNER_TEMP/dist.p12"
           security set-key-partition-list -S apple-tool:,apple: -s -k "$kc_pass" "$keychain" > /dev/null
           security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
-          if ! security find-identity -v -p codesigning "$keychain" | grep -q "Apple Distribution"; then
-            echo "::error::IOS_DIST_P12 holds no VALID Apple Distribution identity (missing private key, expired or revoked)."
+          # The runner image may lack the Apple WWDR intermediate that signed the certificate (G3 today;
+          # G4-G6 exist); without it the chain does not validate and `-v` finds nothing. An intermediate
+          # is never a trust anchor: it still has to chain to Apple Root CA.
+          for g in G3 G4 G5 G6; do
+            if curl -fsSL --retry 3 -o "$RUNNER_TEMP/AppleWWDRCA$g.cer" "https://www.apple.com/certificateauthority/AppleWWDRCA$g.cer"; then
+              security import "$RUNNER_TEMP/AppleWWDRCA$g.cer" -k "$keychain" > /dev/null || true
+            else
+              echo "::warning::Could not download Apple's WWDR $g intermediate."
+            fi
+          done
+          if ! security find-identity -v -p codesigning "$keychain" | grep -qE "(Apple|iPhone) Distribution"; then
+            # Counts, trust codes and Apple's CA names only: never an identity's name.
+            echo "Identities with a private key (any validity): $(security find-identity -p codesigning "$keychain" | grep -cE '^ +[0-9]+\) [0-9A-F]{40}' || true)"
+            security find-identity -p codesigning "$keychain" | grep -o '(CSSMERR[^)]*)' | sort | uniq -c || true
+            echo "Issuers of the certificates in the keychain:"
+            security find-certificate -a -p "$keychain" | awk '/BEGIN CERT/{n++} {print > (ENVIRON["RUNNER_TEMP"] "/cert" n ".pem")}'
+            for c in "$RUNNER_TEMP"/cert*.pem; do
+              openssl x509 -in "$c" -noout -issuer -nameopt sep_comma_plus,space_eq | grep -oE '(CN|OU) = [^,]*' | paste -sd' ' - || true
+            done
+            rm -f "$RUNNER_TEMP"/cert*.pem
+            echo "::error::IOS_DIST_P12 holds no VALID distribution identity. 0 identities above = the .p12 has no private key (export it from «My Certificates»); a CSSMERR code = expired, revoked or untrusted (an issuer OU other than G3-G6 = a newer Apple intermediate)."
             exit 1
           fi
-          security find-identity -v -p codesigning "$keychain" | grep -c "Apple Distribution" | sed 's/^/Apple Distribution identities: /'
+          security find-identity -v -p codesigning "$keychain" | grep -cE "(Apple|iPhone) Distribution" | sed 's/^/Distribution identities: /'
       - name: Archive
         working-directory: native/ios
         run: |

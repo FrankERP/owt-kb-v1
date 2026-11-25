@@ -634,9 +634,16 @@ My Certificates → «Apple Distribution: …» → Export as `.p12` with a NEW 
 `.p12` file afterwards.
 
 **How to rotate.** The certificate lasts a year (an expired or revoked one stops the run at the
-identity check, «no VALID Apple Distribution identity»). Make a new one the same way, replace BOTH secrets
+identity check, «no VALID distribution identity»). Make a new one the same way, replace BOTH secrets
 before the next run, then revoke the old certificate (developer.apple.com → Certificates). A team can
 hold only a few distribution certificates, so revoke the ones nothing uses.
+
+**Reading a failed identity check.** The step first imports Apple's WWDR intermediates (G3–G6) from
+apple.com, which the runner image may lack and without which the chain does not validate (an intermediate is
+never a trust anchor). On failure it prints only counts, `CSSMERR` trust codes and the issuers' CA names, never
+an identity's name: 0 identities = the `.p12` was exported without its private key («Certificates» instead
+of «My Certificates»); a `CSSMERR` code = expired, revoked or untrusted; an issuer OU outside G3–G6 = a newer
+Apple intermediate to add to the step. A legacy «iPhone Distribution» certificate is accepted too.
 
 **Blast radius / what breaks mid-rotation.** Only TestFlight uploads: a run with a mismatched
 `.p12`/password stops at the import step. Revoking the certificate does not affect builds already on
