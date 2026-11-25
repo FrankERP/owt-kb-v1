@@ -28,6 +28,8 @@ final class AppModel {
 
     private(set) var phase: Phase = .starting
     private(set) var services: Services = .loading
+    /// When the list last loaded, so coming back to the app refreshes a list left from another day.
+    private var servicesLoadedAt: Date?
     /// A passing problem shown over the signed-in screen («No hay conexión»…).
     var banner: String?
 
@@ -82,6 +84,7 @@ final class AppModel {
         do {
             let answer = try await api.services()
             services = .loaded(today: answer.today, services: answer.services)
+            servicesLoadedAt = Date()
         } catch APIError.forbidden {
             services = .notInWorship
         } catch {
@@ -137,10 +140,27 @@ final class AppModel {
         }
     }
 
+    /// The app came back to the foreground: reload a list older than ten minutes, so «Hoy» and
+    /// the setlist never stay from the day the app was last opened.
+    func refreshIfStale() async {
+        guard case .signedIn = phase,
+              let loadedAt = servicesLoadedAt,
+              Date().timeIntervalSince(loadedAt) > 600
+        else { return }
+        await reload()
+    }
+
+    /// «Intentar de nuevo» after a failed first load: show the spinner while it tries.
+    func retryServices() async {
+        services = .loading
+        await loadServices()
+    }
+
     func signOut() async {
         await authority.signOut()
         banner = nil
         services = .loading
+        servicesLoadedAt = nil
         phase = .signedOut(notice: nil)
     }
 

@@ -139,7 +139,7 @@ struct HomeView: View {
                     Text(message)
                         .foregroundStyle(.secondary)
                     Button("Intentar de nuevo") {
-                        Task { await model.loadServices() }
+                        Task { await model.retryServices() }
                     }
                 }
             }

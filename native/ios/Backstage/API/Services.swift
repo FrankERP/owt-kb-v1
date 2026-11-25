@@ -21,14 +21,16 @@ struct AppService: Decodable, Hashable, Identifiable, Sendable {
     let time: String?
     let title: String
     let worshipNight: Bool
-    /// The caller's own seats, decided on the server by member id («Keys», «BGV»…).
+    /// The caller holds a seat here (decided on the server by member id), even one with no name.
+    let seated: Bool
+    /// The caller's named seats («Keys», «BGV», «FOH: Console»…).
     let mySeats: [String]
     let sections: [AppSection]
     let songs: [AppSong]
     let teamNotes: String?
     let pastorMessage: String?
 
-    var isMine: Bool { !mySeats.isEmpty }
+    var isMine: Bool { seated }
 
     /// Everyone on the service, in section order, for the face stack.
     var people: [AppPerson] { sections.flatMap(\.people) }
@@ -41,7 +43,6 @@ struct AppSection: Decodable, Hashable, Identifiable, Sendable {
 }
 
 struct AppPerson: Decodable, Hashable, Sendable {
-    let id: String?
     let name: String
     let seat: String
     let photo: String?

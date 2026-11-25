@@ -9,11 +9,11 @@ final class ServicesDecodingTests: XCTestCase {
       "services": [
         {
           "id": "sun-2026-11-29", "kind": "sunday", "date": "2026-11-29", "time": "11:00",
-          "title": "Domingo", "worshipNight": false, "mySeats": ["Keys", "BGV"],
+          "title": "Domingo", "worshipNight": false, "seated": true, "mySeats": ["Keys", "BGV"],
           "sections": [
             { "id": "voces", "label": "Voces", "people": [
-              { "id": "m1", "name": "Liu", "seat": "Lead", "photo": "https://cdn.sanity.io/x.jpg?w=144", "mine": false },
-              { "id": "me", "name": "Frank", "seat": "BGV", "photo": null, "mine": true }
+              { "name": "Liu", "seat": "Lead", "photo": "https://cdn.sanity.io/x.jpg?w=144", "mine": false },
+              { "name": "Frank", "seat": "BGV", "photo": null, "mine": true }
             ] },
             { "id": "banda", "label": "Banda", "people": [] },
             { "id": "cabina", "label": "Cabina", "people": [] }
@@ -26,7 +26,7 @@ final class ServicesDecodingTests: XCTestCase {
         },
         {
           "id": "sp-1", "kind": "special", "date": "2026-12-05", "time": null, "title": "Servicio especial",
-          "worshipNight": true, "mySeats": [], "sections": [], "songs": [], "teamNotes": null, "pastorMessage": null
+          "worshipNight": true, "seated": false, "mySeats": [], "sections": [], "songs": [], "teamNotes": null, "pastorMessage": null
         }
       ]
     }

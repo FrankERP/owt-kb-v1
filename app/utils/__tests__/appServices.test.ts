@@ -66,14 +66,15 @@ describe("buildAppServices", () => {
       time: "11:00",
       title: "Domingo",
       worshipNight: false,
+      seated: true,
       mySeats: ["Keys", "BGV"],
       teamNotes: "Llegar 9:30",
       pastorMessage: "Dios es fiel",
     });
     expect(s!.sections.map((x) => x.id)).toEqual(["voces", "banda", "cabina"]);
     expect(s!.sections[0]!.people).toEqual([
-      { id: "m-lead", name: "Liu", seat: "Lead", photo: "https://cdn.sanity.io/images/p/d/face.jpg?w=144&h=144&fit=crop&fm=jpg", mine: false },
-      { id: ME, name: "Frank", seat: "BGV", photo: null, mine: true },
+      { name: "Liu", seat: "Lead", photo: "https://cdn.sanity.io/images/p/d/face.jpg?w=144&h=144&fit=crop&fm=jpg", mine: false },
+      { name: "Frank", seat: "BGV", photo: null, mine: true },
     ]);
     // The empty Bass seat is not a person.
     expect(s!.sections[1]!.people.map((p) => p.seat)).toEqual(["Keys", "Drums"]);
@@ -87,7 +88,31 @@ describe("buildAppServices", () => {
     const role = sunday("2026-11-29", { BGVs: [member("someone-else", "Francisco", "Frank")], instruments: [] });
     const [s] = buildAppServices({ sundays: [role] }, ME);
     expect(s!.mySeats).toEqual([]);
+    expect(s!.seated).toBe(false);
     expect(s!.sections.flatMap((x) => x.people).some((p) => p.mine)).toBe(false);
+    // No member id goes over the wire.
+    expect(s!.sections.flatMap((x) => x.people).every((p) => !("id" in p))).toBe(true);
+  });
+
+  it("is seated on a seat with no name, and keeps «FOH:» on every booth seat", () => {
+    const nameless = sunday("2026-11-29", { BGVs: [], instruments: [{ instrument: null, id: ME, name: "Frank", photo: null }] });
+    const [a] = buildAppServices({ sundays: [nameless] }, ME);
+    expect(a).toMatchObject({ seated: true, mySeats: [] });
+    const booth = sunday("2026-11-29", {
+      BGVs: [],
+      instruments: [],
+      foh_team: [
+        { role: "Console", id: ME, name: "Frank", photo: null },
+        { role: "Luces", id: ME, name: "Frank", photo: null },
+      ],
+    });
+    expect(buildAppServices({ sundays: [booth] }, ME)[0]!.mySeats).toEqual(["FOH: Console", "FOH: Luces"]);
+  });
+
+  it("leaves out a service the web would paint as nothing (no one seated, no songs)", () => {
+    const empty = sunday("2026-11-29", { Lead: [], BGVs: [], instruments: [], foh_team: [] });
+    expect(buildAppServices({ sundays: [empty] }, ME)).toEqual([]);
+    expect(buildAppServices({ sundays: [empty], sunSetlists: [{ week: "2026-11-29", songs: [{ title: "A" }] }] }, ME)).toHaveLength(1);
   });
 
   it("fails closed on a duplicate weekend role or setlist", () => {
@@ -112,16 +137,17 @@ describe("buildAppServices", () => {
     });
     const out = buildAppServices(
       {
-        specials: [special("sp-b", "19:00", "Noche de alabanza", "worship_night"), special("sp-a", "09:00", null), special("sp-bad", "9am", "Sin hora")],
+        specials: [special("sp-b", "19:00", "  Noche   de alabanza ", "worship_night"), special("sp-a", "09:00", null), special("sp-bad", "9am", "Sin hora")],
         saturdays: [{ _id: "sat-1", _type: "saturday_role", week: "2026-12-05", Lead: [member("m2", "Toño")] }],
       },
       ME,
     );
+    // A special with no time comes first in its day, as the Calendario orders it.
     expect(out.map((s) => [s.id, s.time, s.title, s.worshipNight])).toEqual([
+      ["sp-bad", null, "Sin hora", false],
       ["sp-a", "09:00", "Servicio especial", false],
       ["sat-1", "18:00", "Sábado", false],
       ["sp-b", "19:00", "Noche de alabanza", true],
-      ["sp-bad", null, "Sin hora", false],
     ]);
     expect(out.find((s) => s.id === "sp-b")!.songs[0]!.leads).toEqual(["Ana"]);
   });
@@ -142,7 +168,7 @@ describe("buildAppServices", () => {
   });
 
   it("orders by date, then time", () => {
-    const out = buildAppServices({ sundays: [sunday("2026-12-06"), sunday("2026-11-29")], saturdays: [{ _id: "s", week: "2026-11-28" }] }, ME);
+    const out = buildAppServices({ sundays: [sunday("2026-12-06"), sunday("2026-11-29")], saturdays: [{ _id: "s", week: "2026-11-28", Lead: [member("m2", "Toño")] }] }, ME);
     expect(out.map((s) => s.date)).toEqual(["2026-11-28", "2026-11-29", "2026-12-06"]);
   });
 });

@@ -105,12 +105,12 @@ struct DateTileView: View {
     }
 }
 
-/// «Tú: Keys · BGV».
+/// «Tú: Keys · BGV», or «Te toca servir» when your seat has no name.
 struct MySeatsLabel: View {
     let seats: [String]
 
     var body: some View {
-        Label("Tú: \(seats.joined(separator: " · "))", systemImage: "person.fill.checkmark")
+        Label(seats.isEmpty ? "Te toca servir" : "Tú: \(seats.joined(separator: " · "))", systemImage: "person.fill.checkmark")
             .font(.caption.weight(.semibold))
             .foregroundStyle(Color.accentColor)
             .padding(.horizontal, 8)

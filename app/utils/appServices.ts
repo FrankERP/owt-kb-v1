@@ -19,7 +19,6 @@ import { indexUniqueByKey, serviceDayKey } from "./serviceReadSelect";
 import { pastorMessageBodyOf } from "./serviceThread";
 import { SONG_COVER_GROQ, songCoverUrl } from "./songCover";
 import { serviceStartTime } from "./calendarFeed";
-import { seatLabel } from "./myWeek";
 import { isWorshipNight } from "./serviceFormat";
 import { SPECIAL_SERVICE_FALLBACK } from "./emailServiceLabel";
 
@@ -100,7 +99,8 @@ export type AppServicesRows = {
 
 // ─── The wire shape (the app decodes exactly this) ──────────────────────────────
 
-export type AppPerson = { id: string | null; name: string; seat: string; photo: string | null; mine: boolean };
+/** No member id on the wire: «mine» is decided here, and the app needs no one else's id. */
+export type AppPerson = { name: string; seat: string; photo: string | null; mine: boolean };
 export type AppSection = { id: "voces" | "banda" | "cabina"; label: string; people: AppPerson[] };
 export type AppSong = {
   id: string | null;
@@ -127,7 +127,9 @@ export type AppService = {
   time: string | null;
   title: string;
   worshipNight: boolean;
-  /** The caller's seats here, «Lead · Keys» order; empty when they do not serve. */
+  /** The caller holds at least one seat here — true even when that seat has no name. */
+  seated: boolean;
+  /** The caller's named seats, `seatLabel`'s order and words («Lead», «Keys», «FOH: Console»…). */
   mySeats: string[];
   sections: AppSection[];
   songs: AppSong[];
@@ -178,20 +180,18 @@ function songsOf(rows: SongRow[] | null | undefined): AppSong[] {
   return out;
 }
 
-function sectionsOf(role: AppRoleRow, me: string): { sections: AppSection[]; mySeats: string[] } {
+function sectionsOf(role: AppRoleRow, me: string): { sections: AppSection[]; seated: boolean; mySeats: string[] } {
   const voice = (rows: MemberRow[] | null | undefined, seat: string): AppPerson[] =>
     (Array.isArray(rows) ? rows : []).flatMap((m) => {
       const name = memberName(m);
       if (!m || !name) return [];
-      const id = text(m._id);
-      return [{ id, name, seat, photo: appAvatarUrl(m.photo), mine: id === me }];
+      return [{ name, seat, photo: appAvatarUrl(m.photo), mine: text(m._id) === me }];
     });
   const seats = (rows: SeatRow[] | null | undefined, label: "instrument" | "role"): AppPerson[] =>
     (Array.isArray(rows) ? rows : []).flatMap((s) => {
       const name = s ? text(s.name) : null;
       if (!s || !name) return []; // an empty seat is not a person
-      const id = text(s.id);
-      return [{ id, name, seat: text(s[label]) ?? "", photo: appAvatarUrl(s.photo), mine: id === me }];
+      return [{ name, seat: text(s[label]) ?? "", photo: appAvatarUrl(s.photo), mine: text(s.id) === me }];
     });
 
   const leads = voice(role.Lead, "Lead");
@@ -205,15 +205,18 @@ function sectionsOf(role: AppRoleRow, me: string): { sections: AppSection[]; myS
     { id: "cabina" as const, label: "Cabina", people: booth },
   ].filter((s) => s.people.length > 0);
 
-  // The SAME order and words as `/me` and the `.ics` (seatLabel), decided by id.
-  const label = seatLabel({
-    isLead: leads.some((p) => p.mine),
-    myInstrument: band.filter((p) => p.mine).map((p) => p.seat).filter(Boolean).join(" · ") || undefined,
-    myFohRole: booth.filter((p) => p.mine).map((p) => p.seat).filter(Boolean).join(" · ") || undefined,
-    isBGV: bgvs.some((p) => p.mine),
-    isChorus: chorus.some((p) => p.mine),
-  });
-  return { sections, mySeats: label ? label.split(" · ") : [] };
+  // `seatLabel`'s order and words (/me, the .ics), decided by id, built as a list so a second
+  // FOH seat keeps its «FOH:» prefix. A seat with no name still makes the caller `seated`, as the
+  // .ics says «Te toca servir» for it.
+  const mine = (people: AppPerson[]) => people.filter((p) => p.mine);
+  const mySeats = [
+    ...(mine(leads).length ? ["Lead"] : []),
+    ...mine(band).map((p) => p.seat).filter(Boolean),
+    ...mine(booth).map((p) => p.seat).filter(Boolean).map((r) => `FOH: ${r}`),
+    ...(mine(bgvs).length ? ["BGV"] : []),
+    ...(mine(chorus).length ? ["Coro"] : []),
+  ];
+  return { sections, seated: sections.some((x) => x.people.some((p) => p.mine)), mySeats };
 }
 
 /**
@@ -260,7 +263,7 @@ export function buildAppServices(rows: AppServicesRows, me: string): AppService[
       kind: "special",
       date,
       time: serviceStartTime("special", "", sp.time) ?? null,
-      title: text(sp.service_name) ?? SPECIAL_SERVICE_FALLBACK,
+      title: text(sp.service_name)?.replace(/\s+/g, " ") ?? SPECIAL_SERVICE_FALLBACK,
       worshipNight: isWorshipNight(sp),
       ...sectionsOf(sp, me),
       songs: songsOf(sp.songs),
@@ -269,7 +272,10 @@ export function buildAppServices(rows: AppServicesRows, me: string): AppService[
     });
   }
 
-  return out.sort(
-    (a, b) => a.date.localeCompare(b.date) || (a.time ?? "99:99").localeCompare(b.time ?? "99:99") || a.title.localeCompare(b.title, "es"),
-  );
+  // A service the web's day card would paint as nothing (no one seated, no songs: `paintsDayCard`)
+  // is not listed. Within a day, a special with no time comes first, as the Calendario's
+  // `order(date asc, time asc)` puts it.
+  return out
+    .filter((x) => x.sections.length > 0 || x.songs.length > 0)
+    .sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? "").localeCompare(b.time ?? "") || a.title.localeCompare(b.title, "es"));
 }
