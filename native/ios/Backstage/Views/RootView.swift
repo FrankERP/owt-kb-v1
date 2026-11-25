@@ -166,7 +166,7 @@ struct TopBar: View {
         }
         // The page shows through, blurred, as it slides under the bar; the navy veil keeps the
         // material from turning the system's grey.
-        .background(BS.base.opacity(0.72).background(.ultraThinMaterial).ignoresSafeArea(edges: .top))
+        .background(BS.base.opacity(0.45).background(.ultraThinMaterial).ignoresSafeArea(edges: .top))
     }
 }
 
