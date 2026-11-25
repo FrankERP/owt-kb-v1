@@ -299,8 +299,8 @@ commit it with the runner image it came from.
   the PR or the Actions tab before merging a change to the app.
   **TestFlight uploads** are a second, hand-run workflow, `.github/workflows/ios-testflight.yml`
   (Actions → «iOS TestFlight» → Run workflow, `main` only). It archives the Release build with Xcode 26, signs
-  it with the App Store Connect key (`ASC_*` secrets of the `testflight` environment, which admits
-  only `main`; docs/SECRETS.md) and uploads it; the build number is `<run number>.<attempt>`.
+  it with an Apple Distribution certificate and the App Store Connect key (`IOS_DIST_P12*` and
+  `ASC_*` secrets of the `testflight` environment, which admits only `main`; docs/SECRETS.md) and uploads it; the build number is `<run number>.<attempt>`.
   Nothing runs it on a push: every upload reaches testers.
 
 ### Secrets

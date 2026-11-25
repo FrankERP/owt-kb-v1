@@ -7,7 +7,12 @@
 # needs, and the export signs in the cloud and uploads. That is why the key must have the Admin
 # role: an App Manager key cannot create a distribution certificate.
 #
-# The key's three secrets live in the `testflight` ENVIRONMENT, not the repository: the environment
+# The distribution signature comes from an Apple Distribution certificate of our own (IOS_DIST_P12,
+# imported into a throwaway keychain), NOT from Xcode's cloud-managed one: the first upload
+# (2026-11-24, run 1) was signed in the cloud and App Store Connect refused it as «Invalid
+# Signature»; with a local Apple Distribution identity the export signs with it instead.
+#
+# The key's three secrets and the certificate's two live in the `testflight` ENVIRONMENT, not the repository: the environment
 # admits only `main`, so a workflow pushed on any other branch cannot read an Admin key. The
 # `if:` below only skips a run started elsewhere; the environment is the boundary.
 #
@@ -66,6 +71,31 @@ jobs:
           printf '%s\n' "$ASC_KEY_P8" > "$key"
           chmod 600 "$key"
           echo "ASC_KEY_PATH=$key" >> "$GITHUB_ENV"
+      - name: Install the Apple Distribution certificate
+        env:
+          IOS_DIST_P12: ${{ secrets.IOS_DIST_P12 }}
+          IOS_DIST_P12_PASSWORD: ${{ secrets.IOS_DIST_P12_PASSWORD }}
+        run: |
+          if [ -z "$IOS_DIST_P12" ] || [ -z "$IOS_DIST_P12_PASSWORD" ]; then
+            echo "::error::IOS_DIST_P12 and IOS_DIST_P12_PASSWORD must be secrets of the testflight environment (docs/SECRETS.md)."
+            exit 1
+          fi
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          kc_pass=$(openssl rand -hex 24)
+          security create-keychain -p "$kc_pass" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$kc_pass" "$keychain"
+          printf '%s' "$IOS_DIST_P12" | base64 --decode > "$RUNNER_TEMP/dist.p12"
+          security import "$RUNNER_TEMP/dist.p12" -k "$keychain" -f pkcs12 -P "$IOS_DIST_P12_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          rm -f "$RUNNER_TEMP/dist.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$kc_pass" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          echo "SIGNING_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+          if ! security find-identity -v -p codesigning "$keychain" | grep -q "Apple Distribution"; then
+            echo "::error::IOS_DIST_P12 holds no Apple Distribution identity (certificate plus its private key)."
+            exit 1
+          fi
+          security find-identity -v -p codesigning "$keychain" | grep -c "Apple Distribution" | sed 's/^/Apple Distribution identities: /'
       - name: Archive
         working-directory: native/ios
         run: |
@@ -91,6 +121,8 @@ jobs:
           grep -E "error:|Upload|\*\* " export.log
           if [ "$status" -ne 0 ]; then tail -n 80 export.log; fi
           exit "$status"
-      - name: Remove the key
+      - name: Remove the key and the certificate
         if: always()
-        run: rm -f "$RUNNER_TEMP"/AuthKey_*.p8
+        run: |
+          rm -f "$RUNNER_TEMP"/AuthKey_*.p8 "$RUNNER_TEMP/dist.p12"
+          if [ -n "${SIGNING_KEYCHAIN:-}" ]; then security delete-keychain "$SIGNING_KEYCHAIN" || true; fi

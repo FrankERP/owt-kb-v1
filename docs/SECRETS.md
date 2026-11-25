@@ -610,6 +610,39 @@ certificates and profiles; that is why it lives only in an environment limited t
 
 ---
 
+## `IOS_DIST_P12`, `IOS_DIST_P12_PASSWORD` (GitHub `testflight` environment — the Apple Distribution certificate)
+
+**Needed in: GitHub Actions only, as secrets of the same `testflight` environment as the `ASC_*`
+key** (limited to `main`), read by `.github/workflows/ios-testflight.yml`. **Not needed in:** Vercel,
+GCF, the app, a cloud session, `.env.local`, repository secrets.
+
+**Status: NOT SET yet** (2026-11-24). Frank makes the certificate on his Mac and enters both secrets
+himself; the `.p12` never passes through a chat or a session.
+
+**Purpose.** The identity the TestFlight export signs with. Xcode's cloud-managed distribution
+signing (what the export uses when no local identity exists) was refused by App Store Connect as
+«Invalid Signature» on the first upload (2026-11-24); with an Apple Distribution certificate in the
+keychain the export signs with it. The workflow imports it into a throwaway keychain with a random
+password and deletes that keychain at the end, even on failure.
+
+**Where the values come from.** An Apple Distribution certificate of team `2NM4872N5S`, made either
+in Xcode → Settings → Accounts → Manage Certificates → + → Apple Distribution, or from a Keychain
+Access CSR uploaded at developer.apple.com → Certificates → + → Apple Distribution. Keychain Access →
+My Certificates → «Apple Distribution: …» → Export as `.p12` with a NEW password.
+`IOS_DIST_P12` = `base64 -i dist.p12` (one line), `IOS_DIST_P12_PASSWORD` = that password. Delete the
+`.p12` file afterwards.
+
+**How to rotate.** The certificate lasts a year. Make a new one the same way, replace BOTH secrets
+before the next run, then revoke the old certificate (developer.apple.com → Certificates). A team can
+hold only a few distribution certificates, so revoke the ones nothing uses.
+
+**Blast radius / what breaks mid-rotation.** Only TestFlight uploads: a run with a mismatched
+`.p12`/password stops at the import step. Revoking the certificate does not affect builds already on
+testers' phones or in TestFlight. A leaked `.p12` plus password lets someone sign apps as this team
+(they would still need the `ASC_*` key or an account login to upload): revoke the certificate at once.
+
+---
+
 ## `APP_AUTH_DISABLED`
 
 **Needed in: Vercel production and preview, ONLY when switching the native-app sign-in off — leave
