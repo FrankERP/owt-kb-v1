@@ -93,8 +93,16 @@ jobs:
           rm -f "$RUNNER_TEMP/dist.p12"
           security set-key-partition-list -S apple-tool:,apple: -s -k "$kc_pass" "$keychain" > /dev/null
           security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          # The runner image may lack Apple's WWDR G3 intermediate, which signs every Apple
+          # Distribution certificate; without it the chain does not validate and `-v` finds nothing.
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/AppleWWDRCAG3.cer" https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer
+          security import "$RUNNER_TEMP/AppleWWDRCAG3.cer" -k "$keychain" -T /usr/bin/codesign || true
           if ! security find-identity -v -p codesigning "$keychain" | grep -q "Apple Distribution"; then
-            echo "::error::IOS_DIST_P12 holds no VALID Apple Distribution identity (missing private key, expired or revoked)."
+            # Counts and trust codes only: never an identity's name.
+            echo "Identities with a private key (any validity): $(security find-identity -p codesigning "$keychain" | grep -c 'Apple Distribution' || true)"
+            echo "Certificates in the keychain: $(security find-certificate -a "$keychain" | grep -c '"labl"' || true)"
+            security find-identity -p codesigning "$keychain" | grep -o '(CSSMERR[^)]*)' | sort | uniq -c || true
+            echo "::error::IOS_DIST_P12 holds no VALID Apple Distribution identity. 0 identities above = the .p12 has no private key (export it from «Mis certificados»); a CSSMERR code = expired, revoked or untrusted."
             exit 1
           fi
           security find-identity -v -p codesigning "$keychain" | grep -c "Apple Distribution" | sed 's/^/Apple Distribution identities: /'

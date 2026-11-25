@@ -634,7 +634,10 @@ My Certificates → «Apple Distribution: …» → Export as `.p12` with a NEW 
 `.p12` file afterwards.
 
 **How to rotate.** The certificate lasts a year (an expired or revoked one stops the run at the
-identity check, «no VALID Apple Distribution identity»). Make a new one the same way, replace BOTH secrets
+identity check, «no VALID Apple Distribution identity»; the step then prints only counts and the
+`CSSMERR` trust code, never a name: 0 identities = the `.p12` was exported without its private key, from
+«Certificates» instead of «My Certificates»). The step also imports Apple's WWDR G3 intermediate, which the
+runner image may lack and without which the chain does not validate. Make a new one the same way, replace BOTH secrets
 before the next run, then revoke the old certificate (developer.apple.com → Certificates). A team can
 hold only a few distribution certificates, so revoke the ones nothing uses.
 
