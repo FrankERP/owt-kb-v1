@@ -25,7 +25,9 @@ import "server-only";
 // newly assigns, a request for the worship team that appeared or went away — from the row it read
 // BEFORE its commit and the fields it stores, and hands that back as `effects.notices`; the route
 // sends it in `after()` (`ministryEventNotify.ts`). Nothing is re-read after the commit: the
-// revision the write asserts is what makes «before» exact.
+// revision the write asserts is what makes «before» exact. A group's CLASSES owe their holders the
+// same way (`effects.classNotices`, `ministryLessonNotices.ts`; ADR-0089, addendum of 2026-11-25):
+// a create, an edit, a delete, «Recorrer» and «Cambiar con…» compute who of them it changed.
 
 import { randomUUID } from "node:crypto";
 import { writeClient } from "@/sanity/lib/serverClient";
@@ -41,6 +43,7 @@ import { sanityConflictKind } from "./roleWriteRequest";
 import type { CommitOutcome } from "./commitOutcome";
 import { PART_LIMITS, PLATICA_SEAT, isPartMusic, partSpec, type PartId, type PartMusic, type PartSpec } from "./ministryParts";
 import { hasNotices, meetingNotices, snapshotOf, type EventNoticeEffects } from "./ministryEventNotices";
+import { classNotices, classSnapOf, type ClassNoticeEffects } from "./ministryLessonNotices";
 
 /** Every refusal, named. The Spanish ones reach a person; the codes reach the client's logic. */
 export const EVENT_ERROR = {
@@ -87,7 +90,16 @@ export const LIMITS = { seats: 6, lines: 20, label: 60, note: PART_LIMITS.note, 
 
 export type EventAudience = { kind: "ministry" } | { kind: "groups"; groups: string[] };
 /** `notices`: what the write owes by email (M5), or `null` — the route sends it in `after()`. */
-export type EventEffects = { id: string; rev: string | null; notices: EventNoticeEffects | null };
+/**
+ * `notices`: what a write to a whole-ministry meeting owes (ADR-0089). `classNotices`: what a write
+ * to a group's classes owes their holders (ADR-0089, addendum of 2026-11-25). Both sent by the route.
+ */
+export type EventEffects = {
+  id: string;
+  rev: string | null;
+  notices: EventNoticeEffects | null;
+  classNotices: ClassNoticeEffects | null;
+};
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -599,17 +611,24 @@ function revisionConflict(err: unknown): boolean {
   return kind === "revision_mismatch" || kind === "conflict";
 }
 
-const ok = (id: string, rev: string | null, notices: EventNoticeEffects | null = null): CommitOutcome<EventEffects> => ({
+const ok = (
+  id: string,
+  rev: string | null,
+  notices: EventNoticeEffects | null = null,
+  classes: ClassNoticeEffects | null = null,
+): CommitOutcome<EventEffects> => ({
   ok: true,
   status: 200,
   body: { ok: true, id, rev },
-  effects: { id, rev, notices },
+  effects: { id, rev, notices, classNotices: classes },
 });
 
 // ── Notices (M5) ────────────────────────────────────────────────────────────
 
 /** The fields of a meeting a notice reads: the stored row, or the same fields as a write stores them. */
 type NoticeRow = {
+  _id?: unknown;
+  lesson?: unknown;
   audience?: unknown;
   published?: unknown;
   date?: unknown;
@@ -655,6 +674,19 @@ function noticesFor(
       kind: textOrNull(after.kind),
     },
   };
+}
+
+/**
+ * What a write owes the holders of the classes it touched, or `null`. `before`: the rows read
+ * before the commit (none for a create); `after`: the same rows as the write stores them (none for
+ * a delete). Pure, computed BEFORE the commit and returned only when it succeeds, like `noticesFor`.
+ * Only Jóvenes has classes; the audience rules are `classNotices`'s, narrowed again by the sender.
+ */
+function classNoticesFor(ministry: MinistryId, actorId: string, before: NoticeRow[], after: NoticeRow[]): ClassNoticeEffects | null {
+  if (ministry !== "jovenes") return null;
+  const today = new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
+  const notices = classNotices(before.map(classSnapOf), after.map(classSnapOf), { actorId, today });
+  return notices.length > 0 ? { ministry, actorId, notices } : null;
 }
 
 // ── Create ──────────────────────────────────────────────────────────────────
@@ -712,10 +744,14 @@ export async function createMinistryEvent(
     createdBy: weakRef(actor.id),
   };
   const notices = noticesFor(ministry, actor.id, id, null, doc);
+  // «Nuevo libro» creates a whole roster in a row (up to 60 classes) and says `announce: false`:
+  // each holder hears about their class from the reminders instead of one email per class. A
+  // client can only make a create quieter with it, never louder.
+  const classes = body.announce === false ? null : classNoticesFor(ministry, actor.id, [], [doc]);
   try {
     const created = await writeClient.create(doc);
     revalidateMinistryViews(ministry);
-    return ok(id, typeof created?._rev === "string" ? created._rev : null, notices);
+    return ok(id, typeof created?._rev === "string" ? created._rev : null, notices, classes);
   } catch (err) {
     if (sanityConflictKind(err) !== "already_exists") throw err;
     // A retry or double tap of the same token: «already created» only to someone who may read it.
@@ -799,13 +835,14 @@ export async function updateMinistryEvent(
   const after: Record<string, unknown> = { ...stored, ...set };
   for (const k of unset) delete after[k];
   const notices = noticesFor(ministry, actor.id, id, stored, after);
+  const classes = classNoticesFor(ministry, actor.id, [stored], [after]);
 
   try {
     let patch = writeClient.patch(id).ifRevisionId(rev).set(set);
     if (unset.length) patch = patch.unset(unset);
     const written = await patch.commit();
     revalidateMinistryViews(ministry);
-    return ok(id, typeof written?._rev === "string" ? written._rev : null, notices);
+    return ok(id, typeof written?._rev === "string" ? written._rev : null, notices, classes);
   } catch (err) {
     if (!revisionConflict(err)) throw err;
     return refuse(409, EVENT_ERROR.stale);
@@ -981,6 +1018,8 @@ export async function deleteMinistryEvent(
   if (!stored || !readable(actor, stored, ministry)) return refuse(404, EVENT_ERROR.notFound);
   if (!canWriteStored(actor, stored, ministry)) return refuse(403, EVENT_ERROR.forbidden);
   if (stored._rev !== rev) return refuse(409, EVENT_ERROR.stale);
+  // A deleted class owes its holders a «ya no te toca» (ADR-0089, addendum of 2026-11-25).
+  const classes = classNoticesFor(ministry, actor.id, [stored], []);
 
   try {
     // `delete` takes no revision precondition: a revision-asserting no-op patch and the delete in
@@ -991,7 +1030,7 @@ export async function deleteMinistryEvent(
       .delete(id)
       .commit();
     revalidateMinistryViews(ministry);
-    return ok(id, null);
+    return ok(id, null, null, classes);
   } catch (err) {
     if (!revisionConflict(err)) throw err;
     return refuse(409, EVENT_ERROR.stale);
@@ -1012,6 +1051,10 @@ type RosterRow = StoredMinistryEvent & {
   _rev: string;
   date?: unknown;
   lesson?: unknown;
+  seats?: unknown;
+  title?: unknown;
+  time?: unknown;
+  place?: unknown;
   createdBy?: string | null;
 };
 
@@ -1021,7 +1064,8 @@ const ROSTER_QUERY =
   `*[_type == "${MINISTRY_EVENT_TYPE}" && _id in path("${MINISTRY_EVENT_TYPE}.*") && ministry == $ministry` +
   ` && audience.kind == "groups" && count(audience.groups) == 1 && audience.groups[0] == $group` +
   ` && lesson.series == $series && date >= $date]` +
-  `{ _id, _rev, _type, ministry, audience, published, date, lesson, "createdBy": createdBy._ref }`;
+  // `seats`, `title`, `time`, `place`: only for the holders' notices this write owes, never returned.
+  `{ _id, _rev, _type, ministry, audience, published, date, lesson, seats, title, time, place, "createdBy": createdBy._ref }`;
 
 function mapCommitConflict(err: unknown): Refusal {
   const kind = sanityConflictKind(err);
@@ -1108,10 +1152,14 @@ export async function shiftMinistryLesson(
   const gapDates = new Set<string>([anchorDate, ...gaps.map((g) => g.date as string)]);
   const markerId = `${MINISTRY_EVENT_TYPE}.${markerToken}`;
   let tx = writeClient.transaction();
+  const moved: RosterRow[] = [];
   for (const r of classes) {
     const to = shiftedDate(r.date as string, gapDates);
     tx = tx.patch(r._id, (p) => p.ifRevisionId(r._rev).set({ date: to }));
+    moved.push({ ...r, date: to });
   }
+  // Every holder of a moved class hears once, with all of their new dates (the marker is a draft).
+  const notices = classNoticesFor(ministry, actor.id, classes, moved);
   // A gap removed or re-dated after the read fails the whole write instead of being hopped blind.
   for (const g of gaps) tx = tx.patch(g._id, (p) => p.ifRevisionId(g._rev).set({ ministry }));
   tx = tx.create({
@@ -1134,7 +1182,12 @@ export async function shiftMinistryLesson(
     return mapCommitConflict(err);
   }
   revalidateMinistryViews(ministry);
-  return { ok: true, status: 200, body: { ok: true, id, rev: null, moved: classes.length }, effects: { id, rev: null, notices: null, moved: classes.length } };
+  return {
+    ok: true,
+    status: 200,
+    body: { ok: true, id, rev: null, moved: classes.length },
+    effects: { id, rev: null, notices: null, classNotices: notices, moved: classes.length },
+  };
 }
 
 // ── «Cambiar con…» (plan 2026-11-12 L4) ─────────────────────────────────────
@@ -1211,6 +1264,8 @@ export async function swapMinistryLessons(
   if (!sa || !sb) return refuse(400, EVENT_ERROR.invalidSwap);
   const moved = [...new Set([...sa.members, ...sb.members])];
   if (!(await peopleFit(moved, ministry, { kind: "groups", groups: [group] }))) return refuse(400, EVENT_ERROR.invalidMember);
+  // Each holder hears what they gave and what they took, in one email.
+  const classes = classNoticesFor(ministry, actor.id, [a, b], [{ ...a, seats: sb.seats }, { ...b, seats: sa.seats }]);
 
   try {
     await writeClient
@@ -1222,5 +1277,5 @@ export async function swapMinistryLessons(
     return mapCommitConflict(err);
   }
   revalidateMinistryViews(ministry);
-  return ok(idA, null);
+  return ok(idA, null, null, classes);
 }
