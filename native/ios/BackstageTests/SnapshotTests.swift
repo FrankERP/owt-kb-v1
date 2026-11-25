@@ -25,6 +25,10 @@ final class SnapshotTests: XCTestCase {
                 scheme: scheme, to: "\(dir)/1-inicio-\(suffix).png"
             )
             try render(
+                HomeScreen(me: me, banner: nil, services: .loading, onlyMine: .constant(false), open: { _ in }, retry: {}),
+                scheme: scheme, to: "\(dir)/3-cargando-\(suffix).png"
+            )
+            try render(
                 ServiceFullCard(service: services[1], today: "2026-11-25").padding(16),
                 scheme: scheme, to: "\(dir)/2-servicio-\(suffix).png"
             )

@@ -154,16 +154,12 @@ struct FaceView: View {
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            AsyncImage(url: photo.flatMap(URL.init(string:))) { phase in
-                if let image = phase.image {
-                    image.resizable().scaledToFill()
-                } else {
-                    Text(String(name.trimmingCharacters(in: .whitespaces).prefix(2)).uppercased())
-                        .font(.bsLabel(size * 0.3))
-                        .foregroundStyle(mine ? BS.positive : BS.ink)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(BS.raised)
-                }
+            RemoteImage(photo) {
+                Text(String(name.trimmingCharacters(in: .whitespaces).prefix(2)).uppercased())
+                    .font(.bsLabel(size * 0.3))
+                    .foregroundStyle(mine ? BS.positive : BS.ink)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(BS.raised)
             }
             .frame(width: size, height: size)
             .clipShape(Circle())
@@ -226,18 +222,14 @@ struct CoverView: View {
     var body: some View {
         let radius = size >= 52 ? 10.0 : (size >= 40 ? 8.0 : 6.0)
         ZStack(alignment: .topLeading) {
-            AsyncImage(url: url.flatMap(URL.init(string:))) { phase in
-                if let image = phase.image {
-                    image.resizable().scaledToFill()
-                } else {
-                    Image(systemName: "music.note")
-                        .font(.system(size: size * 0.34))
-                        .foregroundStyle(BS.inkDim)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(
-                            LinearGradient(colors: [BS.ink.opacity(0.10), BS.ink.opacity(0.03)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                        )
-                }
+            RemoteImage(url) {
+                Image(systemName: "music.note")
+                    .font(.system(size: size * 0.34))
+                    .foregroundStyle(BS.inkDim)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(
+                        LinearGradient(colors: [BS.ink.opacity(0.10), BS.ink.opacity(0.03)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    )
             }
             .frame(width: size, height: size)
             .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
@@ -669,6 +661,7 @@ private struct TeamSectionView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .sensoryFeedback(.selection, trigger: isOpen)
             .accessibilityLabel({
                 let n = FaceStack.unique(section.people).count
                 return "\(section.label), \(n) \(n == 1 ? "persona" : "personas")"
