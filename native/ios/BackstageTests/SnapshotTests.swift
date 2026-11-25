@@ -32,6 +32,25 @@ final class SnapshotTests: XCTestCase {
                 ServiceFullCard(service: services[1], today: "2026-11-25").padding(16),
                 scheme: scheme, to: "\(dir)/2-servicio-\(suffix).png"
             )
+            try render(
+                VStack(spacing: 0) {
+                    TopBar(me: me) {}
+                    LibraryScreen(catalogue: .loaded(Fixture.catalogue), query: .constant(""), open: { _ in }, retry: {})
+                },
+                scheme: scheme, to: "\(dir)/4-biblioteca-\(suffix).png"
+            )
+            try render(
+                LibraryScreen(catalogue: .loaded(Fixture.catalogue), query: .constant("gra"), open: { _ in }, retry: {}),
+                scheme: scheme, to: "\(dir)/5-buscar-\(suffix).png"
+            )
+            try render(
+                SongPage(seed: SongSeed(Fixture.detail.song), load: .loaded(Fixture.detail), retry: {}),
+                scheme: scheme, to: "\(dir)/6-cancion-\(suffix).png"
+            )
+            try render(
+                SongPage(seed: SongSeed(Fixture.lyricOnly.song), load: .loaded(Fixture.lyricOnly), retry: {}),
+                scheme: scheme, to: "\(dir)/7-letra-\(suffix).png"
+            )
         }
     }
 
@@ -73,6 +92,63 @@ private enum Fixture {
     static func song(_ title: String, _ author: String, key: String, original: String? = nil, bpm: Int?, medley: String? = nil) -> AppSong {
         AppSong(id: title, slug: nil, title: title, author: author, key: key, songKey: original ?? key, bpm: bpm, timeSig: nil, cover: nil, coverLarge: nil, medley: medley, leads: [])
     }
+
+    static func entry(_ title: String, original: String? = nil, artist: String, key: String, bpm: Int, added: String, tags: [String] = []) -> LibrarySong {
+        LibrarySong(
+            id: title, slug: title.lowercased().replacingOccurrences(of: " ", with: "-"), title: title, original: original,
+            artist: artist, key: key, bpm: bpm, timeSig: "4/4", cover: nil, coverLarge: nil,
+            tags: tags.map { SongTag(slug: $0.lowercased(), name: $0) }, addedAt: added
+        )
+    }
+
+    static let catalogue: [LibrarySong] = [
+        entry("Al que está sentado en el trono", artist: "Marcos Brunet", key: "D", bpm: 70, added: "2026-03-02T00:00:00Z"),
+        entry("Cristo es mi vida", artist: "Su Presencia", key: "D", bpm: 74, added: "2026-11-20T00:00:00Z"),
+        entry("Él es el Rey", artist: "Danilo Montero", key: "A", bpm: 120, added: "2026-02-11T00:00:00Z"),
+        entry("Gracia sublime es", original: "This Is Amazing Grace", artist: "Elevation Worship", key: "A", bpm: 72, added: "2026-11-18T00:00:00Z", tags: ["Gracia"]),
+        entry("Grande y fuerte", artist: "Miel San Marcos", key: "Bb", bpm: 132, added: "2026-05-01T00:00:00Z"),
+        entry("León y Cordero", original: "Lion and The Lamb", artist: "Leeland", key: "G", bpm: 90, added: "2026-11-22T00:00:00Z"),
+        entry("Nadie", artist: "Su Presencia", key: "D", bpm: 68, added: "2026-06-09T00:00:00Z"),
+        entry("Tu fidelidad", artist: "Marcos Witt", key: "E", bpm: 70, added: "2026-01-15T00:00:00Z"),
+        entry("10,000 razones", original: "10,000 Reasons", artist: "Matt Redman", key: "G", bpm: 73, added: "2026-04-04T00:00:00Z"),
+    ]
+
+    static let detail = SongDetail(
+        song: catalogue[3],
+        lyrics: nil,
+        charts: [
+            SongChart(key: "A", content: """
+            # Verso 1
+            [A]Quién rompe el poder del pe[D]cado
+            Su a[F#m]mor es fuerte y pode[E]roso
+            
+            # Coro
+            [A]Gracia sublime [D]es
+            [F#m]Amor sin condi[E]ción
+            [A] [D] [E]
+            """, chordPro: true),
+            SongChart(key: "G", content: "[G]Quién rompe el poder del pe[C]cado", chordPro: true),
+        ],
+        links: [
+            SongLink(kind: "reference", label: "Escuchar la referencia", url: "https://example.com/a"),
+            SongLink(kind: "tutorial", label: "Tutorial de guitarra", url: "https://example.com/b"),
+        ]
+    )
+
+    static let lyricOnly = SongDetail(
+        song: catalogue[7],
+        lyrics: """
+        # Verso
+        Tu fidelidad es grande
+        Tu fidelidad incomparable es
+        
+        # Coro
+        Nadie como tú, bendito Dios (x2)
+        Grande es tu fidelidad
+        """,
+        charts: [],
+        links: []
+    )
 
     static let team: [AppSection] = [
         AppSection(id: "voces", label: "Voces", people: [

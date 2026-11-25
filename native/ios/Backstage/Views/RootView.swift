@@ -16,7 +16,7 @@ struct RootView: View {
             case .signingIn:
                 SignInView(notice: nil, busy: true)
             case .signedIn(let me):
-                HomeView(me: me)
+                MainTabs(me: me)
             case .offline:
                 OfflineView()
             }
@@ -80,14 +80,43 @@ struct SignInView: View {
     }
 }
 
+// MARK: The tabs
+
+/// Inicio and the Biblioteca, each with its own stack, so going back in one never moves the
+/// other. The Biblioteca is Alabanza's: someone outside it would only meet a refusal there.
+/// The profile sheet lives here because both tabs' top bars open the same one.
+struct MainTabs: View {
+    let me: Me
+    @State private var showingProfile = false
+
+    var body: some View {
+        Group {
+            if me.ministries.contains("worship") || me.role == "super-admin" {
+                TabView {
+                    HomeView(me: me) { showingProfile = true }
+                        .tabItem { Label("Inicio", systemImage: "house") }
+                    LibraryView(me: me) { showingProfile = true }
+                        .tabItem { Label("Biblioteca", systemImage: "music.note.list") }
+                }
+            } else {
+                // One destination needs no tab bar.
+                HomeView(me: me) { showingProfile = true }
+            }
+        }
+        .sheet(isPresented: $showingProfile) {
+            ProfileSheet(me: me)
+        }
+    }
+}
+
 // MARK: Inicio
 
 struct HomeView: View {
     @Environment(AppModel.self) private var model
     let me: Me
+    let profile: () -> Void
     @State private var onlyMine = false
-    @State private var showingProfile = false
-    @State private var path: [AppService] = []
+    @State private var path: [Route] = []
     @State private var refreshes = 0
     @Namespace private var zoom
 
@@ -100,13 +129,13 @@ struct HomeView: View {
                     services: model.services,
                     onlyMine: $onlyMine,
                     zoom: zoom,
-                    open: { path.append($0) },
+                    open: { path.append(.service($0)) },
                     retry: { Task { await model.retryServices() } }
                 )
             }
             .background(BS.base.ignoresSafeArea())
             .safeAreaInset(edge: .top, spacing: 0) {
-                TopBar(me: me) { showingProfile = true }
+                TopBar(me: me, profile: profile)
             }
             .refreshable {
                 await model.reload()
@@ -117,13 +146,10 @@ struct HomeView: View {
                 new.count > old.count ? .impact(weight: .light) : nil
             }
             .toolbar(.hidden, for: .navigationBar)
-            .navigationDestination(for: AppService.self) { service in
-                ServiceDetailView(service: service, today: today)
-                    .zoomDestination(id: service.id, in: zoom)
+            .navigationDestination(for: Route.self) { route in
+                RouteDestination(route: route, today: today, zoom: zoom)
             }
-            .sheet(isPresented: $showingProfile) {
-                ProfileSheet(me: me)
-            }
+            .environment(\.openSong) { path.append(.song($0)) }
         }
     }
 
@@ -166,7 +192,7 @@ struct TopBar: View {
         }
         // The page shows through, blurred, as it slides under the bar; the navy veil keeps the
         // material from turning the system's grey.
-        .background(BS.base.opacity(0.72).background(.ultraThinMaterial).ignoresSafeArea(edges: .top))
+        .background(BS.base.opacity(0.45).background(.ultraThinMaterial).ignoresSafeArea(edges: .top))
     }
 }
 

@@ -551,10 +551,22 @@ private struct SetlistSection: View {
 /// A song on the setlist: its cover with its place, the title, the author and tempo, who leads it
 /// on a worship night, and the key as an INK pill (inside a day card the key stays ink, ADR-0071).
 struct SongRowView: View {
+    @Environment(\.openSong) private var openSong
     let number: Int
     let song: AppSong
 
+    /// A row opens its song where something navigates and the setlist still points at one.
     var body: some View {
+        if let openSong, let seed = SongSeed(song) {
+            Button { openSong(seed) } label: { row.contentShape(Rectangle()) }
+                .buttonStyle(.plain)
+                .accessibilityHint("Abre la canción")
+        } else {
+            row
+        }
+    }
+
+    private var row: some View {
         HStack(spacing: 14) {
             CoverView(url: song.cover, size: 52, number: number)
             VStack(alignment: .leading, spacing: 2) {
