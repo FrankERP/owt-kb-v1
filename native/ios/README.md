@@ -28,6 +28,9 @@ Simulator, on every change under `native/ios/`.
   `https` callback `/app/callback/ios`, which needs the Team ID in the site's
   `apple-app-site-association` and the Associated Domains capability on the App ID.
 
+The app icon (`Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png`, 1024×1024, opaque) is the
+Backstage «B» mark, resized from `public/backstage-mark-v2.png`, the same mark as the web's icons.
+
 ## TestFlight
 
 Actions → «iOS TestFlight» → Run workflow on `main` (`.github/workflows/ios-testflight.yml`,
