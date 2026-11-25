@@ -740,7 +740,7 @@ private struct PersonCell: View {
                 photo: person.photo,
                 mine: person.mine,
                 size: 40,
-                badge: section == "voces" ? nil : SeatGlyph.symbol(for: person.seat, section: section)
+                badge: section == "voces" ? nil : SeatGlyph.asset(for: person.seat, section: section)
             )
             VStack(alignment: .leading, spacing: 1) {
                 Text(person.name)
