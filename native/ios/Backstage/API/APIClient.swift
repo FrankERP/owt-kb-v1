@@ -40,6 +40,8 @@ enum APIError: Error, Equatable {
     case session(SessionError)
     /// `403`: the person lacks the level this endpoint needs.
     case forbidden
+    /// `404`: nothing at that address (a song that left the catalogue).
+    case notFound
     case decoding
 }
 
@@ -52,6 +54,16 @@ struct APIClient: Sendable {
     func me() async throws -> Me { try await get("/api/app/v1/me") }
 
     func services() async throws -> ServicesResponse { try await get("/api/app/v1/services") }
+
+    func songs() async throws -> SongsResponse { try await get("/api/app/v1/songs") }
+
+    func song(slug: String) async throws -> SongResponse {
+        // The slug is one path segment: anything that would not be one is escaped, never spliced.
+        var allowed = CharacterSet.urlPathAllowed
+        allowed.remove(charactersIn: "/?#")
+        let segment = slug.addingPercentEncoding(withAllowedCharacters: allowed) ?? ""
+        return try await get("/api/app/v1/songs/\(segment)")
+    }
 
     func get<T: Decodable>(_ path: String) async throws -> T {
         var token = try await sessionCall { try await authority.accessToken() }
@@ -82,6 +94,8 @@ struct APIClient: Sendable {
                 token = try await sessionCall { try await authority.accessToken(replacing: rejected) }
             case 403:
                 throw APIError.forbidden
+            case 404:
+                throw APIError.notFound
             case 503:
                 throw APIError.session(.unavailable)
             default:

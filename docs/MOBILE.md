@@ -27,6 +27,7 @@ clients, `backstage-ios` (iPhone, iPad, Mac) and `backstage-android`:
 | Sign out | `POST /api/app/v1/auth/revoke` | Form `token` (the refresh token) + `client_id`. 200 always, 503 only if the revocation write failed. |
 | Who am I | `GET /api/app/v1/me` | `Authorization: Bearer <access_token>`. |
 | Upcoming services | `GET /api/app/v1/services` | Bearer; worship members only (403 otherwise). The home screen's «Próximos servicios»: today (CDMX) through +95 days, team, setlist, your own seats by member id. |
+| Song library | `GET /api/app/v1/songs`, `GET /api/app/v1/songs/[slug]` | Bearer; worship members only. The Biblioteca (the whole catalogue) and one song with its lyric, chord charts and links. Audio and play history come in a later slice. |
 
 **Redirects.** Production and preview: only `<origin>/app/callback/ios` and
 `<origin>/app/callback/android` (verified `https`; when the app is not installed, or before the OS has the association file, they
