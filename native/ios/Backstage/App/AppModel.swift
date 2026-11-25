@@ -26,7 +26,26 @@ final class AppModel {
         case failed(String)
     }
 
+    /// The Biblioteca's catalogue.
+    enum Catalogue: Equatable {
+        case idle
+        case loading
+        case loaded([LibrarySong])
+        case notInWorship
+        case failed(String)
+    }
+
+    /// One song's page.
+    enum SongLoad: Equatable {
+        case loaded(SongDetail)
+        case missing
+        case failed(String)
+    }
+
     private(set) var phase: Phase = .starting
+    private(set) var catalogue: Catalogue = .idle
+    /// Songs already opened in this run: a song reopens at once, and offline.
+    private var openedSongs: [String: SongDetail] = [:]
     private(set) var services: Services = .loading
     /// When the list last loaded, so coming back to the app refreshes a list left from another day.
     private var servicesLoadedAt: Date?
@@ -106,6 +125,58 @@ final class AppModel {
         }
     }
 
+    // MARK: Biblioteca
+
+    /// Loads the catalogue once; `force` (pull to refresh, «Intentar de nuevo») reads it again.
+    /// A failed refresh keeps the list on screen.
+    func loadCatalogue(force: Bool = false) async {
+        if case .loading = catalogue { return }
+        if case .loaded = catalogue, !force { return }
+        let had = catalogue
+        if case .loaded = had {} else { catalogue = .loading }
+        do {
+            catalogue = .loaded(try await api.songs().songs)
+        } catch APIError.forbidden {
+            catalogue = .notInWorship
+        } catch {
+            let cause = Self.sessionError(from: error)
+            switch cause {
+            case .signedOut, .accountDisabled:
+                show(cause)
+            case .network, .unavailable, .server:
+                if case .loaded = had {
+                    catalogue = had
+                    banner = Self.message(for: cause)
+                } else {
+                    catalogue = .failed(Self.message(for: cause))
+                }
+            }
+        }
+    }
+
+    /// The song already opened in this run, if any: its page draws without a wait.
+    func openedSong(slug: String) -> SongDetail? { openedSongs[slug] }
+
+    func loadSong(slug: String) async -> SongLoad {
+        do {
+            let detail = try await api.song(slug: slug).song
+            openedSongs[slug] = detail
+            return .loaded(detail)
+        } catch APIError.notFound {
+            return .missing
+        } catch {
+            let cause = Self.sessionError(from: error)
+            switch cause {
+            case .signedOut, .accountDisabled:
+                show(cause)
+                return .failed("")
+            case .network, .unavailable, .server:
+                if let kept = openedSongs[slug] { return .loaded(kept) }
+                return .failed(Self.message(for: cause))
+            }
+        }
+    }
+
     // MARK: Sign-in
 
     /// One sign-in: a fresh verifier and state, the server's page in an ephemeral browser session
@@ -166,6 +237,8 @@ final class AppModel {
         banner = nil
         services = .loading
         servicesLoadedAt = nil
+        catalogue = .idle
+        openedSongs = [:]
         phase = .signedOut(notice: nil)
     }
 
@@ -197,6 +270,7 @@ final class AppModel {
             switch api {
             case .session(let e): return e
             case .forbidden: return .server(status: 403)
+            case .notFound: return .server(status: 404)
             case .decoding: return .server(status: 0)
             }
         }
@@ -214,9 +288,13 @@ final class AppModel {
         switch sessionError {
         case .signedOut:
             services = .loading
+            catalogue = .idle
+            openedSongs = [:]
             phase = .signedOut(notice: nil)
         case .accountDisabled:
             services = .loading
+            catalogue = .idle
+            openedSongs = [:]
             phase = .signedOut(notice: "Tu acceso está desactivado. Habla con un administrador.")
         case .network, .unavailable, .server:
             let message = Self.message(for: sessionError)
