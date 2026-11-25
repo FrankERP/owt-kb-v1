@@ -320,7 +320,8 @@ struct ServiceHead: View {
                 if let time = service.time {
                     ClockLine(time: time)
                 }
-                if service.worshipNight {
+                // Only when the title doesn't already say it («Noche de alabanza» twice reads as a stutter).
+                if service.worshipNight, service.title.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil) != "noche de alabanza" {
                     HStack(spacing: 6) {
                         Image(systemName: "sparkles").font(.system(size: 12))
                         Text("Noche de alabanza").font(.bsBody(15))
