@@ -118,8 +118,10 @@ struct RouteDestination: View {
             ServiceDetailView(service: service, today: today)
                 .zoomDestination(id: service.id, in: zoom)
         case .song(let seed):
+            // A song slides in like any page: it opens from the shelf, a letter row, a search
+            // result and a setlist, and a zoom can only return to one of them — from the rest
+            // it closed toward a corner where nothing had opened it.
             SongView(seed: seed)
-                .zoomDestination(id: "song-\(seed.slug)", in: zoom)
         }
     }
 }
@@ -201,7 +203,6 @@ struct LibraryScreen: View {
                         ForEach(recent) { song in
                             Button { open(SongSeed(song)) } label: { ShelfTile(song: song) }
                                 .buttonStyle(CardPressStyle())
-                                .zoomSource(id: "song-\(song.slug)", in: zoom)
                         }
                     }
                     .padding(.horizontal, 20)
