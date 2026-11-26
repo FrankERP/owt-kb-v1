@@ -71,7 +71,7 @@ move provable by those tests passing **unchanged**.
 same order and under the same conditions. Both callers are route handlers, so the request scope
 `after()` needs exists on both doors.
 
-**The move is not test-neutral: three registries change with it, in the same PR.**
+**The move is not test-neutral: four registries change with it, in the same PR.**
 
 - `app/utils/protectedReadAudit.ts`: the protected-writer entry
   `app/api/me/proposals/route.ts#POST` becomes `app/utils/proposalSaveCommit.ts#module`, with the
@@ -85,8 +85,14 @@ same order and under the same conditions. Both callers are route handlers, so th
 - `serviceCommitCallers.test.ts` `EXPECTED_CALLERS` gains
   `proposalSaveCommit: ["app/api/me/proposals/route.ts"]` in PR 1, and the app route is added to
   that list in PR 2.
+- `seatClashGuardCoverage.test.ts`: `proposalSaveCommit.ts` joins `NON_SEAT_WRITERS` (it writes a
+  `setlistProposal` and a lock heartbeat, never a seat); the test fails for any unclassified
+  `*Commit.ts`.
 
-PR 1 is therefore «writer moved + three registries updated»; `proposalWriteRoutes.test.ts` and
+The inventory above is checked, not trusted: PR 1 runs the full gates before review, and any
+guard the list missed is added to it and named in the PR.
+
+PR 1 is therefore «writer moved + four registries updated»; `proposalWriteRoutes.test.ts` and
 `setlistNoticeQueueing.test.ts` must pass without edits, and that is the proof of a pure move.
 
 ### D2. The app's write door
@@ -185,7 +191,10 @@ app's Library carries no play history (`app/utils/appSongs.ts:20`). The history 
 `app/api/me/songs/route.ts:36-59` (canonical client, `canonicalizePlayHistory`,
 `buildPreviousKeysBySong`) moves verbatim into `app/utils/songPreviousKeys.ts`
 (`previousKeysFor(songIds, today)`, importing `operationalClient` itself, for the same audit
-reason as D3), and `/api/me/songs` calls it. Then:
+reason as D3), and `/api/me/songs` calls it. That fetch is the route's only protected read (its
+other read is `post`, not a protected type), so in `protectedReadAudit.test.ts`'s «migrated» list
+`app/api/me/songs/route.ts` is **replaced** by `app/utils/songPreviousKeys.ts`, keeping the
+canonical-client pin on the history read. Then:
 
 - D3 answers `previous_keys` on each proposal song row;
 - `GET /api/app/v1/songs/previous-keys?ids=a,b,…` (`needs` worship member, at most 50 canonical
@@ -206,7 +215,8 @@ Older builds ignore unknown fields.
 
 The app never retries a save on its own. After a timeout or a lost response it re-reads D3 and
 shows what is stored. A manual retry of a save that did commit carries a stale `observed` and is
-refused (`stale_revision`, or `concurrent_creation` for a first create) **before** any write or
+refused with code `stale_revision` (`details.detail` is `concurrent_creation` for a first create,
+`revision_mismatch` otherwise; the app switches on the code, not the detail) **before** any write or
 notification, so no duplicate proposal, no duplicate thread note and no second «Nueva propuesta».
 On any 409 the app keeps the person's local edits on screen, reloads D3 and offers «Recargar».
 A 200 with `_rev: null` (committed, read-back failed) also forces a reload before the next save,
@@ -222,7 +232,9 @@ Songs are picked from the Library the app already holds, each with a play key; r
 message (ADR-0087: always sent, as the web editor does; `""` clears) and, on the first
 submission only, a note to the admins (`leadNotes`; afterwards `""`, as the web editor does). Two
 actions: «Guardar borrador», «Enviar». The proposal thread and the service thread are shown
-read-only. Approved proposals open read-only.
+read-only. Approved proposals open read-only. The app's API client decodes the 409 body (today it
+maps 409 to a generic error) and reads the writer's 403 «Not a Lead on this service» as «Ya no
+diriges este servicio», reloading the list.
 
 ### D7. Guards added
 
@@ -230,10 +242,14 @@ read-only. Approved proposals open read-only.
   a new import-based check: no file under `app/api/app/v1/**` imports `writeClient` (the token
   and revoke routes write through `grantStore`, which stays allowed).
 - `appAuthStatic.test.ts`: the narrowed wrapper rule and its four fixtures (D2.5).
-- `protectedReadAudit`: the moved writer entry (D1) and the two direct read pins (D3).
+- `protectedReadAudit`: the moved writer entry (D1); in the «migrated» list the page is replaced
+  by `proposalEditorRead.ts` (D3) and `app/api/me/songs/route.ts` by `songPreviousKeys.ts` (D3b).
+- `seatClashGuardCoverage`: `proposalSaveCommit.ts` classified (D1).
+- The narrowed `appAuthStatic` rule also requires `withVerificationRunContext` to be imported from
+  `@/app/utils/srVerificationRunContext`.
 - The existing route tests pass unchanged against the web route.
-- New route tests for the app door: no token 401; non-member 403; fresh access inactive 403 with
-  no write; non-Lead 403; happy path delegates with the token's `sub` as `leadId`; body not JSON.
+- New route tests for the app door: no token 401; non-member 403; fresh access inactive 401
+  `account_disabled` with no write; a throw from `saveProposal` answers 503 and is logged; non-Lead 403; happy path delegates with the token's `sub` as `leadId`; body not JSON.
 - `appAuthStatic.test.ts` already enforces the first-statement guard on the new handlers.
 - Read tests: non-Lead and draft service 404; `observed` matches the proposal returned.
 
