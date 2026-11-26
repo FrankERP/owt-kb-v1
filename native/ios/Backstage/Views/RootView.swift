@@ -149,8 +149,10 @@ struct HomeView: View {
             .navigationDestination(for: Route.self) { route in
                 RouteDestination(route: route, today: today, zoom: zoom)
             }
-            .environment(\.openSong) { path.append(.song($0)) }
         }
+        // On the stack itself, so a service's page pushed onto it inherits both.
+        .environment(\.openSong) { path.append(.song($0)) }
+        .environment(\.songZoom, zoom)
     }
 
     /// The server's CDMX today, once the list has loaded.
