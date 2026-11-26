@@ -9,6 +9,7 @@ struct BackstageApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
+                .environment(model.player)
                 .task { await model.start() }
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .active {

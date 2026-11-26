@@ -57,6 +57,8 @@ final class AppModel {
     var banner: String?
 
     let config: AppConfig
+    /// The one audio player, app-wide: a mix outlives the page that started it.
+    let player: MixPlayer
     private let authority: SessionAuthority
     private let api: APIClient
 
@@ -64,6 +66,10 @@ final class AppModel {
         self.config = config
         authority = SessionAuthority(config: config, store: store, transport: transport)
         api = APIClient(config: config, authority: authority, transport: transport)
+        player = MixPlayer()
+        player.resolve = { [weak self] slug, key in
+            await self?.mixSource(slug: slug, key: key) ?? .failed("")
+        }
     }
 
     static func live() -> AppModel {
@@ -182,6 +188,31 @@ final class AppModel {
         }
     }
 
+    /// Where a mix's audio lives, asked for every time one is played: the server answers only
+    /// someone who is in Alabanza right now. Only Sanity's CDN over https is ever played.
+    private func mixSource(slug: String, key: String) async -> MixPlayer.Source {
+        do {
+            let answer = try await api.mixAudio(slug: slug, key: key)
+            guard let url = URL(string: answer.url), url.scheme == "https", url.host == "cdn.sanity.io" else {
+                return .failed("Esta mezcla no está disponible.")
+            }
+            return .url(url)
+        } catch APIError.notFound {
+            return .failed("Esta mezcla ya no está disponible.")
+        } catch APIError.forbidden {
+            return .failed("Las mezclas de ensayo son para el equipo de Alabanza.")
+        } catch {
+            let cause = Self.sessionError(from: error)
+            switch cause {
+            case .signedOut, .accountDisabled:
+                show(cause)
+                return .failed("")
+            case .network, .unavailable, .server:
+                return .failed(Self.message(for: cause))
+            }
+        }
+    }
+
     // MARK: Sign-in
 
     /// One sign-in: a fresh verifier and state, the server's page in an ephemeral browser session
@@ -237,6 +268,7 @@ final class AppModel {
     }
 
     func signOut() async {
+        player.stop()
         await authority.signOut()
         ImageStore.shared.clear()
         banner = nil
@@ -292,11 +324,13 @@ final class AppModel {
         let sessionError = Self.sessionError(from: error)
         switch sessionError {
         case .signedOut:
+            player.stop()
             services = .loading
             catalogue = .idle
             openedSongs = [:]
             phase = .signedOut(notice: nil)
         case .accountDisabled:
+            player.stop()
             services = .loading
             catalogue = .idle
             openedSongs = [:]

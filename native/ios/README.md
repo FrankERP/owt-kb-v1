@@ -12,6 +12,7 @@ runbook: [`docs/MOBILE.md`](../../docs/MOBILE.md)). iOS/iPadOS 17.4+ (iPhone XS/
 | `Backstage/App` | `BackstageApp`, `AppModel` (the one state: signed out / in), `AppConfig` (origin, client id, redirect). |
 | `Backstage/Auth` | PKCE, the callback check (state + issuer), the token endpoint's answers, the Keychain store, and `SessionAuthority`: the one owner of the tokens, an actor so refreshes are single-flight. |
 | `Backstage/API` | `APIClient` (bearer, one refresh on `401 invalid_token`) and the models. |
+| `Backstage/Audio` | `MixPlayer`: the one audio player, app-wide. A rehearsal mix keeps sounding with the screen locked (`UIBackgroundModes: audio` in `project.yml`), with the lock screen's controls; it asks the server where a mix lives every time it plays one. |
 | `Backstage/Views` | The screens. |
 | `BackstageTests` | Unit tests of everything above that is logic. |
 

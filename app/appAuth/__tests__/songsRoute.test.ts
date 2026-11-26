@@ -1,5 +1,5 @@
 // app/appAuth/__tests__/songsRoute.test.ts — `GET /api/app/v1/songs` and `/songs/[slug]` behind the
-// app guard: a worship member gets the catalogue and one song; the slug travels as a GROQ
+// app guard (and `/songs/[slug]/mixes/[key]`, a mix's audio address): a worship member gets the catalogue and one song; the slug travels as a GROQ
 // parameter; a slug with no song is 404; someone outside Alabanza is refused before any read; a
 // Sanity failure is a retry, never a sign-out. The shaping is `app/utils/__tests__/appSongs.test.ts`.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -23,6 +23,7 @@ vi.mock("@/sanity/lib/operationalClient", () => ({ operationalClient: { fetch: (
 
 import { GET as LIST } from "@/app/api/app/v1/songs/route";
 import { GET as ONE } from "@/app/api/app/v1/songs/[slug]/route";
+import { GET as MIX } from "@/app/api/app/v1/songs/[slug]/mixes/[key]/route";
 import { signAppAccessToken } from "../tokens";
 
 const SECRET = "s".repeat(40);
@@ -109,7 +110,7 @@ describe("GET /api/app/v1/songs/[slug]", () => {
     expect(res.headers.get("cache-control")).toContain("no-store");
     expect((await res.json()).song).toMatchObject({ slug: "cordero-y-leon", charts: [{ key: "G", chordPro: true }] });
     const [query, params] = operationalFetch.mock.calls[0]!;
-    expect(params).toEqual({ slug: "cordero-y-leon" });
+    expect(params).toEqual({ slug: "cordero-y-leon", me: "m1" }); // the token's member, never a client value
     expect(query).not.toContain("cordero-y-leon");
   });
 
@@ -130,5 +131,47 @@ describe("GET /api/app/v1/songs/[slug]", () => {
     operationalFetch.mockRejectedValueOnce(new Error("down"));
     expect((await one("cordero-y-leon")).status).toBe(503);
     expect((await one("cordero-y-leon", { host: "localhost:3000" })).status).toBe(401);
+  });
+});
+
+describe("GET /api/app/v1/songs/[slug]/mixes/[key]", () => {
+  const CDN = "https://cdn.sanity.io/files/p/d/abc.mp3";
+  async function mix(slug: string, key: string, headers?: Record<string, string>): Promise<Response> {
+    return MIX(new Request(`${ORIGIN}/api/app/v1/songs/${slug}/mixes/${key}`, { headers: headers ?? (await bearer()) }), {
+      params: Promise.resolve({ slug, key }),
+    });
+  }
+
+  it("answers the CDN address, no-store, with slug and key bound as parameters", async () => {
+    operationalFetch.mockResolvedValueOnce(CDN);
+    const res = await mix("cordero-y-leon", "k1");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toContain("no-store");
+    expect(await res.json()).toEqual({ url: CDN });
+    const [query, params] = operationalFetch.mock.calls[0]!;
+    expect(params).toEqual({ slug: "cordero-y-leon", key: "k1" });
+    expect(query).not.toContain("cordero-y-leon");
+    expect(query).not.toContain("k1");
+  });
+
+  it("answers 404 for no mix, and for an address that is not Sanity's CDN over https", async () => {
+    for (const stored of [null, "", "https://evil.example/a.mp3", "http://cdn.sanity.io/files/a.mp3", { url: CDN }]) {
+      operationalFetch.mockResolvedValueOnce(stored);
+      const res = await mix("cordero-y-leon", "k1");
+      expect(res.status).toBe(404);
+      expect(await res.json()).toEqual({ error: "not_found" });
+    }
+  });
+
+  it("refuses someone outside Alabanza (403) and a missing token (401) before reading anything", async () => {
+    getMemberAccess.mockResolvedValueOnce({ ...WORSHIP, ministries: ["jovenes"] });
+    expect((await mix("cordero-y-leon", "k1")).status).toBe(403);
+    expect((await mix("cordero-y-leon", "k1", { host: "localhost:3000" })).status).toBe(401);
+    expect(operationalFetch).not.toHaveBeenCalled();
+  });
+
+  it("answers 503 (retry, not a sign-out) when Sanity fails", async () => {
+    operationalFetch.mockRejectedValueOnce(new Error("down"));
+    expect((await mix("cordero-y-leon", "k1")).status).toBe(503);
   });
 });

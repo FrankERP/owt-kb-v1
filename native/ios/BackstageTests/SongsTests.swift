@@ -26,6 +26,140 @@ final class SongsDecodingTests: XCTestCase {
         XCTAssertEqual(detail.lyrics, "# Coro\nSanto")
         XCTAssertEqual(detail.charts.first?.chordPro, true)
         XCTAssertEqual(detail.links.first?.kind, "tutorial")
+        // A server from before the mixes: a song with none, never a page that fails to decode.
+        XCTAssertEqual(detail.mixes, [])
+        XCTAssertNil(detail.preferredFamily)
+    }
+
+    func testDecodesTheMixes() throws {
+        let json = """
+        { "song": { "id": "s1", "slug": "santo", "title": "Santo", "original": null, "artist": null, "key": "G",
+          "bpm": null, "timeSig": null, "cover": null, "coverLarge": null, "tags": [], "addedAt": null,
+          "lyrics": null, "charts": [], "links": [], "preferredFamily": "bass",
+          "mixes": [ { "key": "k1", "label": "Banda completa", "family": "full", "familyLabel": "Banda completa", "tone": "G", "bars": [0, 50, 100] },
+                     { "key": "k2", "label": "Bass", "family": "bass", "familyLabel": "Bajo", "tone": null, "bars": [] } ] } }
+        """
+        let detail = try JSONDecoder().decode(SongResponse.self, from: Data(json.utf8)).song
+        XCTAssertEqual(detail.mixes.map(\.key), ["k1", "k2"])
+        XCTAssertEqual(detail.mixes[0].bars, [0, 50, 100])
+        XCTAssertNil(detail.mixes[1].tone)
+        XCTAssertEqual(detail.preferredFamily, "bass")
+        let audio = try JSONDecoder().decode(MixAudioResponse.self, from: Data(#"{"url":"https://cdn.sanity.io/files/p/d/a.mp3"}"#.utf8))
+        XCTAssertEqual(audio.url, "https://cdn.sanity.io/files/p/d/a.mp3")
+    }
+}
+
+final class MixesTests: XCTestCase {
+    private func mix(_ key: String, family: String = "full", tone: String? = "G") -> SongMix {
+        SongMix(key: key, label: key, family: family, familyLabel: family.uppercased(), tone: tone, bars: [])
+    }
+
+    func testListsOneSpellingPerPitchInPitchOrder() {
+        let mixes = [mix("a", tone: "G"), mix("b", tone: "Db"), mix("c", tone: "C#"), mix("d", tone: nil), mix("e", tone: "?")]
+        XCTAssertEqual(Mixes.tones(mixes), ["Db", "G"])
+    }
+
+    func testShowsTheSongsKeyByPitch() {
+        let mixes = [mix("a", tone: "Db"), mix("b", tone: "G")]
+        let selection = Mixes.forKey(mixes, key: "C#")
+        XCTAssertEqual(selection.tone, "Db")
+        XCTAssertTrue(selection.exact)
+        XCTAssertEqual(selection.mixes.map(\.key), ["a"])
+    }
+
+    func testFallsBackToTheNearestKeyLowerOnATie() {
+        let mixes = [mix("up", tone: "A"), mix("down", tone: "G")]
+        let selection = Mixes.forKey(mixes, key: "Ab")
+        XCTAssertEqual(selection.tone, "G")
+        XCTAssertFalse(selection.exact)
+        XCTAssertEqual(selection.mixes.map(\.key), ["down"])
+        // Around the circle: B is one below C, nearer than D.
+        XCTAssertEqual(Mixes.forKey([mix("b", tone: "B"), mix("d", tone: "D")], key: "C").tone, "B")
+    }
+
+    func testShowsEverythingWhenThereIsNothingToChoose() {
+        let mixes = [mix("a", tone: nil), mix("b", tone: "G")]
+        XCTAssertEqual(Mixes.forKey(mixes, key: nil), Mixes.Selection(tone: nil, exact: true, mixes: mixes))
+        let toneless = [mix("a", tone: nil)]
+        XCTAssertEqual(Mixes.forKey(toneless, key: "G"), Mixes.Selection(tone: nil, exact: true, mixes: toneless))
+    }
+
+    func testCutsTheServersOrderIntoFamilies() {
+        let groups = Mixes.groups([mix("f"), mix("k1", family: "keys"), mix("k2", family: "keys"), mix("d", family: "drums")])
+        XCTAssertEqual(groups.map(\.family), ["full", "keys", "drums"])
+        XCTAssertEqual(groups[1].mixes.map(\.key), ["k1", "k2"])
+        XCTAssertEqual(groups[1].label, "KEYS")
+    }
+
+    func testOffersThePersonsInstrumentThenTheBandThenTheFirst() {
+        let mixes = [mix("f"), mix("k", family: "keys"), mix("b", family: "bass")]
+        XCTAssertEqual(Mixes.preselected(mixes, family: "bass")?.key, "b")
+        XCTAssertEqual(Mixes.preselected(mixes, family: "drums")?.key, "f")
+        XCTAssertEqual(Mixes.preselected(mixes, family: nil)?.key, "f")
+        XCTAssertEqual(Mixes.preselected([mix("k", family: "keys")], family: nil)?.key, "k")
+        XCTAssertNil(Mixes.preselected([], family: "bass"))
+    }
+
+    func testWritesAClock() {
+        XCTAssertEqual(Mixes.clock(0), "0:00")
+        XCTAssertEqual(Mixes.clock(65.9), "1:05")
+        XCTAssertEqual(Mixes.clock(600), "10:00")
+        XCTAssertEqual(Mixes.clock(.nan), "0:00")
+    }
+}
+
+@MainActor
+final class MixPlayerTests: XCTestCase {
+    private let track = MixPlayer.Track(slug: "santo", mixKey: "k1", title: "Santo", label: "Bajo", artist: nil, cover: nil)
+
+    func testAFailedAnswerSaysWhyAndAnotherTapAsksAgain() async {
+        let player = MixPlayer()
+        var asked: [String] = []
+        player.resolve = { slug, key in
+            asked.append("\(slug)/\(key)")
+            return .failed("No hay conexión.")
+        }
+        player.toggle(track)
+        XCTAssertEqual(player.status, .loading)
+        XCTAssertEqual(player.track, track)
+        await settle { player.status != .loading }
+        XCTAssertEqual(player.status, .failed("No hay conexión."))
+        player.toggle(track)
+        await settle { asked.count == 2 }
+        XCTAssertEqual(asked, ["santo/k1", "santo/k1"])
+    }
+
+    func testASessionThatEndedLeavesNothingLoaded() async {
+        let player = MixPlayer()
+        player.resolve = { _, _ in .failed("") }
+        player.toggle(track)
+        await settle { player.track == nil }
+        XCTAssertNil(player.track)
+        XCTAssertEqual(player.status, .paused)
+    }
+
+    func testStoppingDropsALateAnswer() async {
+        let player = MixPlayer()
+        player.resolve = { _, _ in
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            return .failed("tarde")
+        }
+        player.toggle(track)
+        player.stop()
+        try? await Task.sleep(nanoseconds: 150_000_000)
+        XCTAssertNil(player.track)
+        XCTAssertEqual(player.status, .paused)
+    }
+
+    func testProgressIsAFractionOfTheLength() {
+        XCTAssertEqual(MixPlayer.fixture(track: track, status: .playing, elapsed: 30, duration: 120).progress, 0.25)
+        XCTAssertEqual(MixPlayer.fixture(track: track, status: .loading, elapsed: 0, duration: 0).progress, 0)
+    }
+
+    private func settle(_ done: () -> Bool) async {
+        for _ in 0..<200 where !done() {
+            try? await Task.sleep(nanoseconds: 5_000_000)
+        }
     }
 }
 

@@ -47,6 +47,10 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         ITSAppUsesNonExemptEncryption: false
+        # A rehearsal mix keeps sounding with the screen locked or another app in front
+        # (Backstage/Audio/MixPlayer.swift).
+        UIBackgroundModes:
+          - audio
         # The web's three faces (app/brandFonts.ts), as static instances of the Google Fonts
         # variable files (OFL; licences beside them in Resources/Fonts).
         UIAppFonts:
