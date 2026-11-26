@@ -785,8 +785,6 @@ struct ServiceDetailView: View {
                 .padding(.vertical, 12)
         }
         .background(BS.base.ignoresSafeArea())
-        .navigationTitle(service.title)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(BS.base, for: .navigationBar)
+        .closablePage()
     }
 }

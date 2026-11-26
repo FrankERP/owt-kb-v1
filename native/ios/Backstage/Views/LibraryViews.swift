@@ -395,9 +395,7 @@ struct SongView: View {
             }
         }
         .background(BS.base.ignoresSafeArea())
-        .navigationTitle(seed.title)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(BS.base, for: .navigationBar)
+        .closablePage()
         .task { await fetch() }
     }
 
