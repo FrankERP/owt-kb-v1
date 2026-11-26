@@ -233,7 +233,7 @@ Older builds ignore unknown fields.
 the lead did not see land.** This is the web editor's behaviour (`ProposalEditor.tsx:442-472`:
 on 409 a reload banner and nothing cleared; on any other error a toast and nothing cleared; `rev`
 changes only from a 200's `_rev` or from «Recargar»). The server compares only id + revision
-(`proposalSaveCommit.ts:131`), so the client is the only place a silent overwrite of a co-lead can
+(`proposalSaveCommit.ts:132`), so the client is the only place a silent overwrite of a co-lead can
 be stopped.
 
 The app's editor state: the local draft (songs, notes, status) and `observed`.

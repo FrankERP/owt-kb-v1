@@ -531,7 +531,7 @@ several exist precisely to stop a plausible-looking change.
   own v3 functions: never re-implement either on the server; `monthToolParity.test.tsx` pins
   byte-identical solve bodies against `MonthGenerator`. A Lead's shared setlist proposal save is
   `saveProposal` (`proposalSaveCommit.ts`): the domain body of `POST /api/me/proposals`, which keeps
-  only worship membership and the JSON read, moved so the native app's door calls the same writer
+  only worship membership and the JSON read, moved so the native app's planned door (W1, not shipped yet) can call the same writer
   (ADR-0091; W1 spec `docs/superpowers/specs/2026-11-26-native-proposal-save-design.md`). The DELETE route's body is `deleteRole`
   (`roleDeleteCommit.ts`, admin parity phase 2, ADR-0072): the route uses the default `notices: "deferred"`
   (`after()`), `delete_services` and its card twin `"inline"` (awaited). A chat delete runs only with

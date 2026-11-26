@@ -39,7 +39,7 @@ export async function GET() {
 /**
  * Create / save / resubmit the ONE shared proposal for a service (A2 §6). The domain body
  * lives in `saveProposal` (`app/utils/proposalSaveCommit.ts`), shared with the native app's
- * door; this route keeps only worship membership and the JSON read.
+ * planned door (W1); this route keeps only worship membership and the JSON read.
  */
 // A3 §3: outbound-delivery evidence emitted anywhere under this handler — including
 // its post-commit `after()` fan-out — carries the in-flight verification run's markers.
