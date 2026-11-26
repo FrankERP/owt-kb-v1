@@ -38,6 +38,7 @@ const PUBLIC_ROUTES = [
   "/api/app/v1/services", // native-app API — requireAppSession (worship member) first; «Próximos servicios» (ADR-0091)
   "/api/app/v1/songs", // native-app API — requireAppSession (worship member) first; the Biblioteca (ADR-0091)
   "/api/app/v1/songs/sample", // native-app API — requireAppSession (worship member) first; one song (ADR-0091)
+  "/api/app/v1/songs/sample/mixes/sample", // native-app API — requireAppSession (worship member) first; where one rehearsal mix's audio lives (ADR-0091)
   "/api/auth/sample", // NextAuth's own catch-all — it IS the login flow
   "/api/calendar/sample/sample/sample", // member calendar feed — HMAC over member id + generation verified with zero I/O before any read; 404 otherwise (ADR-0057)
   "/api/cron/flush-notifications", // Bearer CRON_SECRET, checked in-handler
