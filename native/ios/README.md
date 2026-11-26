@@ -49,9 +49,11 @@ First successful upload: run 4, 2026-11-25 (build 0.1.0 (4.1)). Runs 1–3 faile
 because App Store Connect refused Xcode's cloud signing; run 2 stopped at the identity check; run 3's `.p12` held an Apple
 Development identity (the Distribution `.cer` sat in the System keychain, apart from its key).
 
-Automatic signing archives with a development profile first; if the run says the team has no
-devices, register one iPhone under Devices and run it again. Each fresh runner may create a new
-development certificate: look at Certificates after the first runs and revoke the extras.
+Signing is manual since 2026-11-26: the archive and the export both sign with the Apple Distribution
+certificate and the App Store profile kept as secrets, and a run creates nothing in the Apple
+account. Before that the archive used automatic signing, and every fresh runner asked Apple for a
+new development certificate: run 13 stopped at «Your account has reached the maximum number of
+certificates» and the extras had to be revoked by hand.
 
 ## Rules the code keeps (MOBILE.md)
 

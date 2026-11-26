@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyLists-1.0.dtd">
 <!-- How .github/workflows/ios-testflight.yml exports and uploads the archive: signed for App Store
-     Connect with the Apple Distribution certificate the workflow imports (automatic style: Xcode picks
-     that local identity instead of its cloud-managed one), then uploaded straight to TestFlight. -->
+     Connect, MANUALLY, with the Apple Distribution certificate and the App Store profile the workflow
+     installs (it adds `provisioningProfiles` with that profile's UUID to a copy of this file), then
+     uploaded straight to TestFlight. Manual on purpose: nothing is created in the Apple account. -->
 <plist version="1.0">
 <dict>
 	<key>method</key>
@@ -10,7 +11,9 @@
 	<key>destination</key>
 	<string>upload</string>
 	<key>signingStyle</key>
-	<string>automatic</string>
+	<string>manual</string>
+	<key>signingCertificate</key>
+	<string>Apple Distribution</string>
 	<key>teamID</key>
 	<string>2NM4872N5S</string>
 	<key>manageAppVersionAndBuildNumber</key>

@@ -587,15 +587,15 @@ Frank enters the three secrets himself; the `.p8` never passes through a chat or
 reviewer on the environment is optional; if one is set, only that person approves a run (a session never
 approves, rejects or bypasses it).
 
-**Purpose.** Lets the TestFlight workflow manage signing and upload the iPhone app:
-`-allowProvisioningUpdates` creates the development certificate and the provisioning profiles, and
-`xcodebuild -exportArchive` uploads the build. The distribution signature itself comes from
-`IOS_DIST_P12` (below), not from Xcode's cloud signing, which App Store Connect refused. The workflow writes the key to `$RUNNER_TEMP` and
+**Purpose.** Lets the TestFlight workflow UPLOAD the iPhone app (`xcodebuild -exportArchive`). Since
+2026-11-26 it signs nothing and creates nothing: the signature comes from `IOS_DIST_P12` and
+`IOS_APPSTORE_PROFILE` (below), manually. Until then the archive used it for automatic signing, which
+made a new development certificate on every run until the account was full (run 13). The workflow writes the key to `$RUNNER_TEMP` and
 deletes it at the end, even on failure.
 
 **Where the values come from.** App Store Connect → ••• → Users and Access → Integrations → App Store
-Connect API → Team Keys → Generate API Key, role **Admin** (Xcode's automatic signing creates certificates and
-profiles through it; an App Manager key cannot create certificates). The first key needs the Account Holder to request API
+Connect API → Team Keys → Generate API Key, role **Admin** (chosen when Xcode's automatic signing created certificates and
+profiles through it; with manual signing an **App Manager** key is enough to upload, so use that role at the next rotation). The first key needs the Account Holder to request API
 access once. `ASC_KEY_ID` is the key's row, `ASC_ISSUER_ID` is shown above the table, `ASC_KEY_P8` is
 the whole downloaded `AuthKey_<id>.p8` including the `BEGIN`/`END` lines. Apple lets the `.p8` be
 downloaded ONCE.
@@ -653,6 +653,40 @@ Apple intermediate to add to the step. A legacy «iPhone Distribution» certific
 `.p12`/password stops at the import step. Revoking the certificate does not affect builds already on
 testers' phones or in TestFlight. A leaked `.p12` plus password lets someone sign apps as this team
 (they would still need the `ASC_*` key or an account login to upload): revoke the certificate at once.
+
+---
+
+## `IOS_APPSTORE_PROFILE` (GitHub `testflight` environment — the App Store provisioning profile)
+
+**Needed in: GitHub Actions only, as a secret of the same `testflight` environment** (limited to
+`main`), read by `.github/workflows/ios-testflight.yml`. **Not needed in:** Vercel, GCF, the app, a
+cloud session, `.env.local`, repository secrets.
+
+**Status: NOT SET yet** (2026-11-26). Frank enters it himself. Without it the run stops at «Install
+the App Store provisioning profile».
+
+**Purpose.** With `IOS_DIST_P12`, the pair the archive and the export sign with, manually. It is why a
+run no longer creates anything in the Apple account: before 2026-11-26 the archive used automatic
+signing and each run, on an empty machine, had Apple issue a new development certificate until the
+account reached its maximum (run 13). The workflow checks the profile is for
+`2NM4872N5S.com.owtBackstage.app` and is an App Store one, prints its app and expiry, installs it for
+the run and removes it at the end.
+
+**Where the value comes from.** developer.apple.com → Certificates, IDs & Profiles → Profiles → + →
+Distribution → **App Store Connect** → App ID `com.owtBackstage.app` → the Apple Distribution
+certificate that is in `IOS_DIST_P12` → a name → Download. Then
+`base64 -i <file>.mobileprovision | pbcopy` (one line) into the secret. A profile holds no private
+key: it is not sensitive the way the `.p12` is, but it stays a secret so the workflow has one place
+to read from.
+
+**How to rotate.** The profile lasts a year and is tied to ONE distribution certificate: make a new
+one whenever `IOS_DIST_P12` is replaced (a profile made for the old certificate fails the archive
+with «doesn't include signing certificate»), or when the App ID gains a capability (Push, App
+Groups). Replace the secret; nothing else changes.
+
+**Blast radius / what breaks mid-rotation.** Only TestFlight uploads: an expired, mismatched or
+wrong-kind profile stops the run before anything is uploaded. Builds already on testers' phones are
+untouched.
 
 ---
 
