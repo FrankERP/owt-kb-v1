@@ -87,3 +87,61 @@ final class ServiceDayTests: XCTestCase {
         XCTAssertEqual(joinNames(["Ana", "Jakey", "Lali"]), "Ana, Jakey y Lali")
     }
 }
+
+final class ServiceEventTests: XCTestCase {
+    private func service(date: String = "2026-11-29", time: String? = "11:00", seated: Bool = true, seats: [String] = ["Keys", "BGV"]) -> AppService {
+        AppService(
+            id: "x", kind: .sunday, date: date, time: time, title: "Domingo", worshipNight: false,
+            seated: seated, mySeats: seats, sections: [], songs: [], teamNotes: nil, pastorMessage: nil
+        )
+    }
+
+    func testATimedServiceStartsOnTheTeamsClockAndLastsTwoHours() throws {
+        let event = try XCTUnwrap(ServiceEvent.make(service()))
+        // 11:00 in Mexico City (UTC-6, no daylight saving) is 17:00 UTC, wherever the phone is.
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC")!
+        let parts = utc.dateComponents([.year, .month, .day, .hour, .minute], from: event.start)
+        XCTAssertEqual([parts.year, parts.month, parts.day, parts.hour, parts.minute], [2026, 11, 29, 17, 0])
+        XCTAssertEqual(event.end.timeIntervalSince(event.start), 7200)
+        XCTAssertFalse(event.allDay)
+    }
+
+    func testAServiceWithNoUsableTimeTakesTheWholeDay() throws {
+        for time in [nil, "", "25:00", "11", "once"] as [String?] {
+            let event = try XCTUnwrap(ServiceEvent.make(service(time: time)))
+            XCTAssertTrue(event.allDay, "\(time ?? "nil")")
+            XCTAssertEqual(event.start, event.end)
+        }
+    }
+
+    func testAWholeDayStaysOnItsDayForAPhoneFurtherWest() throws {
+        let event = try XCTUnwrap(ServiceEvent.make(service(time: nil)))
+        for zone in ["America/Los_Angeles", "America/Mexico_City", "Asia/Tokyo"] {
+            var phone = Calendar(identifier: .gregorian)
+            phone.timeZone = TimeZone(identifier: zone)!
+            let parts = phone.dateComponents([.month, .day, .hour], from: event.wholeDay(on: phone))
+            XCTAssertEqual([parts.month, parts.day, parts.hour], [11, 29, 12], zone)
+        }
+    }
+
+    func testADateThatIsNotARealDayMakesNoEvent() {
+        XCTAssertNil(ServiceEvent.make(service(date: "2026-02-30")))
+        XCTAssertNil(ServiceEvent.make(service(date: "pronto")))
+        XCTAssertNil(ServiceEvent.make(service(date: "")))
+    }
+
+    func testTheTitleAndNotesSayWhereTheCallerServes() throws {
+        let mine = try XCTUnwrap(ServiceEvent.make(service()))
+        XCTAssertEqual(mine.title, "⭐ Domingo · Keys, BGV · Oasis Worship")
+        XCTAssertEqual(mine.notes, "Tu lugar: Keys, BGV\n\nCanciones\nSetlist pendiente")
+
+        let unnamed = try XCTUnwrap(ServiceEvent.make(service(seats: [])))
+        XCTAssertEqual(unnamed.title, "⭐ Domingo · Oasis Worship")
+        XCTAssertTrue(unnamed.notes.hasPrefix("Te toca servir"))
+
+        let other = try XCTUnwrap(ServiceEvent.make(service(seated: false, seats: [])))
+        XCTAssertEqual(other.title, "Domingo · Oasis Worship")
+        XCTAssertEqual(other.notes, "Canciones\nSetlist pendiente")
+    }
+}

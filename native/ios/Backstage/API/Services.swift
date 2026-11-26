@@ -231,3 +231,63 @@ extension String {
     /// «domingo 29 de noviembre» → «Domingo 29 de noviembre».
     var capitalizedFirst: String { prefix(1).uppercased() + dropFirst() }
 }
+
+// MARK: A service on the phone's calendar (app/utils/calendarFeed.ts)
+
+/// What «Agregar al calendario» writes: the web feed's title, hour and length for the same
+/// service, with shorter notes (the caller's seat and the setlist; the feed adds the team).
+struct ServiceEvent: Equatable {
+    /// The team's wall clock, wherever the phone is.
+    static let zone = TimeZone(identifier: "America/Mexico_City")!
+
+    let title: String
+    let notes: String
+    let start: Date
+    let end: Date
+    /// A service with no time of its own takes the whole day.
+    let allDay: Bool
+
+    /// An all-day event's day on the PHONE's calendar, at noon. The system reads an all-day
+    /// event on the device's own clock, so Mexico City's midnight would land on the day before
+    /// for a phone further west.
+    func wholeDay(on phone: Calendar = .current) -> Date {
+        var team = Calendar(identifier: .gregorian)
+        team.timeZone = Self.zone
+        var parts = team.dateComponents([.year, .month, .day], from: start)
+        parts.hour = 12
+        return phone.date(from: parts) ?? start
+    }
+
+    /// Nil for a date that is not a real day.
+    static func make(_ service: AppService) -> ServiceEvent? {
+        let day = service.date.prefix(10).split(separator: "-").compactMap { Int($0) }
+        guard day.count == 3 else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        let clock = (service.time ?? "").split(separator: ":").compactMap { Int($0) }
+        let timed = clock.count == 2 && (0...23).contains(clock[0]) && (0...59).contains(clock[1])
+        var parts = DateComponents(year: day[0], month: day[1], day: day[2])
+        if timed {
+            parts.hour = clock[0]
+            parts.minute = clock[1]
+        }
+        guard let start = calendar.date(from: parts),
+              calendar.component(.day, from: start) == day[2],
+              calendar.component(.month, from: start) == day[1]
+        else { return nil }
+        // Two hours, the feed's length; an all-day event ends the day it starts.
+        let end = timed ? start.addingTimeInterval(2 * 60 * 60) : start
+
+        let seat = service.mySeats.joined(separator: ", ")
+        let title = service.seated
+            ? "⭐ \(service.title)\(seat.isEmpty ? "" : " · \(seat)") · Oasis Worship"
+            : "\(service.title) · Oasis Worship"
+        var notes: [String] = []
+        if service.seated { notes += [seat.isEmpty ? "Te toca servir" : "Tu lugar: \(seat)", ""] }
+        notes.append("Canciones")
+        notes += service.songs.isEmpty
+            ? ["Setlist pendiente"]
+            : service.songs.map { song in (song.key ?? song.songKey).map { "\(song.title) (\($0))" } ?? song.title }
+        return ServiceEvent(title: title, notes: notes.joined(separator: "\n"), start: start, end: end, allDay: !timed)
+    }
+}

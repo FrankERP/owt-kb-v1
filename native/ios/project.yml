@@ -38,6 +38,9 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDevelopmentRegion: es
+        # Unused today: «Agregar al calendario» opens the system's own event sheet, which runs
+        # outside the app and asks for no access. Kept so a prompt, if one ever shows, has words.
+        NSCalendarsWriteOnlyAccessUsageDescription: Backstage agrega a tu calendario el servicio que elijas.
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
