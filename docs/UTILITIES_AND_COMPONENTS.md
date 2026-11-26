@@ -552,6 +552,12 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   link was wrong.
 
 ### Proposals
+- **`saveProposal({ leadId, raw })`** ([proposalSaveCommit.ts](../app/utils/proposalSaveCommit.ts))
+  — the ONE writer of a Lead's shared `setlistProposal` (A2 §6): parses the raw body, authorizes
+  against the canonical role, resolves the shared proposal through both indexes, one guarded
+  transaction, then the pending notice and the lead-note queue. Answers `{ status, body }`; a
+  route adds only its own authorization and the JSON read. Callers pinned in
+  `serviceCommitCallers.test.ts`.
 - **`mergeContributor(existing, editorId, newKey)`**, **`describeContributors(contributors, myId)`**
   ([proposalContributors.ts](../app/utils/proposalContributors.ts)) — preserve contributor `_key`s
   + append the current editor once; "con Ana, Beto" label.

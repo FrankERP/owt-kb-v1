@@ -1,8 +1,9 @@
 import "server-only";
 
 // The lead's shared setlist-proposal save (Service Readiness A2 §6): the domain body of
-// `POST /api/me/proposals`, moved here so the native app's door (`/api/app/v1/proposals`,
-// ADR-0091) calls the same writer. Each route keeps only its own authorization and the
+// `POST /api/me/proposals`, moved here so the native app's planned door (W1 spec,
+// `docs/superpowers/specs/2026-11-26-native-proposal-save-design.md`; ADR-0091) can call the
+// same writer. Each route keeps only its own authorization and the
 // JSON read; `leadId` is the ONE identity input and nothing below reads a session.
 // `serviceCommitCallers.test.ts` pins who may import this module.
 
@@ -74,7 +75,7 @@ function storedContributors(value: unknown): StoredContributor[] {
  *   the SAME transaction.
  *
  * Throws only on a failed read before the commit or a non-conflict commit error; every
- * post-commit step is guarded. Both callers are route handlers, so `after()` (used by
+ * post-commit step is guarded. Every caller is a route handler (`serviceCommitCallers.test.ts`), so `after()` (used by
  * `queueLeadNotesNotice`) has its request scope.
  */
 export async function saveProposal(input: { leadId: string; raw: unknown }): Promise<ProposalSaveResult> {
@@ -411,8 +412,8 @@ export async function saveProposal(input: { leadId: string; raw: unknown }): Pro
   // duplicate branch cannot fire here and `[0]` would be indistinguishable.
   //
   // It stays two because the guarded revision goes through the canonical bound
-  // query like every other revision this HANDLER hands out — `GET` above serves
-  // `_rev` from an inline GROQ, so the rule is the handler's, not the file's —
+  // query like every other revision this WRITER hands out — the route's `GET`
+  // serves `_rev` from an inline GROQ, so the rule is the writer's, not the route file's —
   // which is
   // defence-in-depth if that filter is ever widened. Merging them is a
   // legitimate change; it just needs to move `pickUnique`'s protection, not drop
