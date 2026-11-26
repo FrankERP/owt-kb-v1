@@ -181,7 +181,7 @@ checked with `isCanonicalDocumentId` before any read. Answers, no-store:
   observed: { state: "none" } | { state: "single", id, rev },
   proposal: null | { status, songs: [{ songId, title, author, key, play_key, medley_tag,
                                        previous_keys }],
-                     contributors: [{ id, name }],
+                     contributors: [{ name, mine }],
                      teamNotes, pastorMessage, adminNotes, messages: [...] },
   serviceThread: { messages: [...], pastorMessage } }
 ```
@@ -190,13 +190,18 @@ checked with `isCanonicalDocumentId` before any read. Answers, no-store:
 back is what it was shown. The song fields use the save body's spelling (`play_key`,
 `medley_tag`) because `parseSongRows` ignores unknown keys: a client echoing a different spelling
 would save with no keys and no medleys and get a 200. A contract test round-trips D3's song rows
-through `parseSongRows` and asserts the keys and medley tags survive. Thread messages carry author name, role, kind, body and time only (the
-projection `THREAD_MESSAGES` already makes), never an email.
+through `parseSongRows` and asserts the keys and medley tags survive, with
+a row carrying no medley (sent as `null`, never `""`, which `parseSongRows` refuses). The route's assembler maps
+thread messages to explicit fields (author name, author role, kind, body, created and edited
+time, and a server-computed `mine`); it does not pass `THREAD_MESSAGES` rows through, because they
+also carry the author's member id. `contributors` likewise carry `name` and `mine`, no member id,
+matching `appServices.ts`'s «no member id on the wire». A role whose stored date fails
+`serviceDayKey` answers 404, as the page does.
 
 ### D3b. «Tonos anteriores»
 
-The web editor shows each song's previously played keys, both on the proposal's rows and when
-picking a song (`ProposalEditor.tsx:394, :732-735`), from `/api/me/songs`'s `previous_keys`. The
+The web editor shows each song's previously played keys for songs added in the current session
+(the page's projection carries none for stored rows) (`ProposalEditor.tsx:394, :732-735`), from `/api/me/songs`'s `previous_keys`. The
 app's Library carries no play history (`app/utils/appSongs.ts:20`). The history read in
 `app/api/me/songs/route.ts:36-59` (canonical client, `canonicalizePlayHistory`,
 `buildPreviousKeysBySong`) moves verbatim into `app/utils/songPreviousKeys.ts`
@@ -206,7 +211,7 @@ other read is `post`, not a protected type), so in `protectedReadAudit.test.ts`'
 `app/api/me/songs/route.ts` is **replaced** by `app/utils/songPreviousKeys.ts`, keeping the
 canonical-client pin on the history read. Then:
 
-- D3 answers `previous_keys` on each proposal song row;
+- D3 answers `previous_keys` on each proposal song row too (more than the web shows);
 - `GET /api/app/v1/songs/previous-keys?ids=a,b,…` (`needs` worship member, at most 50 canonical
   ids, else 400) answers `{ [songId]: string[] }` for songs the app is about to add, so the picker
   shows them as the web does.
@@ -218,33 +223,59 @@ is in the role's raw `Lead[]._ref` of a published service, the writer's `canonic
 rule, NOT the name-filtered people list the «mine» flag uses, which drops a Lead with no name) and `proposalStatus` (`null` or the shared proposal's status,
 read only for services where `canPropose` is true, in one query by `service_ref._ref in $ids`;
 when two share a `service_ref`, the oldest by `_createdAt` wins, D3's rule, so the list and the
-editor agree).
+editor agree). If that added read fails, the list still answers and every `proposalStatus` is
+`null` (the editor's own read decides); the app refreshes the list after each successful save.
 Older builds ignore unknown fields.
 
 ### D5. Retry and lost responses (mobile networks)
 
-The app never retries a save on its own. After a timeout or a lost response it re-reads D3 and
-shows what is stored. A manual retry of a save that did commit carries a stale `observed` and is
-refused with code `stale_revision` (`details.detail` is `concurrent_creation` for a first create,
-`revision_mismatch` otherwise; the app switches on the code, not the detail) **before** any write or
-notification, so no duplicate proposal, no duplicate thread note and no second «Nueva propuesta».
-On any 409 the app keeps the person's local edits on screen, reloads D3 and offers «Recargar».
-A 200 with `_rev: null` (committed, read-back failed) also forces a reload before the next save,
-as the web editor does (`ProposalEditor.tsx:465-466`). A 503 or a network error is shown as «No
-se pudo guardar», then the app re-reads D3 to learn whether the save landed.
+**One rule: the lead's local edits are never discarded, and the editor never adopts a revision
+the lead did not see land.** This is the web editor's behaviour (`ProposalEditor.tsx:442-472`:
+on 409 a reload banner and nothing cleared; on any other error a toast and nothing cleared; `rev`
+changes only from a 200's `_rev` or from «Recargar»). The server compares only id + revision
+(`proposalSaveCommit.ts:131`), so the client is the only place a silent overwrite of a co-lead can
+be stopped.
+
+The app's editor state: the local draft (songs, notes, status) and `observed`.
+
+- **200 with `_rev`**: `observed` becomes `{ state: "single", id: _id, rev: _rev }`; the draft is
+  now the saved state.
+- **200 with `_rev: null`** (committed, read-back failed): the draft stays, and the editor enters
+  the «Propuesta actualizada» state below; no further save until «Recargar».
+- **409** (any code): the draft stays on screen, «Propuesta actualizada · Recargar» is shown, and
+  saving is disabled until «Recargar».
+- **401**: the existing `APIClient` refresh-and-resend loop applies (the 401 is answered before
+  `saveProposal` runs, so a resend cannot double-write); a second 401 signs out as today.
+- **503, any other status, timeout or a lost response**: «No se pudo guardar». The draft stays
+  and `observed` is **unchanged**. The app does not retry on its own. If the save had in fact
+  landed, the lead's manual retry is refused with `stale_revision` (`details.detail` is
+  `concurrent_creation` for a first create, `revision_mismatch` otherwise; the app switches on the
+  code, never the detail) **before** any write or notification, so there is no duplicate
+  proposal, thread note or «Nueva propuesta», and the app shows «Propuesta actualizada».
+- **«Recargar»**: the only path that adopts a stored revision the lead did not save. It re-reads
+  D3 and replaces the draft with what is stored; before it does, if the draft differs from what
+  is stored, a confirmation says the unsaved changes will be lost (the web lets the lead copy
+  them from the banner; the app asks).
+
+These transitions live in one pure Swift type (`ProposalDraftState`) with XCTest cases for each
+bullet, including: a lost response then a retry gets 409 and keeps the draft; a co-lead's save
+between a failure and a retry is never overwritten.
 
 ### D6. The native editor (iPhone)
 
 From a service the caller leads: «Proponer setlist» (or «Editar propuesta», with the status).
 Songs are picked from the Library the app already holds, each with a play key; reorder by drag;
 «medley» links consecutive songs and tags are re-derived on every reorder with a Swift port of
-`normalizeMedleyTags` tested against the same cases as `medley.ts`. Team notes, the pastor's
-message (ADR-0087: always sent, as the web editor does; `""` clears) and, on the first
-submission only, a note to the admins (`leadNotes`; afterwards `""`, as the web editor does). Two
+`normalizeMedleyTags`; its cases live in one JSON fixture read by both a vitest test of
+`medley.ts` and the XCTest of the port, so the two copies cannot drift. Team notes, the pastor's
+message (ADR-0087: always sent, as the web editor does; `""` clears) and, while no
+proposal document exists yet, a note to the admins (`leadNotes`; once one exists, `""`: exactly
+the web's rule `proposalId ? "" : leadNotes`, so a first «Guardar borrador» also closes it). Two
 actions: «Guardar borrador», «Enviar». The proposal thread and the service thread are shown
 read-only. Approved proposals open read-only. The app's API client decodes the 409 body (today it
-maps 409 to a generic error) and reads the writer's 403 «Not a Lead on this service» as «Ya no
-diriges este servicio», reloading the list.
+maps 409 to a generic error) and shows any 403 with neutral wording («Ya no puedes proponer para este servicio»: the writer
+answers 403 for a non-Lead and for an unpublished service, the door for lost membership), then
+reloads the list.
 
 ### D7. Guards added
 
@@ -265,6 +296,14 @@ diriges este servicio», reloading the list.
 
 ### D8. Docs in the same delivery
 
+**PR 1 (the move) carries:** `docs/NOTIFICATIONS.md` and `docs/API_REFERENCE.md` (the writer's
+new location), the write-path list in CLAUDE.md and `docs/agents/project-rules.md` (the lead's
+save and `proposalSaveCommit.ts`), `docs/UTILITIES_AND_COMPONENTS.md`, the two message routes'
+comments that point at the old location, and the moved comments that no longer read true in their
+new file («`GET` above», «both callers», a header naming a door that does not exist yet).
+
+**PR 2 (the app door and editor) carries the rest:**
+
 ADR-0091 addendum (the app's first write door, why the writer moved, the 30 s grant window, the
 wrapped handler form and its harmless reason-code warn line for an unauthenticated caller with
 verification headers); CLAUDE.md and `docs/agents/project-rules.md` (the write-paths list gains
@@ -276,18 +315,26 @@ routes' comments that point at the old location. No comment in a non-delivery ro
 
 ## Known gaps the owner should hear
 
-- After the first submission the app cannot send the admins a note (that is the proposal thread,
-  slice W2). The web can.
+- Once a proposal exists (after its first save, draft included) the app cannot send the admins a
+  note: that is the proposal thread, slice W2. The web can.
 - D3 and D4 pick the proposal by `service_ref` only, the writer by two indexes. A legacy proposal
   reachable only by its target key would show as «none» and every save would answer 409. This is
   the web's behaviour today too (the page comment claiming identical selection is stale and is
   corrected in the move).
 
+## Verification before production
+
+Physical phones sign in only against production (`docs/MOBILE.md`). PR 2's pre-merge check is
+therefore the Swift `ProposalDraftState` tests plus the new route tests; there is no
+Simulator-against-localhost pass in this environment.
+
 ## Verification on a phone
 
 Preview and production share the Sanity dataset, and a `pending` save on production mails the
 admins. The first real-phone check is a «Guardar borrador» on a service Frank leads (silent), then
-a reload showing it; «Enviar» only with Frank's go-ahead.
+a reload showing it; «Enviar» only with Frank's go-ahead. That draft is real: co-leads see it on
+`/me`, so it is saved on a service Frank leads with a team that knows, or deleted from Studio
+afterwards with his OK.
 
 ## Release
 
