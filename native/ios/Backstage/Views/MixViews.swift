@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // The rehearsal mixes on a song's page (the web's `RehearsalPlayer`): the whole band and each
 // instrument on its own, in the server's order. What the phone adds: the person's own
@@ -312,7 +313,7 @@ struct MiniPlayerBar: View {
         case card
         /// Inside the tab bar's accessory, at full width: the system draws the glass.
         case accessory
-        /// Inside the accessory once the tab bar has shrunk beside it: the title and the pause.
+        /// Inside the accessory once the tab bar has shrunk beside it: the title, pause and stop.
         case inline
     }
 
@@ -322,7 +323,11 @@ struct MiniPlayerBar: View {
 
     var body: some View {
         HStack(spacing: style == .card ? 12 : 10) {
-            CoverView(url: track.cover, size: coverSize)
+            // Shrunk beside the tab bar there is room for the cover or for the stop, and the stop
+            // is the one the person cannot do without.
+            if style != .inline {
+                CoverView(url: track.cover, size: coverSize)
+            }
             VStack(alignment: .leading, spacing: 1) {
                 Text(track.title)
                     .font(.bsBody(style == .card ? 15 : 14, .semibold))
@@ -333,6 +338,7 @@ struct MiniPlayerBar: View {
                         .font(.bsBody(style == .card ? 13 : 12))
                         .foregroundStyle(isFailure ? BS.warning : BS.inkMuted)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                 }
             }
             Spacer(minLength: 0)
@@ -340,24 +346,22 @@ struct MiniPlayerBar: View {
                 player.toggle(track)
             } label: {
                 MiniToggle(player: player)
-                    .frame(width: 44, height: style == .card ? 44 : 36)
+                    .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(player.status == .playing || player.status == .loading ? "Pausar" : "Reproducir")
-            if style != .inline {
-                Button {
-                    player.stop()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(BS.inkMuted)
-                        .frame(width: 40, height: style == .card ? 44 : 36)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Cerrar el reproductor")
+            Button {
+                player.stop()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(BS.inkMuted)
+                    .frame(width: style == .inline ? 36 : 40, height: 44)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Cerrar el reproductor")
         }
         .padding(.leading, style == .card ? 10 : 12)
         .padding(.trailing, style == .card ? 4 : 6)
@@ -380,7 +384,7 @@ struct MiniPlayerBar: View {
         switch style {
         case .card: 40
         case .accessory: 30
-        case .inline: 26
+        case .inline: 0
         }
     }
 
@@ -460,7 +464,9 @@ private struct MiniPlayerTabAccessory: ViewModifier {
 
     func body(content: Content) -> some View {
         // 26.1, not 26.0: only there can the accessory be absent while nothing is loaded.
-        if #available(iOS 26.1, *), let player {
+        // A phone only: there the tab bar sits at the bottom with the accessory on it. An iPad
+        // keeps the card until the accessory has been seen on one.
+        if #available(iOS 26.1, *), let player, UIDevice.current.userInterfaceIdiom == .phone {
             content
                 .tabBarMinimizeBehavior(.onScrollDown)
                 .tabViewBottomAccessory(isEnabled: player.track != nil) {
