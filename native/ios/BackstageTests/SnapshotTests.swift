@@ -65,7 +65,7 @@ final class SnapshotTests: XCTestCase {
             )
             // The full player the bar opens: the waveform to drag, and fifteen seconds either way.
             try render(
-                MixPlayerSheet(player: playing).frame(height: 380).background(BS.card),
+                MixPlayerSheet(player: playing).frame(height: 300).background(BS.card),
                 scheme: scheme, to: "\(dir)/9-reproductor-\(suffix).png"
             )
         }
