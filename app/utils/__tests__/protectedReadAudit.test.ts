@@ -661,9 +661,11 @@ describe("git-tracked protected read inventory", () => {
       "app/(client)/page.tsx",
       "app/(client)/schedule/page.tsx",
       "app/(client)/me/page.tsx",
-      "app/(client)/me/propose/[roleId]/page.tsx",
+      // W1 (ADR-0091): the editor's reads moved into the helper the app's editor read shares.
+      "app/utils/proposalEditorRead.ts",
       "app/api/song/[id]/route.ts",
-      "app/api/me/songs/route.ts",
+      // W1: the play-history read moved into the helper the app's «Tonos anteriores» shares.
+      "app/utils/songPreviousKeys.ts",
       "app/api/notifications/count/route.ts",
       "app/api/cue/route.ts",
       "app/api/admin/proposals/route.ts",

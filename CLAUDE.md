@@ -253,7 +253,9 @@ looks wrong** — several exist to stop a plausible-looking change.
   on NextAuth's DEFAULT `redirect` callback keeping its query — never add a custom `redirect`
   callback that drops it (`authRedirectCallback.test.ts`; `docs/MCP.md`).
 - **Native apps (ADR-0091):** `/api/app/v1/*` authenticates with `requireAppSession(request, { needs })`
-  as its first statement, with a literal `needs` level (no default; `appAuthStatic.test.ts`). The app
+  as its first statement, with a literal `needs` level (no default; `appAuthStatic.test.ts`), or is
+  exactly `export const METHOD = withVerificationRunContext(<local async function>)` whose first
+  statement is that guard (a route that can send mail; the W1 addendum). The app
   door accepts only the verified `https` redirects on production and preview, and mints a code only
   on the person's visible tap (never on Android ≤ 11); the private scheme exists only on localhost —
   never add it, any auto-submit, or any reduced-power session to a deployed origin. Its own secret
@@ -280,7 +282,7 @@ looks wrong** — several exist to stop a plausible-looking change.
   proposal approval's post-commit pastor's-message copy (ADR-0087);
   Oasis Kids' in `kidsCommit.ts`, called by the four `/api/kids/*` writes and the MCP Kids tools;
   a Lead's shared setlist proposal in `proposalSaveCommit.ts`, called by `POST /api/me/proposals`
-  (and, once W1 ships, the native app's door; ADR-0091);
+  and the native app's `POST /api/app/v1/proposals` (a fresh access read first; ADR-0091 addendum);
   the song library's in `songSaveCommit.ts`, called by the song and author routes and the MCP song
   tools (edits by parts, a lossless lyrics gate, `ifRevisionId`, a token-keyed create; ADR-0077);
   people's in `memberCommit.ts`, called by the three `/api/admin/members` routes, `/me`'s PATCH and

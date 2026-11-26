@@ -114,9 +114,12 @@ describe("ProposalEditor — the lead's pastor's message", () => {
     expect(screen.queryByText("Mensaje del pastor que mandaron")).toBeNull();
   });
 
-  it("the page's own proposal read carries the field the editor re-sends", () => {
-    const page = readFileSync(join(__dirname, "..", "page.tsx"), "utf8");
-    const read = page.slice(page.indexOf("async function getSharedProposal"), page.indexOf("async function getServiceThread"));
+  it("the page's proposal read carries the field the editor re-sends", () => {
+    // The page's reads live in the helper the native app's editor read shares (ADR-0091 W1).
+    expect(readFileSync(join(__dirname, "..", "page.tsx"), "utf8")).toMatch(/readProposalEditor\(roleId, leadId\)/);
+    const helper = readFileSync(join(__dirname, "../../../../../utils/proposalEditorRead.ts"), "utf8");
+    const read = helper.slice(helper.indexOf("async function getSharedProposal"), helper.indexOf("async function getServiceThread"));
+    expect(read.length).toBeGreaterThan(100);
     expect(read).toMatch(/\bpastor_message\b/);
   });
 });

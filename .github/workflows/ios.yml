@@ -14,10 +14,13 @@ on:
   push:
     paths:
       - "native/ios/**"
+      # The contract fixtures the app's tests read (native/contract, ADR-0091 W1).
+      - "native/contract/**"
       - ".github/workflows/ios.yml"
   pull_request:
     paths:
       - "native/ios/**"
+      - "native/contract/**"
       - ".github/workflows/ios.yml"
   workflow_dispatch:
 

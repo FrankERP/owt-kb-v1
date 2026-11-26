@@ -38,7 +38,7 @@ const SONG = `play_key, medley_tag,
     "id": song->_id, "slug": song->slug.current, "title": song->title, "author": song->author,
     "songKey": song->key, "bpm": song->bpm, "timeSig": song->timeSig, "cover": ${SONG_COVER_GROQ}`;
 const ROLE = `_id, _type, week, date, time, service_name, format, team_notes,
-  Lead[]->${MEMBER}, BGVs[]->${MEMBER}, Chorus[]->${MEMBER},
+  "leadRefs": Lead[]._ref, Lead[]->${MEMBER}, BGVs[]->${MEMBER}, Chorus[]->${MEMBER},
   instruments[]{ instrument, ${PERSON} },
   foh_team[]{ role, ${PERSON} },
   "pastor_message": ${pastorMessageBodyOf("^._id")}`;
@@ -80,6 +80,8 @@ export type AppRoleRow = {
   service_name?: string | null;
   format?: string | null;
   team_notes?: string | null;
+  /** The raw `Lead[]._ref`s: the proposal writer's rule (`canonicalLeadRefs`), which keeps a Lead with no name. */
+  leadRefs?: Array<string | null> | null;
   Lead?: MemberRow[] | null;
   BGVs?: MemberRow[] | null;
   Chorus?: MemberRow[] | null;
@@ -135,6 +137,14 @@ export type AppService = {
   songs: AppSong[];
   teamNotes: string | null;
   pastorMessage: string | null;
+  /**
+   * The caller may propose this service's setlist (ADR-0091 W1, spec D4): their id is in the role's
+   * raw `Lead[]._ref`, the writer's rule — NOT the name-filtered people list `mine` uses, which
+   * drops a Lead with no name.
+   */
+  canPropose: boolean;
+  /** The shared proposal's status, read only where `canPropose`; `null` = none, or the read failed. */
+  proposalStatus: "draft" | "pending" | "approved" | "changes_requested" | null;
 };
 
 const text = (v: unknown): string | null => (typeof v === "string" && v.trim() !== "" ? v.trim() : null);
@@ -178,6 +188,10 @@ function songsOf(rows: SongRow[] | null | undefined): AppSong[] {
     });
   }
   return out;
+}
+
+function canProposeOf(role: AppRoleRow, me: string): boolean {
+  return Array.isArray(role.leadRefs) && role.leadRefs.some((ref) => typeof ref === "string" && ref === me);
 }
 
 function sectionsOf(role: AppRoleRow, me: string): { sections: AppSection[]; seated: boolean; mySeats: string[] } {
@@ -248,6 +262,8 @@ export function buildAppServices(rows: AppServicesRows, me: string): AppService[
         songs: songsOf(set?.songs),
         teamNotes: text(set?.team_notes),
         pastorMessage: text(role.pastor_message),
+        canPropose: canProposeOf(role, me),
+        proposalStatus: null,
       });
     });
   };
@@ -269,6 +285,8 @@ export function buildAppServices(rows: AppServicesRows, me: string): AppService[
       songs: songsOf(sp.songs),
       teamNotes: text(sp.team_notes),
       pastorMessage: text(sp.pastor_message),
+      canPropose: canProposeOf(sp, me),
+      proposalStatus: null,
     });
   }
 
@@ -278,4 +296,34 @@ export function buildAppServices(rows: AppServicesRows, me: string): AppService[
   return out
     .filter((x) => x.sections.length > 0 || x.songs.length > 0)
     .sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? "").localeCompare(b.time ?? "") || a.title.localeCompare(b.title, "es"));
+}
+
+// ─── The shared proposal's status, for the services the caller may propose (spec D4) ──────────
+
+/**
+ * One read for every service the caller may propose. Oldest first, so that when two proposals
+ * share a `service_ref` the first one per role wins: the editor read's rule
+ * (`order(_createdAt asc)[0]`), so the list and the editor agree.
+ */
+export const APP_PROPOSAL_STATUS_QUERY = `*[_type == "setlistProposal" && service_ref._ref in $ids] | order(_createdAt asc) {
+  "roleId": service_ref._ref, status
+}`;
+export type AppProposalStatusRow = { roleId?: string | null; status?: string | null } | null;
+
+const PROPOSAL_STATUSES = new Set(["draft", "pending", "approved", "changes_requested"]);
+
+/** The ids whose proposal status is read: only where the caller may propose. */
+export function proposableServiceIds(services: readonly AppService[]): string[] {
+  return services.filter((s) => s.canPropose).map((s) => s.id);
+}
+
+/** The services with `proposalStatus` filled from the rows (first row per role wins). */
+export function withProposalStatuses(services: AppService[], rows: readonly AppProposalStatusRow[]): AppService[] {
+  const byRole = new Map<string, AppService["proposalStatus"]>();
+  for (const r of rows) {
+    const id = r ? text(r.roleId) : null;
+    if (!r || !id || byRole.has(id)) continue;
+    byRole.set(id, PROPOSAL_STATUSES.has(r.status ?? "") ? (r.status as AppService["proposalStatus"]) : null);
+  }
+  return services.map((s) => (s.canPropose && byRole.has(s.id) ? { ...s, proposalStatus: byRole.get(s.id) ?? null } : s));
 }

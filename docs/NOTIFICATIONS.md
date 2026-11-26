@@ -496,7 +496,7 @@ supersede what Child A §1 named as accepted gaps:
 
   The legacy `leadNotes` save path still declines an unchanged note, in the
   writer rather than in the queue helper (`notesChanged` in `saveProposal`,
-  `app/utils/proposalSaveCommit.ts`, the body of `POST /api/me/proposals`) — that predicate is now load-bearing alone,
+  `app/utils/proposalSaveCommit.ts`, the body of `POST /api/me/proposals` and of the native app's `POST /api/app/v1/proposals`, so a save from the iPhone mails exactly what one from the web does) — that predicate is now load-bearing alone,
   and it is what stops a client re-sending its one-time initializer from minting
   a bubble on every save.
 - **Two messages inside one window produce one email carrying BOTH**, joined by a

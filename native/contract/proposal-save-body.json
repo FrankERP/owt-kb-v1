@@ -1,0 +1,76 @@
+{
+  "_comment": "W1 spec D7b. Each case is a proposal editor state (read by the iOS XCTest) and the exact save body the app must send for it (read by both the XCTest, key for key, and the vitest test that feeds it to parseProposalSaveRequest). A key spelled differently or left out would still get a 200 from the server and silently drop keys, medleys or the co-leads' team notes.",
+  "cases": [
+    {
+      "name": "first save, no proposal yet: the note to the admins travels, a medley, a song with no medley",
+      "state": {
+        "roleId": "sun-1",
+        "observed": { "state": "none" },
+        "songs": [
+          { "songId": "song-1", "playKey": "G", "medleyTag": null },
+          { "songId": "song-2", "playKey": "Bb", "medleyTag": "t1" },
+          { "songId": "song-3", "playKey": "C#m", "medleyTag": "t1" }
+        ],
+        "teamNotes": "Llegar 8:30",
+        "leadNotes": "Propongo abrir con Santo",
+        "pastorMessage": "Oremos por las familias"
+      },
+      "status": "draft",
+      "body": {
+        "roleId": "sun-1",
+        "observed": { "state": "none" },
+        "songs": [
+          { "songId": "song-1", "play_key": "G", "medley_tag": null },
+          { "songId": "song-2", "play_key": "Bb", "medley_tag": "t1" },
+          { "songId": "song-3", "play_key": "C#m", "medley_tag": "t1" }
+        ],
+        "leadNotes": "Propongo abrir con Santo",
+        "teamNotes": "Llegar 8:30",
+        "pastorMessage": "Oremos por las familias",
+        "status": "draft"
+      }
+    },
+    {
+      "name": "the proposal exists: its observed revision, no note to the admins, the pastor's message cleared",
+      "state": {
+        "roleId": "special-7",
+        "observed": { "state": "single", "id": "setlistProposal.special-7", "rev": "rev-42" },
+        "songs": [{ "songId": "song-9", "playKey": "E", "medleyTag": null }],
+        "teamNotes": "",
+        "leadNotes": "una nota vieja que ya no se manda",
+        "pastorMessage": ""
+      },
+      "status": "pending",
+      "body": {
+        "roleId": "special-7",
+        "observed": { "state": "single", "id": "setlistProposal.special-7", "rev": "rev-42" },
+        "songs": [{ "songId": "song-9", "play_key": "E", "medley_tag": null }],
+        "leadNotes": "",
+        "teamNotes": "",
+        "pastorMessage": "",
+        "status": "pending"
+      }
+    },
+    {
+      "name": "an empty setlist still sends every field",
+      "state": {
+        "roleId": "sat-3",
+        "observed": { "state": "none" },
+        "songs": [],
+        "teamNotes": "  con espacios  ",
+        "leadNotes": "",
+        "pastorMessage": ""
+      },
+      "status": "draft",
+      "body": {
+        "roleId": "sat-3",
+        "observed": { "state": "none" },
+        "songs": [],
+        "leadNotes": "",
+        "teamNotes": "  con espacios  ",
+        "pastorMessage": "",
+        "status": "draft"
+      }
+    }
+  ]
+}
