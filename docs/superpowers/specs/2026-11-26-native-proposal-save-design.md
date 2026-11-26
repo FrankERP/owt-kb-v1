@@ -89,8 +89,18 @@ same order and under the same conditions. Both callers are route handlers, so th
   `setlistProposal` and a lock heartbeat, never a seat); the test fails for any unclassified
   `*Commit.ts`.
 
-The inventory above is checked, not trusted: PR 1 runs the full gates before review, and any
-guard the list missed is added to it and named in the PR.
+Plus one generated artifact: `app/utils/__tests__/__fixtures__/colour-inventory.json` is
+regenerated (`node scripts/colour-inventory.mjs`), because a new file under `app/` moves its
+`filesScanned` count.
+
+**Checked by running the gates, not only by reading (2026-11-26).** The move was made on the
+branch with exactly these edits: `npx tsc --noEmit` clean, `npm test` 685 files / 12,420 tests
+green, `npx eslint .` 0 errors. Before the edits the same suite showed 5 failures, all in the
+four registries above and the colour inventory, and nothing else. A `diff` of the moved block
+against the old route shows only the identity line removed and the three `NextResponse.json`
+answers turned into `{ status, body }`. `proposalWriteRoutes.test.ts` and
+`setlistNoticeQueueing.test.ts` pass with no edits. The same gate run is repeated for PR 2's new
+files before its review.
 
 PR 1 is therefore «writer moved + four registries updated»; `proposalWriteRoutes.test.ts` and
 `setlistNoticeQueueing.test.ts` must pass without edits, and that is the proof of a pure move.

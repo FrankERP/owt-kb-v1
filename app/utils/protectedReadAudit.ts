@@ -301,10 +301,10 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
     removalOwner: "permanent runtime writer (never removed — the setlist save surface itself)",
   },
   {
-    file: "app/api/me/proposals/route.ts",
-    operation: "POST",
+    file: "app/utils/proposalSaveCommit.ts",
+    operation: "module",
     reason:
-      "guarded shared proposal writer: one transaction creates the deterministic setlistProposal or patches the observed one, heartbeating the weekend lock or special-role revision (A2 §6)",
+      "guarded shared proposal writer: one transaction creates the deterministic setlistProposal or patches the observed one, heartbeating the weekend lock or special-role revision (A2 §6). The domain body of `POST /api/me/proposals`, moved here so the native app's door calls the same writer (ADR-0091); the routes keep only authorization and the JSON read, and `serviceCommitCallers.test.ts` pins who may import this module",
     removalOwner: "permanent runtime writer (never removed — the proposal save surface itself)",
   },
   {
