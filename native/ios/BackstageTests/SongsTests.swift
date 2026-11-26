@@ -189,9 +189,47 @@ final class LibraryTests: XCTestCase {
         XCTAssertEqual(Library.search(all, "  ").count, 6)
         XCTAssertEqual(Library.search([song("Él vive")], "el").count, 1)
     }
+
+    func testSearchForgivesANearMissAfterTheExactMatches() {
+        let all = [song("Gracia sublime"), song("Cordero", artist: "Elevation Worship"), song("Grande es"), song("Otro")]
+        // One wrong letter, a missing one, an extra one.
+        XCTAssertEqual(Library.search(all, "grasia").map(\.title), ["Gracia sublime"])
+        XCTAssertEqual(Library.search(all, "gracia sublme").map(\.title), ["Gracia sublime"])
+        XCTAssertEqual(Library.search(all, "elevattion").map(\.title), ["Cordero"])
+        // An exact match still comes first, and a short word forgives nothing.
+        XCTAssertEqual(Library.search(all, "gran").map(\.title), ["Grande es"])
+        XCTAssertEqual(Library.search(all, "otra"), [])
+        // A different first letter is a different word.
+        XCTAssertEqual(Library.search(all, "tracia"), [])
+        XCTAssertEqual(Library.distance("gracia", "grasia", limit: 1), 1)
+        // Past the limit the count stops: more than one is all it says.
+        XCTAssertGreaterThan(Library.distance("gracia", "gloria", limit: 1), 1)
+        // As it sounds: a silent h, v for b, a soft c, and a doubled letter.
+        let sung = [song("Hosanna"), song("Bendito"), song("Cielo abierto"), song("Santidad")]
+        XCTAssertEqual(Library.search(sung, "ossana").map(\.title), ["Hosanna"])
+        XCTAssertEqual(Library.search(sung, "vendito").map(\.title), ["Bendito"])
+        XCTAssertEqual(Library.search(sung, "sielo").map(\.title), ["Cielo abierto"])
+        XCTAssertEqual(Library.search(sung, "sanntid").map(\.title), ["Santidad"])
+        // A word spelled right brings no neighbours with it.
+        XCTAssertEqual(Library.search([song("Santo"), song("Santidad")], "santo").map(\.title), ["Santo"])
+    }
 }
 
 final class TransposeTests: XCTestCase {
+    func testSuggestsTheSmallestCapoForOpenShapes() {
+        // G is an open key already; Ab is G a fret up; B is A two frets up; F is E one up.
+        XCTAssertEqual(Transpose.capo(sounding: 7)?.fret, 0)
+        XCTAssertEqual(Transpose.capo(sounding: 7)?.shape, "G")
+        XCTAssertEqual(Transpose.capo(sounding: 8)?.fret, 1)
+        XCTAssertEqual(Transpose.capo(sounding: 8)?.shape, "G")
+        XCTAssertEqual(Transpose.capo(sounding: 11)?.fret, 2)
+        XCTAssertEqual(Transpose.capo(sounding: 11)?.shape, "A")
+        XCTAssertEqual(Transpose.capo(sounding: 5)?.fret, 1)
+        XCTAssertEqual(Transpose.capo(sounding: 5)?.shape, "E")
+        // A key moved below C wraps: −1 is B.
+        XCTAssertEqual(Transpose.capo(sounding: -1)?.shape, "A")
+    }
+
     func testAKeyAtRestKeepsItsSpelling() {
         XCTAssertEqual(Transpose.key("Db", by: 0), "Db")
         XCTAssertEqual(Transpose.key("Db", by: 12), "Db")
@@ -216,6 +254,13 @@ final class TransposeTests: XCTestCase {
 }
 
 final class ChordProTests: XCTestCase {
+    func testWithoutChordsALineIsItsWordsAndAnIntroIsNothing() {
+        XCTAssertEqual(ChordPro.wordsOnly(.chords(ChordPro.segments("[G]Santo [D]santo"))), .text("Santo santo"))
+        XCTAssertNil(ChordPro.wordsOnly(.chords(ChordPro.segments("[G] [D] [Em]"))))
+        XCTAssertEqual(ChordPro.lines("[G] [D]\n[G]Santo", chords: false), [.text("Santo")])
+        XCTAssertEqual(ChordPro.wordsOnly(.heading("Coro")), .heading("Coro"))
+    }
+
     func testSplitsALineIntoChordsOverTheirWords() {
         XCTAssertEqual(ChordPro.segments("Oh [G]Santo [D/F#]santo"), [
             ChordSegment(chord: nil, lyric: "Oh "),

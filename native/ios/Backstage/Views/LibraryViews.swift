@@ -626,6 +626,8 @@ struct ChartSection: View {
     let songKey: String?
     @State private var selected = 0
     @State private var semitones = 0
+    /// Off for someone who only sings: the chart's words alone, as the web's «Acordes» switch.
+    @State private var showChords = true
 
     var body: some View {
         let chart = charts[min(selected, charts.count - 1)]
@@ -657,12 +659,23 @@ struct ChartSection: View {
                 .sensoryFeedback(.selection, trigger: selected)
             }
             if chart.chordPro {
+                // The switch first: what it hides sits below it, so it never moves under the finger.
+                Toggle(isOn: $showChords.animation(.easeOut(duration: 0.2))) {
+                    Text("Acordes")
+                        .font(.bsBody(15, .semibold))
+                        .foregroundStyle(BS.ink)
+                }
+                .tint(BS.accent)
+                .sensoryFeedback(.selection, trigger: showChords)
                 // Only a key the transposer can read gets the dial: «Do» would move the chords
                 // and leave the pill still.
-                if let written, Transpose.rootIndex(written) != nil {
+                if showChords, let written, let root = Transpose.rootIndex(written) {
                     transposer(written: written)
+                    if let capo = Transpose.capo(sounding: root + semitones) {
+                        capoHint(capo)
+                    }
                 }
-                ChordProView(content: chart.content, semitones: semitones)
+                ChordProView(content: chart.content, semitones: semitones, showChords: showChords)
             } else {
                 // Plain text places its chords with spaces: one fixed-width block, scrolled sideways.
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -703,6 +716,21 @@ struct ChartSection: View {
         .sensoryFeedback(.selection, trigger: semitones)
     }
 
+    /// Where a guitar puts the capo to play this key with open chords.
+    private func capoHint(_ capo: (fret: Int, shape: String)) -> some View {
+        let words = capo.fret == 0 ? "Acordes abiertos (\(capo.shape))" : "Capo \(capo.fret) · formas de \(capo.shape)"
+        return Text(words.uppercased())
+            .font(.bsLabel(11))
+            .tracking(1)
+            .foregroundStyle(BS.accent)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .overlay(Capsule().strokeBorder(BS.accent.opacity(0.30), lineWidth: 1))
+            .contentTransition(.numericText())
+            .animation(.easeOut(duration: 0.2), value: words)
+            .accessibilityLabel(capo.fret == 0 ? "Acordes abiertos en \(capo.shape)" : "Capo en el traste \(capo.fret), con formas de \(capo.shape)")
+    }
+
     private func step(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
@@ -721,10 +749,11 @@ struct ChartSection: View {
 struct ChordProView: View {
     let content: String
     let semitones: Int
+    var showChords = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ForEach(Array(ChordPro.lines(content).enumerated()), id: \.offset) { index, line in
+            ForEach(Array(ChordPro.lines(content, chords: showChords).enumerated()), id: \.offset) { index, line in
                 switch line {
                 case .heading(let text):
                     LyricEyebrow(text: text)
