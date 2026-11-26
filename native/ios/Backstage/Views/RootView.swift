@@ -149,8 +149,11 @@ struct HomeView: View {
             .navigationDestination(for: Route.self) { route in
                 RouteDestination(route: route, today: today, zoom: zoom)
             }
-            .environment(\.openSong) { path.append(.song($0)) }
         }
+        // On the stack itself, so a service's page pushed onto it inherits both.
+        .environment(\.openSong) { path.append(.song($0)) }
+        .environment(\.songZoom, zoom)
+        .miniPlayer()
     }
 
     /// The server's CDMX today, once the list has loaded.
@@ -382,6 +385,44 @@ extension View {
             self
         }
     }
+}
+
+// MARK: A pushed page's close
+
+/// A pushed page (a service, a song) has no system bar: an X floats over its top corner and
+/// the page scrolls beneath it. No page in the stack shows the system's navigation bar, so
+/// there is no bar to bring in and take out with each push — the one that stayed behind,
+/// back button and title, when a page was opened and closed quickly through the zoom.
+private struct ClosablePage: ViewModifier {
+    @Environment(\.dismiss) private var dismiss
+
+    func body(content: Content) -> some View {
+        content
+            .toolbar(.hidden, for: .navigationBar)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                HStack {
+                    Spacer()
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(BS.ink)
+                            .frame(width: 36, height: 36)
+                            .background(.ultraThinMaterial, in: Circle())
+                            .overlay(Circle().strokeBorder(BS.ink.opacity(0.10), lineWidth: 1))
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Cerrar")
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, 2)
+            }
+    }
+}
+
+extension View {
+    func closablePage() -> some View { modifier(ClosablePage()) }
 }
 
 // MARK: Loading

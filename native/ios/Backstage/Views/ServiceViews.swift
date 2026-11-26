@@ -552,14 +552,17 @@ private struct SetlistSection: View {
 /// on a worship night, and the key as an INK pill (inside a day card the key stays ink, ADR-0071).
 struct SongRowView: View {
     @Environment(\.openSong) private var openSong
+    @Environment(\.songZoom) private var zoom
     let number: Int
     let song: AppSong
 
     /// A row opens its song where something navigates and the setlist still points at one.
     var body: some View {
-        if let openSong, let seed = SongSeed(song) {
+        let origin = "setlist-\(number)-\(song.slug ?? "")"
+        if let openSong, let seed = SongSeed(song, origin: zoom == nil ? nil : origin) {
             Button { openSong(seed) } label: { row.contentShape(Rectangle()) }
                 .buttonStyle(.plain)
+                .zoomSource(id: origin, in: zoom)
                 .accessibilityHint("Abre la canción")
         } else {
             row
@@ -782,8 +785,6 @@ struct ServiceDetailView: View {
                 .padding(.vertical, 12)
         }
         .background(BS.base.ignoresSafeArea())
-        .navigationTitle(service.title)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(BS.base, for: .navigationBar)
+        .closablePage()
     }
 }
