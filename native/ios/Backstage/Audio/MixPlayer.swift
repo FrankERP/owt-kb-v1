@@ -27,6 +27,8 @@ final class MixPlayer {
         let label: String
         let artist: String?
         let cover: String?
+        /// The mix's waveform (bar heights, 0–100), for the full player; empty when it has none.
+        var bars: [Int] = []
     }
 
     enum Status: Equatable {
