@@ -52,23 +52,50 @@ struct SongLink: Decodable, Hashable, Sendable {
     let url: String
 }
 
-/// One song: its catalogue row plus the lyric, the charts and the links. The JSON is flat.
+/// A rehearsal mix as the server lists it: already grouped and sorted the way the web's player
+/// shows them. `key` names it to the audio route; there is no address here.
+struct SongMix: Decodable, Hashable, Identifiable, Sendable {
+    let key: String
+    /// «Banda completa», or the track's name.
+    let label: String
+    /// `full`, an instrument family, or `other`.
+    let family: String
+    let familyLabel: String
+    /// The key it sounds in.
+    let tone: String?
+    /// The waveform: bar heights, 0–100. Empty when the mix has none.
+    let bars: [Int]
+
+    var id: String { key }
+}
+
+/// `GET /api/app/v1/songs/[slug]/mixes/[key]`: where one mix's audio lives, asked for at play time.
+struct MixAudioResponse: Decodable, Equatable, Sendable {
+    let url: String
+}
+
+/// One song: its catalogue row plus the lyric, the charts, the links and the mixes. The JSON is flat.
 struct SongDetail: Decodable, Hashable, Sendable {
     let song: LibrarySong
     /// The editor's plain format: `# Coro` a heading, a blank line a stanza.
     let lyrics: String?
     let charts: [SongChart]
     let links: [SongLink]
+    let mixes: [SongMix]
+    /// The family of the person's first instrument: the mix offered first.
+    let preferredFamily: String?
 
     private enum CodingKeys: String, CodingKey {
-        case lyrics, charts, links
+        case lyrics, charts, links, mixes, preferredFamily
     }
 
-    init(song: LibrarySong, lyrics: String?, charts: [SongChart], links: [SongLink]) {
+    init(song: LibrarySong, lyrics: String?, charts: [SongChart], links: [SongLink], mixes: [SongMix] = [], preferredFamily: String? = nil) {
         self.song = song
         self.lyrics = lyrics
         self.charts = charts
         self.links = links
+        self.mixes = mixes
+        self.preferredFamily = preferredFamily
     }
 
     init(from decoder: Decoder) throws {
@@ -77,6 +104,88 @@ struct SongDetail: Decodable, Hashable, Sendable {
         lyrics = try c.decodeIfPresent(String.self, forKey: .lyrics)
         charts = try c.decode([SongChart].self, forKey: .charts)
         links = try c.decode([SongLink].self, forKey: .links)
+        // Absent on a server from before the mixes: a song with none, never a failed page.
+        mixes = try c.decodeIfPresent([SongMix].self, forKey: .mixes) ?? []
+        preferredFamily = try c.decodeIfPresent(String.self, forKey: .preferredFamily)
+    }
+}
+
+// MARK: Which mixes a page shows (app/utils/rehearsalMixes.ts)
+
+enum Mixes {
+    struct Group: Identifiable, Equatable {
+        let family: String
+        let label: String
+        let mixes: [SongMix]
+        var id: String { family }
+    }
+
+    struct Selection: Equatable {
+        /// The key whose mixes are shown; nil when there is nothing to choose between.
+        let tone: String?
+        /// False when the song's key has no mix and the nearest key stands in.
+        let exact: Bool
+        let mixes: [SongMix]
+    }
+
+    /// The keys a song has mixes in: one spelling per pitch (the first seen), in pitch order.
+    static func tones(_ mixes: [SongMix]) -> [String] {
+        var byRoot: [Int: String] = [:]
+        for mix in mixes {
+            guard let tone = mix.tone, let root = Transpose.rootIndex(tone), byRoot[root] == nil else { continue }
+            byRoot[root] = tone
+        }
+        return byRoot.keys.sorted().compactMap { byRoot[$0] }
+    }
+
+    /// The web's `mixesForKey`: the mixes in `key` by pitch (a Db mix answers a C# song), else
+    /// the nearest key's — a tie between a semitone up and one down goes to the lower. With no
+    /// key, or no readable tone anywhere, everything shows and there is nothing to caption.
+    static func forKey(_ mixes: [SongMix], key: String?) -> Selection {
+        let all = tones(mixes)
+        guard let key, let want = Transpose.rootIndex(key), !all.isEmpty else {
+            return Selection(tone: nil, exact: true, mixes: mixes)
+        }
+        var best: (tone: String, root: Int, distance: Int)?
+        for tone in all {
+            guard let root = Transpose.rootIndex(tone) else { continue }
+            // Signed distance around the circle, -6...5.
+            let signed = (((root - want) % 12) + 18) % 12 - 6
+            let distance = abs(signed)
+            if best == nil || distance < best!.distance || (distance == best!.distance && signed < 0) {
+                best = (tone, root, distance)
+            }
+        }
+        guard let chosen = best else { return Selection(tone: nil, exact: true, mixes: mixes) }
+        let shown = mixes.filter { $0.tone.flatMap(Transpose.rootIndex) == chosen.root }
+        return Selection(tone: chosen.tone, exact: chosen.distance == 0, mixes: shown)
+    }
+
+    /// The server's order, cut into its families: nothing is sorted again here.
+    static func groups(_ mixes: [SongMix]) -> [Group] {
+        var out: [Group] = []
+        for mix in mixes {
+            if let last = out.last, last.family == mix.family {
+                out[out.count - 1] = Group(family: last.family, label: last.label, mixes: last.mixes + [mix])
+            } else {
+                out.append(Group(family: mix.family, label: mix.familyLabel, mixes: [mix]))
+            }
+        }
+        return out
+    }
+
+    /// The web's `preselectMix`: the first track of the person's family, else the whole band,
+    /// else the first mix. A highlight only — nothing plays by itself.
+    static func preselected(_ mixes: [SongMix], family: String?) -> SongMix? {
+        if let family, let own = mixes.first(where: { $0.family == family }) { return own }
+        return mixes.first { $0.family == "full" } ?? mixes.first
+    }
+
+    /// «1:05».
+    static func clock(_ seconds: Double) -> String {
+        guard seconds.isFinite, seconds > 0 else { return "0:00" }
+        let whole = Int(seconds.rounded(.down))
+        return "\(whole / 60):" + String(format: "%02d", whole % 60)
     }
 }
 

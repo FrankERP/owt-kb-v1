@@ -65,6 +65,16 @@ struct APIClient: Sendable {
         return try await get("/api/app/v1/songs/\(segment)")
     }
 
+    /// Where one rehearsal mix's audio lives. Asked for each time a mix is played: the address
+    /// is handed out only to someone who is in Alabanza right now.
+    func mixAudio(slug: String, key: String) async throws -> MixAudioResponse {
+        var allowed = CharacterSet.urlPathAllowed
+        allowed.remove(charactersIn: "/?#")
+        let song = slug.addingPercentEncoding(withAllowedCharacters: allowed) ?? ""
+        let mix = key.addingPercentEncoding(withAllowedCharacters: allowed) ?? ""
+        return try await get("/api/app/v1/songs/\(song)/mixes/\(mix)")
+    }
+
     func get<T: Decodable>(_ path: String) async throws -> T {
         var token = try await sessionCall { try await authority.accessToken() }
         for attempt in 0..<2 {

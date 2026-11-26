@@ -51,6 +51,16 @@ final class SnapshotTests: XCTestCase {
                 SongPage(seed: SongSeed(Fixture.lyricOnly.song), load: .loaded(Fixture.lyricOnly), retry: {}),
                 scheme: scheme, to: "\(dir)/7-letra-\(suffix).png"
             )
+            // A mix playing: its row with the waveform, and the bar that follows it around.
+            let playing = MixPlayer.fixture(track: Fixture.playingTrack, status: .playing, elapsed: 42, duration: 251)
+            try render(
+                VStack(spacing: 0) {
+                    MixSection(detail: Fixture.detail).padding(20)
+                    MiniPlayerBar(player: playing, track: Fixture.playingTrack)
+                }
+                .environment(playing),
+                scheme: scheme, to: "\(dir)/8-ensayo-\(suffix).png"
+            )
         }
     }
 
@@ -132,7 +142,32 @@ private enum Fixture {
         links: [
             SongLink(kind: "reference", label: "Escuchar la referencia", url: "https://example.com/a"),
             SongLink(kind: "tutorial", label: "Tutorial de guitarra", url: "https://example.com/b"),
-        ]
+        ],
+        mixes: [
+            mix("full", "Banda completa", "full", "Banda completa", seed: 1),
+            mix("keys1", "Keys 1", "keys", "Teclado", seed: 2),
+            mix("keys2", "Keys 2", "keys", "Teclado", seed: 3),
+            mix("drums", "Drums", "drums", "Batería", seed: 4),
+            mix("eg1", "EG 1", "electric", "Guitarra eléctrica", seed: 5),
+            mix("eg2", "EG 2", "electric", "Guitarra eléctrica", seed: 6),
+            mix("full-g", "Banda completa", "full", "Banda completa", tone: "G", seed: 7),
+        ],
+        preferredFamily: "electric"
+    )
+
+    /// A waveform that looks like one: two swells, never the same for two mixes.
+    static func mix(_ key: String, _ label: String, _ family: String, _ familyLabel: String, tone: String = "A", seed: Int) -> SongMix {
+        let bars = (0..<60).map { i -> Int in
+            let x = Double(i)
+            let swell = 55 + 35 * sin(x / 9 + Double(seed)) * cos(x / 23)
+            let grain = Double((i * 37 + seed * 11) % 17) - 8
+            return Int(min(100, max(8, swell + grain)))
+        }
+        return SongMix(key: key, label: label, family: family, familyLabel: familyLabel, tone: tone, bars: bars)
+    }
+
+    static let playingTrack = MixPlayer.Track(
+        slug: detail.song.slug, mixKey: "eg1", title: detail.song.title, label: "EG 1", artist: detail.song.artist, cover: nil
     )
 
     static let lyricOnly = SongDetail(
