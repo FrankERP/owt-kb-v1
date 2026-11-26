@@ -56,12 +56,17 @@ final class SnapshotTests: XCTestCase {
             try render(
                 VStack(spacing: 0) {
                     MixSection(detail: Fixture.detail).padding(20)
-                    MiniPlayerBar(player: playing, track: Fixture.playingTrack)
+                    MiniPlayerBar(player: playing, track: Fixture.playingTrack, expand: {})
                         .padding(.horizontal, 12)
                         .padding(.bottom, 8)
                 }
                 .environment(playing),
                 scheme: scheme, to: "\(dir)/8-ensayo-\(suffix).png"
+            )
+            // The full player the bar opens: the waveform to drag, and fifteen seconds either way.
+            try render(
+                MixPlayerSheet(player: playing).frame(height: 380).background(BS.card),
+                scheme: scheme, to: "\(dir)/9-reproductor-\(suffix).png"
             )
         }
     }
@@ -169,7 +174,8 @@ private enum Fixture {
     }
 
     static let playingTrack = MixPlayer.Track(
-        slug: detail.song.slug, mixKey: "eg1", title: detail.song.title, label: "EG 1", artist: detail.song.artist, cover: nil
+        slug: detail.song.slug, mixKey: "eg1", title: detail.song.title, label: "EG 1", artist: detail.song.artist, cover: nil,
+        bars: (0..<60).map { 30 + ($0 * 37) % 60 }
     )
 
     static let lyricOnly = SongDetail(

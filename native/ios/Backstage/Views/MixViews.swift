@@ -87,7 +87,8 @@ struct MixSection: View {
             title: detail.song.title,
             label: mix.label,
             artist: detail.song.artist,
-            cover: detail.song.coverLarge ?? detail.song.cover
+            cover: detail.song.coverLarge ?? detail.song.cover,
+            bars: mix.bars
         )
     }
 
@@ -247,6 +248,7 @@ private struct PlayGlyph: View {
 struct MixScrubber: View {
     let bars: [Int]
     let player: MixPlayer
+    var height: CGFloat = 40
     /// Where the finger is, while it is down: the playhead follows it, the audio moves on release.
     @State private var dragging: Double?
 
@@ -279,13 +281,16 @@ struct MixScrubber: View {
                         guard geometry.size.width > 0 else { return }
                         dragging = min(1, max(0, Double(value.location.x / geometry.size.width)))
                     }
-                    .onEnded { _ in
-                        if let dragging { player.seek(toFraction: dragging) }
+                    .onEnded { value in
+                        // A pull down that happened to start here closes a sheet: it is not a seek.
+                        let pull = value.translation
+                        let vertical = abs(pull.height) > 24 && abs(pull.height) > abs(pull.width)
+                        if let dragging, !vertical { player.seek(toFraction: dragging) }
                         dragging = nil
                     }
             )
         }
-        .frame(height: 40)
+        .frame(height: height)
         .accessibilityElement()
         .accessibilityLabel("Posición")
         .accessibilityValue("\(Mixes.clock(player.elapsed)) de \(Mixes.clock(player.duration))")
@@ -320,28 +325,43 @@ struct MiniPlayerBar: View {
     let player: MixPlayer
     let track: MixPlayer.Track
     var style: Style = .card
+    /// Opens the full player; nil where nothing opens (a drawing test).
+    var expand: (() -> Void)?
 
     var body: some View {
         HStack(spacing: style == .card ? 12 : 10) {
-            // Shrunk beside the tab bar there is room for the cover or for the stop, and the stop
-            // is the one the person cannot do without.
-            if style != .inline {
-                CoverView(url: track.cover, size: coverSize)
-            }
-            VStack(alignment: .leading, spacing: 1) {
-                Text(track.title)
-                    .font(.bsBody(style == .card ? 15 : 14, .semibold))
-                    .foregroundStyle(BS.ink)
-                    .lineLimit(1)
-                if style != .inline || isFailure {
-                    Text(subtitle)
-                        .font(.bsBody(style == .card ? 13 : 12))
-                        .foregroundStyle(isFailure ? BS.warning : BS.inkMuted)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
+            // The cover and the words open the full player, where the mix moves to any moment.
+            Button {
+                expand?()
+            } label: {
+                HStack(spacing: style == .card ? 12 : 10) {
+                    // Shrunk beside the tab bar there is room for the cover or for the stop, and
+                    // the stop is the one the person cannot do without.
+                    if style != .inline {
+                        CoverView(url: track.cover, size: coverSize)
+                    }
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(track.title)
+                            .font(.bsBody(style == .card ? 15 : 14, .semibold))
+                            .foregroundStyle(BS.ink)
+                            .lineLimit(1)
+                        if style != .inline || isFailure {
+                            Text(subtitle)
+                                .font(.bsBody(style == .card ? 13 : 12))
+                                .foregroundStyle(isFailure ? BS.warning : BS.inkMuted)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                        }
+                    }
+                    Spacer(minLength: 0)
                 }
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
             }
-            Spacer(minLength: 0)
+            .buttonStyle(.plain)
+            .disabled(expand == nil)
+            .accessibilityLabel("\(track.title), \(subtitle)")
+            .accessibilityHint("Abre el reproductor")
             Button {
                 player.toggle(track)
             } label: {
@@ -439,6 +459,119 @@ private struct MiniRing: View {
     }
 }
 
+// MARK: The full player
+
+/// The loaded mix with room to move in it: its waveform to drag to any moment, fifteen seconds
+/// back or forward, and the stop. Opened from the bar, which has room for none of that.
+struct MixPlayerSheet: View {
+    let player: MixPlayer
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 22) {
+            if let track = player.track {
+                HStack(spacing: 14) {
+                    CoverView(url: track.cover, size: 64)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(track.title)
+                            .font(.bsBody(19, .semibold))
+                            .foregroundStyle(BS.ink)
+                            .lineLimit(2)
+                        Text(caption(track))
+                            .font(.bsBody(15))
+                            .foregroundStyle(isFailure ? BS.warning : BS.inkMuted)
+                            .lineLimit(2)
+                    }
+                    Spacer(minLength: 0)
+                }
+                VStack(spacing: 6) {
+                    MixScrubber(bars: track.bars, player: player, height: 56)
+                    SheetClock(player: player)
+                }
+                // A mix that failed has nothing to move through.
+                .disabled(isFailure)
+                .opacity(isFailure ? 0.4 : 1)
+                HStack(spacing: 36) {
+                    jump(-15, symbol: "gobackward.15", label: "Regresar 15 segundos")
+                    Button {
+                        player.toggle(track)
+                    } label: {
+                        PlayGlyph(status: player.status, size: 64)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(player.status == .playing || player.status == .loading ? "Pausar" : "Reproducir")
+                    .sensoryFeedback(.impact(weight: .light), trigger: player.status == .playing)
+                    jump(15, symbol: "goforward.15", label: "Adelantar 15 segundos")
+                }
+                Button {
+                    player.stop()
+                } label: {
+                    Text("Cerrar el reproductor")
+                        .font(.bsBody(15, .semibold))
+                        .foregroundStyle(BS.inkMuted)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 22)
+        .padding(.top, 30)
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // Half the screen, not a measured height: the words grow with the person's text size.
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(BS.card)
+        // Stopped from here, from the lock screen or by a session that ended: nothing left to show.
+        .onChange(of: player.track == nil, initial: true) { _, gone in
+            if gone { dismiss() }
+        }
+    }
+
+    private var isFailure: Bool {
+        if case .failed = player.status { return true }
+        return false
+    }
+
+    private func caption(_ track: MixPlayer.Track) -> String {
+        if case .failed(let message) = player.status { return message }
+        return [track.label, track.artist].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    private func jump(_ seconds: Double, symbol: String, label: String) -> some View {
+        Button {
+            player.seek(toSeconds: player.elapsed + seconds)
+        } label: {
+            Image(systemName: symbol)
+                .font(.system(size: 28, weight: .regular))
+                .foregroundStyle(BS.ink)
+                .frame(width: 52, height: 52)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(player.duration <= 0 || isFailure)
+        .accessibilityLabel(label)
+    }
+}
+
+/// «0:42» at one end and «4:10» at the other. Its own view: it redraws as the mix plays.
+private struct SheetClock: View {
+    let player: MixPlayer
+
+    var body: some View {
+        HStack {
+            Text(Mixes.clock(player.elapsed))
+            Spacer()
+            Text(player.duration > 0 ? Mixes.clock(player.duration) : "–:––")
+        }
+        .font(.bsBody(13))
+        .monospacedDigit()
+        .foregroundStyle(BS.inkMuted)
+        .accessibilityHidden(true)
+    }
+}
+
 // MARK: Where the bar lives
 
 extension EnvironmentValues {
@@ -451,16 +584,18 @@ extension EnvironmentValues {
 private struct MiniPlayerAccessory: View {
     @Environment(\.tabViewBottomAccessoryPlacement) private var placement
     let player: MixPlayer
+    let expand: () -> Void
 
     var body: some View {
         if let track = player.track {
-            MiniPlayerBar(player: player, track: track, style: placement == .inline ? .inline : .accessory)
+            MiniPlayerBar(player: player, track: track, style: placement == .inline ? .inline : .accessory, expand: expand)
         }
     }
 }
 
 private struct MiniPlayerTabAccessory: ViewModifier {
     @Environment(MixPlayer.self) private var player: MixPlayer?
+    @State private var showingPlayer = false
 
     func body(content: Content) -> some View {
         // 26.1, not 26.0: only there can the accessory be absent while nothing is loaded.
@@ -470,9 +605,12 @@ private struct MiniPlayerTabAccessory: ViewModifier {
             content
                 .tabBarMinimizeBehavior(.onScrollDown)
                 .tabViewBottomAccessory(isEnabled: player.track != nil) {
-                    MiniPlayerAccessory(player: player)
+                    MiniPlayerAccessory(player: player) { showingPlayer = true }
                 }
                 .environment(\.miniPlayerInTabBar, true)
+                .sheet(isPresented: $showingPlayer) {
+                    MixPlayerSheet(player: player)
+                }
         } else {
             content
         }
@@ -482,18 +620,24 @@ private struct MiniPlayerTabAccessory: ViewModifier {
 private struct MiniPlayerInset: ViewModifier {
     @Environment(MixPlayer.self) private var player: MixPlayer?
     @Environment(\.miniPlayerInTabBar) private var inTabBar
+    @State private var showingPlayer = false
 
     func body(content: Content) -> some View {
         content
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if !inTabBar, let player, let track = player.track {
-                    MiniPlayerBar(player: player, track: track)
+                    MiniPlayerBar(player: player, track: track) { showingPlayer = true }
                         .padding(.horizontal, 12)
                         .padding(.bottom, 8)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
             .animation(.easeOut(duration: 0.22), value: player?.track)
+            .sheet(isPresented: $showingPlayer) {
+                if let player {
+                    MixPlayerSheet(player: player)
+                }
+            }
     }
 }
 
