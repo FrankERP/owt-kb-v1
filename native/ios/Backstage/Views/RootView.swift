@@ -98,6 +98,7 @@ struct MainTabs: View {
                     LibraryView(me: me) { showingProfile = true }
                         .tabItem { Label("Biblioteca", systemImage: "music.note.list") }
                 }
+                .miniPlayerAccessory()
             } else {
                 // One destination needs no tab bar.
                 HomeView(me: me) { showingProfile = true }

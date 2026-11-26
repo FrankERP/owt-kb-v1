@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // The rehearsal mixes on a song's page (the web's `RehearsalPlayer`): the whole band and each
 // instrument on its own, in the server's order. What the phone adds: the person's own
@@ -300,64 +301,91 @@ struct MixScrubber: View {
 
 // MARK: The bar that follows the mix around the app
 
-/// What is loaded, over the bottom of every page of a tab: the mix keeps sounding after its
-/// song's page closes, so its pause and its stop have to stay within reach.
+/// What is loaded, within reach on every page: the mix keeps sounding after its song's page
+/// closes, so its pause and its stop have to stay close.
+///
+/// Three drawings of one bar. Where the system has a place for it (iOS 26.1 and later: the tab
+/// bar's own accessory, the glass capsule Music uses) the bar draws no surface of its own;
+/// anywhere else it is a card floating over the page's bottom edge.
 struct MiniPlayerBar: View {
+    enum Style {
+        /// A floating card with its own surface.
+        case card
+        /// Inside the tab bar's accessory, at full width: the system draws the glass.
+        case accessory
+        /// Inside the accessory once the tab bar has shrunk beside it: the title, pause and stop.
+        case inline
+    }
+
     let player: MixPlayer
     let track: MixPlayer.Track
+    var style: Style = .card
 
     var body: some View {
-        VStack(spacing: 0) {
-            MiniProgress(player: player)
-            HStack(spacing: 12) {
-                CoverView(url: track.cover, size: 40)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(track.title)
-                        .font(.bsBody(15, .semibold))
-                        .foregroundStyle(BS.ink)
-                        .lineLimit(1)
+        HStack(spacing: style == .card ? 12 : 10) {
+            // Shrunk beside the tab bar there is room for the cover or for the stop, and the stop
+            // is the one the person cannot do without.
+            if style != .inline {
+                CoverView(url: track.cover, size: coverSize)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(track.title)
+                    .font(.bsBody(style == .card ? 15 : 14, .semibold))
+                    .foregroundStyle(BS.ink)
+                    .lineLimit(1)
+                if style != .inline || isFailure {
                     Text(subtitle)
-                        .font(.bsBody(13))
+                        .font(.bsBody(style == .card ? 13 : 12))
                         .foregroundStyle(isFailure ? BS.warning : BS.inkMuted)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                 }
-                Spacer(minLength: 0)
-                Button {
-                    player.toggle(track)
-                } label: {
-                    PlayGlyph(status: player.status, size: 38)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(player.status == .playing || player.status == .loading ? "Pausar" : "Reproducir")
-                Button {
-                    player.stop()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(BS.inkMuted)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Cerrar el reproductor")
             }
-            .padding(.leading, 16)
-            .padding(.trailing, 6)
-            .padding(.vertical, 6)
+            Spacer(minLength: 0)
+            Button {
+                player.toggle(track)
+            } label: {
+                MiniToggle(player: player)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(player.status == .playing || player.status == .loading ? "Pausar" : "Reproducir")
+            Button {
+                player.stop()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(BS.inkMuted)
+                    .frame(width: style == .inline ? 36 : 40, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Cerrar el reproductor")
         }
+        .padding(.leading, style == .card ? 10 : 12)
+        .padding(.trailing, style == .card ? 4 : 6)
+        .padding(.vertical, style == .card ? 8 : 0)
         .background {
-            ZStack {
-                Rectangle().fill(.ultraThinMaterial)
-                BS.card.opacity(0.55)
+            if style == .card {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.ultraThinMaterial)
+                    RoundedRectangle(cornerRadius: 22, style: .continuous).fill(BS.card.opacity(0.55))
+                    RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(BS.ink.opacity(0.10), lineWidth: 1)
+                }
+                .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
             }
-        }
-        .overlay(alignment: .top) {
-            Rectangle().fill(BS.ink.opacity(0.10)).frame(height: 1)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Reproductor")
+    }
+
+    private var coverSize: CGFloat {
+        switch style {
+        case .card: 40
+        case .accessory: 30
+        case .inline: 0
+        }
     }
 
     private var isFailure: Bool {
@@ -371,29 +399,97 @@ struct MiniPlayerBar: View {
     }
 }
 
-/// The hairline of progress on the bar's top edge. Its own view: it redraws four times a second.
-private struct MiniProgress: View {
+/// The bar's pause and play, inside a ring that fills as the mix plays: the bar's only sign of
+/// progress, so it needs no line of its own across the page.
+private struct MiniToggle: View {
     let player: MixPlayer
 
     var body: some View {
-        GeometryReader { geometry in
-            Rectangle()
-                .fill(BS.accent)
-                .frame(width: geometry.size.width * CGFloat(player.progress))
+        ZStack {
+            Circle().stroke(BS.ink.opacity(0.14), lineWidth: 2)
+            MiniRing(player: player)
+            switch player.status {
+            case .loading:
+                ProgressView().controlSize(.small).tint(BS.ink)
+            case .playing:
+                Image(systemName: "pause.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(BS.ink)
+            default:
+                Image(systemName: "play.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(BS.ink)
+                    .offset(x: 1)
+            }
         }
-        .frame(height: 2)
+        .frame(width: 30, height: 30)
         .accessibilityHidden(true)
+    }
+}
+
+/// Its own view: it redraws four times a second.
+private struct MiniRing: View {
+    let player: MixPlayer
+
+    var body: some View {
+        Circle()
+            .trim(from: 0, to: CGFloat(player.progress))
+            .stroke(BS.accent, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+            .rotationEffect(.degrees(-90))
+    }
+}
+
+// MARK: Where the bar lives
+
+extension EnvironmentValues {
+    /// True under a tab bar that carries the bar itself, so a tab's stack does not draw a second.
+    @Entry var miniPlayerInTabBar = false
+}
+
+/// The bar inside the tab bar's accessory. It reads how much room the system gives it.
+@available(iOS 26.1, *)
+private struct MiniPlayerAccessory: View {
+    @Environment(\.tabViewBottomAccessoryPlacement) private var placement
+    let player: MixPlayer
+
+    var body: some View {
+        if let track = player.track {
+            MiniPlayerBar(player: player, track: track, style: placement == .inline ? .inline : .accessory)
+        }
+    }
+}
+
+private struct MiniPlayerTabAccessory: ViewModifier {
+    @Environment(MixPlayer.self) private var player: MixPlayer?
+
+    func body(content: Content) -> some View {
+        // 26.1, not 26.0: only there can the accessory be absent while nothing is loaded.
+        // A phone only: there the tab bar sits at the bottom with the accessory on it. An iPad
+        // keeps the card until the accessory has been seen on one.
+        if #available(iOS 26.1, *), let player, UIDevice.current.userInterfaceIdiom == .phone {
+            content
+                .tabBarMinimizeBehavior(.onScrollDown)
+                .tabViewBottomAccessory(isEnabled: player.track != nil) {
+                    MiniPlayerAccessory(player: player)
+                }
+                .environment(\.miniPlayerInTabBar, true)
+        } else {
+            content
+        }
     }
 }
 
 private struct MiniPlayerInset: ViewModifier {
     @Environment(MixPlayer.self) private var player: MixPlayer?
+    @Environment(\.miniPlayerInTabBar) private var inTabBar
 
     func body(content: Content) -> some View {
         content
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                if let player, let track = player.track {
+                if !inTabBar, let player, let track = player.track {
                     MiniPlayerBar(player: player, track: track)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 8)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
@@ -402,6 +498,11 @@ private struct MiniPlayerInset: ViewModifier {
 }
 
 extension View {
-    /// Puts the loaded mix's bar over the bottom of a tab's stack, above the tab bar.
+    /// On the tab view: the loaded mix's bar rides on the tab bar itself where the system can
+    /// carry it, and the tab bar shrinks while the page scrolls down.
+    func miniPlayerAccessory() -> some View { modifier(MiniPlayerTabAccessory()) }
+
+    /// On a tab's stack: the loaded mix's bar as a card over the bottom edge, wherever the tab
+    /// bar does not already carry it.
     func miniPlayer() -> some View { modifier(MiniPlayerInset()) }
 }
