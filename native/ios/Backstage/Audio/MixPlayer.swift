@@ -14,6 +14,11 @@ import UIKit
 final class MixPlayer {
     /// What is loaded: which mix of which song, and the words the lock screen shows.
     struct Track: Equatable {
+        /// The same mix of the same song, whatever words came with it.
+        func isSameMix(as other: Track?) -> Bool {
+            other.map { $0.slug == slug && $0.mixKey == mixKey } ?? false
+        }
+
         let slug: String
         let mixKey: String
         /// The song's title.
@@ -54,8 +59,12 @@ final class MixPlayer {
     @ObservationIgnored private var rateObservation: NSKeyValueObservation?
     @ObservationIgnored private var itemObservation: NSKeyValueObservation?
     @ObservationIgnored private var endObserver: NSObjectProtocol?
+    @ObservationIgnored private var failObserver: NSObjectProtocol?
     /// Bumped on every start and stop: a late answer for an earlier mix is dropped.
     @ObservationIgnored private var generation = 0
+    /// True from the moment a mix's audio is handed to the player until the next start or stop:
+    /// what the player reports in between belongs to the loaded mix.
+    @ObservationIgnored private var hasItem = false
     @ObservationIgnored private var commandsReady = false
     @ObservationIgnored private var artwork: MPMediaItemArtwork?
 
@@ -75,14 +84,16 @@ final class MixPlayer {
 
     /// The row's one control: play this mix, or pause and resume it when it is the loaded one.
     func toggle(_ wanted: Track) {
-        guard wanted == track else {
+        guard wanted.isSameMix(as: track) else {
             start(wanted)
             return
         }
         switch status {
         case .playing: pause()
         case .paused: resume()
-        case .loading: stop()
+        // Still asking where the mix lives: the tap takes it back. Buffering mid-song on a weak
+        // signal: the tap is a pause, and the place in the mix is kept.
+        case .loading: if hasItem { pause() } else { stop() }
         case .failed: start(wanted)
         }
     }
@@ -92,7 +103,7 @@ final class MixPlayer {
     }
 
     func resume() {
-        guard track != nil, let player, player.currentItem != nil else { return }
+        guard track != nil, hasItem, let player else { return }
         activateSession()
         player.play()
     }
@@ -114,6 +125,7 @@ final class MixPlayer {
     /// Ends the session: nothing loaded, nothing on the lock screen.
     func stop() {
         generation += 1
+        hasItem = false
         player?.pause()
         clearItem()
         player?.replaceCurrentItem(with: nil)
@@ -131,6 +143,7 @@ final class MixPlayer {
     private func start(_ wanted: Track) {
         generation += 1
         let mine = generation
+        hasItem = false
         player?.pause()
         clearItem()
         player?.replaceCurrentItem(with: nil)
@@ -177,7 +190,15 @@ final class MixPlayer {
                 self?.finished(generation: mine)
             }
         }
+        failObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemFailedToPlayToEndTime, object: item, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.itemChanged(failed: true, seconds: 0, generation: mine)
+            }
+        }
         player.replaceCurrentItem(with: item)
+        hasItem = true
         player.play()
     }
 
@@ -208,12 +229,16 @@ final class MixPlayer {
             NotificationCenter.default.removeObserver(endObserver)
         }
         endObserver = nil
+        if let failObserver {
+            NotificationCenter.default.removeObserver(failObserver)
+        }
+        failObserver = nil
     }
 
     // MARK: What the player reports
 
     private func playerChanged(_ value: AVPlayer.TimeControlStatus) {
-        guard track != nil, player?.currentItem != nil else { return }
+        guard track != nil, hasItem else { return }
         if case .failed = status { return }
         switch value {
         case .playing: status = .playing
@@ -238,7 +263,7 @@ final class MixPlayer {
     }
 
     private func tick(_ seconds: Double) {
-        guard track != nil, seconds.isFinite, seconds >= 0 else { return }
+        guard track != nil, hasItem, seconds.isFinite, seconds >= 0 else { return }
         if case .failed = status { return }
         elapsed = duration > 0 ? min(seconds, duration) : seconds
         if duration == 0, let length = player?.currentItem?.duration.seconds, length.isFinite, length > 0 {

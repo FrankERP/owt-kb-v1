@@ -35,6 +35,11 @@ struct MixSection: View {
                 TonePicker(tones: tones, tone: tone, missing: selection.exact ? nil : (pickedTone ?? detail.song.key)) { picked in
                     withAnimation(.easeOut(duration: 0.2)) { pickedTone = picked }
                 }
+            } else if !selection.exact, let tone = selection.tone, let wanted = detail.song.key {
+                // One key only, and not the song's: say so, there is nothing to pick.
+                Text("No hay mezcla en \(wanted). Se muestra \(tone).")
+                    .font(.bsBody(14))
+                    .foregroundStyle(BS.inkMuted)
             }
             ForEach(shown) { group in
                 VStack(alignment: .leading, spacing: 2) {
@@ -138,7 +143,7 @@ struct MixRow: View {
     let player: MixPlayer?
 
     var body: some View {
-        let status: MixPlayer.Status? = player?.track == track ? player?.status : nil
+        let status: MixPlayer.Status? = track.isSameMix(as: player?.track) ? player?.status : nil
         let playing = status == .playing
         VStack(alignment: .leading, spacing: 10) {
             Button {
@@ -159,7 +164,7 @@ struct MixRow: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("\(playing ? "Pausar" : "Reproducir") \(mix.label)")
+            .accessibilityLabel("\(playing || status == .loading ? "Pausar" : "Reproducir") \(mix.label)")
             .sensoryFeedback(.impact(weight: .light), trigger: playing)
             if let player, let status, !isFailure(status) {
                 MixScrubber(bars: mix.bars, player: player)
@@ -324,7 +329,7 @@ struct MiniPlayerBar: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(player.status == .playing ? "Pausar" : "Reproducir")
+                .accessibilityLabel(player.status == .playing || player.status == .loading ? "Pausar" : "Reproducir")
                 Button {
                     player.stop()
                 } label: {
