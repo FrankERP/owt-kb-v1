@@ -112,6 +112,13 @@ struct MainTabs: View {
 
 // MARK: Inicio
 
+/// One trip to the calendar sheet: a fresh identity each time, so the same service can be
+/// offered twice.
+struct CalendarDraft: Identifiable {
+    let id = UUID()
+    let event: ServiceEvent
+}
+
 struct HomeView: View {
     @Environment(AppModel.self) private var model
     let me: Me
@@ -119,6 +126,7 @@ struct HomeView: View {
     @State private var onlyMine = false
     @State private var path: [Route] = []
     @State private var refreshes = 0
+    @State private var calendarEvent: CalendarDraft?
     @Namespace private var zoom
 
     var body: some View {
@@ -131,6 +139,7 @@ struct HomeView: View {
                     onlyMine: $onlyMine,
                     zoom: zoom,
                     open: { path.append(.service($0)) },
+                    addToCalendar: { calendarEvent = ServiceEvent.make($0).map(CalendarDraft.init) },
                     retry: { Task { await model.retryServices() } }
                 )
             }
@@ -155,6 +164,10 @@ struct HomeView: View {
         .environment(\.openSong) { path.append(.song($0)) }
         .environment(\.songZoom, zoom)
         .miniPlayer()
+        .sheet(item: $calendarEvent) { draft in
+            ServiceEventEditor(event: draft.event)
+                .ignoresSafeArea()
+        }
     }
 
     /// The server's CDMX today, once the list has loaded.
@@ -210,6 +223,8 @@ struct HomeScreen: View {
     /// The namespace a card grows out of into its page; none where nothing navigates (a test).
     var zoom: Namespace.ID?
     let open: (AppService) -> Void
+    /// Hands a service to the calendar sheet; nil where there is none to show it (a test).
+    var addToCalendar: ((AppService) -> Void)?
     let retry: () -> Void
 
     var body: some View {
@@ -261,6 +276,11 @@ struct HomeScreen: View {
                 .padding(.top, 28)
                 .padding(.bottom, 12)
             ServiceFullCard(service: next, today: today)
+                .contextMenu {
+                    if let addToCalendar, ServiceEvent.make(next) != nil {
+                        Button { addToCalendar(next) } label: { Label("Agregar al calendario", systemImage: "calendar.badge.plus") }
+                    }
+                }
             let rest = Array(list.dropFirst()).filter { !onlyMine || $0.isMine }
             HStack(spacing: 12) {
                 SheetTitle(text: "Después")
@@ -284,6 +304,7 @@ struct HomeScreen: View {
                             ServiceFoldedCard(service: service, today: today)
                         }
                         .buttonStyle(CardPressStyle())
+                        .serviceMenu(service, today: today, open: { open(service) }, addToCalendar: addToCalendar)
                         .zoomSource(id: service.id, in: zoom)
                     }
                 }
