@@ -242,15 +242,21 @@ The app's editor state: the local draft (songs, notes, status) and `observed`.
   now the saved state.
 - **200 with `_rev: null`** (committed, read-back failed): the draft stays, and the editor enters
   the «Propuesta actualizada» state below; no further save until «Recargar».
-- **409** (any code): the draft stays on screen, «Propuesta actualizada · Recargar» is shown, and
-  saving is disabled until «Recargar».
+- **409** with `stale_revision` or `bootstrap_completed_reload`: the draft stays on screen,
+  «Propuesta actualizada · Recargar» is shown, and saving is disabled until «Recargar». Any other
+  409 code (`integrity_conflict`, `ambiguous_target`, …): the draft stays and a neutral «Este
+  servicio necesita que un admin lo revise» is shown, since reloading would not fix it.
+- **While a save is in flight** both actions are disabled (the web's `saving` flag), so a double
+  tap cannot send two POSTs with the same `observed`.
 - **401**: the existing `APIClient` refresh-and-resend loop applies (the 401 is answered before
-  `saveProposal` runs, so a resend cannot double-write); a second 401 signs out as today.
+  `saveProposal` runs, so a resend cannot double-write); a second 401 or `account_disabled` signs
+  out as today, and that is the one case where the in-memory draft is lost (as it is when iOS
+  ends the app mid-edit; the draft is not persisted in this slice).
 - **503, any other status, timeout or a lost response**: «No se pudo guardar». The draft stays
   and `observed` is **unchanged**. The app does not retry on its own. If the save had in fact
-  landed, the lead's manual retry is refused with `stale_revision` (`details.detail` is
-  `concurrent_creation` for a first create, `revision_mismatch` otherwise; the app switches on the
-  code, never the detail) **before** any write or notification, so there is no duplicate
+  landed, the lead's manual retry is refused with a 409 (`stale_revision`, or `bootstrap_completed_reload` on a weekend whose lock was
+  just created; `details.detail` varies, e.g. `concurrent_creation`, `revision_mismatch`,
+  `revision_moved`, and the app never switches on it) **before** any write or notification, so there is no duplicate
   proposal, thread note or «Nueva propuesta», and the app shows «Propuesta actualizada».
 - **«Recargar»**: the only path that adopts a stored revision the lead did not save. It re-reads
   D3 and replaces the draft with what is stored; before it does, if the draft differs from what
@@ -267,7 +273,9 @@ From a service the caller leads: «Proponer setlist» (or «Editar propuesta», 
 Songs are picked from the Library the app already holds, each with a play key; reorder by drag;
 «medley» links consecutive songs and tags are re-derived on every reorder with a Swift port of
 `normalizeMedleyTags`; its cases live in one JSON fixture read by both a vitest test of
-`medley.ts` and the XCTest of the port, so the two copies cannot drift. Team notes, the pastor's
+`medley.ts` and the XCTest of the port, so the two copies cannot drift. `normalizeMedleyTags`
+mints new tags from an injected `newTag()`, so both sides use a deterministic counter and the
+fixture compares the resulting grouping. Team notes, the pastor's
 message (ADR-0087: always sent, as the web editor does; `""` clears) and, while no
 proposal document exists yet, a note to the admins (`leadNotes`; once one exists, `""`: exactly
 the web's rule `proposalId ? "" : leadNotes`, so a first «Guardar borrador» also closes it). Two
@@ -294,6 +302,21 @@ reloads the list.
 - `appAuthStatic.test.ts` already enforces the first-statement guard on the new handlers.
 - Read tests: non-Lead and draft service 404; `observed` matches the proposal returned.
 
+### D7b. The app's save body is bound to the server's parser
+
+`parseSongRows` ignores unknown keys and every notes field is optional, while the existing-proposal
+patch always sets `team_notes: request.teamNotes` (`proposalSaveCommit.ts:278`). A Swift encoder
+that spells a key differently (`playKey`, `team_notes`) or omits a field would get a 200 and strip
+every key and medley, or erase the co-leads' stored team notes. So one shared fixture,
+`native/contract/proposal-save-body.json`, holds full save bodies: a song with a non-default
+`play_key`, a two-song medley, a row with `medley_tag: null`, `teamNotes`, `leadNotes`,
+`pastorMessage` (including `""`), and both `observed` shapes. An XCTest asserts the Swift encoder,
+given the matching `ProposalDraftState`, produces each body exactly (key for key); a vitest test
+feeds the same file to `parseProposalSaveRequest` and asserts every field survives with its value.
+The Swift encoder always sends `teamNotes` and `pastorMessage` (never omits them), and sends
+`medley_tag` as `null` when there is none. The app also enforces `PROPOSAL_NOTES_MAX` and the
+song cap before sending, so a 400 is never the first a lead hears of a limit.
+
 ### D8. Docs in the same delivery
 
 **PR 1 (the move) carries:** `docs/NOTIFICATIONS.md` and `docs/API_REFERENCE.md` (the writer's
@@ -310,7 +333,7 @@ verification headers); CLAUDE.md and `docs/agents/project-rules.md` (the write-p
 the lead's save and its module; the native-app invariant names the wrapped form);
 `docs/NOTIFICATIONS.md` (the writer's new location); `docs/MOBILE.md` (the new endpoints);
 `docs/UTILITIES_AND_COMPONENTS.md` (`proposalEditorRead`, `previousKeysFor`); and the two message
-routes' comments that point at the old location. No comment in a non-delivery route names
+routes' comments that point at the old location. No comment in an unwrapped route names
 `proposalSaveCommit` (the run-context scan is a substring match).
 
 ## Known gaps the owner should hear
