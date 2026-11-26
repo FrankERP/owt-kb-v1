@@ -57,6 +57,8 @@ final class SnapshotTests: XCTestCase {
                 VStack(spacing: 0) {
                     MixSection(detail: Fixture.detail).padding(20)
                     MiniPlayerBar(player: playing, track: Fixture.playingTrack)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 8)
                 }
                 .environment(playing),
                 scheme: scheme, to: "\(dir)/8-ensayo-\(suffix).png"
