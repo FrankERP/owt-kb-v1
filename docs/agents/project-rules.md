@@ -466,6 +466,10 @@ several exist precisely to stop a plausible-looking change.
     level means in the app exactly what it means on the web page. A Jóvenes endpoint also calls
     `rolloutAllows("jovenesEvents", access)` first, like the pages. A handler that writes still goes
     through the matching `*Commit.ts`; a `"self"` handler reads or writes only `session.sanityId`.
+    A route that imports a delivery-capable module (the SR-verification scan) has exactly one other
+    allowed form: `export const METHOD = withVerificationRunContext(<name>)`, where `<name>` is an
+    `async function` declared in the same file whose first statement is that guard (W1 addendum,
+    `POST /api/app/v1/proposals`). A write door also re-reads access fresh before the writer.
   - **Verified redirects only on deployed origins.** `app/appAuth/clients.ts` lists ONE `https`
     callback per client on production and preview; the private scheme
     `app.vercel.owt-backstage:` is returned only for `LOCAL_ORIGIN`. Adding it to a deployed origin,
@@ -531,8 +535,9 @@ several exist precisely to stop a plausible-looking change.
   own v3 functions: never re-implement either on the server; `monthToolParity.test.tsx` pins
   byte-identical solve bodies against `MonthGenerator`. A Lead's shared setlist proposal save is
   `saveProposal` (`proposalSaveCommit.ts`): the domain body of `POST /api/me/proposals`, which keeps
-  only worship membership and the JSON read, moved so the native app's planned door (W1, not shipped yet) can call the same writer
-  (ADR-0091; W1 spec `docs/superpowers/specs/2026-11-26-native-proposal-save-design.md`). The DELETE route's body is `deleteRole`
+  only worship membership and the JSON read, moved so the native app's door `POST /api/app/v1/proposals` calls the same writer
+  (ADR-0091 and its W1 addendum; spec `docs/superpowers/specs/2026-11-26-native-proposal-save-design.md`). The app's door adds a fresh
+  access read before the writer and answers any throw with 503; the editor's reads are `proposalEditorRead.ts`, shared with the web page. The DELETE route's body is `deleteRole`
   (`roleDeleteCommit.ts`, admin parity phase 2, ADR-0072): the route uses the default `notices: "deferred"`
   (`after()`), `delete_services` and its card twin `"inline"` (awaited). A chat delete runs only with
   the list and token `check_service_deletes` minted (HMAC over the month and the whole list, label

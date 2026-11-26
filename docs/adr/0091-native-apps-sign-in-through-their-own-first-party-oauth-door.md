@@ -102,3 +102,36 @@ with every export and every MCP test unchanged, and `app/appAuth/grantStore.ts` 
   Guards: `app/appAuth/__tests__/*` (the token matrix, the guard, «every `/api/app/v1` route calls
   `requireAppSession` first with a literal level», the `(appauth)` pages' import closure, the
   headers' order in `next.config.mjs`, the sanity-client guard), `routeMatcher.test.ts`.
+
+## Addendum 2026-11-26: the app's first write door (W1)
+
+A Lead proposes a service's setlist from the iPhone (spec
+`docs/superpowers/specs/2026-11-26-native-proposal-save-design.md`, review log beside it).
+
+- **One writer, two doors.** The web route's domain body moved verbatim into
+  `app/utils/proposalSaveCommit.ts` (`saveProposal`, step 1, PR #280). `POST /api/me/proposals` and
+  `POST /api/app/v1/proposals` both call it, so validation, the co-lead concurrency protocol and the
+  notifications cannot drift. A second copy of a 400-line protocol was the rejected alternative.
+- **What the app door adds.** After `requireAppSession` (worship member), a FRESH access read
+  (`fetchMemberAccessFresh`): inactive → 401 `account_disabled`, out of Alabanza → 403, a failed read
+  → 503 and no write. Any throw from the writer answers 503, never a bare 500.
+- **The grant window.** The grant itself is not re-read fresh: a revoked grant can still write for up
+  to 30 s per instance (the grant cache), the same window the MCP write door accepts.
+- **The wrapped handler form.** The SR-verification scan requires
+  `export const POST = withVerificationRunContext(…)` for any route importing a delivery-capable
+  module, which the first-statement rule forbade. `appAuthStatic.test.ts` now accepts exactly that
+  form around an `async function` declared in the same file whose first statement is the guard, with
+  `withVerificationRunContext` imported from `@/app/utils/srVerificationRunContext`; any other
+  `export const` handler is refused (fixtures for each refusal). An unauthenticated caller that sends
+  verification headers gets a harmless reason-code warn line from the wrapper before the 401.
+- **No member id on the wire.** The editor read (`proposalEditorRead.ts` → `appProposalEditor.ts`)
+  answers contributors and thread messages with a name and a server-computed `mine`.
+- **The client is the only place a co-lead's work is protected.** The writer compares id + revision
+  only, so the app's `ProposalDraftState` never discards the lead's draft and never adopts a revision
+  it did not see land; only «Recargar» does. The app never retries a save by itself.
+- **Bound to the parser.** `native/contract/proposal-save-body.json` and `medley-normalize.json` are
+  read by vitest (through `parseProposalSaveRequest` and `normalizeMedleyTags`) and by the XCTest.
+- **Guards:** `appAuthStatic.test.ts` (the wrapped form), `serviceCommitCallers.test.ts`
+  (`proposalSaveCommit`'s two callers; no `/api/app/v1` route imports the write client),
+  `protectedReadAudit.test.ts` (the moved reads), `nativeProposalContract.test.ts`,
+  `proposalsRoute.test.ts`.

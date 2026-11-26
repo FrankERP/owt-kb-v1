@@ -1,0 +1,13 @@
+{
+  "_comment": "W1 spec D6. normalizeMedleyTags (app/utils/medley.ts) and its Swift port must agree. New tags come from a counter: t1, t2, … in the order they are minted. null = no medley.",
+  "cases": [
+    { "name": "no medleys", "input": [null, null], "expected": [null, null] },
+    { "name": "a pair keeps together under a fresh tag", "input": ["a", "a"], "expected": ["t1", "t1"] },
+    { "name": "an orphan loses its tag", "input": ["a", null, "a"], "expected": [null, null, null] },
+    { "name": "two runs of one old tag become two medleys", "input": ["a", "a", null, "a", "a"], "expected": ["t1", "t1", null, "t2", "t2"] },
+    { "name": "two medleys side by side stay apart", "input": ["a", "a", "b", "b"], "expected": ["t1", "t1", "t2", "t2"] },
+    { "name": "a run of three", "input": [null, "x", "x", "x", null], "expected": [null, "t1", "t1", "t1", null] },
+    { "name": "interleaved tags break into singles", "input": ["a", "b", "a", "b"], "expected": [null, null, null, null] },
+    { "name": "empty list", "input": [], "expected": [] }
+  ]
+}

@@ -1,80 +1,11 @@
 import { requireWorshipPage } from "@/app/utils/worshipPageGate";
 import { notFound } from "next/navigation";
-import { THREAD_MESSAGES } from "@/app/utils/proposalMessageRead";
-import { operationalClient } from "@/sanity/lib/operationalClient";
 import Navbar from "@/app/components/Navbar";
+import type { ComponentProps } from "react";
 import ProposalEditor from "./ProposalEditor";
-import { pickUnique, serviceDayKey } from "@/app/utils/serviceReadSelect";
-import { SERVICE_THREAD_BY_ID_QUERY, serviceThreadId, type PastorMessageRow } from "@/app/utils/serviceThread";
-import type { ThreadMessageRow } from "@/app/utils/proposalMessageRead";
+import { readProposalEditor } from "@/app/utils/proposalEditorRead";
 
 export const revalidate = 0;
-
-type ServiceType = "sunday" | "saturday" | "special";
-
-type RoleDoc = {
-  _id: string;
-  _type: string;
-  week?: string;
-  date?: string;
-  service_name?: string;
-};
-
-async function getRoleDoc(roleId: string, leadId: string) {
-  // Try all three role types — only returns if the user is a Lead on this doc.
-  // Canonical (published-perspective) client: a `drafts.*` overlay is never an
-  // editable service. `published != false` is the separate, app-level
-  // member-visibility gate and stays. Returned as an array and collapsed with
-  // `pickUnique` — an exact-id match can only be ambiguous if the read contract
-  // is violated, in which case we fail closed (404) rather than pick one.
-  const docs = await operationalClient.fetch<RoleDoc[]>(
-    `*[_id == $id && (_type == "sunday_role" || _type == "saturday_role" || _type == "special_role") && $leadId in Lead[]._ref && published != false] {
-      _id, _type, week, date, service_name
-    }`,
-    { id: roleId, leadId }
-  );
-  return pickUnique(docs);
-}
-
-// The ONE shared proposal for this service (matches legacy random-id docs too).
-// `order(_createdAt asc)[0]` is deterministic and deliberately identical to the
-// selection in POST /api/me/proposals, so the editor always loads exactly the
-// document the writer will patch.
-async function getSharedProposal(roleId: string) {
-  return operationalClient.fetch(
-    `*[_type == "setlistProposal" && service_ref._ref == $roleId] | order(_createdAt asc)[0] {
-      _id, _rev, status, lead_notes, team_notes, admin_notes,
-      // ADR-0087: the editor re-sends this on every save, so the read MUST carry it.
-      pastor_message,
-      ${THREAD_MESSAGES},
-      "createdById": lead->_id,
-      "contributors": contributors[]{ "id": person->_id, "name": coalesce(person->alias, person->member_name) },
-      songs[] {
-        _key, play_key, medley_tag,
-        "song_id": song._ref,
-        "title": song->title,
-        "author": song->author,
-        "key": song->key
-      }
-    }`,
-    { roleId }
-  );
-}
-
-// What admins wrote to this service's leads from its card (ADR-0065) — the
-// conversation and the pastor's message. Read for every visit, proposal or not:
-// the lead needs it most BEFORE choosing songs, and once the proposal exists it
-// is part of the same conversation.
-async function getServiceThread(
-  roleId: string,
-): Promise<{ messages: ThreadMessageRow[]; pastorMessage: string | null }> {
-  const threadId = serviceThreadId(roleId);
-  if (!threadId) return { messages: [], pastorMessage: null };
-  const thread = await operationalClient.fetch<
-    { messages?: ThreadMessageRow[] | null; pastor_message?: PastorMessageRow | null } | null
-  >(SERVICE_THREAD_BY_ID_QUERY, { threadId });
-  return { messages: thread?.messages ?? [], pastorMessage: thread?.pastor_message?.body || null };
-}
 
 export default async function ProposePage({
   params,
@@ -84,29 +15,18 @@ export default async function ProposePage({
   const { roleId } = await params;
 
   // Worship surface living under /me: the setlist-proposal editor. It fails
-  // closed for a non-Lead by data shape (the GROQ below requires the member in
+  // closed for a non-Lead by data shape (the read below requires the member in
   // Lead[]._ref), but that is defence in depth, not a gate — a kids-only member
   // must be blocked by the gate, not by the query happening to come back empty.
   const session = await requireWorshipPage(`/me/propose/${roleId}`);
   const leadId = session.user.sanityId;
 
-  const roleDoc = await getRoleDoc(roleId, leadId);
-  if (!roleDoc) notFound();
-
-  const [shared, thread] = await Promise.all([
-    getSharedProposal(roleId),
-    getServiceThread(roleId),
-  ]);
-
-  const serviceType: ServiceType =
-    roleDoc._type === "sunday_role" ? "sunday" :
-    roleDoc._type === "saturday_role" ? "saturday" : "special";
-
-  // A role whose stored date is missing or malformed cannot be proposed against
-  // (the writer derives service_date from it) — fail closed rather than sending
-  // the editor a bogus date.
-  const serviceDate = serviceDayKey(roleDoc.week ?? roleDoc.date);
-  if (!serviceDate) notFound();
+  // The role (caller in Lead[], published), its shared proposal and the service
+  // conversation, read by the one helper the native app's editor read shares.
+  // `null` covers a non-Lead, a draft service and a malformed stored date.
+  const read = await readProposalEditor(roleId, leadId);
+  if (!read) notFound();
+  const { roleDoc, serviceType, serviceDate, proposal: shared, thread } = read;
 
   return (
     <div>
@@ -122,7 +42,9 @@ export default async function ProposePage({
             service_type: serviceType,
             service_date: serviceDate,
           }}
-          proposal={shared ?? null}
+          // The read is typed with GROQ's nulls; the editor's props predate that
+          // typing (the fetch used to return `any`) and handle a missing field the same way.
+          proposal={(shared ?? null) as ComponentProps<typeof ProposalEditor>["proposal"]}
           earlierMessages={thread.messages}
           pastorMessage={thread.pastorMessage}
           currentUserId={leadId}

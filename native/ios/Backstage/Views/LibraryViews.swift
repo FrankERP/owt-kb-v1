@@ -53,6 +53,8 @@ struct SongSeed: Hashable {
 enum Route: Hashable {
     case service(AppService)
     case song(SongSeed)
+    /// «Proponer setlist» for a service the caller leads (ADR-0091 W1).
+    case proposal(AppService)
 }
 
 private struct OpenSongKey: EnvironmentKey {
@@ -136,6 +138,8 @@ struct RouteDestination: View {
         case .service(let service):
             ServiceDetailView(service: service, today: today)
                 .zoomDestination(id: service.id, in: zoom)
+        case .proposal(let service):
+            ProposalEditorView(service: service)
         case .song(let seed):
             // The page grows from the very row or tile that was tapped and returns to it;
             // opened from somewhere that names no origin, it slides in like any page.
