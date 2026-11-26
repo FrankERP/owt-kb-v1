@@ -43,7 +43,8 @@ struct MixSection: View {
             }
             ForEach(shown) { group in
                 VStack(alignment: .leading, spacing: 2) {
-                    if groups.count > 1 {
+                    // «Banda completa» is its own row's name: a title over it would say it twice.
+                    if groups.count > 1, group.family != "full" {
                         Text(group.label)
                             .font(.bsBody(14))
                             .foregroundStyle(BS.inkMuted)
