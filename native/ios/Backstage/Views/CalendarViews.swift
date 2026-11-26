@@ -16,8 +16,8 @@ struct ServiceEventEditor: UIViewControllerRepresentable {
         let draft = EKEvent(eventStore: store)
         draft.title = event.title
         draft.notes = event.notes
-        draft.startDate = event.start
-        draft.endDate = event.end
+        draft.startDate = event.allDay ? event.wholeDay() : event.start
+        draft.endDate = event.allDay ? event.wholeDay() : event.end
         draft.isAllDay = event.allDay
         // The service is at that hour in Mexico City, wherever the phone travels.
         draft.timeZone = event.allDay ? nil : ServiceEvent.zone
@@ -30,7 +30,8 @@ struct ServiceEventEditor: UIViewControllerRepresentable {
 
     func updateUIViewController(_ controller: EKEventEditViewController, context: Context) {}
 
-    final class Coordinator: NSObject, EKEventEditViewDelegate {
+    @MainActor
+    final class Coordinator: NSObject, @preconcurrency EKEventEditViewDelegate {
         let dismiss: DismissAction
 
         init(dismiss: DismissAction) { self.dismiss = dismiss }
@@ -55,6 +56,9 @@ extension View {
             ServiceFullCard(service: service, today: today)
                 .frame(width: 360)
                 .background(BS.base)
+                // A look only: its song rows neither navigate nor join the page's zoom.
+                .environment(\.openSong, nil)
+                .environment(\.songZoom, nil)
         }
     }
 }

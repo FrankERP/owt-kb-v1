@@ -115,6 +115,16 @@ final class ServiceEventTests: XCTestCase {
         }
     }
 
+    func testAWholeDayStaysOnItsDayForAPhoneFurtherWest() throws {
+        let event = try XCTUnwrap(ServiceEvent.make(service(time: nil)))
+        for zone in ["America/Los_Angeles", "America/Mexico_City", "Asia/Tokyo"] {
+            var phone = Calendar(identifier: .gregorian)
+            phone.timeZone = TimeZone(identifier: zone)!
+            let parts = phone.dateComponents([.month, .day, .hour], from: event.wholeDay(on: phone))
+            XCTAssertEqual([parts.month, parts.day, parts.hour], [11, 29, 12], zone)
+        }
+    }
+
     func testADateThatIsNotARealDayMakesNoEvent() {
         XCTAssertNil(ServiceEvent.make(service(date: "2026-02-30")))
         XCTAssertNil(ServiceEvent.make(service(date: "pronto")))
