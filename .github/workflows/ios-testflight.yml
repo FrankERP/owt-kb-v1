@@ -131,7 +131,8 @@ jobs:
           fi
           profile="$RUNNER_TEMP/appstore.mobileprovision"
           plist="$RUNNER_TEMP/appstore-profile.plist"
-          printf '%s' "$IOS_APPSTORE_PROFILE" | base64 --decode > "$profile"
+          # A value that is not base64 leaves an empty or broken file: the next check says so.
+          printf '%s' "$IOS_APPSTORE_PROFILE" | base64 --decode > "$profile" || true
           if ! security cms -D -i "$profile" -o "$plist" 2> /dev/null; then
             echo "::error::IOS_APPSTORE_PROFILE is not a provisioning profile (base64 of the downloaded .mobileprovision, one line)."
             exit 1
@@ -139,7 +140,7 @@ jobs:
           read_key() { /usr/libexec/PlistBuddy -c "Print :$1" "$plist" 2> /dev/null; }
           uuid=$(read_key UUID || true)
           app_id=$(read_key Entitlements:application-identifier || true)
-          # A profile is not a secret, but only what a fix needs is printed: its app, kind and expiry.
+          # A profile is not a secret, but only what a fix needs is printed: its app and expiry.
           echo "Profile for: ${app_id:-unknown} · expires: $(read_key ExpirationDate || true)"
           if ! printf '%s' "$uuid" | grep -qE '^[0-9A-Fa-f-]{36}$'; then
             echo "::error::The profile has no UUID."
@@ -154,19 +155,27 @@ jobs:
             echo "::error::The profile is a development, ad hoc or enterprise one. Make it under Distribution → «App Store Connect»."
             exit 1
           fi
+          # The app's one entitlement. Manual signing cannot add it: a profile without it fails the archive.
+          if ! read_key Entitlements:com.apple.developer.associated-domains > /dev/null; then
+            echo "::error::The profile lacks Associated Domains: enable it on the App ID com.owtBackstage.app, then generate the profile again."
+            exit 1
+          fi
+          # Before the copies, so the cleanup step removes them even if this step stops halfway.
+          echo "PROFILE_UUID=$uuid" >> "$GITHUB_ENV"
           # Xcode 16+ reads the second folder; older ones the first.
           for dir in "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
             mkdir -p "$dir"
             cp "$profile" "$dir/$uuid.mobileprovision"
           done
           rm -f "$profile" "$plist"
-          echo "PROFILE_UUID=$uuid" >> "$GITHUB_ENV"
       - name: Archive
         working-directory: native/ios
         run: |
           set +e
           # Manual signing with our own pair, and no `-allowProvisioningUpdates`: Xcode has nothing
-          # to ask Apple for, so it cannot create a certificate (see the header).
+          # to ask Apple for, so it cannot create a certificate (see the header). These settings reach
+          # EVERY target the archive builds: today only `Backstage`. The day an extension or a Swift
+          # package joins it, move them into project.yml under that target's Release config.
           xcodebuild archive -project Backstage.xcodeproj -scheme Backstage -configuration Release \
             -destination "generic/platform=iOS" -archivePath "$RUNNER_TEMP/Backstage.xcarchive" \
             CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="Apple Distribution" DEVELOPMENT_TEAM=2NM4872N5S \

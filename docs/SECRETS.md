@@ -595,7 +595,7 @@ deletes it at the end, even on failure.
 
 **Where the values come from.** App Store Connect → ••• → Users and Access → Integrations → App Store
 Connect API → Team Keys → Generate API Key, role **Admin** (chosen when Xcode's automatic signing created certificates and
-profiles through it; with manual signing an **App Manager** key is enough to upload, so use that role at the next rotation). The first key needs the Account Holder to request API
+profiles through it; with manual signing an **App Manager** key should be enough to upload: try that role at the next rotation and confirm on its first run). The first key needs the Account Holder to request API
 access once. `ASC_KEY_ID` is the key's row, `ASC_ISSUER_ID` is shown above the table, `ASC_KEY_P8` is
 the whole downloaded `AuthKey_<id>.p8` including the `BEGIN`/`END` lines. Apple lets the `.p8` be
 downloaded ONCE.
@@ -606,7 +606,7 @@ same page. Revoke at once if the `.p8` was ever shown or sent anywhere; after a 
 certificates it created (Certificates, IDs & Profiles → Certificates), which revoking the key does not.
 
 **Blast radius / what breaks mid-rotation.** Only TestFlight uploads: a run between revoking the old
-key and saving the new secrets fails to sign. The app on testers' phones, the web and the server are
+key and saving the new secrets fails to upload. The app on testers' phones, the web and the server are
 untouched. A leaked Admin key can upload and submit builds, manage the account's apps, users,
 certificates and profiles; that is why it lives only in an environment limited to `main`.
 
@@ -624,7 +624,7 @@ chat or a session.
 Export from the **login** keychain: a `.cer` double-clicked into «System» sits apart from the CSR's private
 key (login), so the pair never forms an identity and «My Certificates» offers only other certificates.
 
-**Purpose.** The identity the TestFlight export signs with. Xcode's cloud-managed distribution
+**Purpose.** The identity the TestFlight archive and export sign with. Xcode's cloud-managed distribution
 signing (what the export uses when no local identity exists) was refused by App Store Connect as
 «Invalid Signature» on the first upload (2026-11-24); with an Apple Distribution certificate in the
 keychain the export signs with it. The workflow imports it into a throwaway keychain with a random
@@ -639,7 +639,7 @@ My Certificates → «Apple Distribution: …» → Export as `.p12` with a NEW 
 
 **How to rotate.** The certificate lasts a year (an expired or revoked one stops the run at the
 identity check, «no VALID distribution identity»). Make a new one the same way, replace BOTH secrets
-before the next run, then revoke the old certificate (developer.apple.com → Certificates). A team can
+AND `IOS_APPSTORE_PROFILE` (a new profile made for the new certificate, below) before the next run, then revoke the old certificate (developer.apple.com → Certificates). A team can
 hold only a few distribution certificates, so revoke the ones nothing uses.
 
 **Reading a failed identity check.** The step first imports Apple's WWDR intermediates (G3–G6) from
@@ -674,7 +674,8 @@ the run and removes it at the end.
 
 **Where the value comes from.** developer.apple.com → Certificates, IDs & Profiles → Profiles → + →
 Distribution → **App Store Connect** → App ID `com.owtBackstage.app` → the Apple Distribution
-certificate that is in `IOS_DIST_P12` → a name → Download. Then
+certificate that is in `IOS_DIST_P12` → a name → Generate → Download. Check first that the App ID has
+**Associated Domains** ticked (Identifiers → `com.owtBackstage.app`): the workflow refuses a profile without it. Then
 `base64 -i <file>.mobileprovision | pbcopy` (one line) into the secret. A profile holds no private
 key: it is not sensitive the way the `.p12` is, but it stays a secret so the workflow has one place
 to read from.
