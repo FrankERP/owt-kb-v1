@@ -2,19 +2,21 @@
 # Run by hand only: Actions -> «iOS TestFlight» -> Run workflow, from main. Nothing triggers it
 # on a push, because every upload is a build testers receive.
 #
-# Signing is Xcode's automatic signing driven by an App Store Connect API key (docs/SECRETS.md):
-# `-allowProvisioningUpdates` lets Xcode create the development certificate and the provisioning
-# profiles it needs, and the export uploads. The key keeps the Admin role so Xcode may manage
-# certificates and profiles without a person in the loop.
+# Signing is MANUAL, with two things of our own (docs/SECRETS.md): the Apple Distribution certificate
+# (IOS_DIST_P12, imported into a throwaway keychain) and the App Store provisioning profile made for
+# it (IOS_APPSTORE_PROFILE). Both the archive and the export sign with that pair, so a run creates
+# NOTHING in the Apple account. Two earlier arrangements, and why they went:
+#  - Xcode's cloud-managed distribution signing: the first upload (2026-11-24, run 1) was refused by
+#    App Store Connect as «Invalid Signature».
+#  - Automatic signing at the archive (`-allowProvisioningUpdates` there): every run starts on an
+#    empty machine, so Xcode asked Apple for a NEW development certificate each time and nothing
+#    revoked them; run 13 (2026-11-26) stopped at «Your account has reached the maximum number of
+#    certificates». The archive now carries no `-allowProvisioningUpdates` and no API key at all.
+# The App Store Connect API key is used by the export alone, to upload.
 #
-# The distribution signature comes from an Apple Distribution certificate of our own (IOS_DIST_P12,
-# imported into a throwaway keychain), NOT from Xcode's cloud-managed one: the first upload
-# (2026-11-24, run 1) was signed in the cloud and App Store Connect refused it as «Invalid
-# Signature»; with a local Apple Distribution identity the export signs with it instead.
-#
-# The key's three secrets and the certificate's two live in the `testflight` ENVIRONMENT, not the
-# repository: the environment admits only `main`, so a workflow pushed on any other branch cannot
-# read an Admin key or the certificate. The `if:` below only skips a run started elsewhere; the
+# The key's three secrets, the certificate's two and the profile live in the `testflight`
+# ENVIRONMENT, not the repository: the environment admits only `main`, so a workflow pushed on any
+# other branch cannot read an Admin key or the certificate. The `if:` below only skips a run started elsewhere; the
 # environment is the boundary.
 #
 # Build number = "<run number>.<attempt>" (project.yml maps CFBundleVersion to it), so every upload,
@@ -119,14 +121,65 @@ jobs:
             exit 1
           fi
           security find-identity -v -p codesigning "$keychain" | grep -cE "(Apple|iPhone) Distribution" | sed 's/^/Distribution identities: /'
+      - name: Install the App Store provisioning profile
+        env:
+          IOS_APPSTORE_PROFILE: ${{ secrets.IOS_APPSTORE_PROFILE }}
+        run: |
+          if [ -z "$IOS_APPSTORE_PROFILE" ]; then
+            echo "::error::IOS_APPSTORE_PROFILE must be a secret of the testflight environment (docs/SECRETS.md)."
+            exit 1
+          fi
+          profile="$RUNNER_TEMP/appstore.mobileprovision"
+          plist="$RUNNER_TEMP/appstore-profile.plist"
+          # A value that is not base64 leaves an empty or broken file: the next check says so.
+          printf '%s' "$IOS_APPSTORE_PROFILE" | base64 --decode > "$profile" || true
+          if ! security cms -D -i "$profile" -o "$plist" 2> /dev/null; then
+            echo "::error::IOS_APPSTORE_PROFILE is not a provisioning profile (base64 of the downloaded .mobileprovision, one line)."
+            exit 1
+          fi
+          read_key() { /usr/libexec/PlistBuddy -c "Print :$1" "$plist" 2> /dev/null; }
+          uuid=$(read_key UUID || true)
+          app_id=$(read_key Entitlements:application-identifier || true)
+          # A profile is not a secret, but only what a fix needs is printed: its app and expiry.
+          echo "Profile for: ${app_id:-unknown} · expires: $(read_key ExpirationDate || true)"
+          if ! printf '%s' "$uuid" | grep -qE '^[0-9A-Fa-f-]{36}$'; then
+            echo "::error::The profile has no UUID."
+            exit 1
+          fi
+          if [ "$app_id" != "2NM4872N5S.com.owtBackstage.app" ]; then
+            echo "::error::The profile is for another app: it must be made for com.owtBackstage.app of team 2NM4872N5S."
+            exit 1
+          fi
+          # An App Store profile lists no devices and cannot be debugged; anything else cannot go to TestFlight.
+          if read_key ProvisionedDevices > /dev/null || [ "$(read_key ProvisionsAllDevices)" = "true" ] || [ "$(read_key Entitlements:get-task-allow)" = "true" ]; then
+            echo "::error::The profile is a development, ad hoc or enterprise one. Make it under Distribution → «App Store Connect»."
+            exit 1
+          fi
+          # The app's one entitlement. Manual signing cannot add it: a profile without it fails the archive.
+          if ! read_key Entitlements:com.apple.developer.associated-domains > /dev/null; then
+            echo "::error::The profile lacks Associated Domains: enable it on the App ID com.owtBackstage.app, then generate the profile again."
+            exit 1
+          fi
+          # Before the copies, so the cleanup step removes them even if this step stops halfway.
+          echo "PROFILE_UUID=$uuid" >> "$GITHUB_ENV"
+          # Xcode 16+ reads the second folder; older ones the first.
+          for dir in "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
+            mkdir -p "$dir"
+            cp "$profile" "$dir/$uuid.mobileprovision"
+          done
+          rm -f "$profile" "$plist"
       - name: Archive
         working-directory: native/ios
         run: |
           set +e
+          # Manual signing with our own pair, and no `-allowProvisioningUpdates`: Xcode has nothing
+          # to ask Apple for, so it cannot create a certificate (see the header). These settings reach
+          # EVERY target the archive builds: today only `Backstage`. The day an extension or a Swift
+          # package joins it, move them into project.yml under that target's Release config.
           xcodebuild archive -project Backstage.xcodeproj -scheme Backstage -configuration Release \
             -destination "generic/platform=iOS" -archivePath "$RUNNER_TEMP/Backstage.xcarchive" \
-            -allowProvisioningUpdates -authenticationKeyPath "$ASC_KEY_PATH" \
-            -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="Apple Distribution" DEVELOPMENT_TEAM=2NM4872N5S \
+            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_UUID" \
             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER.$GITHUB_RUN_ATTEMPT" > archive.log 2>&1
           status=$?
           grep -E "error:|warning: .*(sign|provision)|\*\* " archive.log
@@ -136,16 +189,26 @@ jobs:
         working-directory: native/ios
         run: |
           set +e
+          # The export signs with the same pair: the profile is named to it by its UUID. The API key
+          # is here to UPLOAD; with a manual style, `-allowProvisioningUpdates` creates nothing.
+          options="$RUNNER_TEMP/ExportOptions.plist"
+          cp ExportOptions.plist "$options"
+          /usr/libexec/PlistBuddy -c "Add :provisioningProfiles dict" \
+            -c "Add :provisioningProfiles:com.owtBackstage.app string $PROFILE_UUID" "$options" || exit 1
           xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Backstage.xcarchive" \
-            -exportOptionsPlist ExportOptions.plist -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist "$options" -exportPath "$RUNNER_TEMP/export" \
             -allowProvisioningUpdates -authenticationKeyPath "$ASC_KEY_PATH" \
             -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID" > export.log 2>&1
           status=$?
           grep -E "error:|Upload|\*\* " export.log
           if [ "$status" -ne 0 ]; then tail -n 80 export.log; fi
           exit "$status"
-      - name: Remove the key and the certificate
+      - name: Remove the key, the certificate and the profile
         if: always()
         run: |
-          rm -f "$RUNNER_TEMP"/AuthKey_*.p8 "$RUNNER_TEMP/dist.p12"
+          rm -f "$RUNNER_TEMP"/AuthKey_*.p8 "$RUNNER_TEMP/dist.p12" "$RUNNER_TEMP/appstore.mobileprovision" "$RUNNER_TEMP/appstore-profile.plist"
+          if [ -n "${PROFILE_UUID:-}" ]; then
+            rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision" \
+              "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+          fi
           if [ -n "${SIGNING_KEYCHAIN:-}" ]; then security delete-keychain "$SIGNING_KEYCHAIN" || true; fi
