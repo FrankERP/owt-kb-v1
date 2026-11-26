@@ -161,6 +161,9 @@ struct ProposalSaveResponse: Decodable, Equatable, Sendable {
     let _id: String?
     let _rev: String?
     let status: ProposalStatus
+    /// The proposal's thread as it stands after the save (a submission adds the lead's note).
+    /// `nil` when the server could not read it back: keep what is shown, never blank it.
+    var messages: [ThreadMessage]? = nil
 }
 
 /// What became of one save, as the editor needs it.
@@ -271,8 +274,10 @@ struct DraftSong: Equatable, Identifiable, Sendable {
     var playKey: String
     var medleyTag: String?
     var previousKeys: [String]
+    /// The row's own identity: a stored proposal may list one song twice (legacy data).
+    var rowID = UUID()
 
-    var id: String { songId }
+    var id: UUID { rowID }
 }
 
 /// The proposal editor's state and every transition a save's answer causes (W1 spec D5). Pure:
@@ -305,12 +310,19 @@ struct ProposalDraftState: Equatable, Sendable {
     private(set) var notice: Notice?
     /// What was last loaded or saved, to tell unsaved work.
     private var savedSnapshot: Snapshot
+    /// What the save in flight SENT. The editor stays editable while it runs, so a 200 makes this
+    /// the saved state, never what is on screen when the answer lands (the web's rule too).
+    private var sendingSnapshot: Snapshot?
 
     private struct Snapshot: Equatable, Sendable {
         let songs: [[String]]
         let teamNotes: String
         let leadNotes: String
         let pastorMessage: String
+
+        var withoutLeadNotes: Snapshot {
+            Snapshot(songs: songs, teamNotes: teamNotes, leadNotes: "", pastorMessage: pastorMessage)
+        }
     }
 
     init(roleId: String, observed: ObservedTarget, status: ProposalStatus?, songs: [DraftSong], teamNotes: String, leadNotes: String, pastorMessage: String) {
@@ -323,6 +335,7 @@ struct ProposalDraftState: Equatable, Sendable {
         self.pastorMessage = pastorMessage
         saving = nil
         notice = nil
+        sendingSnapshot = nil
         savedSnapshot = Snapshot(songs: [], teamNotes: "", leadNotes: "", pastorMessage: "")
         savedSnapshot = snapshot()
     }
@@ -419,6 +432,7 @@ struct ProposalDraftState: Equatable, Sendable {
         guard canSave, target == .draft || target == .pending else { return nil }
         saving = target
         notice = nil
+        sendingSnapshot = snapshot()
         return body(as: target)
     }
 
@@ -439,18 +453,23 @@ struct ProposalDraftState: Equatable, Sendable {
     /// adopts what the server holds.
     mutating func finishSave(_ outcome: ProposalSaveOutcome) {
         saving = nil
+        let sent = sendingSnapshot
+        sendingSnapshot = nil
         switch outcome {
         case .saved(let answer):
             status = answer.status
             if let id = answer._id, let rev = answer._rev {
+                let wasFirst = !observed.exists
                 observed = .single(id: id, rev: rev)
-                savedSnapshot = snapshot()
+                // What was sent is now saved. A first save also takes the note to the admins out of
+                // the fingerprint, as it leaves the payload.
+                if let sent { savedSnapshot = wasFirst ? sent.withoutLeadNotes : sent }
                 notice = nil
             } else {
                 // The commit landed, but its new revision could not be read back: the next save
                 // could not be guarded, so it waits for «Recargar». `observed` stays as it was
-                // (never a guessed revision); what is on screen was saved.
-                savedSnapshot = snapshot()
+                // (never a guessed revision); what was sent is saved.
+                if let sent { savedSnapshot = sent }
                 notice = .reloadNeeded
             }
         case .conflict(let code):
@@ -475,6 +494,12 @@ struct ProposalDraftState: Equatable, Sendable {
     /// «Recargar»: the ONE path that adopts what the server holds, the lead's draft replaced.
     mutating func reload(from fresh: ProposalEditorResponse) {
         self = ProposalDraftState(loaded: fresh)
+    }
+
+    /// The editor read answered that the caller may no longer propose here: the draft stays on
+    /// screen (to copy from), saving is refused by the server anyway.
+    mutating func noteForbidden() {
+        notice = .forbidden
     }
 
     /// Closes a notice the lead has read. «Recargar» stays until the lead reloads.

@@ -145,6 +145,32 @@ describe("POST /api/app/v1/proposals", () => {
     expect(saveProposal).toHaveBeenCalledWith({ leadId: "m1", raw: BODY });
   });
 
+  it("maps a success's thread rows like the editor read: names and mine, never a member id", async () => {
+    saveProposal.mockResolvedValueOnce({ status: 200, body: {
+      _id: "setlistProposal.sun-1", _rev: "r3", status: "pending",
+      messages: [
+        { _key: "k1", author: "m1", author_name: "Frank", author_role: "lead", kind: "lead_note", body: "Va", at: "2026-11-26T10:00:00Z" },
+        { author: "m9", author_name: "Ana", body: "Sin clave", at: "2026-11-26T11:00:00Z" },
+      ],
+    } });
+    const res = await post();
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).not.toContain("m9");
+    expect(JSON.parse(text)).toEqual({
+      _id: "setlistProposal.sun-1", _rev: "r3", status: "pending",
+      messages: [
+        { key: "k1", authorName: "Frank", authorRole: "lead", kind: "lead_note", body: "Va", at: "2026-11-26T10:00:00Z", editedAt: null, mine: true },
+        { key: "p1", authorName: "Ana", authorRole: null, kind: null, body: "Sin clave", at: "2026-11-26T11:00:00Z", editedAt: null, mine: false },
+      ],
+    });
+  });
+
+  it("keeps a success's messages: null (the read-back failed), never an empty thread", async () => {
+    saveProposal.mockResolvedValueOnce({ status: 200, body: { _id: "setlistProposal.sun-1", _rev: null, status: "draft", messages: null } });
+    expect(await (await post()).json()).toEqual({ _id: "setlistProposal.sun-1", _rev: null, status: "draft", messages: null });
+  });
+
   it("passes the writer's 403 (not a Lead) and 409 (stale) through unchanged", async () => {
     saveProposal.mockResolvedValueOnce({ status: 403, body: { error: "Not a Lead on this service" } });
     expect((await post()).status).toBe(403);

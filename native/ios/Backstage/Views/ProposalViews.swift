@@ -79,11 +79,15 @@ struct ProposalEditorView: View {
     @State private var reloading = false
     @State private var savedNote: String?
     @State private var saves = 0
+    /// The proposal's thread as the last save answered it, until the next load or reload.
+    @State private var savedMessages: [ThreadMessage]?
 
     var body: some View {
         content
             .background(BS.base.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
+            // Unsaved work: no back swipe, so leaving goes through the X and its confirmation.
+            .navigationBarBackButtonHidden(draft?.isDirty == true)
             .safeAreaInset(edge: .top, spacing: 0) { header }
             .task { if phase == .loading { await load() } }
             .sensoryFeedback(.success, trigger: saves)
@@ -417,7 +421,7 @@ struct ProposalEditorView: View {
 
     /// The proposal's thread and the service's conversation, oldest first.
     private func conversation(_ editor: ProposalEditorResponse) -> [ThreadMessage] {
-        let all = editor.serviceThread.messages + (editor.proposal?.messages ?? [])
+        let all = editor.serviceThread.messages + (savedMessages ?? editor.proposal?.messages ?? [])
         var seen = Set<String>()
         return all
             .filter { seen.insert($0.key).inserted }
@@ -438,6 +442,7 @@ struct ProposalEditorView: View {
         case .loaded(let answer):
             editor = answer
             draft = ProposalDraftState(loaded: answer)
+            savedMessages = nil
             phase = .ready
         case .unavailable:
             phase = .unavailable
@@ -454,8 +459,11 @@ struct ProposalEditorView: View {
         case .loaded(let answer):
             editor = answer
             draft?.reload(from: answer)
+            savedMessages = nil
         case .unavailable:
-            phase = .unavailable
+            // No longer the Lead (or the service left): say so over the draft instead of
+            // replacing the screen, so what was typed stays visible to copy.
+            draft?.noteForbidden()
         case .failed:
             // Nothing replaced: the banner stays, the lead can try again.
             break
@@ -466,7 +474,8 @@ struct ProposalEditorView: View {
         guard let body = draft?.beginSave(as: target) else { return }
         let outcome = await model.saveProposal(body)
         draft?.finishSave(outcome)
-        if case .saved = outcome {
+        if case .saved(let answer) = outcome {
+            if let messages = answer.messages { savedMessages = messages }
             saves += 1
             withAnimation { savedNote = target == .pending ? "Propuesta enviada" : "Borrador guardado" }
             try? await Task.sleep(nanoseconds: 2_500_000_000)

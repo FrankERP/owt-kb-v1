@@ -265,8 +265,10 @@ final class AppModel {
             }
             return .failed
         }
-        if case .saved = outcome { await loadServices() }
-        if outcome == .forbidden { await loadServices() }
+        // The list's «Propuesta» state follows, without holding the editor's answer behind it.
+        var refreshes = outcome == .forbidden
+        if case .saved = outcome { refreshes = true }
+        if refreshes { Task { await loadServices() } }
         return outcome
     }
 

@@ -60,14 +60,19 @@ export type AppProposalEditor = {
 const text = (v: unknown): string | null => (typeof v === "string" && v.trim() !== "" ? v.trim() : null);
 const PROPOSAL_STATUSES = new Set(["draft", "pending", "approved", "changes_requested"]);
 
-function messagesOf(rows: ThreadMessageRow[] | null | undefined, me: string): AppThreadMessage[] {
+/**
+ * `source` prefixes the fallback key of a row with no `_key` ("s" the service's conversation, "p"
+ * the proposal's thread), so two keyless rows of different threads never share a key in the app's
+ * merged list. A stored `_key` is kept as it is: the app dedupes the merged list by key.
+ */
+function messagesOf(rows: ThreadMessageRow[] | null | undefined, me: string, source: "s" | "p"): AppThreadMessage[] {
   if (!Array.isArray(rows)) return [];
   const out: AppThreadMessage[] = [];
   rows.forEach((m, i) => {
     const body = m ? text(m.body) : null;
     if (!m || !body) return;
     out.push({
-      key: text(m._key) ?? `m${i}`,
+      key: text(m._key) ?? `${source}${i}`,
       authorName: text(m.author_name),
       authorRole: text(m.author_role),
       kind: text(m.kind),
@@ -97,7 +102,7 @@ export function buildAppProposalEditor(
     text(roleDoc.service_name)?.replace(/\s+/g, " ") ?? SPECIAL_SERVICE_FALLBACK;
 
   const role = { id: roleDoc._id, kind: serviceType, date: serviceDate, title };
-  const serviceThread = { messages: messagesOf(thread.messages, me), pastorMessage: text(thread.pastorMessage) };
+  const serviceThread = { messages: messagesOf(thread.messages, me, "s"), pastorMessage: text(thread.pastorMessage) };
 
   if (!proposal || !text(proposal._id) || !text(proposal._rev)) {
     return { role, observed: { state: "none" }, proposal: null, serviceThread };
@@ -135,7 +140,7 @@ export function buildAppProposalEditor(
       teamNotes: typeof proposal.team_notes === "string" ? proposal.team_notes : "",
       pastorMessage: typeof proposal.pastor_message === "string" ? proposal.pastor_message : "",
       adminNotes: text(proposal.admin_notes),
-      messages: messagesOf(proposal.messages, me),
+      messages: messagesOf(proposal.messages, me, "p"),
     },
     serviceThread,
   };
@@ -159,4 +164,25 @@ export function parsePreviousKeysIds(raw: string | null): string[] | null {
   const ids = [...new Set((raw ?? "").split(",").map((s) => s.trim()).filter(Boolean))];
   if (ids.length === 0 || ids.length > PREVIOUS_KEYS_MAX_IDS) return null;
   return ids.every((id) => isCanonicalDocumentId(id)) ? ids : null;
+}
+
+/**
+ * The app door's answer to a save. Any status other than a success passes through as the writer
+ * shaped it (its error bodies carry codes and document ids, never a member id). A success's
+ * `messages` are the writer's raw thread rows, which name each author by member id: they go out
+ * through `messagesOf` like the editor read's, with `null` kept (the read-back failed, keep what
+ * is shown — never "the thread is empty").
+ */
+export function appSaveAnswer(result: { status: number; body: unknown }, me: string): { status: number; body: unknown } {
+  if (result.status < 200 || result.status >= 300) return result;
+  const body = (result.body ?? {}) as { _id?: unknown; _rev?: unknown; status?: unknown; messages?: unknown };
+  return {
+    status: result.status,
+    body: {
+      _id: body._id ?? null,
+      _rev: body._rev ?? null,
+      status: body.status ?? null,
+      messages: Array.isArray(body.messages) ? messagesOf(body.messages as ThreadMessageRow[], me, "p") : null,
+    },
+  };
 }

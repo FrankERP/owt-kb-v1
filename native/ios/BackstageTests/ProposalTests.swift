@@ -170,6 +170,51 @@ final class ProposalDraftStateTests: XCTestCase {
         XCTAssertTrue(state.canSave)
     }
 
+    func testAnEditMadeWhileTheSaveRunsStaysUnsaved() throws {
+        var state = existing()
+        state.songs.append(song("c"))
+        _ = try XCTUnwrap(state.beginSave(as: .draft))
+        // The editor stays editable while the save is in flight.
+        state.teamNotes = "Escrito durante el guardado"
+        state.finishSave(.saved(ProposalSaveResponse(_id: "setlistProposal.sun-1", _rev: "rev-2", status: .draft)))
+        XCTAssertTrue(state.isDirty, "what was typed after the save left is not saved")
+        XCTAssertEqual(state.teamNotes, "Escrito durante el guardado")
+        state.teamNotes = "Notas"
+        XCTAssertFalse(state.isDirty, "what the save sent is the saved state")
+    }
+
+    func testAFirstSaveWithANoteToTheAdminsEndsClean() throws {
+        var state = fresh()
+        state.songs = [song("a")]
+        state.leadNotes = "Para los admins"
+        _ = try XCTUnwrap(state.beginSave(as: .pending))
+        state.finishSave(.saved(ProposalSaveResponse(_id: "setlistProposal.sun-1", _rev: "rev-1", status: .pending)))
+        XCTAssertFalse(state.isDirty)
+    }
+
+    func testTheEditorReadSayingNoLongerLeadKeepsTheDraft() {
+        var state = existing()
+        state.teamNotes = "Sin guardar"
+        state.noteForbidden()
+        XCTAssertEqual(state.notice, .forbidden)
+        XCTAssertEqual(state.teamNotes, "Sin guardar")
+        XCTAssertEqual(state.songs.map(\.songId), ["a", "b"])
+    }
+
+    func testTheSameSongTwiceInAStoredProposalGetsTwoRows() {
+        let rows = [song("a"), song("a")]
+        XCTAssertEqual(Set(rows.map(\.id)).count, 2)
+    }
+
+    func testASaveAnswerCarriesTheThreadOrNone() throws {
+        let with = #"{"_id":"setlistProposal.sun-1","_rev":"r2","status":"pending","messages":[{"key":"k1","authorName":"Frank","authorRole":"lead","kind":"lead_note","body":"Va","at":"2026-11-26T10:00:00Z","editedAt":null,"mine":true}]}"#
+        let answer = try JSONDecoder().decode(ProposalSaveResponse.self, from: Data(with.utf8))
+        XCTAssertEqual(answer.messages?.map(\.key), ["k1"])
+        XCTAssertEqual(answer.messages?.first?.mine, true)
+        let without = #"{"_id":"setlistProposal.sun-1","_rev":null,"status":"draft","messages":null}"#
+        XCTAssertNil(try JSONDecoder().decode(ProposalSaveResponse.self, from: Data(without.utf8)).messages)
+    }
+
     func testA200WithNoRevisionKeepsTheDraftAndWaitsForAReload() throws {
         var state = existing()
         state.teamNotes = "Nuevas"

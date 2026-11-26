@@ -125,6 +125,16 @@ function routeProblems(src: string): string[] {
     }
   }
 
+  // Any other export that names a method (`export function POST` without `async`,
+  // `export { handler as POST }`, `export var POST`, `export * from`, …) is outside both forms.
+  const accepted = new Set([...direct, ...constExports].map((m) => m.index));
+  for (const m of src.matchAll(/^[ \t]*export\b(?:\s*\{[^}]*\}[^\n]*|\s*\*[^\n]*|[^\n]*)/gm)) {
+    if (accepted.has(m.index)) continue;
+    const named = new RegExp(`\\b${METHOD}\\b`).exec(m[0]);
+    if (named) problems.push(`${named[1]}: exported in a form the rule does not check (\`${m[0].trim().slice(0, 60)}\`)`);
+    else if (/^\s*export\s*\*/.test(m[0])) problems.push(`\`export *\` could re-export a handler the rule does not check`);
+  }
+
   if (direct.length + constExports.length === 0) problems.push("no exported handler");
   return problems;
 }
@@ -168,6 +178,26 @@ describe("the route rule itself (W1 spec D2.5)", () => {
     expect(routeProblems(`export const GET = handler;\n`).join()).toMatch(/exactly/);
     const src = `import { withVerificationRunContext } from "./mine";\nasync function postHandler(request: Request) {\n${GUARD}}\nexport const POST = withVerificationRunContext(postHandler);\n`;
     expect(routeProblems(src).join()).toMatch(/must come from/);
+  });
+});
+
+describe("the route rule refuses every other export of a method (review LOW 8)", () => {
+  const GUARD = '  const auth = await requireAppSession(request, { needs: "self" });\n';
+  it.each([
+    ["a non-async function", `export function POST(request: Request) {\n${GUARD}  return x;\n}\n`],
+    ["a renamed re-export", `async function handler(request: Request) {\n${GUARD}}\nexport { handler as POST };\n`],
+    ["a multi-line renamed re-export", `async function handler(request: Request) {\n${GUARD}}\nexport {\n  handler as GET,\n};\n`],
+    ["an export var", `export var DELETE = handler;\n`],
+    ["a star re-export", `export * from "./handlers";\n`],
+  ])("%s", (_label, src) => {
+    // Beside a valid handler, so "no exported handler" cannot be what fails it.
+    const valid = `export async function PUT(request: Request) {\n${GUARD}  return x;\n}\n`;
+    expect(routeProblems(valid + src).join()).toMatch(/does not check/);
+  });
+
+  it("still accepts the two forms beside other exports", () => {
+    const src = `export const dynamic = "force-dynamic";\nexport const maxDuration = 60;\nexport async function GET(request: Request) {\n${GUARD}  return x;\n}\n`;
+    expect(routeProblems(src)).toEqual([]);
   });
 });
 

@@ -8,7 +8,9 @@
 //     door's 401 `account_disabled` (the app signs out, as on every endpoint); no longer a worship
 //     member → 403; a failed read → 503, never a write. The grant itself rides the 30 s cache;
 //  3. any throw from the writer (a failed read before the commit, a non-conflict commit error)
-//     answers the door's 503, never a bare 500.
+//     answers the door's 503, never a bare 500;
+//  4. a success's thread rows go out as the editor read's messages (`appSaveAnswer`): a name and
+//     `mine`, never the author's member id.
 //
 // Wrapped in `withVerificationRunContext` because the writer can send email (the SR-verification
 // scan); `appAuthStatic.test.ts` accepts exactly this wrapped form.
@@ -20,6 +22,7 @@ import { fetchMemberAccessFresh, type MemberAccess } from "@/app/utils/memberAcc
 import { serviceError } from "@/app/utils/serviceMutation";
 import { saveProposal, type ProposalSaveResult } from "@/app/utils/proposalSaveCommit";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
+import { appSaveAnswer } from "@/app/utils/appProposalEditor";
 
 // The post-commit `after()` fan-out queues the debounced lead-notes notice; give it room to finish.
 export const maxDuration = 60;
@@ -54,7 +57,9 @@ async function postHandler(request: Request): Promise<Response> {
     console.error("[app/v1/proposals] save failed", err instanceof Error ? err.name : "unknown");
     return appUnavailableResponse();
   }
-  return jsonNoStore(result.body, result.status);
+  // The writer's success body carries raw thread rows (author member ids): mapped, as on the read.
+  const answer = appSaveAnswer(result, leadId);
+  return jsonNoStore(answer.body, answer.status);
 }
 
 export const POST = withVerificationRunContext(postHandler);
