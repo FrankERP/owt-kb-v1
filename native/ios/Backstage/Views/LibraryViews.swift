@@ -659,6 +659,14 @@ struct ChartSection: View {
                 .sensoryFeedback(.selection, trigger: selected)
             }
             if chart.chordPro {
+                // The switch first: what it hides sits below it, so it never moves under the finger.
+                Toggle(isOn: $showChords.animation(.easeOut(duration: 0.2))) {
+                    Text("Acordes")
+                        .font(.bsBody(15, .semibold))
+                        .foregroundStyle(BS.ink)
+                }
+                .tint(BS.accent)
+                .sensoryFeedback(.selection, trigger: showChords)
                 // Only a key the transposer can read gets the dial: «Do» would move the chords
                 // and leave the pill still.
                 if showChords, let written, let root = Transpose.rootIndex(written) {
@@ -667,13 +675,6 @@ struct ChartSection: View {
                         capoHint(capo)
                     }
                 }
-                Toggle(isOn: $showChords.animation(.easeOut(duration: 0.2))) {
-                    Text("Acordes")
-                        .font(.bsBody(15, .semibold))
-                        .foregroundStyle(BS.ink)
-                }
-                .tint(BS.accent)
-                .sensoryFeedback(.selection, trigger: showChords)
                 ChordProView(content: chart.content, semitones: semitones, showChords: showChords)
             } else {
                 // Plain text places its chords with spaces: one fixed-width block, scrolled sideways.
@@ -752,8 +753,8 @@ struct ChordProView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ForEach(Array(ChordPro.lines(content).enumerated()), id: \.offset) { index, line in
-                switch showChords ? line : ChordPro.wordsOnly(line) {
+            ForEach(Array(ChordPro.lines(content, chords: showChords).enumerated()), id: \.offset) { index, line in
+                switch line {
                 case .heading(let text):
                     LyricEyebrow(text: text)
                         .padding(.top, index == 0 ? 0 : 14)

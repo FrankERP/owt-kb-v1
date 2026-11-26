@@ -234,14 +234,15 @@ enum Library {
     }
 
     /// A title or its original containing the query, an artist's word starting with it, or the
-    /// key itself; titles that START with it first, then A–Z. Last come the near misses: every
+    /// key itself; titles that START with it first, then A–Z. When nothing matches, the near misses: every
     /// word typed is a letter or two away from a word of the title, its original or its artist
-    /// («grasia» finds «Gracia»), which is what the web's fuzzy search forgives.
+    /// («grasia» finds «Gracia», «ossana» finds «Hosanna»), which is what the web's fuzzy
+    /// search forgives.
     static func search(_ songs: [LibrarySong], _ query: String) -> [LibrarySong] {
         let q = fold(query.trimmingCharacters(in: .whitespaces))
         guard !q.isEmpty else { return songs.sorted(by: byTitle) }
         // A near miss needs enough letters to mean something: «gran» is one letter from «grac».
-        let typed = words(q).filter { $0.count >= 5 }
+        let typed = words(q).filter { $0.count >= 5 }.map(sound)
         func rank(_ song: LibrarySong) -> Int? {
             let title = fold(song.title)
             if title.hasPrefix(q) { return 0 }
@@ -250,16 +251,21 @@ enum Library {
             if let artist = song.artist,
                fold(artist).split(whereSeparator: { !$0.isLetter && !$0.isNumber }).contains(where: { $0.hasPrefix(q) }) { return 3 }
             if let key = song.key, fold(key) == q { return 4 }
-            if !typed.isEmpty {
-                let words = Self.words([song.title, song.original ?? "", song.artist ?? ""].joined(separator: " "))
-                if typed.allSatisfy({ token in words.contains { near(token, $0) } }) { return 5 }
-            }
             return nil
         }
-        return songs
+        let exact = songs
             .compactMap { song in rank(song).map { (song, $0) } }
             .sorted { a, b in a.1 == b.1 ? byTitle(a.0, b.0) : a.1 < b.1 }
             .map(\.0)
+        // Only when nothing matched as typed: a word spelled right should not drag its
+        // neighbours in («santo» is not asking for «Santidad»).
+        guard exact.isEmpty, !typed.isEmpty else { return exact }
+        return songs
+            .filter { song in
+                let words = Self.words([song.title, song.original ?? "", song.artist ?? ""].joined(separator: " ")).map(sound)
+                return typed.allSatisfy { token in words.contains { near(token, $0) } }
+            }
+            .sorted(by: byTitle)
     }
 }
 
@@ -269,14 +275,41 @@ extension Library {
         fold(text).split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
     }
 
-    /// The typed word against the start of a real one: one wrong letter forgiven, two from eight
+    /// A folded word as it sounds in Spanish, so the misspellings people actually make land on
+    /// the same letters: a silent first «h», «v» for «b», «z» and a soft «c» for «s», «ll» for
+    /// «y», and a doubled letter once.
+    static func sound(_ word: String) -> String {
+        var letters = Array(word)
+        if letters.first == "h", letters.count > 1 { letters.removeFirst() }
+        var out = ""
+        var i = 0
+        while i < letters.count {
+            let (ch, next) = (letters[i], i + 1 < letters.count ? letters[i + 1] : nil)
+            switch ch {
+            case "v": out.append("b")
+            case "z": out.append("s")
+            case "c" where next == "e" || next == "i": out.append("s")
+            case "l" where next == "l":
+                out.append("y")
+                i += 1
+            default: out.append(ch)
+            }
+            i += 1
+        }
+        // A doubled letter sounds once («Hosanna», and whatever the thumb doubled).
+        var once = ""
+        for ch in out where once.last != ch { once.append(ch) }
+        return once
+    }
+
+    /// The typed word against the start of a real one, both as they sound: one wrong letter forgiven, two from eight
     /// letters up. The first letter has to be right, or everything is near everything.
     static func near(_ typed: String, _ word: String) -> Bool {
         guard typed.first == word.first else { return false }
         let allowed = typed.count >= 8 ? 2 : 1
-        // The word's start, as long as what was typed or a letter longer (a letter left out
-        // moves the end by one), and never past the word's own end.
-        return Set([typed.count, typed.count + 1].map { min($0, word.count) }).contains { length in
+        // The word's start, as long as what was typed or a letter either way (a letter left
+        // out or doubled moves the end by one), and never past the word's own end.
+        return Set([typed.count - 1, typed.count, typed.count + 1].map { min($0, word.count) }).contains { length in
             distance(typed, String(word.prefix(length)), limit: allowed) <= allowed
         }
     }
@@ -385,11 +418,16 @@ enum ChordPro {
     }
 
     /// A chord line as its words alone, for someone reading without chords; a line that was
-    /// only chords (an intro) has nothing left to read.
-    static func wordsOnly(_ line: ChartLine) -> ChartLine {
+    /// only chords (an intro) has nothing left to read and leaves no gap behind.
+    static func wordsOnly(_ line: ChartLine) -> ChartLine? {
         guard case .chords(let segments) = line else { return line }
         let words = segments.map(\.lyric).joined()
-        return words.trimmingCharacters(in: .whitespaces).isEmpty ? .blank : .text(words)
+        return words.trimmingCharacters(in: .whitespaces).isEmpty ? nil : .text(words)
+    }
+
+    /// The chart's lines as they are drawn: whole, or without their chords.
+    static func lines(_ content: String, chords: Bool) -> [ChartLine] {
+        chords ? lines(content) : lines(content).compactMap(wordsOnly)
     }
 
     static func segments(_ line: String) -> [ChordSegment] {
