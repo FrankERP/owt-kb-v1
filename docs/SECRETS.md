@@ -662,8 +662,9 @@ testers' phones or in TestFlight. A leaked `.p12` plus password lets someone sig
 `main`), read by `.github/workflows/ios-testflight.yml`. **Not needed in:** Vercel, GCF, the app, a
 cloud session, `.env.local`, repository secrets.
 
-**Status: NOT SET yet** (2026-11-26). Frank enters it himself. Without it the run stops at «Install
-the App Store provisioning profile».
+**Status: SET** (2026-11-26) by Frank; first successful upload with manual signing 2026-11-26 (run 15,
+build 0.1.0 (15.1)). Frank enters it himself. Without it the run stops at «Install the App Store
+provisioning profile».
 
 **Purpose.** With `IOS_DIST_P12`, the pair the archive and the export sign with, manually. It is why a
 run no longer creates anything in the Apple account: before 2026-11-26 the archive used automatic
