@@ -202,7 +202,16 @@ final class LibraryTests: XCTestCase {
         // A different first letter is a different word.
         XCTAssertEqual(Library.search(all, "tracia"), [])
         XCTAssertEqual(Library.distance("gracia", "grasia", limit: 1), 1)
-        XCTAssertEqual(Library.distance("gracia", "gloria", limit: 1), 2)
+        // Past the limit the count stops: more than one is all it says.
+        XCTAssertGreaterThan(Library.distance("gracia", "gloria", limit: 1), 1)
+        // As it sounds: a silent h, v for b, a soft c, and a doubled letter.
+        let sung = [song("Hosanna"), song("Bendito"), song("Cielo abierto"), song("Santidad")]
+        XCTAssertEqual(Library.search(sung, "ossana").map(\.title), ["Hosanna"])
+        XCTAssertEqual(Library.search(sung, "vendito").map(\.title), ["Bendito"])
+        XCTAssertEqual(Library.search(sung, "sielo").map(\.title), ["Cielo abierto"])
+        XCTAssertEqual(Library.search(sung, "sanntid").map(\.title), ["Santidad"])
+        // A word spelled right brings no neighbours with it.
+        XCTAssertEqual(Library.search([song("Santo"), song("Santidad")], "santo").map(\.title), ["Santo"])
     }
 }
 
@@ -247,7 +256,8 @@ final class TransposeTests: XCTestCase {
 final class ChordProTests: XCTestCase {
     func testWithoutChordsALineIsItsWordsAndAnIntroIsNothing() {
         XCTAssertEqual(ChordPro.wordsOnly(.chords(ChordPro.segments("[G]Santo [D]santo"))), .text("Santo santo"))
-        XCTAssertEqual(ChordPro.wordsOnly(.chords(ChordPro.segments("[G] [D] [Em]"))), .blank)
+        XCTAssertNil(ChordPro.wordsOnly(.chords(ChordPro.segments("[G] [D] [Em]"))))
+        XCTAssertEqual(ChordPro.lines("[G] [D]\n[G]Santo", chords: false), [.text("Santo")])
         XCTAssertEqual(ChordPro.wordsOnly(.heading("Coro")), .heading("Coro"))
     }
 
