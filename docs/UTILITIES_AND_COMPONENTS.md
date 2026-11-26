@@ -558,6 +558,18 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   transaction, then the pending notice and the lead-note queue. Answers `{ status, body }`; a
   route adds only its own authorization and the JSON read. Callers pinned in
   `serviceCommitCallers.test.ts`.
+- **`readProposalEditor(roleId, leadId)`** ([proposalEditorRead.ts](../app/utils/proposalEditorRead.ts))
+  — the setlist-proposal editor's reads: the role (caller in `Lead[]`, `published != false`, a valid
+  `serviceDayKey`), its ONE shared proposal (`service_ref`, oldest first) and the service
+  conversation; `null` when the caller may not edit. Shared by the web page and the native app's
+  editor read; imports `operationalClient` itself so the protected-read audit sees its reads.
+- **`buildAppProposalEditor(read, me, previousKeys)`** ([appProposalEditor.ts](../app/utils/appProposalEditor.ts))
+  — the app's editor answer: `observed` from the same document the fields come from, song rows in
+  the save body's spelling (`songId`, `play_key`, `medley_tag` — `null`, never `""`), no member ids.
+  `parsePreviousKeysIds` is its `?ids=` parser (≤ 50 canonical ids).
+- **`previousKeysFor(songIds, today)`** ([songPreviousKeys.ts](../app/utils/songPreviousKeys.ts)) —
+  «Tonos anteriores»: the keys each song was played in at past services, newest first. Called by
+  `/api/me/songs`, the app's editor read and `/api/app/v1/songs/previous-keys`.
 - **`mergeContributor(existing, editorId, newKey)`**, **`describeContributors(contributors, myId)`**
   ([proposalContributors.ts](../app/utils/proposalContributors.ts)) — preserve contributor `_key`s
   + append the current editor once; "con Ana, Beto" label.
