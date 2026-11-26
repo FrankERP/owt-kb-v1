@@ -279,6 +279,8 @@ looks wrong** — several exist to stop a plausible-looking change.
   `serviceThreadCommit.ts` too, called by its four routes, the MCP conversation tools (ADR-0073) and the
   proposal approval's post-commit pastor's-message copy (ADR-0087);
   Oasis Kids' in `kidsCommit.ts`, called by the four `/api/kids/*` writes and the MCP Kids tools;
+  a Lead's shared setlist proposal in `proposalSaveCommit.ts`, called by `POST /api/me/proposals`
+  (and, once W1 ships, the native app's door; ADR-0091);
   the song library's in `songSaveCommit.ts`, called by the song and author routes and the MCP song
   tools (edits by parts, a lossless lyrics gate, `ifRevisionId`, a token-keyed create; ADR-0077);
   people's in `memberCommit.ts`, called by the three `/api/admin/members` routes, `/me`'s PATCH and
