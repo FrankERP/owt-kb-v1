@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireMinistryMember } from "@/app/utils/authGuards";
 import { serverClient } from "@/sanity/lib/serverClient";
-import { operationalClient } from "@/sanity/lib/operationalClient";
-import { buildPreviousKeysBySong, type SongPlayHistorySet } from "@/app/utils/songPlayHistory";
-import { canonicalizePlayHistory, playHistoryTargetKey } from "@/app/utils/serviceReadSelect";
+import { previousKeysFor } from "@/app/utils/songPreviousKeys";
 
 interface SongSearchResult {
   _id: string;
@@ -35,28 +33,7 @@ export async function GET(req: NextRequest) {
   if (songs.length === 0) return NextResponse.json([]);
 
   const today = new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
-  const songIds = songs.map(song => song._id);
-  // Canonical (published-perspective) client: a `drafts.*` overlay never counts
-  // as a play. Project the target identity so duplicate-target (ambiguous)
-  // setlists are collapsed before keys are tallied — no double-counted history.
-  type HistorySet = SongPlayHistorySet & { _id?: string; _type?: string; week?: string };
-  const historyRaw = await operationalClient.fetch<HistorySet[]>(
-    `*[
-      (
-        (_type in ["featuredSongs", "saturdarSongs"] && week < $today) ||
-        (_type == "special_role" && date < $today && published != false)
-      ) && count(songs[song._ref in $songIds]) > 0
-    ] | order(coalesce(week, date) desc) {
-      _id, _type, "week": coalesce(week, date),
-      "songs": songs[song._ref in $songIds] {
-        "songId": song._ref,
-        play_key
-      }
-    }`,
-    { songIds, today }
-  );
-  const history = canonicalizePlayHistory(historyRaw, playHistoryTargetKey);
-  const previousKeysBySong = buildPreviousKeysBySong(history);
+  const previousKeysBySong = await previousKeysFor(songs.map(song => song._id), today);
 
   return NextResponse.json(songs.map(song => ({
     ...song,

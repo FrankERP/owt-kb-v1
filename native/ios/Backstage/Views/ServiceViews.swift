@@ -401,6 +401,8 @@ struct ServiceFullCard: View {
                 if let notes = service.teamNotes {
                     NoteBox(title: "Notas para el equipo", text: notes, symbol: "text.bubble", pastor: false)
                 }
+                // A Lead proposes the setlist from here (W1); nothing shows for anyone else.
+                ProposeEntry(service: service)
                 SetlistSection(songs: service.songs)
                 if !service.sections.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {

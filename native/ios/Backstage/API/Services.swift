@@ -29,8 +29,18 @@ struct AppService: Decodable, Hashable, Identifiable, Sendable {
     let songs: [AppSong]
     let teamNotes: String?
     let pastorMessage: String?
+    /// The caller leads this service and may propose its setlist (W1). Optional: absent from a
+    /// server that predates it, and from the tests' older fixtures.
+    var canPropose: Bool? = nil
+    /// The shared proposal's status where `canPropose`; nil = none yet (or it could not be read).
+    /// A string on the wire, so a status this build does not know never fails the whole list.
+    var proposalStatus: String? = nil
 
     var isMine: Bool { seated }
+
+    var mayPropose: Bool { canPropose == true }
+
+    var proposal: ProposalStatus? { proposalStatus.flatMap(ProposalStatus.init(rawValue:)) }
 
     /// Who leads, for the folded card's «Lead Jakey y Lali».
     var leads: [AppPerson] { sections.first { $0.id == "voces" }?.people.filter { $0.seat == "Lead" } ?? [] }

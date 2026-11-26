@@ -213,6 +213,63 @@ final class AppModel {
         }
     }
 
+    // MARK: Proponer setlist (ADR-0091 W1)
+
+    enum ProposalLoad: Equatable {
+        case loaded(ProposalEditorResponse)
+        /// `404` or `403`: the caller no longer leads this published service.
+        case unavailable
+        case failed(String)
+    }
+
+    /// The editor's read. A session that ended goes to sign-in, as anywhere else.
+    func loadProposalEditor(roleId: String) async -> ProposalLoad {
+        do {
+            return .loaded(try await api.proposalEditor(roleId: roleId))
+        } catch APIError.notFound {
+            return .unavailable
+        } catch APIError.forbidden {
+            return .unavailable
+        } catch {
+            let cause = Self.sessionError(from: error)
+            switch cause {
+            case .signedOut, .accountDisabled:
+                show(cause)
+                return .failed("")
+            case .network, .unavailable, .server:
+                return .failed(Self.message(for: cause))
+            }
+        }
+    }
+
+    /// «Tonos anteriores» for songs just added; an empty answer when it cannot be read (the
+    /// picker then shows none, as the web shows none on a failed search).
+    func previousKeys(songIds: [String]) async -> [String: [String]] {
+        (try? await api.previousKeys(songIds: songIds)) ?? [:]
+    }
+
+    /// One save. A session that ended goes to sign-in (the in-memory draft is lost then, as when
+    /// iOS ends the app mid-edit); every other answer goes back to the editor. After a save that
+    /// landed, the list refreshes so its «Borrador»/«Enviada» chip follows.
+    func saveProposal(_ body: ProposalSaveBody) async -> ProposalSaveOutcome {
+        let outcome: ProposalSaveOutcome
+        do {
+            outcome = try await api.saveProposal(body)
+        } catch {
+            let cause = Self.sessionError(from: error)
+            switch cause {
+            case .signedOut, .accountDisabled:
+                show(cause)
+            case .network, .unavailable, .server:
+                break
+            }
+            return .failed
+        }
+        if case .saved = outcome { await loadServices() }
+        if outcome == .forbidden { await loadServices() }
+        return outcome
+    }
+
     // MARK: Sign-in
 
     /// One sign-in: a fresh verifier and state, the server's page in an ephemeral browser session

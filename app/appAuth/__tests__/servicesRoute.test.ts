@@ -99,4 +99,43 @@ describe("GET /api/app/v1/services", () => {
     const res = await GET(new Request(`${ORIGIN}/api/app/v1/services`, { headers: { host: "localhost:3000" } }));
     expect(res.status).toBe(401);
   });
+
+  describe("where the caller may propose (W1 spec D4)", () => {
+    const sunday = (id: string, week: string, leadRefs: string[]) => ({
+      _id: id, _type: "sunday_role", week, leadRefs,
+      Lead: leadRefs.map((r) => ({ _id: r, member_name: r === "m1" ? null : "Otro", alias: null, photo: null })),
+      BGVs: [{ _id: "x", member_name: "Bea", alias: null, photo: null }],
+    });
+
+    it("says canPropose by the raw Lead refs (a Lead with no name still may) and reads the status only there", async () => {
+      operationalFetch
+        .mockResolvedValueOnce({ sundays: [sunday("sun-1", "2099-01-04", ["m1"]), sunday("sun-2", "2099-01-11", ["m9"])] })
+        .mockResolvedValueOnce([
+          { roleId: "sun-1", status: "pending" },
+          // A second proposal on the same service: the oldest (first row) wins, the editor's rule.
+          { roleId: "sun-1", status: "draft" },
+        ]);
+      const body = await (await call()).json();
+      const byId = Object.fromEntries(body.services.map((s: { id: string }) => [s.id, s]));
+      expect(byId["sun-1"]).toMatchObject({ canPropose: true, proposalStatus: "pending", mySeats: [] });
+      expect(byId["sun-2"]).toMatchObject({ canPropose: false, proposalStatus: null });
+      const [, params] = operationalFetch.mock.calls[1]!;
+      expect(params).toEqual({ ids: ["sun-1"] });
+    });
+
+    it("does not read proposals when the caller leads nothing", async () => {
+      operationalFetch.mockResolvedValueOnce({ sundays: [sunday("sun-2", "2099-01-11", ["m9"])] });
+      await call();
+      expect(operationalFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("still answers, every status null, when the proposal read fails", async () => {
+      operationalFetch
+        .mockResolvedValueOnce({ sundays: [sunday("sun-1", "2099-01-04", ["m1"])] })
+        .mockRejectedValueOnce(new Error("down"));
+      const res = await call();
+      expect(res.status).toBe(200);
+      expect((await res.json()).services[0]).toMatchObject({ canPropose: true, proposalStatus: null });
+    });
+  });
 });

@@ -81,8 +81,8 @@ const EXPECTED_CALLERS: Record<string, string[]> = {
   roleDeleteCommit: ["app/api/admin/roles/[id]/route.ts", "app/mcp/tools/serviceDeletes.ts"],
   roleUnpublishCommit: ["app/api/admin/roles/unpublish/route.ts", "app/mcp/tools/unpublishService.ts"],
   setlistSaveCommit: ["app/api/admin/setlists/route.ts", "app/mcp/tools/editSetlist.ts"],
-  // The lead's proposal save: the web route; the native app's door joins it (ADR-0091).
-  proposalSaveCommit: ["app/api/me/proposals/route.ts"],
+  // The lead's proposal save: the web route and the native app's door (ADR-0091 W1).
+  proposalSaveCommit: ["app/api/app/v1/proposals/route.ts", "app/api/me/proposals/route.ts"],
   // Admin parity phase 3: the four service-conversation routes (ADR-0065), the MCP message tools,
   // and the proposal approval (ADR-0087).
   serviceThreadCommit: [
@@ -292,5 +292,23 @@ describe("service *Commit modules are imported only by their pinned callers", ()
     const expected: Record<string, string[]> = {};
     for (const [name, callers] of Object.entries(EXPECTED_CALLERS)) expected[name] = [...callers].sort();
     expect(actual).toEqual(expected);
+  });
+});
+
+describe("the native app's API writes only through the domain writers (ADR-0091 W1, spec D7)", () => {
+  // A route under `/api/app/v1` that reached Sanity's write client directly would be a second
+  // writer beside the `*Commit` modules. The sign-in endpoints write through `grantStore`, which
+  // imports the client itself and stays allowed.
+  it("no app route imports the write client", () => {
+    const routes = trackedAppSources().filter((f) => f.startsWith("app/api/app/v1/"));
+    expect(routes.length).toBeGreaterThan(3);
+    const offenders = routes.filter((file) => {
+      const source = readFileSync(path.join(REPO_ROOT, file), "utf8");
+      const importsServerClient = valueImportSpecifiers(source).some(
+        (s) => resolveSpecifier(file, s) === "sanity/lib/serverClient",
+      );
+      return importsServerClient && /\bwriteClient\b/.test(stripComments(source));
+    });
+    expect(offenders).toEqual([]);
   });
 });

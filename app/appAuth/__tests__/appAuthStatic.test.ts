@@ -75,30 +75,119 @@ function routeFiles(dir: string): string[] {
   return out;
 }
 
+const NEEDS_LITERAL =
+  /^\{\s*needs:\s*(?:"self"|"manager"|"super-admin"|\{\s*ministry:\s*"(?:worship|kids|jovenes)",\s*as:\s*"(?:member|planner|manager)"\s*\})\s*\}$/;
+const METHOD = "(GET|POST|PUT|PATCH|DELETE)";
+
+/** The first statement of a function body (comments and blank lines skipped) must be the guard. */
+function guardProblem(label: string, body: string): string | null {
+  const first = body.split("\n").map((l) => l.trim()).find((l) => l !== "" && !l.startsWith("//"));
+  const m = /^const\s+\w+\s*=\s*await\s+requireAppSession\(\s*\w+\s*,\s*(\{[\s\S]*\})\s*\);$/.exec(first ?? "");
+  if (!m) return `${label}: first statement must be \`await requireAppSession(request, { needs: … })\``;
+  if (!NEEDS_LITERAL.test(m[1]!.replace(/\s+/g, " "))) return `${label}: needs must be a literal level`;
+  return null;
+}
+
+/**
+ * Every problem with one route source. An exported method is either
+ * `export async function METHOD(…)` whose first statement is the guard, or EXACTLY
+ * `export const METHOD = withVerificationRunContext(<name>);` (the SR-verification scan requires
+ * that form for a route that can send mail, W1 spec D2.5), where `<name>` is an
+ * `async function <name>(…)` declared in this file whose first statement passes the same checks,
+ * and `withVerificationRunContext` is imported from `@/app/utils/srVerificationRunContext`.
+ * Any other `export const|let METHOD` is refused.
+ */
+function routeProblems(src: string): string[] {
+  const problems: string[] = [];
+  const direct = [...src.matchAll(new RegExp(`export\\s+async\\s+function\\s+${METHOD}\\s*\\([^)]*\\)[^{]*\\{([\\s\\S]*?)\\n\\}`, "g"))];
+  for (const [, method, body] of direct) {
+    const p = guardProblem(method!, body!);
+    if (p) problems.push(p);
+  }
+
+  const constExports = [...src.matchAll(new RegExp(`export\\s+(?:const|let)\\s+${METHOD}\\b[^\\n]*`, "g"))];
+  for (const [line, method] of constExports) {
+    const wrapped = new RegExp(`^export\\s+const\\s+${method}\\s*=\\s*withVerificationRunContext\\(\\s*([A-Za-z_$][\\w$]*)\\s*\\);\\s*$`).exec(line);
+    if (!wrapped) {
+      problems.push(`${method}: an exported const handler must be exactly \`withVerificationRunContext(<local async function>)\``);
+      continue;
+    }
+    const name = wrapped[1]!;
+    const inner = new RegExp(`(?:^|\\n)async\\s+function\\s+${name}\\s*\\([^)]*\\)[^{]*\\{([\\s\\S]*?)\\n\\}`).exec(src);
+    if (!inner) {
+      problems.push(`${method}: \`${name}\` must be an \`async function\` declared in this file`);
+      continue;
+    }
+    const p = guardProblem(`${method} (${name})`, inner[1]!);
+    if (p) problems.push(p);
+    if (!/import\s*\{[^}]*\bwithVerificationRunContext\b[^}]*\}\s*from\s*"@\/app\/utils\/srVerificationRunContext";/.test(src)) {
+      problems.push(`${method}: withVerificationRunContext must come from @/app/utils/srVerificationRunContext`);
+    }
+  }
+
+  if (direct.length + constExports.length === 0) problems.push("no exported handler");
+  return problems;
+}
+
+describe("the route rule itself (W1 spec D2.5)", () => {
+  const IMPORT = 'import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";\n';
+  const GUARD = '  const auth = await requireAppSession(request, { needs: { ministry: "worship", as: "member" } });\n';
+
+  it("accepts a plain guarded handler", () => {
+    expect(routeProblems(`export async function GET(request: Request) {\n${GUARD}  return x;\n}\n`)).toEqual([]);
+  });
+
+  it("accepts the wrapped form around a local async function that starts with the guard", () => {
+    const src = `${IMPORT}async function postHandler(request: Request): Promise<Response> {\n${GUARD}  return x;\n}\n\nexport const POST = withVerificationRunContext(postHandler);\n`;
+    expect(routeProblems(src)).toEqual([]);
+  });
+
+  it("refuses a wrapped handler whose first statement is not the guard", () => {
+    const src = `${IMPORT}async function postHandler(request: Request) {\n  const body = await request.json();\n${GUARD}  return x;\n}\nexport const POST = withVerificationRunContext(postHandler);\n`;
+    expect(routeProblems(src).join()).toMatch(/first statement/);
+  });
+
+  it("refuses a wrapper naming a function not declared in the file", () => {
+    const src = `${IMPORT}export const POST = withVerificationRunContext(elsewhere);\n`;
+    expect(routeProblems(src).join()).toMatch(/declared in this file/);
+  });
+
+  it("refuses a wrapper around an arrow or an imported function", () => {
+    const arrow = `${IMPORT}export const POST = withVerificationRunContext(async (request: Request) => {\n${GUARD}  return x;\n});\n`;
+    expect(routeProblems(arrow).join()).toMatch(/exactly/);
+    const imported = `${IMPORT}import { postHandler } from "./handler";\nexport const POST = withVerificationRunContext(postHandler);\n`;
+    expect(routeProblems(imported).join()).toMatch(/declared in this file/);
+  });
+
+  it("refuses a non-literal level inside a wrapped handler", () => {
+    const src = `${IMPORT}async function postHandler(request: Request) {\n  const auth = await requireAppSession(request, LEVEL);\n}\nexport const POST = withVerificationRunContext(postHandler);\n`;
+    expect(routeProblems(src).join()).toMatch(/first statement|literal/);
+  });
+
+  it("refuses any other exported const handler, and a wrapper imported from elsewhere", () => {
+    expect(routeProblems(`export const GET = handler;\n`).join()).toMatch(/exactly/);
+    const src = `import { withVerificationRunContext } from "./mine";\nasync function postHandler(request: Request) {\n${GUARD}}\nexport const POST = withVerificationRunContext(postHandler);\n`;
+    expect(routeProblems(src).join()).toMatch(/must come from/);
+  });
+});
+
 describe("every app API route calls the guard first, with a literal level", () => {
   const ROOT = path.join(REPO, "app/api/app/v1");
   const DOOR = new Set(["auth/token/route.ts", "auth/revoke/route.ts"].map((r) => path.join(ROOT, r)));
   const files = routeFiles(ROOT);
-  const NEEDS_LITERAL =
-    /^\{\s*needs:\s*(?:"self"|"manager"|"super-admin"|\{\s*ministry:\s*"(?:worship|kids|jovenes)",\s*as:\s*"(?:member|planner|manager)"\s*\})\s*\}$/;
 
   it("finds the door endpoints and at least one guarded route", () => {
     for (const d of DOOR) expect(files).toContain(d);
     expect(files.filter((f) => !DOOR.has(f)).length).toBeGreaterThan(0);
   });
 
+  it("finds the wrapped proposal door (a vacuous wrapped-form rule would pass with none)", () => {
+    expect(read("app/api/app/v1/proposals/route.ts")).toMatch(/export const POST = withVerificationRunContext\(postHandler\);/);
+  });
+
   for (const file of files.filter((f) => !DOOR.has(f))) {
     it(path.relative(REPO, file), () => {
-      const src = read(path.relative(REPO, file));
-      const handlers = [...src.matchAll(/export\s+async\s+function\s+(GET|POST|PUT|PATCH|DELETE)\s*\([^)]*\)[^{]*\{([\s\S]*?)\n\}/g)];
-      expect(handlers.length).toBeGreaterThan(0);
-      expect(src).not.toMatch(/export\s+(?:const|let)\s+(?:GET|POST|PUT|PATCH|DELETE)\b/);
-      for (const [, method, body] of handlers) {
-        const first = body!.split("\n").map((l) => l.trim()).find((l) => l !== "" && !l.startsWith("//"));
-        const m = /^const\s+\w+\s*=\s*await\s+requireAppSession\(\s*\w+\s*,\s*(\{[\s\S]*\})\s*\);$/.exec(first ?? "");
-        expect(m, `${method}: first statement must be \`await requireAppSession(request, { needs: … })\``).not.toBeNull();
-        expect(m![1]!.replace(/\s+/g, " "), `${method}: needs must be a literal level`).toMatch(NEEDS_LITERAL);
-      }
+      expect(routeProblems(read(path.relative(REPO, file)))).toEqual([]);
     });
   }
 });
