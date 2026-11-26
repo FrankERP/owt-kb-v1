@@ -18,8 +18,13 @@ struct SongSeed: Hashable {
     let key: String?
     let bpm: Int?
     let timeSig: String?
+    /// The zoom source this page grew from and returns to. Every place that lists a song names
+    /// its own («shelf-…», «row-…», «setlist-…»): the same song can sit in two of them on one
+    /// screen, and a shared id sent the page back to whichever SwiftUI found first.
+    let origin: String?
 
-    init(_ song: LibrarySong) {
+    init(_ song: LibrarySong, origin: String? = nil) {
+        self.origin = origin
         slug = song.slug
         title = song.title
         byline = song.byline
@@ -31,8 +36,9 @@ struct SongSeed: Hashable {
     }
 
     /// A setlist's song, when it still points at a song of the catalogue.
-    init?(_ song: AppSong) {
+    init?(_ song: AppSong, origin: String? = nil) {
         guard let slug = song.slug, !slug.isEmpty else { return nil }
+        self.origin = origin
         self.slug = slug
         title = song.title
         byline = song.author
@@ -53,7 +59,17 @@ private struct OpenSongKey: EnvironmentKey {
     static let defaultValue: ((SongSeed) -> Void)? = nil
 }
 
+private struct SongZoomKey: EnvironmentKey {
+    static let defaultValue: Namespace.ID? = nil
+}
+
 extension EnvironmentValues {
+    /// The stack's zoom namespace, for a song row drawn deep inside it (a setlist).
+    var songZoom: Namespace.ID? {
+        get { self[SongZoomKey.self] }
+        set { self[SongZoomKey.self] = newValue }
+    }
+
     /// Opens a song's page from wherever a song is listed; nil where nothing navigates.
     var openSong: ((SongSeed) -> Void)? {
         get { self[OpenSongKey.self] }
@@ -100,8 +116,10 @@ struct LibraryView: View {
             .navigationDestination(for: Route.self) { route in
                 RouteDestination(route: route, today: model.lastToday, zoom: zoom)
             }
-            .environment(\.openSong) { path.append(.song($0)) }
         }
+        // On the stack itself, so a page pushed onto it inherits both.
+        .environment(\.openSong) { path.append(.song($0)) }
+        .environment(\.songZoom, zoom)
         .task { await model.loadCatalogue() }
     }
 }
@@ -118,10 +136,13 @@ struct RouteDestination: View {
             ServiceDetailView(service: service, today: today)
                 .zoomDestination(id: service.id, in: zoom)
         case .song(let seed):
-            // A song slides in like any page: it opens from the shelf, a letter row, a search
-            // result and a setlist, and a zoom can only return to one of them — from the rest
-            // it closed toward a corner where nothing had opened it.
-            SongView(seed: seed)
+            // The page grows from the very row or tile that was tapped and returns to it;
+            // opened from somewhere that names no origin, it slides in like any page.
+            if let origin = seed.origin {
+                SongView(seed: seed).zoomDestination(id: origin, in: zoom)
+            } else {
+                SongView(seed: seed)
+            }
         }
     }
 }
@@ -201,8 +222,10 @@ struct LibraryScreen: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 14) {
                         ForEach(recent) { song in
-                            Button { open(SongSeed(song)) } label: { ShelfTile(song: song) }
+                            let origin = "shelf-\(song.slug)"
+                            Button { open(SongSeed(song, origin: origin)) } label: { ShelfTile(song: song) }
                                 .buttonStyle(CardPressStyle())
+                                .zoomSource(id: origin, in: zoom)
                         }
                     }
                     .padding(.horizontal, 20)
@@ -224,8 +247,10 @@ struct LibraryScreen: View {
                 if index > 0 {
                     Rectangle().fill(BS.ink.opacity(0.06)).frame(height: 1).padding(.leading, 62)
                 }
-                Button { open(SongSeed(song)) } label: { LibraryRow(song: song) }
+                let origin = "row-\(song.slug)"
+                Button { open(SongSeed(song, origin: origin)) } label: { LibraryRow(song: song) }
                     .buttonStyle(CardPressStyle())
+                    .zoomSource(id: origin, in: zoom)
             }
         }
     }
