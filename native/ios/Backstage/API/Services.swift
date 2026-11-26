@@ -231,3 +231,52 @@ extension String {
     /// «domingo 29 de noviembre» → «Domingo 29 de noviembre».
     var capitalizedFirst: String { prefix(1).uppercased() + dropFirst() }
 }
+
+// MARK: A service on the phone's calendar (app/utils/calendarFeed.ts)
+
+/// What «Agregar al calendario» writes: the web feed's event for the same service, so a service
+/// reads the same whichever way it reached the calendar.
+struct ServiceEvent: Equatable {
+    /// The team's wall clock, wherever the phone is.
+    static let zone = TimeZone(identifier: "America/Mexico_City")!
+
+    let title: String
+    let notes: String
+    let start: Date
+    let end: Date
+    /// A service with no time of its own takes the whole day.
+    let allDay: Bool
+
+    /// Nil for a date that is not a real day.
+    static func make(_ service: AppService) -> ServiceEvent? {
+        let day = service.date.prefix(10).split(separator: "-").compactMap { Int($0) }
+        guard day.count == 3 else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        let clock = (service.time ?? "").split(separator: ":").compactMap { Int($0) }
+        let timed = clock.count == 2 && (0...23).contains(clock[0]) && (0...59).contains(clock[1])
+        var parts = DateComponents(year: day[0], month: day[1], day: day[2])
+        if timed {
+            parts.hour = clock[0]
+            parts.minute = clock[1]
+        }
+        guard let start = calendar.date(from: parts),
+              calendar.component(.day, from: start) == day[2],
+              calendar.component(.month, from: start) == day[1]
+        else { return nil }
+        // Two hours, the feed's length; an all-day event ends the day it starts.
+        let end = timed ? start.addingTimeInterval(2 * 60 * 60) : start
+
+        let seat = service.mySeats.joined(separator: ", ")
+        let title = service.seated
+            ? "⭐ \(service.title)\(seat.isEmpty ? "" : " · \(seat)") · Oasis Worship"
+            : "\(service.title) · Oasis Worship"
+        var notes: [String] = []
+        if service.seated { notes += [seat.isEmpty ? "Te toca servir" : "Tu lugar: \(seat)", ""] }
+        notes.append("Canciones")
+        notes += service.songs.isEmpty
+            ? ["Setlist pendiente"]
+            : service.songs.map { song in song.key.map { "\(song.title) (\($0))" } ?? song.title }
+        return ServiceEvent(title: title, notes: notes.joined(separator: "\n"), start: start, end: end, allDay: !timed)
+    }
+}
