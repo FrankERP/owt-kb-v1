@@ -102,7 +102,8 @@ function reject(res: { status: number; body: unknown }) {
   return NextResponse.json(res.body, { status: res.status });
 }
 
-// Declared BEFORE the handler on purpose, matching `app/api/me/proposals/route.ts`.
+// Declared BEFORE the handler on purpose, matching `app/api/me/proposals/route.ts`
+// (whose save body now lives in `app/utils/proposalSaveCommit.ts`).
 // `protectedReadAudit`'s `operationRegions` treats `export const POST =` as the
 // START of the POST region, so declaring it at the bottom files every mutation in
 // this file under `module` and the writer entry reads as dead. Hoisting makes it

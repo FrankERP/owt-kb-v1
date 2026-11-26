@@ -81,6 +81,8 @@ const EXPECTED_CALLERS: Record<string, string[]> = {
   roleDeleteCommit: ["app/api/admin/roles/[id]/route.ts", "app/mcp/tools/serviceDeletes.ts"],
   roleUnpublishCommit: ["app/api/admin/roles/unpublish/route.ts", "app/mcp/tools/unpublishService.ts"],
   setlistSaveCommit: ["app/api/admin/setlists/route.ts", "app/mcp/tools/editSetlist.ts"],
+  // The lead's proposal save: the web route; the native app's door joins it (ADR-0091).
+  proposalSaveCommit: ["app/api/me/proposals/route.ts"],
   // Admin parity phase 3: the four service-conversation routes (ADR-0065), the MCP message tools,
   // and the proposal approval (ADR-0087).
   serviceThreadCommit: [

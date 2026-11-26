@@ -21,6 +21,7 @@ export const DELIVERY_CAPABLE_IMPORTS: readonly string[] = [
   "assignmentEmail",
   "proposalNotify",
   "setlistSaveCommit",
+  "proposalSaveCommit",
   "roleSwapCommit",
   "roleCreateCommit",
   "publishReadyCommit",

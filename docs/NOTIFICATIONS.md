@@ -495,8 +495,8 @@ supersede what Child A §1 named as accepted gaps:
   themselves is saying something.
 
   The legacy `leadNotes` save path still declines an unchanged note, in the
-  route rather than in the queue helper (`notesChanged` in
-  `app/api/me/proposals/route.ts`) — that predicate is now load-bearing alone,
+  writer rather than in the queue helper (`notesChanged` in `saveProposal`,
+  `app/utils/proposalSaveCommit.ts`, the body of `POST /api/me/proposals`) — that predicate is now load-bearing alone,
   and it is what stops a client re-sending its one-time initializer from minting
   a bubble on every save.
 - **Two messages inside one window produce one email carrying BOTH**, joined by a
