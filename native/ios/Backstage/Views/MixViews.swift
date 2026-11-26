@@ -462,10 +462,12 @@ private struct MiniRing: View {
 // MARK: The full player
 
 /// The loaded mix with room to move in it: its waveform to drag to any moment, fifteen seconds
-/// back or forward, and the stop. Opened from the bar, which has room for none of that.
+/// back or forward. Opened from the bar, which has no room for that; the stop stays on the bar,
+/// and the sheet closes like any other, by pulling it down or touching outside it.
 struct MixPlayerSheet: View {
     let player: MixPlayer
     @Environment(\.dismiss) private var dismiss
+    @State private var height: CGFloat = 300
 
     var body: some View {
         VStack(spacing: 22) {
@@ -503,24 +505,17 @@ struct MixPlayerSheet: View {
                     .sensoryFeedback(.impact(weight: .light), trigger: player.status == .playing)
                     jump(15, symbol: "goforward.15", label: "Adelantar 15 segundos")
                 }
-                Button {
-                    player.stop()
-                } label: {
-                    Text("Cerrar el reproductor")
-                        .font(.bsBody(15, .semibold))
-                        .foregroundStyle(BS.inkMuted)
-                        .frame(minHeight: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 22)
         .padding(.top, 30)
-        .padding(.bottom, 8)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        // Half the screen, not a measured height: the words grow with the person's text size.
-        .presentationDetents([.medium])
+        .padding(.bottom, 14)
+        .frame(maxWidth: .infinity)
+        // The sheet is as tall as what it holds, measured: the words grow with the person's
+        // text size, and a fixed height would either clip them or leave the sheet half empty.
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
+        .frame(maxHeight: .infinity, alignment: .top)
+        .presentationDetents([.height(height)])
         .presentationDragIndicator(.visible)
         .presentationBackground(BS.card)
         // Stopped from here, from the lock screen or by a session that ended: nothing left to show.
