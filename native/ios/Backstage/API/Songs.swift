@@ -234,10 +234,14 @@ enum Library {
     }
 
     /// A title or its original containing the query, an artist's word starting with it, or the
-    /// key itself; titles that START with it first, then A–Z.
+    /// key itself; titles that START with it first, then A–Z. Last come the near misses: every
+    /// word typed is a letter or two away from a word of the title, its original or its artist
+    /// («grasia» finds «Gracia»), which is what the web's fuzzy search forgives.
     static func search(_ songs: [LibrarySong], _ query: String) -> [LibrarySong] {
         let q = fold(query.trimmingCharacters(in: .whitespaces))
         guard !q.isEmpty else { return songs.sorted(by: byTitle) }
+        // A near miss needs enough letters to mean something: «gran» is one letter from «grac».
+        let typed = words(q).filter { $0.count >= 5 }
         func rank(_ song: LibrarySong) -> Int? {
             let title = fold(song.title)
             if title.hasPrefix(q) { return 0 }
@@ -246,12 +250,52 @@ enum Library {
             if let artist = song.artist,
                fold(artist).split(whereSeparator: { !$0.isLetter && !$0.isNumber }).contains(where: { $0.hasPrefix(q) }) { return 3 }
             if let key = song.key, fold(key) == q { return 4 }
+            if !typed.isEmpty {
+                let words = Self.words([song.title, song.original ?? "", song.artist ?? ""].joined(separator: " "))
+                if typed.allSatisfy({ token in words.contains { near(token, $0) } }) { return 5 }
+            }
             return nil
         }
         return songs
             .compactMap { song in rank(song).map { (song, $0) } }
             .sorted { a, b in a.1 == b.1 ? byTitle(a.0, b.0) : a.1 < b.1 }
             .map(\.0)
+    }
+}
+
+extension Library {
+    /// Folded text cut into its words.
+    static func words(_ text: String) -> [String] {
+        fold(text).split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
+    }
+
+    /// The typed word against the start of a real one: one wrong letter forgiven, two from eight
+    /// letters up. The first letter has to be right, or everything is near everything.
+    static func near(_ typed: String, _ word: String) -> Bool {
+        guard typed.first == word.first else { return false }
+        let allowed = typed.count >= 8 ? 2 : 1
+        // The word's start, as long as what was typed or a letter longer (a letter left out
+        // moves the end by one), and never past the word's own end.
+        return Set([typed.count, typed.count + 1].map { min($0, word.count) }).contains { length in
+            distance(typed, String(word.prefix(length)), limit: allowed) <= allowed
+        }
+    }
+
+    /// Edit distance (a letter changed, added or dropped), abandoned once every path is over `limit`.
+    static func distance(_ a: String, _ b: String, limit: Int) -> Int {
+        let (x, y) = (Array(a), Array(b))
+        if abs(x.count - y.count) > limit { return limit + 1 }
+        guard !x.isEmpty, !y.isEmpty else { return max(x.count, y.count) }
+        var row = Array(0...y.count)
+        for i in 1...x.count {
+            var next = [i] + Array(repeating: 0, count: y.count)
+            for j in 1...y.count {
+                next[j] = min(row[j] + 1, next[j - 1] + 1, row[j - 1] + (x[i - 1] == y[j - 1] ? 0 : 1))
+            }
+            if (next.min() ?? 0) > limit { return limit + 1 }
+            row = next
+        }
+        return row[y.count]
     }
 }
 
@@ -295,6 +339,17 @@ enum Transpose {
         semitones % 12 == 0 ? key : token(key, by: semitones)
     }
 
+    /// The smallest capo that lets a guitar play the sounding key with open shapes (C, A, G, E,
+    /// D): fret 0 when the key is already one of them. The web's `capoSuggestion`.
+    static func capo(sounding index: Int) -> (fret: Int, shape: String)? {
+        let open = [0, 9, 7, 4, 2]
+        for fret in 0...11 {
+            let shape = ((index - fret) % 12 + 12) % 12
+            if open.contains(shape) { return (fret, notes[shape]) }
+        }
+        return nil
+    }
+
     /// Each side of a slash chord moves on its own: `G/B` up two is `A/C#`.
     static func chord(_ chord: String, by semitones: Int) -> String {
         if semitones % 12 == 0 { return chord }
@@ -327,6 +382,14 @@ enum ChordPro {
             let parsed = segments(line)
             return parsed.contains { $0.chord != nil } ? .chords(parsed) : .text(line)
         }
+    }
+
+    /// A chord line as its words alone, for someone reading without chords; a line that was
+    /// only chords (an intro) has nothing left to read.
+    static func wordsOnly(_ line: ChartLine) -> ChartLine {
+        guard case .chords(let segments) = line else { return line }
+        let words = segments.map(\.lyric).joined()
+        return words.trimmingCharacters(in: .whitespaces).isEmpty ? .blank : .text(words)
     }
 
     static func segments(_ line: String) -> [ChordSegment] {
