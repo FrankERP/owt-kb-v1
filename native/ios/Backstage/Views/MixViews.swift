@@ -281,8 +281,11 @@ struct MixScrubber: View {
                         guard geometry.size.width > 0 else { return }
                         dragging = min(1, max(0, Double(value.location.x / geometry.size.width)))
                     }
-                    .onEnded { _ in
-                        if let dragging { player.seek(toFraction: dragging) }
+                    .onEnded { value in
+                        // A pull down that happened to start here closes a sheet: it is not a seek.
+                        let pull = value.translation
+                        let vertical = abs(pull.height) > 24 && abs(pull.height) > abs(pull.width)
+                        if let dragging, !vertical { player.seek(toFraction: dragging) }
                         dragging = nil
                     }
             )
@@ -485,6 +488,9 @@ struct MixPlayerSheet: View {
                     MixScrubber(bars: track.bars, player: player, height: 56)
                     SheetClock(player: player)
                 }
+                // A mix that failed has nothing to move through.
+                .disabled(isFailure)
+                .opacity(isFailure ? 0.4 : 1)
                 HStack(spacing: 36) {
                     jump(-15, symbol: "gobackward.15", label: "Regresar 15 segundos")
                     Button {
@@ -513,11 +519,12 @@ struct MixPlayerSheet: View {
         .padding(.top, 30)
         .padding(.bottom, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .presentationDetents([.height(360)])
+        // Half the screen, not a measured height: the words grow with the person's text size.
+        .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
         .presentationBackground(BS.card)
         // Stopped from here, from the lock screen or by a session that ended: nothing left to show.
-        .onChange(of: player.track == nil) { _, gone in
+        .onChange(of: player.track == nil, initial: true) { _, gone in
             if gone { dismiss() }
         }
     }
@@ -543,7 +550,7 @@ struct MixPlayerSheet: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(player.duration <= 0)
+        .disabled(player.duration <= 0 || isFailure)
         .accessibilityLabel(label)
     }
 }

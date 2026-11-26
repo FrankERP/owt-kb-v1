@@ -56,7 +56,7 @@ final class SnapshotTests: XCTestCase {
             try render(
                 VStack(spacing: 0) {
                     MixSection(detail: Fixture.detail).padding(20)
-                    MiniPlayerBar(player: playing, track: Fixture.playingTrack)
+                    MiniPlayerBar(player: playing, track: Fixture.playingTrack, expand: {})
                         .padding(.horizontal, 12)
                         .padding(.bottom, 8)
                 }
@@ -65,7 +65,7 @@ final class SnapshotTests: XCTestCase {
             )
             // The full player the bar opens: the waveform to drag, and fifteen seconds either way.
             try render(
-                MixPlayerSheet(player: playing).frame(height: 360).background(BS.card),
+                MixPlayerSheet(player: playing).frame(height: 380).background(BS.card),
                 scheme: scheme, to: "\(dir)/9-reproductor-\(suffix).png"
             )
         }
