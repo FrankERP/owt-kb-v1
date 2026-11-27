@@ -1,4 +1,10 @@
 import SwiftUI
+import UniformTypeIdentifiers
+
+extension UTType {
+    /// A song row dragged inside the proposal editor (declared in project.yml).
+    static let setlistRow = UTType(exportedAs: "com.owtBackstage.app.setlist-row")
+}
 
 // «Proponer setlist» (ADR-0091 W1): a Lead builds the service's shared setlist proposal, the same
 // one the web editor (`/me/propose/{roleId}`) edits, with the same rules. Every answer of a save
@@ -56,7 +62,8 @@ struct ProposeEntry: View {
     }
 }
 
-/// The editor page.
+/// The editor page: loads the proposal, keeps the lead's draft, saves it. What it looks like is
+/// `ProposalEditorContent`, which the snapshot test draws with made-up data.
 struct ProposalEditorView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -89,7 +96,11 @@ struct ProposalEditorView: View {
             // Unsaved work: no back swipe, so leaving goes through the X and its confirmation.
             .navigationBarBackButtonHidden(draft?.isDirty == true)
             .safeAreaInset(edge: .top, spacing: 0) { header }
-            .task { if phase == .loading { await load() } }
+            .task {
+                if phase == .loading { await load() }
+                // The covers come from the Biblioteca the phone already keeps.
+                await model.loadCatalogue()
+            }
             .sensoryFeedback(.success, trigger: saves)
             .sheet(isPresented: $picking) {
                 SongPicker(chosen: Set(draft?.songs.map(\.songId) ?? [])) { song in add(song) }
@@ -114,18 +125,9 @@ struct ProposalEditorView: View {
 
     // MARK: Pieces
 
+    /// Only the close: the page's own head card says which service this is.
     private var header: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("PROPUESTA")
-                    .font(.bsLabel(11))
-                    .tracking(11 * 0.22)
-                    .foregroundStyle(BS.sheetTitle)
-                Text("\(service.title) · \(ServiceDay.longLabel(service.date))")
-                    .font(.bsBody(15, .semibold))
-                    .foregroundStyle(BS.ink)
-                    .lineLimit(1)
-            }
+        HStack {
             Spacer()
             Button {
                 if draft?.isDirty == true { confirmLeave = true } else { dismiss() }
@@ -142,10 +144,8 @@ struct ProposalEditorView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Cerrar")
         }
-        .padding(.leading, 20)
-        .padding(.trailing, 12)
-        .padding(.vertical, 6)
-        .background(BS.base.opacity(0.45).background(.ultraThinMaterial).ignoresSafeArea(edges: .top))
+        .padding(.horizontal, 12)
+        .padding(.top, 2)
     }
 
     @ViewBuilder
@@ -164,9 +164,27 @@ struct ProposalEditorView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .ready:
-            if let editor, draft != nil {
-                editorList(editor)
-                    .safeAreaInset(edge: .bottom, spacing: 0) { actionBar }
+            if let editor, let bound = Binding($draft) {
+                ScrollView {
+                    ProposalEditorContent(
+                        service: service,
+                        editor: editor,
+                        draft: bound,
+                        covers: covers,
+                        messages: conversation(editor),
+                        showsPastorField: showsPastorField(bound.wrappedValue, editor),
+                        reloading: reloading,
+                        addSongs: { picking = true },
+                        reload: {
+                            if draft?.reloadDiscardsWork == true { confirmReload = true } else { Task { await reload() } }
+                        }
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.top, 4)
+                    .padding(.bottom, 24)
+                }
+                .scrollDismissesKeyboard(.interactively)
+                .safeAreaInset(edge: .bottom, spacing: 0) { actionBar }
             }
         }
     }
@@ -180,189 +198,12 @@ struct ProposalEditorView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func editorList(_ editor: ProposalEditorResponse) -> some View {
-        let state = draft!
-        let approved = state.isApproved
-        return List {
-            Section {
-                statusLine(state, editor)
-                if let notice = state.notice { noticeView(notice) }
-                if let problem = state.limitProblem { Text(problem).font(.bsBody(14)).foregroundStyle(BS.warning) }
-                if let pastor = editor.serviceThread.pastorMessage {
-                    readOnlyNote(title: "Mensaje del pastor", text: pastor, accent: true)
-                }
-                if let admin = editor.proposal?.adminNotes {
-                    readOnlyNote(title: "Comentarios del admin", text: admin, accent: false)
-                }
-            }
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
-
-            Section {
-                if state.songs.isEmpty {
-                    Text(approved ? "Esta propuesta no tiene canciones." : "Todavía no hay canciones. Agrega la primera.")
-                        .font(.bsBody(15))
-                        .foregroundStyle(BS.inkDim)
-                }
-                ForEach(Array(state.songs.enumerated()), id: \.element.id) { index, song in
-                    SongDraftRow(
-                        number: index + 1,
-                        song: song,
-                        approved: approved,
-                        linkedToNext: MedleyTags.linked(state.songs.map(\.medleyTag), at: index),
-                        hasNext: index + 1 < state.songs.count,
-                        setKey: { key in draft?.setPlayKey(key, at: index) },
-                        toggleMedley: { withAnimation(.easeOut(duration: 0.2)) { draft?.toggleMedley(at: index) } }
-                    )
-                }
-                .onMove(perform: approved ? nil : moveSongs)
-                .onDelete(perform: approved ? nil : removeSongs)
-                if !approved {
-                    Button {
-                        picking = true
-                    } label: {
-                        Label("Agregar canción", systemImage: "plus.circle.fill")
-                            .font(.bsBody(16, .semibold))
-                            .foregroundStyle(BS.accent)
-                    }
-                    .disabled(state.songs.count >= ProposalLimits.songsMax)
-                }
-            } header: {
-                SheetTitle(text: "Canciones", count: state.songs.count)
-            } footer: {
-                if !approved && state.songs.count > 1 {
-                    Text("Mantén presionada una canción para moverla; desliza para quitarla.")
-                        .font(.bsBody(12))
-                        .foregroundStyle(BS.inkDim)
-                }
-            }
-            .listRowBackground(BS.card)
-
-            Section {
-                notesField("Notas para el equipo", text: binding(\.teamNotes), placeholder: "Lo que el equipo debe saber", disabled: approved)
-                if showsPastorField(state, editor) {
-                    notesField("Mensaje del pastor", text: binding(\.pastorMessage), placeholder: "Lo que el pastor compartió para este servicio", disabled: approved)
-                }
-                if !state.proposalExists && !approved {
-                    notesField("Nota para los admins", text: binding(\.leadNotes), placeholder: "Solo la ven los administradores", disabled: false)
-                }
-            } header: {
-                SheetTitle(text: "Notas")
-            }
-            .listRowBackground(BS.card)
-
-            let messages = conversation(editor)
-            if !messages.isEmpty {
-                Section {
-                    ForEach(messages) { m in MessageRow(message: m) }
-                } header: {
-                    SheetTitle(text: "Conversación")
-                }
-                .listRowBackground(BS.card)
-            }
-        }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .scrollDismissesKeyboard(.interactively)
-    }
-
-    private func statusLine(_ state: ProposalDraftState, _ editor: ProposalEditorResponse) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(state.status?.label ?? "Sin propuesta todavía")
-                .font(.bsLabel(12))
-                .tracking(1.1)
-                .foregroundStyle(state.isApproved ? BS.positive : BS.accent)
-            let others = (editor.proposal?.contributors ?? []).filter { !$0.mine }.map(\.name)
-            if !others.isEmpty {
-                Text("También la editan: \(joinNames(others))")
-                    .font(.bsBody(13))
-                    .foregroundStyle(BS.inkDim)
-            }
-            if state.isApproved {
-                Text("Ya está aprobada: se ve aquí, sin cambios.")
-                    .font(.bsBody(13))
-                    .foregroundStyle(BS.inkDim)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func noticeView(_ notice: ProposalDraftState.Notice) -> some View {
-        switch notice {
-        case .reloadNeeded:
-            HStack(spacing: 10) {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                Text("Propuesta actualizada").font(.bsBody(15, .semibold))
-                Spacer()
-                Button(reloading ? "Recargando…" : "Recargar") {
-                    if draft?.reloadDiscardsWork == true { confirmReload = true } else { Task { await reload() } }
-                }
-                .font(.bsBody(15, .semibold))
-                .disabled(reloading)
-            }
-            .foregroundStyle(BS.warning)
-            .padding(12)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(BS.warning.opacity(0.10)))
-        case .needsAdmin:
-            banner("Este servicio necesita que un admin lo revise. Tu borrador sigue aquí.", symbol: "exclamationmark.triangle")
-        case .notSaved:
-            banner("No se pudo guardar. Tus cambios siguen aquí; intenta de nuevo.", symbol: "wifi.exclamationmark")
-        case .forbidden:
-            banner("Ya no puedes proponer para este servicio.", symbol: "lock")
-        case .invalid:
-            banner("El servidor no aceptó la propuesta. Revisa las notas y las canciones.", symbol: "exclamationmark.triangle")
-        }
-    }
-
-    private func banner(_ text: String, symbol: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: symbol)
-            Text(text).font(.bsBody(14))
-            Spacer(minLength: 0)
-            Button { draft?.dismissNotice() } label: { Image(systemName: "xmark").font(.system(size: 12, weight: .bold)) }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Cerrar aviso")
-        }
-        .foregroundStyle(BS.warning)
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(BS.warning.opacity(0.10)))
-    }
-
-    private func readOnlyNote(title: String, text: String, accent: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title.uppercased())
-                .font(.bsLabel(11))
-                .tracking(1.1)
-                .foregroundStyle(accent ? BS.accent : BS.inkDim)
-            Text(text)
-                .font(.bsBody(15))
-                .foregroundStyle(BS.inkMuted)
-                .textSelection(.enabled)
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(accent ? BS.accent.opacity(0.05) : BS.ink.opacity(0.03)))
-    }
-
-    private func notesField(_ title: String, text: Binding<String>, placeholder: String, disabled: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title.uppercased())
-                .font(.bsLabel(11))
-                .tracking(1.1)
-                .foregroundStyle(BS.inkDim)
-            TextField(placeholder, text: text, axis: .vertical)
-                .font(.bsBody(16))
-                .foregroundStyle(BS.ink)
-                .lineLimit(2...8)
-                .disabled(disabled)
-            if text.wrappedValue.utf16.count > ProposalLimits.notesMax - 200 {
-                Text("\(text.wrappedValue.utf16.count) / \(ProposalLimits.notesMax)")
-                    .font(.bsBody(12))
-                    .monospacedDigit()
-                    .foregroundStyle(ProposalLimits.fits(text.wrappedValue) ? BS.inkDim : BS.warning)
-            }
-        }
-        .padding(.vertical, 4)
+    /// Song id → its album cover, from the Biblioteca (empty until it loads: the rows show notes).
+    private var covers: [String: String] {
+        guard case .loaded(let songs) = model.catalogue else { return [:] }
+        var map: [String: String] = [:]
+        for song in songs { if let cover = song.cover { map[song.id] = cover } }
+        return map
     }
 
     private var actionBar: some View {
@@ -373,10 +214,18 @@ struct ProposalEditorView: View {
             if state?.isApproved == false {
                 VStack(spacing: 8) {
                     if let savedNote {
-                        Text(savedNote)
-                            .font(.bsBody(14))
+                        Label(savedNote, systemImage: "checkmark.circle.fill")
+                            .font(.bsBody(14, .semibold))
                             .foregroundStyle(BS.positive)
-                            .transition(.opacity)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    } else if state?.isDirty == true {
+                        HStack(spacing: 6) {
+                            Circle().fill(BS.warning).frame(width: 6, height: 6)
+                            Text("Cambios sin guardar")
+                        }
+                        .font(.bsBody(13))
+                        .foregroundStyle(BS.inkDim)
+                        .transition(.opacity)
                     }
                     HStack(spacing: 12) {
                         Button {
@@ -386,24 +235,27 @@ struct ProposalEditorView: View {
                                 .font(.bsBody(16, .semibold))
                                 .frame(maxWidth: .infinity, minHeight: 50)
                                 .foregroundStyle(BS.accent)
-                                .overlay(Capsule().strokeBorder(BS.accent.opacity(0.6), lineWidth: 1))
+                                .background(Capsule().fill(BS.accent.opacity(0.08)))
+                                .overlay(Capsule().strokeBorder(BS.accent.opacity(0.5), lineWidth: 1))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(CardPressStyle())
                         .disabled(!enabled)
                         Button {
                             confirmSend = true
                         } label: {
-                            Text(saving == .pending ? "Enviando…" : "Enviar")
+                            Label(saving == .pending ? "Enviando…" : "Enviar", systemImage: "paperplane.fill")
                         }
                         .buttonStyle(BrandButtonStyle())
                         .disabled(!enabled || (state?.songs.isEmpty ?? true))
                     }
                     .opacity(enabled ? 1 : 0.5)
                 }
+                .animation(.easeOut(duration: 0.2), value: state?.isDirty)
                 .padding(.horizontal, 20)
                 .padding(.top, 10)
                 .padding(.bottom, 8)
                 .background(BS.base.opacity(0.6).background(.ultraThinMaterial).ignoresSafeArea(edges: .bottom))
+                .overlay(alignment: .top) { Rectangle().fill(BS.ink.opacity(0.08)).frame(height: 1) }
             }
         }
     }
@@ -426,13 +278,6 @@ struct ProposalEditorView: View {
         return all
             .filter { seen.insert($0.key).inserted }
             .sorted { ($0.at ?? "") < ($1.at ?? "") }
-    }
-
-    private func binding(_ path: WritableKeyPath<ProposalDraftState, String>) -> Binding<String> {
-        Binding(
-            get: { draft?[keyPath: path] ?? "" },
-            set: { value in draft?[keyPath: path] = value }
-        )
     }
 
     // MARK: Work
@@ -483,14 +328,6 @@ struct ProposalEditorView: View {
         }
     }
 
-    private func moveSongs(_ source: IndexSet, _ destination: Int) {
-        draft?.move(from: source, to: destination)
-    }
-
-    private func removeSongs(_ offsets: IndexSet) {
-        draft?.remove(at: offsets)
-    }
-
     private func add(_ song: LibrarySong) {
         draft?.add(songId: song.id, title: song.title, author: song.artist, key: song.key, previousKeys: [])
         Task {
@@ -500,16 +337,397 @@ struct ProposalEditorView: View {
     }
 }
 
-/// One song of the draft: its number, title, the key it is proposed in (a menu), «Tonos
-/// anteriores», and the link to the next song when they are a medley.
-private struct SongDraftRow: View {
+// MARK: The page
+
+/// Everything between the close and the action bar: the service as a card, the notices, the
+/// songs (covers, keys, medleys, reorder by dragging), the notes and the conversation.
+struct ProposalEditorContent: View {
+    let service: AppService
+    let editor: ProposalEditorResponse
+    @Binding var draft: ProposalDraftState
+    let covers: [String: String]
+    let messages: [ThreadMessage]
+    let showsPastorField: Bool
+    let reloading: Bool
+    let addSongs: () -> Void
+    let reload: () -> Void
+
+    /// The row being dragged: it stays in the list as a faint placeholder while the others make
+    /// room, so the order on screen is always the order that will be saved.
+    @State private var dragging: UUID?
+    @Environment(\.scenePhase) private var scenePhase
+
+    init(
+        service: AppService,
+        editor: ProposalEditorResponse,
+        draft: Binding<ProposalDraftState>,
+        covers: [String: String],
+        messages: [ThreadMessage],
+        showsPastorField: Bool,
+        reloading: Bool = false,
+        addSongs: @escaping () -> Void = {},
+        reload: @escaping () -> Void = {}
+    ) {
+        self.service = service
+        self.editor = editor
+        _draft = draft
+        self.covers = covers
+        self.messages = messages
+        self.showsPastorField = showsPastorField
+        self.reloading = reloading
+        self.addSongs = addSongs
+        self.reload = reload
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            headCard
+            if let notice = draft.notice { noticeView(notice) }
+            if let problem = draft.limitProblem {
+                banner(problem, symbol: "exclamationmark.triangle", dismissible: false)
+            }
+            if let pastor = editor.serviceThread.pastorMessage {
+                NoteBox(title: "Mensaje del pastor", text: pastor, symbol: "megaphone", pastor: true)
+            }
+            if let admin = editor.proposal?.adminNotes {
+                NoteBox(title: "Comentarios del admin", text: admin, symbol: "checkmark.bubble", pastor: false)
+            }
+            songsCard
+            notesCard
+            if !messages.isEmpty { conversationCard }
+        }
+        // A drag released anywhere on the page ends; so does any touch after one the system
+        // cancelled, and leaving the app (no drop is ever reported for those).
+        .onDrop(of: [UTType.setlistRow], isTargeted: nil) { _ in
+            dragging = nil
+            return true
+        }
+        .simultaneousGesture(TapGesture().onEnded { if dragging != nil { dragging = nil } })
+        .onChange(of: scenePhase) { dragging = nil }
+    }
+
+    // MARK: The service
+
+    private var headCard: some View {
+        HStack(alignment: .top, spacing: 14) {
+            DateLeaf(date: service.date, tone: ServiceTone(service.kind))
+            VStack(alignment: .leading, spacing: 8) {
+                Text("PROPUESTA DE SETLIST")
+                    .font(.bsLabel(11))
+                    .tracking(11 * 0.22)
+                    .foregroundStyle(BS.sheetTitle)
+                Text(service.title.uppercased())
+                    .font(.bsDisplay(22))
+                    .tracking(0.44)
+                    .foregroundStyle(BS.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let time = service.time {
+                    ClockLine(time: time)
+                }
+                StatusChip(status: draft.status)
+                let others = (editor.proposal?.contributors ?? []).filter { !$0.mine }.map(\.name)
+                if !others.isEmpty {
+                    Label("También la editan \(joinNames(others))", systemImage: "person.2")
+                        .font(.bsBody(13))
+                        .foregroundStyle(BS.inkDim)
+                }
+                if draft.isApproved {
+                    Text("Ya está aprobada: se ve aquí, sin cambios.")
+                        .font(.bsBody(13))
+                        .foregroundStyle(BS.inkDim)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 16)
+        .padding(.leading, 20)
+        .padding(.trailing, 16)
+        .background(alignment: .top) {
+            LinearGradient(colors: [BS.ink.opacity(0.06), .clear], startPoint: .top, endPoint: .bottom)
+                .frame(height: 120)
+        }
+        .cardSurface(tone: ServiceTone(service.kind))
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: Notices
+
+    @ViewBuilder
+    private func noticeView(_ notice: ProposalDraftState.Notice) -> some View {
+        switch notice {
+        case .reloadNeeded:
+            HStack(spacing: 10) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                Text("Propuesta actualizada").font(.bsBody(15, .semibold))
+                Spacer()
+                Button(reloading ? "Recargando…" : "Recargar", action: reload)
+                    .font(.bsBody(15, .semibold))
+                    .disabled(reloading)
+            }
+            .foregroundStyle(BS.warning)
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(BS.warning.opacity(0.10)))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(BS.warning.opacity(0.30), lineWidth: 1))
+        case .needsAdmin:
+            banner("Este servicio necesita que un admin lo revise. Tu borrador sigue aquí.", symbol: "exclamationmark.triangle")
+        case .notSaved:
+            banner("No se pudo guardar. Tus cambios siguen aquí; intenta de nuevo.", symbol: "wifi.exclamationmark")
+        case .forbidden:
+            banner("Ya no puedes proponer para este servicio.", symbol: "lock")
+        case .invalid:
+            banner("El servidor no aceptó la propuesta. Revisa las notas y las canciones.", symbol: "exclamationmark.triangle")
+        }
+    }
+
+    private func banner(_ text: String, symbol: String, dismissible: Bool = true) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: symbol)
+            Text(text).font(.bsBody(14))
+            Spacer(minLength: 0)
+            if dismissible {
+                Button { draft.dismissNotice() } label: { Image(systemName: "xmark").font(.system(size: 12, weight: .bold)) }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Cerrar aviso")
+            }
+        }
+        .foregroundStyle(BS.warning)
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(BS.warning.opacity(0.10)))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(BS.warning.opacity(0.30), lineWidth: 1))
+    }
+
+    // MARK: Songs
+
+    private var songsCard: some View {
+        let approved = draft.isApproved
+        let tags = draft.songs.map(\.medleyTag)
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                SheetTitle(text: "Canciones", count: draft.songs.isEmpty ? nil : draft.songs.count)
+                Spacer()
+                if !approved && draft.songs.count > 1 {
+                    Text("Mantén presionada para mover o quitar")
+                        .font(.bsBody(12))
+                        .foregroundStyle(BS.inkDim)
+                }
+            }
+            if draft.songs.isEmpty {
+                emptySongs(approved: approved)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(draft.songs.enumerated()), id: \.element.id) { index, song in
+                        if index > 0 {
+                            MedleyLink(
+                                linked: MedleyTags.linked(tags, at: index - 1),
+                                editable: !approved,
+                                toggle: { withAnimation(.snappy(duration: 0.22)) { draft.toggleMedley(at: index - 1) } }
+                            )
+                        }
+                        ProposalSongRow(
+                            number: index + 1,
+                            song: song,
+                            cover: covers[song.songId],
+                            approved: approved,
+                            setKey: { key in setKey(key, for: song.id) }
+                        )
+                        .opacity(dragging == song.id ? 0.35 : 1)
+                        .modifier(SongReorder(
+                            enabled: !approved,
+                            id: song.id,
+                            dragging: $dragging,
+                            preview: ProposalSongRow(number: index + 1, song: song, cover: covers[song.songId], approved: true, setKey: { _ in }),
+                            move: move
+                        ))
+                        .contextMenu {
+                            if !approved {
+                                if index > 0 {
+                                    Button { step(song.id, by: -1) } label: { Label("Subir", systemImage: "arrow.up") }
+                                }
+                                if index + 1 < draft.songs.count {
+                                    Button { step(song.id, by: 1) } label: { Label("Bajar", systemImage: "arrow.down") }
+                                }
+                                Button(role: .destructive) { removeSong(song.id) } label: {
+                                    Label("Quitar de la propuesta", systemImage: "trash")
+                                }
+                            }
+                        }
+                    }
+                }
+                // A drop in the gaps between rows ends the drag too.
+                .onDrop(of: [UTType.setlistRow], isTargeted: nil) { _ in
+                    dragging = nil
+                    return true
+                }
+                .sensoryFeedback(.selection, trigger: draft.songs.map(\.id))
+                if !approved {
+                    addButton
+                        .disabled(draft.songs.count >= ProposalLimits.songsMax)
+                }
+            }
+        }
+    }
+
+    private func emptySongs(approved: Bool) -> some View {
+        VStack(spacing: 14) {
+            Image(systemName: "music.note.list")
+                .font(.system(size: 22))
+                .foregroundStyle(BS.accent)
+                .frame(width: 52, height: 52)
+                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(BS.accent.opacity(0.12)))
+            Text(approved ? "Esta propuesta no tiene canciones." : "Todavía no hay canciones")
+                .font(.bsBody(16, .semibold))
+                .foregroundStyle(BS.ink)
+            if !approved {
+                Text("Elige de la Biblioteca las que propones para este servicio.")
+                    .font(.bsBody(14))
+                    .foregroundStyle(BS.inkMuted)
+                    .multilineTextAlignment(.center)
+                Button(action: addSongs) {
+                    Label("Agregar canciones", systemImage: "plus")
+                }
+                .buttonStyle(BrandButtonStyle())
+                .padding(.horizontal, 24)
+                .padding(.top, 4)
+            }
+        }
+        .padding(.vertical, 24)
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity)
+        .overlay(
+            RoundedRectangle(cornerRadius: BS.panelRadius, style: .continuous)
+                .strokeBorder(BS.ink.opacity(0.14), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+        )
+    }
+
+    private var addButton: some View {
+        Button(action: addSongs) {
+            HStack(spacing: 8) {
+                Image(systemName: "plus.circle.fill").font(.system(size: 18))
+                Text("Agregar canciones").font(.bsBody(16, .semibold))
+            }
+            .foregroundStyle(BS.accent)
+            .frame(maxWidth: .infinity, minHeight: 52)
+            .background(RoundedRectangle(cornerRadius: BS.panelRadius, style: .continuous).fill(BS.accent.opacity(0.05)))
+            .overlay(
+                RoundedRectangle(cornerRadius: BS.panelRadius, style: .continuous)
+                    .strokeBorder(BS.accent.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(CardPressStyle())
+    }
+
+    /// The dragged row takes the place of the one it is over, right away: the list is already in
+    /// its final order when the finger lifts, so nothing settles afterwards.
+    private func move(_ moving: UUID, over target: UUID) {
+        guard moving != target,
+              let from = draft.songs.firstIndex(where: { $0.id == moving }),
+              let to = draft.songs.firstIndex(where: { $0.id == target }) else { return }
+        withAnimation(.snappy(duration: 0.22)) {
+            draft.move(from: IndexSet(integer: from), to: to > from ? to + 1 : to)
+        }
+    }
+
+    // The menus act on the row they were opened on, found by its identity when tapped: the
+    // list may have changed under an open menu (a reload landing).
+
+    private func step(_ id: UUID, by delta: Int) {
+        dragging = nil
+        guard let index = draft.songs.firstIndex(where: { $0.id == id }) else { return }
+        let to = index + delta
+        guard draft.songs.indices.contains(to) else { return }
+        withAnimation(.snappy(duration: 0.22)) {
+            draft.move(from: IndexSet(integer: index), to: delta > 0 ? to + 1 : to)
+        }
+    }
+
+    private func removeSong(_ id: UUID) {
+        dragging = nil
+        guard let index = draft.songs.firstIndex(where: { $0.id == id }) else { return }
+        withAnimation(.snappy(duration: 0.22)) { draft.remove(at: IndexSet(integer: index)) }
+    }
+
+    private func setKey(_ key: String, for id: UUID) {
+        guard let index = draft.songs.firstIndex(where: { $0.id == id }) else { return }
+        draft.setPlayKey(key, at: index)
+    }
+
+    // MARK: Notes
+
+    private var notesCard: some View {
+        let approved = draft.isApproved
+        return VStack(alignment: .leading, spacing: 16) {
+            SheetTitle(text: "Notas")
+            NoteField(
+                title: "Notas para el equipo", symbol: "text.bubble",
+                text: $draft.teamNotes, placeholder: "Lo que el equipo debe saber", disabled: approved
+            )
+            if showsPastorField {
+                NoteField(
+                    title: "Mensaje del pastor", symbol: "megaphone",
+                    text: $draft.pastorMessage, placeholder: "Lo que el pastor compartió para este servicio", disabled: approved
+                )
+            }
+            if !draft.proposalExists && !approved {
+                NoteField(
+                    title: "Nota para los admins", symbol: "lock",
+                    text: $draft.leadNotes, placeholder: "Solo la ven los administradores", disabled: false
+                )
+            }
+        }
+        .padding(16)
+        .cardSurface()
+    }
+
+    // MARK: Conversation
+
+    private var conversationCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SheetTitle(text: "Conversación", count: messages.count)
+            ForEach(messages) { message in
+                MessageBubble(message: message)
+            }
+        }
+        .padding(16)
+        .cardSurface()
+    }
+}
+
+/// The proposal's state as a chip: a draft is quiet, a review in progress cyan, a change
+/// request amber, an approval green.
+private struct StatusChip: View {
+    let status: ProposalStatus?
+
+    private var look: (text: String, symbol: String, color: Color) {
+        switch status {
+        case nil: return ("Nueva", "sparkles", BS.inkDim)
+        case .draft: return ("Borrador", "pencil", BS.inkMuted)
+        case .pending: return ("En revisión", "hourglass", BS.accent)
+        case .changesRequested: return ("Cambios solicitados", "arrow.uturn.backward", BS.warning)
+        case .approved: return ("Aprobada", "checkmark.seal.fill", BS.positive)
+        }
+    }
+
+    var body: some View {
+        let look = look
+        Label(look.text, systemImage: look.symbol)
+            .font(.bsLabel(12))
+            .foregroundStyle(look.color)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(look.color.opacity(0.12)))
+            .overlay(Capsule().strokeBorder(look.color.opacity(0.30), lineWidth: 1))
+    }
+}
+
+/// One song of the draft: its cover with its place, the title, the author, the keys it was
+/// played in before, the key it is proposed in (a menu, in the key's rose) and a grip.
+struct ProposalSongRow: View {
     let number: Int
     let song: DraftSong
+    let cover: String?
     let approved: Bool
-    let linkedToNext: Bool
-    let hasNext: Bool
     let setKey: (String) -> Void
-    let toggleMedley: () -> Void
 
     /// The web's `KEY_OPTIONS`, plus the song's own spellings when the list lacks them.
     static let keys = [
@@ -525,53 +743,77 @@ private struct SongDraftRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
-                Text("\(number)")
-                    .font(.bsLabel(14))
-                    .monospacedDigit()
-                    .foregroundStyle(BS.inkDim)
-                    .frame(minWidth: 20)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(song.title)
-                        .font(.bsBody(16, .semibold))
-                        .foregroundStyle(BS.ink)
-                        .lineLimit(2)
-                    if let author = song.author {
-                        Text(author).font(.bsBody(13)).foregroundStyle(BS.inkMuted).lineLimit(1)
-                    }
-                    if !song.previousKeys.isEmpty {
-                        Text("Tonos anteriores: \(song.previousKeys.joined(separator: ", "))")
-                            .font(.bsBody(12))
+        HStack(spacing: 12) {
+            CoverView(url: cover, size: 52, number: number)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(song.title)
+                    .font(.bsBody(16, .semibold))
+                    .foregroundStyle(BS.ink)
+                    .lineLimit(2)
+                if let author = song.author {
+                    Text(author)
+                        .font(.bsBody(13))
+                        .foregroundStyle(BS.inkMuted)
+                        .lineLimit(1)
+                }
+                if !song.previousKeys.isEmpty {
+                    HStack(spacing: 4) {
+                        Text("Antes")
+                            .font(.bsBody(11))
                             .foregroundStyle(BS.inkDim)
-                            .lineLimit(1)
+                        ForEach(song.previousKeys.prefix(4), id: \.self) { key in
+                            Text(key)
+                                .font(.bsLabel(10))
+                                .foregroundStyle(BS.inkMuted)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(BS.ink.opacity(0.14), lineWidth: 1))
+                        }
                     }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Tonos anteriores: \(song.previousKeys.joined(separator: ", "))")
                 }
-                Spacer(minLength: 4)
-                keyControl
             }
-            if hasNext && (!approved || linkedToNext) {
-                Button(action: toggleMedley) {
-                    Label(linkedToNext ? "Medley con la siguiente" : "Unir en medley con la siguiente", systemImage: linkedToNext ? "link" : "link.badge.plus")
-                        .font(.bsBody(13, linkedToNext ? .semibold : .regular))
-                        .foregroundStyle(linkedToNext ? BS.accent : BS.inkDim)
+            Spacer(minLength: 4)
+            VStack(alignment: .trailing, spacing: 3) {
+                keyControl
+                if let original = song.key, !original.isEmpty, original != song.playKey {
+                    Text("orig. \(original)")
+                        .font(.bsLabel(10))
+                        .foregroundStyle(BS.inkDim)
                 }
-                .buttonStyle(.borderless)
-                .disabled(approved)
-                .accessibilityHint(linkedToNext ? "Separa estas dos canciones" : "Las une en un medley")
+            }
+            if !approved {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(BS.inkDim)
+                    .frame(width: 22)
+                    .accessibilityHidden(true)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(RoundedRectangle(cornerRadius: BS.panelRadius, style: .continuous).fill(BS.card))
+        .overlay(RoundedRectangle(cornerRadius: BS.panelRadius, style: .continuous).strokeBorder(BS.ink.opacity(0.08), lineWidth: 1))
+        .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
+        .contentShape(RoundedRectangle(cornerRadius: BS.panelRadius, style: .continuous))
     }
 
     @ViewBuilder
     private var keyControl: some View {
-        let label = Text(song.playKey.isEmpty ? "Tono" : song.playKey)
-            .font(.bsLabel(14))
-            .foregroundStyle(BS.ink)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .overlay(Capsule().strokeBorder(BS.ink.opacity(0.18), lineWidth: 1))
+        let label = HStack(spacing: 3) {
+            Text(song.playKey.isEmpty ? "Tono" : song.playKey)
+            if !approved {
+                Image(systemName: "chevron.up.chevron.down").font(.system(size: 9, weight: .semibold))
+            }
+        }
+        .font(.bsLabel(14))
+        .foregroundStyle(BS.key)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .frame(minWidth: 44)
+        .background(Capsule().fill(BS.key.opacity(0.10)))
+        .overlay(Capsule().strokeBorder(BS.key.opacity(0.35), lineWidth: 1))
         if approved {
             label
         } else {
@@ -589,26 +831,161 @@ private struct SongDraftRow: View {
     }
 }
 
-/// One message of the conversation, read-only.
-private struct MessageRow: View {
+/// The gap between two songs: a thread joins them when they are a medley, and the chip there
+/// links or unlinks them.
+private struct MedleyLink: View {
+    let linked: Bool
+    let editable: Bool
+    let toggle: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            // Under the covers' centre (row padding 12 + half a 52 pt cover).
+            Capsule()
+                .fill(linked ? BS.accent : BS.ink.opacity(0.10))
+                .frame(width: linked ? 3 : 1, height: 26)
+                .padding(.leading, 37)
+            if editable || linked {
+                Button(action: toggle) {
+                    Label(linked ? "Medley" : "Unir en medley", systemImage: linked ? "link" : "plus")
+                        .font(.bsLabel(10))
+                        .tracking(0.8)
+                        .foregroundStyle(linked ? BS.accent : BS.inkDim)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(linked ? BS.accent.opacity(0.12) : Color.clear))
+                        .overlay(Capsule().strokeBorder(linked ? BS.accent.opacity(0.40) : BS.ink.opacity(0.12), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .disabled(!editable)
+                .accessibilityHint(linked ? "Separa estas dos canciones" : "Las une en un medley")
+            }
+            Spacer()
+        }
+        .frame(height: 30)
+    }
+}
+
+/// Long-press a row and drag it: the row under the finger gives up its place at once.
+private struct SongReorder<Preview: View>: ViewModifier {
+    let enabled: Bool
+    let id: UUID
+    @Binding var dragging: UUID?
+    let preview: Preview
+    let move: (UUID, UUID) -> Void
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if enabled {
+            content
+                .onDrag {
+                    dragging = id
+                    // Only this app's own rows read this type, and only inside this app: nothing
+                    // takes the row as text (a notes field would paste its id).
+                    let provider = NSItemProvider()
+                    let payload = Data(id.uuidString.utf8)
+                    provider.registerDataRepresentation(forTypeIdentifier: UTType.setlistRow.identifier, visibility: .ownProcess) { done in
+                        done(payload, nil)
+                        return nil
+                    }
+                    return provider
+                } preview: {
+                    preview.frame(width: 361)
+                }
+                .onDrop(of: [UTType.setlistRow], delegate: SongDropDelegate(target: id, dragging: $dragging, move: move))
+        } else {
+            content
+        }
+    }
+}
+
+private struct SongDropDelegate: DropDelegate {
+    let target: UUID
+    @Binding var dragging: UUID?
+    let move: (UUID, UUID) -> Void
+
+    func dropEntered(info: DropInfo) {
+        guard let dragging, dragging != target else { return }
+        move(dragging, target)
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        dragging = nil
+        return true
+    }
+}
+
+/// A note the lead writes: an icon, a small-caps title, the field in a soft well.
+private struct NoteField: View {
+    let title: String
+    let symbol: String
+    @Binding var text: String
+    let placeholder: String
+    let disabled: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(title.uppercased(), systemImage: symbol)
+                .font(.bsLabel(11))
+                .tracking(1.1)
+                .foregroundStyle(BS.inkDim)
+            TextField(placeholder, text: $text, axis: .vertical)
+                .font(.bsBody(16))
+                .foregroundStyle(BS.ink)
+                .lineLimit(2...8)
+                .disabled(disabled)
+                .padding(12)
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(BS.ink.opacity(0.04)))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(BS.ink.opacity(0.10), lineWidth: 1))
+            if text.utf16.count > ProposalLimits.notesMax - 200 {
+                Text("\(text.utf16.count) / \(ProposalLimits.notesMax)")
+                    .font(.bsBody(12))
+                    .monospacedDigit()
+                    .foregroundStyle(ProposalLimits.fits(text) ? BS.inkDim : BS.warning)
+            }
+        }
+    }
+}
+
+/// One message of the conversation as a bubble: the lead's own on the right, everyone else's on
+/// the left with their name and role.
+private struct MessageBubble: View {
     let message: ThreadMessage
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Text(message.mine ? "Tú" : (message.authorName ?? "Administración"))
-                    .font(.bsBody(13, .semibold))
-                    .foregroundStyle(message.mine ? BS.positive : BS.ink)
-                if let role = roleLabel {
-                    Text(role).font(.bsBody(12)).foregroundStyle(BS.inkDim)
+        HStack {
+            if message.mine { Spacer(minLength: 40) }
+            VStack(alignment: message.mine ? .trailing : .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(message.mine ? "Tú" : (message.authorName ?? "Administración"))
+                        .font(.bsBody(12, .semibold))
+                        .foregroundStyle(message.mine ? BS.accent : BS.ink)
+                    if let role = roleLabel {
+                        Text(role).font(.bsBody(11)).foregroundStyle(BS.inkDim)
+                    }
+                    if let day = dayLabel {
+                        Text(day).font(.bsBody(11)).foregroundStyle(BS.inkDim)
+                    }
                 }
+                Text(message.body)
+                    .font(.bsBody(15))
+                    .foregroundStyle(BS.inkMuted)
+                    .multilineTextAlignment(message.mine ? .trailing : .leading)
+                    .textSelection(.enabled)
             }
-            Text(message.body)
-                .font(.bsBody(15))
-                .foregroundStyle(BS.inkMuted)
-                .textSelection(.enabled)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(message.mine ? BS.accent.opacity(0.10) : BS.ink.opacity(0.05))
+            )
+            if !message.mine { Spacer(minLength: 40) }
         }
-        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
     }
 
     private var roleLabel: String? {
@@ -617,6 +994,17 @@ private struct MessageRow: View {
         case "pastor": "Pastor"
         case "lead": "Lead"
         default: nil
+        }
+    }
+
+    /// «26 nov»: the day it was written, read from the ISO instant's date part.
+    private var dayLabel: String? {
+        guard let at = message.at, at.count >= 10 else { return nil }
+        return ServiceDay.parse(String(at.prefix(10))).map { date in
+            let f = DateFormatter()
+            f.locale = Locale(identifier: "es_MX")
+            f.dateFormat = "d MMM"
+            return f.string(from: date).replacingOccurrences(of: ".", with: "")
         }
     }
 }

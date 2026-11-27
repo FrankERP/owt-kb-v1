@@ -68,6 +68,22 @@ final class SnapshotTests: XCTestCase {
                 MixPlayerSheet(player: playing).frame(height: 300).background(BS.card),
                 scheme: scheme, to: "\(dir)/9-reproductor-\(suffix).png"
             )
+            // A Lead's proposal: covers with their places, keys in rose, a medley, the notes and
+            // the conversation.
+            let editor = try JSONDecoder().decode(ProposalEditorResponse.self, from: Data(Fixture.proposalJSON.utf8))
+            let proposal = ProposalDraftState(loaded: editor)
+            try render(
+                ProposalEditorContent(
+                    service: services[1],
+                    editor: editor,
+                    draft: .constant(proposal),
+                    covers: [:],
+                    messages: editor.proposal?.messages ?? [],
+                    showsPastorField: true
+                )
+                .padding(16),
+                scheme: scheme, to: "\(dir)/10-propuesta-\(suffix).png"
+            )
         }
     }
 
@@ -102,6 +118,29 @@ final class SnapshotTests: XCTestCase {
 }
 
 private enum Fixture {
+    static let proposalJSON = """
+    {
+      "role": { "id": "sun-6", "kind": "sunday", "date": "2026-12-06", "title": "Domingo" },
+      "observed": { "state": "single", "id": "setlistProposal.sun-6", "rev": "rev-1" },
+      "proposal": {
+        "status": "draft",
+        "songs": [
+          { "songId": "a", "title": "Santo por siempre", "author": "Chris Tomlin", "key": "Db", "play_key": "Db", "medley_tag": null, "previous_keys": ["Db", "C"] },
+          { "songId": "b", "title": "Por siempre cantaré", "author": "Bethel Music", "key": "A", "play_key": "G", "medley_tag": "t1", "previous_keys": [] },
+          { "songId": "c", "title": "Amor sin condición", "author": "Su Presencia", "key": "G", "play_key": "G", "medley_tag": "t1", "previous_keys": ["G"] },
+          { "songId": "d", "title": "Dios de imposibles", "author": "Toque de Fe", "key": "G", "play_key": "A", "medley_tag": null, "previous_keys": [] }
+        ],
+        "contributors": [{ "name": "Frank", "mine": true }, { "name": "Lali", "mine": false }],
+        "teamNotes": "Entramos con la banda completa desde el inicio.", "pastorMessage": "", "adminNotes": null,
+        "messages": [
+          { "key": "k1", "authorName": "Frank", "authorRole": "lead", "kind": "lead_note", "body": "¿Podemos cerrar con Dios de imposibles?", "at": "2026-11-26T18:00:00Z", "editedAt": null, "mine": true },
+          { "key": "k2", "authorName": "Ana", "authorRole": "admin", "kind": "admin_message", "body": "Sí, me parece bien.", "at": "2026-11-27T10:00:00Z", "editedAt": null, "mine": false }
+        ]
+      },
+      "serviceThread": { "messages": [], "pastorMessage": "Hablaremos de la fidelidad de Dios." }
+    }
+    """
+
     static func person(_ name: String, _ seat: String, mine: Bool = false) -> AppPerson {
         AppPerson(name: name, seat: seat, photo: nil, mine: mine)
     }
