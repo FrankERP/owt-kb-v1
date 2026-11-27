@@ -151,6 +151,7 @@ Spec `docs/superpowers/specs/2026-11-27-native-proposal-message-design.md`, revi
   same person's push can therefore be worded from a newer alias on the app. Cosmetic, accepted.
 - **The app follows the append's revision only when `observedRev` is the one it holds** (the web's
   rule), so the lead's own message never makes their next save a 409, and a co-lead's change that
-  landed first is never adopted silently. Saving and «Recargar» wait while a message is in flight.
+  landed first is never adopted silently. Saving and «Recargar» wait while a message is in flight,
+  and the composer waits while a reload is (a late reload would erase the sent message on screen).
 - **Guards:** `proposalMessagesRoute.test.ts`, `serviceCommitCallers.test.ts`,
   `protectedReadAudit.test.ts`, `routeMatcher.test.ts`, the XCTest of `ProposalDraftState`.

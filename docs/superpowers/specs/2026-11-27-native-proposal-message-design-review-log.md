@@ -78,3 +78,21 @@ reviewers' VERIFIED lists agreed with the author's own reading of `route.ts`.
 ## Post-approval changes (not reviewed)
 
 The non-blocking adoptions listed above. They change the implementation only, not the plan file.
+
+## Implementation notes (after approval; the plan file is left as approved)
+
+What the code does that the approved bytes do not say, from the adoptions above and the diff
+review of `10b1e411..bd46b719` (one fresh reviewer: no HIGH, one MEDIUM, three LOW):
+
+- D2.5's name read is on `serverClient` (the client `authorize/page.tsx` uses), not `operationalClient`.
+- D3's outcomes also have `full` (`messages_full`), `refused` (404, or a 409 other than
+  `stale_revision`) and `notSent` (nothing was sent: a second tap, a save or a reload in flight).
+  A 409 `stale_revision` is a Sanity write conflict a retry clears, so it is `failed`.
+- `finishMessage(proposalId:rev:observedRev:)` also compares the proposal id; `canReload` exists.
+- **MEDIUM fixed (diff review):** the reverse race — a reload in flight when a message is sent could
+  land after it with pre-append data and erase the sent message from the screen. The composer now
+  waits for a reload too, and `reload()` re-checks `canReload` after its read before touching
+  anything. Not a HIGH (no server write is wrong; the risk was an on-screen loss inviting a
+  duplicate), so gates plus the author's own re-read of the fix, no scoped re-review.
+- LOW fixed: a double tap no longer leaves a false «No se pudo enviar» (`notSent` says nothing);
+  `ProposalThreadRule` refuses a day that does not exist, as the server does.

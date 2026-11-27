@@ -495,7 +495,8 @@ final class ProposalDraftStateTests: XCTestCase {
         XCTAssertEqual(ProposalMessageOutcome.from(status: 400, data: data(#"{"error":"invalid_request","details":{"issues":["notes_length"]}}"#)), .invalid)
         XCTAssertEqual(ProposalMessageOutcome.from(status: 403, data: data("{}")), .forbidden)
         XCTAssertEqual(ProposalMessageOutcome.from(status: 404, data: data("{}")), .refused)
-        XCTAssertEqual(ProposalMessageOutcome.from(status: 409, data: data("{}")), .refused)
+        XCTAssertEqual(ProposalMessageOutcome.from(status: 409, data: data(#"{"error":"integrity_conflict"}"#)), .refused)
+        XCTAssertEqual(ProposalMessageOutcome.from(status: 409, data: data(#"{"error":"stale_revision","conflict":true}"#)), .failed)
         XCTAssertEqual(ProposalMessageOutcome.from(status: 503, data: data("{}")), .failed)
     }
 
@@ -506,6 +507,7 @@ final class ProposalDraftStateTests: XCTestCase {
         XCTAssertTrue(ProposalThreadRule.isOpen(serviceDate: "2026-11-28", now: now))
         XCTAssertFalse(ProposalThreadRule.isOpen(serviceDate: "2026-11-26", now: now))
         XCTAssertFalse(ProposalThreadRule.isOpen(serviceDate: "nope", now: now))
+        XCTAssertFalse(ProposalThreadRule.isOpen(serviceDate: "2027-02-30", now: now))
         XCTAssertTrue(ProposalThreadRule.isOpen(serviceDate: "2027-02-24T00:00:00Z", now: now))
     }
 }

@@ -206,13 +206,19 @@ enum ProposalMessageOutcome: Equatable, Sendable {
     case full
     /// Any other `400`: the server refused the text.
     case invalid
-    /// `404` / `409`: the proposal is gone or needs an admin; sending again would not help.
+    /// `404`, or a `409` other than `stale_revision`: the proposal is gone or needs an admin;
+    /// sending again would not help.
     case refused
-    /// `503`, any other status, a timeout or a lost answer: the message may or may not have landed.
+    /// `503`, a `409 stale_revision` (a Sanity write conflict a retry clears), any other status, a
+    /// timeout or a lost answer: the message may or may not have landed.
     case failed
+    /// Nothing was sent: the editor could not post at that moment (a second tap, a save or a reload
+    /// in flight). The composer says nothing and keeps the text.
+    case notSent
 
     private struct Refusal: Decodable {
         struct Details: Decodable { let issues: [String]? }
+        let error: String?
         let details: Details?
     }
 
@@ -228,7 +234,10 @@ enum ProposalMessageOutcome: Equatable, Sendable {
             if issues.contains("messages_full") { return .full }
             return .invalid
         case 403: return .forbidden
-        case 404, 409: return .refused
+        case 404: return .refused
+        case 409:
+            let code = (try? JSONDecoder().decode(Refusal.self, from: data))?.error
+            return code == "stale_revision" ? .failed : .refused
         default: return .failed
         }
     }
@@ -247,6 +256,9 @@ enum ProposalThreadRule {
         format.locale = Locale(identifier: "en_US_POSIX")
         format.timeZone = ServiceEvent.zone
         format.dateFormat = "yyyy-MM-dd"
+        format.isLenient = false
+        // A day that does not exist (2026-02-30) is closed, as the server's date check refuses it.
+        guard let parsed = format.date(from: day), format.string(from: parsed) == day else { return false }
         return day >= format.string(from: now)
     }
 }

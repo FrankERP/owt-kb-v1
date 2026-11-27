@@ -304,7 +304,11 @@ struct ProposalEditorView: View {
         guard draft?.canReload != false else { return }
         reloading = true
         defer { reloading = false }
-        switch await model.loadProposalEditor(roleId: service.id) {
+        let read = await model.loadProposalEditor(roleId: service.id)
+        // The composer waits for a reload, so nothing should have started meanwhile; if it did,
+        // what the read answered may predate it: keep everything as it is.
+        guard draft?.canReload != false else { return }
+        switch read {
         case .loaded(let answer):
             editor = answer
             draft?.reload(from: answer)
@@ -335,7 +339,8 @@ struct ProposalEditorView: View {
     /// One message into the proposal's thread (W1b). The thread on screen follows the answer when
     /// the server could read it back; otherwise what is shown stays.
     private func postMessage(_ text: String) async -> ProposalMessageOutcome {
-        guard let id = draft?.beginMessage() else { return .failed }
+        // A reload in flight may answer with what predates this message: wait for it.
+        guard !reloading, let id = draft?.beginMessage() else { return .notSent }
         let outcome = await model.postProposalMessage(proposalId: id, body: text)
         var rev: String?
         var observedRev: String?
@@ -732,6 +737,7 @@ struct ProposalEditorContent: View {
     /// The text goes as typed: the server counts its length before trimming, so the app does too.
     private var canSend: Bool {
         draft.canPostMessage
+            && !reloading
             && !composer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && ProposalLimits.fits(composer)
     }
@@ -787,6 +793,8 @@ struct ProposalEditorContent: View {
         case .posted:
             composer = ""
             sentMessages += 1
+        case .notSent:
+            break
         case .failed:
             composerNote = "No se pudo enviar. Revisa tu conexión e inténtalo de nuevo."
         case .forbidden:
