@@ -175,6 +175,7 @@ the writer, never a silent publish, so dropping the row only affects what is dis
 Two consequences of that narrowing are accepted for the phone and told to the owner:
 
 - A past-dated approved row cannot be reopened from the phone; that stays on the web.
+- The phone has no «Todas» tab.
 - A past-dated queue row that gets decided leaves the list. See D4's «no longer in the list».
 
 The GET door's source names neither writer module. `srVerificationRunContext`'s scan matches
@@ -261,7 +262,10 @@ The detail shows:
 - «Mensaje del pastor», with the web's note that approving copies it into the service when the
   service has none;
 - «Mensaje para el equipo»;
-- the conversation (`earlierMessages` then `messages`), with the W1b bubble view.
+- the conversation (`earlierMessages` then `messages`), ordered by `at` as the web's
+  `orderedMessages` does, with the W1b bubble view;
+- a song whose reference survives but whose song was deleted shows «Canción sin título», as the
+  editor does.
 
 There is a composer when `threadOpen`. It is the W1b composer: 4000 UTF-16 units, the raw text
 counted, «Enviar» disabled while empty after trimming. Its hint is «Lo ven el líder y los admins.».
@@ -269,10 +273,12 @@ counted, «Enviar» disabled while empty after trimming. Its hint is «Lo ven el
 The actions:
 
 - **pending / changes_requested**:
-  - «Aprobar» is disabled with no songs. It opens a confirmation: «¿Aprobar y publicar este
-    setlist?» with «El setlist del servicio se reemplaza por esta propuesta y se avisa al líder.
-    Si el servicio está publicado, el equipo recibe el aviso del setlist.». The confirm button is
-    «Aprobar».
+  - «Aprobar» is disabled with no songs. It opens a confirmation sheet:
+    - title «¿Aprobar y publicar este setlist?»;
+    - the songs it will publish, in order, with title and key;
+    - «El setlist del servicio se reemplaza por esta propuesta y se avisa al líder y a quienes
+      editaron la propuesta. Si el servicio está publicado, el equipo recibe el aviso del setlist.»;
+    - the confirm button «Aprobar».
   - «Pedir cambios» opens a sheet with a required note («Explica qué debe cambiar el líder…»,
     4000 max) and «Enviar».
 - **approved**: «Setlist publicado», and «Reabrir para ajustes». That opens a sheet with an
@@ -289,8 +295,8 @@ The actions:
   whose `observedRev` is non-nil and differs from `heldRev` (the web's `postAndLock`). It is
   cleared only by a reload.
 - `deciding`, `posting` and `reloading` are three in-flight flags.
-- `canDecide`: none of the flags set and not `locked`. For approve, the songs must also be
-  non-empty.
+- `canDecide`: none of the flags set, not `locked`, and `changeSeen`. For approve, the songs must
+  also be non-empty.
 - `canPost`: none of the flags set and `threadOpen`. A locked card may still post, as on the web.
 - `canReload`: neither `deciding` nor `posting`.
 - `finishMessage(proposalId:observedRev:)`:
@@ -309,16 +315,32 @@ The actions:
   decision 409.
   - If that reload fails, `heldRev` stays as it was. A decision then meets the writer's 409 and the
     banner: fail closed.
-  - If the reloaded songs, team notes, pastor's message or status differ from what was on screen,
-    the detail shows «La propuesta cambió mientras escribías. Revísala antes de decidir.». The
-    screen already shows the new content, and the approval confirmation shows it again.
+  - The lock `finishMessage` set is cleared by that same reload. This is deliberate: the
+    content and the revision then arrive together, and the change check below covers a content
+    change.
 - A decision always sends `heldRev`, never a revision fetched for the purpose. That is the
   writer's contract («the revision the admin ACTUALLY reviewed»).
+- **Every reload that lands on an open detail checks for a change**, whatever started it: the
+  reload after a message, «Recargar», pull-to-refresh, a list read on launch, or the return to
+  the foreground. It compares the content fingerprint of the row on screen with the reloaded row:
+  the songs in order with their keys and medleys, the team notes, the pastor's message and the
+  status.
+  - When they differ, the detail shows the new content and sets `changeSeen = false`. A banner
+    reads «La propuesta cambió. Revisa las canciones y notas antes de decidir.», with «Ya la
+    revisé».
+  - `canDecide` is false while `changeSeen` is false. A reload can therefore never put new content
+    and a new `heldRev` under a decision the admin has not looked at again. This is the phone's
+    version of the writer's 409, which an unrequested reload would otherwise have absorbed.
+  - A reload with no content change (the admin's own message only moved the revision) raises
+    nothing.
 - `reload` re-checks `canReload` after its read and before touching anything, as W1b does.
   - It applies only a row with the same proposal id.
   - A row no longer in the list leaves the detail on «Esta propuesta ya no está en la lista.»
     with no actions. A past-dated row that leaves the queue by being approved, or a deleted
     proposal, ends up here.
+  - A reload clears `locked`. For a `blocked` 409 whose cause persists, the next decision meets
+    the same 409 and the same wording; causes fixed elsewhere (content not ready, an ambiguous
+    target) clear this way.
   - Returning to the foreground reloads the list and an open detail.
 - Every decision sheet and the approval confirmation record the `heldRev` they were opened on. At
   the confirming tap, the app re-checks `canDecide`. If `heldRev` moved meanwhile, it sends
@@ -332,11 +354,12 @@ The actions:
 
 | Answer | Outcome | What the app shows |
 |---|---|---|
-| 200, `idempotent` | `done` | «Sin cambios» |
+| 200, `idempotent` | `done` | «Ya estaba aplicado.» (a retry after a lost answer lands here) |
 | 200, approve | `done` | the web's `PASTOR_MESSAGE_TOAST` wording for `copied`, `kept_existing` or `failed`, else «Setlist publicado» |
 | 200, other actions | `done` | «Cambios solicitados» or «Propuesta reabierta» |
 | 409 `stale_revision` or `bootstrap_completed_reload` | `conflict` | locks the card, banner «Propuesta actualizada. Cambió mientras la revisabas. Recarga y vuelve a revisar.» with «Recargar» |
-| any other 409 (`integrity_conflict`, `legacy_approval_unverified`, `ambiguous_target`, …) | `blocked` | locks the card, «Esta propuesta tiene un problema que hay que arreglar desde la web.» A reload cannot clear it (W1b's `reloadCodes` split) |
+| any other 409 (`integrity_conflict`, `legacy_approval_unverified`, `ambiguous_target`, …) | `blocked` | locks the card, «Esta propuesta tiene un problema que hay que arreglar desde la web.» (W1b's `reloadCodes` split) |
+| 401 | — | the session goes to sign-in, as `saveProposal` does |
 | 403 | `forbidden` | «Ya no puedes revisar propuestas.» |
 | 404 | `refused` | «Esta propuesta ya no existe.» |
 | other 400 | `invalid` | «No se pudo procesar. Revisa la nota.» |
@@ -359,8 +382,9 @@ The notifications are the writers', unchanged:
 
 - Approve pushes the lead and contributors. On a published service it queues the debounced setlist
   notice, and it copies the pastor's message (ADR-0087).
-- Request changes and reopen push the lead.
-- An admin message pushes the lead.
+- Request changes and reopen push the lead and contributors (`proposalReviewRecipients`).
+- An admin message pushes the lead and contributors through `notifyProposalReview`, the author
+  excluded.
 
 The app sends nothing of its own.
 
@@ -404,6 +428,9 @@ The app sends nothing of its own.
   - does not lock with no `observedRev` or with another proposal's id.
 - `reload` sets `heldRev` and the content from one row.
 - A sheet opened on a revision that has since moved sends nothing.
+- Any reload that changes the songs, notes or status on an open detail sets `changeSeen = false`,
+  and `canDecide` stays false until it is acknowledged. A reload that only moves the revision does
+  not.
 - `canDecide` is false while posting, reloading or locked, and approve is false with no songs.
 - `canReload` is false while deciding.
 - The decision outcome maps from status and body.
