@@ -177,9 +177,16 @@ Spec `docs/superpowers/specs/2026-11-27-native-admin-proposal-review-design.md`,
   while the screen still shows the old songs; adopting it would let the next approval publish content
   the admin never saw. The app's held revision comes only from a list read, every list read that lands
   on an open proposal compares its content, and a change holds every decision until the admin says
-  they looked again. `/admin`'s twin of this hole is left as it is in this slice (the owner's call).
-- **Rejected: the archive on the phone.** Approved and draft proposals of past services, the web's
-  «Ver N meses más» and «Todas» stay on the web; the queue is never filtered.
+  they looked again. The one exception is the admin's own decision: the next landed read compares
+  the status with the status that decision reported, not with the one on screen, so another admin's
+  decision in between still raises the notice. `/admin`'s twin of this hole is left as it is in this
+  slice (the owner's call).
+- **Bound to the parser.** `native/contract/proposal-decision-bodies.json` holds the three bodies the
+  phone sends: a dropped `adminNotes` would parse as an empty note and «Pedir cambios» would commit
+  with none.
+- **Rejected: the archive on the phone.** Approved and draft proposals of past services (this
+  month's included, which `/admin` shows by default), the web's «Ver N meses más» and «Todas» stay on
+  the web; the queue is never filtered.
 - **Guards:** `adminProposalDoors.test.ts`, `appAdminProposals.test.ts`, `adminProposalsRead.test.ts`,
-  `serviceCommitCallers.test.ts`, `protectedReadAudit.test.ts`, `routeMatcher.test.ts`, the XCTest of
-  `ProposalReviewState`.
+  `serviceCommitCallers.test.ts`, `protectedReadAudit.test.ts`, `routeMatcher.test.ts`,
+  `nativeProposalContract.test.ts`, the XCTest of `ProposalReviewState` and of the decision bodies.

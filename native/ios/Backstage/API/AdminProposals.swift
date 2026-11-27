@@ -49,15 +49,24 @@ struct AdminProposal: Decodable, Equatable, Identifiable, Sendable {
     var proposalStatus: ProposalStatus? { ProposalStatus(rawValue: status) }
 
     /// What the admin decides on. A change to any of it under an open detail must be seen again
-    /// before a decision (spec D4). The thread is not part of it: a message is not a decision.
+    /// before a decision (spec D4). The thread is not part of it: a message is not a decision. The
+    /// service is: a `reconcile_target` from the web or the MCP can move the proposal to another date.
     struct Content: Equatable, Sendable {
         let songs: [Song]
         let teamNotes: String?
         let pastorMessage: String?
+        let service: Service
         let status: String
+
+        /// Everything but the status.
+        func sameAsideFromStatus(_ other: Content) -> Bool {
+            songs == other.songs && teamNotes == other.teamNotes && pastorMessage == other.pastorMessage && service == other.service
+        }
     }
 
-    var content: Content { Content(songs: songs, teamNotes: teamNotes, pastorMessage: pastorMessage, status: status) }
+    var content: Content {
+        Content(songs: songs, teamNotes: teamNotes, pastorMessage: pastorMessage, service: service, status: status)
+    }
 
     /// The service's earlier messages, then the proposal's thread, deduplicated by key and ordered
     /// as the web's `orderedMessages`: the dated ones by time among their own places, an undated one
@@ -187,9 +196,11 @@ struct ProposalReviewState: Equatable, Sendable {
     private(set) var gone = false
     private(set) var deciding = false
     private(set) var posting = false
-    /// Set by a decision that landed: the next reload compares everything but the status, which
-    /// the admin's own decision changed.
-    private var ownStatusChange = false
+    /// The status a landed decision reported (spec D4, «the admin's own decision»). The next list
+    /// read that lands compares the status with it instead of with the one on screen, so the
+    /// admin's own decision raises no notice while another admin's decision in between still
+    /// does. One landed read disarms it; a read that fails or waits never lands, so it stays.
+    private(set) var expectedStatus: String?
 
     init(proposal: AdminProposal) { self.proposal = proposal }
 
@@ -237,8 +248,9 @@ struct ProposalReviewState: Equatable, Sendable {
         case .conflict, .blocked:
             locked = true
             lockReason = outcome
-        case .done:
-            ownStatusChange = true
+        case let .done(answer):
+            // A `done` with no status in its answer arms nothing: the next read compares everything.
+            expectedStatus = answer.status
         case .forbidden, .refused, .invalid, .failed, .notSent:
             break
         }
@@ -276,20 +288,16 @@ struct ProposalReviewState: Equatable, Sendable {
     @discardableResult
     mutating func apply(_ list: [AdminProposal]) -> Bool {
         guard canApply else { return false }
+        let expected = expectedStatus
+        expectedStatus = nil
         guard let row = list.first(where: { $0.id == proposal.id }) else {
             gone = true
             return true
         }
         let before = proposal.content
         let after = row.content
-        let changed: Bool
-        if ownStatusChange {
-            changed = before.songs != after.songs || before.teamNotes != after.teamNotes || before.pastorMessage != after.pastorMessage
-        } else {
-            changed = before != after
-        }
-        ownStatusChange = false
-        if changed { changeSeen = false }
+        let statusMoved = after.status != (expected ?? before.status)
+        if statusMoved || !before.sameAsideFromStatus(after) { changeSeen = false }
         proposal = row
         gone = false
         locked = false

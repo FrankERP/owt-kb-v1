@@ -7,11 +7,11 @@ final class AdminProposalTests: XCTestCase {
     static func proposal(
         id: String = "setlistProposal.a", rev: String = "r1", status: String = "pending",
         songs: [AdminProposal.Song] = [song("s1", key: "D")], teamNotes: String? = nil,
-        threadOpen: Bool = true, messages: [ThreadMessage] = []
+        threadOpen: Bool = true, messages: [ThreadMessage] = [], date: String = "2099-01-04"
     ) -> AdminProposal {
         AdminProposal(
             id: id, rev: rev, status: status,
-            service: .init(kind: .sunday, date: "2099-01-04", title: "Domingo"),
+            service: .init(kind: .sunday, date: date, title: "Domingo"),
             leadName: "Luis", coLeads: [], songs: songs, pastorMessage: nil, teamNotes: teamNotes,
             messages: messages, earlierMessages: [], threadOpen: threadOpen
         )
@@ -87,6 +87,7 @@ final class AdminProposalTests: XCTestCase {
             Self.proposal(rev: "r2", teamNotes: "nuevo"),
             Self.proposal(rev: "r2", status: "approved"),
             Self.proposal(rev: "r2", songs: [Self.song("s1", key: "D", medley: "A")]),
+            Self.proposal(rev: "r2", date: "2099-01-11"),
         ] {
             var state = ProposalReviewState(proposal: Self.proposal())
             state.apply([changed])
@@ -97,16 +98,67 @@ final class AdminProposalTests: XCTestCase {
         XCTAssertTrue(state.changeSeen)
     }
 
-    func testTheAdminsOwnDecisionChangesTheStatusWithoutANotice() {
-        var state = ProposalReviewState(proposal: Self.proposal())
+    // MARK: The admin's own decision (spec D4)
+
+    private static func decided(_ status: String?) -> ProposalReviewState {
+        var state = ProposalReviewState(proposal: proposal())
         _ = state.beginDecision(.approve, openedRev: "r1")
-        state.finishDecision(.done(ProposalDecisionResponse(status: "approved")))
+        state.finishDecision(.done(ProposalDecisionResponse(status: status)))
+        return state
+    }
+
+    func testTheAdminsOwnDecisionChangesTheStatusWithoutANotice() {
+        var state = Self.decided("approved")
         state.apply([Self.proposal(rev: "r2", status: "approved")])
         XCTAssertTrue(state.changeSeen)
         XCTAssertTrue(state.canDecide(.reopen))
-        // …but only for that one reload, and never for the songs.
+    }
+
+    func testAnotherStatusThanTheDecisionReportedStillRaisesTheNotice() {
+        var state = Self.decided("approved")
+        // Another admin reopened it between my approval and this read.
         state.apply([Self.proposal(rev: "r3", status: "changes_requested")])
         XCTAssertFalse(state.changeSeen)
+    }
+
+    func testTheSongsAreComparedEvenAfterTheAdminsOwnDecision() {
+        var state = Self.decided("approved")
+        state.apply([Self.proposal(rev: "r2", status: "approved", songs: [Self.song("s1", key: "E")])])
+        XCTAssertFalse(state.changeSeen)
+    }
+
+    func testTheExceptionCoversExactlyOneLandedRead() {
+        var state = Self.decided("approved")
+        state.apply([Self.proposal(rev: "r2", status: "approved")])
+        XCTAssertNil(state.expectedStatus)
+        state.apply([Self.proposal(rev: "r3", status: "changes_requested")])
+        XCTAssertFalse(state.changeSeen, "the second read compares the status normally")
+    }
+
+    func testAReadThatDoesNotLandKeepsTheExceptionArmed() {
+        var state = Self.decided("approved")
+        XCTAssertEqual(state.beginMessage(), "setlistProposal.a")
+        XCTAssertFalse(state.apply([Self.proposal(rev: "r2", status: "approved")]), "refused while posting")
+        XCTAssertEqual(state.expectedStatus, "approved")
+        state.endMessage()
+        state.apply([Self.proposal(rev: "r2", status: "approved")])
+        XCTAssertTrue(state.changeSeen)
+    }
+
+    func testADoneWithNoStatusArmsNothing() {
+        var state = Self.decided(nil)
+        XCTAssertNil(state.expectedStatus)
+        state.apply([Self.proposal(rev: "r2", status: "approved")])
+        XCTAssertFalse(state.changeSeen)
+    }
+
+    func testAnIdempotentDoneArmsTheStatusAlreadyStored() {
+        var state = ProposalReviewState(proposal: Self.proposal(status: "changes_requested"))
+        _ = state.beginDecision(.requestChanges, openedRev: "r1")
+        state.finishDecision(.done(ProposalDecisionResponse(status: "changes_requested", idempotent: true)))
+        XCTAssertEqual(state.expectedStatus, "changes_requested")
+        state.apply([Self.proposal(rev: "r1", status: "changes_requested")])
+        XCTAssertTrue(state.changeSeen)
     }
 
     func testASheetOpenedOnARevisionThatMovedSendsNothing() {
