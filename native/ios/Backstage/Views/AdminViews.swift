@@ -109,13 +109,12 @@ struct AdminProposalList: View {
                     Button("Intentar de nuevo", action: retry).buttonStyle(BrandButtonStyle()).padding(.horizontal, 40)
                 }
             case .loaded(let list):
-                Picker("Estado", selection: $filter) {
-                    ForEach(AdminFilter.allCases) { f in
-                        Text(label(f, list)).tag(f)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .sensoryFeedback(.selection, trigger: filter)
+                BrandSegments(
+                    segments: AdminFilter.allCases.map { f in
+                        BrandSegments<AdminFilter>.Segment(value: f, label: f.label, count: queueCount(f, list))
+                    },
+                    selection: $filter
+                )
                 let shown = list.filter { $0.status == filter.status.rawValue }
                 if shown.isEmpty {
                     quiet(filter.empty)
@@ -134,10 +133,10 @@ struct AdminProposalList: View {
         .animation(.snappy(duration: 0.25), value: filter)
     }
 
-    private func label(_ f: AdminFilter, _ list: [AdminProposal]) -> String {
-        guard f == .pending || f == .changesRequested else { return f.label }
-        let n = list.filter { $0.status == f.status.rawValue }.count
-        return n > 0 ? "\(f.label) \(n)" : f.label
+    /// The queue's counts only: an approved or draft count would read as work to do.
+    private func queueCount(_ f: AdminFilter, _ list: [AdminProposal]) -> Int? {
+        guard f == .pending || f == .changesRequested else { return nil }
+        return list.filter { $0.status == f.status.rawValue }.count
     }
 
     private func quiet(_ text: String) -> some View {
@@ -221,7 +220,8 @@ struct AdminProposalDetail: View {
                         sheet = DecisionSheet(action: action, openedRev: binding.wrappedValue.heldRev)
                     },
                     reload: { Task { await reload() } },
-                    postMessage: postMessage
+                    postMessage: postMessage,
+                    verifyThread: verifyThread
                 )
                 .padding(.horizontal, 16)
                 .padding(.bottom, 32)
@@ -339,6 +339,17 @@ struct AdminProposalDetail: View {
         }
     }
 
+    /// A list read, and this proposal's conversation from it when the read landed; nil otherwise.
+    /// What it read lands on the detail as any list read does.
+    private func verifyThread() async -> [ThreadMessage]? {
+        let before = model.adminProposalsLanded
+        await model.loadAdminProposals()
+        guard model.adminProposalsLanded > before, case .loaded(let rows) = model.adminProposals,
+              let row = rows.first(where: { $0.id == proposalId }) else { return nil }
+        land()
+        return row.conversation
+    }
+
     private func postMessage(_ text: String) async -> ProposalMessageOutcome {
         guard let id = state?.beginMessage() else { return .notSent }
         let outcome = await model.postAdminProposalMessage(proposalId: id, body: text)
@@ -365,10 +376,8 @@ struct AdminProposalContent: View {
     let decide: (ProposalAction) -> Void
     let reload: () -> Void
     let postMessage: (String) async -> ProposalMessageOutcome
-
-    @State private var composer = ""
-    @State private var composerNote: String?
-    @State private var sentMessages = 0
+    /// Reads the conversation again after a message's answer was lost (`ConversationThread`).
+    let verifyThread: () async -> [ThreadMessage]?
 
     private var proposal: AdminProposal { state.proposal }
 
@@ -524,90 +533,16 @@ struct AdminProposalContent: View {
     // MARK: Conversation
 
     private var conversationCard: some View {
-        let messages = proposal.conversation
-        return VStack(alignment: .leading, spacing: 12) {
-            SheetTitle(text: "Conversación", count: messages.count)
-            ForEach(messages) { message in
-                MessageBubble(message: message)
-            }
-            if proposal.threadOpen { composerView(hasMessages: !messages.isEmpty) }
-        }
+        ConversationThread(
+            messages: proposal.conversation,
+            canCompose: proposal.threadOpen && !state.gone,
+            canPostNow: state.canPost,
+            hint: "Lo ven el líder y los admins.",
+            post: postMessage,
+            verify: verifyThread
+        )
         .padding(16)
         .cardSurface()
-        .sensoryFeedback(.success, trigger: sentMessages)
-    }
-
-    private var canSend: Bool {
-        state.canPost
-            && !composer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && ProposalLimits.fits(composer)
-    }
-
-    private func composerView(hasMessages: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .bottom, spacing: 10) {
-                TextField("Escribe un mensaje", text: $composer, axis: .vertical)
-                    .lineLimit(1...6)
-                    .font(.bsBody(16))
-                    .foregroundStyle(BS.ink)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(BS.ink.opacity(0.05)))
-                    .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(BS.ink.opacity(0.10), lineWidth: 1))
-                    .disabled(state.posting)
-                Button {
-                    Task { await send() }
-                } label: {
-                    Group {
-                        if state.posting {
-                            ProgressView().tint(BS.base)
-                        } else {
-                            Image(systemName: "arrow.up").font(.system(size: 15, weight: .bold))
-                        }
-                    }
-                    .foregroundStyle(BS.base)
-                    .frame(width: 38, height: 38)
-                    .background(Circle().fill(canSend || state.posting ? BS.accent : BS.ink.opacity(0.15)))
-                }
-                .disabled(!canSend)
-                .accessibilityLabel("Enviar mensaje")
-            }
-            Text(composerHint)
-                .font(.bsBody(12))
-                .foregroundStyle(composerNote == nil && ProposalLimits.fits(composer) ? BS.inkDim : BS.warning)
-        }
-        .padding(.top, hasMessages ? 4 : 0)
-    }
-
-    private var composerHint: String {
-        if let composerNote { return composerNote }
-        if !ProposalLimits.fits(composer) { return "Un mensaje puede tener hasta \(ProposalLimits.notesMax) caracteres." }
-        return "Lo ven el líder y los admins."
-    }
-
-    private func send() async {
-        guard canSend else { return }
-        composerNote = nil
-        switch await postMessage(composer) {
-        case .posted:
-            composer = ""
-            sentMessages += 1
-        case .notSent:
-            break
-        case .failed:
-            // No idempotency on a message: a blind retry is a permanent duplicate (spec D4).
-            composerNote = "No se pudo confirmar el envío. Recarga para ver si llegó antes de volver a enviarlo."
-        case .forbidden:
-            composerNote = "Ya no puedes escribir en esta propuesta."
-        case .closed:
-            composerNote = "La conversación de este servicio ya cerró."
-        case .full:
-            composerNote = "Esta conversación llegó a su límite de mensajes."
-        case .invalid:
-            composerNote = "El mensaje no es válido."
-        case .refused:
-            composerNote = "No se pudo enviar: esta propuesta ya no existe o hay que revisarla desde la web."
-        }
     }
 
     // MARK: Actions

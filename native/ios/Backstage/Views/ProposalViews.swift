@@ -179,7 +179,8 @@ struct ProposalEditorView: View {
                         reload: {
                             if draft?.reloadDiscardsWork == true { confirmReload = true } else { Task { await reload() } }
                         },
-                        postMessage: { text in await postMessage(text) }
+                        postMessage: { text in await postMessage(text) },
+                        verifyThread: { await verifyThread() }
                     )
                     .padding(.horizontal, 16)
                     .padding(.top, 4)
@@ -353,6 +354,14 @@ struct ProposalEditorView: View {
         return outcome
     }
 
+    /// The editor read again for its conversation only, after a message's answer was lost: the
+    /// thread on screen follows it, the draft is never touched. Nil when the read fails.
+    private func verifyThread() async -> [ThreadMessage]? {
+        guard case .loaded(let answer) = await model.loadProposalEditor(roleId: service.id) else { return nil }
+        if let messages = answer.proposal?.messages { savedMessages = messages }
+        return conversation(answer)
+    }
+
     private func add(_ song: LibrarySong) {
         draft?.add(songId: song.id, title: song.title, author: song.artist, key: song.key, previousKeys: [])
         Task {
@@ -379,11 +388,8 @@ struct ProposalEditorContent: View {
     let addSongs: () -> Void
     let reload: () -> Void
     let postMessage: (String) async -> ProposalMessageOutcome
-
-    /// What the lead is writing in the conversation, and what the last send answered.
-    @State private var composer = ""
-    @State private var composerNote: String?
-    @State private var sentMessages = 0
+    /// Reads the conversation again after a message's answer was lost (`ConversationThread`).
+    let verifyThread: () async -> [ThreadMessage]?
 
     /// The row being dragged: it stays in the list as a faint placeholder while the others make
     /// room, so the order on screen is always the order that will be saved.
@@ -401,7 +407,8 @@ struct ProposalEditorContent: View {
         threadOpen: Bool = false,
         addSongs: @escaping () -> Void = {},
         reload: @escaping () -> Void = {},
-        postMessage: @escaping (String) async -> ProposalMessageOutcome = { _ in .failed }
+        postMessage: @escaping (String) async -> ProposalMessageOutcome = { _ in .failed },
+        verifyThread: @escaping () async -> [ThreadMessage]? = { nil }
     ) {
         self.service = service
         self.editor = editor
@@ -414,6 +421,7 @@ struct ProposalEditorContent: View {
         self.addSongs = addSongs
         self.reload = reload
         self.postMessage = postMessage
+        self.verifyThread = verifyThread
     }
 
     var body: some View {
@@ -718,96 +726,21 @@ struct ProposalEditorContent: View {
 
     // MARK: Conversation
 
-    private var conversationCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SheetTitle(text: "Conversación", count: messages.count)
-            ForEach(messages) { message in
-                MessageBubble(message: message)
-            }
-            if showsComposer { composerView }
-        }
-        .padding(16)
-        .cardSurface()
-        .sensoryFeedback(.success, trigger: sentMessages)
-    }
-
     /// The web's composer: once the proposal exists, until the service day has passed.
     private var showsComposer: Bool { draft.proposalExists && threadOpen }
 
-    /// The text goes as typed: the server counts its length before trimming, so the app does too.
-    private var canSend: Bool {
-        draft.canPostMessage
-            && !reloading
-            && !composer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && ProposalLimits.fits(composer)
-    }
-
-    private var composerView: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .bottom, spacing: 10) {
-                TextField("Escribe un mensaje", text: $composer, axis: .vertical)
-                    .lineLimit(1...6)
-                    .font(.bsBody(16))
-                    .foregroundStyle(BS.ink)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(BS.ink.opacity(0.05)))
-                    .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(BS.ink.opacity(0.10), lineWidth: 1))
-                    // Not editable while the message is on its way: what is cleared on success is
-                    // exactly what was sent.
-                    .disabled(draft.postingMessage)
-                Button {
-                    Task { await send() }
-                } label: {
-                    Group {
-                        if draft.postingMessage {
-                            ProgressView().tint(BS.base)
-                        } else {
-                            Image(systemName: "arrow.up").font(.system(size: 15, weight: .bold))
-                        }
-                    }
-                    .foregroundStyle(BS.base)
-                    .frame(width: 38, height: 38)
-                    .background(Circle().fill(canSend || draft.postingMessage ? BS.accent : BS.ink.opacity(0.15)))
-                }
-                .disabled(!canSend)
-                .accessibilityLabel("Enviar mensaje")
-            }
-            Text(composerHint)
-                .font(.bsBody(12))
-                .foregroundStyle(composerNote == nil && ProposalLimits.fits(composer) ? BS.inkDim : BS.warning)
-        }
-        .padding(.top, messages.isEmpty ? 0 : 4)
-    }
-
-    private var composerHint: String {
-        if let composerNote { return composerNote }
-        if !ProposalLimits.fits(composer) { return "Un mensaje puede tener hasta \(ProposalLimits.notesMax) caracteres." }
-        return "Solo la ven los líderes y los admins."
-    }
-
-    private func send() async {
-        guard canSend else { return }
-        composerNote = nil
-        switch await postMessage(composer) {
-        case .posted:
-            composer = ""
-            sentMessages += 1
-        case .notSent:
-            break
-        case .failed:
-            composerNote = "No se pudo enviar. Revisa tu conexión e inténtalo de nuevo."
-        case .forbidden:
-            composerNote = "Ya no puedes escribir en esta propuesta."
-        case .closed:
-            composerNote = "La conversación de este servicio ya cerró."
-        case .full:
-            composerNote = "Esta conversación llegó a su límite de mensajes."
-        case .invalid:
-            composerNote = "El mensaje no es válido."
-        case .refused:
-            composerNote = "No se pudo enviar: esta propuesta necesita que un admin la revise."
-        }
+    private var conversationCard: some View {
+        ConversationThread(
+            messages: messages,
+            canCompose: showsComposer,
+            // A message waits while a save or a reload is in flight.
+            canPostNow: draft.canPostMessage && !reloading,
+            hint: "Solo la ven los líderes y los admins.",
+            post: postMessage,
+            verify: verifyThread
+        )
+        .padding(16)
+        .cardSurface()
     }
 }
 
@@ -1073,6 +1006,8 @@ private struct NoteField: View {
 /// the left with their name and role.
 struct MessageBubble: View {
     let message: ThreadMessage
+    /// Sent from this screen: it carries «Enviado», as a messaging app does.
+    var sent = false
 
     var body: some View {
         HStack {
@@ -1094,6 +1029,7 @@ struct MessageBubble: View {
                     .foregroundStyle(BS.inkMuted)
                     .multilineTextAlignment(message.mine ? .trailing : .leading)
                     .textSelection(.enabled)
+                if sent && message.mine { SentMark() }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
