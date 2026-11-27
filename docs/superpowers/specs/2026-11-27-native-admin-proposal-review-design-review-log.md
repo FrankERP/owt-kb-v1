@@ -102,6 +102,26 @@ covers them:
 - `apply` is refused while a decision or a message is in flight, and the detail applies again when
   the flight ends (the plan's `canReload`, applied to every list read rather than only «Recargar»).
 
+## Code review fixes (merge range 50be3df5..HEAD, one fresh reviewer: no HIGH, two MEDIUM, four LOW)
+
+All six fixed in the iOS detail; none could publish unseen content (the writer's `rev` assertion
+held in each case). Not a HIGH, so no scoped re-review: gates plus the author's re-read, and the
+iOS CI run.
+
+- **M1** A reload that failed or was superseded re-applied the model's older list, which cleared
+  the lock, spent the armed status or erased a message just shown. Now a list lands on the detail
+  only when it comes from a newer read (`ProposalReviewState.land(_:read:)`, the read number from
+  `AppModel.adminProposalsLanded`); reads that arrived during a flight whose answer showed
+  something newer are passed over (`passOver(read:)`). XCTests for each case.
+- **M2** The reload after a posted message ran before the composer cleared, erasing text typed
+  meanwhile. It now runs after the answer goes back, and the decision buttons wait for it.
+- **L1** A sheet over a changed proposal went silent: `beginDecision` now checks the moved
+  revision before `canDecide`, so it closes with «La propuesta cambió. Revísala de nuevo.».
+- **L2** A read refused during a flight is applied when the flight ends, whatever its outcome
+  (except a 409, whose lock waits for «Recargar»).
+- **L3** Sign-out invalidates a list read still in flight.
+- **L4** A note typed in a sheet is kept after `failed` and `invalid`.
+
 ## Author-side process notes
 
 - The round-2 blocker was introduced by the author: the plan's foreground reload was added in

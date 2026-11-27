@@ -58,6 +58,10 @@ final class AppModel {
     /// Bumped by every list read: only the newest read's answer lands, so a slow read started
     /// before a decision can never replace the list read after it.
     private var adminProposalsRead = 0
+    /// The number of the read that produced the current `.loaded` list. An open proposal applies a
+    /// list only when this is newer than the one it applied last: a read that failed, or was
+    /// superseded, leaves the old list in place and must not land on the detail again (spec D4).
+    private(set) var adminProposalsLanded = 0
     private(set) var catalogue: Catalogue = .idle
     /// Songs already opened in this run: a song reopens at once, and offline.
     private var openedSongs: [String: SongDetail] = [:]
@@ -320,6 +324,7 @@ final class AppModel {
         do {
             let answer = try await api.adminProposals()
             guard read == adminProposalsRead else { return }
+            adminProposalsLanded = read
             adminProposals = .loaded(answer.proposals)
         } catch APIError.forbidden {
             guard read == adminProposalsRead else { return }
@@ -446,6 +451,8 @@ final class AppModel {
         services = .loading
         servicesLoadedAt = nil
         adminProposals = .idle
+        // A read still in flight at sign-out must not land for the next person.
+        adminProposalsRead += 1
         catalogue = .idle
         openedSongs = [:]
         phase = .signedOut(notice: nil)

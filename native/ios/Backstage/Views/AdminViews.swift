@@ -242,6 +242,7 @@ struct AdminProposalDetail: View {
             if state == nil, case .loaded(let list) = model.adminProposals,
                let row = list.first(where: { $0.id == proposalId }) {
                 state = ProposalReviewState(proposal: row)
+                state?.passOver(read: model.adminProposalsLanded)
             }
             // The covers come from the Biblioteca the phone already keeps (refused outside
             // Alabanza: the rows then show a note instead).
@@ -249,10 +250,7 @@ struct AdminProposalDetail: View {
         }
         // Every list read lands here, whatever started it (a pull, the return to the app): the
         // state decides whether the content changed under the admin.
-        .onChange(of: model.adminProposals) { _, list in
-            guard case .loaded(let rows) = list else { return }
-            state?.apply(rows)
-        }
+        .onChange(of: model.adminProposals) { _, _ in land() }
         .sheet(item: $sheet) { open in
             DecisionSheetView(
                 action: open.action,
@@ -271,14 +269,23 @@ struct AdminProposalDetail: View {
         return map
     }
 
-    /// A list read, then that read applied here (it is refused while a decision or a message is in
-    /// flight; this runs again after each).
+    /// A list read, then that read applied here if it landed.
     private func reload() async {
         reloading = true
         await model.loadAdminProposals()
         reloading = false
-        if case .loaded(let rows) = model.adminProposals { state?.apply(rows) }
+        land()
     }
+
+    /// Applies the model's list when it comes from a read newer than the last one applied here
+    /// (`ProposalReviewState.land`). A read refused while a decision or a message is in flight is
+    /// applied when the flight ends, which calls this again.
+    private func land() {
+        guard case .loaded(let rows) = model.adminProposals else { return }
+        state?.land(rows, read: model.adminProposalsLanded)
+    }
+
+    private func passOverReadsSoFar() { state?.passOver(read: model.adminProposalsLanded) }
 
     /// What the sheet does next: close, or stay open saying why.
     private func decide(_ open: DecisionSheet, notes: String) async -> DecisionSheetView.Next {
@@ -300,23 +307,31 @@ struct AdminProposalDetail: View {
             case .done(let answer):
                 note = ProposalDecisionOutcome.doneText(answer, action: open.action)
                 decisions += 1
+                passOverReadsSoFar()
                 await reload()
                 return .close
             case .conflict, .blocked:
+                // Locked: only a read started after this answer (`Recargar`) clears it.
                 keptNotes[open.action] = notes
                 note = nil
+                passOverReadsSoFar()
                 return .close
             case .forbidden:
                 note = "Ya no puedes revisar propuestas."
+                land()
                 return .close
             case .refused:
                 note = "Esta propuesta ya no existe."
                 await reload()
                 return .close
             case .invalid:
+                keptNotes[open.action] = notes
+                land()
                 return .stay("No se pudo procesar. Revisa la nota.")
             case .failed:
                 // A repeated identical decision is a no-write replay on the server: retrying is safe.
+                keptNotes[open.action] = notes
+                land()
                 return .stay("No se pudo confirmar. Recarga para ver si quedó, o intenta de nuevo.")
             case .notSent:
                 return .stay(nil)
@@ -329,10 +344,14 @@ struct AdminProposalDetail: View {
         let outcome = await model.postAdminProposalMessage(proposalId: id, body: text)
         if case .posted(let answer) = outcome {
             state?.finishMessage(proposalId: id, observedRev: answer.observedRev, messages: answer.messages)
-            // Content and revision arrive together only from a list read (spec D4).
-            await reload()
+            passOverReadsSoFar()
+            // Content and revision arrive together only from a list read (spec D4). It runs after
+            // the answer goes back, so the composer clears at once and nothing typed during the
+            // read is erased; decisions wait for it (`reloading`).
+            Task { await reload() }
         } else {
             state?.endMessage()
+            land()
         }
         return outcome
     }
@@ -602,7 +621,7 @@ struct AdminProposalContent: View {
                     if state.deciding { ProgressView().tint(BS.base) } else { Text("Aprobar") }
                 }
                 .buttonStyle(BrandButtonStyle())
-                .disabled(!state.canDecide(.approve))
+                .disabled(reloading || !state.canDecide(.approve))
                 if proposal.songs.isEmpty {
                     Text("Sin canciones no se puede aprobar.")
                         .font(.bsBody(12))
@@ -612,7 +631,7 @@ struct AdminProposalContent: View {
                     .font(.bsBody(16, .semibold))
                     .foregroundStyle(BS.accent)
                     .frame(maxWidth: .infinity, minHeight: 44)
-                    .disabled(!state.canDecide(.requestChanges))
+                    .disabled(reloading || !state.canDecide(.requestChanges))
             }
         case .approved:
             VStack(alignment: .leading, spacing: 10) {
@@ -623,7 +642,7 @@ struct AdminProposalContent: View {
                     .font(.bsBody(16, .semibold))
                     .foregroundStyle(BS.accent)
                     .frame(minHeight: 44)
-                    .disabled(!state.canDecide(.reopen))
+                    .disabled(reloading || !state.canDecide(.reopen))
             }
         case .draft:
             Text("El líder todavía no la envía.")

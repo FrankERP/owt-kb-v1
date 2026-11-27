@@ -236,8 +236,11 @@ struct ProposalReviewState: Equatable, Sendable {
     /// A decision's confirming tap. `openedRev` is the revision on screen when the sheet or the
     /// confirmation opened.
     mutating func beginDecision(_ action: ProposalAction, openedRev: String) -> Begin {
-        guard canDecide(action) else { return .busy }
+        guard !deciding, !posting else { return .busy }
+        // Before `canDecide`: a read that changed the content under an open sheet also moved the
+        // revision, and the sheet must close saying so rather than go silent.
         guard openedRev == heldRev else { return .moved }
+        guard canDecide(action) else { return .busy }
         deciding = true
         return .send(rev: heldRev)
     }
@@ -306,4 +309,24 @@ struct ProposalReviewState: Equatable, Sendable {
     }
 
     mutating func acknowledgeChange() { changeSeen = true }
+
+    // MARK: Which list read may land
+
+    /// The number of the model's list read (`AppModel.adminProposalsLanded`) last applied here.
+    private(set) var appliedRead = 0
+
+    /// The detail's way in: applies `list` only when it comes from a read newer than the last one
+    /// applied. A reload that failed or was superseded leaves the model's older list in place; it
+    /// must not land again, or it would clear the lock, spend `expectedStatus` or erase a message
+    /// just shown, with no fresh read behind it.
+    @discardableResult
+    mutating func land(_ list: [AdminProposal], read: Int) -> Bool {
+        guard read > appliedRead, apply(list) else { return false }
+        appliedRead = read
+        return true
+    }
+
+    /// Reads that arrived during a flight predate what its answer showed (a decision's status, a
+    /// lock, a message in the thread): they are passed over, and the next read brings the truth.
+    mutating func passOver(read: Int) { appliedRead = max(appliedRead, read) }
 }

@@ -169,6 +169,55 @@ final class AdminProposalTests: XCTestCase {
         XCTAssertFalse(state.deciding)
     }
 
+    func testASheetOverAChangedProposalClosesAsMovedNotSilently() {
+        var state = ProposalReviewState(proposal: Self.proposal())
+        let opened = state.heldRev
+        state.apply([Self.proposal(rev: "r2", songs: [Self.song("s1", key: "E")])])
+        XCTAssertFalse(state.changeSeen)
+        XCTAssertEqual(state.beginDecision(.approve, openedRev: opened), .moved)
+    }
+
+    // MARK: Which list read may land
+
+    func testOnlyANewerReadLands() {
+        var state = ProposalReviewState(proposal: Self.proposal())
+        XCTAssertTrue(state.land([Self.proposal(rev: "r2")], read: 1))
+        XCTAssertEqual(state.appliedRead, 1)
+        // A reload that failed leaves the model's list (read 1) in place: it does not land again.
+        XCTAssertFalse(state.land([Self.proposal(rev: "r2")], read: 1))
+    }
+
+    func testAFailedReloadKeepsTheLockTheThreadAndTheArmedStatus() {
+        var state = ProposalReviewState(proposal: Self.proposal())
+        state.passOver(read: 3)
+        // A posted message shows its thread; the reload after it fails.
+        _ = state.beginMessage()
+        state.finishMessage(proposalId: "setlistProposal.a", observedRev: "r9", messages: [Self.message("m1", at: nil)])
+        XCTAssertFalse(state.land([Self.proposal(rev: "r1")], read: 3))
+        XCTAssertTrue(state.locked)
+        XCTAssertEqual(state.proposal.messages.map(\.key), ["m1"])
+        // Only a read started afterwards clears the lock.
+        XCTAssertTrue(state.land([Self.proposal(rev: "r9", messages: [Self.message("m1", at: nil)])], read: 4))
+        XCTAssertFalse(state.locked)
+    }
+
+    func testAFailedReloadAfterTheAdminsDecisionKeepsTheStatusArmed() {
+        var state = Self.decided("approved")
+        state.passOver(read: 2)
+        XCTAssertFalse(state.land([Self.proposal(rev: "r1")], read: 2), "the old list, pending: not a fresh read")
+        XCTAssertEqual(state.expectedStatus, "approved")
+        XCTAssertTrue(state.changeSeen)
+    }
+
+    func testAReadRefusedInFlightLandsWhenTheFlightEnds() {
+        var state = ProposalReviewState(proposal: Self.proposal())
+        _ = state.beginMessage()
+        XCTAssertFalse(state.land([Self.proposal(rev: "r2")], read: 1))
+        state.endMessage()
+        XCTAssertTrue(state.land([Self.proposal(rev: "r2")], read: 1))
+        XCTAssertEqual(state.heldRev, "r2")
+    }
+
     func testAListReadWaitsWhileSomethingIsInFlight() {
         var state = ProposalReviewState(proposal: Self.proposal())
         _ = state.beginDecision(.approve, openedRev: "r1")
