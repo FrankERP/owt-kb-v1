@@ -82,21 +82,32 @@ struct SignInView: View {
 
 // MARK: The tabs
 
-/// Inicio and the Biblioteca, each with its own stack, so going back in one never moves the
-/// other. The Biblioteca is Alabanza's: someone outside it would only meet a refusal there.
-/// The profile sheet lives here because both tabs' top bars open the same one.
+/// Inicio, the Biblioteca and «Admin», each with its own stack, so going back in one never moves
+/// another. The Biblioteca is Alabanza's: someone outside it would only meet a refusal there.
+/// «Admin» is for admins and super-admins (A-W1), Alabanza or not, as `/admin`'s «Propuestas» is.
+/// The profile sheet lives here because every tab's top bar opens the same one.
 struct MainTabs: View {
+    @Environment(AppModel.self) private var model
     let me: Me
     @State private var showingProfile = false
 
+    private var showsLibrary: Bool { me.ministries.contains("worship") || me.role == "super-admin" }
+
     var body: some View {
         Group {
-            if me.ministries.contains("worship") || me.role == "super-admin" {
+            if showsLibrary || me.reviewsProposals {
                 TabView {
                     HomeView(me: me) { showingProfile = true }
                         .tabItem { Label("Inicio", systemImage: "house") }
-                    LibraryView(me: me) { showingProfile = true }
-                        .tabItem { Label("Biblioteca", systemImage: "music.note.list") }
+                    if showsLibrary {
+                        LibraryView(me: me) { showingProfile = true }
+                            .tabItem { Label("Biblioteca", systemImage: "music.note.list") }
+                    }
+                    if me.reviewsProposals {
+                        AdminTab(me: me) { showingProfile = true }
+                            .tabItem { Label("Admin", systemImage: "checkmark.seal") }
+                            .badge(model.pendingProposalCount)
+                    }
                 }
                 .miniPlayerAccessory()
             } else {
