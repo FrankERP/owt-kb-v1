@@ -107,7 +107,9 @@ helper:
     special's title.
 
 The phone is for this week's work. The web's archive window and its «Ver N meses más» stay on the
-web. The queue is never filtered, for the reason `proposalListView.ts` gives: hiding a pending row
+web. This is narrower than the web's default, not equal to it: the web also shows the current
+month's approved and draft rows (`proposalListView.ts`), so last Sunday's approved proposal is one
+tap away on the web and not on the phone. The owner is told it in those terms. The queue is never filtered, for the reason `proposalListView.ts` gives: hiding a pending row
 would strand the reviewer. `today` is the CDMX date
 (`toLocaleDateString("sv",{timeZone:"America/Mexico_City"})`).
 
@@ -140,7 +142,7 @@ app branches on the status, `error` and `issues` only, as the web does.
    `auth.session.access`.
 2. One read: `readAdminProposalsForApp(today)`. A throw answers 503.
 3. The answer is `{ proposals: AppAdminProposal[] }`, built by the pure
-   `buildAppAdminProposals(rows, me)` in `app/utils/appAdminProposals.ts`:
+   `buildAppAdminProposals(rows, me, today)` in `app/utils/appAdminProposals.ts`:
 
 ```ts
 type AppAdminProposal = {
@@ -167,12 +169,14 @@ and the web does not show `admin_notes` either.
 
 `title` follows `buildAppProposalEditor`: «Domingo», «Sábado», or the special's `service_name`
 with whitespace folded, falling back to `SPECIAL_SERVICE_FALLBACK`. `playKey` is
-`play_key || key || ""`, as the web shows it. A row without `_id`, `_rev` or a valid status is
+`play_key || key || ""`, the lead editor's fallback. The admin panel renders `play_key`
+alone; the fallback only fills an empty cell, and the writer publishes the row as stored either
+way. A row without `_id`, `_rev` or a valid status is
 dropped. A song row with no `song_id` is dropped too, because the writer's approval would refuse
 it (`proposal_songs_malformed`) and the web cannot approve it either. The app still gets 409 from
 the writer, never a silent publish, so dropping the row only affects what is displayed.
 
-Two consequences of that narrowing are accepted for the phone and told to the owner:
+Three consequences of that narrowing are accepted for the phone and told to the owner:
 
 - A past-dated approved row cannot be reopened from the phone; that stays on the web.
 - The phone has no «Todas» tab.
@@ -323,8 +327,9 @@ The actions:
 - **Every reload that lands on an open detail checks for a change**, whatever started it: the
   reload after a message, «Recargar», pull-to-refresh, a list read on launch, or the return to
   the foreground. It compares the content fingerprint of the row on screen with the reloaded row:
-  the songs in order with their keys and medleys, the team notes, the pastor's message and the
-  status.
+  the songs in order with their keys and medleys, the team notes, the pastor's message, the
+  status, and the service on screen (date, kind and title, which a `reconcile_target` from the web
+  or the MCP can change).
   - When they differ, the detail shows the new content and sets `changeSeen = false`. A banner
     reads «La propuesta cambió. Revisa las canciones y notas antes de decidir.», with «Ya la
     revisé».
@@ -333,6 +338,19 @@ The actions:
     version of the writer's 409, which an unrequested reload would otherwise have absorbed.
   - A reload with no content change (the admin's own message only moved the revision) raises
     nothing.
+  - **The admin's own decision.** A decision that lands changes the status itself, so the check
+    must not count that change against the admin. The rule, and its bounds:
+    - It is armed only by a `done` whose answer reports a status (`expectedStatus` = that status).
+      An `idempotent` `done` arms it too: its reported status is the one already stored, so it
+      changes nothing. A `done` with no status in the answer does not arm it, and the next reload
+      compares everything.
+    - While armed, the next reload compares the status with `expectedStatus`, not with the status
+      on screen. Another admin's decision landing in between (a reopen after my approval) leaves a
+      different status and still raises the notice.
+    - Songs, notes, pastor's message and service are always compared, armed or not.
+    - It covers exactly one reload: the first list read that lands on the detail (whatever started
+      it, or a «no longer in the list») disarms it. A reload that fails or is refused while
+      something is in flight does not land, so it stays armed until one does.
 - `reload` re-checks `canReload` after its read and before touching anything, as W1b does.
   - It applies only a row with the same proposal id.
   - A row no longer in the list leaves the detail on «Esta propuesta ya no está en la lista.»
@@ -366,7 +384,8 @@ The actions:
 | anything else, including a lost answer | `failed` | «No se pudo confirmar. Recarga para ver si quedó.» |
 | a tap while something is in flight | `notSent` | nothing |
 
-After `done`, the list re-reads and the detail re-reads the same id. Retrying after `failed` is
+After `done`, the list re-reads and the detail re-reads the same id, under the own-decision rule
+above. Retrying after `failed` is
 safe: the writer's receipt or last-transition replay answers a repeated identical decision with
 no write.
 
@@ -419,6 +438,12 @@ The app sends nothing of its own.
   - malformed rows are dropped;
   - `threadOpen`.
 - The registries.
+- The decision body contract: `native/contract/proposal-decision-bodies.json` holds the three
+  bodies the phone sends (approve, request changes with a note, reopen with an empty note). Vitest
+  feeds each to `parseProposalTransitionRequest` and asserts the action and the note it reads;
+  XCTest encodes `ProposalDecisionBody` for each and asserts the same JSON. A misspelled or dropped
+  `adminNotes` would otherwise parse as `""` and «Pedir cambios» would commit with no note. This is
+  the W1 fixture's pattern (`native/contract/proposal-save-body.json`).
 
 **XCTest**
 
@@ -428,9 +453,13 @@ The app sends nothing of its own.
   - does not lock with no `observedRev` or with another proposal's id.
 - `reload` sets `heldRev` and the content from one row.
 - A sheet opened on a revision that has since moved sends nothing.
-- Any reload that changes the songs, notes or status on an open detail sets `changeSeen = false`,
-  and `canDecide` stays false until it is acknowledged. A reload that only moves the revision does
-  not.
+- Any reload that changes the songs, notes, pastor's message, status or service on an open detail
+  sets `changeSeen = false`, and `canDecide` stays false until it is acknowledged, except the one
+  status change the admin's own decision reported. A reload that only moves the revision does not.
+- The own-decision rule: after a `done` reporting status S, a reload landing with status S raises
+  nothing; with another status it raises the notice; a song change still raises it; it is disarmed
+  after one landed reload (a second reload compares the status normally); a failed or refused
+  reload leaves it armed; a `done` with no status does not arm it.
 - `canDecide` is false while posting, reloading or locked, and approve is false with no songs.
 - `canReload` is false while deciding.
 - The decision outcome maps from status and body.
