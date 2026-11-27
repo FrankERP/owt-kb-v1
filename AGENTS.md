@@ -270,7 +270,8 @@ looks wrong** — several exist to stop a plausible-looking change.
   ask for, and a stale copy gets a refresh note (ADR-0069). Guidance that depends on an answer goes in the answer, not the description.
 - **The ten admin write paths** (setlists PUT, roles create, roles PATCH, roles DELETE,
   copy-instruments, swap, publish-ready, unpublish, the fairness PUT, the proposals PATCH) delegate everything after
-  authorization to `app/utils/*Commit.ts`; MCP writes go only through them (`apply_schedule`: roles
+  authorization to `app/utils/*Commit.ts`; the proposals PATCH's writer is also called by the native app's
+  `PATCH /api/app/v1/admin/proposals/[proposalId]` (A-W1); MCP writes go only through them (`apply_schedule`: roles
   create + fairness PUT, ADR-0061; the saved-month editor: PATCH, copy, create, ADR-0066;
   `delete_services`: DELETE, only with the check's echoed list and token, never a past service,
   ADR-0072; the proposal tools: proposals PATCH, its planner in peek for the check, ADR-0076;
@@ -282,6 +283,8 @@ looks wrong** — several exist to stop a plausible-looking change.
   and the native app's `POST /api/app/v1/proposals` (a fresh access read first; ADR-0091 addendum);
   a Lead's message in a saved proposal's thread in `proposalMessageCommit.ts`, called by
   `POST /api/me/proposals/[id]/messages` and the app's `POST /api/app/v1/proposal-messages/[proposalId]` (W1b);
+  the admin's message there too (`postAdminProposalMessage`), called by `POST /api/admin/proposals/[id]/messages`
+  and the app's `POST /api/app/v1/admin/proposal-messages/[proposalId]` (A-W1);
   the song library's in `songSaveCommit.ts`, called by the song and author routes and the MCP song
   tools (edits by parts, a lossless lyrics gate, `ifRevisionId`, a token-keyed create; ADR-0077);
   people's in `memberCommit.ts`, called by the three `/api/admin/members` routes, `/me`'s PATCH and

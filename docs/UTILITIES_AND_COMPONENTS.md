@@ -565,6 +565,15 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   `{ status, body }`; called by the web route and the native app's door (W1b), pinned in
   `serviceCommitCallers.test.ts`. `appMessageAnswer` ([appProposalEditor.ts](../app/utils/appProposalEditor.ts))
   is the app door's answer: the thread by name and `mine`, `rev`, `observedRev`, no member id.
+  **`postAdminProposalMessage({ adminId, proposalId, raw })`** in the same module is the admin's
+  side (A-W1): the same shape, `admin_change_request`, never `admin_notes`, the lead push; called by
+  `/admin`'s route and the app's admin door.
+- **`readAdminProposals()` / `readAdminProposalsForApp(today)`** ([adminProposalsRead.ts](../app/utils/adminProposalsRead.ts))
+  — `/admin`'s «Propuestas» list read (`ADMIN_PROPOSAL_PROJECTION`), and the app's: the queue
+  whatever its date plus the rest from `today` on, with the special's name. Both on `operationalClient`.
+- **`buildAppAdminProposals(rows, me, today)`**, **`appRefusal`**, **`appReviewAnswer`** ([appAdminProposals.ts](../app/utils/appAdminProposals.ts))
+  — the app's admin list (names and `mine`, no member ids, `/admin`'s order, `threadOpen`), the ONE
+  refusal shape of the two admin write doors, and the decision's answer.
 - **`readProposalEditor(roleId, leadId)`** ([proposalEditorRead.ts](../app/utils/proposalEditorRead.ts))
   — the setlist-proposal editor's reads: the role (caller in `Lead[]`, `published != false`, a valid
   `serviceDayKey`), its ONE shared proposal (`service_ref`, oldest first) and the service

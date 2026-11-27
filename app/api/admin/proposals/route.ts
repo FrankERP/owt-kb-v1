@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
-import { THREAD_MESSAGES } from "@/app/utils/proposalMessageRead";
-import { serviceThreadMessagesOf } from "@/app/utils/serviceThread";
-import { operationalClient } from "@/sanity/lib/operationalClient";
+import { readAdminProposals } from "@/app/utils/adminProposalsRead";
 
 export async function GET() {
   const session = await requireActiveManager();
@@ -14,45 +12,9 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // `_rev` plus the approval-input fingerprint fields (target, ordered songs,
-  // team notes) and the recorded approval/transition receipts are part of the
-  // contract (A2 §6): an admin transition must submit the revision it actually
-  // reviewed, and the panel must be able to tell an approved proposal with a
-  // verifiable receipt from a legacy one without one.
-  // `earlier_messages` is what admins wrote on the service before its proposal
-  // existed (ADR-0065), shown in the same thread; `null` when there was nothing.
-  const proposals = await operationalClient.fetch(`
-    *[_type == "setlistProposal"] | order(service_date asc) {
-      _id,
-      _rev,
-      service_type,
-      service_date,
-      status,
-      lead_notes,
-      team_notes,
-      pastor_message,
-      admin_notes,
-      submitted_at,
-      reviewed_at,
-      approval_receipt,
-      last_transition,
-      "service_ref": service_ref._ref,
-      "lead_name": coalesce(lead->alias, lead->member_name),
-      ${THREAD_MESSAGES},
-      "earlier_messages": ${serviceThreadMessagesOf("^.service_ref._ref")},
-      "lead_id": lead->_id,
-      "contributors": contributors[]{ "id": person->_id, "name": coalesce(person->alias, person->member_name) },
-      songs[] {
-        _key,
-        play_key,
-        medley_tag,
-        "song_id": song._ref,
-        "title": song->title,
-        "author": song->author,
-        "key": song->key
-      }
-    }
-  `);
+  // The query and its contract notes live in `adminProposalsRead.ts`, which the native app's
+  // `GET /api/app/v1/admin/proposals` shares (A-W1).
+  const proposals = await readAdminProposals();
 
   return NextResponse.json(proposals);
 }

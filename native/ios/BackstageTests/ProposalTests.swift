@@ -61,6 +61,30 @@ final class ProposalContractTests: XCTestCase {
         }
     }
 
+    /// A-W1: each decision body the iPhone sends is the contract's, key for key.
+    func testTheDecisionBodiesAreExactlyTheContractsBodies() throws {
+        struct Cases: Decodable {
+            struct Case: Decodable {
+                struct Body: Decodable { let action: String; let rev: String; let adminNotes: String }
+                let name: String
+                let body: Body
+            }
+            let cases: [Case]
+        }
+        let data = try contractFixture("proposal-decision-bodies.json")
+        let fixture = try JSONDecoder().decode(Cases.self, from: data)
+        let raw = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let rawCases = try XCTUnwrap(raw["cases"] as? [[String: Any]])
+        XCTAssertEqual(fixture.cases.count, 3)
+        for (c, rawCase) in zip(fixture.cases, rawCases) {
+            let action = try XCTUnwrap(ProposalAction(rawValue: c.body.action), c.name)
+            let encoded = try JSONEncoder().encode(ProposalDecisionBody(action: action, rev: c.body.rev, adminNotes: c.body.adminNotes))
+            let ours = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? NSDictionary, c.name)
+            let theirs = try XCTUnwrap(rawCase["body"] as? NSDictionary, c.name)
+            XCTAssertEqual(ours, theirs, c.name)
+        }
+    }
+
     /// W1 spec D6: the Swift port of `normalizeMedleyTags` gives every shared case exactly.
     func testMedleysNormalizeAsTheWebDoes() throws {
         struct Cases: Decodable {

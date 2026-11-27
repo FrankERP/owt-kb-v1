@@ -311,15 +311,8 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
     file: "app/utils/proposalMessageCommit.ts",
     operation: "module",
     reason:
-      "guarded lead thread writer: resolves the setlistProposal through `loadCanonicalProposal`, then appends one message. The domain body of `POST /api/me/proposals/[id]/messages`, moved here so the native app's door (`POST /api/app/v1/proposal-messages/[proposalId]`, W1b, ADR-0091) calls the same writer; the routes keep only authorization and the JSON read, and `serviceCommitCallers.test.ts` pins who may import this module. It NO LONGER mirrors `lead_notes` — Child B removed that write, so the thread is the only record of a lead's note and the legacy field is a frozen archive. It carries no `ifRevisionId` ON PURPOSE — two co-leads posting at once must both land — so the usual observed-revision assertion is deliberately absent here and the entry exists to say so out loud (Child A §4)",
-    removalOwner: "permanent runtime writer (never removed — the lead side of the thread)",
-  },
-  {
-    file: "app/api/admin/proposals/[id]/messages/route.ts",
-    operation: "POST",
-    reason:
-      "guarded admin thread writer: same shape as the lead route, and does NOT touch `admin_notes`. Nothing does any more: Child B stopped the transition mirroring it too, so that field is a frozen change-request archive rather than one the transition keeps current. Restoring either write is what a rollback does, and the e2e fixtures move with it (Child A §1, §4)",
-    removalOwner: "permanent runtime writer (never removed — the admin side of the thread)",
+      "guarded thread writers, lead and admin: each resolves the setlistProposal through `loadCanonicalProposal`, then appends one message. (1) the lead's, the domain body of `POST /api/me/proposals/[id]/messages`, moved here so the native app's door (`POST /api/app/v1/proposal-messages/[proposalId]`, W1b, ADR-0091) calls the same writer. (2) the admin's (`postAdminProposalMessage`), the domain body of `POST /api/admin/proposals/[id]/messages`, moved so the native app's door calls the same writer (`POST /api/app/v1/admin/proposal-messages/[proposalId]`, A-W1): same shape as the lead side, and does NOT touch `admin_notes`. Nothing does any more: Child B stopped the transition mirroring it too, so that field is a frozen change-request archive rather than one the transition keeps current. Restoring either write is what a rollback does, and the e2e fixtures move with it (Child A §1, §4). The routes keep only authorization and the JSON read, and `serviceCommitCallers.test.ts` pins who may import this module. It NO LONGER mirrors `lead_notes` — Child B removed that write, so the thread is the only record of a lead's note and the legacy field is a frozen archive. It carries no `ifRevisionId` ON PURPOSE — two co-leads posting at once must both land — so the usual observed-revision assertion is deliberately absent here and the entry exists to say so out loud (Child A §4)",
+    removalOwner: "permanent runtime writer (never removed — both sides of the thread)",
   },
   {
     file: "app/utils/serviceThreadCommit.ts",

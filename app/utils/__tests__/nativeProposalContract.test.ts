@@ -8,7 +8,9 @@
 //  - the editor read's song rows (`buildAppProposalEditor`), echoed back as the app does, keep
 //    their keys and medley tags through `parseSongRows`, a row with no medley included;
 //  - `normalizeMedleyTags` gives each case of `native/contract/medley-normalize.json` exactly, the
-//    cases the Swift port is tested against.
+//    cases the Swift port is tested against;
+//  - every admin decision body in `native/contract/proposal-decision-bodies.json` (A-W1) parses
+//    with its action, revision and note: a dropped `adminNotes` would parse as an empty note.
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,7 +18,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { parseProposalSaveRequest } from "../proposalWriteRequest";
+import { parseProposalSaveRequest, parseProposalTransitionRequest } from "../proposalWriteRequest";
 import { parseSongRows } from "../setlistWriteRequest";
 import { buildAppProposalEditor } from "../appProposalEditor";
 import { normalizeMedleyTags } from "../medley";
@@ -128,4 +130,27 @@ describe("normalizeMedleyTags agrees with the shared cases", () => {
       expect(out.map((e) => e.medley_tag ?? null)).toEqual(c.expected);
     });
   }
+});
+
+// A-W1: the admin's three decision bodies, as the iPhone encodes them, parse with their action,
+// revision and note intact.
+type DecisionCase = {
+  name: string;
+  body: { action: string; rev: string; adminNotes: string };
+  parsed: { action: string; adminNotes: string };
+};
+
+describe("the native admin decision body contract (A-W1)", () => {
+  const { cases } = fixture<{ cases: DecisionCase[] }>("proposal-decision-bodies.json");
+
+  it("covers the three decisions the panel offers", () => {
+    expect(cases.map((c) => c.body.action).sort()).toEqual(["approve", "reopen", "request_changes"]);
+  });
+
+  it.each(cases.map((c) => [c.name, c] as const))("%s", (_name, c) => {
+    const result = parseProposalTransitionRequest(c.body);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toEqual({ action: c.parsed.action, rev: c.body.rev, adminNotes: c.parsed.adminNotes });
+  });
 });

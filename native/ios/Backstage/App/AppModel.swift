@@ -42,7 +42,26 @@ final class AppModel {
         case failed(String)
     }
 
+    /// The admin's «Propuestas» (A-W1).
+    enum AdminProposals: Equatable {
+        case idle
+        case loading
+        case loaded([AdminProposal])
+        /// `403`: not an admin (any more).
+        case forbidden
+        /// The first load failed; a later failure keeps the last list.
+        case failed(String)
+    }
+
     private(set) var phase: Phase = .starting
+    private(set) var adminProposals: AdminProposals = .idle
+    /// Bumped by every list read: only the newest read's answer lands, so a slow read started
+    /// before a decision can never replace the list read after it.
+    private var adminProposalsRead = 0
+    /// The number of the read that produced the current `.loaded` list. An open proposal applies a
+    /// list only when this is newer than the one it applied last: a read that failed, or was
+    /// superseded, leaves the old list in place and must not land on the detail again (spec D4).
+    private(set) var adminProposalsLanded = 0
     private(set) var catalogue: Catalogue = .idle
     /// Songs already opened in this run: a song reopens at once, and offline.
     private var openedSongs: [String: SongDetail] = [:]
@@ -105,6 +124,7 @@ final class AppModel {
             return
         }
         await loadServices()
+        await loadAdminProposals()
     }
 
     /// Loads the upcoming services. A session that ended goes to the sign-in screen as anywhere
@@ -289,6 +309,83 @@ final class AppModel {
         }
     }
 
+    // MARK: Admin: revisar propuestas (A-W1)
+
+    /// Reads the admin's proposals, for an admin only. Only the newest read's answer is kept.
+    func loadAdminProposals() async {
+        guard case .signedIn(let me) = phase, me.reviewsProposals else {
+            adminProposals = .idle
+            return
+        }
+        adminProposalsRead += 1
+        let read = adminProposalsRead
+        if case .idle = adminProposals { adminProposals = .loading }
+        if case .failed = adminProposals { adminProposals = .loading }
+        do {
+            let answer = try await api.adminProposals()
+            guard read == adminProposalsRead else { return }
+            adminProposalsLanded = read
+            adminProposals = .loaded(answer.proposals)
+        } catch APIError.forbidden {
+            guard read == adminProposalsRead else { return }
+            adminProposals = .forbidden
+        } catch {
+            guard read == adminProposalsRead else { return }
+            let cause = Self.sessionError(from: error)
+            switch cause {
+            case .signedOut, .accountDisabled:
+                show(cause)
+            case .network, .unavailable, .server:
+                if case .loaded = adminProposals {
+                    banner = Self.message(for: cause)
+                } else {
+                    adminProposals = .failed(Self.message(for: cause))
+                }
+            }
+        }
+    }
+
+    /// The «Pendientes» count on the tab.
+    var pendingProposalCount: Int {
+        guard case .loaded(let list) = adminProposals else { return 0 }
+        return list.filter { $0.status == ProposalStatus.pending.rawValue }.count
+    }
+
+    /// One decision. A session that ended goes to sign-in; every other answer goes back to the
+    /// detail. After one that landed, the list reads again.
+    func decideProposal(proposalId: String, body: ProposalDecisionBody) async -> ProposalDecisionOutcome {
+        let outcome: ProposalDecisionOutcome
+        do {
+            outcome = try await api.decideProposal(proposalId: proposalId, body: body)
+        } catch {
+            let cause = Self.sessionError(from: error)
+            switch cause {
+            case .signedOut, .accountDisabled:
+                show(cause)
+            case .network, .unavailable, .server:
+                break
+            }
+            return .failed
+        }
+        return outcome
+    }
+
+    /// One admin message into a proposal's thread.
+    func postAdminProposalMessage(proposalId: String, body: String) async -> ProposalMessageOutcome {
+        do {
+            return try await api.postAdminProposalMessage(proposalId: proposalId, body: body)
+        } catch {
+            let cause = Self.sessionError(from: error)
+            switch cause {
+            case .signedOut, .accountDisabled:
+                show(cause)
+            case .network, .unavailable, .server:
+                break
+            }
+            return .failed
+        }
+    }
+
     // MARK: Sign-in
 
     /// One sign-in: a fresh verifier and state, the server's page in an ephemeral browser session
@@ -330,6 +427,9 @@ final class AppModel {
     /// The app came back to the foreground: reload a list older than ten minutes, so «Hoy» and
     /// the setlist never stay from the day the app was last opened.
     func refreshIfStale() async {
+        // The admin's proposals are read on every return: a lead may have saved meanwhile, and an
+        // open detail must see it before a decision (A-W1 spec D4).
+        if case .signedIn = phase { Task { await loadAdminProposals() } }
         guard case .signedIn = phase,
               let loadedAt = servicesLoadedAt,
               Date().timeIntervalSince(loadedAt) > 600
@@ -350,6 +450,9 @@ final class AppModel {
         banner = nil
         services = .loading
         servicesLoadedAt = nil
+        adminProposals = .idle
+        // A read still in flight at sign-out must not land for the next person.
+        adminProposalsRead += 1
         catalogue = .idle
         openedSongs = [:]
         phase = .signedOut(notice: nil)
