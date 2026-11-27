@@ -283,6 +283,8 @@ looks wrong** — several exist to stop a plausible-looking change.
   Oasis Kids' in `kidsCommit.ts`, called by the four `/api/kids/*` writes and the MCP Kids tools;
   a Lead's shared setlist proposal in `proposalSaveCommit.ts`, called by `POST /api/me/proposals`
   and the native app's `POST /api/app/v1/proposals` (a fresh access read first; ADR-0091 addendum);
+  a Lead's message in a saved proposal's thread in `proposalMessageCommit.ts`, called by
+  `POST /api/me/proposals/[id]/messages` and the app's `POST /api/app/v1/proposal-messages/[proposalId]` (W1b);
   the song library's in `songSaveCommit.ts`, called by the song and author routes and the MCP song
   tools (edits by parts, a lossless lyrics gate, `ifRevisionId`, a token-keyed create; ADR-0077);
   people's in `memberCommit.ts`, called by the three `/api/admin/members` routes, `/me`'s PATCH and

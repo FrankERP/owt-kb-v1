@@ -179,6 +179,90 @@ enum ProposalSaveOutcome: Equatable, Sendable {
     case failed
 }
 
+// MARK: A message in a saved proposal's thread (W1b)
+
+/// `POST /api/app/v1/proposal-messages/{proposalId}`: the web's lead thread writer, through the app's
+/// door (`app/utils/proposalMessageCommit.ts`). The body is the web composer's, `{ body }`.
+struct ProposalMessageBody: Encodable, Equatable, Sendable {
+    let body: String
+}
+
+/// The door's 200: the proposal's thread after the append (`nil` when it could not be read back:
+/// keep what is shown, never blank it), the revision after the append, and the one read just before.
+struct ProposalMessageResponse: Decodable, Equatable, Sendable {
+    var messages: [ThreadMessage]? = nil
+    var rev: String? = nil
+    var observedRev: String? = nil
+}
+
+/// What became of one message, as the composer needs it.
+enum ProposalMessageOutcome: Equatable, Sendable {
+    case posted(ProposalMessageResponse)
+    /// `403`: no longer a Lead of a published service, or no longer in Alabanza.
+    case forbidden
+    /// `400 thread_closed`: the service day has passed.
+    case closed
+    /// `400 messages_full`: the thread holds its maximum.
+    case full
+    /// Any other `400`: the server refused the text.
+    case invalid
+    /// `404`, or a `409` other than `stale_revision`: the proposal is gone or needs an admin;
+    /// sending again would not help.
+    case refused
+    /// `503`, a `409 stale_revision` (a Sanity write conflict a retry clears), any other status, a
+    /// timeout or a lost answer: the message may or may not have landed.
+    case failed
+    /// Nothing was sent: the editor could not post at that moment (a second tap, a save or a reload
+    /// in flight). The composer says nothing and keeps the text.
+    case notSent
+
+    private struct Refusal: Decodable {
+        struct Details: Decodable { let issues: [String]? }
+        let error: String?
+        let details: Details?
+    }
+
+    /// The door's answer read as an outcome. Pure, so each mapping has its own XCTest.
+    static func from(status: Int, data: Data) -> ProposalMessageOutcome {
+        switch status {
+        case 200..<300:
+            guard let answer = try? JSONDecoder().decode(ProposalMessageResponse.self, from: data) else { return .failed }
+            return .posted(answer)
+        case 400:
+            let issues = (try? JSONDecoder().decode(Refusal.self, from: data))?.details?.issues ?? []
+            if issues.contains("thread_closed") { return .closed }
+            if issues.contains("messages_full") { return .full }
+            return .invalid
+        case 403: return .forbidden
+        case 404: return .refused
+        case 409:
+            let code = (try? JSONDecoder().decode(Refusal.self, from: data))?.error
+            return code == "stale_revision" ? .failed : .refused
+        default: return .failed
+        }
+    }
+}
+
+/// The writer's `isThreadOpen` (app/utils/proposalThread.ts): the conversation stays open through
+/// the service day, in Mexico City, whatever the phone's own zone. A date that is not a day is
+/// closed, as the server fails closed. The server decides anyway; this only hides a composer that
+/// would be refused.
+enum ProposalThreadRule {
+    static func isOpen(serviceDate: String, now: Date = Date()) -> Bool {
+        let day = String(serviceDate.prefix(10))
+        guard day.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil else { return false }
+        let format = DateFormatter()
+        format.calendar = Calendar(identifier: .gregorian)
+        format.locale = Locale(identifier: "en_US_POSIX")
+        format.timeZone = ServiceEvent.zone
+        format.dateFormat = "yyyy-MM-dd"
+        format.isLenient = false
+        // A day that does not exist (2026-02-30) is closed, as the server's date check refuses it.
+        guard let parsed = format.date(from: day), format.string(from: parsed) == day else { return false }
+        return day >= format.string(from: now)
+    }
+}
+
 // MARK: Limits (the server's, checked before sending so a 400 is never the first a lead hears)
 
 enum ProposalLimits {
@@ -308,6 +392,9 @@ struct ProposalDraftState: Equatable, Sendable {
     var pastorMessage: String
     private(set) var saving: ProposalStatus?
     private(set) var notice: Notice?
+    /// A thread message is in flight (W1b). Saving and «Recargar» wait for it: a save would race
+    /// the append's new revision, and a reload would forget the post and invite a duplicate.
+    private(set) var postingMessage = false
     /// What was last loaded or saved, to tell unsaved work.
     private var savedSnapshot: Snapshot
     /// What the save in flight SENT. The editor stays editable while it runs, so a 200 makes this
@@ -365,7 +452,14 @@ struct ProposalDraftState: Equatable, Sendable {
 
     /// Both actions: never while a save is in flight (a double tap cannot send two saves with the
     /// same observed revision), never once a reload is needed, never on an approved proposal.
-    var canSave: Bool { !isSaving && !reloadNeeded && !isApproved && limitProblem == nil }
+    var canSave: Bool { !isSaving && !postingMessage && !reloadNeeded && !isApproved && limitProblem == nil }
+
+    /// The composer under the conversation: once the proposal exists (any status, approved too, as
+    /// the web), never while a save or another message is in flight.
+    var canPostMessage: Bool { proposalExists && !isSaving && !postingMessage }
+
+    /// «Recargar» waits for a message in flight.
+    var canReload: Bool { !postingMessage }
 
     var isDirty: Bool { !isApproved && snapshot() != savedSnapshot }
 
@@ -485,6 +579,30 @@ struct ProposalDraftState: Equatable, Sendable {
         }
     }
 
+    // MARK: Thread messages (W1b)
+
+    /// The proposal id to post into, and the editor now «posting»; nil when it may not post now.
+    mutating func beginMessage() -> String? {
+        guard canPostMessage, case .single(let id, _) = observed else { return nil }
+        postingMessage = true
+        return id
+    }
+
+    /// What one message's answer does. The lead's own post moves the proposal's revision, so the
+    /// next save would be refused unless the editor follows it. It follows ONLY when the revision
+    /// read just before the append is the one this editor holds, for the same proposal (the web's
+    /// rule, `ProposalEditor.tsx` `postMessage`): if anything else moved the proposal first, the
+    /// editor keeps its revision and the next save says «Propuesta actualizada». The draft, the
+    /// notice and what counts as saved are never touched here.
+    mutating func finishMessage(proposalId: String, rev: String?, observedRev: String?) {
+        postingMessage = false
+        guard let rev, let observedRev,
+              case .single(let id, let current) = observed,
+              id == proposalId, current == observedRev
+        else { return }
+        observed = .single(id: id, rev: rev)
+    }
+
     /// The 409 codes a reload fixes: the proposal moved, or its first create raced a co-lead's.
     static let reloadCodes: Set<String> = ["stale_revision", "bootstrap_completed_reload"]
 
@@ -493,6 +611,7 @@ struct ProposalDraftState: Equatable, Sendable {
 
     /// «Recargar»: the ONE path that adopts what the server holds, the lead's draft replaced.
     mutating func reload(from fresh: ProposalEditorResponse) {
+        guard canReload else { return }
         self = ProposalDraftState(loaded: fresh)
     }
 

@@ -426,12 +426,19 @@ struct ServiceFullCard: View {
 }
 
 /// The pastor's message and the team notes: an icon tile, a small-caps title, the text.
-private struct NoteBox: View {
+struct NoteBox: View {
     let title: String
     let text: String
     let symbol: String
     let pastor: Bool
     @State private var expanded = false
+
+    init(title: String, text: String, symbol: String, pastor: Bool) {
+        self.title = title
+        self.text = text
+        self.symbol = symbol
+        self.pastor = pastor
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {

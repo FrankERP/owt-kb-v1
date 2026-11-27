@@ -114,6 +114,20 @@ struct APIClient: Sendable {
         }
     }
 
+    /// One message into a saved proposal's thread (W1b). A lost answer is `.failed`: the message may
+    /// have landed, and the composer keeps the text.
+    func postProposalMessage(proposalId: String, body text: String) async throws -> ProposalMessageOutcome {
+        let encoded: Data
+        do { encoded = try JSONEncoder().encode(ProposalMessageBody(body: text)) } catch { return .invalid }
+        let (data, status): (Data, Int)
+        do {
+            (data, status) = try await send("/api/app/v1/proposal-messages/\(Self.segment(proposalId))", method: "POST", body: encoded)
+        } catch APIError.session(.network) {
+            return .failed
+        }
+        return ProposalMessageOutcome.from(status: status, data: data)
+    }
+
     private struct ErrorCode: Decodable { let error: String }
 
     private static func segment(_ value: String) -> String {

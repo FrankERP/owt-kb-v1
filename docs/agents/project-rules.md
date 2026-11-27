@@ -547,7 +547,14 @@ several exist precisely to stop a plausible-looking change.
   `saveProposal` (`proposalSaveCommit.ts`): the domain body of `POST /api/me/proposals`, which keeps
   only worship membership and the JSON read, moved so the native app's door `POST /api/app/v1/proposals` calls the same writer
   (ADR-0091 and its W1 addendum; spec `docs/superpowers/specs/2026-11-26-native-proposal-save-design.md`). The app's door adds a fresh
-  access read before the writer and answers any throw with 503; the editor's reads are `proposalEditorRead.ts`, shared with the web page. The DELETE route's body is `deleteRole`
+  access read before the writer and answers any throw with 503; the editor's reads are `proposalEditorRead.ts`, shared with the web page. A Lead's message in a saved
+  proposal's thread is `postProposalMessage` (`proposalMessageCommit.ts`, W1b): the domain body of
+  `POST /api/me/proposals/[id]/messages` (no `ifRevisionId` on purpose, the Lead check on the
+  canonical proposal's role, `isThreadOpen`, the PRE-COMMIT notice snapshot, the approved-only admin
+  push), moved so the app's `POST /api/app/v1/proposal-messages/[proposalId]` calls the same writer;
+  each door passes its own author name (the web the session's, the app one guarded live read). The
+  app follows the append's new revision only when `observedRev` is the one it holds, as the web
+  does (spec `docs/superpowers/specs/2026-11-27-native-proposal-message-design.md`). The DELETE route's body is `deleteRole`
   (`roleDeleteCommit.ts`, admin parity phase 2, ADR-0072): the route uses the default `notices: "deferred"`
   (`after()`), `delete_services` and its card twin `"inline"` (awaited). A chat delete runs only with
   the list and token `check_service_deletes` minted (HMAC over the month and the whole list, label
