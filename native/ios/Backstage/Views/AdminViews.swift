@@ -196,7 +196,10 @@ struct AdminProposalDetail: View {
     @State private var sheet: DecisionSheet?
     @State private var note: String?
     @State private var decisions = 0
-    @State private var reloading = false
+    /// Reloads in flight (a counter: back-to-back messages each start one, and the decisions must
+    /// wait for the last).
+    @State private var reloads = 0
+    private var reloading: Bool { reloads > 0 }
     /// A note typed into a sheet that closed without sending (the proposal moved): offered again.
     @State private var keptNotes: [ProposalAction: String] = [:]
 
@@ -271,18 +274,19 @@ struct AdminProposalDetail: View {
 
     /// A list read, then that read applied here if it landed.
     private func reload() async {
-        reloading = true
+        reloads += 1
         await model.loadAdminProposals()
-        reloading = false
+        reloads -= 1
         land()
     }
 
     /// Applies the model's list when it comes from a read newer than the last one applied here
     /// (`ProposalReviewState.land`). A read refused while a decision or a message is in flight is
     /// applied when the flight ends, which calls this again.
-    private func land() {
-        guard case .loaded(let rows) = model.adminProposals else { return }
-        state?.land(rows, read: model.adminProposalsLanded)
+    @discardableResult
+    private func land() -> Bool {
+        guard case .loaded(let rows) = model.adminProposals else { return false }
+        return state?.land(rows, read: model.adminProposalsLanded) == true
     }
 
     private func passOverReadsSoFar() { state?.passOver(read: model.adminProposalsLanded) }
@@ -346,7 +350,9 @@ struct AdminProposalDetail: View {
         await model.loadAdminProposals()
         guard model.adminProposalsLanded > before, case .loaded(let rows) = model.adminProposals,
               let row = rows.first(where: { $0.id == proposalId }) else { return nil }
-        land()
+        // Only a read that landed on the detail counts (one refused during a decision does not:
+        // the thread on screen would not show what the check found).
+        guard land() || state?.appliedRead == model.adminProposalsLanded else { return nil }
         return row.conversation
     }
 

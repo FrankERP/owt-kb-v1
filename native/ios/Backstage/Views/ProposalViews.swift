@@ -358,7 +358,10 @@ struct ProposalEditorView: View {
     /// thread on screen follows it, the draft is never touched. Nil when the read fails.
     private func verifyThread() async -> [ThreadMessage]? {
         guard case .loaded(let answer) = await model.loadProposalEditor(roleId: service.id) else { return nil }
-        if let messages = answer.proposal?.messages { savedMessages = messages }
+        // A save's answer or «Recargar» that started meanwhile carries a newer thread: keep it.
+        if let messages = answer.proposal?.messages, !reloading, draft?.isSaving != true {
+            savedMessages = messages
+        }
         return conversation(answer)
     }
 

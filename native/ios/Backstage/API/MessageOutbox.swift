@@ -35,7 +35,14 @@ struct MessageOutbox: Equatable, Sendable {
         /// The keys of the person's own messages the thread already held when this one was written:
         /// a message of theirs with the same text and a key outside this set is this one.
         var known: Set<String>
+        /// Reads after a lost answer that did not show it. One is not proof: the write may still be
+        /// on its way to the database when the read answers.
+        var misses = 0
     }
+
+    /// Reads of the thread, after a lost answer, that must all miss the message before it is
+    /// offered again.
+    static let missesBeforeRetry = 2
 
     private(set) var items: [Item] = []
     /// The thread keys of the messages sent from this screen, for their «Enviado».
@@ -44,12 +51,15 @@ struct MessageOutbox: Equatable, Sendable {
 
     // MARK: Sending
 
-    /// The person tapped «Enviar»: the message joins the chat at once.
+    /// The person tapped «Enviar»: the message joins the chat at once. It is kept, and sent,
+    /// trimmed: the server stores `body.trim()`, and the thread's copy must read the same to be
+    /// recognised as this message.
     @discardableResult
     mutating func enqueue(_ body: String, thread: [ThreadMessage]) -> Int {
         let id = nextId
         nextId += 1
-        items.append(Item(id: id, body: body, state: .queued, known: Self.ownKeys(thread)))
+        let text = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        items.append(Item(id: id, body: text, state: .queued, known: Self.ownKeys(thread)))
         return id
     }
 
@@ -67,7 +77,10 @@ struct MessageOutbox: Equatable, Sendable {
         switch outcome {
         case .posted:
             set(id, .sent)
-            if let thread { reconcile(thread) }
+            guard let thread else { return }
+            // This message first: an earlier one with the same text must not take its key.
+            if let index = items.firstIndex(where: { $0.id == id }) { _ = claim(at: index, in: thread) }
+            reconcile(thread)
         case .failed:
             set(id, .checking)
         case .notSent:
@@ -86,21 +99,28 @@ struct MessageOutbox: Equatable, Sendable {
         }
     }
 
-    /// The thread read after a lost answer, or nil when that read failed too.
-    mutating func checked(_ id: Int, thread: [ThreadMessage]?) {
-        guard let index = items.firstIndex(where: { $0.id == id }), items[index].state == .checking else { return }
+    /// The thread read after a lost answer, or nil when that read failed too. Answers whether
+    /// another read is needed: a message is «No se envió» only after `missesBeforeRetry` reads
+    /// that do not show it.
+    @discardableResult
+    mutating func checked(_ id: Int, thread: [ThreadMessage]?) -> Bool {
+        guard let index = items.firstIndex(where: { $0.id == id }), items[index].state == .checking else { return false }
         guard let thread else {
             items[index].state = .unconfirmed
-            return
+            return false
         }
-        if claim(at: index, in: thread) { return }
+        if claim(at: index, in: thread) { return false }
+        items[index].misses += 1
+        if items[index].misses < Self.missesBeforeRetry { return true }
         items[index].state = .notDelivered
+        return false
     }
 
-    /// «Revisar» on an unconfirmed message: read the thread again.
+    /// «Revisar» on an unconfirmed message: read the thread again, from the start.
     mutating func recheck(_ id: Int) {
         guard let index = items.firstIndex(where: { $0.id == id }), items[index].state == .unconfirmed else { return }
         items[index].state = .checking
+        items[index].misses = 0
     }
 
     /// «Reintentar»: only a message the thread provably does not hold.
@@ -148,8 +168,10 @@ struct MessageOutbox: Equatable, Sendable {
     /// `sentKeys`, and no other item can claim that key.
     private mutating func claim(at index: Int, in thread: [ThreadMessage]) -> Bool {
         let item = items[index]
+        let body = item.body.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let match = thread.first(where: {
-            $0.mine && $0.body == item.body && !item.known.contains($0.key) && !sentKeys.contains($0.key)
+            $0.mine && $0.body.trimmingCharacters(in: .whitespacesAndNewlines) == body
+                && !item.known.contains($0.key) && !sentKeys.contains($0.key)
         }) else { return false }
         sentKeys.insert(match.key)
         items.remove(at: index)

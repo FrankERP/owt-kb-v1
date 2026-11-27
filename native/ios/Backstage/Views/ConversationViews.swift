@@ -33,6 +33,8 @@ struct ConversationThread: View {
             ForEach(outbox.items) { item in
                 OutgoingBubble(
                     item: item,
+                    // A message waiting for a composer that is gone (the thread closed) never goes.
+                    stranded: item.state == .queued && !canCompose,
                     recheck: { recheck(item.id) },
                     retry: { outbox.retry(item.id); drain() },
                     edit: { edit(item.id) },
@@ -111,11 +113,19 @@ struct ConversationThread: View {
             outbox.resolve(item.id, outcome, thread: thread)
             if outcome == .failed {
                 // A lost answer: it may have landed. Look before anything is offered again.
-                outbox.checked(item.id, thread: await verify())
+                await check(item.id)
             }
             draining = false
             if outcome != .notSent { drain() }
         }
+    }
+
+    /// Reads the thread until it shows the message or has missed it enough times to say so. The
+    /// first read waits a moment: a write whose answer was lost may still be reaching the database.
+    private func check(_ id: Int) async {
+        repeat {
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+        } while outbox.checked(id, thread: await verify())
     }
 
     private func recheck(_ id: Int) {
@@ -123,7 +133,7 @@ struct ConversationThread: View {
         outbox.recheck(id)
         draining = true
         Task {
-            outbox.checked(id, thread: await verify())
+            await check(id)
             draining = false
             drain()
         }
@@ -140,6 +150,7 @@ struct ConversationThread: View {
 /// A message of the person's that the thread does not show yet, with where it is.
 private struct OutgoingBubble: View {
     let item: MessageOutbox.Item
+    let stranded: Bool
     let recheck: () -> Void
     let retry: () -> Void
     let edit: () -> Void
@@ -172,25 +183,47 @@ private struct OutgoingBubble: View {
             )
         }
         .accessibilityElement(children: .contain)
+        .onChange(of: item.state) { _, state in
+            if let words = Self.announcement(state) {
+                AccessibilityNotification.Announcement(words).post()
+            }
+        }
+    }
+
+    private static func announcement(_ state: MessageOutbox.Item.State) -> String? {
+        switch state {
+        case .sent: "Mensaje enviado"
+        case .notDelivered: "El mensaje no se envió"
+        case .unconfirmed: "No se pudo confirmar si el mensaje llegó"
+        case .refused(let why): why
+        default: nil
+        }
     }
 
     private var isOnItsWay: Bool {
+        if stranded { return false }
         switch item.state {
-        case .queued, .sending, .checking: true
-        default: false
+        case .queued, .sending, .checking: return true
+        default: return false
         }
     }
 
     private var problem: Bool {
+        if stranded { return true }
         switch item.state {
-        case .unconfirmed, .notDelivered, .refused: true
-        default: false
+        case .unconfirmed, .notDelivered, .refused: return true
+        default: return false
         }
     }
 
     @ViewBuilder
     private var status: some View {
         switch item.state {
+        case .queued where stranded:
+            Label("No se envió: la conversación ya no acepta mensajes.", systemImage: "exclamationmark.circle")
+                .font(.bsBody(11))
+                .foregroundStyle(BS.warning)
+                .multilineTextAlignment(.trailing)
         case .queued, .sending:
             HStack(spacing: 6) {
                 ProgressView().controlSize(.mini)
@@ -226,6 +259,10 @@ private struct OutgoingBubble: View {
     @ViewBuilder
     private var actions: some View {
         switch item.state {
+        case .queued where stranded:
+            HStack(spacing: 14) {
+                action("Quitar", remove, strong: true)
+            }
         case .unconfirmed:
             HStack(spacing: 14) {
                 action("Quitar", remove)
@@ -251,7 +288,8 @@ private struct OutgoingBubble: View {
         Button(title, action: run)
             .font(.bsBody(13, strong ? .semibold : .regular))
             .foregroundStyle(strong ? BS.accent : BS.inkMuted)
-            .frame(minHeight: 32)
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
     }
 }
 

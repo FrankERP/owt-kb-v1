@@ -62,7 +62,11 @@ final class MessageOutboxTests: XCTestCase {
         box.resolve(a, .failed, thread: nil)
         box.retry(a)
         XCTAssertEqual(box.items.first?.state, .checking, "no retry while it may have landed")
-        box.checked(a, thread: before)
+        XCTAssertTrue(box.checked(a, thread: before), "one read that misses it is not proof")
+        XCTAssertEqual(box.items.first?.state, .checking)
+        box.retry(a)
+        XCTAssertEqual(box.items.first?.state, .checking)
+        XCTAssertFalse(box.checked(a, thread: before))
         XCTAssertEqual(box.items.first?.state, .notDelivered)
         box.retry(a)
         XCTAssertEqual(box.items.first?.state, .queued)
@@ -132,7 +136,58 @@ final class MessageOutboxTests: XCTestCase {
         let a = box.enqueue("Ok", thread: before)
         box.markSending(a)
         box.resolve(a, .failed, thread: nil)
-        box.checked(a, thread: before + [message("k1", "Ok", mine: false)])
+        let others = before + [message("k1", "Ok", mine: false)]
+        box.checked(a, thread: others)
+        box.checked(a, thread: others)
         XCTAssertEqual(box.items.first?.state, .notDelivered)
+    }
+
+    // MARK: The server trims
+
+    func testAMessageIsKeptAndSentTrimmed() {
+        var box = MessageOutbox()
+        box.enqueue("  Listo \n", thread: before)
+        XCTAssertEqual(box.items.first?.body, "Listo")
+    }
+
+    func testALandedMessageWithOuterSpacesIsRecognisedAfterALostAnswer() {
+        var box = MessageOutbox()
+        let a = box.enqueue("Listo ", thread: before)
+        box.markSending(a)
+        box.resolve(a, .failed, thread: nil)
+        box.checked(a, thread: before + [message("k1", "Listo")])
+        XCTAssertTrue(box.items.isEmpty, "it landed: never offered again")
+    }
+
+    func testAPostedMessageWithOuterSpacesLeavesTheOutbox() {
+        var box = MessageOutbox()
+        let a = box.enqueue("Gracias\n", thread: before)
+        box.markSending(a)
+        box.resolve(a, .posted(ProposalMessageResponse()), thread: before + [message("k1", "Gracias")])
+        XCTAssertTrue(box.items.isEmpty)
+    }
+
+    func testThePostedMessageClaimsItsKeyBeforeAnEarlierUnconfirmedTwin() {
+        var box = MessageOutbox()
+        let a = box.enqueue("Sí", thread: before)
+        box.markSending(a)
+        box.resolve(a, .failed, thread: nil)
+        box.checked(a, thread: nil)
+        XCTAssertEqual(box.items.first?.state, .unconfirmed)
+        let b = box.enqueue("Sí", thread: before)
+        box.markSending(b)
+        box.resolve(b, .posted(ProposalMessageResponse()), thread: before + [message("k2", "Sí")])
+        XCTAssertEqual(box.items.map(\.id), [a], "k2 is the posted one's; the unconfirmed one stays to be checked")
+    }
+
+    func testARecheckStartsCountingAgain() {
+        var box = MessageOutbox()
+        let a = box.enqueue("Uno", thread: before)
+        box.markSending(a)
+        box.resolve(a, .failed, thread: nil)
+        box.checked(a, thread: before)
+        box.checked(a, thread: nil)
+        box.recheck(a)
+        XCTAssertTrue(box.checked(a, thread: before), "a fresh check needs its own two misses")
     }
 }
