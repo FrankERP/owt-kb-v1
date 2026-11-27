@@ -1,6 +1,11 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+extension UTType {
+    /// A song row dragged inside the proposal editor (declared in project.yml).
+    static let setlistRow = UTType(exportedAs: "com.owtBackstage.app.setlist-row")
+}
+
 // «Proponer setlist» (ADR-0091 W1): a Lead builds the service's shared setlist proposal, the same
 // one the web editor (`/me/propose/{roleId}`) edits, with the same rules. Every answer of a save
 // goes through `ProposalDraftState`, which never throws the lead's work away.
@@ -350,6 +355,7 @@ struct ProposalEditorContent: View {
     /// The row being dragged: it stays in the list as a faint placeholder while the others make
     /// room, so the order on screen is always the order that will be saved.
     @State private var dragging: UUID?
+    @Environment(\.scenePhase) private var scenePhase
 
     init(
         service: AppService,
@@ -390,6 +396,14 @@ struct ProposalEditorContent: View {
             notesCard
             if !messages.isEmpty { conversationCard }
         }
+        // A drag released anywhere on the page ends; so does any touch after one the system
+        // cancelled, and leaving the app (no drop is ever reported for those).
+        .onDrop(of: [UTType.setlistRow], isTargeted: nil) { _ in
+            dragging = nil
+            return true
+        }
+        .simultaneousGesture(TapGesture().onEnded { if dragging != nil { dragging = nil } })
+        .onChange(of: scenePhase) { dragging = nil }
     }
 
     // MARK: The service
@@ -492,7 +506,7 @@ struct ProposalEditorContent: View {
                 SheetTitle(text: "Canciones", count: draft.songs.isEmpty ? nil : draft.songs.count)
                 Spacer()
                 if !approved && draft.songs.count > 1 {
-                    Text("Mantén presionada para mover")
+                    Text("Mantén presionada para mover o quitar")
                         .font(.bsBody(12))
                         .foregroundStyle(BS.inkDim)
                 }
@@ -514,7 +528,7 @@ struct ProposalEditorContent: View {
                             song: song,
                             cover: covers[song.songId],
                             approved: approved,
-                            setKey: { key in draft.setPlayKey(key, at: index) }
+                            setKey: { key in setKey(key, for: song.id) }
                         )
                         .opacity(dragging == song.id ? 0.35 : 1)
                         .modifier(SongReorder(
@@ -527,22 +541,20 @@ struct ProposalEditorContent: View {
                         .contextMenu {
                             if !approved {
                                 if index > 0 {
-                                    Button { step(index, by: -1) } label: { Label("Subir", systemImage: "arrow.up") }
+                                    Button { step(song.id, by: -1) } label: { Label("Subir", systemImage: "arrow.up") }
                                 }
                                 if index + 1 < draft.songs.count {
-                                    Button { step(index, by: 1) } label: { Label("Bajar", systemImage: "arrow.down") }
+                                    Button { step(song.id, by: 1) } label: { Label("Bajar", systemImage: "arrow.down") }
                                 }
-                                Button(role: .destructive) {
-                                    withAnimation(.snappy(duration: 0.22)) { draft.remove(at: IndexSet(integer: index)) }
-                                } label: {
+                                Button(role: .destructive) { removeSong(song.id) } label: {
                                     Label("Quitar de la propuesta", systemImage: "trash")
                                 }
                             }
                         }
                     }
                 }
-                // A drop between rows (or after a cancelled drag) still ends the drag.
-                .onDrop(of: [UTType.text], isTargeted: nil) { _ in
+                // A drop in the gaps between rows ends the drag too.
+                .onDrop(of: [UTType.setlistRow], isTargeted: nil) { _ in
                     dragging = nil
                     return true
                 }
@@ -616,12 +628,28 @@ struct ProposalEditorContent: View {
         }
     }
 
-    private func step(_ index: Int, by delta: Int) {
+    // The menus act on the row they were opened on, found by its identity when tapped: the
+    // list may have changed under an open menu (a reload landing).
+
+    private func step(_ id: UUID, by delta: Int) {
+        dragging = nil
+        guard let index = draft.songs.firstIndex(where: { $0.id == id }) else { return }
         let to = index + delta
         guard draft.songs.indices.contains(to) else { return }
         withAnimation(.snappy(duration: 0.22)) {
             draft.move(from: IndexSet(integer: index), to: delta > 0 ? to + 1 : to)
         }
+    }
+
+    private func removeSong(_ id: UUID) {
+        dragging = nil
+        guard let index = draft.songs.firstIndex(where: { $0.id == id }) else { return }
+        withAnimation(.snappy(duration: 0.22)) { draft.remove(at: IndexSet(integer: index)) }
+    }
+
+    private func setKey(_ key: String, for id: UUID) {
+        guard let index = draft.songs.firstIndex(where: { $0.id == id }) else { return }
+        draft.setPlayKey(key, at: index)
     }
 
     // MARK: Notes
@@ -852,11 +880,19 @@ private struct SongReorder<Preview: View>: ViewModifier {
             content
                 .onDrag {
                     dragging = id
-                    return NSItemProvider(object: id.uuidString as NSString)
+                    // Only this app's own rows read this type, and only inside this app: nothing
+                    // takes the row as text (a notes field would paste its id).
+                    let provider = NSItemProvider()
+                    let payload = Data(id.uuidString.utf8)
+                    provider.registerDataRepresentation(forTypeIdentifier: UTType.setlistRow.identifier, visibility: .ownProcess) { done in
+                        done(payload, nil)
+                        return nil
+                    }
+                    return provider
                 } preview: {
-                    preview.frame(width: 340)
+                    preview.frame(width: 361)
                 }
-                .onDrop(of: [UTType.text], delegate: SongDropDelegate(target: id, dragging: $dragging, move: move))
+                .onDrop(of: [UTType.setlistRow], delegate: SongDropDelegate(target: id, dragging: $dragging, move: move))
         } else {
             content
         }

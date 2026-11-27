@@ -50,6 +50,13 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         ITSAppUsesNonExemptEncryption: false
+        # A song row dragged inside the proposal editor (ProposalViews.swift): its own type, so no
+        # text field or other app takes the drop as text.
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: com.owtBackstage.app.setlist-row
+            UTTypeDescription: Canción de una propuesta
+            UTTypeConformsTo:
+              - public.data
         # A rehearsal mix keeps sounding with the screen locked or another app in front
         # (Backstage/Audio/MixPlayer.swift).
         UIBackgroundModes:
