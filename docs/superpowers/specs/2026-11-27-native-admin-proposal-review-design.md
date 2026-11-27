@@ -172,6 +172,14 @@ dropped. A song row with no `song_id` is dropped too, because the writer's appro
 it (`proposal_songs_malformed`) and the web cannot approve it either. The app still gets 409 from
 the writer, never a silent publish, so dropping the row only affects what is displayed.
 
+Two consequences of that narrowing are accepted for the phone and told to the owner:
+
+- A past-dated approved row cannot be reopened from the phone; that stays on the web.
+- A past-dated queue row that gets decided leaves the list. See D4's «no longer in the list».
+
+The GET door's source names neither writer module. `srVerificationRunContext`'s scan matches
+substrings, and a read route needs no run-context wrapper.
+
 The rows are ordered as `sortProposals` orders them (`app/components/admin/proposalListView.ts`,
 a pure module).
 
@@ -247,7 +255,8 @@ those of D3.2.
 
 The detail shows:
 
-- the songs, each with its Biblioteca cover (the cache the editor already uses), title, author,
+- the songs, each with its Biblioteca cover (the cache the editor already uses; a music-note tile
+  when there is none, as for an admin outside Alabanza, whose Biblioteca read is refused), title, author,
   the proposed key in the key colour, and the medley mark;
 - «Mensaje del pastor», with the web's note that approving copies it into the service when the
   service has none;
@@ -272,8 +281,10 @@ The actions:
 
 ### Pure state: `ProposalReviewState` (`native/ios/Backstage/API/AdminProposals.swift`), XCTested
 
-- `heldRev`: the revision the admin is reviewing. It is set from the list read and re-set only by
-  a reload.
+- `heldRev`: the revision the admin is reviewing. It is set only by a list read, the same read
+  that supplies the songs, notes and status on screen. Content and revision therefore always come
+  from one document read. **Nothing else ever writes `heldRev`**: not a message's `rev`, and not a
+  revision fetched for a decision.
 - `locked`: the fail-closed lock. It is set by any 409 from a decision, and by a posted message
   whose `observedRev` is non-nil and differs from `heldRev` (the web's `postAndLock`). It is
   cleared only by a reload.
@@ -282,16 +293,38 @@ The actions:
   non-empty.
 - `canPost`: none of the flags set and `threadOpen`. A locked card may still post, as on the web.
 - `canReload`: neither `deciding` nor `posting`.
-- `finishMessage(proposalId:rev:observedRev:)`:
+- `finishMessage(proposalId:observedRev:)`:
   - It clears `posting`.
-  - It adopts `rev` into `heldRev` only when the proposal id matches, `observedRev == heldRev`,
-    and both are non-nil. So the admin's own message never makes their next decision 409.
-  - When `observedRev` is non-nil and differs, it sets `locked`.
-  - With no `observedRev` it changes nothing else. A decision on that held revision then meets the
-    writer's 409 and the banner, which is the fail-closed outcome.
+  - It never adopts the answer's `rev`. That revision comes from a read-back taken AFTER the
+    append, which carries no `ifRevisionId`. A lead's save, or another admin's decision, can land
+    between the writer's load and that read-back. It would then be folded into `rev` while the
+    screen still shows the old songs. Adopting it would let the next «Aprobar» publish content the
+    admin was never shown.
+  - When the proposal id matches and `observedRev` is non-nil and differs from `heldRev`, it sets
+    `locked` (the web's `postAndLock`).
+  - The answer's `messages` (when non-nil) replace the thread on screen at once, so the admin sees
+    their message.
+- **After every `posted`, the detail reloads** through the ordinary `reload`. That one list read
+  brings the content and `heldRev` together, so the admin's own message never makes their next
+  decision 409.
+  - If that reload fails, `heldRev` stays as it was. A decision then meets the writer's 409 and the
+    banner: fail closed.
+  - If the reloaded songs, team notes, pastor's message or status differ from what was on screen,
+    the detail shows «La propuesta cambió mientras escribías. Revísala antes de decidir.». The
+    screen already shows the new content, and the approval confirmation shows it again.
 - A decision always sends `heldRev`, never a revision fetched for the purpose. That is the
   writer's contract («the revision the admin ACTUALLY reviewed»).
 - `reload` re-checks `canReload` after its read and before touching anything, as W1b does.
+  - It applies only a row with the same proposal id.
+  - A row no longer in the list leaves the detail on «Esta propuesta ya no está en la lista.»
+    with no actions. A past-dated row that leaves the queue by being approved, or a deleted
+    proposal, ends up here.
+  - Returning to the foreground reloads the list and an open detail.
+- Every decision sheet and the approval confirmation record the `heldRev` they were opened on. At
+  the confirming tap, the app re-checks `canDecide`. If `heldRev` moved meanwhile, it sends
+  nothing: the sheet closes, keeping the typed note, and the detail says «La propuesta cambió.
+  Revísala de nuevo.». So a decision only ever carries the revision whose content was on screen
+  when the admin chose.
 
 ### Outcomes
 
@@ -302,7 +335,8 @@ The actions:
 | 200, `idempotent` | `done` | «Sin cambios» |
 | 200, approve | `done` | the web's `PASTOR_MESSAGE_TOAST` wording for `copied`, `kept_existing` or `failed`, else «Setlist publicado» |
 | 200, other actions | `done` | «Cambios solicitados» or «Propuesta reabierta» |
-| 409 | `conflict` | locks the card, banner «Propuesta actualizada. Cambió mientras la revisabas. Recarga y vuelve a revisar.» with «Recargar» |
+| 409 `stale_revision` or `bootstrap_completed_reload` | `conflict` | locks the card, banner «Propuesta actualizada. Cambió mientras la revisabas. Recarga y vuelve a revisar.» with «Recargar» |
+| any other 409 (`integrity_conflict`, `legacy_approval_unverified`, `ambiguous_target`, …) | `blocked` | locks the card, «Esta propuesta tiene un problema que hay que arreglar desde la web.» A reload cannot clear it (W1b's `reloadCodes` split) |
 | 403 | `forbidden` | «Ya no puedes revisar propuestas.» |
 | 404 | `refused` | «Esta propuesta ya no existe.» |
 | other 400 | `invalid` | «No se pudo procesar. Revisa la nota.» |
@@ -313,8 +347,11 @@ After `done`, the list re-reads and the detail re-reads the same id. Retrying af
 safe: the writer's receipt or last-transition replay answers a repeated identical decision with
 no write.
 
-Messages reuse W1b's `ProposalMessageOutcome` mapping unchanged: `posted`, `forbidden`, `closed`,
-`full`, `invalid`, `refused`, `failed`, `notSent`, with the same Spanish wording.
+Messages reuse W1b's `ProposalMessageOutcome` mapping: `posted`, `forbidden`, `closed`, `full`,
+`invalid`, `refused`, `failed`, `notSent`. The wording is W1b's except for `failed`. An admin
+message has no idempotency, so a retry after a lost answer is a permanent duplicate and a second
+push. The admin's `failed` therefore says «No se pudo confirmar el envío. Recarga para ver si
+llegó antes de volver a enviarlo.», and the text stays in the field.
 
 ### Notifications
 
@@ -348,6 +385,8 @@ The app sends nothing of its own.
   - a 2xx carries no member id, no `message` and no `ok`.
 - The PATCH door also covers: `reconcile_target` is refused before the writer, and the reviewer id
   reaching the writer is the session's.
+- `appRefusal` (the ONE wire reduction, in `appAdminProposals.ts`, used by both admin write
+  doors): it keeps `error`, `conflict` and a string `issues` array, and drops everything else.
 - `buildAppAdminProposals` unit tests:
   - names and `mine` only;
   - co-leads exclude the lead;
@@ -360,9 +399,11 @@ The app sends nothing of its own.
 **XCTest**
 
 - `finishMessage`:
-  - adopts only when the revisions match;
-  - locks when they differ;
-  - leaves everything as it was with no `observedRev`.
+  - never changes `heldRev`, whatever `rev` and `observedRev` say;
+  - locks when `observedRev` differs;
+  - does not lock with no `observedRev` or with another proposal's id.
+- `reload` sets `heldRev` and the content from one row.
+- A sheet opened on a revision that has since moved sends nothing.
 - `canDecide` is false while posting, reloading or locked, and approve is false with no songs.
 - `canReload` is false while deciding.
 - The decision outcome maps from status and body.
@@ -373,10 +414,14 @@ The app sends nothing of its own.
 
 Approval must not be exercised on production data. It publishes a setlist and notifies the team.
 
-On dev, which writes to the real dataset, only these run against the test proposal: list, open, an
-admin message, request changes and reopen, all on the test service «Prueba app (no es real)»
-(`18fa9ed1-…`, whose only server is Frank). Approve is covered by the door tests and the writer's
-existing suites.
+On dev, which writes to the real dataset, only list, open, an admin message and «Pedir cambios»
+run, and only against the test service «Prueba app (no es real)» (`18fa9ed1-…`, whose only
+server is Frank). Even these happen only when its proposal is pending.
+
+«Reabrir» needs an approved proposal, and approving the test proposal is forbidden. So reopen is
+covered by the door tests and the writer's existing suites only. Approve through the new door gets
+no live exercise at all. That gap is accepted: the door adds entry checks only, and the writer is
+the one the web and the MCP already run.
 
 ## Docs
 
@@ -389,6 +434,12 @@ existing suites.
 - `docs/MOBILE.md`.
 - `docs/UTILITIES_AND_COMPONENTS.md`.
 - An ADR-0091 addendum line «2026-11-27 A-W1».
+
+## Follow-up outside this slice
+
+The web panel has the same latent hole D4 closes. `ProposalsPanel.tsx` `postMessage` adopts the
+read-back `rev` unconditionally. This slice leaves `/admin` unchanged, and the owner is told so,
+so that fixing the web is his call.
 
 ## Out of scope
 
