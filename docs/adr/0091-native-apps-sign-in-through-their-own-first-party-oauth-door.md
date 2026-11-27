@@ -135,3 +135,22 @@ A Lead proposes a service's setlist from the iPhone (spec
   (`proposalSaveCommit`'s two callers; no `/api/app/v1` route imports the write client),
   `protectedReadAudit.test.ts` (the moved reads), `nativeProposalContract.test.ts`,
   `proposalsRoute.test.ts`.
+
+## Addendum 2026-11-27: a Lead writes in a saved proposal's conversation (W1b)
+
+Spec `docs/superpowers/specs/2026-11-27-native-proposal-message-design.md`, review log beside it.
+
+- **One writer, two doors, as W1.** The body of `POST /api/me/proposals/[id]/messages` moved into
+  `app/utils/proposalMessageCommit.ts` (`postProposalMessage`); the app's door is
+  `POST /api/app/v1/proposal-messages/[proposalId]`, a top-level path because the writer keys by
+  proposal id and a `proposals/[roleId]` segment would carry an id the door would have to cross-check.
+- **The door adds what W1's adds:** the guard first, a malformed id 404 before any read, a fresh
+  access read (401 / 403 / 503), any writer throw 503, no member id on the wire.
+- **The author's name is read live on the app** (one guarded read of `coalesce(alias, member_name)`,
+  `""` on failure, which is the push's nameless wording); the web keeps the session's snapshot. The
+  same person's push can therefore be worded from a newer alias on the app. Cosmetic, accepted.
+- **The app follows the append's revision only when `observedRev` is the one it holds** (the web's
+  rule), so the lead's own message never makes their next save a 409, and a co-lead's change that
+  landed first is never adopted silently. Saving and «Recargar» wait while a message is in flight.
+- **Guards:** `proposalMessagesRoute.test.ts`, `serviceCommitCallers.test.ts`,
+  `protectedReadAudit.test.ts`, `routeMatcher.test.ts`, the XCTest of `ProposalDraftState`.

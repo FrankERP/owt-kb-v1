@@ -79,7 +79,8 @@ final class SnapshotTests: XCTestCase {
                     draft: .constant(proposal),
                     covers: [:],
                     messages: editor.proposal?.messages ?? [],
-                    showsPastorField: true
+                    showsPastorField: true,
+                    threadOpen: true
                 )
                 .padding(16),
                 scheme: scheme, to: "\(dir)/10-propuesta-\(suffix).png"

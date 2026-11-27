@@ -437,6 +437,7 @@ real proposal notified NOBODY, in either direction.
 | Lead, on `pending` / `changes_requested` | thread | the debounced admin **email** |
 | Lead, on `approved` — **the dominant real case** | thread | **push to admins**, `/admin` |
 | Lead, on `draft` | thread | nothing — a draft is not in front of admins yet |
+| _(the three Lead rows hold for the native app's door too: one writer, `proposalMessageCommit.ts`, W1b)_ | | |
 | Admin, standalone message | thread | **push to the lead** + contributors, "Nuevo mensaje" |
 | Admin, via `request_changes` / `reopen` | transition | unchanged review push, exactly one. The MCP's `review_setlist_proposal` (admin parity phase 3, ADR-0076) is the same writer (`proposalReviewCommit.ts`) and sends the same; its `approve` sends the same review push and queues the same setlist notice as «Aprobar» |
 | Lead, first submission | save | unchanged `notifyProposalSubmitted` |

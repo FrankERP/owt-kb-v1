@@ -83,6 +83,11 @@ const EXPECTED_CALLERS: Record<string, string[]> = {
   setlistSaveCommit: ["app/api/admin/setlists/route.ts", "app/mcp/tools/editSetlist.ts"],
   // The lead's proposal save: the web route and the native app's door (ADR-0091 W1).
   proposalSaveCommit: ["app/api/app/v1/proposals/route.ts", "app/api/me/proposals/route.ts"],
+  // The lead's proposal-thread message: the web route and the native app's door (ADR-0091 W1b).
+  proposalMessageCommit: [
+    "app/api/app/v1/proposal-messages/[proposalId]/route.ts",
+    "app/api/me/proposals/[id]/messages/route.ts",
+  ],
   // Admin parity phase 3: the four service-conversation routes (ADR-0065), the MCP message tools,
   // and the proposal approval (ADR-0087).
   serviceThreadCommit: [

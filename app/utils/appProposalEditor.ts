@@ -186,3 +186,23 @@ export function appSaveAnswer(result: { status: number; body: unknown }, me: str
     },
   };
 }
+
+/**
+ * The app door's answer to a thread message (W1b). Any status other than a success passes through
+ * as the writer shaped it (codes, issues and document ids, never a member id). A success keeps only
+ * what the app needs: the proposal's thread as names and `mine` (`null` kept: the read-back failed,
+ * keep what is shown), the revision after the append, and the revision read just before it. The
+ * writer's `message` row (its `author` is a member id) and `ok` are dropped.
+ */
+export function appMessageAnswer(result: { status: number; body: unknown }, me: string): { status: number; body: unknown } {
+  if (result.status < 200 || result.status >= 300) return result;
+  const body = (result.body ?? {}) as { messages?: unknown; rev?: unknown; observedRev?: unknown };
+  return {
+    status: result.status,
+    body: {
+      messages: Array.isArray(body.messages) ? messagesOf(body.messages as ThreadMessageRow[], me, "p") : null,
+      rev: typeof body.rev === "string" && body.rev ? body.rev : null,
+      observedRev: typeof body.observedRev === "string" && body.observedRev ? body.observedRev : null,
+    },
+  };
+}
