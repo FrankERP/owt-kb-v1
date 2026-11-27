@@ -308,10 +308,10 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
     removalOwner: "permanent runtime writer (never removed — the proposal save surface itself)",
   },
   {
-    file: "app/api/me/proposals/[id]/messages/route.ts",
-    operation: "POST",
+    file: "app/utils/proposalMessageCommit.ts",
+    operation: "module",
     reason:
-      "guarded lead thread writer: resolves the setlistProposal through `loadCanonicalProposal`, then appends one message. It NO LONGER mirrors `lead_notes` — Child B removed that write, so the thread is the only record of a lead's note and the legacy field is a frozen archive. It carries no `ifRevisionId` ON PURPOSE — two co-leads posting at once must both land — so the usual observed-revision assertion is deliberately absent here and the entry exists to say so out loud (Child A §4)",
+      "guarded lead thread writer: resolves the setlistProposal through `loadCanonicalProposal`, then appends one message. The domain body of `POST /api/me/proposals/[id]/messages`, moved here so the native app's door (`POST /api/app/v1/proposal-messages/[proposalId]`, W1b, ADR-0091) calls the same writer; the routes keep only authorization and the JSON read, and `serviceCommitCallers.test.ts` pins who may import this module. It NO LONGER mirrors `lead_notes` — Child B removed that write, so the thread is the only record of a lead's note and the legacy field is a frozen archive. It carries no `ifRevisionId` ON PURPOSE — two co-leads posting at once must both land — so the usual observed-revision assertion is deliberately absent here and the entry exists to say so out loud (Child A §4)",
     removalOwner: "permanent runtime writer (never removed — the lead side of the thread)",
   },
   {

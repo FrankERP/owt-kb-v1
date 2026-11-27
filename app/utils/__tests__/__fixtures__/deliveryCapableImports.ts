@@ -22,6 +22,8 @@ export const DELIVERY_CAPABLE_IMPORTS: readonly string[] = [
   "proposalNotify",
   "setlistSaveCommit",
   "proposalSaveCommit",
+  // W1b: the lead's proposal-thread message (queues the lead-notes email, pushes on approved).
+  "proposalMessageCommit",
   "roleSwapCommit",
   "roleCreateCommit",
   "publishReadyCommit",

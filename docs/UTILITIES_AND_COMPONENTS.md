@@ -558,6 +558,13 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   transaction, then the pending notice and the lead-note queue. Answers `{ status, body }`; a
   route adds only its own authorization and the JSON read. Callers pinned in
   `serviceCommitCallers.test.ts`.
+- **`postProposalMessage({ leadId, authorName, proposalId, raw })`** ([proposalMessageCommit.ts](../app/utils/proposalMessageCommit.ts))
+  — the ONE writer of a Lead's message in a saved proposal's thread: parses `{ body }`, the
+  canonical proposal, the Lead/published check, `isThreadOpen`, one `setIfMissing` + `append` with
+  no `ifRevisionId`, the PRE-COMMIT lead-notes notice and the approved-only admin push. Answers
+  `{ status, body }`; called by the web route and the native app's door (W1b), pinned in
+  `serviceCommitCallers.test.ts`. `appMessageAnswer` ([appProposalEditor.ts](../app/utils/appProposalEditor.ts))
+  is the app door's answer: the thread by name and `mine`, `rev`, `observedRev`, no member id.
 - **`readProposalEditor(roleId, leadId)`** ([proposalEditorRead.ts](../app/utils/proposalEditorRead.ts))
   — the setlist-proposal editor's reads: the role (caller in `Lead[]`, `published != false`, a valid
   `serviceDayKey`), its ONE shared proposal (`service_ref`, oldest first) and the service

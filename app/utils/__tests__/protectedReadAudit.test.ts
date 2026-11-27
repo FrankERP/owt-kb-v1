@@ -490,7 +490,7 @@ describe("A2 handoff allowlist", () => {
         "app/utils/fairnessMonthWriteRequest.ts#module",
         "app/utils/fairnessMonthCommit.ts#module",
         "app/utils/proposalSaveCommit.ts#module",
-        "app/api/me/proposals/[id]/messages/route.ts#POST",
+        "app/utils/proposalMessageCommit.ts#module",
         "app/api/admin/proposals/[id]/messages/route.ts#POST",
         "app/utils/serviceThreadCommit.ts#module",
         "app/utils/availabilityFixCommit.ts#module",

@@ -398,4 +398,116 @@ final class ProposalDraftStateTests: XCTestCase {
         state.setPreviousKeys(["a": ["A", "Bb"]])
         XCTAssertEqual(state.songs[0].previousKeys, ["A", "Bb"])
     }
+
+    // MARK: Thread messages (W1b)
+
+    func testOnlyASavedProposalTakesAMessage() {
+        var none = fresh()
+        XCTAssertFalse(none.canPostMessage)
+        XCTAssertNil(none.beginMessage())
+        var saved = existing()
+        XCTAssertTrue(saved.canPostMessage)
+        XCTAssertEqual(saved.beginMessage(), "setlistProposal.sun-1")
+    }
+
+    func testAnApprovedProposalStillTakesAMessage() {
+        let state = ProposalDraftState(roleId: "sun-1", observed: stored, status: .approved, songs: [], teamNotes: "", leadNotes: "", pastorMessage: "")
+        XCTAssertFalse(state.canSave)
+        XCTAssertTrue(state.canPostMessage)
+    }
+
+    func testTheLeadsOwnPostMovesTheRevisionTheNextSaveSends() throws {
+        var state = existing()
+        let id = try XCTUnwrap(state.beginMessage())
+        state.finishMessage(proposalId: id, rev: "rev-2", observedRev: "rev-1")
+        XCTAssertFalse(state.postingMessage)
+        XCTAssertEqual(state.observed, .single(id: "setlistProposal.sun-1", rev: "rev-2"))
+        XCTAssertEqual(try XCTUnwrap(state.beginSave(as: .draft)).observed, .single(id: "setlistProposal.sun-1", rev: "rev-2"))
+    }
+
+    func testARevisionSomeoneElseMovedFirstIsNeverAdopted() throws {
+        var state = existing()
+        let id = try XCTUnwrap(state.beginMessage())
+        state.finishMessage(proposalId: id, rev: "rev-3", observedRev: "rev-2")
+        XCTAssertEqual(state.observed, stored)
+    }
+
+    func testAPostWithNoReadBackKeepsTheRevision() throws {
+        var state = existing()
+        let id = try XCTUnwrap(state.beginMessage())
+        state.finishMessage(proposalId: id, rev: nil, observedRev: "rev-1")
+        XCTAssertEqual(state.observed, stored)
+        XCTAssertTrue(state.canSave)
+        var lost = existing()
+        let again = try XCTUnwrap(lost.beginMessage())
+        lost.finishMessage(proposalId: again, rev: nil, observedRev: nil)
+        XCTAssertEqual(lost.observed, stored)
+    }
+
+    func testARevisionForAnotherProposalIsNeverAdopted() throws {
+        var state = existing()
+        _ = try XCTUnwrap(state.beginMessage())
+        state.finishMessage(proposalId: "setlistProposal.other", rev: "rev-2", observedRev: "rev-1")
+        XCTAssertEqual(state.observed, stored)
+    }
+
+    func testAMessageInFlightHoldsSavingReloadingAndASecondMessage() throws {
+        var state = existing()
+        state.songs.append(song("c"))
+        _ = try XCTUnwrap(state.beginMessage())
+        XCTAssertFalse(state.canSave)
+        XCTAssertNil(state.beginSave(as: .draft))
+        XCTAssertFalse(state.canReload)
+        XCTAssertNil(state.beginMessage())
+        let freshRead = ProposalEditorResponse(
+            role: .init(id: "sun-1", kind: .sunday, date: "2099-01-04", title: "Domingo"),
+            observed: .single(id: "setlistProposal.sun-1", rev: "rev-9"),
+            proposal: .init(status: .pending, songs: [], contributors: [], teamNotes: "", pastorMessage: "", adminNotes: nil, messages: []),
+            serviceThread: .init(messages: [], pastorMessage: nil)
+        )
+        state.reload(from: freshRead)
+        XCTAssertTrue(state.postingMessage, "a reload in flight must not forget the message")
+        XCTAssertEqual(state.songs.map(\.songId), ["a", "b", "c"])
+        state.finishMessage(proposalId: "setlistProposal.sun-1", rev: "rev-2", observedRev: "rev-1")
+        XCTAssertTrue(state.canSave)
+        XCTAssertTrue(state.canReload)
+        XCTAssertTrue(state.isDirty, "the unsaved song stays unsaved")
+    }
+
+    func testASaveInFlightHoldsTheComposer() throws {
+        var state = existing()
+        _ = try XCTUnwrap(state.beginSave(as: .draft))
+        XCTAssertFalse(state.canPostMessage)
+    }
+
+    func testTheDoorsAnswersReadAsOutcomes() {
+        func data(_ s: String) -> Data { Data(s.utf8) }
+        let ok = ProposalMessageOutcome.from(status: 200, data: data(#"{"messages":[{"key":"a1","authorName":"Frank","authorRole":"lead","kind":"lead_note","body":"Hola","at":"2026-11-27T19:00:00Z","editedAt":null,"mine":true}],"rev":"r2","observedRev":"r1"}"#))
+        guard case .posted(let answer) = ok else { return XCTFail("expected posted") }
+        XCTAssertEqual(answer.rev, "r2")
+        XCTAssertEqual(answer.observedRev, "r1")
+        XCTAssertEqual(answer.messages?.map(\.key), ["a1"])
+        XCTAssertEqual(ProposalMessageOutcome.from(status: 200, data: data(#"{"messages":null,"rev":null,"observedRev":"r1"}"#)),
+                       .posted(ProposalMessageResponse(messages: nil, rev: nil, observedRev: "r1")))
+        XCTAssertEqual(ProposalMessageOutcome.from(status: 200, data: data("nope")), .failed)
+        XCTAssertEqual(ProposalMessageOutcome.from(status: 400, data: data(#"{"error":"invalid_request","details":{"issues":["thread_closed"]}}"#)), .closed)
+        XCTAssertEqual(ProposalMessageOutcome.from(status: 400, data: data(#"{"error":"invalid_request","details":{"issues":["messages_full"]}}"#)), .full)
+        XCTAssertEqual(ProposalMessageOutcome.from(status: 400, data: data(#"{"error":"invalid_request","details":{"issues":["notes_length"]}}"#)), .invalid)
+        XCTAssertEqual(ProposalMessageOutcome.from(status: 403, data: data("{}")), .forbidden)
+        XCTAssertEqual(ProposalMessageOutcome.from(status: 404, data: data("{}")), .refused)
+        XCTAssertEqual(ProposalMessageOutcome.from(status: 409, data: data(#"{"error":"integrity_conflict"}"#)), .refused)
+        XCTAssertEqual(ProposalMessageOutcome.from(status: 409, data: data(#"{"error":"stale_revision","conflict":true}"#)), .failed)
+        XCTAssertEqual(ProposalMessageOutcome.from(status: 503, data: data("{}")), .failed)
+    }
+
+    func testTheThreadStaysOpenThroughTheServiceDayInMexicoCity() throws {
+        // 2026-11-28 05:30 UTC is still the 27th in Mexico City (UTC-6).
+        let now = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-11-28T05:30:00Z"))
+        XCTAssertTrue(ProposalThreadRule.isOpen(serviceDate: "2026-11-27", now: now))
+        XCTAssertTrue(ProposalThreadRule.isOpen(serviceDate: "2026-11-28", now: now))
+        XCTAssertFalse(ProposalThreadRule.isOpen(serviceDate: "2026-11-26", now: now))
+        XCTAssertFalse(ProposalThreadRule.isOpen(serviceDate: "nope", now: now))
+        XCTAssertFalse(ProposalThreadRule.isOpen(serviceDate: "2027-02-30", now: now))
+        XCTAssertTrue(ProposalThreadRule.isOpen(serviceDate: "2027-02-24T00:00:00Z", now: now))
+    }
 }

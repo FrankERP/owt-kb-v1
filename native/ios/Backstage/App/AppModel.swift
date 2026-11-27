@@ -272,6 +272,23 @@ final class AppModel {
         return outcome
     }
 
+    /// One message into a saved proposal's thread (W1b). A session that ended goes to sign-in, as
+    /// a save's does; every other answer goes back to the composer.
+    func postProposalMessage(proposalId: String, body: String) async -> ProposalMessageOutcome {
+        do {
+            return try await api.postProposalMessage(proposalId: proposalId, body: body)
+        } catch {
+            let cause = Self.sessionError(from: error)
+            switch cause {
+            case .signedOut, .accountDisabled:
+                show(cause)
+            case .network, .unavailable, .server:
+                break
+            }
+            return .failed
+        }
+    }
+
     // MARK: Sign-in
 
     /// One sign-in: a fresh verifier and state, the server's page in an ephemeral browser session

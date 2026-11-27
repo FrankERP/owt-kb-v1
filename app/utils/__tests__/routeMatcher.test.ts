@@ -35,6 +35,7 @@ const PUBLIC_ROUTES = [
   "/api/app/v1/auth/revoke", // native-app sign-out — authenticated by the refresh token itself; 200 either way (ADR-0091)
   "/api/app/v1/auth/token", // native-app token endpoint — a signed code + PKCE or a signed refresh token, no session (ADR-0091)
   "/api/app/v1/me", // native-app API — requireAppSession (bearer + live access + declared level) first (ADR-0091)
+  "/api/app/v1/proposal-messages/sample", // native-app API — requireAppSession (worship member) first, then a fresh access read; a Lead writes in a saved proposal's thread through the web's one writer (ADR-0091 W1b)
   "/api/app/v1/proposals", // native-app API — requireAppSession (worship member) first, then a fresh access read; a Lead saves the shared setlist proposal through the web's one writer (ADR-0091 W1)
   "/api/app/v1/proposals/sample", // native-app API — requireAppSession (worship member) first; the proposal editor's read, 404 unless the caller leads the published service (ADR-0091 W1)
   "/api/app/v1/services", // native-app API — requireAppSession (worship member) first; «Próximos servicios» (ADR-0091)

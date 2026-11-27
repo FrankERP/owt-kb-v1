@@ -26,6 +26,7 @@ const NON_SEAT_WRITERS = [
   "fairnessMonthCommit.ts",
   "kidsCommit.ts",
   "proposalSaveCommit.ts", // a setlistProposal and a lock heartbeat, never a seat
+  "proposalMessageCommit.ts", // one message appended to a setlistProposal thread, never a seat
   "memberCommit.ts", // people: never a role document
   "ministryEventCommit.ts", // Jóvenes events: its own seats, never a worship role (ADR-0081)
   "proposalReviewCommit.ts",
