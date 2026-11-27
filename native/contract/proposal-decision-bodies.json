@@ -1,0 +1,20 @@
+{
+  "_comment": "A-W1 spec, Tests. The three decision bodies the iPhone sends to PATCH /api/app/v1/admin/proposals/{id}. The iOS XCTest encodes ProposalDecisionBody for each case and asserts this exact JSON; the vitest test feeds each body to parseProposalTransitionRequest and asserts the action and note it reads. A misspelled or dropped adminNotes would still parse (as an empty note), and «Pedir cambios» would commit with no note in the thread.",
+  "cases": [
+    {
+      "name": "approve: no note",
+      "body": { "action": "approve", "rev": "rev-1", "adminNotes": "" },
+      "parsed": { "action": "approve", "adminNotes": "" }
+    },
+    {
+      "name": "request changes: the note travels",
+      "body": { "action": "request_changes", "rev": "rev-2", "adminNotes": "Cambia la segunda canción a G" },
+      "parsed": { "action": "request_changes", "adminNotes": "Cambia la segunda canción a G" }
+    },
+    {
+      "name": "reopen: an empty note",
+      "body": { "action": "reopen", "rev": "rev-3", "adminNotes": "" },
+      "parsed": { "action": "reopen", "adminNotes": "" }
+    }
+  ]
+}

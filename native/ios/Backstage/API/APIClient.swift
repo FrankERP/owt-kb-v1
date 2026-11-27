@@ -24,6 +24,10 @@ struct Me: Decodable, Equatable, Sendable {
         }
     }
 
+    /// An admin or super-admin: the web's rule for «Propuestas» (A-W1). Only hides the tab; the
+    /// server decides every call on live access.
+    var reviewsProposals: Bool { role == "admin" || role == "super-admin" }
+
     var ministryLabels: [String] {
         ministries.map { id in
             switch id {
@@ -122,6 +126,38 @@ struct APIClient: Sendable {
         let (data, status): (Data, Int)
         do {
             (data, status) = try await send("/api/app/v1/proposal-messages/\(Self.segment(proposalId))", method: "POST", body: encoded)
+        } catch APIError.session(.network) {
+            return .failed
+        }
+        return ProposalMessageOutcome.from(status: status, data: data)
+    }
+
+    // MARK: Admin: proposals (A-W1)
+
+    /// The proposals an admin reviews: the queue, plus every other one still ahead.
+    func adminProposals() async throws -> AdminProposalsResponse { try await get("/api/app/v1/admin/proposals") }
+
+    /// One decision. Never retried by itself: a lost answer is `.failed`, and the admin's own retry
+    /// is what the server judges (an identical decision that had landed is a no-write replay).
+    func decideProposal(proposalId: String, body: ProposalDecisionBody) async throws -> ProposalDecisionOutcome {
+        let encoded: Data
+        do { encoded = try JSONEncoder().encode(body) } catch { return .invalid }
+        let (data, status): (Data, Int)
+        do {
+            (data, status) = try await send("/api/app/v1/admin/proposals/\(Self.segment(proposalId))", method: "PATCH", body: encoded)
+        } catch APIError.session(.network) {
+            return .failed
+        }
+        return ProposalDecisionOutcome.from(status: status, data: data)
+    }
+
+    /// One admin message into a proposal's thread. A lost answer is `.failed`: it may have landed.
+    func postAdminProposalMessage(proposalId: String, body text: String) async throws -> ProposalMessageOutcome {
+        let encoded: Data
+        do { encoded = try JSONEncoder().encode(ProposalMessageBody(body: text)) } catch { return .invalid }
+        let (data, status): (Data, Int)
+        do {
+            (data, status) = try await send("/api/app/v1/admin/proposal-messages/\(Self.segment(proposalId))", method: "POST", body: encoded)
         } catch APIError.session(.network) {
             return .failed
         }

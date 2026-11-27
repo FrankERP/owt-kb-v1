@@ -554,7 +554,17 @@ several exist precisely to stop a plausible-looking change.
   push), moved so the app's `POST /api/app/v1/proposal-messages/[proposalId]` calls the same writer;
   each door passes its own author name (the web the session's, the app one guarded live read). The
   app follows the append's new revision only when `observedRev` is the one it holds, as the web
-  does (spec `docs/superpowers/specs/2026-11-27-native-proposal-message-design.md`). The DELETE route's body is `deleteRole`
+  does (spec `docs/superpowers/specs/2026-11-27-native-proposal-message-design.md`). The admin's message is
+  `postAdminProposalMessage` in the same module (A-W1): the domain body of `POST /api/admin/proposals/[id]/messages`,
+  moved so the app's `POST /api/app/v1/admin/proposal-messages/[proposalId]` calls the same writer; the app's
+  `PATCH /api/app/v1/admin/proposals/[proposalId]` calls `reviewProposal` (only `approve`, `request_changes`,
+  `reopen`), and `/admin`'s list read is `adminProposalsRead.ts`, shared with the app's list. Those doors keep
+  the web's rule (an active manager who is not a content-editor, no ministry check, #8), re-read access fresh
+  before a write, and reduce a refusal to code, conflict and issues (`appRefusal`). **The app never adopts a
+  message's read-back revision as the one it decides on**: that read follows an append that asserts none, so a
+  lead's save can be folded into it; the held revision comes only from a list read, and a list read that
+  changes the content under an open detail holds every decision until the admin has looked again (spec
+  `docs/superpowers/specs/2026-11-27-native-admin-proposal-review-design.md`). The DELETE route's body is `deleteRole`
   (`roleDeleteCommit.ts`, admin parity phase 2, ADR-0072): the route uses the default `notices: "deferred"`
   (`after()`), `delete_services` and its card twin `"inline"` (awaited). A chat delete runs only with
   the list and token `check_service_deletes` minted (HMAC over the month and the whole list, label

@@ -813,7 +813,7 @@ struct ProposalEditorContent: View {
 
 /// The proposal's state as a chip: a draft is quiet, a review in progress cyan, a change
 /// request amber, an approval green.
-private struct StatusChip: View {
+struct StatusChip: View {
     let status: ProposalStatus?
 
     private var look: (text: String, symbol: String, color: Color) {
@@ -951,7 +951,7 @@ struct ProposalSongRow: View {
 
 /// The gap between two songs: a thread joins them when they are a medley, and the chip there
 /// links or unlinks them.
-private struct MedleyLink: View {
+struct MedleyLink: View {
     let linked: Bool
     let editable: Bool
     let toggle: () -> Void
@@ -1071,7 +1071,7 @@ private struct NoteField: View {
 
 /// One message of the conversation as a bubble: the lead's own on the right, everyone else's on
 /// the left with their name and role.
-private struct MessageBubble: View {
+struct MessageBubble: View {
     let message: ThreadMessage
 
     var body: some View {

@@ -83,8 +83,11 @@ const EXPECTED_CALLERS: Record<string, string[]> = {
   setlistSaveCommit: ["app/api/admin/setlists/route.ts", "app/mcp/tools/editSetlist.ts"],
   // The lead's proposal save: the web route and the native app's door (ADR-0091 W1).
   proposalSaveCommit: ["app/api/app/v1/proposals/route.ts", "app/api/me/proposals/route.ts"],
-  // The lead's proposal-thread message: the web route and the native app's door (ADR-0091 W1b).
+  // The proposal-thread messages: the lead's web route and app door (ADR-0091 W1b), the admin's
+  // web route and app door (A-W1).
   proposalMessageCommit: [
+    "app/api/admin/proposals/[id]/messages/route.ts",
+    "app/api/app/v1/admin/proposal-messages/[proposalId]/route.ts",
     "app/api/app/v1/proposal-messages/[proposalId]/route.ts",
     "app/api/me/proposals/[id]/messages/route.ts",
   ],
@@ -109,7 +112,11 @@ const EXPECTED_CALLERS: Record<string, string[]> = {
     "app/mcp/tools/kids.ts",
   ],
   // Admin parity phase 3 (S1): the proposals PATCH route and the MCP proposal-decision tools.
-  proposalReviewCommit: ["app/api/admin/proposals/[id]/route.ts", "app/mcp/tools/setlistProposalReview.ts"],
+  proposalReviewCommit: [
+    "app/api/admin/proposals/[id]/route.ts",
+    "app/api/app/v1/admin/proposals/[proposalId]/route.ts",
+    "app/mcp/tools/setlistProposalReview.ts",
+  ],
   // Admin parity phase 3 (S3): /admin's song and author routes and the MCP song tools.
   songSaveCommit: [
     "app/api/content/authors/route.ts",

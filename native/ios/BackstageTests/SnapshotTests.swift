@@ -85,6 +85,45 @@ final class SnapshotTests: XCTestCase {
                 .padding(16),
                 scheme: scheme, to: "\(dir)/10-propuesta-\(suffix).png"
             )
+            // An admin's «Propuestas» (A-W1): the queue, then one proposal with its songs, notes,
+            // conversation and the decisions; and the same one after a lead changed it.
+            let reviewList = try JSONDecoder().decode(AdminProposalsResponse.self, from: Data(Fixture.adminProposalsJSON.utf8)).proposals
+            try render(
+                VStack(spacing: 0) {
+                    TopBar(me: me) {}
+                    AdminProposalList(proposals: .loaded(reviewList), filter: .constant(.pending), open: { _ in }, retry: {})
+                },
+                scheme: scheme, to: "\(dir)/11-admin-propuestas-\(suffix).png"
+            )
+            var review = ProposalReviewState(proposal: reviewList[0])
+            try render(
+                AdminProposalContent(
+                    state: .constant(review), covers: [:], note: nil, reloading: false,
+                    decide: { _ in }, reload: {}, postMessage: { _ in .notSent }
+                )
+                .padding(16),
+                scheme: scheme, to: "\(dir)/12-admin-revisar-\(suffix).png"
+            )
+            var changed = reviewList[0]
+            changed = AdminProposal(
+                id: changed.id, rev: "r2", status: changed.status, service: changed.service,
+                leadName: changed.leadName, coLeads: changed.coLeads, songs: Array(changed.songs.reversed()),
+                pastorMessage: changed.pastorMessage, teamNotes: changed.teamNotes,
+                messages: changed.messages, earlierMessages: changed.earlierMessages, threadOpen: changed.threadOpen
+            )
+            review.apply([changed])
+            try render(
+                AdminProposalContent(
+                    state: .constant(review), covers: [:], note: nil, reloading: false,
+                    decide: { _ in }, reload: {}, postMessage: { _ in .notSent }
+                )
+                .padding(16),
+                scheme: scheme, to: "\(dir)/13-admin-cambio-\(suffix).png"
+            )
+            try render(
+                DecisionSheetView(action: .approve, proposal: reviewList[0], confirm: { _ in .close }),
+                scheme: scheme, to: "\(dir)/14-admin-aprobar-\(suffix).png"
+            )
         }
     }
 
@@ -119,6 +158,28 @@ final class SnapshotTests: XCTestCase {
 }
 
 private enum Fixture {
+    static let adminProposalsJSON = """
+    {"proposals":[
+      {"id":"setlistProposal.a","rev":"r1","status":"pending","service":{"kind":"sunday","date":"2026-11-29","title":"Domingo"},
+       "leadName":"Luis Pérez","coLeads":["Sara"],
+       "songs":[
+         {"songId":"s1","title":"Gracia Sublime Es","author":"Bethel Music","key":"G","playKey":"A","medleyTag":null},
+         {"songId":"s2","title":"Way Maker","author":"Sinach","key":"E","playKey":"D","medleyTag":"A"},
+         {"songId":"s3","title":"Tu Fidelidad","author":"Marcos Witt","key":"C","playKey":"C","medleyTag":"A"}
+       ],
+       "pastorMessage":"Domingo de Santa Cena: terminamos con una canción tranquila.",
+       "teamNotes":"Llegar a las 9:00 para prueba de sonido.",
+       "messages":[
+         {"key":"m1","authorName":"Luis Pérez","authorRole":"lead","kind":"lead_note","body":"Propongo cerrar con Tu Fidelidad.","at":"2026-11-26T18:00:00Z","editedAt":null,"mine":false},
+         {"key":"m2","authorName":"Frank","authorRole":"admin","kind":"admin_change_request","body":"¿Podemos bajar Way Maker a D?","at":"2026-11-26T19:00:00Z","editedAt":null,"mine":true}
+       ],
+       "earlierMessages":[],"threadOpen":true},
+      {"id":"setlistProposal.b","rev":"r1","status":"pending","service":{"kind":"special","date":"2026-12-05","title":"Noche de alabanza"},
+       "leadName":"Ana","coLeads":[],"songs":[],"pastorMessage":null,"teamNotes":null,"messages":[],"earlierMessages":[],"threadOpen":true},
+      {"id":"setlistProposal.c","rev":"r1","status":"changes_requested","service":{"kind":"saturday","date":"2026-11-28","title":"Sábado"},
+       "leadName":"Sara","coLeads":[],"songs":[],"pastorMessage":null,"teamNotes":null,"messages":[],"earlierMessages":[],"threadOpen":true}
+    ]}
+    """
     static let proposalJSON = """
     {
       "role": { "id": "sun-6", "kind": "sunday", "date": "2026-12-06", "title": "Domingo" },
