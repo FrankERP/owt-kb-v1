@@ -491,7 +491,6 @@ describe("A2 handoff allowlist", () => {
         "app/utils/fairnessMonthCommit.ts#module",
         "app/utils/proposalSaveCommit.ts#module",
         "app/utils/proposalMessageCommit.ts#module",
-        "app/api/admin/proposals/[id]/messages/route.ts#POST",
         "app/utils/serviceThreadCommit.ts#module",
         "app/utils/availabilityFixCommit.ts#module",
       ].sort(),
@@ -668,7 +667,8 @@ describe("git-tracked protected read inventory", () => {
       "app/utils/songPreviousKeys.ts",
       "app/api/notifications/count/route.ts",
       "app/api/cue/route.ts",
-      "app/api/admin/proposals/route.ts",
+      // A-W1: the admin list read moved into the helper the app's admin list shares.
+      "app/utils/adminProposalsRead.ts",
       "app/api/me/proposals/route.ts",
     ];
     for (const file of migrated) {

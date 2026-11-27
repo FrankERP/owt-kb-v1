@@ -65,7 +65,7 @@ const PROPOSAL_STATUSES = new Set(["draft", "pending", "approved", "changes_requ
  * the proposal's thread), so two keyless rows of different threads never share a key in the app's
  * merged list. A stored `_key` is kept as it is: the app dedupes the merged list by key.
  */
-function messagesOf(rows: ThreadMessageRow[] | null | undefined, me: string, source: "s" | "p"): AppThreadMessage[] {
+export function messagesOf(rows: ThreadMessageRow[] | null | undefined, me: string, source: "s" | "p"): AppThreadMessage[] {
   if (!Array.isArray(rows)) return [];
   const out: AppThreadMessage[] = [];
   rows.forEach((m, i) => {

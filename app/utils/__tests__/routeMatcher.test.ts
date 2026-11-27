@@ -32,6 +32,9 @@ function appRoutes(): string[] {
  * a route cannot happen as a side effect of widening a regex.
  */
 const PUBLIC_ROUTES = [
+  "/api/app/v1/admin/proposal-messages/sample", // native-app API — requireAppSession (manager, not content-editor) first, then a fresh access read; an admin writes in a proposal's thread through the web's one writer (ADR-0091 A-W1)
+  "/api/app/v1/admin/proposals", // native-app API — requireAppSession (manager, not content-editor) first; the admin's proposal list (ADR-0091 A-W1)
+  "/api/app/v1/admin/proposals/sample", // native-app API — requireAppSession (manager, not content-editor) first, then a fresh access read; an admin decides on a proposal through the web's one writer (ADR-0091 A-W1)
   "/api/app/v1/auth/revoke", // native-app sign-out — authenticated by the refresh token itself; 200 either way (ADR-0091)
   "/api/app/v1/auth/token", // native-app token endpoint — a signed code + PKCE or a signed refresh token, no session (ADR-0091)
   "/api/app/v1/me", // native-app API — requireAppSession (bearer + live access + declared level) first (ADR-0091)
