@@ -166,7 +166,10 @@ Spec `docs/superpowers/specs/2026-11-27-native-admin-proposal-review-design.md`,
   thread writer moved out of its route into `proposalMessageCommit.ts`.
 - **Who: the web's rule exactly** — an active manager who is not a content-editor, no ministry check
   (FrankERP/owt-kb-v1#8). A door stricter than the route beside it would give two answers to «can this
-  admin act on this proposal». The writes re-read access fresh first.
+  admin act on this proposal». The writes re-read access fresh first. The 30-second window in which a
+  revoked grant still opens the door (accepted for the lead's save in W1) is accepted again here,
+  for a door that publishes and notifies: the fresh access read closes it for a demoted or disabled
+  account, which is the case that matters.
 - **Only `/admin`'s three actions reach the writer.** `reconcile_target` is metadata repair the panel
   never sends; it stays on the web route and the MCP.
 - **A refusal crosses reduced** to `{ error, conflict, details?: { issues } }`: the writer's details
