@@ -155,3 +155,31 @@ Spec `docs/superpowers/specs/2026-11-27-native-proposal-message-design.md`, revi
   and the composer waits while a reload is (a late reload would erase the sent message on screen).
 - **Guards:** `proposalMessagesRoute.test.ts`, `serviceCommitCallers.test.ts`,
   `protectedReadAudit.test.ts`, `routeMatcher.test.ts`, the XCTest of `ProposalDraftState`.
+
+## Addendum 2026-11-27: an admin reviews proposals from the app (A-W1)
+
+Spec `docs/superpowers/specs/2026-11-27-native-admin-proposal-review-design.md`, review log beside it.
+
+- **The same writers, three doors.** `GET /api/app/v1/admin/proposals` reads `/admin`'s projection
+  (`adminProposalsRead.ts`); `PATCH /api/app/v1/admin/proposals/[proposalId]` calls `reviewProposal`;
+  `POST /api/app/v1/admin/proposal-messages/[proposalId]` calls `postAdminProposalMessage`, the admin
+  thread writer moved out of its route into `proposalMessageCommit.ts`.
+- **Who: the web's rule exactly** — an active manager who is not a content-editor, no ministry check
+  (FrankERP/owt-kb-v1#8). A door stricter than the route beside it would give two answers to «can this
+  admin act on this proposal». The writes re-read access fresh first.
+- **Only `/admin`'s three actions reach the writer.** `reconcile_target` is metadata repair the panel
+  never sends; it stays on the web route and the MCP.
+- **A refusal crosses reduced** to `{ error, conflict, details?: { issues } }`: the writer's details
+  carry revisions and target ids the app does not need, and a coordination refusal's are not audited
+  for member ids.
+- **Rejected: following a message's read-back `rev`** (the W1b rule, and what `/admin` does). The read
+  follows an append that asserts no revision, so a lead's save landing in between is folded into it
+  while the screen still shows the old songs; adopting it would let the next approval publish content
+  the admin never saw. The app's held revision comes only from a list read, every list read that lands
+  on an open proposal compares its content, and a change holds every decision until the admin says
+  they looked again. `/admin`'s twin of this hole is left as it is in this slice (the owner's call).
+- **Rejected: the archive on the phone.** Approved and draft proposals of past services, the web's
+  «Ver N meses más» and «Todas» stay on the web; the queue is never filtered.
+- **Guards:** `adminProposalDoors.test.ts`, `appAdminProposals.test.ts`, `adminProposalsRead.test.ts`,
+  `serviceCommitCallers.test.ts`, `protectedReadAudit.test.ts`, `routeMatcher.test.ts`, the XCTest of
+  `ProposalReviewState`.
