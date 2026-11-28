@@ -278,6 +278,22 @@ struct ServiceMessagesState: Equatable, Sendable {
     /// Bumped whenever a write ends (its answer, or its own re-read, landed): a read started before
     /// that predates what the screen now shows, and must not land over it.
     private(set) var epoch = 0
+    /// Reads are numbered as they start; one lands only if it is newer than the last one that did,
+    /// so a slow pull never undoes a quicker check that already showed a message.
+    private var readsStarted = 0
+    private var lastLanded = 0
+
+    /// What a read carries from its start to its answer.
+    struct ReadTicket: Equatable, Sendable {
+        let epoch: Int
+        let number: Int
+    }
+
+    /// Called just before a read of the door is sent.
+    mutating func startRead() -> ReadTicket {
+        readsStarted += 1
+        return ReadTicket(epoch: epoch, number: readsStarted)
+    }
 
     init(data: ServiceMessages) { self.data = data }
 
@@ -315,13 +331,15 @@ struct ServiceMessagesState: Equatable, Sendable {
         epoch += 1
     }
 
-    /// A read of the door, started when `epoch` was `startedAt`. Refused (false) while a write is in
-    /// flight, and when a write ended after the read started: that write's answer, not an older
-    /// read, says what the screen shows (a message the outbox already handed over must not vanish).
+    /// A read of the door, with the ticket it started with. Refused (false) while a write is in
+    /// flight, when a write ended after the read started (that write's answer, not an older read,
+    /// says what the screen shows: a message the outbox already handed over must not vanish), and
+    /// when a read that started later has already landed.
     @discardableResult
-    mutating func adopt(_ read: ServiceMessages, startedAt: Int) -> Bool {
-        guard !writing, !posting, startedAt == epoch else { return false }
+    mutating func adopt(_ read: ServiceMessages, ticket: ReadTicket) -> Bool {
+        guard !writing, !posting, ticket.epoch == epoch, ticket.number > lastLanded else { return false }
         data = read
+        lastLanded = ticket.number
         return true
     }
 

@@ -188,34 +188,37 @@ struct ServiceMessagesSheet: View {
 
     /// A read of the door. On screen it lands only while nothing is being written; an explicit
     /// one (a pull, «Recargar») also starts the two editors clean.
-    private func reload(explicit: Bool) async {
-        let started = state?.epoch
+    /// `quiet`: the re-read after a pastor's-message save, which says nothing when it fails (the
+    /// save itself succeeded).
+    private func reload(explicit: Bool, quiet: Bool = false) async {
+        let ticket = state?.startRead()
         switch await model.loadServiceMessages(roleId: roleId) {
         case .loaded(let fresh):
             if state == nil {
                 state = ServiceMessagesState(data: fresh)
-            } else if let started, state?.adopt(fresh, startedAt: started) == true, explicit {
+            } else if let ticket, state?.adopt(fresh, ticket: ticket) == true, explicit {
                 generation += 1
             }
             if explicit { threadNotice = nil }
             phase = .ready
         case .missing:
-            if state == nil { phase = .missing } else { threadNotice = "Este servicio ya no existe." }
+            if state == nil { phase = .missing } else if !quiet { threadNotice = "Este servicio ya no existe." }
         case .forbidden:
+            // The conversation (and its outbox) leaves the screen: nothing is left in flight.
             unsettled = false
+            state?.outboxBusy = false
             phase = .forbidden
         case .failed(let why):
-            if state == nil { phase = .failed(why) } else if !why.isEmpty { threadNotice = why }
+            if state == nil { phase = .failed(why) } else if !why.isEmpty, !quiet { threadNotice = why }
         }
     }
 
     /// The conversation's check after a lost answer: a fresh read, landed on screen (both threads),
     /// unless a write is in flight (A5).
     private func verify() async -> [ThreadMessage]? {
-        guard let current = state, !current.writing else { return nil }
-        let started = current.epoch
+        guard state?.writing == false, let ticket = state?.startRead() else { return nil }
         guard case .loaded(let fresh) = await model.loadServiceMessages(roleId: roleId) else { return nil }
-        guard state?.adopt(fresh, startedAt: started) == true else { return nil }
+        guard state?.adopt(fresh, ticket: ticket) == true else { return nil }
         return state?.conversation
     }
 
@@ -229,7 +232,7 @@ struct ServiceMessagesSheet: View {
     /// ended meanwhile).
     private func pastorChanged() {
         cardChanged()
-        Task { await reload(explicit: false) }
+        Task { await reload(explicit: false, quiet: true) }
     }
 
     // MARK: Messages

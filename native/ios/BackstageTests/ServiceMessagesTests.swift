@@ -189,16 +189,16 @@ final class ServiceMessagesTests: XCTestCase {
         XCTAssertTrue(state.beginWrite())
         XCTAssertFalse(state.beginWrite())
         XCTAssertFalse(state.canPostNow, "a message waits for the edit (A2)")
-        XCTAssertFalse(state.adopt(other, startedAt: state.epoch))
+        XCTAssertFalse(state.adopt(other, ticket: state.startRead()))
         XCTAssertEqual(state.data.serviceMessages.count, 2)
         state.endWrite()
         XCTAssertTrue(state.beginPost())
         XCTAssertFalse(state.canWrite, "an edit waits for the message")
-        XCTAssertFalse(state.adopt(other, startedAt: state.epoch))
+        XCTAssertFalse(state.adopt(other, ticket: state.startRead()))
         state.endPost()
         state.outboxBusy = true
         XCTAssertFalse(state.canWrite, "nor while its fate is being read")
-        XCTAssertTrue(state.adopt(other, startedAt: state.epoch), "the check's read lands")
+        XCTAssertTrue(state.adopt(other, ticket: state.startRead()), "the check's read lands")
         XCTAssertTrue(state.data.serviceMessages.isEmpty)
     }
 
@@ -206,15 +206,29 @@ final class ServiceMessagesTests: XCTestCase {
     /// the outbox already handed over to the thread (a retype would be a second email).
     func testAReadStartedBeforeAWriteEndedNeverLands() throws {
         var state = ServiceMessagesState(data: try read())
-        let pulled = state.epoch
+        let pulled = state.startRead()
         XCTAssertTrue(state.beginPost())
         state.endPost()
         state.applyThread([message("k1", "¿Ya tienen el tono?"), message("k9", "Nuevo")])
         var older = try read()
         older.serviceMessages = []
-        XCTAssertFalse(state.adopt(older, startedAt: pulled))
+        XCTAssertFalse(state.adopt(older, ticket: pulled))
         XCTAssertEqual(state.data.serviceMessages.map(\.key), ["k1", "k9"])
-        XCTAssertTrue(state.adopt(older, startedAt: state.epoch), "a read started after it lands")
+        XCTAssertTrue(state.adopt(older, ticket: state.startRead()), "a read started after it lands")
+    }
+
+    /// Two reads in one quiet stretch: the one that started later wins, whichever answers first.
+    func testAnOlderReadNeverLandsOverANewerOne() throws {
+        var state = ServiceMessagesState(data: try read())
+        let slowPull = state.startRead()
+        let check = state.startRead()
+        var shown = try read()
+        shown.serviceMessages = [message("k9", "Llegó")]
+        XCTAssertTrue(state.adopt(shown, ticket: check))
+        var older = try read()
+        older.serviceMessages = []
+        XCTAssertFalse(state.adopt(older, ticket: slowPull))
+        XCTAssertEqual(state.data.serviceMessages.map(\.key), ["k9"])
     }
 
     func testAStaleWritesOwnRereadLandsAndEndsIt() throws {

@@ -124,8 +124,8 @@ final class SnapshotTests: XCTestCase {
                 DecisionSheetView(action: .approve, proposal: reviewList[0], confirm: { _ in .close }),
                 scheme: scheme, to: "\(dir)/14-admin-aprobar-\(suffix).png"
             )
-            // An admin's «Mensajes del servicio» (A-W2): filled; empty with no setlist yet; and a
-            // past service whose conversation closed.
+            // An admin's «Mensajes del servicio» (A-W2): filled; empty; a service with no setlist
+            // yet; and a past service whose conversation closed.
             let screens: [(String, String)] = [
                 ("15-mensajes-servicio", ServiceMessagesTests.readJSON),
                 ("16-mensajes-vacio", Fixture.serviceMessagesEmptyJSON),
