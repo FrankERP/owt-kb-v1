@@ -190,4 +190,42 @@ final class MessageOutboxTests: XCTestCase {
         box.recheck(a)
         XCTAssertTrue(box.checked(a, thread: before), "a fresh check needs its own two misses")
     }
+
+    func testAMessageCalledNotSentThatLandsLateLeavesWithTheNextThread() {
+        var box = MessageOutbox()
+        let a = box.enqueue("Uno", thread: before)
+        box.markSending(a)
+        box.resolve(a, .failed, thread: nil)
+        box.checked(a, thread: before)
+        box.checked(a, thread: before)
+        XCTAssertEqual(box.items.first?.state, .notDelivered)
+        // The write reached the database after both reads; a save's answer shows it.
+        box.reconcile(before + [message("k1", "Uno")])
+        XCTAssertTrue(box.items.isEmpty, "«Reintentar» must not stay under a message that is there")
+        XCTAssertEqual(box.sentKeys, ["k1"])
+    }
+
+    func testAByteOrderMarkIsTrimmedAsTheServerDoes() {
+        var box = MessageOutbox()
+        let a = box.enqueue("\u{FEFF}Listo\u{FEFF}", thread: before)
+        XCTAssertEqual(box.items.first?.body, "Listo")
+        box.markSending(a)
+        box.resolve(a, .failed, thread: nil)
+        box.checked(a, thread: before + [message("k1", "Listo")])
+        XCTAssertTrue(box.items.isEmpty)
+    }
+
+    func testAWaitingMessageNeverGoesOnceTheConversationCloses() {
+        var box = MessageOutbox()
+        let a = box.enqueue("Uno", thread: before)
+        let b = box.enqueue("Dos", thread: before)
+        box.markSending(a)
+        box.strand()
+        XCTAssertEqual(box.items.map(\.state), [.sending, .refused(MessageOutbox.strandedReason)])
+        box.resolve(a, .posted(ProposalMessageResponse()), thread: nil)
+        XCTAssertNil(box.next, "the stranded one stays unsent")
+        box.retry(b)
+        XCTAssertNil(box.next)
+        XCTAssertEqual(box.remove(b), "Dos")
+    }
 }

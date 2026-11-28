@@ -44,6 +44,13 @@ struct MessageOutbox: Equatable, Sendable {
     /// offered again.
     static let missesBeforeRetry = 2
 
+    /// What the server's `trim()` removes: every white space and line end, plus U+FEFF, which
+    /// JavaScript counts as white space and Foundation does not.
+    static let trimmed = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "\u{FEFF}"))
+
+    /// Why a message waiting for a conversation that stopped taking them was never sent.
+    static let strandedReason = "No se envió: la conversación ya no acepta mensajes."
+
     private(set) var items: [Item] = []
     /// The thread keys of the messages sent from this screen, for their «Enviado».
     private(set) var sentKeys: Set<String> = []
@@ -58,7 +65,7 @@ struct MessageOutbox: Equatable, Sendable {
     mutating func enqueue(_ body: String, thread: [ThreadMessage]) -> Int {
         let id = nextId
         nextId += 1
-        let text = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = body.trimmingCharacters(in: Self.trimmed)
         items.append(Item(id: id, body: text, state: .queued, known: Self.ownKeys(thread)))
         return id
     }
@@ -129,6 +136,14 @@ struct MessageOutbox: Equatable, Sendable {
         items[index].state = .queued
     }
 
+    /// The conversation stopped taking messages (the service day passed, the proposal left the
+    /// admin's reach): every message still waiting says so and never goes, even if it opens again.
+    mutating func strand() {
+        for index in items.indices where items[index].state == .queued {
+            items[index].state = .refused(Self.strandedReason)
+        }
+    }
+
     /// «Quitar» (or «Editar», which puts the text back in the composer): never a message on its
     /// way or one being checked.
     @discardableResult
@@ -146,12 +161,14 @@ struct MessageOutbox: Equatable, Sendable {
 
     /// A new thread on screen (an answer, a reload): a sent message it now shows leaves the outbox,
     /// its bubble taken over by the thread's own, which keeps its «Enviado». So does a message whose
-    /// answer was lost and that turns out to be there.
+    /// answer was lost and that turns out to be there, even one already called «No se envió» (a
+    /// write that reached the database after both reads): «Reintentar» must not stay under it.
     mutating func reconcile(_ thread: [ThreadMessage]) {
         var index = 0
         while index < items.count {
             let state = items[index].state
-            if state == .sent || state == .checking || state == .unconfirmed, claim(at: index, in: thread) {
+            if state == .sent || state == .checking || state == .unconfirmed || state == .notDelivered,
+               claim(at: index, in: thread) {
                 continue
             }
             index += 1
@@ -168,9 +185,9 @@ struct MessageOutbox: Equatable, Sendable {
     /// `sentKeys`, and no other item can claim that key.
     private mutating func claim(at index: Int, in thread: [ThreadMessage]) -> Bool {
         let item = items[index]
-        let body = item.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        let body = item.body.trimmingCharacters(in: Self.trimmed)
         guard let match = thread.first(where: {
-            $0.mine && $0.body.trimmingCharacters(in: .whitespacesAndNewlines) == body
+            $0.mine && $0.body.trimmingCharacters(in: Self.trimmed) == body
                 && !item.known.contains($0.key) && !sentKeys.contains($0.key)
         }) else { return false }
         sentKeys.insert(match.key)

@@ -276,9 +276,12 @@ struct ProposalEditorView: View {
 
     /// The proposal's thread and the service's conversation, oldest first.
     private func conversation(_ editor: ProposalEditorResponse) -> [ThreadMessage] {
-        let all = editor.serviceThread.messages + (savedMessages ?? editor.proposal?.messages ?? [])
+        Self.merged(editor.serviceThread.messages, savedMessages ?? editor.proposal?.messages ?? [])
+    }
+
+    private static func merged(_ service: [ThreadMessage], _ proposal: [ThreadMessage]) -> [ThreadMessage] {
         var seen = Set<String>()
-        return all
+        return (service + proposal)
             .filter { seen.insert($0.key).inserted }
             .sorted { ($0.at ?? "") < ($1.at ?? "") }
     }
@@ -356,13 +359,24 @@ struct ProposalEditorView: View {
 
     /// The editor read again for its conversation only, after a message's answer was lost: the
     /// thread on screen follows it, the draft is never touched. Nil when the read fails.
+    ///
+    /// What it answers is always this read's own thread, never the one on screen: the outbox judges
+    /// whether the message landed on it, and judging a fresh read on an older thread would call a
+    /// landed message «No se envió» and offer the resend that duplicates it.
     private func verifyThread() async -> [ThreadMessage]? {
         guard case .loaded(let answer) = await model.loadProposalEditor(roleId: service.id) else { return nil }
-        // A save's answer or «Recargar» that started meanwhile carries a newer thread: keep it.
-        if let messages = answer.proposal?.messages, !reloading, draft?.isSaving != true {
-            savedMessages = messages
+        let fresh = answer.proposal?.messages ?? []
+        if !reloading, draft?.isSaving != true {
+            if let messages = answer.proposal?.messages { savedMessages = messages }
+        } else {
+            // A save or «Recargar» in flight brings its own, newer thread: replace nothing, only
+            // add what the screen lacks, so a message the outbox now hands over stays in view.
+            let shown = savedMessages ?? editor?.proposal?.messages ?? []
+            let have = Set(shown.map(\.key))
+            let missing = fresh.filter { !have.contains($0.key) }
+            if !missing.isEmpty { savedMessages = shown + missing }
         }
-        return conversation(answer)
+        return Self.merged(answer.serviceThread.messages, fresh)
     }
 
     private func add(_ song: LibrarySong) {

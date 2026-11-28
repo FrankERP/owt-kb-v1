@@ -33,8 +33,8 @@ struct ConversationThread: View {
             ForEach(outbox.items) { item in
                 OutgoingBubble(
                     item: item,
-                    // A message waiting for a composer that is gone (the thread closed) never goes.
-                    stranded: item.state == .queued && !canCompose,
+                    // «Editar» and «Reintentar» need a conversation that still takes messages.
+                    canWrite: canCompose,
                     recheck: { recheck(item.id) },
                     retry: { outbox.retry(item.id); drain() },
                     edit: { edit(item.id) },
@@ -46,7 +46,13 @@ struct ConversationThread: View {
         }
         .animation(.snappy(duration: 0.28), value: outbox)
         .sensoryFeedback(.success, trigger: sent)
+        .onChange(of: sent) { _, _ in AccessibilityNotification.Announcement("Mensaje enviado").post() }
         .onChange(of: messages) { _, thread in outbox.reconcile(thread) }
+        // A message still waiting when the conversation closes never goes, even if it opens again.
+        .onChange(of: canCompose) { _, open in if !open { outbox.strand() } }
+        // Also one that went back to waiting after the conversation closed (a send the screen
+        // could not make then).
+        .onChange(of: outbox) { _, _ in if !canCompose { outbox.strand() } }
         .onChange(of: canPostNow) { _, now in if now { drain() } }
     }
 
@@ -91,7 +97,8 @@ struct ConversationThread: View {
 
     private func send() {
         guard canSend else { return }
-        // The text goes as typed: the server counts its length before trimming.
+        // The length is judged on the text as typed (the server counts it before trimming); the
+        // outbox keeps and sends it trimmed, as the server stores it.
         outbox.enqueue(composer, thread: messages)
         composer = ""
         drain()
@@ -100,7 +107,7 @@ struct ConversationThread: View {
     /// Sends the next waiting message, one at a time. A send the screen could not make now waits
     /// for `canPostNow`; any other answer moves on to the next one.
     private func drain() {
-        guard !draining, let item = outbox.next else { return }
+        guard !draining, canCompose, let item = outbox.next else { return }
         draining = true
         outbox.markSending(item.id)
         Task {
@@ -126,6 +133,8 @@ struct ConversationThread: View {
         repeat {
             try? await Task.sleep(nanoseconds: 2_500_000_000)
         } while outbox.checked(id, thread: await verify())
+        // Found in the thread: it was sent after all, and says so like any other.
+        if !outbox.items.contains(where: { $0.id == id }) { sent += 1 }
     }
 
     private func recheck(_ id: Int) {
@@ -150,7 +159,7 @@ struct ConversationThread: View {
 /// A message of the person's that the thread does not show yet, with where it is.
 private struct OutgoingBubble: View {
     let item: MessageOutbox.Item
-    let stranded: Bool
+    let canWrite: Bool
     let recheck: () -> Void
     let retry: () -> Void
     let edit: () -> Void
@@ -190,9 +199,10 @@ private struct OutgoingBubble: View {
         }
     }
 
+    /// «Mensaje enviado» is announced by the conversation, which sees a message sent even when its
+    /// bubble leaves in the same moment.
     private static func announcement(_ state: MessageOutbox.Item.State) -> String? {
         switch state {
-        case .sent: "Mensaje enviado"
         case .notDelivered: "El mensaje no se envió"
         case .unconfirmed: "No se pudo confirmar si el mensaje llegó"
         case .refused(let why): why
@@ -201,7 +211,6 @@ private struct OutgoingBubble: View {
     }
 
     private var isOnItsWay: Bool {
-        if stranded { return false }
         switch item.state {
         case .queued, .sending, .checking: return true
         default: return false
@@ -209,7 +218,6 @@ private struct OutgoingBubble: View {
     }
 
     private var problem: Bool {
-        if stranded { return true }
         switch item.state {
         case .unconfirmed, .notDelivered, .refused: return true
         default: return false
@@ -219,11 +227,6 @@ private struct OutgoingBubble: View {
     @ViewBuilder
     private var status: some View {
         switch item.state {
-        case .queued where stranded:
-            Label("No se envió: la conversación ya no acepta mensajes.", systemImage: "exclamationmark.circle")
-                .font(.bsBody(11))
-                .foregroundStyle(BS.warning)
-                .multilineTextAlignment(.trailing)
         case .queued, .sending:
             HStack(spacing: 6) {
                 ProgressView().controlSize(.mini)
@@ -259,25 +262,25 @@ private struct OutgoingBubble: View {
     @ViewBuilder
     private var actions: some View {
         switch item.state {
-        case .queued where stranded:
-            HStack(spacing: 14) {
-                action("Quitar", remove, strong: true)
-            }
         case .unconfirmed:
             HStack(spacing: 14) {
                 action("Quitar", remove)
                 action("Revisar", recheck, strong: true)
             }
-        case .notDelivered:
+        case .notDelivered where canWrite:
             HStack(spacing: 14) {
                 action("Quitar", remove)
                 action("Editar", edit)
                 action("Reintentar", retry, strong: true)
             }
-        case .refused:
+        case .refused where canWrite:
             HStack(spacing: 14) {
                 action("Quitar", remove)
                 action("Editar", edit, strong: true)
+            }
+        case .notDelivered, .refused:
+            HStack(spacing: 14) {
+                action("Quitar", remove, strong: true)
             }
         default:
             EmptyView()
