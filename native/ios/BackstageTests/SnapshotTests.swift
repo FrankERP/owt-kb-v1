@@ -99,7 +99,7 @@ final class SnapshotTests: XCTestCase {
             try render(
                 AdminProposalContent(
                     state: .constant(review), covers: [:], note: nil, reloading: false,
-                    decide: { _ in }, reload: {}, postMessage: { _ in .notSent }
+                    decide: { _ in }, reload: {}, postMessage: { _ in .notSent }, verifyThread: { nil }
                 )
                 .padding(16),
                 scheme: scheme, to: "\(dir)/12-admin-revisar-\(suffix).png"
@@ -115,7 +115,7 @@ final class SnapshotTests: XCTestCase {
             try render(
                 AdminProposalContent(
                     state: .constant(review), covers: [:], note: nil, reloading: false,
-                    decide: { _ in }, reload: {}, postMessage: { _ in .notSent }
+                    decide: { _ in }, reload: {}, postMessage: { _ in .notSent }, verifyThread: { nil }
                 )
                 .padding(16),
                 scheme: scheme, to: "\(dir)/13-admin-cambio-\(suffix).png"
