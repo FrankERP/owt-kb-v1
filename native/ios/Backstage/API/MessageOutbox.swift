@@ -79,8 +79,40 @@ struct MessageOutbox: Equatable, Sendable {
 
     mutating func markSending(_ id: Int) { set(id, .sending) }
 
+    /// The refusals that name what the conversation belongs to: a proposal (the lead's editor, the
+    /// admin's review) or a service (the admin's «Mensajes del servicio», A-W2).
+    struct Words: Equatable, Sendable {
+        let forbidden: String
+        let refused: String
+
+        static let proposal = Words(
+            forbidden: "Ya no puedes escribir en esta propuesta.",
+            refused: "No se pudo enviar: esta propuesta ya no existe o necesita que un admin la revise."
+        )
+        static let service = Words(
+            forbidden: "Ya no puedes escribir en este servicio.",
+            refused: "No se pudo enviar: este servicio ya no existe o hay que corregirlo en la web."
+        )
+    }
+
+    /// A message is on its way or its fate is being read: nothing else may write meanwhile.
+    var inFlight: Bool {
+        items.contains { $0.state == .sending || $0.state == .checking }
+    }
+
+    /// A message the screen must not forget: one waiting, on its way, being read, or whose fate
+    /// nobody knows. Closing the screen then could lose it, or invite a retype that duplicates it.
+    var unsettled: Bool {
+        items.contains {
+            switch $0.state {
+            case .queued, .sending, .checking, .unconfirmed: return true
+            case .sent, .notDelivered, .refused: return false
+            }
+        }
+    }
+
     /// What the send answered. `thread` is the conversation the answer brought, when it brought one.
-    mutating func resolve(_ id: Int, _ outcome: ProposalMessageOutcome, thread: [ThreadMessage]?) {
+    mutating func resolve(_ id: Int, _ outcome: ProposalMessageOutcome, thread: [ThreadMessage]?, words: Words = .proposal) {
         switch outcome {
         case .posted:
             set(id, .sent)
@@ -94,7 +126,7 @@ struct MessageOutbox: Equatable, Sendable {
             // Nothing left the phone: it goes again when the screen can post.
             set(id, .queued)
         case .forbidden:
-            set(id, .refused("Ya no puedes escribir en esta propuesta."))
+            set(id, .refused(words.forbidden))
         case .closed:
             set(id, .refused("La conversación de este servicio ya cerró."))
         case .full:
@@ -102,7 +134,7 @@ struct MessageOutbox: Equatable, Sendable {
         case .invalid:
             set(id, .refused("El servidor no aceptó este mensaje."))
         case .refused:
-            set(id, .refused("No se pudo enviar: esta propuesta ya no existe o necesita que un admin la revise."))
+            set(id, .refused(words.refused))
         }
     }
 

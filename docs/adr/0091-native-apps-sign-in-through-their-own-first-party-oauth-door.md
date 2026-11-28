@@ -193,3 +193,26 @@ Spec `docs/superpowers/specs/2026-11-27-native-admin-proposal-review-design.md`,
 - **Guards:** `adminProposalDoors.test.ts`, `appAdminProposals.test.ts`, `adminProposalsRead.test.ts`,
   `serviceCommitCallers.test.ts`, `protectedReadAudit.test.ts`, `routeMatcher.test.ts`,
   `nativeProposalContract.test.ts`, the XCTest of `ProposalReviewState` and of the decision bodies.
+
+## Addendum 2026-11-28: an admin's «Mensajes del servicio» from the app (A-W2)
+
+Spec `docs/superpowers/specs/2026-11-28-native-service-messages-design.md`, review log beside it.
+
+- **The same five writers, four more doors.** Under `/api/app/v1/admin/service-threads/[roleId]`:
+  the read (`serviceConversationQuery`, the web dialog's), and the message POST, own-message
+  PATCH/DELETE, pastor's-message PUT and team-note PUT onto `serviceThreadCommit.ts`, unchanged. No
+  writer moved: they already served the web and the MCP.
+- **Who: the web's rule exactly**, as in A-W1, decided again on a fresh access read
+  (`refuseUnlessFreshAdmin`, `app/appAuth/freshAdmin.ts`).
+- **The two threads travel apart.** A write answer carries the service thread only; merging the
+  threads on the server would drop the leads' rows from the screen after every admin write, and a
+  chat that changes under the admin invites the retype that duplicates an email.
+- **No idempotency key.** The message POST keeps the outbox's verify-before-resend rule (two reads
+  must miss it). The pastor's-message and team-note PUTs need none: a resend after a landed write
+  meets a moved stamp or `_rev` (409) before any write or notice, and the app re-reads.
+- **Rejected for this slice: drafts, past services and the rest of what the services list leaves
+  out.** The sheet opens from a service's detail; the doors take any canonical role id, so slice 3
+  (publishing, which needs drafts) opens them without a door change.
+- **Guards:** `serviceMessageDoors.test.ts`, `appServiceMessages.test.ts` (with the contract
+  fixture `native/contract/service-message-bodies.json`), `serviceCommitCallers.test.ts`,
+  `routeMatcher.test.ts`, the XCTests of the sheet's rules and request bodies.

@@ -17,6 +17,14 @@ struct ConversationThread: View {
     let post: (String) async -> ProposalMessageOutcome
     /// Reads the conversation again without touching anything else; nil when that read fails.
     let verify: () async -> [ThreadMessage]?
+    /// What a refusal names: the proposal, or (the admin's «Mensajes del servicio») the service.
+    var words: MessageOutbox.Words = .proposal
+    /// What a long press on a message offers (an admin's own service message: «Editar»,
+    /// «Eliminar»). The proposal screens offer nothing.
+    var actions: (ThreadMessage) -> [MessageAction] = { _ in [] }
+    /// Told of every change to the messages on their way, so the screen can hold its other writes
+    /// and its dismissal while one is unsettled.
+    var outboxChanged: ((MessageOutbox) -> Void)? = nil
 
     @State private var outbox = MessageOutbox()
     @State private var composer = ""
@@ -28,7 +36,24 @@ struct ConversationThread: View {
         VStack(alignment: .leading, spacing: 12) {
             SheetTitle(text: "Conversación", count: messages.count)
             ForEach(messages) { message in
-                MessageBubble(message: message, sent: outbox.sentKeys.contains(message.key))
+                let offered = actions(message)
+                if offered.isEmpty {
+                    MessageBubble(message: message, sent: outbox.sentKeys.contains(message.key))
+                } else {
+                    MessageBubble(message: message, sent: outbox.sentKeys.contains(message.key))
+                        .contextMenu {
+                            ForEach(offered) { action in
+                                Button(role: action.destructive ? .destructive : nil, action: action.run) {
+                                    Label(action.title, systemImage: action.systemImage)
+                                }
+                            }
+                        }
+                        .accessibilityActions {
+                            ForEach(offered) { action in
+                                Button(action.title, action: action.run)
+                            }
+                        }
+                }
             }
             ForEach(outbox.items) { item in
                 OutgoingBubble(
@@ -56,7 +81,10 @@ struct ConversationThread: View {
         .onChange(of: canCompose) { _, open in if !open { outbox.strand() } }
         // Also one that went back to waiting after the conversation closed (a send the screen
         // could not make then).
-        .onChange(of: outbox) { _, _ in if !canCompose { outbox.strand() } }
+        .onChange(of: outbox) { _, _ in
+            if !canCompose { outbox.strand() }
+            outboxChanged?(outbox)
+        }
         .onChange(of: canPostNow) { _, now in if now, canCompose { drain() } }
     }
 
@@ -124,7 +152,7 @@ struct ConversationThread: View {
                 thread = answer.messages
                 sent += 1
             }
-            outbox.resolve(item.id, outcome, thread: thread)
+            outbox.resolve(item.id, outcome, thread: thread, words: words)
             if outcome == .failed {
                 // A lost answer: it may have landed. Look before anything is offered again.
                 await check(item.id)
@@ -301,6 +329,16 @@ private struct OutgoingBubble: View {
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
     }
+}
+
+/// One thing a long press on a message offers.
+struct MessageAction: Identifiable {
+    let title: String
+    let systemImage: String
+    var destructive = false
+    let run: () -> Void
+
+    var id: String { title }
 }
 
 /// «✓ Enviado» under a message sent from this screen.

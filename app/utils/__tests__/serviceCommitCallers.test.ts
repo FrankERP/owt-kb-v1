@@ -91,13 +91,18 @@ const EXPECTED_CALLERS: Record<string, string[]> = {
     "app/api/app/v1/proposal-messages/[proposalId]/route.ts",
     "app/api/me/proposals/[id]/messages/route.ts",
   ],
-  // Admin parity phase 3: the four service-conversation routes (ADR-0065), the MCP message tools,
-  // and the proposal approval (ADR-0087).
+  // Admin parity phase 3: the four service-conversation routes (ADR-0065), the native app's four
+  // doors (A-W2), the MCP message tools, and the proposal approval (ADR-0087).
   serviceThreadCommit: [
     "app/api/admin/service-threads/[roleId]/messages/[key]/route.ts",
     "app/api/admin/service-threads/[roleId]/messages/route.ts",
     "app/api/admin/service-threads/[roleId]/pastor-message/route.ts",
     "app/api/admin/service-threads/[roleId]/team-notes/route.ts",
+    // A-W2 (ADR-0091): the native app's four doors onto the same writers.
+    "app/api/app/v1/admin/service-threads/[roleId]/messages/[key]/route.ts",
+    "app/api/app/v1/admin/service-threads/[roleId]/messages/route.ts",
+    "app/api/app/v1/admin/service-threads/[roleId]/pastor-message/route.ts",
+    "app/api/app/v1/admin/service-threads/[roleId]/team-notes/route.ts",
     "app/mcp/tools/serviceMessages.ts",
     // ADR-0087: an approval's post-commit copy of the leads' pastor's message
     // (`adoptProposalPastorMessage`), never a route of its own.

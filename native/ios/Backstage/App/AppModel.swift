@@ -386,6 +386,75 @@ final class AppModel {
         }
     }
 
+    // MARK: Admin: «Mensajes del servicio» (A-W2)
+
+    enum ServiceMessagesLoad: Equatable {
+        case loaded(ServiceMessages)
+        /// `404`: the service is gone.
+        case missing
+        /// `403`: not an admin (any more).
+        case forbidden
+        case failed(String)
+    }
+
+    /// The sheet's read. A session that ended goes to sign-in, as anywhere else.
+    func loadServiceMessages(roleId: String) async -> ServiceMessagesLoad {
+        do {
+            return .loaded(try await api.serviceMessages(roleId: roleId))
+        } catch APIError.notFound {
+            return .missing
+        } catch APIError.forbidden {
+            return .forbidden
+        } catch {
+            let cause = Self.sessionError(from: error)
+            switch cause {
+            case .signedOut, .accountDisabled:
+                show(cause)
+                return .failed("")
+            case .network, .unavailable, .server:
+                return .failed(Self.message(for: cause))
+            }
+        }
+    }
+
+    func postServiceMessage(roleId: String, body: String) async -> ServiceWriteOutcome<ServiceThreadAnswer> {
+        await serviceWrite { try await self.api.postServiceMessage(roleId: roleId, body: body) }
+    }
+
+    func editServiceMessage(roleId: String, key: String, body: String) async -> ServiceWriteOutcome<ServiceThreadAnswer> {
+        await serviceWrite { try await self.api.editServiceMessage(roleId: roleId, key: key, body: body) }
+    }
+
+    func deleteServiceMessage(roleId: String, key: String) async -> ServiceWriteOutcome<ServiceThreadAnswer> {
+        await serviceWrite { try await self.api.deleteServiceMessage(roleId: roleId, key: key) }
+    }
+
+    func setPastorMessage(roleId: String, body: PastorMessageBody) async -> ServiceWriteOutcome<PastorAnswer> {
+        await serviceWrite { try await self.api.setPastorMessage(roleId: roleId, body: body) }
+    }
+
+    func saveTeamNotes(roleId: String, body: TeamNotesBody) async -> ServiceWriteOutcome<TeamNotesAnswer> {
+        await serviceWrite { try await self.api.saveTeamNotes(roleId: roleId, body: body) }
+    }
+
+    /// A session that ended goes to sign-in; every other failure goes back to the sheet as `.failed`.
+    private func serviceWrite<Answer: Decodable & Equatable & Sendable>(
+        _ call: () async throws -> ServiceWriteOutcome<Answer>
+    ) async -> ServiceWriteOutcome<Answer> {
+        do {
+            return try await call()
+        } catch {
+            let cause = Self.sessionError(from: error)
+            switch cause {
+            case .signedOut, .accountDisabled:
+                show(cause)
+            case .network, .unavailable, .server:
+                break
+            }
+            return .failed
+        }
+    }
+
     // MARK: Sign-in
 
     /// One sign-in: a fresh verifier and state, the server's page in an ephemeral browser session

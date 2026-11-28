@@ -95,3 +95,27 @@ export function pastorMessageStamp(
 ): string | null {
   return m?.edited_at || m?.at || null;
 }
+
+/** Trimmed, line endings folded: how the approval's copy compares two bodies (ADR-0087). */
+export function comparablePastor(text: string | null | undefined): string {
+  return (text ?? "").trim().replace(/\r\n?/g, "\n");
+}
+
+/**
+ * The leads' pastor's message to OFFER as the service's (ADR-0087, «Usar como mensaje del
+ * pastor»): a submitted proposal's (never a draft's — the leads have not handed it in), and only
+ * when it differs from what the service shows. Null = nothing to offer.
+ *
+ * Lives here, not in the web dialog, because the native app's read door applies the same rule
+ * (A-W2) and a server module may never CALL a value from a `"use client"` module (ADR-0028).
+ */
+export function offeredProposalPastorMessage(data: {
+  proposal?: { status?: string | null; pastor_message?: string | null } | null;
+  pastor_message?: { body?: string | null } | null;
+}): string | null {
+  const proposal = data.proposal;
+  if (!proposal || !proposal.status || proposal.status === "draft") return null;
+  const text = comparablePastor(proposal.pastor_message);
+  if (!text) return null;
+  return text === comparablePastor(data.pastor_message?.body) ? null : text;
+}
