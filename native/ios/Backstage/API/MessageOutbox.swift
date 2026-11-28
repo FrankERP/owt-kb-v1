@@ -163,14 +163,18 @@ struct MessageOutbox: Equatable, Sendable {
     /// its bubble taken over by the thread's own, which keeps its «Enviado». So does a message whose
     /// answer was lost and that turns out to be there, even one already called «No se envió» (a
     /// write that reached the database after both reads): «Reintentar» must not stay under it.
+    ///
+    /// The messages the server confirmed claim first: an earlier one with the same text whose fate
+    /// was unknown must not take the key of one that is known to have landed.
     mutating func reconcile(_ thread: [ThreadMessage]) {
+        claimAll(in: thread) { $0 == .sent }
+        claimAll(in: thread) { $0 == .checking || $0 == .unconfirmed || $0 == .notDelivered }
+    }
+
+    private mutating func claimAll(in thread: [ThreadMessage], _ which: (Item.State) -> Bool) {
         var index = 0
         while index < items.count {
-            let state = items[index].state
-            if state == .sent || state == .checking || state == .unconfirmed || state == .notDelivered,
-               claim(at: index, in: thread) {
-                continue
-            }
+            if which(items[index].state), claim(at: index, in: thread) { continue }
             index += 1
         }
     }

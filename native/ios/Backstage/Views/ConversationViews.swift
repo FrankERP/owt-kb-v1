@@ -36,7 +36,11 @@ struct ConversationThread: View {
                     // «Editar» and «Reintentar» need a conversation that still takes messages.
                     canWrite: canCompose,
                     recheck: { recheck(item.id) },
-                    retry: { outbox.retry(item.id); drain() },
+                    retry: {
+                        guard canCompose else { return }
+                        outbox.retry(item.id)
+                        drain()
+                    },
                     edit: { edit(item.id) },
                     remove: { outbox.remove(item.id) }
                 )
@@ -53,14 +57,14 @@ struct ConversationThread: View {
         // Also one that went back to waiting after the conversation closed (a send the screen
         // could not make then).
         .onChange(of: outbox) { _, _ in if !canCompose { outbox.strand() } }
-        .onChange(of: canPostNow) { _, now in if now { drain() } }
+        .onChange(of: canPostNow) { _, now in if now, canCompose { drain() } }
     }
 
     // MARK: Composer
 
     private var canSend: Bool {
         canCompose
-            && !composer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !composer.trimmingCharacters(in: MessageOutbox.trimmed).isEmpty
             && ProposalLimits.fits(composer)
     }
 
@@ -107,7 +111,10 @@ struct ConversationThread: View {
     /// Sends the next waiting message, one at a time. A send the screen could not make now waits
     /// for `canPostNow`; any other answer moves on to the next one.
     private func drain() {
-        guard !draining, canCompose, let item = outbox.next else { return }
+        // No look at `canCompose` here: a call from a finished Task's continuation would read the
+        // value of the render that started it. The fresh call sites check it, and `strand()` leaves
+        // nothing waiting once the conversation closes.
+        guard !draining, let item = outbox.next else { return }
         draining = true
         outbox.markSending(item.id)
         Task {

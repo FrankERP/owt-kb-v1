@@ -205,6 +205,21 @@ final class MessageOutboxTests: XCTestCase {
         XCTAssertEqual(box.sentKeys, ["k1"])
     }
 
+    func testAConfirmedMessageClaimsItsKeyBeforeAnEarlierTwinCalledNotSent() {
+        var box = MessageOutbox()
+        let a = box.enqueue("Ok", thread: before)
+        box.markSending(a)
+        box.resolve(a, .failed, thread: nil)
+        box.checked(a, thread: before)
+        box.checked(a, thread: before)
+        let b = box.enqueue("Ok", thread: before)
+        box.markSending(b)
+        box.resolve(b, .posted(ProposalMessageResponse()), thread: nil)
+        box.reconcile(before + [message("k1", "Ok")])
+        XCTAssertEqual(box.items.map(\.id), [a], "k1 is the confirmed one's")
+        XCTAssertEqual(box.items.first?.state, .notDelivered)
+    }
+
     func testAByteOrderMarkIsTrimmedAsTheServerDoes() {
         var box = MessageOutbox()
         let a = box.enqueue("\u{FEFF}Listo\u{FEFF}", thread: before)
