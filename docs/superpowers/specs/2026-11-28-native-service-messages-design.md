@@ -48,9 +48,16 @@ routes and the MCP tools).
   the outbox's verify-before-resend rule instead (D5).
 - No ministry check beyond the web's own: a manager who is not a content-editor. That gap is the
   same as the web's (FrankERP/owt-kb-v1#8) and is not widened here.
-- Unpublished services have no entry point. The app's services list reads `published != false`
-  only (`app/utils/appServices.ts`). The DOORS accept any canonical role id, exactly as the web
-  routes do, so a later slice («Publicar/despublicar») can open them for drafts without a door
+- **Where the phone is narrower than the web, named so Frank can weigh it against «como mínimo
+  igual que la web»:** the entry point is the app's services list (`app/utils/appServices.ts`),
+  so only published services from today to +95 days can be opened. These cannot:
+  - a DRAFT service. On the web an admin can load the pastor's message before publishing;
+  - a past service. Its thread is closed anyway, so only reading is lost;
+  - a service beyond +95 days;
+  - a week whose weekend role is duplicated, which the list does not show at all.
+
+  The DOORS accept any canonical role id, exactly as the web routes do, so a later slice
+  («Publicar/despublicar», which needs drafts) can open the sheet for drafts without a door
   change.
 - No push or email on the phone for a lead's new message (an existing follow-up).
 
@@ -93,12 +100,23 @@ type AppServiceMessages = {
            | { text: string; observed: { id: string; rev: string } };  // teamNotesTarget, verbatim
   proposal: null | { status: "draft" | "pending" | "approved" | "changes_requested";
                      offeredPastorMessage: string | null };            // offeredProposalPastorMessage rule
-  messages: AppThreadMessage[];        // service ("s") + proposal ("p"), merged by key, sorted by `at`
+  serviceMessages: AppThreadMessage[];   // the service thread, messagesOf(rows, me, "s")
+  proposalMessages: AppThreadMessage[];  // the shared proposal's thread, messagesOf(rows, me, "p"); [] without one
 };
 ```
 
-- `messages` reuses `messagesOf(rows, me, source)` for both threads, so names, `mine` and the
-  `"s"/"p"` fallback keys are exactly those of the editor door. Each `AppThreadMessage` gains one
+- **The two threads travel apart**, as on the web dialog (`ServiceMessagesDialog.tsx`, which
+  replaces only the service list after a write) and as in both existing app doors
+  (`serviceThread.messages` + `proposal.messages`). The phone merges them for display, deduped by
+  key and sorted by `at`, exactly as `conversation(_:)` does in `ProposalViews.swift`. The client
+  rule:
+  - a write answer (D3.1 step 9) REPLACES the service list only. `null` keeps it;
+  - the proposal list changes only on a read of this door;
+  - the merged list, and the outbox's `known` keys, are built from both;
+  - a `verify` read (D5) is ADOPTED on screen, both lists, unless a write is in flight. This is
+    the lead editor's rule from PR #285: a message the outbox hands over must stay in view.
+- Both lists reuse `messagesOf(rows, me, source)`, so names, `mine` and the `"s"/"p"` fallback
+  keys are exactly those of the editor door. Each `AppThreadMessage` gains one
   field, `editable: boolean`. It is true only when ALL of these hold: the row is in the SERVICE
   thread; it has a stored `_key` that passes `isMessageKey` (a fallback key never does); `mine`;
   and `open`. The writer re-checks the author and the open thread on every edit; `editable` only
@@ -118,7 +136,11 @@ type AppServiceMessages = {
 
 The read wraps nothing in `withVerificationRunContext`. It is its own module and sends nothing,
 and `appAuthStatic.test.ts` accepts the plain `export async function GET` form when the guard is
-the first statement.
+the first statement. The SR scan (`srVerificationRunContext.test.ts`) matches substrings in the
+route's OWN source, comments included, and follows no import. The GET route's source must
+therefore never name a delivery-capable module, for example `serviceThreadCommit` or anything
+matching `utils/email`. The title builder is imported in `appServiceMessages.ts`, not in the
+route.
 
 ## D3. The write doors
 
@@ -145,20 +167,22 @@ Four new routes, the app's twins of the web's four:
 5. The JSON body is read (PATCH, POST and the PUTs). Malformed JSON gets 400 `invalid_request`
    with issues `["json"]`, the same answer as the A-W1 door.
 6. The writer is called with the session's `sanityId` as the actor id. Where the writer takes a
-   name (POST, pastor PUT), the name comes from ONE guarded live read of
-   `coalesce(alias, member_name)`, `""` on failure. This is the `authorNameOf` rule of the W1b
-   door (`app/api/app/v1/proposal-messages/[proposalId]/route.ts`), moved into a shared helper,
-   `app/appAuth/authorName.ts`, so the two doors keep one copy. The name only words the leads'
-   email; the stored message names its author by reference. Implementation must confirm that
-   `notifyLeadsAboutServiceMessage` words a mail with an empty name sensibly. If it does not, the
-   fallback becomes `"Un admin"` at the door, and the web path is untouched.
+   name (POST, pastor PUT), the name comes from ONE live read of `alias || member_name` through
+   the existing `loadActorName` (`app/mcp/reads/serviceConversation.ts`, which the MCP message
+   tools already use for these same writers), wrapped in `try/catch` → `""` on failure. That is the
+   W1b door's rule (`authorNameOf`), with no third copy of the read. The name only words the
+   leads' email; the stored message names its author by reference. An empty name already reads
+   «Un admin» in the mail (`serviceThreadNotify.ts`), and the push carries no name.
 7. Any throw from the writer answers 503 `appUnavailableResponse()`. The writers throw only on a
    failed pre-commit read or a non-conflict commit error, so the client treats a 503 as «not
    known whether it landed» only on POST, the one write without a guard (D5).
-8. A refusal passes through `appRefusal(result)`, the A-W1 shape: codes, issues and document ids,
-   never a member id.
+8. A refusal passes through `appRefusal(result)`, the ONE refusal shape of the admin doors:
+   `{ error, conflict, details?: { issues } }`. Nothing else crosses: neither `details.detail`
+   (`pastor_message_moved`, `no_setlist`, `revision_mismatch`) nor the 403's `code: "not_author"`.
+   The phone therefore branches on the status, `error` and `issues` only (D6), and learns «no
+   setlist» from a re-read, never from a refusal.
 9. A success is shaped by a new pure builder per writer in `appServiceMessages.ts`:
-   - **POST, PATCH, DELETE** → `{ messages: AppThreadMessage[] | null }`: the SERVICE thread's
+   - **POST, PATCH, DELETE** → `{ serviceMessages: AppThreadMessage[] | null }`: the SERVICE thread's
      read-back through `messagesOf(rows, me, "s")`, with `editable` set as in D2, or `null` when
      the writer's guarded read-back failed («keep what you show»). The writer's `message` row
      carries an author id and is dropped.
@@ -193,7 +217,17 @@ object equality). This is the A-W1 pattern, so a renamed field breaks a test on 
 - `protectedReadAudit.ts` describes the Sanity WRITERS, not the doors that call them. The new
   doors write nothing themselves, so no entry is expected. Implementation runs its test and adds an
   entry only if the test asks for one, never by loosening it.
-- `routeMatcher`: `/api/app/v1` is already excluded from `proxy.ts`. Nothing changes.
+- `routeMatcher.test.ts`: `/api/app/v1` is already excluded from `proxy.ts`, but the test pins
+  every ungated route against a reviewed `PUBLIC_ROUTES` list. Five entries are added, each with its
+  justification in the A-W1 entries' words:
+  - `/api/app/v1/admin/service-threads/sample`
+  - `…/sample/messages`
+  - `…/sample/messages/sample`
+  - `…/sample/pastor-message`
+  - `…/sample/team-notes`
+- `AGENTS.md` mirrors CLAUDE.md (`agentDocsParity.test.ts`); `docs/API_REFERENCE.md` lists the
+  new doors beside A-W1's; the caller sentence in `protectedReadAudit.ts` for the service-thread
+  writers names the app doors.
 - CLAUDE.md's «service conversation's writers» line, and the long form in
   `docs/agents/project-rules.md`: «called by its four routes, the app's four doors (A-W2), the MCP
   conversation tools and the proposal approval's copy».
@@ -211,8 +245,8 @@ cannot store something twice or notify twice.
 | POST message | Appends again (no idempotency): a duplicate and a second email | Uses `MessageOutbox` unchanged. The sheet's `verify` is the read door's `messages` (D2). Two reads 2.5 s apart must miss the message before «Reintentar» |
 | PATCH own message | Sets the same body again and moves `edited_at`. Nobody is notified | Retries freely; on success shows the answer's thread |
 | DELETE own message | 404 `not_found` (already gone) | Treats a 404 on a retry of its own delete as done |
-| pastor PUT | 409 `pastor_message_moved`, because the stored stamp is no longer the observed one. No second notice | On a 409, re-reads (D2). If the stored body equals what it sent (trimmed, line endings folded), it says «Guardado» and adopts the read; otherwise it shows the web's stale copy («Otro admin cambió este mensaje…») with «Recargar» |
-| team-notes PUT | 409 `revision_moved` (the setlist's `_rev` moved). Nothing else is sent | Same as the pastor PUT: on a 409, re-reads. If the stored text equals what it sent, it says «Guardado»; otherwise it shows the stale copy |
+| pastor PUT | 409 `stale_revision`, because the stored stamp is no longer the observed one. No second notice | On a 409, re-reads (D2). If the stored body equals what it sent (trimmed, line endings folded), it says «Guardado» and adopts the read; otherwise it shows the web's stale copy («Otro admin cambió este mensaje…») with «Recargar» |
+| team-notes PUT | 409 `stale_revision` (the setlist's `_rev` moved: `compareObservedTarget` says `revision_mismatch`). Nothing else is sent | Same as the pastor PUT: on a 409, re-reads. If the stored text equals what it sent, it says «Guardado»; otherwise it shows the stale copy |
 
 - The comparison in the pastor and team-notes rows judges only the write the phone itself made.
   It never decides another admin's write. A 409 whose read shows a DIFFERENT text is shown as the
@@ -240,6 +274,9 @@ cannot store something twice or notify twice.
 - **Mensaje para el equipo:** the text with «Editar», and «Mover a mensaje del pastor» when the
   pastor's message is empty. With no setlist: «Todavía no hay setlist; el mensaje para el equipo
   llega con la propuesta de los líderes». Ambiguous: the web's copy for a duplicated setlist.
+- **After a pastor-message or team-note save**, the sheet asks the model to reload the services
+  list. The card under the sheet shows both texts, and `ServiceDetailView` holds a `let service`;
+  the web dialog does the same (`onChanged`). The detail adopts the reloaded row by id.
 - **Conversación con los líderes:** `ConversationThread` (PR #285) with `canCompose: open`,
   `canPostNow` true while no edit or delete is in flight, the hint «Lo ven los líderes y los
   admins. A los líderes les llega por correo» (published) or «… no reciben aviso mientras el
@@ -251,10 +288,20 @@ cannot store something twice or notify twice.
 - A pull to refresh, or «Recargar», re-reads. While a POST is on its way or being checked, a
   reload never replaces the outbox; the outbox reconciles against the new thread, as in PR #285.
 - Every write shows its own state: «Guardando…», then the saved text, or the refusal's words.
-  Refusal copy maps the writer's codes: `thread_closed` → «La conversación de este servicio ya
-  cerró.»; `messages_full` → the limit sentence; `not_author` (403) → «Solo puedes editar tus
-  mensajes.»; `no_setlist` → the no-setlist sentence; 401 → the session's sign-out path; 503 →
-  «No se pudo guardar. Revisa tu conexión».
+  Refusal copy, from what crosses the wire (D3.1 step 8):
+  - issue `thread_closed` → «La conversación de este servicio ya cerró.»;
+  - issue `messages_full` → the limit sentence;
+  - 409 `stale_revision` → the D5 re-read decides «Guardado», «no setlist yet», or the web's
+    stale copy;
+  - 409 `ambiguous_target` / `integrity_conflict` → the web's blocked copy;
+  - 403 → «No tienes permiso para hacer esto», then a re-read. A lost author and a lost admin
+    role look the same on the wire, and the re-read shows which;
+  - 401 → the session's sign-out path;
+  - 503 → «No se pudo guardar. Revisa tu conexión».
+- `MessageOutbox`'s refusal sentences name a proposal («Ya no puedes escribir en esta propuesta.»).
+  They become a parameter (`MessageOutbox.Words`). The proposal screens pass today's sentences
+  unchanged, and this sheet passes service wording («Ya no puedes escribir en este servicio.»,
+  «No se pudo enviar: este servicio ya no existe.»). The rest of `MessageOutbox` is unchanged.
 
 ## D7. Tests
 
@@ -281,6 +328,9 @@ cannot store something twice or notify twice.
   - the decoder (missing `editable` → false; each `teamNotes` arm);
   - the D5 rules as pure functions: a pastor or team-notes 409 whose read shows the sent text →
     saved, a different text → stale; a DELETE 404 on a retry → done;
+  - a POST, PATCH or DELETE answer replaces the service list and keeps every proposal row; a
+    `null` answer keeps both;
+  - the outbox's service wording;
   - the snapshot of the sheet in `SnapshotTests.swift` (filled; empty; no setlist; closed).
 
 ## Open questions for the review
