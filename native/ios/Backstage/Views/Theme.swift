@@ -121,6 +121,77 @@ struct SheetTitle: View {
     }
 }
 
+/// The app's own segmented control (the web's `SegmentedControl` + `SlidingIndicator`): capsules on
+/// one line that scrolls sideways when it does not fit, the chosen one filled in the accent with a
+/// highlight that slides between them, and an optional count beside a label. Replaces the system
+/// `.segmented` picker, which does not take the app's fonts or colours.
+struct BrandSegments<Value: Hashable>: View {
+    struct Segment: Identifiable {
+        let value: Value
+        let label: String
+        var count: Int?
+        var id: Value { value }
+    }
+
+    let segments: [Segment]
+    @Binding var selection: Value
+    @Namespace private var indicator
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(segments) { segment in
+                        chip(segment).id(segment.value)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+            .scrollClipDisabled()
+            .onChange(of: selection) { _, value in
+                withAnimation(.snappy(duration: 0.3)) { proxy.scrollTo(value, anchor: .center) }
+            }
+        }
+        .sensoryFeedback(.selection, trigger: selection)
+        .accessibilityElement(children: .contain)
+    }
+
+    private func chip(_ segment: Segment) -> some View {
+        let on = segment.value == selection
+        return Button {
+            withAnimation(.snappy(duration: 0.3)) { selection = segment.value }
+        } label: {
+            HStack(spacing: 6) {
+                Text(segment.label)
+                    .font(.bsBody(14, on ? .semibold : .regular))
+                if let count = segment.count, count > 0 {
+                    Text("\(count)")
+                        .font(.bsBody(12, .semibold))
+                        .monospacedDigit()
+                        .padding(.horizontal, 6)
+                        .frame(minWidth: 20, minHeight: 20)
+                        .background(Capsule().fill(on ? BS.base.opacity(0.22) : BS.accent.opacity(0.14)))
+                }
+            }
+            .foregroundStyle(on ? BS.base : BS.inkMuted)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 36)
+            .background {
+                if on {
+                    Capsule().fill(BS.accent).matchedGeometryEffect(id: "on", in: indicator)
+                } else {
+                    Capsule().fill(BS.ink.opacity(0.05))
+                        .overlay(Capsule().strokeBorder(BS.ink.opacity(0.10), lineWidth: 1))
+                }
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+        .accessibilityLabel(segment.count.map { $0 > 0 ? "\(segment.label), \($0)" : segment.label } ?? segment.label)
+    }
+}
+
 /// `.brand-surface`: the opaque card with a hairline edge, a soft shadow and the panel radius,
 /// with the day's 3 pt rail on its leading edge when a tone is given.
 struct CardSurface: ViewModifier {

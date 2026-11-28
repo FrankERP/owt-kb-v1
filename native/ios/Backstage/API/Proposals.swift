@@ -117,6 +117,9 @@ struct ThreadMessage: Decodable, Equatable, Identifiable, Sendable {
     let at: String?
     let editedAt: String?
     let mine: Bool
+    /// The caller may edit or delete it from the app (only an admin's own message in an open
+    /// service thread, A-W2). Absent on the other doors' rows: never editable.
+    var editable: Bool? = nil
 
     var id: String { key }
 }

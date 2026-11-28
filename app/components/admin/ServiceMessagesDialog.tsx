@@ -24,7 +24,7 @@ import Skeleton from "@/app/components/ui/Skeleton";
 import ProposalThread, { type ThreadMessage } from "@/app/components/ProposalThread";
 import { PROPOSAL_NOTES_MAX } from "@/app/utils/proposalNotesLimit";
 import { useTransientValue } from "@/app/utils/useTransientValue";
-import { pastorMessageStamp } from "@/app/utils/serviceMessageEdit";
+import { offeredProposalPastorMessage, pastorMessageStamp } from "@/app/utils/serviceMessageEdit";
 import type { PastorMessageRow } from "@/app/utils/serviceThread";
 
 interface TeamNotesTarget {
@@ -51,24 +51,6 @@ interface Conversation {
     pastor_message?: string | null;
     messages?: ThreadMessage[] | null;
   } | null;
-}
-
-/** Trimmed, line endings folded: how the approval's copy compares two bodies (ADR-0087). */
-function comparablePastor(text: string | null | undefined): string {
-  return (text ?? "").trim().replace(/\r\n?/g, "\n");
-}
-
-/**
- * The leads' pastor's message to OFFER in the dialog (ADR-0087): a submitted
- * proposal's (never a draft's — the leads have not handed it in), and only when
- * it differs from what the service shows. Null = nothing to offer.
- */
-export function offeredProposalPastorMessage(data: Pick<Conversation, "proposal" | "pastor_message">): string | null {
-  const proposal = data.proposal;
-  if (!proposal || !proposal.status || proposal.status === "draft") return null;
-  const text = comparablePastor(proposal.pastor_message);
-  if (!text) return null;
-  return text === comparablePastor(data.pastor_message?.body) ? null : text;
 }
 
 /** The message as stored — `author` a reference, no resolved name — which the

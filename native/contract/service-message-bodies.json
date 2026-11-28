@@ -1,0 +1,10 @@
+{
+  "_comment": "A-W2 spec D3.2. The request bodies the iPhone sends to the «Mensajes del servicio» doors (/api/app/v1/admin/service-threads/{roleId}/...). The iOS XCTest encodes each request type and asserts this exact JSON; the vitest test feeds each body to the writer's own parser and asserts what it reads. `observed: null` must be sent explicitly: a missing `observed` is refused by parsePastorMessageEdit.",
+  "cases": [
+    { "name": "post a message", "door": "post", "body": { "body": "¿Ya tienen el tono?" }, "parsed": { "body": "¿Ya tienen el tono?" } },
+    { "name": "edit an own message", "door": "edit", "body": { "body": "¿Ya tienen el tono de la segunda?" }, "parsed": { "body": "¿Ya tienen el tono de la segunda?" } },
+    { "name": "set the pastor's message (none before)", "door": "pastor", "body": { "body": "Dios les bendiga", "observed": null }, "parsed": { "body": "Dios les bendiga", "observed": null } },
+    { "name": "clear the pastor's message", "door": "pastor", "body": { "body": "", "observed": "2026-11-28T10:00:00.000Z" }, "parsed": { "body": "", "observed": "2026-11-28T10:00:00.000Z" } },
+    { "name": "edit the team note", "door": "teamNotes", "body": { "teamNotes": "Ensayo a las 9:30", "observed": { "id": "featuredSongs.abc", "rev": "rev-1" } }, "parsed": { "teamNotes": "Ensayo a las 9:30", "observed": { "id": "featuredSongs.abc", "rev": "rev-1" } } }
+  ]
+}

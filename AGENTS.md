@@ -279,7 +279,8 @@ looks wrong** — several exist to stop a plausible-looking change.
   `delete_services`: DELETE, only with the check's echoed list and token, never a past service,
   ADR-0072; the proposal tools: proposals PATCH, its planner in peek for the check, ADR-0076;
   `serviceCommitCallers.test.ts`). The service conversation's writers live in
-  `serviceThreadCommit.ts` too, called by its four routes, the MCP conversation tools (ADR-0073) and the
+  `serviceThreadCommit.ts` too, called by its four routes, the app's four doors under
+  `/api/app/v1/admin/service-threads/[roleId]` (A-W2), the MCP conversation tools (ADR-0073) and the
   proposal approval's post-commit pastor's-message copy (ADR-0087);
   Oasis Kids' in `kidsCommit.ts`, called by the four `/api/kids/*` writes and the MCP Kids tools;
   a Lead's shared setlist proposal in `proposalSaveCommit.ts`, called by `POST /api/me/proposals`

@@ -234,6 +234,17 @@ function sectionsOf(role: AppRoleRow, me: string): { sections: AppSection[]; sea
 }
 
 /**
+ * A service's title as the app names it: «Domingo» / «Sábado» for a weekend service, a special's
+ * name (spaces collapsed) or the shared fallback. The services list and the admin's «Mensajes del
+ * servicio» read (A-W2) both use it, so the card and the sheet name a service the same way.
+ */
+export function appServiceTitle(kind: "sunday" | "saturday" | "special", serviceName?: unknown): string {
+  if (kind === "sunday") return "Domingo";
+  if (kind === "saturday") return "Sábado";
+  return text(serviceName)?.replace(/\s+/g, " ") ?? SPECIAL_SERVICE_FALLBACK;
+}
+
+/**
  * The services in the window, earliest first (date, then start time, then title). `me` is the
  * caller's member id. Records with no usable date are dropped, as the Calendario drops them.
  */
@@ -256,7 +267,7 @@ export function buildAppServices(rows: AppServicesRows, me: string): AppService[
         kind,
         date,
         time: serviceStartTime("weekend", day, null) ?? null,
-        title: day,
+        title: appServiceTitle(kind),
         worshipNight: false,
         ...sectionsOf(role, me),
         songs: songsOf(set?.songs),
@@ -279,7 +290,7 @@ export function buildAppServices(rows: AppServicesRows, me: string): AppService[
       kind: "special",
       date,
       time: serviceStartTime("special", "", sp.time) ?? null,
-      title: text(sp.service_name)?.replace(/\s+/g, " ") ?? SPECIAL_SERVICE_FALLBACK,
+      title: appServiceTitle("special", sp.service_name),
       worshipNight: isWorshipNight(sp),
       ...sectionsOf(sp, me),
       songs: songsOf(sp.songs),

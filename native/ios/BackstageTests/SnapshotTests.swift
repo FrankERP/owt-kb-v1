@@ -99,7 +99,7 @@ final class SnapshotTests: XCTestCase {
             try render(
                 AdminProposalContent(
                     state: .constant(review), covers: [:], note: nil, reloading: false,
-                    decide: { _ in }, reload: {}, postMessage: { _ in .notSent }
+                    decide: { _ in }, reload: {}, postMessage: { _ in .notSent }, verifyThread: { nil }
                 )
                 .padding(16),
                 scheme: scheme, to: "\(dir)/12-admin-revisar-\(suffix).png"
@@ -115,7 +115,7 @@ final class SnapshotTests: XCTestCase {
             try render(
                 AdminProposalContent(
                     state: .constant(review), covers: [:], note: nil, reloading: false,
-                    decide: { _ in }, reload: {}, postMessage: { _ in .notSent }
+                    decide: { _ in }, reload: {}, postMessage: { _ in .notSent }, verifyThread: { nil }
                 )
                 .padding(16),
                 scheme: scheme, to: "\(dir)/13-admin-cambio-\(suffix).png"
@@ -124,6 +124,26 @@ final class SnapshotTests: XCTestCase {
                 DecisionSheetView(action: .approve, proposal: reviewList[0], confirm: { _ in .close }),
                 scheme: scheme, to: "\(dir)/14-admin-aprobar-\(suffix).png"
             )
+            // An admin's «Mensajes del servicio» (A-W2): filled; empty; a service with no setlist
+            // yet; and a past service whose conversation closed.
+            let screens: [(String, String)] = [
+                ("15-mensajes-servicio", ServiceMessagesTests.readJSON),
+                ("16-mensajes-vacio", Fixture.serviceMessagesEmptyJSON),
+                ("17-mensajes-sin-setlist", Fixture.serviceMessagesNoSetlistJSON),
+                ("18-mensajes-cerrado", Fixture.serviceMessagesClosedJSON),
+            ]
+            for (name, json) in screens {
+                let data = try JSONDecoder().decode(ServiceMessages.self, from: Data(json.utf8))
+                try render(
+                    ServiceMessagesContent(
+                        state: ServiceMessagesState(data: data), generation: 0, threadNotice: nil,
+                        savePastor: { _, _ in .saved }, saveTeamNotes: { _, _ in .saved }, move: { _, _ in .saved },
+                        reload: {}, post: { _ in .notSent }, verify: { nil }, actions: { _ in [] }, outboxChanged: { _ in }
+                    )
+                    .padding(16),
+                    scheme: scheme, to: "\(dir)/\(name)-\(suffix).png"
+                )
+            }
         }
     }
 
@@ -158,6 +178,23 @@ final class SnapshotTests: XCTestCase {
 }
 
 private enum Fixture {
+    static let serviceMessagesEmptyJSON = """
+    {"service":{"id":"sun-6","kind":"sunday","date":"2026-12-06","title":"Domingo","published":true,"leads":[]},
+     "open":true,"pastorMessage":null,"teamNotes":{"text":"","observed":{"id":"featuredSongs.sun-6","rev":"r1"}},
+     "proposal":null,"serviceMessages":[],"proposalMessages":[]}
+    """
+    static let serviceMessagesNoSetlistJSON = """
+    {"service":{"id":"sun-13","kind":"sunday","date":"2026-12-13","title":"Domingo","published":true,"leads":["Luis"]},
+     "open":true,"pastorMessage":{"body":"Domingo de Santa Cena.","authorName":"Frank","at":"2026-11-28T10:00:00.000Z","editedAt":null,"stamp":"2026-11-28T10:00:00.000Z"},
+     "teamNotes":null,"proposal":null,"serviceMessages":[],"proposalMessages":[]}
+    """
+    static let serviceMessagesClosedJSON = """
+    {"service":{"id":"spc-1","kind":"special","date":"2026-11-20","title":"Noche de alabanza","published":true,"leads":["Ana"]},
+     "open":false,"pastorMessage":null,
+     "teamNotes":{"text":"","observed":{"id":"spc-1","rev":"r3"}},"proposal":{"status":"approved","offeredPastorMessage":null},
+     "serviceMessages":[{"key":"k1","authorName":"Frank","authorRole":"admin","kind":"admin_change_request","body":"Gracias a todos por hoy.","at":"2026-11-20T22:00:00Z","editedAt":null,"mine":true,"editable":false}],
+     "proposalMessages":[]}
+    """
     static let adminProposalsJSON = """
     {"proposals":[
       {"id":"setlistProposal.a","rev":"r1","status":"pending","service":{"kind":"sunday","date":"2026-11-29","title":"Domingo"},

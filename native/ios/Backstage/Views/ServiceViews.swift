@@ -784,14 +784,31 @@ private struct PersonCell: View {
 // MARK: The service's page
 
 struct ServiceDetailView: View {
+    @Environment(AppModel.self) private var model
     let service: AppService
     let today: String
 
+    /// The row the services list holds now for this service: a save from «Mensajes del servicio»
+    /// reloads the list, and the page shows the texts it brought (spec D6).
+    private var current: AppService {
+        if case .loaded(_, let list) = model.services, let row = list.first(where: { $0.id == service.id }) { return row }
+        return service
+    }
+
+    /// An admin or super-admin (the Admin tab's rule): the server decides again on every call.
+    private var isAdmin: Bool {
+        if case .signedIn(let me) = model.phase { return me.reviewsProposals }
+        return false
+    }
+
     var body: some View {
         ScrollView {
-            ServiceFullCard(service: service, today: today)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+            VStack(spacing: 14) {
+                ServiceFullCard(service: current, today: today)
+                if isAdmin { ServiceMessagesEntry(service: current) }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
         }
         .background(BS.base.ignoresSafeArea())
         .closablePage()

@@ -576,8 +576,9 @@ several exist precisely to stop a plausible-looking change.
   the notice builder's own audience (`deleteLines.test.ts`). Only contention is told to repeat, once.
   A service's conversation (ADR-0065: the leads' thread, «Mensaje del pastor», «Mensaje para el
   equipo») has its writers in `serviceThreadCommit.ts` (admin parity phase 3, ADR-0073): the four
-  `/api/admin/service-threads/[roleId]/*` routes and the MCP conversation tools
-  (`app/mcp/tools/serviceMessages.ts`) both call them (and `proposalReviewCommit.ts` calls
+  `/api/admin/service-threads/[roleId]/*` routes, the native app's four twins under
+  `/api/app/v1/admin/service-threads/[roleId]/*` (A-W2, ADR-0091) and the MCP conversation tools
+  (`app/mcp/tools/serviceMessages.ts`) all call them (and `proposalReviewCommit.ts` calls
   `adoptProposalPastorMessage` after an approval commits, ADR-0087), so a chat message reaches the leads exactly as
   `/admin`'s does. The acting member is the session's on `/admin` and the bearer's (`principalOf`) in
   the chat, never an argument; no principal refuses before any read.

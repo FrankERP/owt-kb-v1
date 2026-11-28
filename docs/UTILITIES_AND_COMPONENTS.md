@@ -573,7 +573,21 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   whatever its date plus the rest from `today` on, with the special's name. Both on `operationalClient`.
 - **`buildAppAdminProposals(rows, me, today)`**, **`appRefusal`**, **`appReviewAnswer`** ([appAdminProposals.ts](../app/utils/appAdminProposals.ts))
   — the app's admin list (names and `mine`, no member ids, `/admin`'s order, `threadOpen`), the ONE
-  refusal shape of the two admin write doors, and the decision's answer.
+  refusal shape of the app's admin write doors (A-W1's two, A-W2's four), and the decision's answer.
+- **`buildAppServiceMessages(read, me, today?)`**, **`appPastorMessage`**, **`appServiceMessagesAnswer`**,
+  **`appPastorAnswer`**, **`appTeamNotesAnswer`** ([appServiceMessages.ts](../app/utils/appServiceMessages.ts))
+  — the iPhone's «Mensajes del servicio» wire (A-W2): the read with the two threads APART, names and
+  `mine`/`editable` (decided on the stored `_key`), never a member id; and each write's answer (the
+  service thread only, the pastor's message with its stamp, the team note with its target).
+- **`refuseUnlessFreshAdmin(memberId)`** ([freshAdmin.ts](../app/appAuth/freshAdmin.ts)), **`readJsonBody`**,
+  **`actorNameOf`** ([appServiceMessagesDoor.ts](../app/utils/appServiceMessagesDoor.ts)) — the A-W2 doors'
+  fresh access read (401 / 403 / 503), JSON read (400 `["json"]`) and the author's live name (`""` on a
+  failed read, which the leads' mail words as «Un admin»).
+- **`appServiceTitle(kind, serviceName?)`** ([appServices.ts](../app/utils/appServices.ts)) — the ONE
+  title the app gives a service («Domingo», «Sábado», a special's name); the services list and A-W2 use it.
+- **`offeredProposalPastorMessage(data)`**, **`comparablePastor(text)`** ([serviceMessageEdit.ts](../app/utils/serviceMessageEdit.ts))
+  — «Usar como mensaje del pastor»'s rule (a submitted proposal's text, only when it differs), shared by
+  the web dialog and the app's read; moved out of the `"use client"` dialog so a server module may call it.
 - **`readProposalEditor(roleId, leadId)`** ([proposalEditorRead.ts](../app/utils/proposalEditorRead.ts))
   — the setlist-proposal editor's reads: the role (caller in `Lead[]`, `published != false`, a valid
   `serviceDayKey`), its ONE shared proposal (`service_ref`, oldest first) and the service

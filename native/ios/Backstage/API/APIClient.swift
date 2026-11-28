@@ -164,6 +164,63 @@ struct APIClient: Sendable {
         return ProposalMessageOutcome.from(status: status, data: data)
     }
 
+    // MARK: Admin: «Mensajes del servicio» (A-W2)
+
+    /// One service's pastor's message, team note and conversation with its leads.
+    func serviceMessages(roleId: String) async throws -> ServiceMessages {
+        try await get(Self.serviceThreadPath(roleId))
+    }
+
+    /// One admin message into the service's thread. No idempotency on the server: a lost answer is
+    /// `.failed`, and the conversation reads the thread before offering it again.
+    func postServiceMessage(roleId: String, body text: String) async throws -> ServiceWriteOutcome<ServiceThreadAnswer> {
+        try await serviceWrite(Self.serviceThreadPath(roleId) + "/messages", method: "POST", body: ProposalMessageBody(body: text))
+    }
+
+    /// Edits one of the caller's own messages. A resend sets the same text again and notifies nobody.
+    func editServiceMessage(roleId: String, key: String, body text: String) async throws -> ServiceWriteOutcome<ServiceThreadAnswer> {
+        try await serviceWrite(
+            Self.serviceThreadPath(roleId) + "/messages/\(Self.segment(key))", method: "PATCH", body: ProposalMessageBody(body: text)
+        )
+    }
+
+    /// Deletes one of the caller's own messages. A resend of one that landed answers `404`.
+    func deleteServiceMessage(roleId: String, key: String) async throws -> ServiceWriteOutcome<ServiceThreadAnswer> {
+        try await serviceWrite(Self.serviceThreadPath(roleId) + "/messages/\(Self.segment(key))", method: "DELETE", body: Optional<ProposalMessageBody>.none)
+    }
+
+    /// Sets (or, with `""`, clears) the pastor's message against the stamp the edit started from.
+    func setPastorMessage(roleId: String, body: PastorMessageBody) async throws -> ServiceWriteOutcome<PastorAnswer> {
+        try await serviceWrite(Self.serviceThreadPath(roleId) + "/pastor-message", method: "PUT", body: body)
+    }
+
+    /// Saves the team note against the setlist revision it was started on. Notifies nobody.
+    func saveTeamNotes(roleId: String, body: TeamNotesBody) async throws -> ServiceWriteOutcome<TeamNotesAnswer> {
+        try await serviceWrite(Self.serviceThreadPath(roleId) + "/team-notes", method: "PUT", body: body)
+    }
+
+    private static func serviceThreadPath(_ roleId: String) -> String {
+        "/api/app/v1/admin/service-threads/\(segment(roleId))"
+    }
+
+    /// One write to a service-thread door. Never retried by itself: a lost answer is `.failed`, and
+    /// what a retry may do is the sheet's rule per write (spec D5). A session problem still throws.
+    private func serviceWrite<Body: Encodable, Answer: Decodable & Equatable & Sendable>(
+        _ path: String, method: String, body: Body?
+    ) async throws -> ServiceWriteOutcome<Answer> {
+        var encoded: Data?
+        if let body {
+            do { encoded = try JSONEncoder().encode(body) } catch { return .invalid }
+        }
+        let (data, status): (Data, Int)
+        do {
+            (data, status) = try await send(path, method: method, body: encoded)
+        } catch APIError.session(.network) {
+            return .failed
+        }
+        return ServiceWriteOutcome<Answer>.from(status: status, data: data)
+    }
+
     private struct ErrorCode: Decodable { let error: String }
 
     private static func segment(_ value: String) -> String {
@@ -175,7 +232,7 @@ struct APIClient: Sendable {
     /// One authenticated request, with the same refresh-once rule as `get`; any status other than
     /// a 401 comes back to the caller with its body. A 401 `account_disabled` or a second 401 ends
     /// the session and throws.
-    private func send(_ path: String, method: String, body: Data) async throws -> (Data, Int) {
+    private func send(_ path: String, method: String, body: Data?) async throws -> (Data, Int) {
         var token = try await sessionCall { try await authority.accessToken() }
         for attempt in 0..<2 {
             var request = URLRequest(url: config.url(path))
@@ -183,7 +240,7 @@ struct APIClient: Sendable {
             request.httpBody = body
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             request.setValue("application/json", forHTTPHeaderField: "Accept")
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            if body != nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
             let data: Data
             let response: HTTPURLResponse
             do {
