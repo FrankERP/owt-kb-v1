@@ -337,3 +337,56 @@ cannot store something twice or notify twice.
 
 None the author knows of. The empty-name email (D3.1 step 6) is an implementation check with a
 stated fallback, not an open design choice.
+
+## Post-approval amendments (adopted from the reviewers' non-blocking notes, not re-reviewed)
+
+The plan above was approved by two fresh reviewers on digest `49bdade4…9746b` (log:
+`2026-11-28-native-service-messages-design-review-log.md`). These amendments came from their
+non-blocking notes. They were adopted afterwards without a further plan round, and the merge-range
+code review checks them in the diff.
+
+- **A1. The sheet cannot be swiped away while a message is unsettled.** The outbox lives in the
+  sheet's view state. Dismissing the sheet while an item is `.sending`, `.checking` or
+  `.unconfirmed` would forget it, and a retype is the duplicate. So the sheet sets
+  `interactiveDismissDisabled` while any item is in one of those states, as `AdminViews.swift`
+  already does for its decision sheet. Its close button says «Espera a que se confirme el
+  mensaje».
+- **A2. One write at a time.** A POST and an edit or delete never overlap, in either direction.
+  `canPostNow` is false while an edit or delete is in flight, and «Editar»/«Eliminar» are disabled
+  while the outbox has an item `.sending` or `.checking`. Write answers therefore arrive in the
+  order they were sent, so a POST read-back taken before an edit can never land after the edit's
+  answer.
+- **A3. A `null` read-back after PATCH or DELETE is applied locally**, as the web does: the edited
+  body with `editedAt` = now, or the row removed. A `null` after POST keeps the service list; the
+  outbox then holds the message as `.sent` until a read shows it.
+- **A4. `editable` is computed from the stored row**, before `messagesOf` maps it: the raw `_key`
+  must be present and pass `isMessageKey`. A fallback key such as `s0` passes the regex, so the
+  output key is never what is tested. On a write answer, `open` is taken as true: the writer has
+  just enforced `isThreadOpen` for that write. D7's test includes a keyless own row in an open
+  service thread.
+- **A5. Names on the wire.** `verify` is the merged `serviceMessages` + `proposalMessages` of a
+  fresh read. While a write is in flight, the read is not adopted and `verify` answers `nil`
+  (→ `.unconfirmed`, «Revisar»), as the admin proposal screen does (`AdminViews.swift`). The
+  sheet's POST answer type decodes `serviceMessages`; it does not reuse `ProposalMessageResponse`,
+  which decodes `messages`.
+- **A6. An empty pastor's message.** The read builder treats a stored `pastor_message` with an
+  empty body as `null`, as the writer does, so the stamp it sends always matches. In D5, a clear
+  (`body: ""`) equals a re-read of `pastorMessage: null`.
+- **A7. «Mover a mensaje del pastor» after a lost answer.** If the pastor PUT's answer is lost and
+  D5 resolves it to «Guardado», the move continues to the team-note clear. A failure there shows
+  the web's «in both places» sentence. No step sends a second notice: the pastor write is not
+  repeated.
+- **A8. One title builder.** The services list's inline title becomes an exported
+  `appServiceTitle(row)` in `appServices.ts`. The services list and this door use it. The two
+  existing inline copies (`appAdminProposals.ts`, `appProposalEditor.ts`) move to it only if their
+  tests stay byte-identical; otherwise they are left as they are, and the reason is said in the PR.
+- **A9. The narrowing, stated fully.** Unreachable from the phone are: drafts; services past
+  today (on the web the pastor's message and the team note stay editable after the day, since
+  neither writer checks `isThreadOpen`); services beyond +95 days; a week with a duplicated weekend
+  role; and a published service with nobody seated and no songs (`appServices.ts` leaves it out).
+  Whether that is acceptable for this slice is Frank's decision, put to him on a card.
+  Recommended: yes, with drafts reached in slice 3 («Publicar/despublicar»).
+- **A10. Live check and rollback.** No agent writes live on dev, as in A-W1. Dev writes to the
+  real dataset, and a message on a real service mails its real leads. Frank checks the sheet on the
+  TestFlight build. Rollback is a revert of the additive routes and the iOS sheet; no writer or
+  data changes.
