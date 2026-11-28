@@ -1,4 +1,5 @@
-// The native app's admin doors (A-W1, A-W2): after `requireAppSession(request, { needs: "manager" })`
+// The native app's «Mensajes del servicio» doors (A-W2; the A-W1 doors inline the same three
+// checks): after `requireAppSession(request, { needs: "manager" })`
 // and its content-editor check, ONE fresh access read decides again, because the token's level is
 // up to 30 seconds old. Not active → 401 `account_disabled`; no longer a manager, or now a
 // content-editor → 403; a failed read → 503. Never a write after any of them.

@@ -83,10 +83,15 @@ function rowsOf(
   });
 }
 
-/** The stored pastor's message as the app shows it; an empty body is no message (as the writer reads it). */
+/**
+ * The stored pastor's message as the app shows it. Presence is the writer's own test (a non-empty
+ * stored body, `setPastorMessage`): an empty body is no message (A6), while a whitespace-only one,
+ * which only Studio can store, IS one, so its stamp is sent back and «Quitar» can clear it.
+ */
 export function appPastorMessage(row: PastorMessageRow | null | undefined, authorNameFallback?: string): AppPastorMessage | null {
-  const body = text(row?.body);
-  if (!row || !body) return null;
+  const raw = typeof row?.body === "string" ? row.body : "";
+  if (!row || !raw) return null;
+  const body = text(raw) ?? raw;
   const stamp = pastorMessageStamp(row);
   if (!stamp) return null;
   return {

@@ -234,10 +234,6 @@ function sectionsOf(role: AppRoleRow, me: string): { sections: AppSection[]; sea
 }
 
 /**
- * The services in the window, earliest first (date, then start time, then title). `me` is the
- * caller's member id. Records with no usable date are dropped, as the Calendario drops them.
- */
-/**
  * A service's title as the app names it: «Domingo» / «Sábado» for a weekend service, a special's
  * name (spaces collapsed) or the shared fallback. The services list and the admin's «Mensajes del
  * servicio» read (A-W2) both use it, so the card and the sheet name a service the same way.
@@ -248,6 +244,10 @@ export function appServiceTitle(kind: "sunday" | "saturday" | "special", service
   return text(serviceName)?.replace(/\s+/g, " ") ?? SPECIAL_SERVICE_FALLBACK;
 }
 
+/**
+ * The services in the window, earliest first (date, then start time, then title). `me` is the
+ * caller's member id. Records with no usable date are dropped, as the Calendario drops them.
+ */
 export function buildAppServices(rows: AppServicesRows, me: string): AppService[] {
   const list = <T,>(v: T[] | null | undefined): T[] => (Array.isArray(v) ? v : []);
   const sunSets = indexUniqueByKey(list(rows.sunSetlists), (s) => serviceDayKey(s.week));

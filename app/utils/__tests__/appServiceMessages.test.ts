@@ -2,7 +2,8 @@
 //  - the read builder sends names and `mine`, never a member id, and the two threads apart;
 //  - `editable` only for an OWN, KEYED, OPEN, service-thread row (a fallback key such as `s0`
 //    passes `isMessageKey`, so the stored `_key` is what is tested);
-//  - an empty stored pastor's message is no message; the stamp is the writer's;
+//  - an empty stored pastor's message is no message (a whitespace-only one is, as the writer reads
+//    it); the stamp is the writer's;
 //  - the offered pastor's text follows the web dialog's rule;
 //  - every body in `native/contract/service-message-bodies.json` (which the iOS XCTest encodes)
 //    parses with the writer's own parser.
@@ -75,7 +76,11 @@ describe("buildAppServiceMessages", () => {
   });
 
   it("an empty stored pastor's message is none; the stamp is the last edit, else the first set", () => {
-    expect(buildAppServiceMessages(read({ pastor_message: { body: "  ", at: "2099-01-01T10:00:00Z" } }), "m1", TODAY)!.pastorMessage).toBeNull();
+    expect(buildAppServiceMessages(read({ pastor_message: { body: "", at: "2099-01-01T10:00:00Z" } }), "m1", TODAY)!.pastorMessage).toBeNull();
+    // Whitespace only (Studio): the writer counts it as a message, so its stamp must cross.
+    expect(buildAppServiceMessages(read({ pastor_message: { body: "  ", at: "2099-01-01T10:00:00Z" } }), "m1", TODAY)!.pastorMessage?.stamp).toBe(
+      "2099-01-01T10:00:00Z",
+    );
     const edited = buildAppServiceMessages(
       read({ pastor_message: { body: "Hola", at: "2099-01-01T10:00:00Z", edited_at: "2099-01-01T12:00:00Z", author: "m1", author_name: "Frank" } }),
       "m1",

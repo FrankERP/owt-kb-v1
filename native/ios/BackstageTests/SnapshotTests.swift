@@ -129,7 +129,8 @@ final class SnapshotTests: XCTestCase {
             let screens: [(String, String)] = [
                 ("15-mensajes-servicio", ServiceMessagesTests.readJSON),
                 ("16-mensajes-vacio", Fixture.serviceMessagesEmptyJSON),
-                ("17-mensajes-cerrado", Fixture.serviceMessagesClosedJSON),
+                ("17-mensajes-sin-setlist", Fixture.serviceMessagesNoSetlistJSON),
+                ("18-mensajes-cerrado", Fixture.serviceMessagesClosedJSON),
             ]
             for (name, json) in screens {
                 let data = try JSONDecoder().decode(ServiceMessages.self, from: Data(json.utf8))
@@ -179,7 +180,13 @@ final class SnapshotTests: XCTestCase {
 private enum Fixture {
     static let serviceMessagesEmptyJSON = """
     {"service":{"id":"sun-6","kind":"sunday","date":"2026-12-06","title":"Domingo","published":true,"leads":[]},
-     "open":true,"pastorMessage":null,"teamNotes":null,"proposal":null,"serviceMessages":[],"proposalMessages":[]}
+     "open":true,"pastorMessage":null,"teamNotes":{"text":"","observed":{"id":"featuredSongs.sun-6","rev":"r1"}},
+     "proposal":null,"serviceMessages":[],"proposalMessages":[]}
+    """
+    static let serviceMessagesNoSetlistJSON = """
+    {"service":{"id":"sun-13","kind":"sunday","date":"2026-12-13","title":"Domingo","published":true,"leads":["Luis"]},
+     "open":true,"pastorMessage":{"body":"Domingo de Santa Cena.","authorName":"Frank","at":"2026-11-28T10:00:00.000Z","editedAt":null,"stamp":"2026-11-28T10:00:00.000Z"},
+     "teamNotes":null,"proposal":null,"serviceMessages":[],"proposalMessages":[]}
     """
     static let serviceMessagesClosedJSON = """
     {"service":{"id":"spc-1","kind":"special","date":"2026-11-20","title":"Noche de alabanza","published":true,"leads":["Ana"]},

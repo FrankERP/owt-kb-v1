@@ -19,6 +19,7 @@ struct ConversationThread: View {
     let verify: () async -> [ThreadMessage]?
     /// What a refusal names: the proposal, or (the admin's «Mensajes del servicio») the service.
     var words: MessageOutbox.Words = .proposal
+    var title = "Conversación"
     /// What a long press on a message offers (an admin's own service message: «Editar»,
     /// «Eliminar»). The proposal screens offer nothing.
     var actions: (ThreadMessage) -> [MessageAction] = { _ in [] }
@@ -34,7 +35,7 @@ struct ConversationThread: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SheetTitle(text: "Conversación", count: messages.count)
+            SheetTitle(text: title, count: messages.count)
             ForEach(messages) { message in
                 let offered = actions(message)
                 if offered.isEmpty {

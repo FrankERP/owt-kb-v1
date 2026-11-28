@@ -198,7 +198,7 @@ Spec `docs/superpowers/specs/2026-11-27-native-admin-proposal-review-design.md`,
 
 Spec `docs/superpowers/specs/2026-11-28-native-service-messages-design.md`, review log beside it.
 
-- **The same five writers, four more doors.** Under `/api/app/v1/admin/service-threads/[roleId]`:
+- **The same five writers, behind a read and four write routes.** Under `/api/app/v1/admin/service-threads/[roleId]`:
   the read (`serviceConversationQuery`, the web dialog's), and the message POST, own-message
   PATCH/DELETE, pastor's-message PUT and team-note PUT onto `serviceThreadCommit.ts`, unchanged. No
   writer moved: they already served the web and the MCP.

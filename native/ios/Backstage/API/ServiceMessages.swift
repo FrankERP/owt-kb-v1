@@ -36,7 +36,7 @@ struct ServiceMessages: Decodable, Equatable, Sendable {
     /// Where the «Mensaje para el equipo» lives.
     enum TeamNotes: Decodable, Equatable, Sendable {
         /// No setlist yet: the note arrives with the leads' proposal.
-        case none
+        case noSetlist
         /// A duplicated setlist (or an unpublished Studio draft): fix it on the web first.
         case ambiguous
         /// The note, and the setlist revision a save asserts.
@@ -46,7 +46,7 @@ struct ServiceMessages: Decodable, Equatable, Sendable {
 
         init(from decoder: Decoder) throws {
             if let single = try? decoder.singleValueContainer(), single.decodeNil() {
-                self = .none
+                self = .noSetlist
                 return
             }
             let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -85,7 +85,7 @@ struct ServiceMessages: Decodable, Equatable, Sendable {
         service = try c.decode(Service.self, forKey: .service)
         open = try c.decodeIfPresent(Bool.self, forKey: .open) ?? false
         pastorMessage = try c.decodeIfPresent(PastorMessage.self, forKey: .pastorMessage)
-        teamNotes = try c.decodeIfPresent(TeamNotes.self, forKey: .teamNotes) ?? .none
+        teamNotes = try c.decodeIfPresent(TeamNotes.self, forKey: .teamNotes) ?? .noSetlist
         proposal = try c.decodeIfPresent(Proposal.self, forKey: .proposal)
         serviceMessages = try c.decodeIfPresent([ThreadMessage].self, forKey: .serviceMessages) ?? []
         proposalMessages = try c.decodeIfPresent([ThreadMessage].self, forKey: .proposalMessages) ?? []
@@ -231,7 +231,7 @@ enum ServiceMessageRules {
     /// A team-notes PUT refused as stale.
     static func teamNotesVerdict(sent text: String, reread: ServiceMessages) -> Verdict {
         switch reread.teamNotes {
-        case .none: return .noSetlist
+        case .noSetlist: return .noSetlist
         case .ambiguous: return .blocked
         case .target(let stored, _): return folded(stored) == folded(text) ? .saved : .stale
         }
@@ -275,6 +275,9 @@ struct ServiceMessagesState: Equatable, Sendable {
     private(set) var posting = false
     /// The conversation has a message on its way or being checked (reported by its outbox).
     var outboxBusy = false
+    /// Bumped whenever a write ends (its answer, or its own re-read, landed): a read started before
+    /// that predates what the screen now shows, and must not land over it.
+    private(set) var epoch = 0
 
     init(data: ServiceMessages) { self.data = data }
 
@@ -296,7 +299,10 @@ struct ServiceMessagesState: Equatable, Sendable {
         return true
     }
 
-    mutating func endWrite() { writing = false }
+    mutating func endWrite() {
+        writing = false
+        epoch += 1
+    }
 
     mutating func beginPost() -> Bool {
         guard canPostNow, !posting else { return false }
@@ -304,13 +310,17 @@ struct ServiceMessagesState: Equatable, Sendable {
         return true
     }
 
-    mutating func endPost() { posting = false }
+    mutating func endPost() {
+        posting = false
+        epoch += 1
+    }
 
-    /// A read of the door. Refused (false) while a write is in flight: its answer, not an older
-    /// read, says what the screen shows next.
+    /// A read of the door, started when `epoch` was `startedAt`. Refused (false) while a write is in
+    /// flight, and when a write ended after the read started: that write's answer, not an older
+    /// read, says what the screen shows (a message the outbox already handed over must not vanish).
     @discardableResult
-    mutating func adopt(_ read: ServiceMessages) -> Bool {
-        guard !writing, !posting else { return false }
+    mutating func adopt(_ read: ServiceMessages, startedAt: Int) -> Bool {
+        guard !writing, !posting, startedAt == epoch else { return false }
         data = read
         return true
     }
@@ -319,6 +329,7 @@ struct ServiceMessagesState: Equatable, Sendable {
     mutating func settle(with read: ServiceMessages) {
         data = read
         writing = false
+        epoch += 1
     }
 
     /// A message write's answer: it replaces the SERVICE thread only; nil keeps it (D2).

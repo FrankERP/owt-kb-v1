@@ -86,7 +86,8 @@ final class ServiceMessagesTests: XCTestCase {
         func notes(_ value: String) throws -> ServiceMessages.TeamNotes {
             try read(#"{"service":{"id":"a","kind":"sunday","date":"2026-12-06","title":"Domingo","published":true,"leads":[]},"open":true,"pastorMessage":null,"teamNotes":\#(value),"proposal":null,"serviceMessages":[],"proposalMessages":[]}"#).teamNotes
         }
-        XCTAssertEqual(try notes("null"), .none)
+        XCTAssertEqual(try notes("null"), .noSetlist)
+        XCTAssertEqual(try read(#"{"service":{"id":"a","kind":"sunday","date":"2026-12-06","title":"Domingo","published":true,"leads":[]},"open":true}"#).teamNotes, .noSetlist)
         XCTAssertEqual(try notes(#"{"unavailable":"ambiguous"}"#), .ambiguous)
         XCTAssertEqual(try notes(#"{"text":"","observed":{"id":"featuredSongs.a","rev":"r"}}"#), .target(text: "", observed: TeamNotesTarget(id: "featuredSongs.a", rev: "r")))
     }
@@ -133,7 +134,7 @@ final class ServiceMessagesTests: XCTestCase {
         var fresh = try read()
         XCTAssertEqual(ServiceMessageRules.teamNotesVerdict(sent: " Llegar a las 9:00 ", reread: fresh), .saved)
         XCTAssertEqual(ServiceMessageRules.teamNotesVerdict(sent: "Otra", reread: fresh), .stale)
-        fresh.teamNotes = .none
+        fresh.teamNotes = .noSetlist
         XCTAssertEqual(ServiceMessageRules.teamNotesVerdict(sent: "Otra", reread: fresh), .noSetlist)
         fresh.teamNotes = .ambiguous
         XCTAssertEqual(ServiceMessageRules.teamNotesVerdict(sent: "Otra", reread: fresh), .blocked)
@@ -188,17 +189,32 @@ final class ServiceMessagesTests: XCTestCase {
         XCTAssertTrue(state.beginWrite())
         XCTAssertFalse(state.beginWrite())
         XCTAssertFalse(state.canPostNow, "a message waits for the edit (A2)")
-        XCTAssertFalse(state.adopt(other))
+        XCTAssertFalse(state.adopt(other, startedAt: state.epoch))
         XCTAssertEqual(state.data.serviceMessages.count, 2)
         state.endWrite()
         XCTAssertTrue(state.beginPost())
         XCTAssertFalse(state.canWrite, "an edit waits for the message")
-        XCTAssertFalse(state.adopt(other))
+        XCTAssertFalse(state.adopt(other, startedAt: state.epoch))
         state.endPost()
         state.outboxBusy = true
         XCTAssertFalse(state.canWrite, "nor while its fate is being read")
-        XCTAssertTrue(state.adopt(other), "the check's read lands")
+        XCTAssertTrue(state.adopt(other, startedAt: state.epoch), "the check's read lands")
         XCTAssertTrue(state.data.serviceMessages.isEmpty)
+    }
+
+    /// A pull started before a message was sent answers after it: it must not erase the message
+    /// the outbox already handed over to the thread (a retype would be a second email).
+    func testAReadStartedBeforeAWriteEndedNeverLands() throws {
+        var state = ServiceMessagesState(data: try read())
+        let pulled = state.epoch
+        XCTAssertTrue(state.beginPost())
+        state.endPost()
+        state.applyThread([message("k1", "¿Ya tienen el tono?"), message("k9", "Nuevo")])
+        var older = try read()
+        older.serviceMessages = []
+        XCTAssertFalse(state.adopt(older, startedAt: pulled))
+        XCTAssertEqual(state.data.serviceMessages.map(\.key), ["k1", "k9"])
+        XCTAssertTrue(state.adopt(older, startedAt: state.epoch), "a read started after it lands")
     }
 
     func testAStaleWritesOwnRereadLandsAndEndsIt() throws {

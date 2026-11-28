@@ -86,7 +86,9 @@ struct ServiceMessagesSheet: View {
         var id: String { key }
     }
 
-    private var locked: Bool { unsettled || state?.writing == true }
+    /// Only a sheet showing the conversation can hold a message: once it shows a refusal (the
+    /// service is gone, the admin was demoted) nothing is left to wait for.
+    private var locked: Bool { phase == .ready && (unsettled || state?.writing == true) }
 
     var body: some View {
         NavigationStack {
@@ -187,11 +189,12 @@ struct ServiceMessagesSheet: View {
     /// A read of the door. On screen it lands only while nothing is being written; an explicit
     /// one (a pull, «Recargar») also starts the two editors clean.
     private func reload(explicit: Bool) async {
+        let started = state?.epoch
         switch await model.loadServiceMessages(roleId: roleId) {
         case .loaded(let fresh):
             if state == nil {
                 state = ServiceMessagesState(data: fresh)
-            } else if state?.adopt(fresh) == true, explicit {
+            } else if let started, state?.adopt(fresh, startedAt: started) == true, explicit {
                 generation += 1
             }
             if explicit { threadNotice = nil }
@@ -199,6 +202,7 @@ struct ServiceMessagesSheet: View {
         case .missing:
             if state == nil { phase = .missing } else { threadNotice = "Este servicio ya no existe." }
         case .forbidden:
+            unsettled = false
             phase = .forbidden
         case .failed(let why):
             if state == nil { phase = .failed(why) } else if !why.isEmpty { threadNotice = why }
@@ -209,14 +213,23 @@ struct ServiceMessagesSheet: View {
     /// unless a write is in flight (A5).
     private func verify() async -> [ThreadMessage]? {
         guard let current = state, !current.writing else { return nil }
+        let started = current.epoch
         guard case .loaded(let fresh) = await model.loadServiceMessages(roleId: roleId) else { return nil }
-        guard state?.adopt(fresh) == true else { return nil }
+        guard state?.adopt(fresh, startedAt: started) == true else { return nil }
         return state?.conversation
     }
 
     /// The card under the sheet shows both texts: the services list reads them again (D6).
     private func cardChanged() {
         Task { await model.loadServices() }
+    }
+
+    /// After a pastor's-message save the leads' offer («Usar como mensaje del pastor») may come or
+    /// go: the door decides it, so the sheet reads it again (a read that lands only if no write
+    /// ended meanwhile).
+    private func pastorChanged() {
+        cardChanged()
+        Task { await reload(explicit: false) }
     }
 
     // MARK: Messages
@@ -275,7 +288,10 @@ struct ServiceMessagesSheet: View {
     }
 
     private func delete(_ message: ThreadMessage) async {
-        guard state?.beginWrite() == true else { return }
+        guard state?.beginWrite() == true else {
+            threadNotice = "Espera a que termine lo que se está enviando y vuelve a intentarlo."
+            return
+        }
         let key = message.key
         let isRetry = retriedDeletes.contains(key)
         let outcome = await model.deleteServiceMessage(roleId: roleId, key: key)
@@ -316,7 +332,7 @@ struct ServiceMessagesSheet: View {
         case .done(let answer):
             state?.applyPastor(answer.pastorMessage)
             state?.endWrite()
-            cardChanged()
+            pastorChanged()
             return .saved
         case .stale:
             // A lost answer resent finds its own stamp moved: the re-read says whether the text
@@ -328,7 +344,7 @@ struct ServiceMessagesSheet: View {
             state?.settle(with: fresh)
             switch ServiceMessageRules.pastorVerdict(sent: body, reread: fresh) {
             case .saved:
-                cardChanged()
+                pastorChanged()
                 return .saved
             default:
                 return .stale
@@ -497,6 +513,7 @@ struct ServiceMessagesContent: View {
                 post: post,
                 verify: verify,
                 words: .service,
+                title: "Conversación con los líderes",
                 actions: actions,
                 outboxChanged: outboxChanged
             )
@@ -581,7 +598,11 @@ private struct PastorMessageSection: View {
                     .disabled(!canWrite || saving)
                 }
             }
-            if let offered, !stale, draft == nil { offeredBlock(offered) }
+            // Hidden once it IS the pastor's message (the door's next read drops it too).
+            if let offered, !stale, draft == nil,
+               ServiceMessageRules.folded(offered) != ServiceMessageRules.folded(message?.body) {
+                offeredBlock(offered)
+            }
             if let problem { ProblemLine(text: problem) }
         }
         .confirmationDialog("¿Quitar el mensaje del pastor?", isPresented: $confirmClear, titleVisibility: .visible) {
@@ -696,7 +717,7 @@ private struct TeamNotesSection: View {
         VStack(alignment: .leading, spacing: 10) {
             SheetTitle(text: "Mensaje para el equipo")
             switch notes {
-            case .none:
+            case .noSetlist:
                 Text(ServiceMessageRules.noSetlistCopy).font(.bsBody(14)).foregroundStyle(BS.inkMuted)
             case .ambiguous:
                 Text(ServiceMessageRules.blockedCopy).font(.bsBody(14)).foregroundStyle(BS.inkMuted)
